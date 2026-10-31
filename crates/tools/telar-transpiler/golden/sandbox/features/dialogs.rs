@@ -15,195 +15,153 @@
 pub struct DialogsProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn dialogs(props: DialogsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("OVERLAYS").title("Dialogs").desc("Modal, drawer and tooltip — high-level widgets built on the overlay primitive (a top-layer portal that escapes clipping and blocks the page). Each renders its content only while open, so a closed overlay costs nothing and never eats a background click.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("OVERLAYS").title("Dialogs").desc("Modal, drawer and tooltip — high-level widgets built on the overlay primitive (a top-layer portal that escapes clipping and blocks the page). Each renders its content only while open, so a closed overlay costs nothing and never eats a background click.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_0 = {
-                                            Text::declaring(
-                                                || "Naming the dialog is what removes the signal(bool) per overlay: anything can open it by name — a menu item, a shortcut, a deep link — without the state being threaded down to it.".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_0));
-                                        let __node_3 = button(ButtonProps::props().label("Open modal").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("confirm"))).build(), Children::default())?;
-                                        __children.push(box_item(__node_3));
-                                        let __node_4 = {
-                                            let __deferred = Children::per_slot(
-                                                {
-                                                    let theme = theme.clone();
-                                                move |__request: SlotRequest<'_>| {
-                                                    let theme = theme.clone();
-                                                    let mut __slots = Slots::new();
-                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                    if __request.includes(None) {
-                                                        let __text_1 = {
-                                                            Text::declaring(
-                                                                || "Body content here".to_string(),
-                                                                LayoutStyle::new(),
-                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                            )?
-                                                        };
-                                                        __children.push(box_item(__text_1));
-                                                    }
-                                                    __slots.extend_default(__children);
-                                                    Ok(__slots)
-                                                }
-                                                }
-                                            );
-                                            modal(ModalProps::props().id("confirm").title("Confirm").build(), __deferred)?
-                                        };
-                                        __children.push(box_item(__node_4));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_5 = code_line(CodeLineProps::props().code("modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere on this surface").build(), Children::default())?;
-                        __children.push(box_item(__node_5));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_0 = {
+                                    Text::declaring(
+                                        || "Naming the dialog is what removes the signal(bool) per overlay: anything can open it by name — a menu item, a shortcut, a deep link — without the state being threaded down to it.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_0));
+                                let __node_3 = button(ButtonProps::props().label("Open modal").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("confirm"))).build())?;
+                                __children.push(box_item(__node_3));
+                                let __node_4 = {
+                                    let __recipe_children = Children::new(
+                                        {
+                                            let theme = theme.clone();
+                                        move || {
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __text_1 = {
+                                                Text::declaring(
+                                                    || "Body content here".to_string(),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                )?
+                                            };
+                                            __children.push(box_item(__text_1));
+                                            Ok(__children)
+                                        }
+                                        }
+                                    );
+                                    modal(ModalProps::props().id("confirm").title("Confirm").children(__recipe_children).build())?
+                                };
+                                __children.push(box_item(__node_4));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_5 = code_line(CodeLineProps::props().code("modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere on this surface").build())?;
+                    __children.push(box_item(__node_5));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Modal — an opaque dialog centred over a dimming scrim; the scrim or Close dismisses").build(), __deferred)?
+            example(ExampleProps::props().title("Modal — an opaque dialog centred over a dimming scrim; the scrim or Close dismisses").children(__recipe_children).build())?
         };
         let __node_6 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_7 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __node_8 = button(ButtonProps::props().label("Open drawer").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("nav"))).build(), Children::default())?;
-                                        __children.push(box_item(__node_8));
-                                        let __node_9 = {
-                                            let __deferred = Children::per_slot(
-                                                {
-                                                    let theme = theme.clone();
-                                                move |__request: SlotRequest<'_>| {
-                                                    let theme = theme.clone();
-                                                    let mut __slots = Slots::new();
-                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                    if __request.includes(None) {
-                                                        let __text_2 = {
-                                                            Text::declaring(
-                                                                || "Drawer content".to_string(),
-                                                                LayoutStyle::new(),
-                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink) },
-                                                            )?
-                                                        };
-                                                        __children.push(box_item(__text_2));
-                                                    }
-                                                    __slots.extend_default(__children);
-                                                    Ok(__slots)
-                                                }
-                                                }
-                                            );
-                                            drawer(DrawerProps::props().id("nav").side("right").build(), __deferred)?
-                                        };
-                                        __children.push(box_item(__node_9));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_7));
-                        let __node_10 = code_line(CodeLineProps::props().code("drawer id:\"nav\" side:\"right\"  >  text \"Drawer content\"").build(), Children::default())?;
-                        __children.push(box_item(__node_10));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_7 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_8 = button(ButtonProps::props().label("Open drawer").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("nav"))).build())?;
+                                __children.push(box_item(__node_8));
+                                let __node_9 = {
+                                    let __recipe_children = Children::new(
+                                        {
+                                            let theme = theme.clone();
+                                        move || {
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __text_2 = {
+                                                Text::declaring(
+                                                    || "Drawer content".to_string(),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink) },
+                                                )?
+                                            };
+                                            __children.push(box_item(__text_2));
+                                            Ok(__children)
+                                        }
+                                        }
+                                    );
+                                    drawer(DrawerProps::props().id("nav").side("right").children(__recipe_children).build())?
+                                };
+                                __children.push(box_item(__node_9));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_7));
+                    let __node_10 = code_line(CodeLineProps::props().code("drawer id:\"nav\" side:\"right\"  >  text \"Drawer content\"").build())?;
+                    __children.push(box_item(__node_10));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Drawer — a full-height side panel pinned to an edge, over the same scrim").build(), __deferred)?
+            example(ExampleProps::props().title("Drawer — a full-height side panel pinned to an edge, over the same scrim").children(__recipe_children).build())?
         };
         let __node_11 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
+            let __recipe_children = Children::new(
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_12 = {
-                            let __deferred = Children::per_slot(
-                                move |__request: SlotRequest<'_>| {
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __node_13 = {
-                                            let __deferred = Children::per_slot(
-                                                move |__request: SlotRequest<'_>| {
-                                                    let mut __slots = Slots::new();
-                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                    if __request.includes(None) {
-                                                        let __node_14 = button(ButtonProps::props().label("Hover me").build(), Children::default())?;
-                                                        __children.push(box_item(__node_14));
-                                                    }
-                                                    __slots.extend_default(__children);
-                                                    Ok(__slots)
-                                                }
-                                            );
-                                            tooltip(TooltipProps::props().text("Helpful hint").build(), __deferred)?
-                                        };
-                                        __children.push(box_item(__node_13));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_12));
-                        let __node_15 = code_line(CodeLineProps::props().code("tooltip text:\"Helpful hint\"  >  button label:\"Hover me\"").build(), Children::default())?;
-                        __children.push(box_item(__node_15));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_12 = {
+                        let __recipe_children = Children::new(
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_13 = {
+                                    let __recipe_children = Children::new(
+                                        move || {
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __node_14 = button(ButtonProps::props().label("Hover me").build())?;
+                                            __children.push(box_item(__node_14));
+                                            Ok(__children)
+                                        }
+                                    );
+                                    tooltip(TooltipProps::props().text("Helpful hint").children(__recipe_children).build())?
+                                };
+                                __children.push(box_item(__node_13));
+                                Ok(__children)
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_12));
+                    let __node_15 = code_line(CodeLineProps::props().code("tooltip text:\"Helpful hint\"  >  button label:\"Hover me\"").build())?;
+                    __children.push(box_item(__node_15));
+                    Ok(__children)
                 }
             );
-            example(ExampleProps::props().title("Tooltip — a hover popup anchored just below its trigger").build(), __deferred)?
+            example(ExampleProps::props().title("Tooltip — a hover popup anchored just below its trigger").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_6, __node_11])?
     };

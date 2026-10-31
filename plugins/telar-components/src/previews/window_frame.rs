@@ -1,9 +1,11 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Container, LayoutError, LayoutItem, LayoutStyle, Reactive, Role, Text, box_item};
+use telar::{
+    Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, Role, Text, box_item,
+};
 
-use crate::window_frame::{SurfaceFrameStyle, WindowControls, window_frame};
+use crate::window_frame::{SurfaceFrameStyle, WindowControls, WindowFrameProps, window_frame};
 
 fn line(content: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::declaring(
@@ -20,7 +22,7 @@ fn token(read: fn(&dyn telar::ThemeTokens) -> telar::Color) -> Reactive<telar::C
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
-        preview!(window_frame, "Default", |p| {
+        preview!(window_frame: WindowFrameProps, "Default", |p| {
             let style = SurfaceFrameStyle {
                 radius: Some(crate::metrics::radius_dialog()),
                 controls: WindowControls {
@@ -33,21 +35,24 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             }
             .close_hover(token(|t| t.error()))
             .close_hover_glyph(token(|t| t.on_error()));
-            let body = Container::new(
-                LayoutStyle::column().gap(8.0).width(320.0).height(160.0),
-                vec![
-                    line("Telar can draw its own window chrome.")?,
-                    line("Drag the corner grip to resize.")?,
-                ],
-            )?;
+            let body = Children::one(|| {
+                Ok(box_item(Container::new(
+                    LayoutStyle::column().gap(8.0).width(320.0).height(160.0),
+                    vec![
+                        line("Telar can draw its own window chrome.")?,
+                        line("Drag the corner grip to resize.")?,
+                    ],
+                )?))
+            });
             let actions = p.actions();
             window_frame(
-                p.arg("title", "Settings"),
-                None,
-                style,
-                Rc::new(move || actions.log("on_close", Vec::new())),
-                Box::new(body),
-                Some(Rc::new(|_, _| {})),
+                WindowFrameProps::props()
+                    .title(p.arg("title", "Settings"))
+                    .style(style)
+                    .close(Rc::new(move || actions.log("on_close", Vec::new())))
+                    .body(body)
+                    .resize(Rc::new(|_, _| {}))
+                    .build(),
             )
         })
         .title("Chrome/Window frame")

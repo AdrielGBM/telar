@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Key, NamedKey, Role};
+use telar::{Color, Key, NamedKey, Role};
 
 use crate::slider::{SliderProps, slider};
 
@@ -14,7 +14,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .track_color(p.arg("track_color", Color::TRANSPARENT))
                     .width(p.arg("width", 0.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Slider")
@@ -37,7 +36,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .max(p.arg("max", 100.0f32))
                     .step(p.arg("step", 10.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Slider")

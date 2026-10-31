@@ -6,7 +6,7 @@ use crate::{LayoutError, LayoutItem, box_item};
 #[diagnostic::on_unimplemented(
     message = "a preview's body returns `{Self}`, which is not a tree",
     label = "expected `Result<impl LayoutItem, LayoutError>`",
-    note = "a component call returns one: `tag(TagProps::props().build(), Children::default())`"
+    note = "a component call returns one: `tag(TagProps::props().build())`"
 )]
 pub trait IntoPreviewRoot {
     fn into_preview_root(self) -> Result<Box<dyn LayoutItem>, LayoutError>;
@@ -31,7 +31,6 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 ///                     .label(p.arg("label", "Save"))
 ///                     .variant(p.arg("variant", ButtonVariant::Solid))
 ///                     .build(),
-///                 Children::default(),
 ///             )
 ///         })
 ///         .title("Inputs/Button")
@@ -43,7 +42,6 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 ///                     .label("Press me")
 ///                     .on_press(Rc::new(move || pressed.update(|n| *n += 1)))
 ///                     .build(),
-///                 Children::default(),
 ///             )
 ///         }),
 ///     ]
@@ -75,11 +73,8 @@ macro_rules! __preview_entry {
                     let actions = ctx.actions();
                     // Shadows the component for the body alone, so every call it makes logs the callbacks it is handed.
                     #[allow(unused_variables)]
-                    let $tag = move |props: $props, children| {
-                        $tag(
-                            <$props as $crate::preview::PreviewActions>::preview_actions(props, &actions),
-                            children,
-                        )
+                    let $tag = move |props: $props| {
+                        $tag(<$props as $crate::preview::PreviewActions>::preview_actions(props, &actions))
                     };
                 )?
                 let $ctx = ctx;

@@ -97,3 +97,16 @@ fn every_meaningful_tag_takes_the_accessibility_attributes() {
         matches!(value_kind("text", "a11y"), Some(ValueKind::Keywords(table)) if keyword(table, "hidden") == Some("a11y_hidden"))
     );
 }
+
+/// `slot:` and a `<part>_style:` key are described where the editor asks, and a state key on a component call is not taken for a box's.
+#[test]
+fn a_call_s_slot_and_part_keys_are_described_and_its_state_keys_are_not() {
+    assert!(attr_spec("card", SLOT_ATTR).is_some_and(|spec| spec.doc.is_some()));
+    assert!(attr_spec("text", SLOT_ATTR).is_some_and(|spec| spec.doc.is_some()));
+    assert!(attr_spec("sidebar", "header_style").is_some_and(|spec| spec.doc.is_some()));
+    for key in STATE_STYLE_KEYS {
+        assert!(attr_spec("sidebar", key).is_none(), "{key}");
+        assert!(!is_part_style_key(key), "{key}");
+    }
+    assert!(attr_spec("box", "hover_style").is_some());
+}

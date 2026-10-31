@@ -4,7 +4,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, JustifyContent, Key, LayoutError, LayoutItem,
+    Accessible, AlignItems, BorderRadius, JustifyContent, Key, LayoutError, LayoutItem,
     LayoutStyle, ModifiersState, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
     StyledContainer, SurfaceAmendment, box_item, children,
     focus::{self, FocusId, Role},
@@ -61,10 +61,7 @@ pub struct SearchFieldProps {
 }
 
 /// A field for a query, with a magnifying glass, a clear button and Escape to clear.
-pub fn search_field(
-    props: SearchFieldProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SearchFieldProps {
         value,
         placeholder,

@@ -6,8 +6,7 @@ use std::sync::Arc;
 
 use telar::{
     Children, Container, LayoutError, LayoutItem, LayoutStyle, Memo, PointerButton, Reactive,
-    ReactiveList, Rect, RectStyle, RwSignal, Slots, StyledContainer, box_item, pointer_position,
-    signal,
+    ReactiveList, Rect, RectStyle, RwSignal, StyledContainer, box_item, pointer_position, signal,
 };
 use telar_components::{
     ContextHandler, ContextMenuProps, ItemProps, SeparatorProps, TreeContext, TreeNode,
@@ -141,7 +140,7 @@ impl TreeMenu {
                     Some(around) => props.around(around),
                     None => props,
                 };
-                context_menu(props.build(), self.rows(asked_for.node))
+                context_menu(props.children(self.rows(asked_for.node)).build())
             },
             0.0,
         )?;
@@ -150,7 +149,7 @@ impl TreeMenu {
 
     fn rows(self, node: Option<TreeNode>) -> Children {
         Children::new(move || {
-            let mut slots = Slots::new();
+            let mut rows = Vec::new();
             for command in commands(node.as_ref()) {
                 let row = match command {
                     Some(command) => {
@@ -160,14 +159,13 @@ impl TreeMenu {
                                 .label(Reactive::of(move || strings::text(command.label())))
                                 .on_press(Rc::new(move || self.run(command, node.as_ref())))
                                 .build(),
-                            Children::default(),
                         )?
                     }
-                    None => separator(SeparatorProps::props().build(), Children::default())?,
+                    None => separator(SeparatorProps::props().build())?,
                 };
-                slots.push(None, row);
+                rows.push(row);
             }
-            Ok(slots)
+            Ok(rows)
         })
     }
 }

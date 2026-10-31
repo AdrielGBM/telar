@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Role};
+use telar::{Color, Role};
 
 use crate::toggle::{ToggleProps, toggle};
 
@@ -12,7 +12,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Notifications"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Toggle")

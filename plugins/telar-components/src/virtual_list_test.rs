@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use telar::testing::{key_with, lay_out, named, press, release, route};
 
-use telar::{AccessNode, ComponentList, DrawCommand, Event, Slots, relayout_if_dirty};
+use telar::{AccessNode, ComponentList, DrawCommand, Event, relayout_if_dirty};
 
 use super::*;
 
@@ -53,7 +53,6 @@ impl Mounted {
                 .label("Fruit")
                 .wrap(wrap)
                 .build(),
-            Children::default(),
         )
         .unwrap();
         lay_out(item.layout_node(), 240.0, height);
@@ -238,7 +237,6 @@ fn a_row_builder_draws_the_row_while_the_list_keeps_it_a_choosable_option() {
                 Ok(box_item(text))
             }))
             .build(),
-        Children::default(),
     )
     .unwrap();
     lay_out(item.layout_node(), 240.0, 300.0);
@@ -311,7 +309,6 @@ impl Several {
                 .label("Fruit")
                 .wrap(wrap)
                 .build(),
-            Children::default(),
         )
         .unwrap();
         lay_out(item.layout_node(), 240.0, 300.0);
@@ -513,7 +510,6 @@ fn an_empty_list_says_so_until_its_rows_arrive() {
             .items(Reactive::of(move || items.get()))
             .label("Fruit")
             .build(),
-        Children::default(),
     )
     .unwrap();
     lay_out(item.layout_node(), 240.0, 200.0);
@@ -536,14 +532,13 @@ fn an_empty_list_says_so_until_its_rows_arrive() {
 }
 
 #[test]
-fn an_empty_list_shows_its_own_words_or_its_children() {
+fn an_empty_list_shows_its_own_words_or_its_empty_state() {
     crate::test_support::fresh_layout_runtime();
     let words = telar::testing::scoped(|| {
         let words = virtual_list(
             VirtualListProps::props()
                 .empty_label("No fruit yet")
                 .build(),
-            Children::default(),
         )
         .unwrap();
         lay_out(words.layout_node(), 240.0, 200.0);
@@ -555,14 +550,14 @@ fn an_empty_list_shows_its_own_words_or_its_children() {
     crate::test_support::fresh_layout_runtime();
     let built = telar::testing::scoped(|| {
         let built = virtual_list(
-            VirtualListProps::props().empty_label("Unused").build(),
-            Children::new(|| {
-                let mut slots = Slots::new();
-                let text =
-                    Text::declaring(|| "Add a fruit".to_string(), LayoutStyle::new(), |t| t)?;
-                slots.push(None, box_item(text));
-                Ok(slots)
-            }),
+            VirtualListProps::props()
+                .empty_label("Unused")
+                .empty(Children::one(|| {
+                    let text =
+                        Text::declaring(|| "Add a fruit".to_string(), LayoutStyle::new(), |t| t)?;
+                    Ok(box_item(text))
+                }))
+                .build(),
         )
         .unwrap();
         lay_out(built.layout_node(), 240.0, 200.0);
@@ -687,7 +682,6 @@ fn a_row_builder_s_lines_are_given_the_height_they_ask_for_in_a_wrapping_list() 
                 )?))
             }))
             .build(),
-        Children::default(),
     )
     .unwrap();
     lay_out(item.layout_node(), 240.0, 300.0);

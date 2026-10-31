@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, Children, Color, Container, Cursor, JustifyContent, Key,
-    LayoutError, LayoutItem, LayoutStyle, NamedKey, Props, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
+    Accessible, AlignItems, Border, Color, Container, Cursor, JustifyContent, Key, LayoutError,
+    LayoutItem, LayoutStyle, NamedKey, Props, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -86,10 +86,7 @@ pub struct SwatchesProps {
 }
 
 /// A row of colour swatches selecting one of them, or none.
-pub fn swatches(
-    props: SwatchesProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SwatchesProps {
         colors,
         names,

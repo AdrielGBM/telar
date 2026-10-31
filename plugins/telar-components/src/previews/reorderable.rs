@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
-use telar::{Children, Reactive, Role, signal};
+use telar::{Reactive, Role, signal};
 
 use super::sample;
 use crate::reorderable::{ReorderableProps, reorderable};
@@ -25,7 +25,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .gap(p.arg("gap", 8.0f32))
                     .drag_threshold(p.arg("drag_threshold", 4.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Layout/Reorderable")

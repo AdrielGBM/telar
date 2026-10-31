@@ -1,5 +1,5 @@
+use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Role};
 
 use crate::code_view::{CodeSpan, CodeViewProps, TokenKind, code_view};
 
@@ -37,7 +37,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .highlighted(vec![p.arg("highlighted", 3u32)])
                     .max_height(p.arg("max_height", 0.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Workbench/Code view")

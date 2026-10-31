@@ -225,3 +225,39 @@ pub(crate) fn run_insets(
     let (x, width) = run.expect("the label is drawn");
     (x - control.x, control.x + control.width - (x + width))
 }
+
+/// A body of one 20 px line reading `label`: what an accordion, a dialog or a drawer is opened on when only its own box is under test.
+#[cfg(any(feature = "advanced", feature = "overlays"))]
+pub(crate) fn text_body(label: &'static str) -> telar::Children {
+    telar::Children::one(move || {
+        let body = telar::Text::declaring(
+            move || label.to_string(),
+            telar::LayoutStyle::new().height(20.0),
+            |t| t,
+        )?;
+        Ok(telar::box_item(body))
+    })
+}
+
+/// A body of `lines` 20 px lines, `Line 0` onwards: enough of them to be taller than the window a dialog or a drawer is opened in.
+#[cfg(feature = "overlays")]
+pub(crate) fn tall_body(lines: usize) -> telar::Children {
+    telar::Children::new(move || {
+        (0..lines)
+            .map(|line| {
+                let text = telar::Text::declaring(
+                    move || format!("Line {line}"),
+                    telar::LayoutStyle::new().height(20.0),
+                    |t| t,
+                )?;
+                Ok(telar::box_item(text) as Box<dyn telar::LayoutItem>)
+            })
+            .collect()
+    })
+}
+
+/// Whether any text `cmds` draw reads exactly `needle`.
+pub(crate) fn find_text(cmds: &[telar::DrawCommand], needle: &str) -> bool {
+    cmds.iter()
+        .any(|c| matches!(c, telar::DrawCommand::Text { text, .. } if text.as_ref() == needle))
+}

@@ -7,20 +7,12 @@ use telar::{
 };
 
 use super::*;
-
-fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
-    cmds.iter()
-        .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
-}
+use crate::test_support::find_text;
 
 #[test]
 fn renders_label() {
     crate::test_support::fresh_layout_runtime();
-    let chip = chip(
-        ChipProps::props().label("Draft").build(),
-        Children::default(),
-    )
-    .unwrap();
+    let chip = chip(ChipProps::props().label("Draft").build()).unwrap();
     let root = new_container(
         LayoutStyle::new().flex_row().width(200.0).height(60.0),
         &[chip.layout_node()],
@@ -49,7 +41,6 @@ fn on_close_renders_and_fires_on_tap() {
             .label("Tag")
             .on_close(Rc::new(move || sink.set(true)) as Rc<dyn Fn()>)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let node = chip.layout_node();
@@ -90,7 +81,7 @@ fn on_close_renders_and_fires_on_tap() {
 #[test]
 fn empty_label_builds_without_panic() {
     crate::test_support::fresh_layout_runtime();
-    let chip = chip(ChipProps::props().build(), Children::default()).unwrap();
+    let chip = chip(ChipProps::props().build()).unwrap();
     let root = new_container(
         LayoutStyle::new().flex_row().width(200.0).height(60.0),
         &[chip.layout_node()],
@@ -108,7 +99,7 @@ fn empty_label_builds_without_panic() {
 
 fn mounted(props: ChipProps) -> (ComponentList, telar::Rect) {
     crate::test_support::fresh_layout_runtime();
-    let chip = chip(props, Children::default()).unwrap();
+    let chip = chip(props).unwrap();
     let rect = track_layout(chip.layout_node()).unwrap();
     compute_layout(
         chip.layout_node(),
@@ -152,10 +143,7 @@ fn a_style_amendment_reshapes_the_pill() {
 fn the_padding_scales_with_the_control_size() {
     crate::test_support::fresh_layout_runtime();
     let chip = telar::provide_control_size(telar::ControlSize::Large, || {
-        chip(
-            ChipProps::props().label("Draft").build(),
-            Children::default(),
-        )
+        chip(ChipProps::props().label("Draft").build())
     })
     .unwrap();
     let rect = track_layout(chip.layout_node()).unwrap();

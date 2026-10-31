@@ -65,8 +65,6 @@ pub type RowBuilder = Rc<dyn Fn(&ListRow) -> Result<Box<dyn LayoutItem>, LayoutE
 /// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so ten thousand rows cost what a screenful does. Every row stands at [`ListTokens::row_height`], which is what lets it place the rows it has not built, unless [`wrap`](Self::wrap) lets rows grow: then each is measured once built, and stands at the row height until then.
 ///
 /// The keyboard walks a cursor over the rows — the arrows, Home and End, Page Up and Page Down, and type-ahead on the rows' labels — and Enter, Space or a press chooses the row it is on. A reader hears the row the cursor is on as it moves. In [`SelectionMode::Multiple`] the list says it takes several rows, each row says whether it is one of them, and Shift, Ctrl (Command on a Mac) and Space choose them as [`SelectionMode::Multiple`] says.
-///
-/// Children: what the list shows while it has no rows, in place of [`empty_label`](Self::empty_label).
 #[derive(Props)]
 pub struct VirtualListProps {
     #[props(into, default)]
@@ -95,19 +93,19 @@ pub struct VirtualListProps {
     /// What a reader calls the list.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
-    /// What the list says while it has no rows, and a reader hears as a status. `None` (the default) uses the localized `telar_components.nothing_to_show` message.
+    /// What the list says while it has no rows and [`empty`](Self::empty) builds nothing, and a reader hears as a status. `None` (the default) uses the localized `telar_components.nothing_to_show` message.
     #[props(some, into, default)]
     pub empty_label: Option<Reactive<String>>,
     /// Accent for the selection and the keyboard cursor. `Color::TRANSPARENT` (the default) falls back to the theme's washes and focus ring.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
+    /// What the list shows while it has no rows, in place of [`empty_label`](Self::empty_label); when it builds nothing, the label shows instead.
+    #[props(default)]
+    pub empty: Children,
 }
 
 /// A long list of rows to choose one or several from, with only the rows on screen built.
-pub fn virtual_list(
-    props: VirtualListProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let VirtualListProps {
         items,
         selection_mode,
@@ -120,6 +118,7 @@ pub fn virtual_list(
         label,
         empty_label,
         color,
+        empty,
     } = props;
     let selection = RowSelection::new(selection_mode, selected, selected_rows, on_selection_change);
     let rows = memo(move || Rows(Rc::new(items.get())));
@@ -179,7 +178,7 @@ pub fn virtual_list(
         move || rows.with(|rows| rows.0.is_empty()),
         row_height,
         empty_label,
-        children,
+        empty,
     )
 }
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use telar::testing::{Scoped, scoped};
 use telar::{
-    AvailableSpace, Children, ComponentList, ControlSize, DrawCommand, LayoutItem, Role, TextStyle,
+    AvailableSpace, ComponentList, ControlSize, DrawCommand, LayoutItem, Role, TextStyle,
     compute_layout,
 };
 
@@ -40,11 +40,7 @@ fn exposed_roles(tree: &ComponentList) -> Vec<Role> {
 }
 
 fn titled(level: u8) -> Box<dyn LayoutItem> {
-    heading(
-        HeadingProps::props().text("Account").level(level).build(),
-        Children::default(),
-    )
-    .unwrap()
+    heading(HeadingProps::props().text("Account").level(level).build()).unwrap()
 }
 
 fn body() -> TextStyle {

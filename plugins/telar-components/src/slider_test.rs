@@ -14,11 +14,7 @@ fn lay_out(node: NodeId) -> Rect {
 fn drag_to_midpoint_sets_value_half() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
-    let mut widget = slider(
-        SliderProps::props().value(value).width(200.0).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let mut widget = slider(SliderProps::props().value(value).width(200.0).build()).unwrap();
     let rect = lay_out(widget.layout_node());
 
     widget.on_event(&press((rect.x + 100.0) as f64, (rect.y + 4.0) as f64));
@@ -41,7 +37,7 @@ fn drag_to_midpoint_sets_value_half() {
 #[test]
 fn uncontrolled_slider_builds_with_default_value() {
     crate::test_support::fresh_layout_runtime();
-    let result = slider(SliderProps::props().build(), Children::default());
+    let result = slider(SliderProps::props().build());
     assert!(
         result.is_ok(),
         "an uncontrolled slider builds from its default"
@@ -58,7 +54,6 @@ fn on_change_fires_with_mapped_value() {
             .width(100.0)
             .on_change(Rc::new(move |v| sink.set(v)))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let rect = lay_out(widget.layout_node());
@@ -82,7 +77,6 @@ fn custom_range_maps_midpoint_to_range_midpoint() {
             .min(0.0)
             .max(100.0)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let rect = lay_out(widget.layout_node());
@@ -107,7 +101,6 @@ fn step_snaps_value_to_nearest_step() {
             .max(100.0)
             .step(10.0)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let rect = lay_out(widget.layout_node());
@@ -124,10 +117,7 @@ fn step_snaps_value_to_nearest_step() {
 #[test]
 fn label_builds_without_panicking() {
     crate::test_support::fresh_layout_runtime();
-    let result = slider(
-        SliderProps::props().label("Volume").build(),
-        Children::default(),
-    );
+    let result = slider(SliderProps::props().label("Volume").build());
     assert!(result.is_ok(), "a labelled slider builds");
 }
 
@@ -139,13 +129,7 @@ fn only_the_focused_slider_answers_the_arrows() {
     let (volume, brightness) = (signal(0.5f32), signal(0.5f32));
     let mut sliders: Vec<_> = [volume, brightness]
         .into_iter()
-        .map(|value| {
-            slider(
-                SliderProps::props().value(value).step(0.1).max(1.0).build(),
-                Children::default(),
-            )
-            .unwrap()
-        })
+        .map(|value| slider(SliderProps::props().value(value).step(0.1).max(1.0).build()).unwrap())
         .collect();
     let right = telar::testing::named(telar::NamedKey::ArrowRight);
 
@@ -209,7 +193,7 @@ fn track_and_thumb(
 fn plain_slider(style: Option<telar::SurfaceAmendment>) -> Box<dyn LayoutItem> {
     let mut props = SliderProps::props().value(signal(0.5f32)).build();
     props.style = style;
-    slider(props, Children::default()).unwrap()
+    slider(props).unwrap()
 }
 
 #[test]
@@ -275,11 +259,7 @@ fn a_style_amendment_reshapes_the_track() {
 fn a_press_beside_the_thin_track_still_takes_hold_of_it() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
-    let mut widget = slider(
-        SliderProps::props().value(value).width(200.0).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let mut widget = slider(SliderProps::props().value(value).width(200.0).build()).unwrap();
     let rect = lay_out(widget.layout_node());
     let above = rect.y - (crate::metrics::MIN_TARGET - rect.height) / 2.0 + 1.0;
     widget.on_event(&press((rect.x + 100.0) as f64, above as f64));

@@ -6,11 +6,11 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use telar::{
-    Accessible, Border, BorderRadius, Canvas, Children, Color, Container, Declared, FontFamily,
-    FontStyle, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, Rect,
-    RectStyle, RenderNode, ShapeStyle, Span, StyledContainer, SurfaceAmendment, Text, TextStyle,
-    TextWrap, Timer, amend_surface, box_item, children, focus::Role, inherited_text_style,
-    line_box, memo, run_after, signal,
+    Accessible, Border, BorderRadius, Canvas, Color, Container, Declared, FontFamily, FontStyle,
+    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, Rect, RectStyle,
+    RenderNode, ShapeStyle, Span, StyledContainer, SurfaceAmendment, Text, TextStyle, TextWrap,
+    Timer, amend_surface, box_item, children, focus::Role, inherited_text_style, line_box, memo,
+    run_after, signal,
 };
 
 use crate::line_gutter::LineGutter;
@@ -218,10 +218,7 @@ fn code_text(inherited: TextStyle) -> TextStyle {
 }
 
 /// Read-only source with token colours, line numbers, marked lines and a copy button.
-pub fn code_view(
-    props: CodeViewProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let CodeViewProps {
         code,
         spans,
@@ -377,7 +374,6 @@ fn copy_button(
             }))
             .on_press(press)
             .build(),
-        Children::default(),
     )?;
     let corner_box = || {
         LayoutStyle::new()

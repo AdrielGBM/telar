@@ -17,7 +17,7 @@
 pub struct AccessibilityProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn accessibility(props: AccessibilityProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -26,317 +26,258 @@ pub fn accessibility(props: AccessibilityProps, children: Children) -> Result<Bo
     let mood = signal(String::from("calm"));
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("ACCESSIBILITY").title("Names, languages and hiding").desc("label, lang and a11y:hidden say what a box is called, what language it is in, and whether a screen reader skips it. Every target reads the same words: a document writes aria-label, lang and aria-hidden, the desktop hands them to AccessKit, and a terminal writes them into its plain-text reading.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("ACCESSIBILITY").title("Names, languages and hiding").desc("label, lang and a11y:hidden say what a box is called, what language it is in, and whether a screen reader skips it. Every target reads the same words: a document writes aria-label, lang and aria-hidden, the desktop hands them to AccessKit, and a terminal writes them into its plain-text reading.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let letters = letters.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let letters = letters.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                    let letters = letters.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let letters = letters.clone();
-                                    let mut __slots = Slots::new();
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                                let letters = letters.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_0 = {
-                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                            for letter in letters.clone() {
-                                                let letter = letter.to_owned();
-                                                let __text_0 = {
-                                                    let letter = letter.clone();
-                                                    Text::declaring(
-                                                        move || format!("{}", letter),
-                                                        LayoutStyle::new(),
-                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(32.0).with_color(theme.get().primary).with_font_weight(700) },
-                                                    )?
-                                                };
-                                                let __text_0 = __text_0.a11y_hidden();
-                                                __children.push(box_item(__text_0));
-                                            }
-                                            Container::new(LayoutStyle::new().flex_row().gap(4.0), __children)?.role(::telar::Role::Heading(2))
-                                        };
-                                        let __row_0 = __row_0.a11y_label(|| "Telar");
-                                        __children.push(box_item(__row_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_3 = code_line(CodeLineProps::props().code("row label:'Telar'  ·  text '{letter}' a11y:hidden").build(), Children::default())?;
-                        __children.push(box_item(__node_3));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-                }
-            );
-            example(ExampleProps::props().title("Split letters — read as one word, not five").build(), __deferred)?
-        };
-        let __node_4 = {
-            let __deferred = Children::per_slot(
-                {
-                    let theme = theme.clone();
-                    let demo_icon = demo_icon.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let demo_icon = demo_icon.clone();
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_5 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                    let demo_icon = demo_icon.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let demo_icon = demo_icon.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_1 = {
-                                            let __svg_0 = {
-                                                let __src = demo_icon.clone();
-                                                Svg::new(
-                                                    LayoutStyle::new().width(40.0).height(40.0),
-                                                    move || __src.clone(),
-                                                    || None,
-                                                    move || ObjectFit::Contain,
-                                                )?
-                                            };
-                                            let __svg_1 = {
-                                                let __src = demo_icon.clone();
-                                                Svg::new(
-                                                    LayoutStyle::new().width(40.0).height(40.0),
-                                                    move || __src.clone(),
-                                                    { let theme = theme.clone(); move || Some(theme.get().primary) },
-                                                    move || ObjectFit::Contain,
-                                                )?
-                                            };
-                                            let __svg_1 = __svg_1.a11y_label(|| "Telar logo");
-                                            let __text_1 = {
-                                                Text::declaring(
-                                                    || "the first is skipped, the second is read as “Telar logo, image”".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                                )?
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__svg_0, __svg_1, __text_1])?
-                                        };
-                                        __children.push(box_item(__row_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_5));
-                        let __node_6 = code_line(CodeLineProps::props().code("svg src:demo_icon label:'Telar logo'").build(), Children::default())?;
-                        __children.push(box_item(__node_6));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-                }
-            );
-            example(ExampleProps::props().title("A picture is decoration until it is named").build(), __deferred)?
-        };
-        let __node_7 = {
-            let __deferred = Children::per_slot(
-                {
-                    let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_8 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __col_1 = {
-                                            let __text_2 = {
-                                                Text::declaring(
-                                                    || "A quotation in another language keeps its own voice:".to_string(),
-                                                    LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0),
-                                                )?
-                                            };
-                                            let __text_3 = {
-                                                Text::declaring(
-                                                    || "“Caminante, no hay camino, se hace camino al andar.”".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                                )?
-                                            };
-                                            let __text_3 = __text_3.a11y_lang(|| "es");
-                                            let __text_4 = {
-                                                Text::declaring(
-                                                    || "「猿も木から落ちる」".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                                )?
-                                            };
-                                            let __text_4 = __text_4.a11y_lang(|| "ja");
-                                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__text_2, __text_3, __text_4])?
-                                        };
-                                        __children.push(box_item(__col_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_8));
-                        let __node_9 = code_line(CodeLineProps::props().code("text '…' lang:'es'").build(), Children::default())?;
-                        __children.push(box_item(__node_9));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-                }
-            );
-            example(ExampleProps::props().title("Language of a subtree").build(), __deferred)?
-        };
-        let __node_10 = {
-            let __deferred = Children::per_slot(
-                {
-                    let theme = theme.clone();
-                    let mood = mood.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mood = mood.clone();
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_11 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                    let mood = mood.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mood = mood.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_2 = {
-                                            let __sbox_0 = {
-                                                let __node_12 = icon(IconProps::props().name(("lucide:smile", crate::__rsx_assets::ASSET_4AF7F703.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
-                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_all(12.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__node_12])?.on_press({ let mood = mood.clone(); move || mood.set(if mood.get() == "calm" { "busy".into() } else { "calm".into() }) })
-                                            };
-                                            let __sbox_0 = __sbox_0.a11y_label({ let mood = mood.clone(); move || ::std::string::ToString::to_string(&(format!("Mood: {}", mood.get()))) });
-                                            let __text_5 = {
-                                                Text::declaring(
-                                                    || "press to change the name a reader hears".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                                )?
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_5])?
-                                        };
-                                        __children.push(box_item(__row_2));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_11));
-                        let __node_13 = code_line(CodeLineProps::props().code("box label:(format!('Mood: {}', $mood))").build(), Children::default())?;
-                        __children.push(box_item(__node_13));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-                }
-            );
-            example(ExampleProps::props().title("A name that follows state").build(), __deferred)?
-        };
-        let __node_14 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_15 = {
-                            let __deferred = Children::per_slot(
-                                move |__request: SlotRequest<'_>| {
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_6 = {
+                                    for letter in letters.clone() {
+                                        let letter = letter.to_owned();
+                                        let __text_0 = {
+                                            let letter = letter.clone();
                                             Text::declaring(
-                                                || "The card is a plain box, so the call can say it is an article. A role a person operates stays the component's: role:button here is a build error.".to_string(),
+                                                move || format!("{}", letter),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(32.0).with_color(theme.get().primary).with_font_weight(700) },
                                             )?
                                         };
-                                        __children.push(box_item(__text_6));
+                                        let __text_0 = __text_0.a11y_hidden();
+                                        __children.push(box_item(__text_0));
                                     }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        let __node_15 = __node_15.a11y_label(|| "Release notes").a11y_role(::telar::Role::Article);
-                        __children.push(box_item(__node_15));
-                        let __node_16 = code_line(CodeLineProps::props().code("card role:article a11y_label:'Release notes'").build(), Children::default())?;
-                        __children.push(box_item(__node_16));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                    Container::new(LayoutStyle::new().flex_row().gap(4.0), __children)?.role(::telar::Role::Heading(2))
+                                };
+                                let __row_0 = __row_0.a11y_label(|| "Telar");
+                                __children.push(box_item(__row_0));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_3 = code_line(CodeLineProps::props().code("row label:'Telar'  ·  text '{letter}' a11y:hidden").build())?;
+                    __children.push(box_item(__node_3));
+                    Ok(__children)
+                }
                 }
             );
-            example(ExampleProps::props().title("What a component's item is, said where it is used").build(), __deferred)?
+            example(ExampleProps::props().title("Split letters — read as one word, not five").children(__recipe_children).build())?
+        };
+        let __node_4 = {
+            let __recipe_children = Children::new(
+                {
+                    let theme = theme.clone();
+                    let demo_icon = demo_icon.clone();
+                move || {
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_5 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                                let demo_icon = demo_icon.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_1 = {
+                                    let __svg_0 = {
+                                        let __src = demo_icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(40.0).height(40.0),
+                                            move || __src.clone(),
+                                            || None,
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_1 = {
+                                        let __src = demo_icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(40.0).height(40.0),
+                                            move || __src.clone(),
+                                            { let theme = theme.clone(); move || Some(theme.get().primary) },
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_1 = __svg_1.a11y_label(|| "Telar logo");
+                                    let __text_1 = {
+                                        Text::declaring(
+                                            || "the first is skipped, the second is read as “Telar logo, image”".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__svg_0, __svg_1, __text_1])?
+                                };
+                                __children.push(box_item(__row_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_5));
+                    let __node_6 = code_line(CodeLineProps::props().code("svg src:demo_icon label:'Telar logo'").build())?;
+                    __children.push(box_item(__node_6));
+                    Ok(__children)
+                }
+                }
+            );
+            example(ExampleProps::props().title("A picture is decoration until it is named").children(__recipe_children).build())?
+        };
+        let __node_7 = {
+            let __recipe_children = Children::new(
+                {
+                    let theme = theme.clone();
+                move || {
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_8 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __col_1 = {
+                                    let __text_2 = {
+                                        Text::declaring(
+                                            || "A quotation in another language keeps its own voice:".to_string(),
+                                            LayoutStyle::new(),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(13.0),
+                                        )?
+                                    };
+                                    let __text_3 = {
+                                        Text::declaring(
+                                            || "“Caminante, no hay camino, se hace camino al andar.”".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    let __text_3 = __text_3.a11y_lang(|| "es");
+                                    let __text_4 = {
+                                        Text::declaring(
+                                            || "「猿も木から落ちる」".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    let __text_4 = __text_4.a11y_lang(|| "ja");
+                                    Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__text_2, __text_3, __text_4])?
+                                };
+                                __children.push(box_item(__col_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_9 = code_line(CodeLineProps::props().code("text '…' lang:'es'").build())?;
+                    __children.push(box_item(__node_9));
+                    Ok(__children)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Language of a subtree").children(__recipe_children).build())?
+        };
+        let __node_10 = {
+            let __recipe_children = Children::new(
+                {
+                    let theme = theme.clone();
+                    let mood = mood.clone();
+                move || {
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_11 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                                let mood = mood.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_2 = {
+                                    let __sbox_0 = {
+                                        let __node_12 = icon(IconProps::props().name(("lucide:smile", crate::__rsx_assets::ASSET_4AF7F703.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build())?;
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(12.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__node_12])?.on_press({ let mood = mood.clone(); move || mood.set(if mood.get() == "calm" { "busy".into() } else { "calm".into() }) })
+                                    };
+                                    let __sbox_0 = __sbox_0.a11y_label({ let mood = mood.clone(); move || ::std::string::ToString::to_string(&(format!("Mood: {}", mood.get()))) });
+                                    let __text_5 = {
+                                        Text::declaring(
+                                            || "press to change the name a reader hears".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_5])?
+                                };
+                                __children.push(box_item(__row_2));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_11));
+                    let __node_13 = code_line(CodeLineProps::props().code("box label:(format!('Mood: {}', $mood))").build())?;
+                    __children.push(box_item(__node_13));
+                    Ok(__children)
+                }
+                }
+            );
+            example(ExampleProps::props().title("A name that follows state").children(__recipe_children).build())?
+        };
+        let __node_14 = {
+            let __recipe_children = Children::new(
+                move || {
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_15 = {
+                        let __recipe_children = Children::new(
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_6 = {
+                                    Text::declaring(
+                                        || "The card is a plain box, so the call can say it is an article. A role a person operates stays the component's: role:button here is a build error.".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0),
+                                    )?
+                                };
+                                __children.push(box_item(__text_6));
+                                Ok(__children)
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    let __node_15 = __node_15.a11y_label(|| "Release notes").a11y_role(::telar::Role::Article);
+                    __children.push(box_item(__node_15));
+                    let __node_16 = code_line(CodeLineProps::props().code("card role:article a11y_label:'Release notes'").build())?;
+                    __children.push(box_item(__node_16));
+                    Ok(__children)
+                }
+            );
+            example(ExampleProps::props().title("What a component's item is, said where it is used").children(__recipe_children).build())?
         };
         let __node_17 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
+            let __recipe_children = Children::new(
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_2 = {
-                            let __node_18 = prop_row(PropRowProps::props().name("label").values("text · t!(…) · $state expr").about("The name assistive technology reads. On img and svg it is what makes a picture more than decoration.").build(), Children::default())?;
-                            let __node_19 = prop_row(PropRowProps::props().name("lang").values("BCP 47 tag").about("The language of the box and everything under it; the nearest one wins.").build(), Children::default())?;
-                            let __node_20 = prop_row(PropRowProps::props().name("a11y").values("hidden").about("Skipped by assistive technology, with its whole subtree. Still drawn and still pressable.").build(), Children::default())?;
-                            let __node_21 = prop_row(PropRowProps::props().name("role").values("landmark · article · h1–h6 · status · log · listitem · group").about("On a component call: what the item it returns is, where the component left it a plain box or a region. A control keeps its own role.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_18, __node_19, __node_20, __node_21])?
-                        };
-                        __children.push(box_item(__col_2));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __col_2 = {
+                        let __node_18 = prop_row(PropRowProps::props().name("label").values("text · t!(…) · $state expr").about("The name assistive technology reads. On img and svg it is what makes a picture more than decoration.").build())?;
+                        let __node_19 = prop_row(PropRowProps::props().name("lang").values("BCP 47 tag").about("The language of the box and everything under it; the nearest one wins.").build())?;
+                        let __node_20 = prop_row(PropRowProps::props().name("a11y").values("hidden").about("Skipped by assistive technology, with its whole subtree. Still drawn and still pressable.").build())?;
+                        let __node_21 = prop_row(PropRowProps::props().name("role").values("landmark · article · h1–h6 · status · log · listitem · group").about("On a component call: what the item it returns is, where the component left it a plain box or a region. A control keeps its own role.").build())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_18, __node_19, __node_20, __node_21])?
+                    };
+                    __children.push(box_item(__col_2));
+                    Ok(__children)
                 }
             );
-            example(ExampleProps::props().title("Attributes").build(), __deferred)?
+            example(ExampleProps::props().title("Attributes").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_14, __node_17])?
     };

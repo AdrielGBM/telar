@@ -20,7 +20,7 @@ pub enum SignalKind {
     Memo,
 }
 
-/// Every identifier the logic zone binds with a top-level `let`, so a bare name in the view resolves to the binding the author wrote three lines above instead of an ambient theme token that happens to share its spelling. Without this the shadowing runs the wrong way: `let size = props.size` is unreachable from `font_size:size`, and a binding named after a real token (`radius`, `spacing`, `muted`) silently reads the theme.
+/// Every identifier the logic zone binds with a top-level `let`: the bindings a closure the view emits captures, and so may have to copy rather than move when another reader still needs them.
 ///
 /// Only bindings at the zone's own indentation count — anything deeper belongs to a nested `fn` or block and is not in scope where the view is emitted. Destructuring patterns contribute every name they bind.
 pub fn scan_locals(logic_source: &str) -> Vec<String> {

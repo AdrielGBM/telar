@@ -9,9 +9,9 @@ use telar::preview::{Globals, MatrixCell, Play, PreviewEntry};
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, ColorScheme, Container,
     Direction, LayoutError, LayoutItem, LayoutStyle, Lazy, Memo, PointerButton, Reactive,
-    ReactiveList, RectStyle, RelayoutHook, Role, RwSignal, ShapeStyle, Size, Slots,
-    StyledContainer, SurfaceFrame, Text, ViewRange, box_item, children, effect, memo, on_cleanup,
-    pointer_position, scroll_progress, signal, use_theme_tokens,
+    ReactiveList, RectStyle, RelayoutHook, Role, RwSignal, ShapeStyle, Size, StyledContainer,
+    SurfaceFrame, Text, ViewRange, box_item, children, effect, memo, on_cleanup, pointer_position,
+    scroll_progress, signal, use_theme_tokens,
 };
 use telar_components::{BadgeProps, ItemProps, TooltipProps, badge, item, tooltip};
 use telar_devtools::{
@@ -271,23 +271,14 @@ fn cell_menu(
 ) -> Result<CellMenu, LayoutError> {
     let open = signal(None::<Asked>);
     let state = state.clone();
-    let rows = Rc::new(move || {
+    let rows = Children::one(move || {
         let (state, cell) = (state.clone(), cell.clone());
-        Children::new(move || {
-            let (state, cell) = (state.clone(), cell.clone());
-            let mut slots = Slots::new();
-            slots.push(
-                None,
-                item(
-                    ItemProps::props()
-                        .label(strings::reactive(OPEN_IN_CANVAS))
-                        .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
-            Ok(slots)
-        })
+        item(
+            ItemProps::props()
+                .label(strings::reactive(OPEN_IN_CANVAS))
+                .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
+                .build(),
+        )
     });
     let layer = menu_layer(open, rows)?;
     Ok(CellMenu { open, layer })
@@ -332,7 +323,6 @@ fn badges(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErro
                     .label(Reactive::of(move || status.text()))
                     .color(Reactive::of(move || tone_color(tone)))
                     .build(),
-                Children::default(),
             )
         },
     )?;
@@ -354,18 +344,19 @@ fn details(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErr
         |detail: &String| detail.clone(),
         |detail| {
             let line = detail.clone();
-            let text = Text::declaring(
-                move || line.clone(),
-                LayoutStyle::new().max_width(CELL_WIDTH),
-                |text| workbench_muted(workbench_mono(text)).with_clamp(1, true),
-            )?;
-            let mut slots = Slots::new();
-            slots.push(None, box_item(text));
             tooltip(
                 TooltipProps::props()
                     .text(Reactive::of(move || detail.clone()))
+                    .children(Children::new(move || {
+                        let line = line.clone();
+                        let text = Text::declaring(
+                            move || line.clone(),
+                            LayoutStyle::new().max_width(CELL_WIDTH),
+                            |text| workbench_muted(workbench_mono(text)).with_clamp(1, true),
+                        )?;
+                        Ok(vec![box_item(text)])
+                    }))
                     .build(),
-                Children::from(slots),
             )
         },
     )?;

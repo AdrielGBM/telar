@@ -11,9 +11,6 @@ use telar_icons::icon;
 
 use crate::strings;
 
-/// The rows a menu shows, built each time it opens, so a row that comes and goes is current.
-pub(crate) type Rows = Rc<dyn Fn() -> Children>;
-
 /// Where a menu was asked for: under a button, or at the pointer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Asked {
@@ -24,7 +21,7 @@ pub(crate) struct Asked {
 /// A ⋯ button named by the string `label` names, and the menu of `rows` it opens under itself.
 pub(crate) fn more_button(
     label: &'static str,
-    rows: Rows,
+    rows: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let open = signal(None::<Asked>);
     let anchor = signal(None::<NodeId>);
@@ -39,7 +36,6 @@ pub(crate) fn more_button(
                 }));
             }))
             .build(),
-        Children::default(),
     )?;
     anchor.set(Some(button.layout_node()));
     Ok(box_item(Container::new(
@@ -51,7 +47,7 @@ pub(crate) fn more_button(
 /// The menu of `rows` while `open` says where it was asked for, closing it back to `None`.
 pub(crate) fn menu_layer(
     open: RwSignal<Option<Asked>>,
-    rows: Rows,
+    rows: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let menu = ReactiveList::new(
         move || vec![open.with(Option::is_some)],
@@ -67,7 +63,7 @@ pub(crate) fn menu_layer(
                 Some(around) => props.around(around),
                 None => props,
             };
-            context_menu(props.build(), rows())
+            context_menu(props.children(rows.clone()).build())
         },
         0.0,
     )?;

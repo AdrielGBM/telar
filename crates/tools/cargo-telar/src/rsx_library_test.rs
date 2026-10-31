@@ -336,7 +336,7 @@ col pad:16 fill:$theme.surface
 "#;
 
 const CONSUMER_LIB_TEST_RS: &str = r#"use telar::testing::{Scoped, mount, texts};
-use telar::{Children, ComponentList, DrawCommand, WindowRoot, reset_layout_runtime};
+use telar::{ComponentList, DrawCommand, WindowRoot, reset_layout_runtime};
 
 use crate::theme::ConsumerTheme;
 use crate::welcome::{WelcomeProps, welcome};
@@ -344,7 +344,7 @@ use crate::welcome::{WelcomeProps, welcome};
 fn render() -> Scoped<ComponentList> {
     telar::install_default_text_metrics();
     reset_layout_runtime();
-    mount(|| WindowRoot::new(welcome(WelcomeProps::props().build(), Children::default()).expect("the page lays out")), 480, 160)
+    mount(|| WindowRoot::new(welcome(WelcomeProps::props().build()).expect("the page lays out")), 480, 160)
 }
 
 #[test]
@@ -383,7 +383,7 @@ fn the_binary_carries_the_notice_of_the_icons_the_library_baked() {
 #[test]
 fn the_icon_the_library_names_from_rust_draws_from_its_shipped_artifact() {
     reset_layout_runtime();
-    let tree = mount(|| WindowRoot::new(telar_rsx_fixture::marker(Children::default()).expect("the marker lays out")), 64, 64);
+    let tree = mount(|| WindowRoot::new(telar_rsx_fixture::marker().expect("the marker lays out")), 64, 64);
     let commands = tree.commands();
     assert!(commands.iter().any(|command| matches!(command, DrawCommand::Path { .. })), "{commands:?}");
 }

@@ -7,6 +7,7 @@ use telar::{
 };
 
 use super::*;
+use crate::test_support::find_text;
 
 // Returns the field and its absolute box rect. Valid only when `label` is empty: a labelled field's outer node is the wrapping column, offset above the box by the caption row.
 fn laid_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, telar::Rect) {
@@ -15,7 +16,7 @@ fn laid_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, telar::Rect) {
 }
 
 fn lay_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, telar::Rect) {
-    let field = text_field(props, Children::default()).unwrap();
+    let field = text_field(props).unwrap();
     let root = new_container(
         LayoutStyle::new().flex_column().width(400.0).height(200.0),
         &[field.layout_node()],
@@ -31,21 +32,12 @@ fn lay_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, telar::Rect) {
     (field, rect)
 }
 
-fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
-    cmds.iter()
-        .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
-}
-
 /// The §1.4 bug, made unwritable: a properties panel that says its region is 11px used to get a field at 14.98 among 11px labels, with no attribute to correct it — `TextFieldProps` has no size.
 #[test]
 fn a_field_takes_the_size_the_region_around_it_declared() {
     let value = signal("hi".to_string());
     crate::test_support::fresh_layout_runtime();
-    let field = text_field(
-        TextFieldProps::props().value(value).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let field = text_field(TextFieldProps::props().value(value).build()).unwrap();
     let box_node = field.layout_node();
     let root = new_container(
         LayoutStyle::new().flex_column().width(400.0).height(200.0),
@@ -236,7 +228,7 @@ fn a_field_points_a_reader_at_the_suggestion_its_cursor_is_on() {
 fn the_input_is_as_tall_as_the_box_so_the_whole_field_is_the_target() {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let field = text_field(TextFieldProps::props().build(), Children::default()).unwrap();
+    let field = text_field(TextFieldProps::props().build()).unwrap();
     let root = new_container(
         LayoutStyle::new().flex_column().width(400.0).height(200.0),
         &[field.layout_node()],
@@ -344,10 +336,7 @@ fn the_default_width_follows_the_control_size() {
     let mut built = None;
     let field = telar::provide_control_size(telar::ControlSize::Large, || {
         built = Some(TextFieldTokens::current().width());
-        text_field(
-            TextFieldProps::props().label("Name").build(),
-            Children::default(),
-        )
+        text_field(TextFieldProps::props().label("Name").build())
     })
     .unwrap();
     let rect = track_layout(field.layout_node()).unwrap();
@@ -385,11 +374,7 @@ mod multiline {
             crate::test_support::fresh_layout_runtime();
             focus::clear();
             let value = signal(String::new());
-            let item = text_field(
-                props.multiline(true).value(value).build(),
-                Children::default(),
-            )
-            .unwrap();
+            let item = text_field(props.multiline(true).value(value).build()).unwrap();
             lay_out(item.layout_node(), 400.0, 400.0);
             let tree = ComponentList::new(item);
             let mut mounted = Self { tree, value };

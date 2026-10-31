@@ -245,14 +245,16 @@ fn the_summary_wraps_in_its_pane_and_the_pane_closes_cleanly_once_the_audit_is_i
                     telar_components::SplitPaneProps::props()
                         .size(telar::signal(PANE))
                         .collapsible(false)
+                        .first(telar::Children::one(move || {
+                            accessibility_panel(inspection)
+                        }))
+                        .second(telar::Children::one(|| {
+                            Ok(box_item(telar::Container::new(
+                                telar::LayoutStyle::new().flex_grow(1.0),
+                                Vec::new(),
+                            )?))
+                        }))
                         .build(),
-                    panes([
-                        accessibility_panel(inspection)?,
-                        box_item(telar::Container::new(
-                            telar::LayoutStyle::new().flex_grow(1.0),
-                            Vec::new(),
-                        )?),
-                    ]),
                 )
             },
         )?;

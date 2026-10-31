@@ -307,31 +307,31 @@ mod empty {
 
     use crate::{shared, strings};
 
-    /// What a list or a table that has no rows is wrapped in to say so: `scroll`, the list itself, and under it a status that holds, while `empty` answers `true`, `children` where there are any, else `label`, else the localized `telar_components.nothing_to_show`.
+    /// What a list or a table that has no rows is wrapped in to say so: `scroll`, the list itself, and under it a status that holds, while `no_rows` answers `true`, what `empty` builds where it builds anything, else `label`, else the localized `telar_components.nothing_to_show`.
     ///
     /// While empty, the list keeps only `kept` px, its header row or for a list without one a row's height, so it still has a box to hold focus in, and the message takes the rest, centred. Beside the list rather than over it, since a list box or a grid holds nothing but its rows, and a reader hears the message as its own; and a status that is there all along, so a reader hears it when the last row goes.
     pub(crate) fn with_empty_state(
         scroll: Box<dyn LayoutItem>,
-        empty: impl Fn() -> bool + 'static,
+        no_rows: impl Fn() -> bool + 'static,
         kept: f32,
         label: Option<Reactive<String>>,
-        children: Children,
+        empty: Children,
     ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let empty: Rc<dyn Fn() -> bool> = Rc::new(empty);
+        let no_rows: Rc<dyn Fn() -> bool> = Rc::new(no_rows);
         let frame = {
-            let empty = empty.clone();
-            move || match empty() {
+            let no_rows = no_rows.clone();
+            move || match no_rows() {
                 true => LayoutStyle::column().height(kept).flex_shrink(0.0),
                 false => LayoutStyle::column().flex_grow(1.0).min_height(0.0),
             }
         };
         let rows = Container::new(frame(), vec![scroll])?.styled_by(frame);
-        let shown = empty.clone();
+        let shown = no_rows.clone();
         let message = shared::shown_while(
             move || shown(),
             LayoutStyle::column(),
             move || {
-                let mut content = children.build_slot(None)?;
+                let mut content = empty.build()?;
                 if content.is_empty() {
                     let label = label.clone();
                     let text = Text::declaring(
@@ -353,7 +353,7 @@ mod empty {
                 Ok(box_item(message))
             },
         )?;
-        let status_box = move || match empty() {
+        let status_box = move || match no_rows() {
             true => LayoutStyle::column()
                 .flex_grow(1.0)
                 .align_items(AlignItems::CENTER)

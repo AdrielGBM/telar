@@ -12,7 +12,7 @@ pub struct GreetingCardProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn greeting_card(props: GreetingCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn greeting_card(props: GreetingCardProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     let __row_0 = {
         let __svg_0 = {
@@ -23,7 +23,7 @@ pub fn greeting_card(props: GreetingCardProps, children: Children) -> Result<Box
                 move || ObjectFit::Contain,
             )?
         };
-        let __node_0 = icon(IconProps::props().name(("fixture:dot", crate::__rsx_assets::ASSET_6504A2AF.get(), true)).size(::telar::Int(16)).build(), Children::default())?;
+        let __node_0 = icon(IconProps::props().name(("fixture:dot", crate::__rsx_assets::ASSET_6504A2AF.get(), true)).size(::telar::Int(16)).build())?;
         let __text_0 = {
             Text::declaring(
                 move || format!("{}", t!("greeting", name = props.name)),
@@ -40,7 +40,7 @@ pub fn greeting_card(props: GreetingCardProps, children: Children) -> Result<Box
 
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn greeting_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let __node_0 = greeting_card(GreetingCardProps::props().name(::telar::__preview_arg!(__preview, "name", "Ada")).__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = greeting_card(GreetingCardProps::props().name(::telar::__preview_arg!(__preview, "name", "Ada")).__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }
 

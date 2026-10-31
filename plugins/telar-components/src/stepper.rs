@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError,
+    Accessible, AlignItems, BorderRadius, Color, Container, JustifyContent, LayoutError,
     LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
     SurfaceAmendment, Text, amend_surface, box_item, children, focus::Role, signal,
 };
@@ -70,10 +70,7 @@ pub struct StepperProps {
 }
 
 /// A value between a minus and a plus button, clamped to its range.
-pub fn stepper(
-    props: StepperProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let StepperProps {
         value,
         min,

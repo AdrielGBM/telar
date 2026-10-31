@@ -55,10 +55,10 @@ pub use package::{
 pub use preview::PREVIEW_OPTION_KEYS;
 #[cfg(feature = "transpile")]
 pub use registry::{
-    AttrSpec, ROLE_VALUES, ValueKind, attr_doc, attr_spec, builtin_tag_doc, builtin_tags,
-    color_attr_keys, color_keywords, component_instance_attrs, is_builtin_tag,
-    is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, role_values, role_variant,
-    tag_attr_keys, tag_attr_specs, value_kind,
+    AttrSpec, ROLE_VALUES, SLOT_ATTR, STATE_STYLE_KEYS, ValueKind, attr_doc, attr_spec,
+    builtin_tag_doc, builtin_tags, color_attr_keys, color_keywords, component_instance_attrs,
+    is_builtin_tag, is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, role_values,
+    role_variant, tag_attr_keys, tag_attr_specs, value_kind,
 };
 #[cfg(feature = "transpile")]
 pub use signal_scan::{SignalInfo, scan_effects, scan_locals, scan_signals};

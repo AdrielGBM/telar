@@ -6,9 +6,9 @@ use telar::preview::{
 };
 use telar::testing::{Scoped, centre, key_with, mount, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Children, Color, ComponentList, DrawCommand, Event, Key,
-    LayoutError, LayoutItem, LayoutStyle, LocalApp, ModifiersState, NamedKey, Rect, Role,
-    StyledContainer, Text, TextStyle, box_item, for_each_with_matrix, transform_clip_rect,
+    AccessNode, App, AppRuntime, Color, ComponentList, DrawCommand, Event, Key, LayoutError,
+    LayoutItem, LayoutStyle, LocalApp, ModifiersState, NamedKey, Rect, Role, StyledContainer, Text,
+    TextStyle, box_item, for_each_with_matrix, transform_clip_rect,
 };
 use telar_components::{ButtonProps, button};
 
@@ -137,7 +137,6 @@ fn firing(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 log.log("on_fire", vec![fired.get().to_string()]);
             }))
             .build(),
-        Children::default(),
     )?;
     let pick = button(
         ButtonProps::props()
@@ -146,7 +145,6 @@ fn firing(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 log.log("on_pick", vec!["\"apple\"".to_string(), "2".to_string()])
             }))
             .build(),
-        Children::default(),
     )?;
     column(vec![fire, pick])
 }

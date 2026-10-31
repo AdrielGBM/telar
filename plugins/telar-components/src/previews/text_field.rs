@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Key, NamedKey, Role};
+use telar::{Key, NamedKey, Role};
 
 use crate::text_field::{TextFieldProps, text_field};
 
@@ -14,7 +14,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .placeholder(p.arg("placeholder", "Type here"))
                     .width(p.arg("width", 300.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Text field")
@@ -36,7 +35,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .placeholder("Type here")
                     .value(value)
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Text field")
@@ -61,7 +59,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .counter(p.arg("counter", true))
                     .max_length(120)
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Text field")
@@ -90,7 +87,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .rows(2)
                     .max_rows(6)
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Text field")

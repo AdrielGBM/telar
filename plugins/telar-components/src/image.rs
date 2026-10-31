@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Clip, ClippedItem, ImageData, JustifyContent,
+    Accessible, AlignItems, BorderRadius, Clip, ClippedItem, ImageData, JustifyContent,
     LayoutError, LayoutItem, LayoutStyle, ObjectFit, Props, Raster, Reactive, RectStyle,
     ShapeStyle, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap, amend_surface,
     box_item, children,
@@ -108,7 +108,7 @@ pub struct ImageProps {
 }
 
 /// A picture with the words that stand for it, and a placeholder while it loads or when it cannot.
-pub fn image(props: ImageProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn image(props: ImageProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ImageProps {
         source,
         alt,

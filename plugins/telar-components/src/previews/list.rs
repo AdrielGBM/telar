@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_text, preview};
-use telar::{Children, Container, LayoutError, LayoutStyle};
+use telar::{Container, LayoutError, LayoutStyle};
 
 use crate::list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};
 
@@ -13,7 +13,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .checked(p.arg("checked", false))
                     .shortcut(p.arg("shortcut", "F2"))
                     .build(),
-                Children::default(),
             )
         })
         .title("Layout/List")
@@ -25,27 +24,18 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         }),
         preview!(group: GroupProps, "Grouped rows", |p| {
             let row = |label: &'static str, shortcut: &'static str| {
-                crate::list::item(
-                    ItemProps::props().label(label).shortcut(shortcut).build(),
-                    Children::default(),
-                )
+                crate::list::item(ItemProps::props().label(label).shortcut(shortcut).build())
             };
             let rows = vec![
-                group(
-                    GroupProps::props().label(p.arg("label", "Edit")).build(),
-                    Children::default(),
-                )?,
+                group(GroupProps::props().label(p.arg("label", "Edit")).build())?,
                 row("Undo", "Mod+Z")?,
                 row("Redo", "Mod+Shift+Z")?,
-                separator(SeparatorProps::props().build(), Children::default())?,
-                group(GroupProps::props().label("View").build(), Children::default())?,
+                separator(SeparatorProps::props().build())?,
+                group(GroupProps::props().label("View").build())?,
                 row("Zoom in", "Mod+=")?,
                 row("Zoom out", "Mod+-")?,
             ];
-            Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::column().width(240.0),
-                rows,
-            )?)
+            Ok::<_, LayoutError>(Container::new(LayoutStyle::column().width(240.0), rows)?)
         })
         .title("Layout/List")
         .layout(Layout::Padded),

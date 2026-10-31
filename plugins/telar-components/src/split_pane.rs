@@ -189,7 +189,7 @@ impl Limits {
     }
 }
 
-/// Two panes divided by a splitter, dragged or stepped with the keys to resize one of them, the first unless [`sized`](Self::sized) says otherwise; the other takes the rest. Children: the first pane's content, then the second's. Every drag is a [`Transaction`] on the size, so Escape puts it back.
+/// Two panes, [`first`](Self::first) and [`second`](Self::second), divided by a splitter, dragged or stepped with the keys to resize one of them, the first unless [`sized`](Self::sized) says otherwise; the other takes the rest. Every drag is a [`Transaction`] on the size, so Escape puts it back.
 #[derive(Props)]
 pub struct SplitPaneProps {
     #[props(default)]
@@ -239,12 +239,15 @@ pub struct SplitPaneProps {
     /// Amends the paint of the rule drawn in the gap — the split's **principal surface** — at rest and while dragged. See [`telar::SurfaceStyle`] for when a theme token or [`SplitPaneTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// What the first pane holds: at the inline start of a row, or at the top of a column.
+    #[props(default)]
+    pub first: Children,
+    /// What the second pane holds: at the inline end of a row, or at the bottom of a column.
+    #[props(default)]
+    pub second: Children,
 }
 
-pub fn split_pane(
-    props: SplitPaneProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn split_pane(props: SplitPaneProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SplitPaneProps {
         direction,
         sized,
@@ -262,6 +265,8 @@ pub fn split_pane(
         label,
         region,
         style,
+        first,
+        second,
     } = props;
     let default_size = if default_size > 0.0 {
         default_size
@@ -278,10 +283,6 @@ pub fn split_pane(
         min_fraction,
         max_fraction,
     };
-
-    let mut slots = children.build()?.take_default().into_iter();
-    let first_items: Vec<_> = slots.by_ref().take(1).collect();
-    let second_items: Vec<_> = slots.collect();
 
     let fixed = move || {
         let style = LayoutStyle::column().flex_shrink(0.0);
@@ -309,8 +310,8 @@ pub fn split_pane(
         let rect = track_layout(pane.layout_node()).expect("a pane is registered");
         Ok::<_, LayoutError>((ClippedItem::following(box_item(pane), Clip::both), rect))
     };
-    let (first, first_rect) = pane(first_items, sized == SizedPane::First)?;
-    let (second, second_rect) = pane(second_items, sized == SizedPane::Second)?;
+    let (first, first_rect) = pane(first.build()?, sized == SizedPane::First)?;
+    let (second, second_rect) = pane(second.build()?, sized == SizedPane::Second)?;
     let (sized_rect, other_rect) = match sized {
         SizedPane::First => (first_rect, second_rect),
         SizedPane::Second => (second_rect, first_rect),

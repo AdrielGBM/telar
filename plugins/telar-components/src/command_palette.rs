@@ -5,8 +5,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Color, Container,
-    Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
+    Accessible, AlignItems, Border, BorderRadius, Clip, ClippedItem, Color, Container, Declared,
+    JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
     ModifiersState, NamedKey, Props, Reactive, ReactiveList, RectStyle, RwSignal, ShapeStyle, Span,
     StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap, amend_surface, box_item,
     children, effect,
@@ -169,10 +169,7 @@ pub struct CommandPaletteProps {
 }
 
 /// A dialog that finds a command by typing part of its name, and runs it.
-pub fn command_palette(
-    props: CommandPaletteProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn command_palette(props: CommandPaletteProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let CommandPaletteProps {
         open,
         id,
@@ -201,10 +198,11 @@ pub fn command_palette(
         style,
     };
     scrim::scrim_overlay(open, on_close, move |dismiss| {
-        build_open_palette(parts, open, dismiss)
+        build_open_palette(parts.clone(), open, dismiss)
     })
 }
 
+#[derive(Clone)]
 struct Parts {
     commands: Reactive<Vec<Command>>,
     query: RwSignal<String>,
@@ -549,7 +547,6 @@ fn build_open_palette(
             .active_descendant(pointed)
             .controls(Rc::new(move || list))
             .build(),
-        Children::default(),
     )?;
 
     let empty = ReactiveList::new(
@@ -645,7 +642,6 @@ fn heading(group: Arc<str>, places: &RowPlaces) -> Result<Box<dyn LayoutItem>, L
         crate::list::GroupProps::props()
             .label(Reactive::of(move || group.to_string()))
             .build(),
-        Children::default(),
     )?;
     let slot = Container::new(
         places.sized(
@@ -694,12 +690,9 @@ fn build_row(
     let mut content: Vec<Box<dyn LayoutItem>> =
         children![ClippedItem::new(box_item(text), Clip::both())];
     if let Some(chord) = command.shortcut.clone() {
-        content.push(kbd(
-            KbdProps::props()
-                .chord(Reactive::of(move || chord.to_string()))
-                .build(),
-            Children::default(),
-        )?);
+        content.push(kbd(KbdProps::props()
+            .chord(Reactive::of(move || chord.to_string()))
+            .build())?);
     }
 
     let chord = command.shortcut.clone();

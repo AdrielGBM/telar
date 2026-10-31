@@ -277,175 +277,143 @@ fn draw_dashes(rect: Rect) -> RenderNode {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn paths(props: PathsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Paths").desc("Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps and dashes, and per-path shadows — then draw it in a Canvas.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Paths").desc("Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps and dashes, and per-path shadows — then draw it in a Canvas.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
+            let __recipe_children = Children::new(
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                move |__request: SlotRequest<'_>| {
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __canvas_0 = Canvas::new(LayoutStyle::new().height(430.0), draw_paths)?;
-                                        __children.push(box_item(__canvas_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_3 = code_line(CodeLineProps::props().code("PathData::new().move_to(p).cubic_to(a, b, c)   >   RenderNode::path(d, style)").build(), Children::default())?;
-                        __children.push(box_item(__node_3));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __canvas_0 = Canvas::new(LayoutStyle::new().height(430.0), draw_paths)?;
+                                __children.push(box_item(__canvas_0));
+                                Ok(__children)
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_3 = code_line(CodeLineProps::props().code("PathData::new().move_to(p).cubic_to(a, b, c)   >   RenderNode::path(d, style)").build())?;
+                    __children.push(box_item(__node_3));
+                    Ok(__children)
                 }
             );
-            example(ExampleProps::props().title("Polygons, curves, fills and a path shadow").build(), __deferred)?
+            example(ExampleProps::props().title("Polygons, curves, fills and a path shadow").children(__recipe_children).build())?
         };
         let __node_4 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_5 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_0 = {
-                                            let __path_0 = {
-                                                let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
-                                                Path::static_data(LayoutStyle::new().width(100.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().primary)), stroke: Some(Stroke::new(theme.get().ink, 2.0)), shadow: None, fill_rule: FillRule::Winding } })?
-                                            };
-                                            let __path_1 = {
-                                                let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(6.0, 42.0)).line_to(Point::new(34.0, 70.0)).line_to(Point::new(74.0, 14.0)));
-                                                Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().success, 7.0)), shadow: None, fill_rule: FillRule::Winding } })?
-                                            };
-                                            let __path_2 = {
-                                                let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
-                                                Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().warning)), stroke: Some(Stroke::new(theme.get().ink, 1.0)), shadow: None, fill_rule: FillRule::Winding } })?
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_0, __path_1, __path_2])?
-                                        };
-                                        __children.push(box_item(__row_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_5));
-                        let __node_6 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" fill:$theme.primary stroke:$theme.ink stroke_width:2 width:100 height:80").build(), Children::default())?;
-                        __children.push(box_item(__node_6));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_5 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __path_0 = {
+                                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
+                                        Path::static_data(LayoutStyle::new().width(100.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().primary)), stroke: Some(Stroke::new(theme.get().ink, 2.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                    };
+                                    let __path_1 = {
+                                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(6.0, 42.0)).line_to(Point::new(34.0, 70.0)).line_to(Point::new(74.0, 14.0)));
+                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().success, 7.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                    };
+                                    let __path_2 = {
+                                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
+                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().warning)), stroke: Some(Stroke::new(theme.get().ink, 1.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_0, __path_1, __path_2])?
+                                };
+                                __children.push(box_item(__row_0));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_5));
+                    let __node_6 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" fill:$theme.primary stroke:$theme.ink stroke_width:2 width:100 height:80").build())?;
+                    __children.push(box_item(__node_6));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Declarative paths in [view]").build(), __deferred)?
+            example(ExampleProps::props().title("Declarative paths in [view]").children(__recipe_children).build())?
         };
         let __node_7 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_8 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __col_1 = {
-                                            let __canvas_1 = Canvas::new(LayoutStyle::new().height(180.0), draw_dashes)?;
-                                            let __row_1 = {
-                                                let __path_3 = {
-                                                    let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 40.0)).line_to(Point::new(120.0, 40.0)));
-                                                    Path::static_data(LayoutStyle::new().width(120.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().ink, 1.0).with_dash(&[1.0, 4.0], 0.0)), shadow: None, fill_rule: FillRule::Winding } })?
-                                                };
-                                                let __path_4 = {
-                                                    let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
-                                                    Path::static_data(LayoutStyle::new().width(100.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().primary, 2.0).with_dash(&[6.0, 3.0], 0.0)), shadow: None, fill_rule: FillRule::Winding } })?
-                                                };
-                                                let __path_5 = {
-                                                    let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
-                                                    Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().warning, 2.0).with_dash(&[8.0, 4.0], 4.0)), shadow: None, fill_rule: FillRule::Winding } })?
-                                                };
-                                                Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_3, __path_4, __path_5])?
-                                            };
-                                            Container::new(LayoutStyle::new().flex_column().gap(16.0), children![__canvas_1, __row_1])?
+                    let __node_8 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __col_1 = {
+                                    let __canvas_1 = Canvas::new(LayoutStyle::new().height(180.0), draw_dashes)?;
+                                    let __row_1 = {
+                                        let __path_3 = {
+                                            let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 40.0)).line_to(Point::new(120.0, 40.0)));
+                                            Path::static_data(LayoutStyle::new().width(120.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().ink, 1.0).with_dash(&[1.0, 4.0], 0.0)), shadow: None, fill_rule: FillRule::Winding } })?
                                         };
-                                        __children.push(box_item(__col_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_8));
-                        let __node_9 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" stroke:$theme.primary stroke_width:2 stroke_dash:\"6 3\"   /   Stroke::new(c, 1.0).with_dash(&[1.0, 4.0], 0.0)").build(), Children::default())?;
-                        __children.push(box_item(__node_9));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                        let __path_4 = {
+                                            let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
+                                            Path::static_data(LayoutStyle::new().width(100.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().primary, 2.0).with_dash(&[6.0, 3.0], 0.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                        };
+                                        let __path_5 = {
+                                            let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
+                                            Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().warning, 2.0).with_dash(&[8.0, 4.0], 4.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                        };
+                                        Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_3, __path_4, __path_5])?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_column().gap(16.0), children![__canvas_1, __row_1])?
+                                };
+                                __children.push(box_item(__col_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_9 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" stroke:$theme.primary stroke_width:2 stroke_dash:\"6 3\"   /   Stroke::new(c, 1.0).with_dash(&[1.0, 4.0], 0.0)").build())?;
+                    __children.push(box_item(__node_9));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Dashed strokes").build(), __deferred)?
+            example(ExampleProps::props().title("Dashed strokes").children(__recipe_children).build())?
         };
         let __node_10 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
+            let __recipe_children = Children::new(
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_2 = {
-                            let __node_11 = prop_row(PropRowProps::props().name("move_to / line_to").values("Point").about("Start a subpath, add a straight segment.").build(), Children::default())?;
-                            let __node_12 = prop_row(PropRowProps::props().name("quad_to / cubic_to").values("Points").about("Quadratic and cubic Bézier curves.").build(), Children::default())?;
-                            let __node_13 = prop_row(PropRowProps::props().name("fill_rule").values("Winding · EvenOdd").about("How overlapping regions are filled.").build(), Children::default())?;
-                            let __node_14 = prop_row(PropRowProps::props().name("Stroke::with_cap").values("Butt·Round·Square").about("Line ends (and with_join for corners).").build(), Children::default())?;
-                            let __node_15 = prop_row(PropRowProps::props().name("Stroke::with_dash").values("pattern, offset").about("Drawn and skipped lengths, and where the stroke starts in them.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_11, __node_12, __node_13, __node_14, __node_15])?
-                        };
-                        __children.push(box_item(__col_2));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __col_2 = {
+                        let __node_11 = prop_row(PropRowProps::props().name("move_to / line_to").values("Point").about("Start a subpath, add a straight segment.").build())?;
+                        let __node_12 = prop_row(PropRowProps::props().name("quad_to / cubic_to").values("Points").about("Quadratic and cubic Bézier curves.").build())?;
+                        let __node_13 = prop_row(PropRowProps::props().name("fill_rule").values("Winding · EvenOdd").about("How overlapping regions are filled.").build())?;
+                        let __node_14 = prop_row(PropRowProps::props().name("Stroke::with_cap").values("Butt·Round·Square").about("Line ends (and with_join for corners).").build())?;
+                        let __node_15 = prop_row(PropRowProps::props().name("Stroke::with_dash").values("pattern, offset").about("Drawn and skipped lengths, and where the stroke starts in them.").build())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_11, __node_12, __node_13, __node_14, __node_15])?
+                    };
+                    __children.push(box_item(__col_2));
+                    Ok(__children)
                 }
             );
-            example(ExampleProps::props().title("The PathData API").build(), __deferred)?
+            example(ExampleProps::props().title("The PathData API").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10])?
     };

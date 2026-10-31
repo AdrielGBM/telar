@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use telar::{
-    AvailableSpace, Children, Color, ComponentList, Declared, DrawCommand, LayoutItem, LayoutStyle,
-    Paint, compute_layout, declare, drain_tasks, new_container, reset_layout_runtime,
+    AvailableSpace, Color, ComponentList, Declared, DrawCommand, LayoutItem, LayoutStyle, Paint,
+    compute_layout, declare, drain_tasks, new_container, reset_layout_runtime,
 };
 use telar_icons::{IconProps, RuntimeIcons, SvgDir, icon};
 
@@ -19,11 +19,7 @@ const LOGO: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
 const INK: Color = Color::RED;
 
 fn laid_out(name: &'static str) -> ComponentList {
-    let item = icon(
-        IconProps::props().name(name).size(24.0).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = icon(IconProps::props().name(name).size(24.0).build()).unwrap();
     let root = new_container(
         LayoutStyle::new().width(100.0).height(100.0),
         &[item.layout_node()],

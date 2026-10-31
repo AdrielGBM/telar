@@ -24,151 +24,125 @@ fn bar_rule(parts: &telar::TitleParts<'_>) -> String {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn surface_title(props: SurfaceTitleProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn surface_title(props: SurfaceTitleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let shown = memo(telar::use_surface_title);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Surface title").desc("The title a surface shows is derived, not set: the app's own title, then the title of the page the app's address stands on, in the active locale. Change either and the window, the browser tab, the recents screen or the terminal follows.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Surface title").desc("The title a surface shows is derived, not set: the app's own title, then the title of the page the app's address stands on, in the active locale. Change either and the window, the browser tab, the recents screen or the terminal follows.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let shown = shown.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let shown = shown.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let shown = shown.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_0 = {
                                     let shown = shown.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let shown = shown.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_0 = {
-                                            let shown = shown.clone();
-                                            Text::declaring(
-                                                move || format!("{}", shown.get()),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_0));
-                                        let __row_0 = {
-                                            let __node_3 = button(ButtonProps::props().label("Name this page").on_press(std::rc::Rc::new(move || telar::set_page_title(Some("Surface title".to_string())))).build(), Children::default())?;
-                                            let __node_4 = button(ButtonProps::props().label("No page title").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_page_title(None))).build(), Children::default())?;
-                                            let __node_5 = button(ButtonProps::props().label("Rename the app").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::window::set_title("Telar sandbox"))).build(), Children::default())?;
-                                            Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_3, __node_4, __node_5])?
-                                        };
-                                        __children.push(box_item(__row_0));
-                                        let __text_1 = {
-                                            Text::declaring(
-                                                || "A navigator that follows the app's address names the page itself, from its current route's title.".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_6 = code_line(CodeLineProps::props().code("impl Route for Page   ·   fn title(&self) -> Option<String>   ·   Some(t!(\"credits.title\"))").build(), Children::default())?;
-                        __children.push(box_item(__node_6));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                    Text::declaring(
+                                        move || format!("{}", shown.get()),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_0));
+                                let __row_0 = {
+                                    let __node_3 = button(ButtonProps::props().label("Name this page").on_press(std::rc::Rc::new(move || telar::set_page_title(Some("Surface title".to_string())))).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("No page title").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_page_title(None))).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("Rename the app").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::window::set_title("Telar sandbox"))).build())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_3, __node_4, __node_5])?
+                                };
+                                __children.push(box_item(__row_0));
+                                let __text_1 = {
+                                    Text::declaring(
+                                        || "A navigator that follows the app's address names the page itself, from its current route's title.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_6 = code_line(CodeLineProps::props().code("impl Route for Page   ·   fn title(&self) -> Option<String>   ·   Some(t!(\"credits.title\"))").build())?;
+                    __children.push(box_item(__node_6));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("What this surface is called right now").build(), __deferred)?
+            example(ExampleProps::props().title("What this surface is called right now").children(__recipe_children).build())?
         };
         let __node_7 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_8 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_1 = {
-                                            let __node_9 = button(ButtonProps::props().label("Page | App").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_title_format(bar_rule))).build(), Children::default())?;
-                                            let __node_10 = button(ButtonProps::props().label("Page — App").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_title_format(telar::compose_title))).build(), Children::default())?;
-                                            Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_9, __node_10])?
-                                        };
-                                        __children.push(box_item(__row_1));
-                                        let __text_2 = {
-                                            Text::declaring(
-                                                || "The rule runs inside the effect that derives the title, so one that translates follows the locale too.".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_2));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_8));
-                        let __node_11 = code_line(CodeLineProps::props().code("set_title_format(bar_rule)   ·   compose_title(parts)   ·   use_surface_title()").build(), Children::default())?;
-                        __children.push(box_item(__node_11));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_8 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_1 = {
+                                    let __node_9 = button(ButtonProps::props().label("Page | App").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_title_format(bar_rule))).build())?;
+                                    let __node_10 = button(ButtonProps::props().label("Page — App").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_title_format(telar::compose_title))).build())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_9, __node_10])?
+                                };
+                                __children.push(box_item(__row_1));
+                                let __text_2 = {
+                                    Text::declaring(
+                                        || "The rule runs inside the effect that derives the title, so one that translates follows the locale too.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_2));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_11 = code_line(CodeLineProps::props().code("set_title_format(bar_rule)   ·   compose_title(parts)   ·   use_surface_title()").build())?;
+                    __children.push(box_item(__node_11));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("A rule of your own").build(), __deferred)?
+            example(ExampleProps::props().title("A rule of your own").children(__recipe_children).build())?
         };
         let __node_12 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
+            let __recipe_children = Children::new(
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_1 = {
-                            let __node_13 = prop_row(PropRowProps::props().name("web").values("document.title").about("the tab, the history entry and a bookmark.").build(), Children::default())?;
-                            let __node_14 = prop_row(PropRowProps::props().name("desktop").values("window title").about("the title bar and the task switcher.").build(), Children::default())?;
-                            let __node_15 = prop_row(PropRowProps::props().name("android").values("task description").about("the label on the recents screen.").build(), Children::default())?;
-                            let __node_16 = prop_row(PropRowProps::props().name("terminal").values("OSC 0").about("the terminal's tab, given back on exit.").build(), Children::default())?;
-                            let __node_17 = prop_row(PropRowProps::props().name("headless").values("HeadlessWindow::title").about("kept, and recorded with record_titles_into for a prerender to read.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15, __node_16, __node_17])?
-                        };
-                        __children.push(box_item(__col_1));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __col_1 = {
+                        let __node_13 = prop_row(PropRowProps::props().name("web").values("document.title").about("the tab, the history entry and a bookmark.").build())?;
+                        let __node_14 = prop_row(PropRowProps::props().name("desktop").values("window title").about("the title bar and the task switcher.").build())?;
+                        let __node_15 = prop_row(PropRowProps::props().name("android").values("task description").about("the label on the recents screen.").build())?;
+                        let __node_16 = prop_row(PropRowProps::props().name("terminal").values("OSC 0").about("the terminal's tab, given back on exit.").build())?;
+                        let __node_17 = prop_row(PropRowProps::props().name("headless").values("HeadlessWindow::title").about("kept, and recorded with record_titles_into for a prerender to read.").build())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15, __node_16, __node_17])?
+                    };
+                    __children.push(box_item(__col_1));
+                    Ok(__children)
                 }
             );
-            example(ExampleProps::props().title("Where each target shows it").build(), __deferred)?
+            example(ExampleProps::props().title("Where each target shows it").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_12])?
     };

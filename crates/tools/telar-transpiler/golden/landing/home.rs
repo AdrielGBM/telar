@@ -85,7 +85,7 @@ fn style_footwrap() -> LayoutStyle {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
@@ -101,7 +101,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
         let __sbox_0 = {
             let __row_0 = {
                 let __row_1 = {
-                    let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().dark })).build(), Children::default())?;
+                    let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().dark })).build())?;
                     let __text_0 = {
                         Text::declaring(
                             || "rsx".to_string(),
@@ -133,7 +133,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                         )?
                     };
-                    let __node_1 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                    let __node_1 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER).flex_wrap(), children![__text_1, __text_2, __text_3, __node_1])?
                 };
                 Container::new(style_navwrap().flex_wrap().gap(12.0), children![__row_1, __row_2])?
@@ -159,8 +159,8 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             )?
                         };
                         let __row_4 = {
-                            let __node_2 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
-                            let __node_3 = button(ButtonProps::props().label("Read the docs").variant(ButtonVariant::Outline).color(PRIMARY).build(), Children::default())?;
+                            let __node_2 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
+                            let __node_3 = button(ButtonProps::props().label("Read the docs").variant(ButtonVariant::Outline).color(PRIMARY).build())?;
                             Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_2, __node_3])?
                         };
                         let __text_6 = {
@@ -297,80 +297,60 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                 };
                 let __row_6 = {
                     let __node_4 = {
-                        let __deferred = Children::per_slot(
+                        let __recipe_icon = Children::new(
                             {
                                 let theme = theme.clone();
-                            move |__request: SlotRequest<'_>| {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
+                            move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                if __request.includes(Some("icon")) {
-                                    let __node_5 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
-                                    __slots.push(Some("icon"), box_item(__node_5));
-                                }
-                                __slots.extend_default(__children);
-                                Ok(__slots)
+                                let __node_5 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                                __children.push(box_item(__node_5));
+                                Ok(__children)
                             }
                             }
                         );
-                        feature_card(FeatureCardProps::props().title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), __deferred)?
+                        feature_card(FeatureCardProps::props().title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").icon(__recipe_icon).build())?
                     };
                     let __node_6 = {
-                        let __deferred = Children::per_slot(
+                        let __recipe_icon = Children::new(
                             {
                                 let theme = theme.clone();
-                            move |__request: SlotRequest<'_>| {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
+                            move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                if __request.includes(Some("icon")) {
-                                    let __node_7 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
-                                    __slots.push(Some("icon"), box_item(__node_7));
-                                }
-                                __slots.extend_default(__children);
-                                Ok(__slots)
+                                let __node_7 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                                __children.push(box_item(__node_7));
+                                Ok(__children)
                             }
                             }
                         );
-                        feature_card(FeatureCardProps::props().title("Composable").body("Signals, memos and reusable .rsx components compose right inside the markup.").build(), __deferred)?
+                        feature_card(FeatureCardProps::props().title("Composable").body("Signals, memos and reusable .rsx components compose right inside the markup.").icon(__recipe_icon).build())?
                     };
                     let __node_8 = {
-                        let __deferred = Children::per_slot(
+                        let __recipe_icon = Children::new(
                             {
                                 let theme = theme.clone();
-                            move |__request: SlotRequest<'_>| {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
+                            move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                if __request.includes(Some("icon")) {
-                                    let __node_9 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
-                                    __slots.push(Some("icon"), box_item(__node_9));
-                                }
-                                __slots.extend_default(__children);
-                                Ok(__slots)
+                                let __node_9 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                                __children.push(box_item(__node_9));
+                                Ok(__children)
                             }
                             }
                         );
-                        feature_card(FeatureCardProps::props().title("Themeable").body("Semantic color tokens resolve reactively, so dark mode is a single swap.").build(), __deferred)?
+                        feature_card(FeatureCardProps::props().title("Themeable").body("Semantic color tokens resolve reactively, so dark mode is a single swap.").icon(__recipe_icon).build())?
                     };
                     let __node_10 = {
-                        let __deferred = Children::per_slot(
+                        let __recipe_icon = Children::new(
                             {
                                 let theme = theme.clone();
-                            move |__request: SlotRequest<'_>| {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
+                            move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                if __request.includes(Some("icon")) {
-                                    let __node_11 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
-                                    __slots.push(Some("icon"), box_item(__node_11));
-                                }
-                                __slots.extend_default(__children);
-                                Ok(__slots)
+                                let __node_11 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                                __children.push(box_item(__node_11));
+                                Ok(__children)
                             }
                             }
                         );
-                        feature_card(FeatureCardProps::props().title("Cross-platform").body("One codebase targets desktop and Android with native event loops.").build(), __deferred)?
+                        feature_card(FeatureCardProps::props().title("Cross-platform").body("One codebase targets desktop and Android with native event loops.").icon(__recipe_icon).build())?
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).flex_wrap(), children![__node_4, __node_6, __node_8, __node_10])?
                 };
@@ -496,7 +476,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             )?
                         };
                         let __row_9 = {
-                            let __node_12 = icon(IconProps::props().name(("lucide:arrow-right", crate::__rsx_assets::ASSET_6866DA5D.get(), true)).size(::telar::Int(16)).color(PRIMARY).build(), Children::default())?;
+                            let __node_12 = icon(IconProps::props().name(("lucide:arrow-right", crate::__rsx_assets::ASSET_6866DA5D.get(), true)).size(::telar::Int(16)).color(PRIMARY).build())?;
                             let __text_25 = {
                                 Text::declaring(
                                     || "signal, memo, effect".to_string(),
@@ -532,7 +512,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     )?
                 };
                 let __row_10 = {
-                    let __node_13 = button(ButtonProps::props().label("Reserve a seat").color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                    let __node_13 = button(ButtonProps::props().label("Reserve a seat").color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
                     let __text_28 = {
                         let signups = signups.clone();
                         Text::declaring(
@@ -551,7 +531,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
             let __row_11 = {
                 let __col_16 = {
                     let __row_12 = {
-                        let __node_14 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(18)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().on_primary })).build(), Children::default())?;
+                        let __node_14 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(18)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().on_primary })).build())?;
                         let __text_29 = {
                             Text::declaring(
                                 || "rsx".to_string(),
@@ -633,7 +613,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
 pub fn home_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    let __node_0 = home(HomeProps::props().__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = home(HomeProps::props().__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }
 

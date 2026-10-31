@@ -34,7 +34,6 @@ fn plus_increments_by_step_and_clamps_at_max() {
             .max(5.0)
             .step(1.0)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let node = widget.layout_node();
@@ -64,7 +63,6 @@ fn minus_decrements_by_step_and_clamps_at_min() {
             .max(5.0)
             .step(1.0)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let node = widget.layout_node();
@@ -95,7 +93,6 @@ fn on_change_fires_with_new_value() {
             .step(1.0)
             .on_change(Rc::new(move |v| sink.set(v)))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let node = widget.layout_node();
@@ -114,7 +111,7 @@ fn on_change_fires_with_new_value() {
 #[test]
 fn uncontrolled_stepper_builds_with_default_value() {
     crate::test_support::fresh_layout_runtime();
-    let result = stepper(StepperProps::props().build(), Children::default());
+    let result = stepper(StepperProps::props().build());
     assert!(
         result.is_ok(),
         "an uncontrolled stepper builds from its default"
@@ -125,11 +122,7 @@ fn uncontrolled_stepper_builds_with_default_value() {
 fn unset_max_does_not_clamp_to_min() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
-    let mut widget = stepper(
-        StepperProps::props().value(value).step(1.0).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let mut widget = stepper(StepperProps::props().value(value).step(1.0).build()).unwrap();
     let node = widget.layout_node();
     let rect = track_layout(node).unwrap();
     compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
@@ -143,7 +136,7 @@ fn unset_max_does_not_clamp_to_min() {
 
 fn mounted(props: StepperProps) -> telar::ComponentList {
     crate::test_support::fresh_layout_runtime();
-    let widget = stepper(props, Children::default()).unwrap();
+    let widget = stepper(props).unwrap();
     compute_layout(
         widget.layout_node(),
         AvailableSpace::MaxContent,

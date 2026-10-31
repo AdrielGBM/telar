@@ -1,11 +1,7 @@
 use telar::{AvailableSpace, ComponentList, DrawCommand, compute_layout, new_container};
 
 use super::*;
-
-fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
-    cmds.iter()
-        .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
-}
+use crate::test_support::find_text;
 
 fn laid_out(item: Box<dyn LayoutItem>) -> ComponentList {
     let root = new_container(
@@ -25,11 +21,7 @@ fn laid_out(item: Box<dyn LayoutItem>) -> ComponentList {
 #[test]
 fn renders_label() {
     crate::test_support::fresh_layout_runtime();
-    let badge = badge(
-        BadgeProps::props().label("New").build(),
-        Children::default(),
-    )
-    .unwrap();
+    let badge = badge(BadgeProps::props().label("New").build()).unwrap();
     let tree = laid_out(badge);
     assert!(
         find_text(&tree.commands(), "New"),
@@ -40,14 +32,14 @@ fn renders_label() {
 #[test]
 fn empty_label_builds_without_panic() {
     crate::test_support::fresh_layout_runtime();
-    let badge = badge(BadgeProps::props().build(), Children::default()).unwrap();
+    let badge = badge(BadgeProps::props().build()).unwrap();
     let tree = laid_out(badge);
     let _ = tree.commands();
 }
 
 fn mounted(props: BadgeProps) -> (ComponentList, telar::Rect) {
     crate::test_support::fresh_layout_runtime();
-    let badge = badge(props, Children::default()).unwrap();
+    let badge = badge(props).unwrap();
     let rect = telar::track_layout(badge.layout_node()).unwrap();
     compute_layout(
         badge.layout_node(),
@@ -92,10 +84,7 @@ fn a_style_amendment_reshapes_the_pill() {
 fn the_padding_scales_with_the_control_size() {
     crate::test_support::fresh_layout_runtime();
     let badge = telar::provide_control_size(telar::ControlSize::Large, || {
-        badge(
-            BadgeProps::props().label("New").build(),
-            Children::default(),
-        )
+        badge(BadgeProps::props().label("New").build())
     })
     .unwrap();
     let rect = telar::track_layout(badge.layout_node()).unwrap();

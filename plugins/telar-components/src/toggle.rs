@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, BorderRadius, Children, Color, LayoutError, LayoutItem, LayoutStyle, Props,
-    Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface,
-    box_item, box_transform, children, focus::Role, signal,
+    AlignItems, BorderRadius, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive,
+    RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item,
+    box_transform, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -164,7 +164,7 @@ pub struct ToggleProps {
 }
 
 /// A switch flipping a bound boolean.
-pub fn toggle(props: ToggleProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ToggleProps {
         checked,
         label,

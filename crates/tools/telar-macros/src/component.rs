@@ -34,7 +34,6 @@ pub fn expand(item: TokenStream2) -> Result<TokenStream2> {
 
     let mut fields = Vec::new();
     let mut names = Vec::new();
-    let mut children = None;
     for arg in &signature.inputs {
         let FnArg::Typed(arg) = arg else {
             return Err(syn::Error::new(
@@ -49,11 +48,6 @@ pub fn expand(item: TokenStream2) -> Result<TokenStream2> {
             ));
         };
         let (name, ty, attrs) = (&name.ident, &arg.ty, &arg.attrs);
-        // The one argument that is not a prop: what the call site nested inside the tag, which every component takes whether or not it uses them.
-        if name == "children" {
-            children = Some(quote! { let #name: #ty = __children; });
-            continue;
-        }
         names.push(name.clone());
         fields.push(quote! { #(#attrs)* pub #name: #ty });
     }
@@ -75,7 +69,6 @@ pub fn expand(item: TokenStream2) -> Result<TokenStream2> {
         .iter()
         .filter(|a| !a.path().is_ident("doc"))
         .collect();
-    let children = children.unwrap_or_else(|| quote! { let _ = __children; });
 
     Ok(quote! {
         #(#docs)*
@@ -88,10 +81,8 @@ pub fn expand(item: TokenStream2) -> Result<TokenStream2> {
         #(#kept)*
         #vis fn #name(
             __props: #props_name,
-            __children: ::telar::Children,
         ) #output {
             let #props_name { #(#names,)* } = __props;
-            #children
             #body
         }
     })

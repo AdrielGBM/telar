@@ -6,10 +6,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Children, Clip, ClippedItem, Color, Container, Direction,
-    JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey,
-    PointerButton, Props, Reactive, Rect, RectStyle, RwSignal, StyledContainer, Text, TextWrap,
-    box_item, current_direction,
+    Accessible, AlignItems, Clip, ClippedItem, Color, Container, Direction, JustifyContent, Key,
+    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey, PointerButton, Props,
+    Reactive, Rect, RectStyle, RwSignal, StyledContainer, Text, TextWrap, box_item,
+    current_direction,
     focus::{self, FocusId, Role, SetPosition},
     memo, signal,
 };
@@ -177,10 +177,7 @@ pub type ContextHandler = Rc<dyn Fn(TreeContext)>;
 pub type TrailingBuilder = Rc<dyn Fn(&TreeNode) -> Result<Box<dyn LayoutItem>, LayoutError>>;
 
 /// A tree of rows given as data, with expand and collapse, keyboard navigation, type-ahead and a bound selection.
-pub fn tree_view(
-    props: TreeViewProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn tree_view(props: TreeViewProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TreeViewProps {
         items,
         selected,

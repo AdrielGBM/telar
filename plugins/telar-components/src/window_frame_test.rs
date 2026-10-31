@@ -1,16 +1,27 @@
+use std::cell::Cell;
+
 use super::*;
 use telar::testing::press;
 use telar::{AvailableSpace, Component, Event, PointerSource, compute_layout};
 
-fn panel() -> Box<dyn LayoutItem> {
-    box_item(
-        StyledContainer::new(
+fn panel() -> Children {
+    Children::one(|| {
+        Ok(box_item(StyledContainer::new(
             LayoutStyle::new().width(100.0).height(40.0),
             |_r| RectStyle::default(),
             vec![],
-        )
-        .unwrap(),
-    )
+        )?))
+    })
+}
+
+/// A frame titled `title` around [`panel`], painted as `style`, whose close does nothing and that draws no grip.
+fn framing(title: &'static str, style: SurfaceFrameStyle) -> WindowFrameProps {
+    WindowFrameProps::props()
+        .title(title)
+        .style(style)
+        .close(Rc::new(|| {}))
+        .body(panel())
+        .build()
 }
 
 /// The grip's whole job is arithmetic, and every part of it is invisible until it is wrong.
@@ -24,14 +35,10 @@ fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
     let asked: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = asked.clone();
     let style = SurfaceFrameStyle::default();
-    let mut frame = window_frame(
-        "Settings",
-        None,
-        style,
-        Rc::new(|| {}),
-        panel(),
-        Some(Rc::new(move |w, h| sink.borrow_mut().push((w, h)))),
-    )
+    let mut frame = window_frame(WindowFrameProps {
+        resize: Some(Rc::new(move |w, h| sink.borrow_mut().push((w, h)))),
+        ..framing("Settings", style)
+    })
     .unwrap();
     compute_layout(
         frame.layout_node(),
@@ -77,25 +84,21 @@ fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
 
     const SURFACE: (f32, f32) = (920.0, 680.0);
     let style = SurfaceFrameStyle::default();
-    let hungry = box_item(
-        StyledContainer::new(
+    let hungry = Children::one(|| {
+        Ok(box_item(StyledContainer::new(
             LayoutStyle::new().width(600.0).height(SURFACE.1),
             |_r| RectStyle::default(),
             vec![],
-        )
-        .unwrap(),
-    );
+        )?))
+    });
     let asked: Rc<std::cell::RefCell<Vec<(f32, f32)>>> =
         Rc::new(std::cell::RefCell::new(Vec::new()));
     let sink = asked.clone();
-    let mut frame = window_frame(
-        "Settings",
-        None,
-        style,
-        Rc::new(|| {}),
-        hungry,
-        Some(Rc::new(move |w, h| sink.borrow_mut().push((w, h)))),
-    )
+    let mut frame = window_frame(WindowFrameProps {
+        body: hungry,
+        resize: Some(Rc::new(move |w, h| sink.borrow_mut().push((w, h)))),
+        ..framing("Settings", style)
+    })
     .unwrap();
     compute_layout(
         frame.layout_node(),
@@ -133,56 +136,60 @@ fn a_frame_without_a_resize_callback_draws_no_grip() {
     let style = SurfaceFrameStyle::default();
     // A grip a backend cannot act on must be absent rather than present and inert.
     assert!(
-        window_frame("Clock", None, style, Rc::new(|| {}), panel(), None).is_ok(),
+        window_frame(framing("Clock", style)).is_ok(),
         "a frame with no resize callback still builds"
     );
+}
+
+/// An empty box laid out as `style`, built where the frame places it, that records where it was laid out in `rect`.
+fn recording(rect: &Rc<Cell<Option<RwSignal<Rect>>>>, style: fn() -> LayoutStyle) -> Children {
+    let rect = rect.clone();
+    Children::one(move || {
+        let item = StyledContainer::new(style(), |_r| RectStyle::default(), vec![])?;
+        rect.set(telar::track_layout(item.layout_node()));
+        Ok(box_item(item))
+    })
 }
 
 /// A leading item takes room in the strip without pushing the title out of it, and a zero body inset gives the body the full width below. Both exist so an application window — an icon beside its title, content owning everything under the strip — is this frame rather than a second one.
 #[test]
 fn a_leading_item_and_a_zero_inset_reshape_the_frame_without_replacing_it() {
-    let filling = || {
-        box_item(
-            StyledContainer::new(
-                LayoutStyle::new()
-                    .width(SizeDimension::Percent(1.0))
-                    .height(40.0),
-                |_r| RectStyle::default(),
-                vec![],
-            )
-            .unwrap(),
-        )
-    };
     // Everything is built inside the closure: `fresh_layout_runtime` empties the tree, so a widget made before it names a node that no longer exists — and, once ids are handed out again, someone else's.
     let laid_out = |inset: f32, with_icon: bool| {
         crate::test_support::fresh_layout_runtime();
-        let body = filling();
-        let body_rect = telar::track_layout(body.layout_node()).unwrap();
-        let leading: Option<Box<dyn LayoutItem>> = with_icon.then(|| {
-            box_item(
-                StyledContainer::new(
-                    LayoutStyle::new().width(16.0).height(16.0),
-                    |_r| RectStyle::default(),
-                    vec![],
-                )
-                .unwrap(),
-            )
+        let body_rect = Rc::new(Cell::new(None));
+        let leading_rect = Rc::new(Cell::new(None));
+        let body = recording(&body_rect, || {
+            LayoutStyle::new()
+                .width(SizeDimension::Percent(1.0))
+                .height(40.0)
         });
-        let leading_rect = leading
-            .as_ref()
-            .and_then(|item| telar::track_layout(item.layout_node()));
+        let leading = match with_icon {
+            true => recording(&leading_rect, || {
+                LayoutStyle::new().width(16.0).height(16.0)
+            }),
+            false => Children::default(),
+        };
         let style = SurfaceFrameStyle {
             body_inset: Some(inset),
             ..SurfaceFrameStyle::default()
         };
-        let frame = window_frame("Files", leading, style, Rc::new(|| {}), body, None).unwrap();
+        let frame = window_frame(WindowFrameProps {
+            leading,
+            body,
+            ..framing("Files", style)
+        })
+        .unwrap();
         compute_layout(
             frame.layout_node(),
             AvailableSpace::Definite(300.0),
             AvailableSpace::Definite(200.0),
         )
         .unwrap();
-        (body_rect.get(), leading_rect.map(|r| r.get()))
+        (
+            body_rect.get().expect("the body was built").get(),
+            leading_rect.get().map(|r: RwSignal<Rect>| r.get()),
+        )
     };
 
     let (flush, icon_rect) = laid_out(0.0, true);
@@ -257,7 +264,7 @@ fn a_frame_restyles_on_a_mode_switch_without_being_rebuilt() {
 
     let style = SurfaceFrameStyle::default()
         .background(Reactive::of(|| telar::use_theme_tokens().surface()));
-    let frame = window_frame("Files", None, style, Rc::new(|| {}), panel(), None).unwrap();
+    let frame = window_frame(framing("Files", style)).unwrap();
     compute_layout(
         frame.layout_node(),
         AvailableSpace::Definite(300.0),
@@ -311,7 +318,7 @@ fn the_close_mark_swaps_to_its_hover_colour_while_the_pointer_is_over_it() {
         .close(resting)
         .close_hover(Color::rgba(0.8, 0.1, 0.1, 1.0))
         .close_hover_glyph(hovered);
-    let frame = window_frame("Files", None, style, Rc::new(|| {}), panel(), None).unwrap();
+    let frame = window_frame(framing("Files", style)).unwrap();
     compute_layout(
         frame.layout_node(),
         AvailableSpace::Definite(300.0),
@@ -332,7 +339,7 @@ fn the_close_mark_swaps_to_its_hover_colour_while_the_pointer_is_over_it() {
 
 fn laid_out_frame(style: SurfaceFrameStyle) -> telar::ComponentList {
     crate::test_support::fresh_layout_runtime();
-    let frame = window_frame("Files", None, style, Rc::new(|| {}), panel(), None).unwrap();
+    let frame = window_frame(framing("Files", style)).unwrap();
     compute_layout(
         frame.layout_node(),
         AvailableSpace::Definite(300.0),

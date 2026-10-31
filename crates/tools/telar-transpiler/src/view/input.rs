@@ -4,7 +4,7 @@ use telar_parser::{Element, Value};
 
 use crate::style::{PropCall, layout_prop_call};
 
-use super::signals::{normalize_closure, rust_str, substitute_handles, wrap_signal_clones};
+use super::signals::{normalize_closure, rust_str, substitute_handles};
 use super::{ChildEmit, ViewGen};
 
 impl ViewGen<'_> {
@@ -36,10 +36,9 @@ impl ViewGen<'_> {
         {
             modifiers.push_str(".with_font_size(::core::compile_error!(\"`font_size:fit(…)` fits the line of a `text`; an `input` takes a size\"))");
         }
-        let style = wrap_signal_clones(
+        let style = self.owning(
             &super::text::raw_reactive_values(&el.attributes),
-            format!("move |__inherited: TextStyle| __inherited{modifiers}"),
-            self.theme_access,
+            &format!("move |__inherited: TextStyle| __inherited{modifiers}"),
         );
         let size = el
             .attributes
@@ -87,11 +86,7 @@ impl ViewGen<'_> {
             .map(|a| {
                 let closure =
                     substitute_handles(&normalize_closure(a.value.text()), self.theme_access);
-                wrap_signal_clones(
-                    &[a.value.text()],
-                    format!("move {closure}"),
-                    self.theme_access,
-                )
+                self.owning(&[a.value.text()], &format!("move {closure}"))
             });
 
         let placeholder = el
@@ -111,11 +106,7 @@ impl ViewGen<'_> {
             .map(|a| {
                 let closure =
                     substitute_handles(&normalize_closure(a.value.text()), self.theme_access);
-                wrap_signal_clones(
-                    &[a.value.text()],
-                    format!("move {closure}"),
-                    self.theme_access,
-                )
+                self.owning(&[a.value.text()], &format!("move {closure}"))
             });
 
         let mut tail = String::new();

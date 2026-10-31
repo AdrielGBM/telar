@@ -67,11 +67,7 @@ fn path_fills(commands: &[DrawCommand]) -> Vec<Paint> {
 #[test]
 fn a_baked_icon_draws_its_path_in_the_text_colour_around_it() {
     reset_layout_runtime();
-    let item = icon(
-        IconProps::props().name(baked(MONOTONE)).size(24.0).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = icon(IconProps::props().name(baked(MONOTONE)).size(24.0).build()).unwrap();
     let laid = lay_out(item, Color::RED);
     assert_eq!(
         path_fills(&laid.tree.commands()),
@@ -88,7 +84,6 @@ fn a_colour_given_wins_over_the_text_colour() {
             .name(baked(MONOTONE))
             .color(Color::BLUE)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let laid = lay_out(item, Color::RED);
@@ -101,11 +96,7 @@ fn a_colour_given_wins_over_the_text_colour() {
 #[test]
 fn a_multicolour_icon_keeps_its_colours() {
     reset_layout_runtime();
-    let item = icon(
-        IconProps::props().name(baked_in_palette(PALETTE)).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = icon(IconProps::props().name(baked_in_palette(PALETTE)).build()).unwrap();
     let fills = path_fills(&lay_out(item, Color::GREEN).tree.commands());
     assert_eq!(fills.len(), 2, "{fills:?}");
     assert!(!fills.contains(&Paint::Solid(Color::GREEN)), "{fills:?}");
@@ -114,11 +105,7 @@ fn a_multicolour_icon_keeps_its_colours() {
 #[test]
 fn an_unset_size_is_the_themes_icon_size() {
     reset_layout_runtime();
-    let item = icon(
-        IconProps::props().name(baked(MONOTONE)).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = icon(IconProps::props().name(baked(MONOTONE)).build()).unwrap();
     let expected = use_theme_tokens().icon_size();
     let rect = lay_out(item, Color::RED).rect;
     assert_eq!((rect.width, rect.height), (expected, expected));
@@ -127,11 +114,7 @@ fn an_unset_size_is_the_themes_icon_size() {
 #[test]
 fn an_icon_is_decoration_unless_it_is_named() {
     reset_layout_runtime();
-    let decorative = icon(
-        IconProps::props().name(baked(MONOTONE)).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let decorative = icon(IconProps::props().name(baked(MONOTONE)).build()).unwrap();
     let laid = lay_out(decorative, Color::RED);
     assert!(telar::inspect::snapshot(&laid.tree.commands()).is_empty());
 
@@ -141,7 +124,6 @@ fn an_icon_is_decoration_unless_it_is_named() {
             .name(baked(MONOTONE))
             .label("Home")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let laid = lay_out(named, Color::RED);
@@ -154,11 +136,7 @@ fn an_icon_is_decoration_unless_it_is_named() {
 #[test]
 fn an_id_nothing_resolves_keeps_its_box_and_draws_nothing() {
     reset_layout_runtime();
-    let item = icon(
-        IconProps::props().name("demo:unbaked").size(20.0).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = icon(IconProps::props().name("demo:unbaked").size(20.0).build()).unwrap();
     let laid = lay_out(item, Color::RED);
     assert!(path_fills(&laid.tree.commands()).is_empty());
     assert_eq!((laid.rect.width, laid.rect.height), (20.0, 20.0));
@@ -176,7 +154,6 @@ fn a_one_colour_logo_of_a_palette_set_keeps_its_colour() {
             .name(baked_in_palette(BRAND))
             .size(24.0)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let fills = path_fills(&lay_out(item, Color::RED).tree.commands());
@@ -191,11 +168,7 @@ fn a_one_colour_logo_of_a_palette_set_keeps_its_colour() {
 #[test]
 fn a_monochrome_icon_is_tinted_whatever_colour_it_is_drawn_in() {
     reset_layout_runtime();
-    let item = icon(
-        IconProps::props().name(baked(BRAND)).size(24.0).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = icon(IconProps::props().name(baked(BRAND)).size(24.0).build()).unwrap();
     assert_eq!(
         path_fills(&lay_out(item, Color::RED).tree.commands()),
         vec![Paint::Solid(Color::RED)]
@@ -210,7 +183,6 @@ fn a_colour_given_tints_even_a_palette_icon() {
             .name(baked_in_palette(PALETTE))
             .color(Color::BLUE)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let fills = path_fills(&lay_out(item, Color::RED).tree.commands());

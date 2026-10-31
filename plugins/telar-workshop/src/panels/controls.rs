@@ -5,7 +5,7 @@ use std::rc::Rc;
 use telar::preview::host::{ArgState, Args};
 use telar::preview::{ControlKind, PreviewEntry, PropDefault};
 use telar::{
-    Accessible, AlignItems, Border, Children, Container, LayoutError, LayoutItem, LayoutScrollArea,
+    Accessible, AlignItems, Border, Container, LayoutError, LayoutItem, LayoutScrollArea,
     LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer, Text, box_item, children,
 };
 use telar_components::{BadgeProps, ButtonProps, ButtonVariant, badge, button};
@@ -93,7 +93,6 @@ pub(super) fn count_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
                 BadgeProps::props()
                     .label(Reactive::of(move || count.to_string()))
                     .build(),
-                Children::default(),
             )
         },
     )?;
@@ -257,7 +256,6 @@ fn reset_button(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .variant(ButtonVariant::Ghost)
             .on_press(on_press)
             .build(),
-        Children::default(),
     )?
     .a11y_label(move || strings::text_with(RESET_ARG, name));
     Ok(button)

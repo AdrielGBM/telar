@@ -18,7 +18,7 @@ pub struct CurrentPlaceProps {}
 const BAR: f32 = 44.0;
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn current_place(props: CurrentPlaceProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn current_place(props: CurrentPlaceProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -43,192 +43,174 @@ pub fn current_place(props: CurrentPlaceProps, children: Children) -> Result<Box
     });
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Current place").desc("Which place is under a line across the view of a scroll: the anchor whose box spans that distance from the view's top edge, worked out from Telar's layout and the scroll's offset on every target. A bar over the page reads it with its own height to mark the link to the section under it with current:, and to dress itself like that section.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Current place").desc("Which place is under a line across the view of a scroll: the anchor whose box spans that distance from the view's top edge, worked out from Telar's layout and the scroll's offset on every target. A bar over the page reads it with its own height to mark the link to the section under it with current:, and to dress itself like that section.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                     let on_intro = on_intro.clone();
                     let on_usage = on_usage.clone();
                     let on_limits = on_limits.clone();
                     let shown = shown.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let on_intro = on_intro.clone();
-                    let on_usage = on_usage.clone();
-                    let on_limits = on_limits.clone();
-                    let shown = shown.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_1 = {
-                            let __row_0 = {
-                                let __sbox_0 = {
-                                    let __text_0 = {
-                                        Text::declaring(
-                                            || "Intro".to_string(),
-                                            LayoutStyle::new(),
-                                            { let on_intro = on_intro.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_intro.get() { theme.get().on_primary } else { theme.get().ink }) },
-                                        )?
-                                    };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_intro = on_intro.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_intro.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_0])?.to(move || anchor("place-intro")).current({ let on_intro = on_intro.clone(); move || on_intro.get() })
-                                };
-                                let __sbox_1 = {
-                                    let __text_1 = {
-                                        Text::declaring(
-                                            || "Usage".to_string(),
-                                            LayoutStyle::new(),
-                                            { let on_usage = on_usage.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_usage.get() { theme.get().on_primary } else { theme.get().ink }) },
-                                        )?
-                                    };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_usage = on_usage.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_usage.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_1])?.to(move || anchor("place-usage")).current({ let on_usage = on_usage.clone(); move || on_usage.get() })
-                                };
-                                let __sbox_2 = {
-                                    let __text_2 = {
-                                        Text::declaring(
-                                            || "Limits".to_string(),
-                                            LayoutStyle::new(),
-                                            { let on_limits = on_limits.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_limits.get() { theme.get().on_primary } else { theme.get().ink }) },
-                                        )?
-                                    };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_limits = on_limits.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_limits.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_2])?.to(move || anchor("place-limits")).current({ let on_limits = on_limits.clone(); move || on_limits.get() })
-                                };
-                                let __text_3 = {
-                                    let shown = shown.clone();
-                                    Text::declaring(
-                                        move || format!("under the bar: {}", shown.get()),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                let __text_3 = __text_3.a11y_hidden();
-                                StyledContainer::new(LayoutStyle::new().flex_row().sticky().inset_top(0.0).height(BAR).width(SizeDimension::Percent(1.0)).gap(8.0).padding_horizontal(12.0).align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [0.0, 0.0, 1.0, 0.0] }), shadow: None, radius: BorderRadius::zero() } }, children![__sbox_0, __sbox_1, __sbox_2, __text_3])?.role(::telar::Role::Navigation)
-                            };
-                            let __row_0 = __row_0.a11y_label(|| "Places");
-                            let __col_2 = {
-                                let __text_4 = {
+                    let __col_1 = {
+                        let __row_0 = {
+                            let __sbox_0 = {
+                                let __text_0 = {
+                                    let on_intro = on_intro.clone();
                                     Text::declaring(
                                         || "Intro".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(600) },
+                                        { let on_intro = on_intro.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_intro.get() { theme.get().on_primary } else { theme.get().ink }) },
                                     )?
                                 };
-                                let __text_5 = {
-                                    Text::declaring(
-                                        || "Scroll this page: the bar sticks to the top of its view, and the link to the section under it is the current one.".to_string(),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(420.0).padding_all(16.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__text_4, __text_5])?
+                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_intro = on_intro.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_intro.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_0])?.to(move || anchor("place-intro")).current({ let on_intro = on_intro.clone(); move || on_intro.get() })
                             };
-                            let __col_2 = __col_2.page_anchor(|| "place-intro");
-                            let __col_3 = {
-                                let __text_6 = {
+                            let __sbox_1 = {
+                                let __text_1 = {
+                                    let on_usage = on_usage.clone();
                                     Text::declaring(
                                         || "Usage".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(600) },
+                                        { let on_usage = on_usage.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_usage.get() { theme.get().on_primary } else { theme.get().ink }) },
                                     )?
                                 };
-                                let __text_7 = {
-                                    Text::declaring(
-                                        || "A link marked current: is aria-current in a document (location, for an anchor), aria_current in AccessKit, and \"current\" in a terminal's reading.".to_string(),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(420.0).padding_all(16.0).gap(8.0), children![__text_6, __text_7])?
+                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_usage = on_usage.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_usage.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_1])?.to(move || anchor("place-usage")).current({ let on_usage = on_usage.clone(); move || on_usage.get() })
                             };
-                            let __col_3 = __col_3.page_anchor(|| "place-usage");
-                            let __col_4 = {
-                                let __text_8 = {
+                            let __sbox_2 = {
+                                let __text_2 = {
+                                    let on_limits = on_limits.clone();
                                     Text::declaring(
                                         || "Limits".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(600) },
+                                        { let on_limits = on_limits.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_limits.get() { theme.get().on_primary } else { theme.get().ink }) },
                                     )?
                                 };
-                                let __text_9 = {
+                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_limits = on_limits.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_limits.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_2])?.to(move || anchor("place-limits")).current({ let on_limits = on_limits.clone(); move || on_limits.get() })
+                            };
+                            let __text_3 = {
+                                let shown = shown.clone();
+                                Text::declaring(
+                                    move || format!("under the bar: {}", shown.get()),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                )?
+                            };
+                            let __text_3 = __text_3.a11y_hidden();
+                            StyledContainer::new(LayoutStyle::new().flex_row().sticky().inset_top(0.0).height(BAR).width(SizeDimension::Percent(1.0)).gap(8.0).padding_horizontal(12.0).align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [0.0, 0.0, 1.0, 0.0] }), shadow: None, radius: BorderRadius::zero() } }, children![__sbox_0, __sbox_1, __sbox_2, __text_3])?.role(::telar::Role::Navigation)
+                        };
+                        let __row_0 = __row_0.a11y_label(|| "Places");
+                        let __col_2 = {
+                            let __text_4 = {
+                                Text::declaring(
+                                    || "Intro".to_string(),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(600) },
+                                )?
+                            };
+                            let __text_5 = {
+                                Text::declaring(
+                                    || "Scroll this page: the bar sticks to the top of its view, and the link to the section under it is the current one.".to_string(),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                )?
+                            };
+                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(420.0).padding_all(16.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__text_4, __text_5])?
+                        };
+                        let __col_2 = __col_2.page_anchor(|| "place-intro");
+                        let __col_3 = {
+                            let __text_6 = {
+                                Text::declaring(
+                                    || "Usage".to_string(),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(600) },
+                                )?
+                            };
+                            let __text_7 = {
+                                Text::declaring(
+                                    || "A link marked current: is aria-current in a document (location, for an anchor), aria_current in AccessKit, and \"current\" in a terminal's reading.".to_string(),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                )?
+                            };
+                            Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(420.0).padding_all(16.0).gap(8.0), children![__text_6, __text_7])?
+                        };
+                        let __col_3 = __col_3.page_anchor(|| "place-usage");
+                        let __col_4 = {
+                            let __text_8 = {
+                                Text::declaring(
+                                    || "Limits".to_string(),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(600) },
+                                )?
+                            };
+                            let __text_9 = {
+                                Text::declaring(
+                                    || "Where two places meet at the line, the one below it is under it; of nested places, the innermost; a place in a scroll of its own counts only where that scroll shows it.".to_string(),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                )?
+                            };
+                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(420.0).padding_all(16.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__text_8, __text_9])?
+                        };
+                        let __col_4 = __col_4.page_anchor(|| "place-limits");
+                        Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)), children![__row_0, __col_2, __col_3, __col_4])?
+                    };
+                    __children.push(box_item(__col_1));
+                    let __node_2 = code_line(CodeLineProps::props().code("memo(move || view.anchor_at(44.0))   ·   box to:anchor(\"place-usage\") current:$on_usage").build())?;
+                    __children.push(box_item(__node_2));
+                    Ok(__children)
+                }
+                }
+            );
+            example(ExampleProps::props().title("anchor_at — the place under a bar, and current: on its link").children(__recipe_children).build())?
+        };
+        let __node_3 = {
+            let __recipe_children = Children::new(
+                {
+                    let on_page = on_page.clone();
+                    let theme = theme.clone();
+                move || {
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_4 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let on_page = on_page.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_10 = {
+                                    let on_page = on_page.clone();
                                     Text::declaring(
-                                        || "Where two places meet at the line, the one below it is under it; of nested places, the innermost; a place in a scroll of its own counts only where that scroll shows it.".to_string(),
+                                        move || format!("Under a 48px line of the primary scroll: {}", on_page.get()),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_10));
+                                let __text_11 = {
+                                    Text::declaring(
+                                        || "A bar fixed over the page reads use_anchor_at(48.0) from anywhere on the surface, as it reads use_primary_scroll(). The sandbox scrolls each section itself, so here there is no primary scroll.".to_string(),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(420.0).padding_all(16.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__text_8, __text_9])?
-                            };
-                            let __col_4 = __col_4.page_anchor(|| "place-limits");
-                            Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)), children![__row_0, __col_2, __col_3, __col_4])?
-                        };
-                        __children.push(box_item(__col_1));
-                        let __node_2 = code_line(CodeLineProps::props().code("memo(move || view.anchor_at(44.0))   ·   box to:anchor(\"place-usage\") current:$on_usage").build(), Children::default())?;
-                        __children.push(box_item(__node_2));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                __children.push(box_item(__text_11));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(12)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_4));
+                    let __node_5 = code_line(CodeLineProps::props().code("memo(|| use_anchor_at(48.0))   ·   the anchor under a bar fixed over the page, or None").build())?;
+                    __children.push(box_item(__node_5));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("anchor_at — the place under a bar, and current: on its link").build(), __deferred)?
-        };
-        let __node_3 = {
-            let __deferred = Children::per_slot(
-                {
-                    let on_page = on_page.clone();
-                    let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let on_page = on_page.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_4 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let on_page = on_page.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let on_page = on_page.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_10 = {
-                                            let on_page = on_page.clone();
-                                            Text::declaring(
-                                                move || format!("Under a 48px line of the primary scroll: {}", on_page.get()),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_10));
-                                        let __text_11 = {
-                                            Text::declaring(
-                                                || "A bar fixed over the page reads use_anchor_at(48.0) from anywhere on the surface, as it reads use_primary_scroll(). The sandbox scrolls each section itself, so here there is no primary scroll.".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_11));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_4));
-                        let __node_5 = code_line(CodeLineProps::props().code("memo(|| use_anchor_at(48.0))   ·   the anchor under a bar fixed over the page, or None").build(), Children::default())?;
-                        __children.push(box_item(__node_5));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-                }
-            );
-            example(ExampleProps::props().title("use_anchor_at — the same, on the page's own scroll").build(), __deferred)?
+            example(ExampleProps::props().title("use_anchor_at — the same, on the page's own scroll").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_3])?
     };

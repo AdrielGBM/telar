@@ -5,11 +5,11 @@ use std::rc::Rc;
 use crate::shared;
 use crate::strings;
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Input,
-    JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, ModifiersState,
-    NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
-    Text, TextArea, TextStyle, TextWrap, amend_surface, box_item, children, focus::FocusId, signal,
-    style_follows, use_theme_tokens,
+    Accessible, AlignItems, Border, BorderRadius, Color, Container, Input, JustifyContent, Key,
+    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, ModifiersState, NodeId, Props,
+    Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextArea,
+    TextStyle, TextWrap, amend_surface, box_item, children, focus::FocusId, signal, style_follows,
+    use_theme_tokens,
 };
 
 /// A field's width in ems when neither its call nor the theme names one: room for a sentence-long value.
@@ -143,10 +143,7 @@ pub struct TextFieldProps {
 pub type FieldKeyHandler = Rc<dyn Fn(&Key, ModifiersState) -> bool>;
 
 /// Builds a `text_field`: a bordered/padded box around `telar::Input`, or around `telar::TextArea` in a scroll when it is [`multiline`](TextFieldProps::multiline). The muted placeholder is the editor's own, drawn while the value is empty, so the field stays a live, always-mounted editor — tappable/typable from a cold start, with no swapped-in `Text` that would refuse focus.
-pub fn text_field(
-    props: TextFieldProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     adorned_field(props, Adornments::default()).map(|(field, _)| field)
 }
 

@@ -1,7 +1,7 @@
 use telar::preview::{Matrix, PreviewEntry, by_role, preview};
 use telar::{
-    Border, Key, LayoutStyle, NamedKey, RectStyle, Role, ShapeStyle, Size, StyledContainer,
-    box_item, signal,
+    Border, Children, Key, LayoutStyle, NamedKey, RectStyle, Role, ShapeStyle, Size,
+    StyledContainer, box_item, signal,
 };
 
 use super::sample;
@@ -25,20 +25,20 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .edges(p.arg("edges", ResizeEdges::All))
                     .growth(p.arg("growth", ResizeGrowth::Anchored))
                     .step(p.arg("step", 16.0f32))
+                    .children(Children::one(|| {
+                        let panel = StyledContainer::new(
+                            LayoutStyle::column().flex_grow(1.0).padding_all(12.0),
+                            |_| {
+                                let tokens = telar::use_theme_tokens();
+                                RectStyle::default()
+                                    .with_fill(tokens.surface_alt())
+                                    .with_border(Border::uniform(tokens.border(), 1.0))
+                            },
+                            vec![sample::text("Panel")?],
+                        )?;
+                        Ok(box_item(panel))
+                    }))
                     .build(),
-                sample::children(|| {
-                    let panel = StyledContainer::new(
-                        LayoutStyle::column().flex_grow(1.0).padding_all(12.0),
-                        |_| {
-                            let tokens = telar::use_theme_tokens();
-                            RectStyle::default()
-                                .with_fill(tokens.surface_alt())
-                                .with_border(Border::uniform(tokens.border(), 1.0))
-                        },
-                        vec![sample::text("Panel")?],
-                    )?;
-                    Ok(vec![box_item(panel)])
-                }),
             )
         })
         .title("Workbench/Resizable")

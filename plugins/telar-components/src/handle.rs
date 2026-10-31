@@ -4,8 +4,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, Border, Children, Color, Cursor, Insets, Key, LayoutError, LayoutItem, LayoutStyle,
-    NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Accessible, Border, Color, Cursor, Insets, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey,
+    Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
     Transaction, amend_surface, box_item, focus::Role, signal, step_factor, use_theme_tokens,
 };
 
@@ -105,7 +105,7 @@ struct Grab {
     offset: (f32, f32),
 }
 
-pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let HandleProps {
         value,
         transaction,

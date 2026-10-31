@@ -13,7 +13,7 @@
 pub struct OverviewProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn overview(props: OverviewProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -21,7 +21,7 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
     let __col_0 = {
         let __col_1 = {
             let __row_0 = {
-                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(30)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
+                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(30)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build())?;
                 let __text_0 = {
                     Text::declaring(
                         || "rsx — native UI for Rust".to_string(),
@@ -41,88 +41,68 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
             Container::new(LayoutStyle::new().flex_column().gap(10.0), children![__row_0, __text_1])?
         };
         let __node_1 = {
-            let __node_2 = stat(StatProps::props().value("25+").label("modular crates").build(), Children::default())?;
-            let __node_3 = stat(StatProps::props().value("2").label("render backends").build(), Children::default())?;
-            let __node_4 = stat(StatProps::props().value("60 fps").label("software + wgpu").build(), Children::default())?;
-            let __node_5 = stat(StatProps::props().value("0").label("GC pauses").build(), Children::default())?;
+            let __node_2 = stat(StatProps::props().value("25+").label("modular crates").build())?;
+            let __node_3 = stat(StatProps::props().value("2").label("render backends").build())?;
+            let __node_4 = stat(StatProps::props().value("60 fps").label("software + wgpu").build())?;
+            let __node_5 = stat(StatProps::props().value("0").label("GC pauses").build())?;
             Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(150.0), TemplateTrack::fr(1.0)))]).gap(16.0), children![__node_2, __node_3, __node_4, __node_5])?
         };
         let __node_6 = {
             let __node_7 = {
-                let __deferred = Children::per_slot(
+                let __recipe_icon = Children::new(
                     {
                         let theme = theme.clone();
-                    move |__request: SlotRequest<'_>| {
-                        let theme = theme.clone();
-                        let mut __slots = Slots::new();
+                    move || {
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                        if __request.includes(Some("icon")) {
-                            let __node_8 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
-                            __slots.push(Some("icon"), box_item(__node_8));
-                        }
-                        __slots.extend_default(__children);
-                        Ok(__slots)
+                        let __node_8 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                        __children.push(box_item(__node_8));
+                        Ok(__children)
                     }
                     }
                 );
-                feature_card(FeatureCardProps::props().title("Declarative").body("Rows, columns, boxes and text compose by indentation — no builder soup.").build(), __deferred)?
+                feature_card(FeatureCardProps::props().title("Declarative").body("Rows, columns, boxes and text compose by indentation — no builder soup.").icon(__recipe_icon).build())?
             };
             let __node_9 = {
-                let __deferred = Children::per_slot(
+                let __recipe_icon = Children::new(
                     {
                         let theme = theme.clone();
-                    move |__request: SlotRequest<'_>| {
-                        let theme = theme.clone();
-                        let mut __slots = Slots::new();
+                    move || {
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                        if __request.includes(Some("icon")) {
-                            let __node_10 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
-                            __slots.push(Some("icon"), box_item(__node_10));
-                        }
-                        __slots.extend_default(__children);
-                        Ok(__slots)
+                        let __node_10 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                        __children.push(box_item(__node_10));
+                        Ok(__children)
                     }
                     }
                 );
-                feature_card(FeatureCardProps::props().title("Themeable").body("Semantic color tokens resolve reactively. Switch the theme in the sidebar.").build(), __deferred)?
+                feature_card(FeatureCardProps::props().title("Themeable").body("Semantic color tokens resolve reactively. Switch the theme in the sidebar.").icon(__recipe_icon).build())?
             };
             let __node_11 = {
-                let __deferred = Children::per_slot(
+                let __recipe_icon = Children::new(
                     {
                         let theme = theme.clone();
-                    move |__request: SlotRequest<'_>| {
-                        let theme = theme.clone();
-                        let mut __slots = Slots::new();
+                    move || {
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                        if __request.includes(Some("icon")) {
-                            let __node_12 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
-                            __slots.push(Some("icon"), box_item(__node_12));
-                        }
-                        __slots.extend_default(__children);
-                        Ok(__slots)
+                        let __node_12 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                        __children.push(box_item(__node_12));
+                        Ok(__children)
                     }
                     }
                 );
-                feature_card(FeatureCardProps::props().title("Reactive").body("Fine-grained signals update only the widgets that depend on them.").build(), __deferred)?
+                feature_card(FeatureCardProps::props().title("Reactive").body("Fine-grained signals update only the widgets that depend on them.").icon(__recipe_icon).build())?
             };
             let __node_13 = {
-                let __deferred = Children::per_slot(
+                let __recipe_icon = Children::new(
                     {
                         let theme = theme.clone();
-                    move |__request: SlotRequest<'_>| {
-                        let theme = theme.clone();
-                        let mut __slots = Slots::new();
+                    move || {
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                        if __request.includes(Some("icon")) {
-                            let __node_14 = icon(IconProps::props().name(("lucide:layout-grid", crate::__rsx_assets::ASSET_624744E2.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
-                            __slots.push(Some("icon"), box_item(__node_14));
-                        }
-                        __slots.extend_default(__children);
-                        Ok(__slots)
+                        let __node_14 = icon(IconProps::props().name(("lucide:layout-grid", crate::__rsx_assets::ASSET_624744E2.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                        __children.push(box_item(__node_14));
+                        Ok(__children)
                     }
                     }
                 );
-                feature_card(FeatureCardProps::props().title("Flex + grid").body("A full flexbox and CSS-grid engine with wrapping and responsive tracks.").build(), __deferred)?
+                feature_card(FeatureCardProps::props().title("Flex + grid").body("A full flexbox and CSS-grid engine with wrapping and responsive tracks.").icon(__recipe_icon).build())?
             };
             Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(200.0), TemplateTrack::fr(1.0)))]).gap(16.0), children![__node_7, __node_9, __node_11, __node_13])?
         };

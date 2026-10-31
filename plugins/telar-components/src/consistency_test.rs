@@ -50,32 +50,17 @@ fn probes() -> Vec<Probe> {
     let mut probes = vec![
         Probe {
             name: "button",
-            build: || {
-                crate::button(
-                    crate::ButtonProps::props().label("Save").build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::button(crate::ButtonProps::props().label("Save").build()),
             surface: Surface::First(Role::Button),
         },
         Probe {
             name: "text_field",
-            build: || {
-                crate::text_field(
-                    crate::TextFieldProps::props().placeholder("Name").build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::text_field(crate::TextFieldProps::props().placeholder("Name").build()),
             surface: Surface::Root,
         },
         Probe {
             name: "search_field",
-            build: || {
-                crate::search_field(
-                    crate::SearchFieldProps::props().build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::search_field(crate::SearchFieldProps::props().build()),
             surface: Surface::Root,
         },
         Probe {
@@ -86,34 +71,23 @@ fn probes() -> Vec<Probe> {
                         .multiline(true)
                         .rows(1)
                         .build(),
-                    Children::default(),
                 )
             },
             surface: Surface::Root,
         },
         Probe {
             name: "select",
-            build: || crate::select(crate::SelectProps::props().build(), Children::default()),
+            build: || crate::select(crate::SelectProps::props().build()),
             surface: Surface::First(Role::ComboBox),
         },
         Probe {
             name: "tab",
-            build: || {
-                crate::tabs(
-                    crate::TabsProps::props().items(vec!["One", "Two"]).build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::tabs(crate::TabsProps::props().items(vec!["One", "Two"]).build()),
             surface: Surface::First(Role::Tab),
         },
         Probe {
             name: "scrub_field",
-            build: || {
-                crate::scrub_field(
-                    crate::ScrubFieldProps::props().label("X").build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::scrub_field(crate::ScrubFieldProps::props().label("X").build()),
             surface: Surface::Root,
         },
     ];
@@ -126,7 +100,6 @@ fn probes() -> Vec<Probe> {
                     .icon("lucide:search")
                     .label("Find")
                     .build(),
-                Children::default(),
             )
         },
         surface: Surface::First(Role::Button),
@@ -134,18 +107,13 @@ fn probes() -> Vec<Probe> {
     #[cfg(feature = "overlays")]
     probes.push(Probe {
         name: "menu",
-        build: || {
-            crate::menu(
-                crate::MenuProps::props().label("File").fit(true).build(),
-                Children::default(),
-            )
-        },
+        build: || crate::menu(crate::MenuProps::props().label("File").fit(true).build()),
         surface: Surface::First(Role::Button),
     });
     #[cfg(feature = "advanced")]
     probes.push(Probe {
         name: "stepper",
-        build: || crate::stepper(crate::StepperProps::props().build(), Children::default()),
+        build: || crate::stepper(crate::StepperProps::props().build()),
         surface: Surface::First(Role::Button),
     });
     probes
@@ -268,36 +236,21 @@ fn selections() -> Vec<Selection> {
     vec![
         Selection {
             name: "checkbox",
-            build: || {
-                crate::checkbox(
-                    crate::CheckboxProps::props().label("Agree").build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::checkbox(crate::CheckboxProps::props().label("Agree").build()),
             role: Role::CheckBox,
             drawn: || (metrics::icon_size(), metrics::icon_size()),
             corner: |_| BorderRadius::all(Distinct.radius_item()),
         },
         Selection {
             name: "radio",
-            build: || {
-                crate::radio(
-                    crate::RadioProps::props().label("Small").build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::radio(crate::RadioProps::props().label("Small").build()),
             role: Role::Radio,
             drawn: || (metrics::icon_size(), metrics::icon_size()),
             corner: metrics::pill,
         },
         Selection {
             name: "toggle",
-            build: || {
-                crate::toggle(
-                    crate::ToggleProps::props().label("Wi-Fi").build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::toggle(crate::ToggleProps::props().label("Wi-Fi").build()),
             role: Role::Switch,
             drawn: || {
                 let (knob, inset) = (metrics::icon_size(), metrics::gap_xs());
@@ -420,17 +373,11 @@ fn nothing_to_open(_: &mut ComponentList) {}
 
 fn two_items() -> Children {
     Children::new(|| {
-        let mut slots = telar::Slots::new();
+        let mut items = Vec::new();
         for label in ["Cut", "Copy"] {
-            slots.push(
-                None,
-                crate::item(
-                    crate::ItemProps::props().label(label).build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::item(crate::ItemProps::props().label(label).build())?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -447,18 +394,13 @@ fn row_probes() -> Vec<Rows> {
     let mut probes = vec![
         Rows {
             name: "list item",
-            build: || {
-                crate::item(
-                    crate::ItemProps::props().label("Cut").build(),
-                    Children::default(),
-                )
-            },
+            build: || crate::item(crate::ItemProps::props().label("Cut").build()),
             open: nothing_to_open,
             row: Surface::Root,
         },
         Rows {
             name: "select",
-            build: || crate::select(crate::SelectProps::props().build(), two_items()),
+            build: || crate::select(crate::SelectProps::props().children(two_items()).build()),
             open: open_from_keyboard,
             row: Surface::First(Role::Option),
         },
@@ -467,7 +409,14 @@ fn row_probes() -> Vec<Rows> {
     probes.extend([
         Rows {
             name: "menu",
-            build: || crate::menu(crate::MenuProps::props().label("Edit").build(), two_items()),
+            build: || {
+                crate::menu(
+                    crate::MenuProps::props()
+                        .label("Edit")
+                        .children(two_items())
+                        .build(),
+                )
+            },
             open: open_from_keyboard,
             row: Surface::First(Role::MenuItem),
         },
@@ -479,8 +428,8 @@ fn row_probes() -> Vec<Rows> {
                         .at((40.0, 30.0))
                         .on_close(std::rc::Rc::new(|| {}))
                         .within(Rect::new(0.0, 0.0, 800.0, 600.0))
+                        .children(two_items())
                         .build(),
-                    two_items(),
                 )
             },
             open: nothing_to_open,
@@ -499,7 +448,6 @@ fn row_probes() -> Vec<Rows> {
                     ])
                     .label("Files")
                     .build(),
-                Children::default(),
             )
         },
         open: nothing_to_open,
@@ -518,7 +466,6 @@ fn row_probes() -> Vec<Rows> {
                         ])
                         .label("Edit")
                         .build(),
-                    Children::default(),
                 )
             },
             open: nothing_to_open,
@@ -533,7 +480,6 @@ fn row_probes() -> Vec<Rows> {
                         .rows(vec![crate::TableRow::new("a", ["lib.rs"])])
                         .label("Files")
                         .build(),
-                    Children::default(),
                 )
             },
             open: nothing_to_open,
@@ -631,7 +577,7 @@ fn panel_probes() -> Vec<Panel> {
         corner: Corner::Surface,
         show: || {
             let mut tree =
-                shown(|| crate::select(crate::SelectProps::props().build(), two_items()));
+                shown(|| crate::select(crate::SelectProps::props().children(two_items()).build()));
             open_from_keyboard(&mut tree);
             settle(&tree);
             tree
@@ -644,13 +590,18 @@ fn panel_probes() -> Vec<Panel> {
             corner: Corner::Surface,
             show: || {
                 let tree = shown(|| {
-                    let trigger =
-                        telar::Container::new(LayoutStyle::new().width(80.0).height(30.0), vec![])?;
-                    let mut slots = telar::Slots::new();
-                    slots.push(None, telar::box_item(trigger));
+                    let trigger = Children::one(|| {
+                        let trigger = telar::Container::new(
+                            LayoutStyle::new().width(80.0).height(30.0),
+                            vec![],
+                        )?;
+                        Ok(telar::box_item(trigger))
+                    });
                     crate::tooltip(
-                        crate::TooltipProps::props().text("Find").build(),
-                        Children::from(slots),
+                        crate::TooltipProps::props()
+                            .text("Find")
+                            .children(trigger)
+                            .build(),
                     )
                 });
                 let mut tree = tree;
@@ -664,12 +615,8 @@ fn panel_probes() -> Vec<Panel> {
             corner: Corner::Surface,
             show: || {
                 let queue = crate::Toasts::new();
-                let tree = shown(|| {
-                    crate::toaster(
-                        crate::ToasterProps::props().toasts(queue).build(),
-                        Children::default(),
-                    )
-                });
+                let tree =
+                    shown(|| crate::toaster(crate::ToasterProps::props().toasts(queue).build()));
                 queue.push(crate::Toast::new("Saved").until_dismissed());
                 settle(&tree);
                 tree
@@ -685,8 +632,8 @@ fn panel_probes() -> Vec<Panel> {
                             .at((40.0, 30.0))
                             .on_close(std::rc::Rc::new(|| {}))
                             .within(Rect::new(0.0, 0.0, 800.0, 600.0))
+                            .children(two_items())
                             .build(),
-                        two_items(),
                     )
                 })
             },
@@ -701,7 +648,6 @@ fn panel_probes() -> Vec<Panel> {
                             .open(telar::signal(true))
                             .title("Confirm")
                             .build(),
-                        Children::default(),
                     )
                 })
             },
@@ -715,7 +661,6 @@ fn panel_probes() -> Vec<Panel> {
                         crate::DrawerProps::props()
                             .open(telar::signal(true))
                             .build(),
-                        Children::default(),
                     )
                 })
             },
@@ -730,7 +675,6 @@ fn panel_probes() -> Vec<Panel> {
                             .open(telar::signal(true))
                             .commands(vec![crate::Command::new("save", "Save")])
                             .build(),
-                        Children::default(),
                     )
                 })
             },
@@ -747,7 +691,6 @@ fn panel_probes() -> Vec<Panel> {
                         .code("fn main() {}")
                         .copyable(false)
                         .build(),
-                    Children::default(),
                 )
             })
         },

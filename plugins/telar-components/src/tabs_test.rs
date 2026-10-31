@@ -10,11 +10,7 @@ use super::*;
 #[test]
 fn an_inactive_tab_fades_the_ink_of_the_region_around_it() {
     crate::test_support::fresh_layout_runtime();
-    let item = tabs(
-        TabsProps::props().items(vec!["One", "Two"]).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = tabs(TabsProps::props().items(vec!["One", "Two"]).build()).unwrap();
     let root = new_container(
         LayoutStyle::new().flex_column().width(400.0).height(100.0),
         &[item.layout_node()],
@@ -55,7 +51,6 @@ fn builds_and_lays_out() {
         TabsProps::props()
             .items(vec!["One", "Two", "Three"])
             .build(),
-        Children::default(),
     )
     .unwrap();
     let r = lay_out(item.layout_node());
@@ -73,7 +68,6 @@ fn pressing_the_last_tab_sets_selected_index() {
             .items(vec!["One", "Two"])
             .selected(selected)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let r = lay_out(item.layout_node());
@@ -99,7 +93,6 @@ fn the_bar_is_a_tab_list_a_reader_can_name() {
             .items(vec!["General", "Advanced"])
             .label("Settings sections")
             .build(),
-        Children::default(),
     )
     .unwrap();
     lay_out(item.layout_node());
@@ -197,11 +190,10 @@ fn the_left_arrow_moves_forward_when_the_surface_reads_right_to_left() {
 fn a_trailing_item_is_drawn_but_not_part_of_the_tabs_name() {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let badge = Text::declaring(|| "7".to_string(), LayoutStyle::new(), |t| t).unwrap();
     let selected = signal(Page::First);
     let item = tab_list(
         selected,
-        vec![Tab::new(Page::First, "Actions").trailing(box_item(badge))],
+        vec![Tab::new(Page::First, "Actions").trailing(count_badge())],
         Reactive::of(|| Color::TRANSPARENT),
         None,
     )
@@ -254,7 +246,6 @@ fn an_icon_tab_is_the_same_square_as_an_icon_button() {
             .icon(telar_icons::icon!("lucide:square"))
             .label("Two")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let root = telar::Container::new(
@@ -276,7 +267,7 @@ fn an_icon_tab_is_the_same_square_as_an_icon_button() {
 
 fn mounted(props: TabsProps) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
-    let item = tabs(props, Children::default()).unwrap();
+    let item = tabs(props).unwrap();
     lay_out(item.layout_node());
     ComponentList::new(item)
 }
@@ -349,10 +340,9 @@ fn the_padding_tokens_scale_with_the_control_size() {
 fn a_trailing_item_keeps_a_gap_from_the_name() {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let badge = Text::declaring(|| "7".to_string(), LayoutStyle::new(), |t| t).unwrap();
     let item = tab_list(
         signal(Page::First),
-        vec![Tab::new(Page::First, "Actions").trailing(box_item(badge))],
+        vec![Tab::new(Page::First, "Actions").trailing(count_badge())],
         Reactive::of(|| Color::TRANSPARENT),
         None,
     )
@@ -504,4 +494,41 @@ fn a_list_overflows_its_strip_only_by_more_than_snapping_opens_between_them() {
     assert!(!overflows(480.62, 480.0));
     assert!(!overflows(480.0, 480.0));
     assert!(overflows(500.0, 480.0));
+}
+
+fn count_badge() -> Children {
+    Children::one(|| {
+        let badge = Text::declaring(|| "7".to_string(), LayoutStyle::new(), |t| t)?;
+        Ok(box_item(badge))
+    })
+}
+
+/// A tab under a tooltip is a recipe the tooltip may run again; a rebuilt tab takes its own place among the ones the arrows walk instead of adding one.
+#[test]
+fn a_tab_built_again_keeps_its_place_among_the_arrows() {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let focus_ids: Rc<RefCell<Vec<FocusId>>> = Rc::default();
+    let values: Rc<[Page]> = [Page::First, Page::Second].into();
+    let button = |index: usize, value: Page, name: &'static str| TabButton {
+        selected: signal(Page::First),
+        entry: Tab::new(value, name),
+        index,
+        paint: Paint {
+            color: Reactive::of(|| Color::TRANSPARENT),
+            style: None,
+        },
+        values: Rc::clone(&values),
+        focus_ids: Rc::clone(&focus_ids),
+    };
+    let first = button(0, Page::First, "One");
+    let _built = first.build().unwrap();
+    let rebuilt = first.build().unwrap();
+    let _second = button(1, Page::Second, "Two").build().unwrap();
+    assert_eq!(focus_ids.borrow().len(), 2);
+    let rebuilt_id = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.node == rebuilt.layout_node())
+        .map(|exposed| exposed.id);
+    assert_eq!(focus_ids.borrow().first().copied(), rebuilt_id);
 }

@@ -4,12 +4,11 @@ use std::time::Duration;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Role, signal};
 
-use super::sample;
 use crate::icon_button::{IconButtonProps, icon_button};
 use crate::toolbar::{ToolbarProps, toolbar};
 
 fn tools() -> Children {
-    sample::children(|| {
+    Children::new(|| {
         let playing = signal(false);
         Ok(vec![
             icon_button(
@@ -20,7 +19,6 @@ fn tools() -> Children {
                     .pressed(playing)
                     .on_press(Rc::new(move || playing.set(true)))
                     .build(),
-                Children::default(),
             )?,
             icon_button(
                 IconButtonProps::props()
@@ -29,14 +27,12 @@ fn tools() -> Children {
                     .shortcut("Shift+F5")
                     .on_press(Rc::new(move || playing.set(false)))
                     .build(),
-                Children::default(),
             )?,
             icon_button(
                 IconButtonProps::props()
                     .icon(telar_icons::icon!("lucide:rotate-cw"))
                     .label("Restart")
                     .build(),
-                Children::default(),
             )?,
             icon_button(
                 IconButtonProps::props()
@@ -44,7 +40,6 @@ fn tools() -> Children {
                     .label("Settings")
                     .disabled(true)
                     .build(),
-                Children::default(),
             )?,
         ])
     })
@@ -57,8 +52,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 ToolbarProps::props()
                     .label(p.arg("label", "Debug"))
                     .vertical(p.arg("vertical", false))
+                    .children(tools())
                     .build(),
-                tools(),
             )
         })
         .title("Workbench/Toolbar")

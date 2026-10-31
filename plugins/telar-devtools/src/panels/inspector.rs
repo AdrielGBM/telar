@@ -1,15 +1,16 @@
 //! The component inspector: what is mounted, as a tree, over the selected component's box.
 
 use telar::{
-    Accessible, AlignItems, Container, Insets, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    ReactiveList, Rect, Role, RwSignal, Size, Text, box_item, children, memo, signal, track_layout,
+    Accessible, AlignItems, Children, Container, Insets, LayoutError, LayoutItem, LayoutStyle,
+    Reactive, ReactiveList, Rect, Role, RwSignal, Size, Text, box_item, children, memo, signal,
+    track_layout,
 };
 use telar_components::{
     SizedPane, SplitDirection, SplitPaneProps, TreeNode, TreeViewProps, split_pane, tree_view,
 };
 
 use super::tree_menu::TreeMenu;
-use super::{count_mounted, mounted_while, number, panes};
+use super::{count_mounted, mounted_while, number};
 use crate::inspect::{InspectedNode, Inspection};
 use crate::strings::{
     self, BORDER, COMPONENTS, DEPTH, DETAILS, GAP, MARGIN, NOTHING_SELECTED, PADDING, POSITION,
@@ -60,8 +61,9 @@ fn split(
             .min(min)
             .max_fraction(DETAILS_MAX_FRACTION)
             .label(Reactive::of(|| strings::text(RESIZE_DETAILS)))
+            .first(Children::one(move || components(inspection)))
+            .second(Children::one(move || details(inspection)))
             .build(),
-        panes([components(inspection)?, details(inspection)?]),
     )
 }
 
@@ -76,7 +78,6 @@ fn components(inspection: Inspection) -> Result<Box<dyn LayoutItem>, LayoutError
             .on_context(menu.on_context())
             .label(Reactive::of(|| strings::text(COMPONENTS)))
             .build(),
-        telar::Children::default(),
     )?;
     menu.around(tree)
 }

@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Container, LayoutError, LayoutStyle};
+use telar::{Container, LayoutError, LayoutStyle};
 
 use crate::heading::{HeadingProps, heading};
 use crate::metrics;
@@ -12,7 +12,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .text(p.arg("text", "Heading"))
                     .level(p.arg("level", 2u8))
                     .build(),
-                Children::default(),
             )
         })
         .title("Layout/Heading")
@@ -26,7 +25,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                             .text(format!("Heading {level}"))
                             .level(level)
                             .build(),
-                        Children::default(),
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;

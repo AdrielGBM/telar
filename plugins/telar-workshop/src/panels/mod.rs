@@ -13,8 +13,8 @@ use std::rc::Rc;
 use telar::preview::PreviewEntry;
 use telar::{
     Accessible, AlignItems, Children, Color, Container, LayoutError, LayoutItem, LayoutStyle, Memo,
-    Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, ShapeStyle, Slots, StyledContainer,
-    box_item, children, effect, memo, signal, track_layout,
+    Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, ShapeStyle, StyledContainer, box_item,
+    children, effect, memo, signal, track_layout,
 };
 use telar_components::{
     ButtonProps, ButtonVariant, IconButtonProps, ItemProps, Tab, button, icon_button, item,
@@ -28,7 +28,7 @@ use telar_icons::icon;
 
 pub(crate) use controls::arg_table;
 
-use crate::more_menu::{Rows, more_button};
+use crate::more_menu::more_button;
 use crate::state::{PanelPosition, PanelTab, WorkshopState};
 use crate::strings::{
     self, ACCESSIBILITY, ACTIONS, BACK_TO_LIVE, CONTROLS, FOLD_PANELS, HIDE_PANELS, INTERACTIONS,
@@ -130,7 +130,6 @@ fn fold_button(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError
                         collapsed.update(|folded| *folded = !*folded)
                     }))
                     .build(),
-                Children::default(),
             )
         },
     )?;
@@ -154,15 +153,24 @@ fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         .into_iter()
         .map(|tab| {
             let named = Tab::new(tab, strings::reactive(tab_key(tab)));
-            Ok(match tab {
-                PanelTab::Controls => named.trailing(controls::count_badge(state)?),
-                PanelTab::Actions => named.trailing(actions::count_badge(state.actions())?),
-                PanelTab::Interactions => named.trailing(interactions::tab_badge(state)?),
-                PanelTab::Snapshot => named.trailing(snapshot::tab_badge(state)?),
+            let state = state.clone();
+            match tab {
+                PanelTab::Controls => {
+                    named.trailing(Children::one(move || controls::count_badge(&state)))
+                }
+                PanelTab::Actions => {
+                    named.trailing(Children::one(move || actions::count_badge(state.actions())))
+                }
+                PanelTab::Interactions => {
+                    named.trailing(Children::one(move || interactions::tab_badge(&state)))
+                }
+                PanelTab::Snapshot => {
+                    named.trailing(Children::one(move || snapshot::tab_badge(&state)))
+                }
                 PanelTab::Layout | PanelTab::Accessibility => named,
-            })
+            }
         })
-        .collect::<Result<Vec<_>, LayoutError>>()?;
+        .collect::<Vec<_>>();
     tab_list(
         state.panel_tab(),
         tabs,
@@ -232,58 +240,43 @@ fn spread_tools(state: &WorkshopState, tab: PanelTab) -> Result<Box<dyn LayoutIt
 }
 
 /// The tools of panel `tab` as the rows of a menu, built as it opens; `None` for a panel with none on the strip.
-fn tool_rows(state: &WorkshopState, tab: PanelTab) -> Option<Rows> {
+fn tool_rows(state: &WorkshopState, tab: PanelTab) -> Option<Children> {
     let state = state.clone();
-    let rows: Rows = match tab {
-        PanelTab::Controls => Rc::new(move || {
-            let state = state.clone();
-            Children::new(move || {
-                let edited = state
-                    .selected()
-                    .map(|entry| state.args(&entry))
-                    .filter(|args| args.states().iter().any(|arg| arg.edited));
-                let mut slots = Slots::new();
-                slots.push(
-                    None,
-                    action_row(RESET_ALL, edited.is_some(), move || {
-                        if let Some(args) = &edited {
-                            args.reset();
-                        }
-                    })?,
-                );
-                Ok(slots)
-            })
-        }),
-        PanelTab::Interactions => Rc::new(move || {
-            let state = state.clone();
-            Children::new(move || {
-                let interactions = state.interactions().clone();
-                let mut slots = Slots::new();
-                if interactions.picked().is_some() {
-                    let live = interactions.clone();
-                    slots.push(
-                        None,
-                        action_row(BACK_TO_LIVE, true, move || live.back_to_live())?,
-                    );
+    let rows = match tab {
+        PanelTab::Controls => Children::new(move || {
+            let edited = state
+                .selected()
+                .map(|entry| state.args(&entry))
+                .filter(|args| args.states().iter().any(|arg| arg.edited));
+            Ok(vec![action_row(RESET_ALL, edited.is_some(), move || {
+                if let Some(args) = &edited {
+                    args.reset();
                 }
-                slots.push(None, switch_row(RUN_ON_MOUNT, interactions.auto_run())?);
-                let replaying = state.clone();
-                slots.push(
-                    None,
-                    action_row(REPLAY, true, move || interactions::replay(&replaying))?,
-                );
-                Ok(slots)
-            })
+            })?])
         }),
-        PanelTab::Layout => Rc::new(move || {
+        PanelTab::Interactions => Children::new(move || {
+            let interactions = state.interactions().clone();
+            let mut items = Vec::new();
+            if interactions.picked().is_some() {
+                let live = interactions.clone();
+                items.push(action_row(BACK_TO_LIVE, true, move || live.back_to_live())?);
+            }
+            items.push(switch_row(RUN_ON_MOUNT, interactions.auto_run())?);
+            let replaying = state.clone();
+            items.push(action_row(REPLAY, true, move || {
+                interactions::replay(&replaying)
+            })?);
+            Ok(items)
+        }),
+        PanelTab::Layout => {
             let inspection = state.inspection();
             Children::new(move || {
-                let mut slots = Slots::new();
-                slots.push(None, switch_row(OUTLINE, inspection.outline())?);
-                slots.push(None, switch_row(MEASURE, inspection.measure())?);
-                Ok(slots)
+                Ok(vec![
+                    switch_row(OUTLINE, inspection.outline())?,
+                    switch_row(MEASURE, inspection.measure())?,
+                ])
             })
-        }),
+        }
         PanelTab::Actions | PanelTab::Accessibility | PanelTab::Snapshot => return None,
     };
     Some(rows)
@@ -300,7 +293,6 @@ fn action_row(
             .disabled(Reactive::of(move || !enabled))
             .on_press(Rc::new(act))
             .build(),
-        Children::default(),
     )
 }
 
@@ -311,7 +303,6 @@ fn switch_row(label: &'static str, on: RwSignal<bool>) -> Result<Box<dyn LayoutI
             .switch(Reactive::of(move || on.get()))
             .on_press(Rc::new(move || on.update(|on| *on = !*on)))
             .build(),
-        Children::default(),
     )
 }
 
@@ -360,7 +351,6 @@ fn reset_all(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> 
                     .variant(ButtonVariant::Ghost)
                     .on_press(on_press)
                     .build(),
-                Children::default(),
             )
         },
     )?;

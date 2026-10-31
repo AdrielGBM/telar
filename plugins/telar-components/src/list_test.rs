@@ -11,7 +11,6 @@ fn a_hint_fades_the_ink_of_the_row_it_trails() {
             .label("Move")
             .hint(Reactive::from("⌘G"))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let root = new_container(
@@ -52,10 +51,7 @@ fn a_row_stands_at_the_shared_row_height_at_every_control_size() {
         let mut wanted = 0.0;
         let row = provide_control_size(size, || {
             wanted = ListTokens::current().row_height();
-            item(
-                ItemProps::props().label("Move").build(),
-                Children::default(),
-            )
+            item(ItemProps::props().label("Move").build())
         })
         .unwrap();
         let rect = track_layout(row.layout_node()).unwrap();

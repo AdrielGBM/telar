@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Role};
+use telar::{Color, Role};
 
 use crate::tabs::{TabsProps, tabs};
 
@@ -19,7 +19,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .items(labels(p.arg("count", 3u32)))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )
         })
         .title("Navigation/Tabs")
@@ -33,8 +32,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(tabs: TabsProps, "Bound selection", |p| {
             let selected = p.signal("selected", 0u32);
             tabs(
-                TabsProps::props().items(labels(4)).selected(selected).build(),
-                Children::default(),
+                TabsProps::props()
+                    .items(labels(4))
+                    .selected(selected)
+                    .build(),
             )
         })
         .title("Navigation/Tabs")

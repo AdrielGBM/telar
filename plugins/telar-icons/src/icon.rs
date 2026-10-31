@@ -5,9 +5,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, Children, Color, LayoutError, LayoutItem, LayoutStyle, NodeId, ObjectFit, Props,
-    Reactive, RectStyle, SizeDimension, StyledContainer, Svg, SvgData, box_item,
-    inherited_text_style, use_theme_tokens,
+    Accessible, Color, LayoutError, LayoutItem, LayoutStyle, NodeId, ObjectFit, Props, Reactive,
+    RectStyle, SizeDimension, StyledContainer, Svg, SvgData, box_item, inherited_text_style,
+    use_theme_tokens,
 };
 
 use crate::IconName;
@@ -41,7 +41,7 @@ pub(crate) struct Glyph {
 /// Draws the icon `name` in a `size`-px square, a monochrome one tinted like the text around it.
 ///
 /// An id that was not baked is resolved by the runtime source the application installed (the `runtime` feature); until it arrives, and when nothing can answer for it, the box is drawn empty at its full size, so nothing around it moves when it lands.
-pub fn icon(props: IconProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn icon(props: IconProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let IconProps {
         name,
         size,

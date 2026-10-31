@@ -16,7 +16,7 @@ pub struct CodeLineProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn code_line(props: CodeLineProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn code_line(props: CodeLineProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -39,7 +39,7 @@ pub fn code_line(props: CodeLineProps, children: Children) -> Result<Box<dyn Lay
 pub fn code_line_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let __node_0 = code_line(CodeLineProps::props().code(::telar::__preview_arg!(__preview, "code", "box fill:primary radius:8 width:120 height:80")).__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = code_line(CodeLineProps::props().code(::telar::__preview_arg!(__preview, "code", "box fill:primary radius:8 width:120 height:80")).__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }
 

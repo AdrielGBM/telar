@@ -19,7 +19,6 @@ fn tap_toggles_bound_signal() {
             .checked(checked)
             .label("Agree")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let (cx, cy) = lay_out(widget.layout_node());
@@ -42,7 +41,6 @@ fn on_toggle_reports_new_state() {
         CheckboxProps::props()
             .on_toggle(Rc::new(move |v| sink.set(Some(v))))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let (cx, cy) = lay_out(widget.layout_node());
@@ -100,7 +98,7 @@ fn checked(on: bool) -> CheckboxProps {
 }
 
 fn built(props: CheckboxProps) -> Box<dyn LayoutItem> {
-    checkbox(props, Children::default()).unwrap()
+    checkbox(props).unwrap()
 }
 
 #[test]

@@ -3,7 +3,6 @@ use std::time::Duration;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Role};
 
-use super::sample;
 use crate::button::{ButtonProps, button};
 use crate::tooltip::{TooltipProps, tooltip};
 
@@ -31,13 +30,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .description(p.arg("description", "Writes the file to disk."))
                     .side(side)
                     .color(p.arg("color", Color::TRANSPARENT))
+                    .children(Children::one(|| {
+                        button(
+                            ButtonProps::props().label("Hover me").build(),
+                        )
+                    }))
                     .build(),
-                sample::children(|| {
-                    Ok(vec![button(
-                        ButtonProps::props().label("Hover me").build(),
-                        Children::default(),
-                    )?])
-                }),
             )
         })
         .title("Overlays/Tooltip")

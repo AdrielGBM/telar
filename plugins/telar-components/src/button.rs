@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Border, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text,
-    TextWrap, amend_surface, box_item, children, focus::Role,
+    AlignItems, Border, BorderRadius, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
+    Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap,
+    amend_surface, box_item, children, focus::Role,
 };
 
 use crate::shared;
@@ -96,7 +96,7 @@ enum State {
 }
 
 /// The pressable control, in its solid, outline, soft and ghost variants.
-pub fn button(props: ButtonProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ButtonProps {
         label,
         variant,

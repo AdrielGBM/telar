@@ -4,10 +4,9 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, BorderRadius, Children, Container, Cursor, DragAxis, Input, Key, LayoutError,
-    LayoutItem, LayoutStyle, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceAmendment, Text, Transaction, amend_surface, box_item, children,
-    effect,
+    AlignItems, BorderRadius, Container, Cursor, DragAxis, Input, Key, LayoutError, LayoutItem,
+    LayoutStyle, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    SurfaceAmendment, Text, Transaction, amend_surface, box_item, children, effect,
     focus::{self, Role},
     signal, step_factor, style_follows,
 };
@@ -90,10 +89,7 @@ struct Scrub {
     raw: f32,
 }
 
-pub fn scrub_field(
-    props: ScrubFieldProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ScrubFieldProps {
         value,
         transaction,

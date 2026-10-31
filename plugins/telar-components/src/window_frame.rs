@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use telar::{
     AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, Size, SizeDimension,
+    LayoutStyle, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, Size, SizeDimension,
     StyledContainer, SurfaceAmendment, Text, TextStyle, amend_surface, box_item, focus::Role,
     track_layout,
 };
@@ -120,23 +120,41 @@ fn resize_grip(
     ))
 }
 
-/// A titled, closable window frame around `body`.
-///
-/// `leading` is drawn before the title — an application icon, a back arrow, a status dot. `None` for a frame that is only a title, which is every panel.
-///
-/// `resize` opts the frame into a corner grip: it is handed the size the surface should take, in logical pixels, on every move of that grip. A backend that can renegotiate a surface's size wires it up; one that cannot passes `None` and the grip is not drawn, rather than drawn and inert.
-pub fn window_frame(
-    title: impl Into<String>,
-    leading: Option<Box<dyn LayoutItem>>,
-    style: SurfaceFrameStyle,
-    close: std::rc::Rc<dyn Fn()>,
-    body: Box<dyn LayoutItem>,
-    resize: Option<Rc<dyn Fn(f32, f32)>>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let title = title.into();
+/// A titled, closable window frame around its [`body`](Self::body).
+#[derive(Props)]
+pub struct WindowFrameProps {
+    /// What the title strip says.
+    #[props(into, default)]
+    pub title: Reactive<String>,
+    /// Drawn before the title: an application icon, a back arrow, a status dot. Nothing (the default) for a frame that is only a title, which is every panel.
+    #[props(default)]
+    pub leading: Children,
+    /// How the frame is painted, and which window controls it draws beside close.
+    #[props(default)]
+    pub style: SurfaceFrameStyle,
+    /// What the close button does.
+    pub close: Rc<dyn Fn()>,
+    /// What the frame holds, under the title strip.
+    #[props(default)]
+    pub body: Children,
+    /// Opts the frame into a corner grip, handed the size the surface should take, in logical pixels, on every move of that grip. A backend that can renegotiate a surface's size wires it up; one that cannot leaves it `None` (the default) and the grip is not drawn, rather than drawn and inert.
+    #[props(some, default)]
+    pub resize: Option<Rc<dyn Fn(f32, f32)>>,
+}
+
+/// A titled, closable window frame around its body.
+pub fn window_frame(props: WindowFrameProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let WindowFrameProps {
+        title,
+        leading,
+        style,
+        close,
+        body,
+        resize,
+    } = props;
     let title_color = style.title_text.clone();
     let title_label = box_item(Text::declaring(
-        move || title.clone(),
+        move || title.get(),
         LayoutStyle::new(),
         move |inherited| chrome_text(inherited, title_color.as_ref().map(Reactive::get)),
     )?);
@@ -144,21 +162,18 @@ pub fn window_frame(
     let or_unset = |color: &Option<Reactive<Color>>| {
         color.clone().unwrap_or_else(|| Color::TRANSPARENT.into())
     };
-    let controls = window_controls(
-        WindowControlsProps {
-            minimize: style.controls.minimize,
-            maximize: style.controls.maximize,
-            on_close: close,
-            glyph: or_unset(&style.close),
-            hover: or_unset(&style.control_hover),
-            hover_glyph: or_unset(&style.control_hover_glyph),
-            close_hover: or_unset(&style.close_hover),
-            close_hover_glyph: or_unset(&style.close_hover_glyph),
-            min_size: None,
-            style: None,
-        },
-        Children::default(),
-    )?;
+    let controls = window_controls(WindowControlsProps {
+        minimize: style.controls.minimize,
+        maximize: style.controls.maximize,
+        on_close: close,
+        glyph: or_unset(&style.close),
+        hover: or_unset(&style.control_hover),
+        hover_glyph: or_unset(&style.control_hover_glyph),
+        close_hover: or_unset(&style.close_hover),
+        close_hover_glyph: or_unset(&style.close_hover_glyph),
+        min_size: None,
+        style: None,
+    })?;
 
     // One group, so `SPACE_BETWEEN` pushes the controls to the far edge rather than spreading three things across the strip.
     let label_box = || {
@@ -166,16 +181,9 @@ pub fn window_frame(
             .align_items(AlignItems::CENTER)
             .gap(shared::gap_md())
     };
-    let label_group = box_item(
-        Container::new(
-            label_box(),
-            match leading {
-                Some(leading) => vec![leading, title_label],
-                None => vec![title_label],
-            },
-        )?
-        .styled_by(label_box),
-    );
+    let mut labels = leading.build()?;
+    labels.push(title_label);
+    let label_group = box_item(Container::new(label_box(), labels)?.styled_by(label_box));
 
     let title_bar_color = style.title_bar.clone();
     let strip_box = || {
@@ -214,7 +222,7 @@ pub fn window_frame(
             .justify_content(JustifyContent::CENTER)
             .padding_all(body_inset.unwrap_or_else(shared::gap_lg))
     };
-    let body_area = box_item(Container::new(body_box(), vec![body])?.styled_by(body_box));
+    let body_area = box_item(Container::new(body_box(), body.build()?)?.styled_by(body_box));
 
     let card_rect: DeferredRect = Rc::new(RefCell::new(None));
     let mut children = vec![strip, body_area];

@@ -12,8 +12,8 @@ use telar::preview::{Axis, Matrices, Matrix, MatrixCell, PreviewEntry, control_s
 use telar::{
     Accessible, AlignItems, Children, Clip, ClippedItem, ColorScheme, Container, JustifyContent,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle,
-    Role, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextWrap, batch, box_item, children,
-    signal, use_resolved_scheme, use_theme_tokens,
+    Role, RwSignal, ShapeStyle, StyledContainer, Text, TextWrap, batch, box_item, children, signal,
+    use_resolved_scheme, use_theme_tokens,
 };
 use telar_components::{IconButtonProps, ItemProps, SeparatorProps, icon_button, item, separator};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
@@ -80,11 +80,7 @@ fn header(
     )?;
     let mut items = children![title];
     items.push(open_in_canvas(state, entry, shown)?);
-    let picking = state.clone();
-    items.push(more_button(
-        MATRIX_AXES_MENU,
-        Rc::new(move || axis_rows(&picking, entry)),
-    )?);
+    items.push(more_button(MATRIX_AXES_MENU, axis_rows(state, entry))?);
     let header = StyledContainer::new(
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
@@ -105,36 +101,26 @@ fn header(
 fn axis_rows(state: &WorkshopState, entry: PreviewEntry) -> Children {
     let state = state.clone();
     Children::new(move || {
-        let mut slots = Slots::new();
         let args = state.args(&entry).states();
         let matrices = Matrices::installed();
-        for (axis, label) in pickable(&entry, &args, &matrices) {
-            slots.push(None, axis_row(&state, entry, axis, label)?);
-        }
+        let mut rows = pickable(&entry, &args, &matrices)
+            .into_iter()
+            .map(|(axis, label)| axis_row(&state, entry, axis, label))
+            .collect::<Result<Vec<_>, _>>()?;
         let axes = state.matrix_axes();
         if entry.matrix.is_some() {
             let changed =
                 move || Reactive::of(move || !axes.with(|axes| axes.is_declared_for(&entry)));
-            slots.push(
-                None,
-                separator(
-                    SeparatorProps::props().shown(changed()).build(),
-                    Children::default(),
-                )?,
-            );
-            slots.push(
-                None,
-                item(
-                    ItemProps::props()
-                        .label(strings::reactive(RESET_AXES))
-                        .shown(changed())
-                        .on_press(Rc::new(move || axes.set(MatrixAxes::Declared)))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            rows.push(separator(SeparatorProps::props().shown(changed()).build())?);
+            rows.push(item(
+                ItemProps::props()
+                    .label(strings::reactive(RESET_AXES))
+                    .shown(changed())
+                    .on_press(Rc::new(move || axes.set(MatrixAxes::Declared)))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(rows)
     })
 }
 
@@ -216,7 +202,6 @@ fn axis_row(
                 axes.update(|axes| *axes = axes.toggled(&entry, &matrices, &axis, flipped));
             }))
             .build(),
-        Children::default(),
     )
 }
 
@@ -260,7 +245,6 @@ fn open_in_canvas(
                     .label(strings::reactive(OPEN_IN_CANVAS))
                     .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
                     .build(),
-                Children::default(),
             )
         },
     )?;

@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn the_icon_named_from_rust_is_baked_and_draws() {
     reset_layout_runtime();
-    let item = marker(Children::default()).unwrap();
+    let item = marker().unwrap();
     compute_layout(
         item.layout_node(),
         AvailableSpace::Definite(100.0),

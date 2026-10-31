@@ -1,5 +1,5 @@
+use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Role};
 use telar_icons::IconName;
 
 use crate::icon_button::{IconButtonProps, icon_button};
@@ -33,7 +33,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .shortcut(p.arg("shortcut", "Mod+K"))
                     .disabled(p.arg("disabled", false))
                     .build(),
-                Children::default(),
             )
         })
         .title("Workbench/Icon button")
@@ -52,7 +51,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .pressed(pressed)
                     .on_press(std::rc::Rc::new(move || pressed.update(|on| *on = !*on)))
                     .build(),
-                Children::default(),
             )
         })
         .title("Workbench/Icon button")

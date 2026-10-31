@@ -83,7 +83,6 @@ impl Mounted {
                 .select_branches(select_branches)
                 .wrap(wrap)
                 .build(),
-            Children::default(),
         )
         .unwrap();
         lay_out(item.layout_node(), 240.0, height);

@@ -15,7 +15,7 @@
 pub struct TextFitProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn text_fit(props: TextFitProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn text_fit(props: TextFitProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -24,226 +24,182 @@ pub fn text_fit(props: TextFitProps, children: Children) -> Result<Box<dyn Layou
     let share = memo(move || FitWidth::Containing(if narrow_rsx_mv.get() { 0.4 } else { 0.9 }));
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Fitted text").desc("font_size:fit(…) asks for a width instead of a size. Layout measures the line at two sizes through whatever measures text on this target and solves for the size that sets it to that width, again whenever the width, the text, its style or its face changes. The line scales whole, tracking in em included, and never wraps.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Fitted text").desc("font_size:fit(…) asks for a width instead of a size. Layout measures the line at two sizes through whatever measures text on this target and solves for the size that sets it to that width, again whenever the width, the text, its style or its face changes. The line scales whole, tracking in em included, and never wraps.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_0 = {
-                                            Text::fitting(
-                                                || "TELAR".to_string(),
-                                                LayoutStyle::new(),
-                                                move || FontFit::containing(0.6),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink).with_font_weight(800).with_letter_spacing_in(TextLength::Em(-0.04), Size::ZERO) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_0));
-                                        let __text_1 = {
-                                            Text::fitting(
-                                                || "WOVEN ON EVERY TARGET".to_string(),
-                                                LayoutStyle::new(),
-                                                move || FontFit::containing(0.6),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().muted).with_font_weight(800).with_letter_spacing_in(TextLength::Em(0.04), Size::ZERO) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_3 = code_line(CodeLineProps::props().code("text 'TELAR' font_size:fit(60%) letter_spacing:-0.04em").build(), Children::default())?;
-                        __children.push(box_item(__node_3));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_0 = {
+                                    Text::fitting(
+                                        || "TELAR".to_string(),
+                                        LayoutStyle::new(),
+                                        move || FontFit::containing(0.6),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink).with_font_weight(800).with_letter_spacing_in(TextLength::Em(-0.04), Size::ZERO) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_0));
+                                let __text_1 = {
+                                    Text::fitting(
+                                        || "WOVEN ON EVERY TARGET".to_string(),
+                                        LayoutStyle::new(),
+                                        move || FontFit::containing(0.6),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().muted).with_font_weight(800).with_letter_spacing_in(TextLength::Em(0.04), Size::ZERO) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(8)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_3 = code_line(CodeLineProps::props().code("text 'TELAR' font_size:fit(60%) letter_spacing:-0.04em").build())?;
+                    __children.push(box_item(__node_3));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("A share of the box holding the text").build(), __deferred)?
+            example(ExampleProps::props().title("A share of the box holding the text").children(__recipe_children).build())?
         };
         let __node_4 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_5 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_2 = {
-                                            Text::fitting(
-                                                || "Wide".to_string(),
-                                                LayoutStyle::new(),
-                                                move || FontFit::containing(1.0).with_max_height(TextLength::SurfaceHeight(0.18)),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink).with_font_weight(800) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_2));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_5));
-                        let __node_6 = code_line(CodeLineProps::props().code("text 'Wide' font_size:fit(100%, max_height:18sh)").build(), Children::default())?;
-                        __children.push(box_item(__node_6));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_5 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_2 = {
+                                    Text::fitting(
+                                        || "Wide".to_string(),
+                                        LayoutStyle::new(),
+                                        move || FontFit::containing(1.0).with_max_height(TextLength::SurfaceHeight(0.18)),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink).with_font_weight(800) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_2));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_5));
+                    let __node_6 = code_line(CodeLineProps::props().code("text 'Wide' font_size:fit(100%, max_height:18sh)").build())?;
+                    __children.push(box_item(__node_6));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Capped by a height").build(), __deferred)?
+            example(ExampleProps::props().title("Capped by a height").children(__recipe_children).build())?
         };
         let __node_7 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let share = share.clone();
                     let theme = theme.clone();
                     let narrow = narrow.clone();
-                move |__request: SlotRequest<'_>| {
-                    let share = share.clone();
-                    let theme = theme.clone();
-                    let narrow = narrow.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_8 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let share = share.clone();
-                                    let theme = theme.clone();
-                                    let narrow = narrow.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let share = share.clone();
-                                    let theme = theme.clone();
-                                    let narrow = narrow.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_3 = {
-                                            Text::fitting(
-                                                || "Reflow".to_string(),
-                                                LayoutStyle::new(),
-                                                { let share = share.clone(); move || FontFit::new(share.get()) },
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().primary).with_font_weight(600) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_3));
-                                        let __node_9 = button(ButtonProps::props().label("Switch between 90% and 40%").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let narrow = narrow.clone(); move || narrow.toggle() })).build(), Children::default())?;
-                                        __children.push(box_item(__node_9));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_8));
-                        let __node_10 = code_line(CodeLineProps::props().code("let share = memo(move || FitWidth::Containing(…));   text font_size:fit($share)").build(), Children::default())?;
-                        __children.push(box_item(__node_10));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_8 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let share = share.clone();
+                                let theme = theme.clone();
+                                let narrow = narrow.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_3 = {
+                                    Text::fitting(
+                                        || "Reflow".to_string(),
+                                        LayoutStyle::new(),
+                                        { let share = share.clone(); move || FontFit::new(share.get()) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().primary).with_font_weight(600) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_3));
+                                let __node_9 = button(ButtonProps::props().label("Switch between 90% and 40%").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let narrow = narrow.clone(); move || narrow.toggle() })).build())?;
+                                __children.push(box_item(__node_9));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(8)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_10 = code_line(CodeLineProps::props().code("let share = memo(move || FitWidth::Containing(…));   text font_size:fit($share)").build())?;
+                    __children.push(box_item(__node_10));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("A width that follows state").build(), __deferred)?
+            example(ExampleProps::props().title("A width that follows state").children(__recipe_children).build())?
         };
         let __node_11 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_12 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_4 = {
-                                            Text::fitting(
-                                                || "320 pixels wide".to_string(),
-                                                LayoutStyle::new(),
-                                                move || FontFit::new(TextLength::Px(320.0)),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_4));
-                                        let __text_5 = {
-                                            Text::fitting(
-                                                || "Telar Test".to_string(),
-                                                LayoutStyle::new(),
-                                                move || FontFit::containing(0.8),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_5));
-                                        let __text_6 = {
-                                            Text::declaring(
-                                                || "Fitted in the fallback first, then again on the frame the face lands.".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_6));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_12));
-                        let __node_13 = code_line(CodeLineProps::props().code("text font_size:fit(320)   ·   fit(40sw)   ·   fit(12em)").build(), Children::default())?;
-                        __children.push(box_item(__node_13));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_12 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_4 = {
+                                    Text::fitting(
+                                        || "320 pixels wide".to_string(),
+                                        LayoutStyle::new(),
+                                        move || FontFit::new(TextLength::Px(320.0)),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_4));
+                                let __text_5 = {
+                                    Text::fitting(
+                                        || "Telar Test".to_string(),
+                                        LayoutStyle::new(),
+                                        move || FontFit::containing(0.8),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_5));
+                                let __text_6 = {
+                                    Text::declaring(
+                                        || "Fitted in the fallback first, then again on the frame the face lands.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_6));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(8)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_12));
+                    let __node_13 = code_line(CodeLineProps::props().code("text font_size:fit(320)   ·   fit(40sw)   ·   fit(12em)").build())?;
+                    __children.push(box_item(__node_13));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("A length, and the face the app ships").build(), __deferred)?
+            example(ExampleProps::props().title("A length, and the face the app ships").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_11])?
     };

@@ -37,7 +37,7 @@ fn every_preview_has_its_own_id() {
 }
 
 /// Building blocks called with plain arguments rather than as a tag with derived props.
-const WITHOUT_PROPS: [&str; 2] = ["line_gutter", "window_frame"];
+const WITHOUT_PROPS: [&str; 1] = ["line_gutter"];
 
 #[test]
 fn every_preview_describes_its_component_by_its_props() {

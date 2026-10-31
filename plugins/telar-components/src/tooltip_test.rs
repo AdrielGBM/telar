@@ -1,20 +1,16 @@
 use super::*;
+use crate::test_support::find_text;
 use telar::testing::moved;
 use telar::{
     AvailableSpace, ComponentList, DrawCommand, LineHeight, compute_layout, new_container,
     relayout_if_dirty,
 };
 
-fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
-    cmds.iter()
-        .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
-}
-
-fn slot_with_trigger() -> Slots {
-    let inner = Container::new(LayoutStyle::new().width(80.0).height(30.0), vec![]).unwrap();
-    let mut slots = Slots::new();
-    slots.push(None, box_item(inner));
-    slots
+fn trigger() -> Children {
+    Children::one(|| {
+        let inner = Container::new(LayoutStyle::new().width(80.0).height(30.0), vec![])?;
+        Ok(box_item(inner))
+    })
 }
 
 /// A hint is sized from the text it is describing, not from the theme: a compact panel that says its region is 11px gets a bubble at that panel's scale, and `TooltipProps` has no size to correct it with.
@@ -22,8 +18,10 @@ fn slot_with_trigger() -> Slots {
 fn a_bubble_takes_the_size_the_region_around_it_declared() {
     crate::test_support::fresh_layout_runtime();
     let tooltip = tooltip(
-        TooltipProps::props().text("Move").build(),
-        Children::from(slot_with_trigger()),
+        TooltipProps::props()
+            .text("Move")
+            .children(trigger())
+            .build(),
     )
     .unwrap();
     let root = new_container(
@@ -60,10 +58,11 @@ fn a_bubble_takes_the_size_the_region_around_it_declared() {
 #[test]
 fn hover_shows_bubble_and_leave_hides_it() {
     crate::test_support::fresh_layout_runtime();
-    let slots = slot_with_trigger();
     let tooltip = tooltip(
-        TooltipProps::props().text("Helpful hint").build(),
-        Children::from(slots),
+        TooltipProps::props()
+            .text("Helpful hint")
+            .children(trigger())
+            .build(),
     )
     .unwrap();
 
@@ -111,8 +110,8 @@ fn a_hint_shows_its_name_its_shortcut_and_its_description() {
             .text("Move")
             .shortcut("G")
             .description("Drag the selection along the ground")
+            .children(trigger())
             .build(),
-        Children::from(slot_with_trigger()),
     )
     .unwrap();
     let root = new_container(
@@ -149,8 +148,8 @@ fn the_description_line_is_set_with_room_to_wrap_into() {
         TooltipProps::props()
             .text("Setup")
             .description("Name regions and say what it is made of")
+            .children(trigger())
             .build(),
-        Children::from(slot_with_trigger()),
     )
     .unwrap();
     let root = new_container(
@@ -200,8 +199,8 @@ fn a_bubble_is_as_wide_as_what_it_says() {
             .text("Object")
             .shortcut("1")
             .description("Pick whole bodies")
+            .children(trigger())
             .build(),
-        Children::from(slot_with_trigger()),
     )
     .unwrap();
     let root = new_container(
@@ -239,7 +238,11 @@ fn an_absent_shortcut_and_description_take_no_room() {
     crate::test_support::fresh_layout_runtime();
     let height_of = |props: TooltipProps| {
         let mut tree = telar::testing::scoped(|| {
-            let tooltip = tooltip(props, Children::from(slot_with_trigger())).unwrap();
+            let tooltip = tooltip(TooltipProps {
+                children: trigger(),
+                ..props
+            })
+            .unwrap();
             let root = new_container(
                 LayoutStyle::new().flex_column().width(400.0).height(400.0),
                 &[tooltip.layout_node()],
@@ -281,8 +284,7 @@ fn an_absent_shortcut_and_description_take_no_room() {
 #[test]
 fn builds_without_hover() {
     crate::test_support::fresh_layout_runtime();
-    let slots = slot_with_trigger();
-    let tooltip = tooltip(TooltipProps::props().build(), Children::from(slots)).unwrap();
+    let tooltip = tooltip(TooltipProps::props().children(trigger()).build()).unwrap();
     let tree = ComponentList::new(tooltip);
     assert!(
         !find_text(&tree.commands(), "Helpful hint"),
@@ -321,7 +323,7 @@ fn hovered(
         None => props,
     };
     let mut tree = telar::testing::scoped(|| {
-        let tooltip = tooltip(props.build(), Children::from(slot_with_trigger())).unwrap();
+        let tooltip = tooltip(props.children(trigger()).build()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             &[tooltip.layout_node()],
@@ -446,8 +448,8 @@ fn every_line_of_a_bubble_reads_on_it_in_light_and_in_dark() {
                 .text("Find")
                 .shortcut("Ctrl+K")
                 .description("Search every command")
+                .children(trigger())
                 .build(),
-            Children::from(slot_with_trigger()),
         )
         .unwrap();
         let root = new_container(

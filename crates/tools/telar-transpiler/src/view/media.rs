@@ -5,7 +5,7 @@ use telar_parser::{Attr, Element, Value};
 use crate::registry;
 use telar_project::{AssetContext, AssetKind, asset_kind_for_tag};
 
-use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
+use super::signals::{rust_str, substitute_reads};
 use super::{ChildEmit, ViewGen, expr_marker};
 
 /// The shared `fit:` attribute (CSS `object-fit`) for `img`/`svg`, as a reactive `ObjectFit` closure. An absent `fit:` preserves the aspect ratio and letterboxes, matching the widget default.
@@ -111,7 +111,7 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Resolves `color:` into a `move || Option<Color>` closure, sharing `fill`/`stroke`/`color`'s [`color_expr`](ViewGen::color_expr) resolution: a bare theme token (`color:accent`), a `$signal` read, an inline `#hex`, a CSS keyword, and an arbitrary color expression (`color:theme().primary`, recognized by its `(`) all resolve identically — so an icon takes its ink from a theme token the same way text takes `color:`. A token re-reads `use_theme` on every `view()`, so a runtime theme switch recolors the glyph; any `$signal` referenced is cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `box fill:$sig`. Missing or empty `color` keeps the SVG's own colors (`None`).
+    /// Resolves `color:` into a `move || Option<Color>` closure, sharing `fill`/`stroke`/`color`'s [`color_expr`](ViewGen::color_expr) resolution: a `$theme` read (`color:$theme.accent`), a `$signal` read, an inline `#hex`, a CSS keyword, and an arbitrary color expression (`color:theme().primary`, recognized by its `(`) all resolve identically — so an icon takes its ink from a theme token the same way text takes `color:`. A `$theme` read follows the theme, so a runtime theme switch recolors the glyph; the closure takes its captures by [`ViewGen::owning`], so the outer handle stays usable, mirroring `box fill:$sig`. Missing or empty `color` keeps the SVG's own colors (`None`).
     fn svg_color_closure(&self, color_attr: Option<&Attr>) -> String {
         let Some(a) = color_attr else {
             return "|| None".to_string();
@@ -121,7 +121,7 @@ impl ViewGen<'_> {
             return "|| None".to_string();
         }
         let expr = self.color_expr(a.value.text(), Some(a.value_start));
-        wrap_signal_clones(&[v], format!("move || Some({expr})"), self.theme_access)
+        self.owning(&[v], &format!("move || Some({expr})"))
     }
 
     /// `stroke:` on an `svg`, overriding the stroke width the document declares. A theme that draws its icons at one weight sets it here rather than editing every asset, which is why the override exists on `Svg` at all — it was simply unreachable from `[view]`.
@@ -138,13 +138,13 @@ impl ViewGen<'_> {
             self.theme_access,
         );
         // `.into()` rather than `Some(…)`, so a width and an already-optional one both work — std gives `From<T> for Option<T>` and the identity, and `with_stroke`'s parameter fixes the target.
-        wrap_signal_clones(&[v], format!("move || ({expr}).into()"), self.theme_access)
+        self.owning(&[v], &format!("move || ({expr}).into()"))
     }
 
     /// Resolves a media widget's `src` attribute into `(setup, data_fn)` fragments that slot into its construction block.
     ///
     /// - Quoted, non-empty `src:"path"` is a static asset the CLI baked: `data_fn` clones the `Arc` the artifact's `static` holds, and `setup` is empty — the payload lives once per crate in the generated module, not once per use site as it did when the macro baked it.
-    /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). Signals are cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `svg color:$sig` / `box fill:$sig`.
+    /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). The closure takes its captures by [`ViewGen::owning`], so the outer handle stays usable, mirroring `svg color:$sig` / `box fill:$sig`.
     /// - Non-quoted, `$`-free `src:expr` is a constant `Arc<Data>` handle: `setup` hoists it into `__src` once and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
     /// - Missing, empty, or written in a form that cannot name an asset (a bare flag, a `t"…"` key) falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
     fn media_src_binding(
@@ -160,10 +160,9 @@ impl ViewGen<'_> {
             Some((a, Value::Expr(expr) | Value::Directive(expr))) if !expr.trim().is_empty() => {
                 let v = expr.trim();
                 if v.contains('$') {
-                    let data_fn = wrap_signal_clones(
+                    let data_fn = self.owning(
                         &[v],
-                        format!("move || {}", substitute_reads(v, self.theme_access)),
-                        self.theme_access,
+                        &format!("move || {}", substitute_reads(v, self.theme_access)),
                     );
                     return (String::new(), data_fn);
                 }

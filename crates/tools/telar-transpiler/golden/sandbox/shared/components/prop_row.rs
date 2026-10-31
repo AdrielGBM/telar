@@ -19,7 +19,7 @@ pub struct PropRowProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn prop_row(props: PropRowProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn prop_row(props: PropRowProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -56,7 +56,7 @@ pub fn prop_row(props: PropRowProps, children: Children) -> Result<Box<dyn Layou
 pub fn prop_row_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let __node_0 = prop_row(PropRowProps::props().name(::telar::__preview_arg!(__preview, "name", "align")).values(::telar::__preview_arg!(__preview, "values", "start · center · end · stretch")).about(::telar::__preview_arg!(__preview, "about", "Cross-axis alignment of children.")).__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = prop_row(PropRowProps::props().name(::telar::__preview_arg!(__preview, "name", "align")).values(::telar::__preview_arg!(__preview, "values", "start · center · end · stretch")).about(::telar::__preview_arg!(__preview, "about", "Cross-axis alignment of children.")).__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }
 

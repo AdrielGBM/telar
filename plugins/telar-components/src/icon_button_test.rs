@@ -49,7 +49,6 @@ fn a_standalone_icon_button_is_a_tab_stop_that_enter_presses() {
             .label("Search")
             .on_press(Rc::new(move || sink.set(sink.get() + 1)))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let mut tree = mount(button);
@@ -69,7 +68,6 @@ fn a_plain_button_says_nothing_about_being_pressed() {
             .icon("lucide:search")
             .label("Search")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let _tree = mount(button);
@@ -88,7 +86,6 @@ fn the_pressed_state_follows_its_signal_into_the_semantics() {
             .label("Grid")
             .pressed(on)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let _tree = mount(button);
@@ -111,7 +108,6 @@ fn a_disabled_button_is_announced_as_unavailable_and_does_not_fire() {
             .disabled(true)
             .on_press(Rc::new(move || sink.set(true)))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let mut tree = mount(button);
@@ -144,7 +140,6 @@ fn an_icon_baked_from_rust_draws_its_artwork() {
             .icon(telar_icons::icon!("lucide:search"))
             .label("Search")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let tree = mount(button);
@@ -159,7 +154,7 @@ fn an_icon_baked_from_rust_draws_its_artwork() {
 
 fn mounted(props: IconButtonProps) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
-    mount(icon_button(props, Children::default()).unwrap())
+    mount(icon_button(props).unwrap())
 }
 
 fn square(tree: &ComponentList) -> RectStyle {
@@ -256,4 +251,41 @@ fn the_shortcut_is_the_button_s_own_and_not_the_tooltip_s() {
             .build(),
     );
     assert_eq!(exposed_button().keyboard_shortcut, None);
+}
+
+/// The square under the tooltip is a recipe, so built again it is the same working button rather than an empty trigger.
+#[test]
+fn the_square_under_the_tooltip_builds_again_as_a_working_button() {
+    let fired = Rc::new(Cell::new(0));
+    crate::test_support::fresh_layout_runtime();
+    focus::clear();
+    let sink = fired.clone();
+    let square = Square {
+        icon: "lucide:search".into(),
+        label: "Search".into(),
+        shortcut: Reactive::default(),
+        pressed: None,
+        disabled: Reactive::default(),
+        activate: Rc::new(move || sink.set(sink.get() + 1)),
+        style: None,
+        toolbar: None,
+        index: None,
+    };
+    let first = square.build().unwrap();
+    let again = square.build().unwrap();
+    let tree = mount(box_item(
+        Container::new(LayoutStyle::new().flex_row(), vec![first, again]).unwrap(),
+    ));
+    let named: Vec<String> = telar::inspect::snapshot(&tree.commands())
+        .into_iter()
+        .filter(|node| node.role == Role::Button)
+        .map(|node| node.name)
+        .collect();
+    assert_eq!(named, ["Search", "Search"]);
+
+    let mut tree = tree;
+    focus::focus_next();
+    focus::focus_next();
+    tree.on_event(&enter());
+    assert_eq!(fired.get(), 1, "the second build presses like the first");
 }

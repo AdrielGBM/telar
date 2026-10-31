@@ -1,5 +1,5 @@
+use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Role};
 
 use crate::title_bar::{WindowControlsProps, window_controls};
 
@@ -11,7 +11,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .minimize(p.arg("minimize", true))
                     .maximize(p.arg("maximize", true))
                     .build(),
-                Children::default(),
             )
         })
         .title("Chrome/Window controls")

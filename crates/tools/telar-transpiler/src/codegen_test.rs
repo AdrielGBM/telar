@@ -115,20 +115,20 @@ fn a_preview_reading_scheme_binds_the_handle_in_its_own_fn() {
 }
 
 #[test]
-fn a_component_with_slots_reads_scheme_in_its_own_view_and_in_the_children_it_places() {
+fn a_component_taking_children_reads_scheme_in_its_own_view_and_in_the_children_it_places() {
     let code = transpiled(
-        "[logic]\nlet open = signal(true);\n\n[view]\ncol fill:(if $scheme == telar::ColorScheme::Dark { Color::BLACK } else { Color::WHITE })\n    if $open\n        children\n    panel\n        text \"{scheme_name($scheme)}\"\n",
+        "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\nlet open = signal(true);\n\n[view]\ncol fill:(if $scheme == telar::ColorScheme::Dark { Color::BLACK } else { Color::WHITE })\n    if $open\n        children $props.children\n    panel\n        text \"{scheme_name($scheme)}\"\n",
     );
     syn::parse_file(&code).unwrap_or_else(|error| panic!("{error}:\n{code}"));
     let binding = "let scheme = telar::ResolvedScheme;";
     assert_eq!(code.matches(binding).count(), 1, "{code}");
     let bound = code.find(binding).expect("the handle is bound");
     let placed = code
-        .find("children.build_slot(None)?")
-        .unwrap_or_else(|| panic!("the placeholder builds its slot:\n{code}"));
+        .find("props.children.build()?")
+        .unwrap_or_else(|| panic!("the placeholder builds its children:\n{code}"));
     let nested = code
-        .find("Children::per_slot(")
-        .unwrap_or_else(|| panic!("the nested children are a per-slot recipe:\n{code}"));
+        .find("Children::new(")
+        .unwrap_or_else(|| panic!("the nested children are a recipe:\n{code}"));
     assert!(bound < placed && bound < nested, "{code}");
     let recipe = &code[nested..];
     assert!(recipe.contains("let scheme = scheme.clone();"), "{code}");

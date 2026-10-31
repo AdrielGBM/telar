@@ -9,7 +9,7 @@ use crate::registry;
 use crate::style::{PropCall, layout_prop_call, number_or};
 use crate::theme_access::ThemeAccess;
 
-use super::signals::{captured_idents, emit_transition_prelude, rust_str, wrap_signal_clones};
+use super::signals::{emit_transition_prelude, rust_str};
 use super::{ChildEmit, ChildMode, ViewGen};
 
 /// The size a `font_size:` value falls back to when it cannot be resolved. A `text` naming no size takes the inherited one instead, so this only ever stands in for a value already reported as an error.
@@ -42,7 +42,7 @@ impl ViewGen<'_> {
         // Regression: the class reached a container and stopped there, so `@heading { font_size: 22 }` compiled and did nothing.
         let attrs = self.effective_attrs(el);
         let style = self.text_style(&attrs, &transitions, &mut hoists);
-        let fit = fit_closure(&attrs, &mut errors, self.theme_access);
+        let fit = fit_closure(self, &attrs, &mut errors);
         let (constructor, fit_arg) = fit_constructor("Text::declaring", "Text::fitting", fit, &pad);
 
         let layout_style = text_layout_style(&attrs, self.theme_access);
@@ -90,7 +90,7 @@ impl ViewGen<'_> {
         let attrs = self.effective_attrs(el);
         let style = self.text_style(&attrs, &transitions, &mut hoists);
         let layout_style = text_layout_style(&attrs, self.theme_access);
-        let fit = fit_closure(&attrs, &mut errors, self.theme_access);
+        let fit = fit_closure(self, &attrs, &mut errors);
         let (constructor, fit_arg) = fit_constructor("Text::runs", "Text::runs_fitting", fit, &pad);
 
         let mut runs: Vec<String> = Vec::new();
@@ -133,11 +133,7 @@ impl ViewGen<'_> {
                 let _ = write!(
                     run,
                     ".declaring({})",
-                    wrap_signal_clones(
-                        &raw_reactive_values(&span_attrs),
-                        closure,
-                        self.theme_access
-                    )
+                    self.owning(&raw_reactive_values(&span_attrs), &closure)
                 );
             }
             if let Some(to) = span_attrs.iter().find(|a| a.key == "to") {
@@ -147,7 +143,7 @@ impl ViewGen<'_> {
                 let _ = write!(
                     run,
                     ".to({})",
-                    wrap_signal_clones(&[value], format!("move || {read}"), self.theme_access)
+                    self.owning(&[value], &format!("move || {read}"))
                 );
             }
             runs.push(run);
@@ -271,11 +267,12 @@ impl ViewGen<'_> {
     /// Emits `let name = name.clone();` for every signal (`$name`) referenced in the *raw* `snippets` — still carrying the `$` sigil, so captures are detected before substitution — plus any loop variable in scope they use. Indented under `pad + extra`.
     pub(super) fn clone_bindings(&self, snippets: &[&str], pad: &str, extra: &str) -> String {
         let mut out = String::new();
-        for name in captured_idents(snippets, &self.loop_variables, self.theme_access) {
+        let scoped = super::signals::unscoped(snippets);
+        for name in self.captured_names(&scoped) {
             let _ = writeln!(
                 out,
-                "{pad}{extra}let {}{name} = {name}.clone();",
-                super::shadow_marker(&name)
+                "{pad}{extra}{}",
+                super::signals::clone_statement(&name)
             );
         }
         out
@@ -306,7 +303,7 @@ impl ViewGen<'_> {
 
         let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
         // The raw value, not the substituted expression, so a signal-backed colour clones itself into this closure.
-        wrap_signal_clones(&raw_reactive_values(attrs), closure, self.theme_access)
+        self.owning(&raw_reactive_values(attrs), &closure)
     }
 
     /// The builder calls for the text properties that flow down a tree, in the spelling both `TextStyle` and `Declared` answer to — which is what lets a `text` and the container above it be written the same way and mean the same thing at different reaches.
@@ -483,7 +480,7 @@ impl ViewGen<'_> {
         let closure = format!("move || Declared::default(){modifiers}");
         format!(
             ".declaring({})",
-            wrap_signal_clones(&raw_reactive_values(attrs), closure, self.theme_access)
+            self.owning(&raw_reactive_values(attrs), &closure)
         )
     }
 }
@@ -759,10 +756,11 @@ fn fit_length(value: &str, theme: ThemeAccess) -> Result<String, String> {
 }
 
 /// The closure a fitted `text` is built with, or `None` when it names no fit (or a fit that is an error, pushed onto `errors`).
-fn fit_closure(attrs: &[Attr], errors: &mut Vec<String>, theme: ThemeAccess) -> Option<String> {
+fn fit_closure(generator: &ViewGen, attrs: &[Attr], errors: &mut Vec<String>) -> Option<String> {
+    let theme = generator.theme_access;
     let raw = attrs.iter().find(|a| a.key == "font_size")?.value.text();
     match font_fit_expr(font_fit(raw)?, theme) {
-        Ok(expr) => Some(wrap_signal_clones(&[raw], format!("move || {expr}"), theme)),
+        Ok(expr) => Some(generator.owning(&[raw], &format!("move || {expr}"))),
         Err(message) => {
             errors.push(message);
             None

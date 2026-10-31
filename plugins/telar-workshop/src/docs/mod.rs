@@ -8,8 +8,8 @@ mod frame;
 
 use telar::preview::PreviewEntry;
 use telar::{
-    AlignItems, Children, Container, JustifyContent, LayoutError, LayoutItem, ReactiveList, Role,
-    Text, box_item, children,
+    AlignItems, Container, JustifyContent, LayoutError, LayoutItem, ReactiveList, Role, Text,
+    box_item, children,
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
 
@@ -66,7 +66,6 @@ fn page(
             .title(title)
             .entries(entries)
             .build(),
-        Children::default(),
     )
 }
 

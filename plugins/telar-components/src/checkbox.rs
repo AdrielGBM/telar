@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Border, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
+    AlignItems, Border, BorderRadius, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
+    Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
+    amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -83,10 +83,7 @@ pub struct CheckboxProps {
 }
 
 /// A box and its label, toggling a bound boolean.
-pub fn checkbox(
-    props: CheckboxProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let CheckboxProps {
         checked,
         label,

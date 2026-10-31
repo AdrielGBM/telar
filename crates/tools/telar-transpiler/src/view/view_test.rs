@@ -79,7 +79,7 @@ fn unknown_tag_becomes_component_call() {
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     assert!(
         out.rust_code
-            .contains("my_card(MyCardProps::props().build(), Children::default())?"),
+            .contains("my_card(MyCardProps::props().build())?"),
         "no-attr tag should call fn directly"
     );
 }
@@ -332,63 +332,170 @@ fn plain_col_with_active_style_upgrades_to_styled_container() {
     );
 }
 
+const SLOTTED_PROPS: &str = "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n    #[props(default)]\n    pub header: Children,\n}\n";
+
 #[test]
-fn component_default_slot_takes_slots_arg() {
-    let src = "[view]\nbox fill:#101010 pad:16\n    children\n";
-    let out = crate::transpile_source(src, "card", None, None).unwrap();
-    let code = &out.rust_code;
+fn a_component_takes_only_its_props() {
+    let src =
+        format!("{SLOTTED_PROPS}[view]\nbox fill:#101010 pad:16\n    children $props.children\n");
+    let code = crate::transpile_source(&src, "card", None, None)
+        .unwrap()
+        .rust_code;
     assert!(
-        code.contains("children: Children"),
-        "a slotted component takes a Slots argument:\n{code}"
+        code.contains("pub fn card(props: CardProps) -> Result<Box<dyn LayoutItem>, LayoutError>"),
+        "{code}"
     );
+    assert!(!code.contains("children: Children)"), "{code}");
+}
+
+#[test]
+fn a_placeholder_builds_the_children_prop_it_names_in_place() {
+    let src = format!(
+        "{SLOTTED_PROPS}[view]\nbox pad:16\n    children $props.header\n    text \"between\"\n    children $props.children\n"
+    );
+    let code = crate::transpile_source(&src, "panel", None, None)
+        .unwrap()
+        .rust_code;
+    let header = code
+        .find("__children.extend(props.header.build()?);")
+        .unwrap_or_else(|| panic!("the header is built where it is placed:\n{code}"));
+    let between = code
+        .find("\"between\"")
+        .expect("the text sibling is emitted");
+    let body = code
+        .find("__children.extend(props.children.build()?);")
+        .unwrap_or_else(|| panic!("and so are the bare children:\n{code}"));
     assert!(
-        code.contains("__children.extend(children.build_slot(None)?);"),
-        "the default slot is built where it is placed:\n{code}"
+        header < between && between < body,
+        "in source order:\n{code}"
+    );
+    if let Err(e) = syn::parse_file(&code) {
+        panic!("generated code does not parse: {e}\n{code}");
+    }
+}
+
+#[test]
+fn a_bare_or_named_placeholder_is_an_error_naming_the_prop_it_places() {
+    let code = crate::transpile_source("[view]\ncol\n    children\n", "panel", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("compile_error!(\"`children` places a `Children` prop: write `children $props.children`, with `#[props(default)] pub children: Children` in `Props`\")"),
+        "{code}"
+    );
+    assert!(!code.contains(".build()?"), "{code}");
+
+    let code = crate::transpile_source(
+        "[view]\ncol\n    children name:\"header\"\n",
+        "panel",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains("compile_error!(\"`children` places a `Children` prop: write `children $props.header`, with `#[props(default)] pub header: Children` in `Props`\")"),
+        "{code}"
+    );
+    assert_eq!(
+        code.matches("compile_error!").count(),
+        1,
+        "`name:` is explained once, not also refused as an unknown key:\n{code}"
     );
 }
 
 #[test]
-fn component_named_and_default_slots() {
-    let src = "[view]\nbox pad:16\n    children name:\"header\"\n    children\n";
-    let out = crate::transpile_source(src, "panel", None, None).unwrap();
-    let code = &out.rust_code;
+fn bare_children_at_a_call_become_the_children_prop() {
+    let code = crate::transpile_source("[view]\ncard\n    text \"hi\"\n", "demo", None, None)
+        .unwrap()
+        .rust_code;
     assert!(
-        code.contains("__children.extend(children.build_slot(Some(\"header\"))?);"),
-        "the named slot is built where it is placed:\n{code}"
+        code.contains("let __recipe_children = Children::new("),
+        "{code}"
     );
     assert!(
-        code.contains("__children.extend(children.build_slot(None)?);"),
-        "and so is the default one:\n{code}"
+        code.contains("card(CardProps::props().children(__recipe_children).build())?"),
+        "{code}"
+    );
+    assert!(code.contains("Ok(__children)"), "{code}");
+}
+
+#[test]
+fn a_child_routed_to_a_slot_becomes_that_prop() {
+    let code = crate::transpile_source(
+        "[view]\npanel\n    text \"T\" slot:\"header\"\n    text \"B\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains(
+            "panel(PanelProps::props().header(__recipe_header).children(__recipe_children).build())?"
+        ),
+        "{code}"
+    );
+    let header = code.find("let __recipe_header").expect("a header recipe");
+    let children = code
+        .find("let __recipe_children")
+        .expect("a children recipe");
+    let title = code.find("\"T\"").expect("the header text");
+    let body = code.find("\"B\"").expect("the body text");
+    assert!(
+        header < title && title < children && children < body,
+        "each child sits in its own prop's recipe:\n{code}"
+    );
+    assert!(!code.contains("slot"), "`slot:` is consumed:\n{code}");
+}
+
+#[test]
+fn a_call_with_no_children_sets_no_children() {
+    let code = crate::transpile_source("[view]\ncard title:\"x\"\n", "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("card(CardProps::props().title(\"x\").build())?"),
+        "{code}"
+    );
+    assert!(
+        !code.contains(".children(") && !code.contains("Children::new"),
+        "{code}"
     );
 }
 
 #[test]
-fn component_call_with_children_builds_slots() {
-    let src = "[view]\ncard\n    text \"hi\"\n";
-    let out = crate::transpile_source(src, "demo", None, None).unwrap();
-    let code = &out.rust_code;
+fn a_slot_that_names_no_field_is_an_error_on_its_line() {
+    let code = crate::transpile_source(
+        "[view]\ncard\n    text \"x\" slot:\"side-bar\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
     assert!(
-        code.contains("let mut __slots = Slots::new();"),
-        "a call with children builds a Slots:\n{code}"
-    );
-    assert!(
-        code.contains("card(CardProps::props().build(), __deferred)?"),
-        "the Slots is the trailing arg:\n{code}"
+        code.contains(
+            "compile_error!(\"`slot:\\\"side-bar\\\"` names the prop this child is handed through"
+        ),
+        "{code}"
     );
 }
 
 #[test]
-fn component_call_routes_named_slot() {
-    let src = "[view]\npanel\n    text \"T\" slot:\"header\"\n    text \"B\"\n";
-    let out = crate::transpile_source(src, "demo", None, None).unwrap();
-    let code = &out.rust_code;
-    assert!(
-        code.contains("__slots.push(Some(\"header\"), box_item("),
-        "slot:\"header\" routes to the named slot:\n{code}"
-    );
-    assert!(
-        code.contains("__children.push(box_item("),
-        "a bare child goes to the default slot:\n{code}"
+fn a_view_let_reaches_every_recipe_after_it() {
+    let code = crate::transpile_source(
+        "[view]\ncard\n    let label = \"hi\"\n    text \"{label}\" slot:\"header\"\n    text \"{label}\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert_eq!(
+        code.matches("let label = \"hi\";").count(),
+        2,
+        "both recipes bind it:\n{code}"
     );
 }
 
@@ -398,7 +505,7 @@ fn component_bool_flag_prop() {
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
-        code.contains("CardProps::props().elevated(true).build()"),
+        code.contains("CardProps::props().elevated(true).children(__recipe_children).build()"),
         "a bare flag prop should be bool true:\n{code}"
     );
 }
@@ -830,9 +937,7 @@ fn heading_resolves_as_widget_component() {
         .unwrap()
         .rust_code;
     assert!(
-        code.contains(
-            "heading(HeadingProps::props().text(\"Title\").build(), Children::default())"
-        ),
+        code.contains("heading(HeadingProps::props().text(\"Title\").build())?"),
         "heading is a component call carrying its text:\n{code}"
     );
 }
@@ -932,14 +1037,25 @@ fn a_fraction_of_the_surface_needs_no_effect_of_its_own() {
     );
 }
 
-/// A closure that runs again cannot move what it names, and a computed value names whatever the author had in scope — including `props`, which the generated scope binds and `#[derive(Props)]` makes cloneable for exactly this.
+/// A re-resolving style names whatever the author had in scope, and takes it the way every closure does: moved when nothing else reads it, copied in when something does — a `props` field by itself, so `Props` need not be `Clone`.
 #[test]
-fn a_re_resolving_style_clones_what_it_names_instead_of_moving_it() {
+fn a_re_resolving_style_copies_only_what_another_reader_needs() {
     let src = "[logic]\nlet side = 4.0f32;\n[view]\ncol gap:side pad:props.pad\n    text \"x\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     assert!(
+        out.rust_code.contains(
+            ".styled_by(move || LayoutStyle::new().flex_column().gap(side).padding_all(props.pad))"
+        ),
+        "{}",
         out.rust_code
-            .contains(".styled_by({ let props = props.clone(); let side = side.clone(); move ||"),
+    );
+
+    let shared = "[logic]\nlet side = 4.0f32;\n[view]\ncol gap:side pad:props.pad\n    text \"{side} {props.pad}\"\n";
+    let out = crate::transpile_source(shared, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains(
+            ".styled_by({ let side = side.clone(); let __props_pad = props.pad.clone(); move || LayoutStyle::new().flex_column().gap(side).padding_all(__props_pad) })"
+        ),
         "{}",
         out.rust_code
     );
@@ -1877,7 +1993,7 @@ fn a_prop_reading_reactive_context_follows_it() {
     for expected in [
         ".color(Reactive::of(move || use_tokens().primary))",
         ".scroll(use_primary_scroll())",
-        ".disabled(Reactive::of({ let open = open.clone(); move || open.get() }))",
+        ".disabled(Reactive::of(move || open.get()))",
         ".width(WIDTH * 2.0)",
     ] {
         assert!(code.contains(expected), "`{expected}`:\n{code}");
@@ -2030,8 +2146,8 @@ fn a_reactive_of_closure_reading_a_signal_is_not_wrapped_again() {
         "a closure the callee keeps reads later, so it must not be wrapped:\n{code}"
     );
     assert!(
-        code.contains("let sig = sig.clone();"),
-        "the closure still needs its capture cloned in:\n{code}"
+        !code.contains("let sig = sig.clone();"),
+        "the one reader of the binding takes it:\n{code}"
     );
 }
 
@@ -2051,10 +2167,7 @@ fn an_unknown_helper_taking_a_closure_is_a_read_and_is_wrapped() {
         "let sig = signal(0.0f32);",
         "(tweened(move || sig.get() * 2.0))",
     );
-    assert!(
-        code.contains("Reactive::of({ let sig = sig.clone(); move || tweened("),
-        "{code}"
-    );
+    assert!(code.contains("Reactive::of(move || tweened("), "{code}");
 }
 
 #[test]
@@ -2095,10 +2208,7 @@ fn a_closure_handed_to_a_method_is_a_read_at_the_call_site() {
 #[test]
 fn a_direct_signal_read_in_a_prop_still_follows_the_signal() {
     let code = prop_code("let sig = signal(0.0f32);", "(sig.get())");
-    assert!(
-        code.contains("Reactive::of({ let sig = sig.clone(); move || sig.get() })"),
-        "{code}"
-    );
+    assert!(code.contains("Reactive::of(move || sig.get())"), "{code}");
     let code = prop_code("let sig = signal(0.0f32);", "$sig");
     assert!(code.contains(".value(sig.clone())"), "{code}");
 }
@@ -2139,4 +2249,186 @@ fn a_reactive_constructor_that_stores_its_closure_is_not_wrapped_again() {
 fn a_method_named_like_a_closure_keeping_callee_is_not_one() {
     let code = prop_code("let x = signal(0.0f32);", "(table.memo(move || $x))");
     assert!(code.contains("Reactive::of("), "{code}");
+}
+
+const SURFACE_PROPS: &str = "[logic]\npub struct Props {\n    #[props(some, default)]\n    pub style: Option<SurfaceAmendment>,\n}\n";
+
+/// `surface:` runs the caller's amendment over the finished style after the box's own paint, in the base and in each state that swaps it, each closure taking its own copy of the prop.
+#[test]
+fn a_surface_amends_the_base_paint_and_every_state_after_its_own() {
+    let src = format!(
+        "{SURFACE_PROPS}[view]\nbox fill:#ffffff hover_style(fill:#eeeeee) active_style(fill:#dddddd) focus_style(stroke:#0000ff) on_press:(|| {{}}) surface:$props.style\n    text \"x\"\n"
+    );
+    let out = crate::transpile_source(&src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    let spans: Vec<(&str, &str)> = out
+        .expr_spans
+        .iter()
+        .map(|span| {
+            let (gen_at, rsx_at, len) = (
+                span.gen_start as usize,
+                span.rsx_start as usize,
+                span.len as usize,
+            );
+            (&code[gen_at..gen_at + len], &src[rsx_at..rsx_at + len])
+        })
+        .collect();
+    assert!(
+        spans.contains(&("props.style", "props.style")),
+        "the marker on the place moves onto its copy, where the place still is: {spans:?}"
+    );
+    assert!(
+        spans
+            .iter()
+            .all(|(generated, written)| generated == written),
+        "{spans:?}"
+    );
+    assert_eq!(
+        code.matches("let __props_style = props.style.clone();")
+            .count(),
+        3,
+        "{code}"
+    );
+    let base = code.split("StyledContainer::new(").nth(1).unwrap();
+    assert!(
+        base.starts_with(
+            "LayoutStyle::new().flex_column(), { let __props_style = props.style.clone(); move |_| amend_surface(RectStyle::default().with_fill("
+        ),
+        "{code}"
+    );
+    for state in [".hover_style(", ".active_style("] {
+        let call = code.split(state).nth(1).unwrap();
+        assert!(
+            call.starts_with("{ let __props_style = props.style.clone(); move |_| amend_surface("),
+            "{state} is amended too:\n{code}"
+        );
+    }
+    let ring = code.split(".focus_style(").nth(1).unwrap();
+    assert!(
+        ring.starts_with("move |_| RectStyle {"),
+        "the ring is composed over an amended state, so amending it as well would apply the caller twice:\n{code}"
+    );
+    if let Err(e) = syn::parse_file(code) {
+        panic!("generated code does not parse: {e}\n{code}");
+    }
+}
+
+/// A `col` carries no paint of its own, but one handed its caller's surface has something to paint.
+#[test]
+fn a_surface_makes_a_plain_container_a_styled_one() {
+    let src = format!("{SURFACE_PROPS}[view]\ncol surface:$props.style\n    text \"x\"\n");
+    let code = crate::transpile_source(&src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("move |_| amend_surface(RectStyle::default(), &props.style)"),
+        "its one paint closure takes the prop itself:\n{code}"
+    );
+    assert!(!code.contains("__props_style"), "{code}");
+}
+
+#[test]
+fn a_surface_on_a_tag_that_paints_no_box_is_an_error_naming_those_that_do() {
+    let src = format!("{SURFACE_PROPS}[view]\ntext \"x\" surface:$props.style\n");
+    let code = crate::transpile_source(&src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(
+            "compile_error!(\"`surface:` amends the paint of a `box`, `row`, `col` or `grid`, and `text` is none of them\")"
+        ),
+        "{code}"
+    );
+    assert!(!code.contains("amend_surface"), "{code}");
+}
+
+/// The base paint and each state of one box are closures of their own, so a prop they all read is copied into each: moved, the first would take it from the rest.
+#[test]
+fn a_prop_read_by_several_paint_closures_of_one_box_is_copied_into_each() {
+    let src = "[logic]\npub struct Props {\n    #[props(into, default)]\n    pub tint: Reactive<Color>,\n}\n[view]\nbox fill:$props.tint stroke:$props.tint hover_style(fill:$props.tint) opacity:$props.tint.a\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains(
+            "{ let __props_tint = props.tint.clone(); move |_| RectStyle { fill: Some(Paint::Solid(__props_tint.get())), border: Some(Border { paint: Paint::Solid(__props_tint.get())"
+        ),
+        "the base takes one copy for its fill and its stroke:\n{code}"
+    );
+    assert!(
+        code.contains(".hover_style({ let __props_tint = props.tint.clone(); move |_|"),
+        "{code}"
+    );
+    assert!(
+        code.contains(
+            ".with_opacity({ let __props_tint = props.tint.clone(); move || __props_tint.get().a })"
+        ),
+        "{code}"
+    );
+    assert!(!code.contains("(props.tint.get())"), "{code}");
+    if let Err(e) = syn::parse_file(code) {
+        panic!("generated code does not parse: {e}\n{code}");
+    }
+}
+
+/// Two elements reading one prop are two closures, and each takes a copy of its own.
+#[test]
+fn a_prop_read_by_two_elements_is_copied_into_each_closure() {
+    let src = "[logic]\npub struct Props {\n    #[props(into, default)]\n    pub tint: Reactive<Color>,\n}\n[view]\ncol\n    text \"x\" color:$props.tint\n    box fill:$props.tint\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("{ let __props_tint = props.tint.clone(); move |__inherited: TextStyle| __inherited.with_color(__props_tint.get()) }"),
+        "{code}"
+    );
+    assert!(
+        code.contains("{ let __props_tint = props.tint.clone(); move |_| RectStyle::default().with_fill(__props_tint.get())"),
+        "{code}"
+    );
+    assert!(!code.contains("(props.tint.get())"), "{code}");
+}
+
+/// A `[logic]` binding the base paint and a state of one box both read is copied into each, and so is a loop variable, which every item's closures read anew.
+#[test]
+fn a_local_and_a_loop_variable_read_by_two_closures_of_one_box_are_copied_into_each() {
+    let src = "[logic]\nlet accent = Color::rgb(1.0, 0.0, 0.0);\nlet rows = vec![Color::rgb(0.0, 0.0, 1.0)];\n[view]\ncol\n    box fill:accent hover_style(stroke:accent)\n    for row in rows.clone()\n        box fill:row hover_style(stroke:row)\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    for name in ["accent", "row"] {
+        let copy = format!("{{ let {name} = {name}.clone(); move |_|");
+        assert_eq!(
+            code.matches(&copy).count(),
+            2,
+            "the base paint and the hover each copy `{name}`:\n{code}"
+        );
+    }
+    if let Err(e) = syn::parse_file(&code) {
+        panic!("generated code does not parse: {e}\n{code}");
+    }
+}
+
+/// A binding that is a reference is copied two ways, each for its receiver. Into a `move` closure it becomes the value it points at, since the closure must be `'static`; handed on by value it stays the reference, since the prop declares that type.
+#[test]
+fn a_reference_binding_is_owned_by_each_closure_and_handed_on_as_the_reference() {
+    let src = "[logic]\nlet location: Option<String> = None;\nlet schema: Option<&'static PropsSchema> = None;\n[view]\ncol\n    if let Some(location) = &location\n        text \"{location}\"\n        text \"at {location}\"\n    if let Some(schema) = schema\n        props_table schema:schema\n        props_list schema:schema\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert_eq!(
+        code.matches("let location = location.clone();").count(),
+        2,
+        "each text closure owns a `String`, not the `&String` the pattern binds:\n{code}"
+    );
+    for call in ["props_table(PropsTableProps", "props_list(PropsListProps"] {
+        assert!(
+            code.contains(&format!(
+                "{call}::props().schema(::core::clone::Clone::clone(&schema)).build())"
+            )),
+            "each call is handed the `&PropsSchema` itself:\n{code}"
+        );
+    }
+    if let Err(e) = syn::parse_file(&code) {
+        panic!("generated code does not parse: {e}\n{code}");
+    }
 }

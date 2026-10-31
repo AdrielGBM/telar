@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, LayoutError,
-    LayoutItem, LayoutStyle, Props, Reactive, Rect, RectStyle, ShapeStyle, StyledContainer,
-    SurfaceAmendment, Text, amend_surface, box_item, children, focus::Role,
+    Accessible, AlignItems, Border, BorderRadius, Color, Container, LayoutError, LayoutItem,
+    LayoutStyle, Props, Reactive, Rect, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Text, amend_surface, box_item, children, focus::Role,
 };
 
 use crate::shared;
@@ -80,7 +80,7 @@ pub struct ChipProps {
 }
 
 /// A compact pill, optionally with a status dot and a close affordance.
-pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ChipProps {
         label,
         color,

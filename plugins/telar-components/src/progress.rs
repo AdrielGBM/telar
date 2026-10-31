@@ -1,9 +1,8 @@
 //! [`progress`]: a determinate bar filled to a bound value.
 
 use telar::{
-    BorderRadius, Children, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, Rect,
-    RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Transform, amend_surface, box_item,
-    children,
+    BorderRadius, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, Rect, RectStyle,
+    ShapeStyle, StyledContainer, SurfaceAmendment, Transform, amend_surface, box_item, children,
 };
 
 use crate::shared;
@@ -72,10 +71,7 @@ pub struct ProgressProps {
 }
 
 /// A determinate bar filled to a bound value.
-pub fn progress(
-    props: ProgressProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ProgressProps {
         value,
         color,

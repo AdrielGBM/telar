@@ -3,11 +3,7 @@ use telar::{AvailableSpace, LayoutItem, compute_layout, track_layout};
 fn page_rect_at(window_width: f32) -> (f32, f32) {
     telar::set_theme(crate::theme::LandingTheme::light());
     telar::reset_layout_runtime();
-    let page = crate::home::home(
-        crate::home::HomeProps::props().build(),
-        telar::Children::default(),
-    )
-    .expect("home build");
+    let page = crate::home::home(crate::home::HomeProps::props().build()).expect("home build");
     let node = page.layout_node();
     compute_layout(
         node,
@@ -97,7 +93,6 @@ fn real_feature_cards_do_not_overflow_row() {
                     .title(title)
                     .body(body)
                     .build(),
-                telar::Children::default(),
             )
             .unwrap()
         })
@@ -163,11 +158,7 @@ fn drawn_content_stays_within_page_height() {
 
     telar::set_theme(crate::theme::LandingTheme::light());
     telar::reset_layout_runtime();
-    let page = crate::home::home(
-        crate::home::HomeProps::props().build(),
-        telar::Children::default(),
-    )
-    .unwrap();
+    let page = crate::home::home(crate::home::HomeProps::props().build()).unwrap();
     let node = page.layout_node();
     compute_layout(
         node,

@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Children, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
-    LayoutStyle, Reactive, Role, SizeDimension, Text, TextAlign, box_item, children,
+    AlignItems, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle,
+    Reactive, Role, SizeDimension, Text, TextAlign, box_item, children,
 };
 use telar_components::{ButtonProps, CodeViewProps, button, code_view};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
@@ -96,7 +96,6 @@ impl EmptyState {
                     .label(Reactive::of(move || strings::text(label)))
                     .on_press(on_press)
                     .build(),
-                Children::default(),
             )?);
         }
         let content = Container::new(
@@ -150,7 +149,6 @@ fn snippet(example: Example) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .grow(true)
             .label(example.language.to_string())
             .build(),
-        Children::default(),
     )?;
     let column = Container::new(
         LayoutStyle::column()

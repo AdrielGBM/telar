@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Container, LayoutError, LayoutStyle, Location, Role, external};
+use telar::{Container, LayoutError, LayoutStyle, Location, Role, external};
 
 use crate::link::{LinkProps, link};
 
@@ -13,14 +13,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         .to(Location::root().segment("guide"))
                         .current(p.arg("current", false))
                         .build(),
-                    Children::default(),
                 )?,
                 link(
                     LinkProps::props()
                         .label("Source code")
                         .to(external("https://github.com/AdrielGBM/telar"))
                         .build(),
-                    Children::default(),
                 )?,
                 link(
                     LinkProps::props()
@@ -28,7 +26,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         .to(Location::root())
                         .current(true)
                         .build(),
-                    Children::default(),
                 )?,
             ];
             Ok::<_, LayoutError>(Container::new(LayoutStyle::column().gap(12.0), links)?)

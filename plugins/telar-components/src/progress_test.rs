@@ -9,7 +9,7 @@ fn lay_out(node: NodeId) {
 #[test]
 fn uncontrolled_progress_builds_with_default_value() {
     crate::test_support::fresh_layout_runtime();
-    let result = progress(ProgressProps::props().build(), Children::default());
+    let result = progress(ProgressProps::props().build());
     assert!(
         result.is_ok(),
         "an uncontrolled progress builds from its default"
@@ -26,7 +26,6 @@ fn controlled_progress_builds_and_layouts() {
             .width(200.0)
             .height(10.0)
             .build(),
-        Children::default(),
     )
     .unwrap();
     lay_out(widget.layout_node());
@@ -37,11 +36,7 @@ fn controlled_progress_builds_and_layouts() {
 fn setting_value_after_build_does_not_panic() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
-    let widget = progress(
-        ProgressProps::props().value(value).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let widget = progress(ProgressProps::props().value(value).build()).unwrap();
     lay_out(widget.layout_node());
     value.set(0.75);
     value.set(1.5);
@@ -56,10 +51,7 @@ fn a_derived_reading_can_drive_the_bar() {
     let total = signal(4.0f32);
     let fraction = telar::derive_pair(used, total, |u, t| u / t);
     let _read = fraction;
-    let bar = progress(
-        ProgressProps::props().value(fraction).stretch(true).build(),
-        Children::default(),
-    );
+    let bar = progress(ProgressProps::props().value(fraction).stretch(true).build());
     assert!(bar.is_ok(), "a derivation drives it");
     used.set(1.0);
     assert_eq!(fraction.get(), 0.25, "and keeps following its sources");
@@ -68,7 +60,7 @@ fn a_derived_reading_can_drive_the_bar() {
 fn bar(props: ProgressProps) -> telar::testing::Scoped<telar::ComponentList> {
     crate::test_support::fresh_layout_runtime();
     telar::testing::scoped(|| {
-        let widget = progress(props, Children::default()).unwrap();
+        let widget = progress(props).unwrap();
         lay_out(widget.layout_node());
         telar::ComponentList::new(widget)
     })

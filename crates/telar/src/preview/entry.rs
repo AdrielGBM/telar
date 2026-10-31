@@ -2,9 +2,7 @@
 
 use reactive_core::RwSignal;
 
-use crate::{
-    Children, Color, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Size, Slots,
-};
+use crate::{Children, Color, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Size};
 
 use super::a11y::Rule;
 use super::host::Args;
@@ -83,7 +81,7 @@ impl From<Args> for PreviewCtx {
 /// Builds a preview's tree against the canvas it is mounted in.
 pub type BuildFn = fn(&PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError>;
 
-/// Wraps a preview's root, handed over as the children of whatever the decorator builds: a component call with its props fixed, `|children| card(CardProps::props().build(), children)`.
+/// Wraps a preview's root, handed over as the children of whatever the decorator builds: a component call with its props fixed, `|children| card(CardProps::props().children(children).build())`.
 ///
 /// The root is built where the decorator places its children, so it sees every theme and context the decorator provides.
 pub type Decorator = fn(Children) -> Result<Box<dyn LayoutItem>, LayoutError>;
@@ -442,11 +440,7 @@ impl PreviewEntry {
             Some(decorator) => {
                 let build = self.build;
                 let ctx = ctx.clone();
-                decorator(Children::new(move || {
-                    let mut slots = Slots::new();
-                    slots.push(None, build(&ctx)?);
-                    Ok(slots)
-                }))?
+                decorator(Children::one(move || build(&ctx)))?
             }
         };
         match self.surface {

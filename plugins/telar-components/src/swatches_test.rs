@@ -33,7 +33,6 @@ fn build(
             .size(SIZE)
             .on_select(Rc::new(move |i| sink.borrow_mut().push(i)))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let rect = telar::testing::lay_out_row(item.layout_node(), 400.0, 100.0);
@@ -147,7 +146,7 @@ fn the_selected_swatch_draws_a_thicker_border_than_the_others() {
 #[test]
 fn empty_colours_build_an_empty_row() {
     crate::test_support::fresh_layout_runtime();
-    let item = swatches(SwatchesProps::props().build(), Children::default()).unwrap();
+    let item = swatches(SwatchesProps::props().build()).unwrap();
     let _ = item.view();
 }
 
@@ -186,7 +185,7 @@ fn faces(style: Option<telar::SurfaceAmendment>) -> Vec<(Rect, telar::RectStyle)
         .build();
     props.style = style;
     telar::testing::scoped(|| {
-        let item = swatches(props, Children::default()).unwrap();
+        let item = swatches(props).unwrap();
         telar::testing::lay_out_row(item.layout_node(), 400.0, 100.0);
         ComponentList::new(item)
     })

@@ -13,6 +13,7 @@ mod breakpoints;
 mod canvas;
 mod caret;
 mod child_host;
+mod children;
 mod composition;
 mod container;
 mod context;
@@ -59,7 +60,6 @@ mod scroll_page;
 mod scroll_timeline;
 mod scroll_viewports;
 mod serial;
-mod slots;
 mod step;
 mod styled_container;
 mod surface;
@@ -100,6 +100,7 @@ pub use border::{logical_border_radius, logical_border_widths};
 pub use breakpoints::{Breakpoints, breakpoint};
 pub use canvas::Canvas;
 pub use child_host::{ChildSlot, fragment, fragment_positional};
+pub use children::{Children, use_context};
 pub use container::Container;
 pub use context::{
     NodeId, RelayoutHook, absolute_rect, compute_layout, current_direction, live_node_count,
@@ -163,7 +164,6 @@ pub use scroll_timeline::{
     use_scroll_viewport,
 };
 pub use scroll_viewports::{enclosing_scroll_viewport, scroll_viewports_of, use_primary_scroll};
-pub use slots::{Children, SlotRequest, Slots, use_context};
 pub use step::{COARSE_STEP, FINE_STEP, step_factor};
 pub use styled_container::{
     KeyAnswer, StyledContainer, box_transform, focus_ring_border, style_follows,

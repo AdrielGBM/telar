@@ -25,7 +25,6 @@ fn field_over(value: RwSignal<f32>, transaction: Transaction<f32>, min: f32, max
             .min(min)
             .max(max)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let node = widget.layout_node();
@@ -248,7 +247,7 @@ fn a_scrub_inside_an_open_transaction_joins_it() {
 
 fn mounted(props: ScrubFieldProps) -> ComponentList {
     fresh();
-    let widget = scrub_field(props, Children::default()).unwrap();
+    let widget = scrub_field(props).unwrap();
     let node = widget.layout_node();
     let tree = ComponentList::new(widget);
     lay_out(node, 300.0, 40.0);
@@ -285,11 +284,7 @@ fn a_style_amendment_reshapes_the_handle() {
 #[test]
 fn an_unlabelled_handle_holds_only_its_value_and_its_padding() {
     fresh();
-    let widget = scrub_field(
-        ScrubFieldProps::props().value(signal(7.0)).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let widget = scrub_field(ScrubFieldProps::props().value(signal(7.0)).build()).unwrap();
     let node = widget.layout_node();
     let tree = ComponentList::new(widget);
     lay_out(node, 300.0, 40.0);

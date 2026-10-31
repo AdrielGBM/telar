@@ -2,9 +2,9 @@
 
 use std::rc::Rc;
 use telar::{
-    Accessible, Border, Children, Color, Insets, LayoutError, LayoutItem, LayoutStyle, Props,
-    Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Transform,
-    amend_surface, box_item, box_transform, children, focus::Role, signal,
+    Accessible, Border, Color, Insets, LayoutError, LayoutItem, LayoutStyle, Props, Reactive,
+    RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Transform, amend_surface,
+    box_item, box_transform, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -107,7 +107,7 @@ pub struct SliderProps {
 }
 
 /// A track and thumb dragged, or stepped with the arrow keys, over a range.
-pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SliderProps {
         value,
         color,

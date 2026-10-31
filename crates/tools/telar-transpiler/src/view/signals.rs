@@ -306,44 +306,9 @@ fn dollar_spans(s: &str) -> impl Iterator<Item = (usize, usize)> {
     })
 }
 
-/// The distinct identifiers a `move` closure must clone so its captures stay independent of the outer bindings: every `$name` signal referenced across `snippets` (raw, still carrying `$`), deduped, followed by any `loop_variables` a snippet uses (also deduped against the signals). Pass `&[]` for `loop_variables` at a call site with no loop scope (e.g. the free-standing [`wrap_signal_clones`]); the three clone emitters ([`wrap_signal_clones`], `clone_bindings`, `scalar_closure`) all format this list for their own context (block wrapper / standalone statements / inline prefix).
-pub(super) fn captured_idents(
-    snippets: &[&str],
-    loop_variables: &[String],
-    theme: ThemeAccess,
-) -> Vec<String> {
-    captured_idents_with(snippets, loop_variables, &[], theme)
-}
-
-/// The same, plus the `[logic]` bindings the snippets name.
+/// The distinct names a `move` closure reading `snippets` clones in: every `$name` signal they reference, then every one of `loop_variables` and `locals` they use, deduped. A name a snippet's own scope binds is the closure's, not a capture.
 ///
-/// **A rebuilding closure needs every capture, not just the reactive ones.** Signals and loop variables were enough while a subtree was built once; a region that runs again cannot *move* anything it names, and a plain binding — an `Arc<ImageData>` behind `img src:gradient`, a drawing behind `canvas paint:…` — is exactly what a plain binding is. Cloning it is the same answer already given to a signal, applied to the rest of the scope.
-///
-/// A binding that is not `Clone` cannot survive a region that rebuilds, and saying so at the clone is the honest place: the alternative is a move-out-of-`Fn` error pointing at generated code the author never wrote.
-pub(super) fn captured_idents_with(
-    snippets: &[&str],
-    loop_variables: &[String],
-    locals: &[String],
-    theme: ThemeAccess,
-) -> Vec<String> {
-    let flat: Vec<(&str, &[String])> = snippets.iter().map(|s| (*s, &[][..])).collect();
-    captured_from(&flat, loop_variables, locals, theme)
-}
-
-/// The same for a subtree walked by [`scoped_snippets`], where each snippet carries the names bound between it and the closure being wrapped.
-pub(super) fn captured_in_scope(
-    snippets: &[ScopedSnippet],
-    loop_variables: &[String],
-    locals: &[String],
-    theme: ThemeAccess,
-) -> Vec<String> {
-    let borrowed: Vec<(&str, &[String])> = snippets
-        .iter()
-        .map(|s| (s.text.as_str(), s.shadowed.as_slice()))
-        .collect();
-    captured_from(&borrowed, loop_variables, locals, theme)
-}
-
+/// A binding that is not `Clone` cannot be copied into a closure that needs its own, and saying so at the clone is the honest place: the alternative is a move-out-of-`Fn` error pointing at generated code the author never wrote.
 fn captured_from(
     snippets: &[(&str, &[String])],
     loop_variables: &[String],
@@ -379,43 +344,204 @@ fn captured_from(
     idents
 }
 
-/// The same as [`wrap_signal_clones`], with the view's loop variables and `[logic]` bindings in scope.
+/// Snippets read with nothing bound between them and the closure reading them.
+pub(super) fn unscoped<'a>(raw_values: &[&'a str]) -> Vec<(&'a str, &'a [String])> {
+    raw_values.iter().map(|s| (*s, &[][..])).collect()
+}
+
+/// The `let` that gives a closure its own `name`, marked so the source map knows the binding shadows the one it copies.
 ///
-/// A closure that re-runs cannot *move* what it names, and a computed layout value names whatever the author had in scope — `inset_start:seat(&desk, id).x` captures `desk` and `id`, neither of which carries a `$`.
-impl ViewGen<'_> {
-    pub(super) fn clone_captures(&self, raw_values: &[&str], closure_expr: String) -> String {
-        let idents = captured_idents_with(
-            raw_values,
-            &self.loop_variables,
-            &self.locals,
-            self.theme_access,
-        );
-        clone_block(&idents, closure_expr)
-    }
+/// `name.clone()`, not [`copy_of`]: a `move` closure the view emits must be `'static`, so a binding that is a reference has to become the value it points at, which is what the method call's auto-deref does.
+pub(super) fn clone_statement(name: &str) -> String {
+    format!("let {}{name} = {name}.clone();", super::shadow_marker(name))
 }
 
-/// Wraps a `move` closure literal in a block that clones every `$name` signal referenced (raw, still carrying `$`) across `raw_values` first, generalized for `color_expr` callers, whose reads (e.g. `accent.get()`) are embedded inside an already-built closure string rather than assembled inline. A no-op when none of `raw_values` reference a signal, so a purely static/theme color emits the closure unchanged.
-pub(super) fn wrap_signal_clones(
-    raw_values: &[&str],
-    closure_expr: String,
-    theme: ThemeAccess,
-) -> String {
-    // No loop scope is available in a free function, so loop variables are captured by move.
-    clone_block(&captured_idents(raw_values, &[], theme), closure_expr)
+/// A copy of `expr` handed on by value, of exactly its type: `Clone::clone(&x)`, since what takes it declares that type, where `x.clone()` would turn a binding that is a reference into a clone of what it points at.
+pub(super) fn copy_of(expr: &str) -> String {
+    format!("::core::clone::Clone::clone(&{expr})")
 }
 
-/// Prefixes a closure literal with one `let x = x.clone();` per name, inside a block so the whole thing is still an expression. A no-op when there is nothing to clone.
-fn clone_block(idents: &[String], closure_expr: String) -> String {
-    if idents.is_empty() {
-        return closure_expr;
+/// `closure` behind one `let x = x.clone();` per name and then `copies`, whole `let` statements, inside a block so the whole thing is still an expression; bare when there is nothing to take, since a block holding only the closure is the `unused_braces` rustc warns of in generated code.
+fn capture_block(idents: &[String], copies: &[String], closure: String) -> String {
+    if idents.is_empty() && copies.is_empty() {
+        return closure;
     }
     let prefix: String = idents
         .iter()
-        .map(|s| format!("let {}{s} = {s}.clone(); ", super::shadow_marker(s)))
+        .map(|name| format!("{} ", clone_statement(name)))
+        .chain(copies.iter().map(|copy| format!("{copy} ")))
         .collect();
-    format!("{{ {prefix}{closure_expr} }}")
+    format!("{{ {prefix}{closure} }}")
 }
 
+/// [`capture_block`] for a closure whose body spans lines: the clones go on lines of their own above it at `pad`, so the generated code stays readable and the source map keeps pointing at the right `.rsx` lines.
+fn capture_block_multiline(
+    idents: &[String],
+    copies: &[String],
+    closure: String,
+    pad: &str,
+) -> String {
+    if idents.is_empty() && copies.is_empty() {
+        return closure;
+    }
+    let mut out = format!("{pad}{{\n");
+    for name in idents {
+        let _ = writeln!(out, "{pad}    {}", clone_statement(name));
+    }
+    for copy in copies {
+        let _ = writeln!(out, "{pad}    {copy}");
+    }
+    let _ = write!(out, "{closure}\n{pad}}}");
+    out
+}
+
+/// Every source marker in `code`: where it is written, where it ends, and how many bytes after it it covers.
+fn source_markers(code: &str) -> Vec<(usize, usize, usize)> {
+    let mut markers = Vec::new();
+    let mut from = 0;
+    while let Some(found) = code[from..].find(super::SRC_EXPR_OPEN) {
+        let at = from + found;
+        let body = at + super::SRC_EXPR_OPEN.len();
+        let Some(close) = code[body..].find(super::SRC_EXPR_CLOSE) else {
+            break;
+        };
+        let end = body + close + super::SRC_EXPR_CLOSE.len();
+        if let Some(len) = code[body..body + close]
+            .split_once(':')
+            .and_then(|(_, len)| len.parse().ok())
+        {
+            markers.push((at, end, len));
+        }
+        from = end;
+    }
+    markers
+}
+
+/// `code` with each of `places` read through a copy of its own, pushing the `let` that makes each copy onto `copies` once, so a `move` closure takes the copy and leaves the place to every other reader. `marker` is the source marker for the place at a byte offset.
+///
+/// A marker already in `code` covering text within a place moves onto its copy, where that text still is; one covering more than the place is dropped, since the text it spans changes.
+pub(super) fn copy_places(
+    code: &str,
+    places: &[(usize, usize)],
+    marker: impl Fn(usize, &str) -> String,
+    copies: &mut Vec<String>,
+) -> String {
+    let markers = source_markers(code);
+    let mut dropped: Vec<(usize, usize)> = Vec::new();
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    for &(start, end) in places {
+        let place = &code[start..end];
+        let binding = format!("__{}", crate::rust::place_text(place).replace('.', "_"));
+        let mut copied = place.to_string();
+        let mut inner: Vec<(usize, &str)> = Vec::new();
+        for &(at, marker_end, len) in &markers {
+            let covered = (marker_end, marker_end + len);
+            if covered.1 <= start || covered.0 >= end {
+                continue;
+            }
+            dropped.push((at, marker_end));
+            if covered.0 >= start && covered.1 <= end {
+                inner.push((covered.0 - start, &code[at..marker_end]));
+            }
+        }
+        for (offset, text) in inner.into_iter().rev() {
+            copied.insert_str(offset, text);
+        }
+        let copy = format!("let {binding} = {}{copied}.clone();", marker(start, place));
+        if !copies.contains(&copy) {
+            copies.push(copy);
+        }
+        edits.push((start, end, binding));
+    }
+    edits.extend(
+        dropped
+            .into_iter()
+            .map(|(at, end)| (at, end, String::new())),
+    );
+    edits.sort_by_key(|&(at, _, _)| at);
+    edits.dedup_by_key(|edit| edit.0);
+    let mut rewritten = String::with_capacity(code.len());
+    let mut done = 0;
+    for (at, end, with) in edits {
+        rewritten.push_str(&code[done..at]);
+        rewritten.push_str(&with);
+        done = end;
+    }
+    rewritten.push_str(&code[done..]);
+    rewritten
+}
+
+impl ViewGen<'_> {
+    /// The one capture rule for a `move` closure the view emits, built from the source `raw_values`: every `$signal` and loop variable they name is cloned in, and every `[logic]` binding and `props` place the closure reads is copied in where [`Self::must_copy_capture`] says moving it would take it from another reader, and moved where nothing else needs it.
+    pub(super) fn owning(&self, raw_values: &[&str], closure: &str) -> String {
+        let snippets = unscoped(raw_values);
+        let (idents, copies, closure) = self.captures(&snippets, closure);
+        capture_block(&idents, &copies, closure)
+    }
+
+    /// [`Self::owning`] for a closure that builds a subtree, from the subtree's scoped `snippets`, with its clones on lines of their own at `pad`.
+    pub(super) fn owning_subtree(
+        &self,
+        snippets: &[ScopedSnippet],
+        closure: String,
+        pad: &str,
+    ) -> String {
+        let scoped: Vec<(&str, &[String])> = snippets
+            .iter()
+            .map(|s| (s.text.as_str(), s.shadowed.as_slice()))
+            .collect();
+        let (idents, copies, closure) = self.captures(&scoped, &closure);
+        capture_block_multiline(&idents, &copies, closure, pad)
+    }
+
+    /// What a `move` closure reading `snippets` takes in: the names it clones, the `props` places it copies, and the closure reading those copies.
+    fn captures(
+        &self,
+        snippets: &[(&str, &[String])],
+        closure: &str,
+    ) -> (Vec<String>, Vec<String>, String) {
+        let places: Vec<(usize, usize)> = crate::rust::field_places(closure, "props")
+            .into_iter()
+            .filter(|&(start, end)| {
+                self.must_copy_capture(
+                    self.reads
+                        .place(&crate::rust::place_text(&closure[start..end])),
+                )
+            })
+            .collect();
+        let mut copies = Vec::new();
+        let closure = copy_places(closure, &places, |_, _| String::new(), &mut copies);
+        (self.captured_names(snippets), copies, closure)
+    }
+
+    /// `written`, the emitted form of `expr`, taken by value when `expr` names a `[logic]` binding, a binding the view makes (a loop variable, an `if let` or arm binding, which [`ViewReads`](super::ViewReads) does not count, so each is one reader of its own), or a `props` place: a [`copy_of`] it where [`Self::must_copy_capture`] says moving it would take it from another reader or from the next run of a rebuilding region, itself where it can be moved. `None` for an expression that names no binding to take.
+    pub(super) fn by_value(&self, expr: &str, written: String) -> Option<String> {
+        let readers = if self.is_local(expr) {
+            self.reads.local(expr)
+        } else if self.loop_variables.iter().any(|bound| bound == expr) {
+            1
+        } else if crate::rust::field_places(expr, "props") == [(0, expr.len())] {
+            self.reads.place(&crate::rust::place_text(expr))
+        } else {
+            return None;
+        };
+        Some(match self.must_copy_capture(readers) {
+            true => copy_of(&written),
+            false => written,
+        })
+    }
+
+    /// The bindings a `move` closure reading `snippets` clones in: every `$signal` and loop variable they name, and every `[logic]` binding moving would take from another reader. `props` is not one: its places are copied one by one.
+    pub(super) fn captured_names(&self, snippets: &[(&str, &[String])]) -> Vec<String> {
+        let locals: Vec<String> = self
+            .locals
+            .iter()
+            .filter(|local| *local != "props" && self.must_copy_capture(self.reads.local(local)))
+            .cloned()
+            .collect();
+        captured_from(snippets, &self.loop_variables, &locals, self.theme_access)
+    }
+}
 /// One raw source snippet of a subtree, with the names bound between it and the top of that subtree — a view `let` above it, an enclosing loop or arm pattern, the wrapping closure's own parameters.
 ///
 /// Those names belong to the closure being wrapped, so an identifier a snippet shares with one of them is a reference to what the closure itself declares and not a capture to clone in from outside.
@@ -435,7 +561,7 @@ impl ScopedSnippet {
 
 /// Every raw source snippet a subtree contains, still carrying its `$` sigils — attribute values, text content, control-flow conditions and verbatim `let`s.
 ///
-/// Collected so a `move` closure wrapping that subtree ([`clone_block_multiline`]) can clone the signals it will reference instead of moving them out of the surrounding view. Every emitter that puts view markup inside a `move` closure needs this: a reactive `if`/`for` branch and a `lazy` block alike.
+/// Collected so a `move` closure wrapping that subtree ([`ViewGen::owning_subtree`]) takes what it reads without moving it out of the surrounding view, and so [`ViewReads`](super::ViewReads) can count who reads what. Every emitter that puts view markup inside a `move` closure needs this: a reactive `if`/`for` branch, a `lazy` block and a component's `Children` recipe alike.
 pub(super) fn subtree_snippets(nodes: &[ViewNode]) -> Vec<String> {
     scoped_snippets(nodes, &[])
         .into_iter()
@@ -469,9 +595,21 @@ fn collect_snippets(nodes: &[ViewNode], scope: &mut Vec<String>, out: &mut Vec<S
                         out.push(ScopedSnippet::new(attr.value.text().to_string(), scope));
                     }
                 }
-                // A placeholder builds its slot from the component's `children` recipe where it stands, so a rebuilding closure around it has to clone that binding in.
+                // Each state of a box is a paint closure of its own laid over the base paint, so the base paint has a reader more per state.
+                for _ in 0..box_states(el) {
+                    for attr in el
+                        .attributes
+                        .iter()
+                        .filter(|a| is_paint_key(&a.key) || a.key == "surface")
+                    {
+                        out.push(ScopedSnippet::new(attr.value.text().to_string(), scope));
+                    }
+                }
+                // A placeholder's positional expression parses as a flag, whose key is the source a rebuilding closure around it has to clone in.
                 if el.tag == "children" {
-                    out.push(ScopedSnippet::new("children".to_string(), scope));
+                    for operand in el.attributes.iter().filter(|a| a.value.is_flag()) {
+                        out.push(ScopedSnippet::new(operand.key.clone(), scope));
+                    }
                 }
                 collect_snippets(&el.children, scope, out);
             }
@@ -524,6 +662,23 @@ fn collect_snippets(nodes: &[ViewNode], scope: &mut Vec<String>, out: &mut Vec<S
     }
 }
 
+/// How many state paints a `box`, `row`, `col` or `grid` swaps its base paint for.
+fn box_states(el: &telar_parser::Element) -> usize {
+    match el.tag.as_str() {
+        "box" | "row" | "col" | "grid" => el
+            .attributes
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.key.as_str(),
+                    "hover_style" | "active_style" | "disabled_style"
+                )
+            })
+            .count(),
+        _ => 0,
+    }
+}
+
 /// The names a view `let` binds, falling back to a scan of its pattern text when the statement does not parse — half-written mid-keystroke, or holding macro tokens.
 fn let_bound_names(source: &str) -> Vec<String> {
     crate::rust::let_bindings(source).unwrap_or_else(|| {
@@ -534,23 +689,6 @@ fn let_bound_names(source: &str) -> Vec<String> {
             .map(pattern_idents)
             .unwrap_or_default()
     })
-}
-
-/// [`wrap_signal_clones`] for a closure whose body spans lines: the clones go on their own line above it, so the generated code stays readable and the source map keeps pointing at the right `.rsx` lines. A no-op when `idents` is empty, which keeps the common signal-free closure unwrapped.
-pub(super) fn clone_block_multiline(idents: &[String], closure: String, pad: &str) -> String {
-    if idents.is_empty() {
-        return closure;
-    }
-    let mut out = format!("{pad}{{\n");
-    for name in idents {
-        let _ = writeln!(
-            out,
-            "{pad}    let {}{name} = {name}.clone();",
-            super::shadow_marker(name)
-        );
-    }
-    let _ = write!(out, "{closure}\n{pad}}}");
-    out
 }
 
 /// Assembles a `&[(pos, color)]` gradient stops expression from the resolved `from`, `to`, and optional `mid`/`mid_pos` values. Keys that contribute to a container's paint (`RectStyle`) rather than its layout. Used to pick which class props to merge into an element's paint attributes.

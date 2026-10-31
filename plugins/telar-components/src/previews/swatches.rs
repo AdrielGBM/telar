@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Role};
+use telar::{Color, Role};
 
 use crate::swatches::{SwatchesProps, swatches};
 
@@ -28,7 +28,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .selected(p.signal("selected", Some(0u32)))
                     .size(p.arg("size", 0.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Swatches")

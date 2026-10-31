@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive, Role};
+use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive, Role};
 
 use crate::button::{ButtonProps, ButtonVariant, button};
 use crate::metrics;
@@ -15,7 +15,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .variant(p.arg("variant", ButtonVariant::Solid))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Button")
@@ -41,7 +40,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         .variant(variant)
                         .color(color)
                         .build(),
-                    Children::default(),
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -56,10 +54,11 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let presses = p.signal("presses", 0u32);
             button(
                 ButtonProps::props()
-                    .label(Reactive::of(move || format!("Pressed {} times", presses.get())))
+                    .label(Reactive::of(move || {
+                        format!("Pressed {} times", presses.get())
+                    }))
                     .on_press(Rc::new(move || presses.update(|count| *count += 1)))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Button")

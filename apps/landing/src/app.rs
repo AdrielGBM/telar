@@ -11,7 +11,6 @@ impl App for LandingRoot {
         reset_layout_runtime();
         let content = crate::home::home(
             crate::home::HomeProps::props().build(),
-            telar::Children::default(),
         )
         .expect("layout failed");
         let page = ScrollPage::new(content).expect("page layout failed");

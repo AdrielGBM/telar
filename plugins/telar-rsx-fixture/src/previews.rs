@@ -13,7 +13,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Apples"))
                     .count(p.arg("count", 3u32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Fixture/Tally")
@@ -23,7 +22,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let count = p.signal("count", 0u32);
             tally(
                 TallyProps::props().label("Presses").count(count).build(),
-                Children::default(),
             )
         })
         .title("Fixture/Tally")
@@ -34,7 +32,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
 }
 
 fn framed(children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let content = children.build()?.take_default();
+    let content = children.build()?;
     Ok(box_item(Container::new(
         LayoutStyle::new().padding_all(12.0),
         content,

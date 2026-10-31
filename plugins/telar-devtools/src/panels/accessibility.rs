@@ -1,8 +1,8 @@
 //! The accessibility panel: what the checks found, and what a reader is told, as the tree a reader steps through.
 
 use telar::{
-    AccessAudit, AccessNode, AccessSeverity, AlignItems, Children, Container, LayoutError,
-    LayoutItem, LayoutStyle, Reactive, Text, box_item, children, memo,
+    AccessAudit, AccessNode, AccessSeverity, AlignItems, Container, LayoutError, LayoutItem,
+    LayoutStyle, Reactive, Text, box_item, children, memo,
 };
 use telar_components::{TreeNode, TreeViewProps, tree_view};
 
@@ -55,7 +55,6 @@ pub fn accessibility_panel(inspection: Inspection) -> Result<Box<dyn LayoutItem>
             .on_context(menu.on_context())
             .label(Reactive::of(|| strings::text(ACCESSIBILITY)))
             .build(),
-        Children::default(),
     )?;
     Ok(box_item(Container::new(
         workbench_fill(),

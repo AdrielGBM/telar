@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Role};
+use telar::{Color, Role};
 
 use crate::stepper::{StepperProps, stepper};
 
@@ -14,7 +14,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .step(p.arg("step", 1.0f32))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Stepper")

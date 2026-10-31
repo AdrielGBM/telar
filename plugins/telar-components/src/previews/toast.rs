@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Container, LayoutError, LayoutStyle, Role, box_item};
+use telar::{Container, LayoutError, LayoutStyle, Role, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::toast::{Toast, ToastKind, ToasterProps, Toasts, toaster};
@@ -19,7 +19,6 @@ fn poster(
                 queue.push(toast());
             }))
             .build(),
-        Children::default(),
     )
 }
 
@@ -53,7 +52,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .toasts(queue)
                     .max_visible(p.arg("max_visible", 3u32))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(Container::column(vec![box_item(row), stack])?)
         })

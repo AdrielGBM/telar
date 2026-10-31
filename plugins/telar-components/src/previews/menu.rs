@@ -3,27 +3,20 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role, RwSignal};
 
-use super::sample;
 use crate::list::{ItemProps, SeparatorProps, item, separator};
 use crate::menu::{MenuProps, menu};
 use crate::menu_panel::{SubmenuProps, submenu};
 
 fn actions() -> Children {
-    sample::children(|| {
+    Children::new(|| {
         let row = |label: &'static str, shortcut: &'static str| {
-            item(
-                ItemProps::props().label(label).shortcut(shortcut).build(),
-                Children::default(),
-            )
+            item(ItemProps::props().label(label).shortcut(shortcut).build())
         };
         Ok(vec![
             row("New file", "Mod+N")?,
             row("Open…", "Mod+O")?,
-            separator(SeparatorProps::props().build(), Children::default())?,
-            item(
-                ItemProps::props().label("Close").disabled(true).build(),
-                Children::default(),
-            )?,
+            separator(SeparatorProps::props().build())?,
+            item(ItemProps::props().label("Close").disabled(true).build())?,
         ])
     })
 }
@@ -32,7 +25,7 @@ const THEMES: [&str; 3] = ["System", "Light", "Dark"];
 
 /// The choices of a set, the one `chosen` holds ticked.
 fn choices(chosen: RwSignal<usize>) -> Children {
-    sample::children(move || {
+    Children::new(move || {
         (0..THEMES.len())
             .map(|at| {
                 item(
@@ -42,7 +35,6 @@ fn choices(chosen: RwSignal<usize>) -> Children {
                         .radio(true)
                         .on_press(Rc::new(move || chosen.set(at)))
                         .build(),
-                    Children::default(),
                 )
             })
             .collect()
@@ -50,44 +42,43 @@ fn choices(chosen: RwSignal<usize>) -> Children {
 }
 
 fn view_menu(chosen: RwSignal<usize>, rulers: RwSignal<bool>) -> Children {
-    sample::children(move || {
+    Children::new(move || {
         Ok(vec![
             submenu(
                 SubmenuProps::props()
                     .label("Theme")
                     .hint(Reactive::of(move || THEMES[chosen.get()].to_string()))
+                    .children(choices(chosen))
                     .build(),
-                choices(chosen),
             )?,
             submenu(
-                SubmenuProps::props().label("Zoom").build(),
-                sample::children(|| {
-                    Ok(vec![
-                        item(
-                            ItemProps::props()
-                                .label("Zoom in")
-                                .shortcut("Mod+=")
-                                .build(),
-                            Children::default(),
-                        )?,
-                        item(
-                            ItemProps::props()
-                                .label("Zoom out")
-                                .shortcut("Mod+-")
-                                .build(),
-                            Children::default(),
-                        )?,
-                    ])
-                }),
+                SubmenuProps::props()
+                    .label("Zoom")
+                    .children(Children::new(|| {
+                        Ok(vec![
+                            item(
+                                ItemProps::props()
+                                    .label("Zoom in")
+                                    .shortcut("Mod+=")
+                                    .build(),
+                            )?,
+                            item(
+                                ItemProps::props()
+                                    .label("Zoom out")
+                                    .shortcut("Mod+-")
+                                    .build(),
+                            )?,
+                        ])
+                    }))
+                    .build(),
             )?,
-            separator(SeparatorProps::props().build(), Children::default())?,
+            separator(SeparatorProps::props().build())?,
             item(
                 ItemProps::props()
                     .label("Rulers")
                     .checked(Reactive::of(move || rulers.get()))
                     .on_press(Rc::new(move || rulers.set(!rulers.get())))
                     .build(),
-                Children::default(),
             )?,
         ])
     })
@@ -98,7 +89,7 @@ fn settings_menu(
     motion: RwSignal<bool>,
     contrast: RwSignal<bool>,
 ) -> Children {
-    sample::children(move || {
+    Children::new(move || {
         let switch = |label: &'static str, on: RwSignal<bool>| {
             item(
                 ItemProps::props()
@@ -106,7 +97,6 @@ fn settings_menu(
                     .switch(Reactive::of(move || on.get()))
                     .on_press(Rc::new(move || on.set(!on.get())))
                     .build(),
-                Children::default(),
             )
         };
         Ok(vec![
@@ -114,10 +104,10 @@ fn settings_menu(
                 SubmenuProps::props()
                     .label("Theme")
                     .hint(Reactive::of(move || THEMES[chosen.get()].to_string()))
+                    .children(choices(chosen))
                     .build(),
-                choices(chosen),
             )?,
-            separator(SeparatorProps::props().build(), Children::default())?,
+            separator(SeparatorProps::props().build())?,
             switch("Reduce motion", motion)?,
             switch("High contrast", contrast)?,
         ])
@@ -134,8 +124,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .bordered(p.arg("bordered", false))
                     .caret(p.arg("caret", true))
                     .stretch(p.arg("stretch", false))
+                    .children(actions())
                     .build(),
-                actions(),
             )
         })
         .title("Overlays/Menu")
@@ -158,8 +148,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let chosen = p.signal("theme", 0usize);
             let rulers = p.signal("rulers", true);
             menu(
-                MenuProps::props().label(p.arg("label", "View")).build(),
-                view_menu(chosen, rulers),
+                MenuProps::props()
+                    .label(p.arg("label", "View"))
+                    .children(view_menu(chosen, rulers))
+                    .build(),
             )
         })
         .title("Overlays/Menu")
@@ -195,8 +187,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let motion = p.signal("motion", false);
             let contrast = p.signal("contrast", true);
             menu(
-                MenuProps::props().label(p.arg("label", "Settings")).build(),
-                settings_menu(chosen, motion, contrast),
+                MenuProps::props()
+                    .label(p.arg("label", "Settings"))
+                    .children(settings_menu(chosen, motion, contrast))
+                    .build(),
             )
         })
         .title("Overlays/Menu")

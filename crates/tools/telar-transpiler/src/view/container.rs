@@ -9,7 +9,7 @@ use telar_project::naming::to_pascal_case;
 
 use super::signals::{
     closure_marker, emit_transition_prelude, has_paint, normalize_closure, substitute_handles,
-    substitute_reads, wrap_signal_clones,
+    substitute_reads,
 };
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker, forces_child_vec};
 
@@ -128,7 +128,7 @@ impl ViewGen<'_> {
             let raw: Vec<&str> = reactive.iter().map(String::as_str).collect();
             format!(
                 ".styled_by({})",
-                self.clone_captures(&raw, format!("move || {style}"))
+                self.owning(&raw, &format!("move || {style}"))
             )
         };
         // `cursor:pointer` names a variant; anything else is the expression it is, and a reactive value becomes a reading so the shape follows it the way a colour does.
@@ -143,13 +143,12 @@ impl ViewGen<'_> {
                     Some(variant) => format!(".cursor({variant})"),
                     None if value.contains('$') => format!(
                         ".cursor({})",
-                        wrap_signal_clones(
+                        self.owning(
                             &[value],
-                            format!(
+                            &format!(
                                 "Reactive::of(move || {})",
                                 substitute_reads(value, self.theme_access)
-                            ),
-                            self.theme_access
+                            )
                         )
                     ),
                     None => format!(".cursor({})", value),
@@ -243,11 +242,13 @@ impl ViewGen<'_> {
             .is_some_and(|a| !a.value.is_closure());
 
         let attrs = self.effective_attrs(el);
-        let hover_call = self.state_style_call(el, "hover_style", "hover_style", &attrs);
-        let active_call = self.state_style_call(el, "active_style", "active_style", &attrs);
-        let disabled_call = self.state_style_call(el, "disabled_style", "disabled_style", &attrs);
+        let surface = attrs.iter().find(|a| a.key == "surface");
+        let hover_call = self.state_style_call(el, "hover_style", &attrs, surface);
+        let active_call = self.state_style_call(el, "active_style", &attrs, surface);
+        let disabled_call = self.state_style_call(el, "disabled_style", &attrs, surface);
         let disabled = self.predicate_call(el, "disabled");
-        let focus_ring = self.state_style_call(el, "focus_style", "focus_style", &[]);
+        // Not amended: the ring is composed over whichever state won, which already was, and an amendment restroking it would hide where the keyboard is.
+        let focus_ring = self.state_style_call(el, "focus_style", &[], None);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_pointer_move = self.closure_attr_call(el, "on_pointer_move", "on_pointer_move");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
@@ -257,7 +258,7 @@ impl ViewGen<'_> {
         let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
         let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
         let on_alt_press = self.closure_attr_call(el, "on_alt_press", "on_alt_press");
-        let consumes_keys = consumes_keys_call(el, &mut errors, self.theme_access);
+        let consumes_keys = consumes_keys_call(self, el, &mut errors);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
@@ -273,8 +274,9 @@ impl ViewGen<'_> {
             || !styling.is_empty()
             || on_press_forwarded
             || operated
+            || surface.is_some()
         {
-            Some(self.rect_style_pieces(&attrs, &transitions, &mut hoists))
+            Some(self.rect_style_pieces(&attrs, &transitions, &mut hoists, surface))
         } else {
             None
         };
@@ -372,15 +374,22 @@ impl ViewGen<'_> {
     /// Builds one trailing `.on_X_style(...)` from an `X_style(...)` attribute — the paint swap for a state, written as a mini list of paint props (`hover_style(fill:x stroke:y)`). Reuses `rect_style_pieces`, so a `$signal` colour is cloned into the closure just like the base style. Transitions are deliberately not applied to a state variant.
     ///
     /// `base` is prepended to the overrides so `rect_style_pieces`. first-match `find` picks the state value over the base one. The focus ring passes an empty `base`: what the ring does not name comes from whichever state won underneath it at paint time, not from the base style at build time.
-    fn state_style_call(&mut self, el: &Element, key: &str, method: &str, base: &[Attr]) -> String {
+    fn state_style_call(
+        &mut self,
+        el: &Element,
+        key: &str,
+        base: &[Attr],
+        surface: Option<&Attr>,
+    ) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
         let mut merged = parse_inline_paint_attrs(attr.value.text(), attr.value_start);
         merged.extend(base.iter().cloned());
         let mut hoists: Vec<String> = Vec::new();
-        let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
-        format!(".{method}({closure})")
+        let (closure, _opacity) =
+            self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists, surface);
+        format!(".{key}({closure})")
     }
 
     ///
@@ -396,7 +405,7 @@ impl ViewGen<'_> {
         let read = substitute_reads(value, self.theme_access);
         format!(
             ".{key}({})",
-            wrap_signal_clones(&[value], format!("move || {read}"), self.theme_access)
+            self.owning(&[value], &format!("move || {read}"))
         )
     }
 
@@ -408,10 +417,7 @@ impl ViewGen<'_> {
         let value = attr.value.text().trim();
         errors.extend(refused_external(value));
         let read = substitute_reads(value, self.theme_access);
-        format!(
-            ".to({})",
-            wrap_signal_clones(&[value], format!("move || {read}"), self.theme_access)
-        )
+        format!(".to({})", self.owning(&[value], &format!("move || {read}")))
     }
 
     /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`/ `on_drag`/`on_focus`/`on_long_press`), or an empty string when the attribute is absent. `$name` signals are cloned into the closure, `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
@@ -427,7 +433,9 @@ impl ViewGen<'_> {
                 None => (0, text),
             };
             let marker = expr_marker(attr.value_start + offset, inner.len());
-            return format!(".maybe_{method}({marker}{inner})");
+            let written = format!("{marker}{inner}");
+            let handler = self.by_value(inner, written.clone()).unwrap_or(written);
+            return format!(".maybe_{method}({handler})");
         }
         format!(".{method}({})", self.emit_closure_value(attr))
     }
@@ -441,11 +449,7 @@ impl ViewGen<'_> {
         } else {
             closure_marker(Some(attr))
         };
-        wrap_signal_clones(
-            &[attr.value.text()],
-            format!("move {marker}{closure}"),
-            self.theme_access,
-        )
+        self.owning(&[attr.value.text()], &format!("move {marker}{closure}"))
     }
 
     fn on_press_call(&self, el: &Element) -> String {
@@ -544,7 +548,7 @@ impl ViewGen<'_> {
             .into_iter()
             .chain(origin_refs.iter().map(String::as_str))
             .collect();
-        let call = wrap_signal_clones(&refs, format!("move |__r: Rect| {call}"), self.theme_access);
+        let call = self.owning(&refs, &format!("move |__r: Rect| {call}"));
         format!(".with_transform({call})")
     }
 
@@ -618,7 +622,8 @@ fn split_outside_delimiters(value: &str) -> Vec<(usize, &str)> {
 }
 
 /// `.consumes_keys(..)` for a box that names the keys it keeps: a list of names checked here, so a misspelt key is a compile error rather than a key silently handed back to the page, or a `$`-reading expression re-read every render.
-fn consumes_keys_call(el: &Element, errors: &mut Vec<String>, theme: ThemeAccess) -> String {
+fn consumes_keys_call(generator: &ViewGen, el: &Element, errors: &mut Vec<String>) -> String {
+    let theme = generator.theme_access;
     let Some(attr) = el.attributes.iter().find(|a| a.key == "consumes_keys") else {
         return String::new();
     };
@@ -628,7 +633,7 @@ fn consumes_keys_call(el: &Element, errors: &mut Vec<String>, theme: ThemeAccess
         let read = substitute_reads(value, theme);
         return format!(
             ".consumes_keys({})",
-            wrap_signal_clones(&[value], format!("move || {read}"), theme)
+            generator.owning(&[value], &format!("move || {read}"))
         );
     }
     let mut constants = Vec::new();

@@ -22,7 +22,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label("Open the drawer")
                     .on_press(Rc::new(move || open.set(true)))
                     .build(),
-                Children::default(),
             )?;
             let side = match p.arg("side", Side::Left) {
                 Side::Left => "left",
@@ -34,13 +33,13 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .side(side)
                     .width(p.arg("width", 0.0f32))
                     .color(p.arg("color", Color::TRANSPARENT))
+                    .children(Children::new(|| {
+                        Ok(vec![
+                            sample::text("Filters")?,
+                            sample::text("Tap outside the panel to close it.")?,
+                        ])
+                    }))
                     .build(),
-                sample::children(|| {
-                    Ok(vec![
-                        sample::text("Filters")?,
-                        sample::text("Tap outside the panel to close it.")?,
-                    ])
-                }),
             )?;
             Ok::<_, LayoutError>(Container::column(vec![box_item(reopen), panel])?)
         })

@@ -1,7 +1,5 @@
 use telar::testing::{Scoped, centre, named, press, release, route};
-use telar::{
-    AvailableSpace, ComponentList, NamedKey, Slots, compute_layout, relayout_if_dirty, signal,
-};
+use telar::{AvailableSpace, ComponentList, NamedKey, compute_layout, relayout_if_dirty, signal};
 
 use super::*;
 use crate::select::{SelectProps, select};
@@ -13,19 +11,15 @@ const WINDOW_HEIGHT: f32 = 300.0;
 
 fn rows(count: u32) -> Children {
     Children::new(move || {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for n in 0..count {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || format!("Row {n}")))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || format!("Row {n}")))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -41,7 +35,13 @@ fn opened(count: u32, top: f32) -> (Scoped<ComponentList>, RwSignal<u32>) {
     fresh_layout_runtime();
     let picked = signal(0u32);
     let mut tree = telar::testing::scoped(|| {
-        let field = select(SelectProps::props().selected(picked).build(), rows(count)).unwrap();
+        let field = select(
+            SelectProps::props()
+                .selected(picked)
+                .children(rows(count))
+                .build(),
+        )
+        .unwrap();
         let root = Container::new(
             LayoutStyle::new().flex_column().padding_top(top),
             vec![field],
@@ -277,25 +277,16 @@ fn controls_of_every_kind_standing_in_a_row_are_drawn_at_one_height() {
 
     fresh_layout_runtime();
     let items = vec![
-        button(
-            ButtonProps::props().label("Open").build(),
-            Children::default(),
-        )
-        .unwrap(),
+        button(ButtonProps::props().label("Open").build()).unwrap(),
         icon_button(
             IconButtonProps::props()
                 .icon("lucide:search")
                 .label("Find")
                 .build(),
-            Children::default(),
         )
         .unwrap(),
-        menu(
-            MenuProps::props().label("File").fit(true).build(),
-            Children::default(),
-        )
-        .unwrap(),
-        select(SelectProps::props().build(), Children::default()).unwrap(),
+        menu(MenuProps::props().label("File").fit(true).build()).unwrap(),
+        select(SelectProps::props().build()).unwrap(),
     ];
     let root = telar::Container::new(
         telar::LayoutStyle::new()
@@ -349,7 +340,13 @@ fn a_list_keeps_the_popup_offset_from_its_field_on_either_side() {
         }),
     });
     let picked = signal(0u32);
-    let field = select(SelectProps::props().selected(picked).build(), rows(3)).unwrap();
+    let field = select(
+        SelectProps::props()
+            .selected(picked)
+            .children(rows(3))
+            .build(),
+    )
+    .unwrap();
     compute_layout(
         field.layout_node(),
         AvailableSpace::Definite(WINDOW_WIDTH),

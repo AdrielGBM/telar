@@ -1,8 +1,7 @@
 //! [`tally`]: a component written in Rust beside the `.rsx` one, so the fixture carries previews written in Rust.
 
 use telar::{
-    Children, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, Text, TextStyle,
-    box_item,
+    Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, Text, TextStyle, box_item,
 };
 
 /// A label beside how many of it there are.
@@ -17,7 +16,7 @@ pub struct TallyProps {
 }
 
 /// A label beside how many of it there are, as `label · count`.
-pub fn tally(props: TallyProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn tally(props: TallyProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TallyProps { label, count } = props;
     let text = Text::new(
         move || format!("{} · {}", label.get(), count.get()),

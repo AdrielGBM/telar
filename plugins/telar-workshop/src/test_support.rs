@@ -1,7 +1,7 @@
 use telar::preview::{PreviewCtx, PreviewEntry};
 use telar::{
-    AccessNode, App, Children, Component, ComponentList, DrawCommand, LayoutError, LayoutItem,
-    Reactive, Rect, Role, WindowRoot, for_each_with_matrix, relayout_if_dirty, transform_clip_rect,
+    AccessNode, App, Component, ComponentList, DrawCommand, LayoutError, LayoutItem, Reactive,
+    Rect, Role, WindowRoot, for_each_with_matrix, relayout_if_dirty, transform_clip_rect,
 };
 use telar_components::{BadgeProps, ButtonProps, badge, button};
 use telar_devtools::workbench_scope;
@@ -92,7 +92,6 @@ fn sample_button(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
         ButtonProps::props()
             .label(Reactive::of(move || label.clone()))
             .build(),
-        Children::default(),
     )
 }
 
@@ -102,7 +101,6 @@ fn sample_badge(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
         BadgeProps::props()
             .label(Reactive::of(move || count.to_string()))
             .build(),
-        Children::default(),
     )
 }
 

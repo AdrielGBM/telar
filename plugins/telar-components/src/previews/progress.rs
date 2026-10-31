@@ -1,5 +1,5 @@
+use telar::Color;
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
 
 use crate::progress::{ProgressProps, progress};
 
@@ -14,7 +14,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .width(p.arg("width", 0.0f32))
                     .height(p.arg("height", 0.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Feedback/Progress")

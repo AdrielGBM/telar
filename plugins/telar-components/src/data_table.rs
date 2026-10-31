@@ -231,8 +231,6 @@ pub type TableRowHandler = Rc<dyn Fn(&TableRow)>;
 /// The keyboard walks a cursor from cell to cell — the arrows, Home and End along a row, Ctrl with them to the table's corners, Page Up and Page Down — and a reader hears the cell it is on. Enter, Space or a press on a row's cell chooses the row; on a sortable column's header they sort the rows by it, and again the other way. In [`SelectionMode::Multiple`] the grid says it takes several rows, each row says whether it is one of them, and Shift, Ctrl (Command on a Mac) and Space choose them as [`SelectionMode::Multiple`] says.
 ///
 /// A [resizable](Column::resizable) column's header holds a splitter on its inline-end edge, the [`resize_handle`] a reader hears as "Resize Name column" with the column's width as its value: dragged, or focused with Tab after the table and stepped with the arrow keys, Home taking it to its [narrowest](Column::min_width), and Escape putting a drag back. A column resized keeps the width it was given in [`widths`](Self::widths) as though it were [`Fixed`](ColumnWidth::Fixed) — a [`Flex`](ColumnWidth::Flex) one too, so the flexible columns left share what the fixed ones leave, and columns that add up to more than the table scroll it sideways.
-///
-/// Children: what the table shows under its header while it has no rows, in place of [`empty_label`](Self::empty_label).
 #[derive(Props)]
 pub struct DataTableProps {
     #[props(into, default)]
@@ -269,19 +267,19 @@ pub struct DataTableProps {
     /// What a reader calls the table.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
-    /// What the table says under its header while it has no rows, and a reader hears as a status. `None` (the default) uses the localized `telar_components.nothing_to_show` message.
+    /// What the table says under its header while it has no rows and [`empty`](Self::empty) builds nothing, and a reader hears as a status. `None` (the default) uses the localized `telar_components.nothing_to_show` message.
     #[props(some, into, default)]
     pub empty_label: Option<Reactive<String>>,
     /// Accent for the selection and the keyboard cursor. `Color::TRANSPARENT` (the default) falls back to the theme's washes and focus ring.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
+    /// What the table shows under its header while it has no rows, in place of [`empty_label`](Self::empty_label); when it builds nothing, the label shows instead.
+    #[props(default)]
+    pub empty: Children,
 }
 
 /// Rows of data under a header of sortable, resizable columns, walked cell by cell.
-pub fn data_table(
-    props: DataTableProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let DataTableProps {
         columns,
         rows,
@@ -297,6 +295,7 @@ pub fn data_table(
         label,
         empty_label,
         color,
+        empty,
     } = props;
     let columns: Rc<[Column]> = columns.into();
     let sort = sort.unwrap_or_else(|| signal(None));
@@ -377,7 +376,7 @@ pub fn data_table(
         move || ordered.with(|rows| rows.0.is_empty()),
         row_height,
         empty_label,
-        children,
+        empty,
     )
 }
 
@@ -903,7 +902,6 @@ fn column_resizer(
             .on_start(Rc::new(start))
             .on_end(Rc::new(end))
             .build(),
-        Children::default(),
     )?;
     let edge = Container::new(
         LayoutStyle::row()

@@ -1,3 +1,4 @@
+use telar::Children;
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 
 use super::sample;
@@ -9,13 +10,13 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             section(
                 SectionProps::props()
                     .title(p.arg("title", "Profile"))
+                    .children(Children::new(|| {
+                        Ok(vec![
+                            sample::text("Your name and photo are shown to other members.")?,
+                            sample::text("Only you can see your email address.")?,
+                        ])
+                    }))
                     .build(),
-                sample::children(|| {
-                    Ok(vec![
-                        sample::text("Your name and photo are shown to other members.")?,
-                        sample::text("Only you can see your email address.")?,
-                    ])
-                }),
             )
         })
         .title("Layout/Section")

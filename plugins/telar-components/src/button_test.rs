@@ -17,7 +17,6 @@ fn a_ghost_label_keeps_the_ink_of_the_region_around_it() {
             .label("Undo")
             .variant(ButtonVariant::Ghost)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let root = new_container(
@@ -59,7 +58,6 @@ fn tap_fires_on_press() {
             .color(Reactive::of(|| Color::rgba(0.2, 0.4, 0.9, 1.0)))
             .on_press(Rc::new(move || sink.set(true)))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let node = btn.layout_node();
@@ -108,7 +106,7 @@ fn switching_theme_re_spaces_the_button() {
     crate::test_support::fresh_layout_runtime();
     set_theme(Spaced(8.0));
     // Measured with no label, so the width is the padding alone: what a font system makes of the text is a different question from whether the box followed the theme.
-    let btn = button(ButtonProps::props().build(), Children::default()).unwrap();
+    let btn = button(ButtonProps::props().build()).unwrap();
     let node = btn.layout_node();
     let rect = track_layout(node).unwrap();
     compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
@@ -144,7 +142,7 @@ fn the_ambient_control_size_scales_a_control_that_never_asked_for_one() {
     crate::test_support::fresh_layout_runtime();
     set_theme(Plain);
     set_control_size(ControlSize::Regular);
-    let btn = button(ButtonProps::props().build(), Children::default()).unwrap();
+    let btn = button(ButtonProps::props().build()).unwrap();
     let node = btn.layout_node();
     let rect = track_layout(node).unwrap();
     compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
@@ -202,11 +200,11 @@ fn a_button_under_a_provider_paints_with_that_theme() {
             on_primary: white,
             spacing: 16.0,
         },
-        || button(ButtonProps::props().label("A").build(), Children::default()),
+        || button(ButtonProps::props().label("A").build()),
     )
     .unwrap();
     let themed_rect = track_layout(themed.layout_node()).unwrap();
-    let plain = button(ButtonProps::props().label("A").build(), Children::default()).unwrap();
+    let plain = button(ButtonProps::props().label("A").build()).unwrap();
     let plain_rect = track_layout(plain.layout_node()).unwrap();
     let row = telar::Container::new(
         LayoutStyle::new().flex_row().align_items(AlignItems::START),
@@ -254,7 +252,6 @@ fn a_ghost_button_is_washed_while_the_pointer_rests_on_it() {
             .label("Undo")
             .variant(ButtonVariant::Ghost)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let root = new_container(
@@ -304,7 +301,7 @@ impl telar::ThemeTokens for Rounded {
 
 fn laid_out(props: ButtonProps) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
-    let btn = button(props, Children::default()).unwrap();
+    let btn = button(props).unwrap();
     compute_layout(
         btn.layout_node(),
         AvailableSpace::MaxContent,
@@ -428,11 +425,7 @@ fn a_style_amendment_reshapes_every_state() {
 
 fn label_height_in(width: f32) -> f32 {
     crate::test_support::fresh_layout_runtime();
-    let btn = button(
-        ButtonProps::props().label("Get started now").build(),
-        Children::default(),
-    )
-    .unwrap();
+    let btn = button(ButtonProps::props().label("Get started now").build()).unwrap();
     compute_layout(
         btn.layout_node(),
         AvailableSpace::Definite(width),
@@ -464,7 +457,6 @@ fn a_hugging_button_pads_its_label_evenly_on_both_sides() {
             .label("Settings")
             .variant(ButtonVariant::Ghost)
             .build(),
-        Children::default(),
     )
     .unwrap();
     let root = new_container(

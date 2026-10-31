@@ -16,7 +16,7 @@
 pub struct FrameClockProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn frame_clock(props: FrameClockProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn frame_clock(props: FrameClockProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -35,118 +35,96 @@ pub fn frame_clock(props: FrameClockProps, children: Children) -> Result<Box<dyn
     });
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Frame clock").desc("A reactive elapsed time for motion that is a function of time rather than a transition toward a target. It advances only while a reactive reader is subscribed, so a screen that stops reading it asks for no frames, and it freezes under reduced motion.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Frame clock").desc("A reactive elapsed time for motion that is a function of time rather than a transition toward a target. It advances only while a reactive reader is subscribed, so a screen that stops reading it asks for no frames, and it freezes under reduced motion.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                     let running = running.clone();
                     let seconds = seconds.clone();
                     let swing = swing.clone();
                     let state = state.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let running = running.clone();
-                    let seconds = seconds.clone();
-                    let swing = swing.clone();
-                    let state = state.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                    let running = running.clone();
-                                    let seconds = seconds.clone();
-                                    let swing = swing.clone();
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                                let running = running.clone();
+                                let seconds = seconds.clone();
+                                let swing = swing.clone();
+                                let state = state.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __node_3 = button(ButtonProps::props().label("Start").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(true) })).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("Stop").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(false) })).build())?;
+                                    let __text_0 = {
+                                        let seconds = seconds.clone();
+                                        Text::declaring(
+                                            move || format!("{}", seconds.get()),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_3, __node_4, __text_0])?
+                                };
+                                __children.push(box_item(__row_0));
+                                let __sbox_0 = {
+                                    let __sbox_1 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(24.0).height(24.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![])?.with_transform({ let swing = swing.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (1) as f32, (1) as f32, (swing.get()) as f32, (0) as f32) })
+                                    };
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(24.0).width(260.0).align_items(AlignItems::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
+                                };
+                                __children.push(box_item(__sbox_0));
+                                let __text_1 = {
                                     let state = state.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let running = running.clone();
-                                    let seconds = seconds.clone();
-                                    let swing = swing.clone();
-                                    let state = state.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_0 = {
-                                            let __node_3 = button(ButtonProps::props().label("Start").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(true) })).build(), Children::default())?;
-                                            let __node_4 = button(ButtonProps::props().label("Stop").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(false) })).build(), Children::default())?;
-                                            let __text_0 = {
-                                                let seconds = seconds.clone();
-                                                Text::declaring(
-                                                    move || format!("{}", seconds.get()),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_3, __node_4, __text_0])?
-                                        };
-                                        __children.push(box_item(__row_0));
-                                        let __sbox_0 = {
-                                            let __sbox_1 = {
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(24.0).height(24.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![])?.with_transform({ let swing = swing.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (1) as f32, (1) as f32, (swing.get()) as f32, (0) as f32) })
-                                            };
-                                            StyledContainer::new(LayoutStyle::new().flex_column().height(24.0).width(260.0).align_items(AlignItems::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
-                                        };
-                                        __children.push(box_item(__sbox_0));
-                                        let __text_1 = {
-                                            let state = state.clone();
-                                            Text::declaring(
-                                                move || format!("{}", state.get()),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_1));
-                                        let __text_2 = {
-                                            Text::declaring(
-                                                || "Stop holds the reading, and Start continues from it. With less motion in effect the sway rests wherever the clock stood, because the clock freezes.".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_2));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_5 = code_line(CodeLineProps::props().code("let time = motion::use_frame_time_while(move || running.get());").build(), Children::default())?;
-                        __children.push(box_item(__node_5));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                    Text::declaring(
+                                        move || format!("{}", state.get()),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_1));
+                                let __text_2 = {
+                                    Text::declaring(
+                                        || "Stop holds the reading, and Start continues from it. With less motion in effect the sway rests wherever the clock stood, because the clock freezes.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_2));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(12)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_5 = code_line(CodeLineProps::props().code("let time = motion::use_frame_time_while(move || running.get());").build())?;
+                    __children.push(box_item(__node_5));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("An idle sway that exists only while it is read").build(), __deferred)?
+            example(ExampleProps::props().title("An idle sway that exists only while it is read").children(__recipe_children).build())?
         };
         let __node_6 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
+            let __recipe_children = Children::new(
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_1 = {
-                            let __node_7 = prop_row(PropRowProps::props().name("use_frame_time()").values("ReadSignal<Duration>").about("A clock tied to the calling scope, at zero when made. It runs while an effect, memo or view segment reads it.").build(), Children::default())?;
-                            let __node_8 = prop_row(PropRowProps::props().name("use_frame_time_while(f)").values("Memo<Duration>").about("The same, read only while f() is true; otherwise it holds its last reading and asks for nothing.").build(), Children::default())?;
-                            let __node_9 = prop_row(PropRowProps::props().name("FrameClock").values("get · peek · millis · secs · reset").about("The handle behind both. peek reads without subscribing.").build(), Children::default())?;
-                            let __node_10 = prop_row(PropRowProps::props().name("MAX_FRAME_STEP").values("100 ms").about("The most one frame adds, so a hidden tab or a stall does not jump the clock.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_7, __node_8, __node_9, __node_10])?
-                        };
-                        __children.push(box_item(__col_1));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __col_1 = {
+                        let __node_7 = prop_row(PropRowProps::props().name("use_frame_time()").values("ReadSignal<Duration>").about("A clock tied to the calling scope, at zero when made. It runs while an effect, memo or view segment reads it.").build())?;
+                        let __node_8 = prop_row(PropRowProps::props().name("use_frame_time_while(f)").values("Memo<Duration>").about("The same, read only while f() is true; otherwise it holds its last reading and asks for nothing.").build())?;
+                        let __node_9 = prop_row(PropRowProps::props().name("FrameClock").values("get · peek · millis · secs · reset").about("The handle behind both. peek reads without subscribing.").build())?;
+                        let __node_10 = prop_row(PropRowProps::props().name("MAX_FRAME_STEP").values("100 ms").about("The most one frame adds, so a hidden tab or a stall does not jump the clock.").build())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_7, __node_8, __node_9, __node_10])?
+                    };
+                    __children.push(box_item(__col_1));
+                    Ok(__children)
                 }
             );
-            example(ExampleProps::props().title("API").build(), __deferred)?
+            example(ExampleProps::props().title("API").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_6])?
     };

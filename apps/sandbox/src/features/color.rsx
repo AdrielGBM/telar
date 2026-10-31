@@ -92,4 +92,4 @@ col gap:20
             themed_panel mode:"midnight"
                 text "Nested at the call site, drawn in {$theme.name}" font_size:14 color:$theme.ink
                 text "and inside the panel's context: {use_context::<ThemedPanelContext>().map(|panel| panel.mode).unwrap_or_default()}" font_size:12 color:$theme.muted
-        code_line code:"col theme:(…)  ›  children in:ctx   — slot children are built where they are placed"
+        code_line code:"col theme:(…)  ›  children $props.children in:ctx   — children are built where they are placed"

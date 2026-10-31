@@ -7,8 +7,8 @@ use std::cell::RefCell;
 use telar::testing::{CanvasTextMetrics, DomRenderer};
 use telar::{
     Accessible, Children, Color, ComponentList, Container, Event, LayoutError, LayoutItem,
-    LayoutStyle, Location, Reactive, RectStyle, RenderBackend, Role, Size, Slots, StyledContainer,
-    Text, TextRun, TextStyle, WindowRoot, box_item, external, focus,
+    LayoutStyle, Location, Reactive, RectStyle, RenderBackend, Role, Size, StyledContainer, Text,
+    TextRun, TextStyle, WindowRoot, box_item, external, focus,
 };
 use telar_components::{
     ButtonProps, CheckboxProps, ImageProps, ImageSource, ItemProps, LinkProps, ScrubFieldProps,
@@ -100,27 +100,20 @@ fn stateful_control(
 /// `platform-desktop/src/accessibility_test.rs` builds the same screen from `ui-core` primitives standing in for the catalogue's button, field and checkbox, so a change here is mirrored there.
 /// A scrub field and a select, each in a box the application named: the box is the only name either control has.
 fn labelled_fields() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
-    let speed = scrub_field(
-        ScrubFieldProps::props().label("X").build(),
-        Children::default(),
-    )?;
+    let speed = scrub_field(ScrubFieldProps::props().label("X").build())?;
     let speed = Container::new(LayoutStyle::new(), vec![speed])?.a11y_label(|| "Speed");
     let sizes = Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for label in ["Small", "Large"] {
-            slots.push(
-                None,
-                item(
-                    ItemProps::props()
-                        .label(Reactive::of(move || label.to_string()))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(item(
+                ItemProps::props()
+                    .label(Reactive::of(move || label.to_string()))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     });
-    let size = select(SelectProps::props().build(), sizes)?;
+    let size = select(SelectProps::props().children(sizes).build())?;
     let size = Container::new(LayoutStyle::new(), vec![size])?.a11y_label(|| "Size");
     Ok(vec![box_item(speed), box_item(size)])
 }
@@ -137,7 +130,6 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
             .label("Save")
             .on_press(std::rc::Rc::new(|| {}))
             .build(),
-        Children::default(),
     )?;
     let source = link("Source code", || external("https://example.com/telar"))?;
     let about = link("About", || Location::root().segment("about"))?;
@@ -146,13 +138,11 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
             .label("Name")
             .placeholder("Ada Lovelace")
             .build(),
-        Children::default(),
     )?;
     let subscribe = checkbox(
         CheckboxProps::props()
             .label("Send me the newsletter")
             .build(),
-        Children::default(),
     )?;
     let calm = stateful_control(Role::Switch, "Reduce motion", "≈", true)?;
     let bold = stateful_control(Role::Button, "Bold", "B", false)?;
@@ -184,7 +174,6 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
             .items(vec!["General", "Advanced"])
             .label("Sections")
             .build(),
-        Children::default(),
     )?;
     let mut controls = vec![
         box_item(heading),
@@ -234,7 +223,6 @@ fn tree() -> Result<Box<dyn LayoutItem>, LayoutError> {
             .selected(telar::signal(Some("button".into())))
             .label("Components")
             .build(),
-        Children::default(),
     )?;
     Ok(box_item(Container::new(
         LayoutStyle::new().flex_column().height(140.0),
@@ -247,44 +235,41 @@ fn tree() -> Result<Box<dyn LayoutItem>, LayoutError> {
 fn tools() -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_components::{IconButtonProps, ToolbarProps, icon_button, toolbar};
     let children = Children::new(|| {
-        let mut slots = telar::Slots::new();
-        slots.push(
-            None,
+        Ok(vec![
             icon_button(
                 IconButtonProps::props()
                     .icon("lucide:bold")
                     .label("Bold")
                     .pressed(true)
                     .build(),
-                Children::default(),
             )?,
-        );
-        slots.push(
-            None,
             icon_button(
                 IconButtonProps::props()
                     .icon("lucide:search")
                     .label("Find")
                     .shortcut("Mod+F")
                     .build(),
-                Children::default(),
             )?,
-        );
-        Ok(slots)
+        ])
     });
-    toolbar(ToolbarProps::props().label("Formatting").build(), children)
+    toolbar(
+        ToolbarProps::props()
+            .label("Formatting")
+            .children(children)
+            .build(),
+    )
 }
 
 /// Two panes and the splitter between them, in a box of their own size.
 #[cfg(feature = "workbench")]
 fn split() -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_components::{SplitPaneProps, split_pane};
-    let mut slots = telar::Slots::new();
-    slots.push(None, box_item(words("Outline")?));
-    slots.push(None, box_item(words("Preview")?));
     let split = split_pane(
-        SplitPaneProps::props().default_size(120.0).build(),
-        Children::from(slots),
+        SplitPaneProps::props()
+            .default_size(120.0)
+            .first(Children::one(|| Ok(box_item(words("Outline")?))))
+            .second(Children::one(|| Ok(box_item(words("Preview")?))))
+            .build(),
     )?;
     Ok(box_item(Container::new(
         LayoutStyle::new().flex_row().height(60.0),
@@ -296,15 +281,13 @@ fn split() -> Result<Box<dyn LayoutItem>, LayoutError> {
 #[cfg(feature = "workbench")]
 fn resizable_box() -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_components::{ResizableProps, resizable};
-    let mut slots = telar::Slots::new();
-    slots.push(None, box_item(words("Notes")?));
     resizable(
         ResizableProps::props()
             .default_size(Size::new(160.0, 48.0))
             .min(Size::new(80.0, 32.0))
             .max(Size::new(400.0, 0.0))
+            .children(Children::one(|| Ok(box_item(words("Notes")?))))
             .build(),
-        Children::from(slots),
     )
 }
 
@@ -642,17 +625,22 @@ fn key(key: telar::NamedKey) {
 #[cfg(feature = "overlays")]
 fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let rows = Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for n in 1..=40 {
             let row = ItemProps::props()
                 .label(Reactive::of(move || format!("Action {n}")))
                 .build();
-            slots.push(None, item(row, Children::default())?);
+            items.push(item(row)?);
         }
-        Ok(slots)
+        Ok(items)
     });
-    let actions = menu(MenuProps::props().label("Actions").build(), rows)?;
-    let view = menu(MenuProps::props().label("View").build(), view_rows())?;
+    let actions = menu(MenuProps::props().label("Actions").children(rows).build())?;
+    let view = menu(
+        MenuProps::props()
+            .label("View")
+            .children(view_rows())
+            .build(),
+    )?;
     let commands: Vec<Command> = [Command::new("zoom", "Zoom in").in_group("View")]
         .into_iter()
         .chain((1..=20).map(|n| Command::new(format!("c{n}"), format!("Command {n}"))))
@@ -662,21 +650,26 @@ fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
             .id(PALETTE)
             .commands(commands)
             .build(),
-        Children::default(),
     )?;
     let terms = Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for n in 1..=40 {
             let clause = Text::new(
                 move || format!("Clause {n} of the terms."),
                 LayoutStyle::new(),
                 ink,
             )?;
-            slots.push(None, box_item(clause));
+            items.push(box_item(clause));
         }
-        Ok(slots)
+        Ok(items)
     });
-    let notice = modal(ModalProps::props().id(NOTICE).title("Terms").build(), terms)?;
+    let notice = modal(
+        ModalProps::props()
+            .id(NOTICE)
+            .title("Terms")
+            .children(terms)
+            .build(),
+    )?;
     Ok(vec![actions, view, palette, notice])
 }
 
@@ -684,42 +677,38 @@ fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
 #[cfg(feature = "overlays")]
 fn view_rows() -> Children {
     Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         let choices = Children::new(|| {
-            let mut slots = Slots::new();
+            let mut items = Vec::new();
             for (label, on) in [("System", true), ("Light", false), ("Dark", false)] {
                 let row = ItemProps::props()
                     .label(label)
                     .checked(on)
                     .radio(true)
                     .build();
-                slots.push(None, item(row, Children::default())?);
+                items.push(item(row)?);
             }
-            Ok(slots)
+            Ok(items)
         });
-        let theme = SubmenuProps::props().label("Theme").hint("System").build();
-        slots.push(None, submenu(theme, choices)?);
-        slots.push(
-            None,
-            item(
-                ItemProps::props()
-                    .label("Rulers")
-                    .shortcut("Mod+Shift+R")
-                    .build(),
-                Children::default(),
-            )?,
-        );
-        slots.push(
-            None,
-            item(
-                ItemProps::props()
-                    .label("Reduce motion")
-                    .switch(false)
-                    .build(),
-                Children::default(),
-            )?,
-        );
-        Ok(slots)
+        let theme = SubmenuProps::props()
+            .label("Theme")
+            .hint("System")
+            .children(choices)
+            .build();
+        items.push(submenu(theme)?);
+        items.push(item(
+            ItemProps::props()
+                .label("Rulers")
+                .shortcut("Mod+Shift+R")
+                .build(),
+        )?);
+        items.push(item(
+            ItemProps::props()
+                .label("Reduce motion")
+                .switch(false)
+                .build(),
+        )?);
+        Ok(items)
     })
 }
 
@@ -1165,14 +1154,12 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
                     .to(Location::root().segment("changelog"))
                     .current(true)
                     .build(),
-                Children::default(),
             )?,
             text_link(
                 LinkProps::props()
                     .label("Sponsor")
                     .to(external("https://example.com/sponsor"))
                     .build(),
-                Children::default(),
             )?,
         ],
     )?;
@@ -1185,7 +1172,6 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
                     .alt("A blue gradient")
                     .width(48.0)
                     .build(),
-                Children::default(),
             )?,
             image(
                 ImageProps::props()
@@ -1193,7 +1179,6 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
                     .alt("")
                     .width(24.0)
                     .build(),
-                Children::default(),
             )?,
             image(
                 ImageProps::props()
@@ -1202,7 +1187,6 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
                     .width(96.0)
                     .height(32.0)
                     .build(),
-                Children::default(),
             )?,
         ],
     )?;
@@ -1214,13 +1198,11 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
             .counter(true)
             .max_length(80)
             .build(),
-        Children::default(),
     )?;
     let search = search_field(
         SearchFieldProps::props()
             .value(telar::signal("buttons".to_string()))
             .build(),
-        Children::default(),
     )?;
     Ok(vec![box_item(links), box_item(pictures), notes, search])
 }
@@ -1244,7 +1226,6 @@ fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
             ])))
             .label("Contacts")
             .build(),
-        Children::default(),
     )?;
     let files: Vec<TableRow> = (0..40)
         .map(|i| {
@@ -1268,14 +1249,12 @@ fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
             .selected(telar::signal(Some("f2".into())))
             .label("Files")
             .build(),
-        Children::default(),
     )?;
     let downloads = data_table(
         DataTableProps::props()
             .columns(vec![Column::new("name", "Name")])
             .label("Downloads")
             .build(),
-        Children::default(),
     )?;
     Ok(vec![
         box_item(Container::new(

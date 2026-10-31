@@ -548,6 +548,32 @@ pub(crate) fn shown_while(
     Ok(box_item(list))
 }
 
+/// What `build` makes, under a tooltip showing `text` and `shortcut` (empty for none): a control that is only a picture, or one whose binding is worth showing. A recipe because the tooltip builds its trigger where it places it, and again whenever it places it again, so whatever `build` draws from has to outlive one build: a `#[derive(Clone)]` struct of the parts with a `build(&self)`, moved in as `move || parts.build()`.
+#[cfg(all(feature = "overlays", any(feature = "chrome", feature = "workbench")))]
+pub(crate) fn hinted(
+    build: impl Fn() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    text: Reactive<String>,
+    shortcut: Reactive<String>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    crate::tooltip(
+        crate::TooltipProps::props()
+            .text(text)
+            .shortcut(shortcut)
+            .children(telar::Children::one(build))
+            .build(),
+    )
+}
+
+/// Without `overlays` there is no tooltip to put over it, so it is what `build` makes alone; a title bar's controls still say their names to a reader.
+#[cfg(all(feature = "chrome", not(feature = "overlays")))]
+pub(crate) fn hinted(
+    build: impl Fn() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    _text: Reactive<String>,
+    _shortcut: Reactive<String>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    build()
+}
+
 /// `chord` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere: what a hint shows and a reader hears. Text that names no [`Chord`] is shown as written.
 pub(crate) fn shown_chord(chord: &str) -> String {
     match Chord::parse(chord) {

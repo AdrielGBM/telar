@@ -206,7 +206,7 @@ impl ListContext {
         self.0.declaring.set(true);
         let declared = rows.build_with(self.clone());
         self.0.declaring.set(false);
-        for item in declared?.take_default() {
+        for item in declared? {
             telar::remove_node(item.layout_node());
         }
         Ok(())
@@ -412,6 +412,9 @@ pub struct ItemProps {
     /// Whether the row is in the list. A hidden row takes no room and the keyboard passes over it, yet keeps its position, so a row can come and go with what it acts on while its menu stays open.
     #[props(some, into, default)]
     pub shown: Option<Reactive<bool>>,
+    /// The row's content in place of [`label`](Self::label), when it needs more than a line of text.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// What a row tells a reader beyond being a row of its list.
@@ -423,8 +426,7 @@ pub(crate) enum Mark {
 }
 
 /// One row of a list: its content, and what a commit on it does.
-pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let children = children.build()?;
+pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ItemProps {
         label,
         disabled,
@@ -435,7 +437,9 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         shortcut,
         on_press,
         shown,
+        children,
     } = props;
+    let supplied = children.build()?;
     let list = use_context::<ListContext>();
     let index = list.as_ref().map(|ctx| {
         let (disabled, shown) = (disabled.clone(), shown.clone());
@@ -478,8 +482,6 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
     };
     let mut content = vec![tick_column(&list, tick, checked.is_some())?];
     // Markup children are the row's content when there are any; `label` is the shorthand for the case that needs nothing else.
-    let mut given = children;
-    let supplied = given.take_default();
     if supplied.is_empty() {
         content.push(box_item(label_text(label, disabled.clone(), &list)?));
     } else {
@@ -665,10 +667,7 @@ pub struct SeparatorProps {
 }
 
 /// A rule between groups of rows. Never takes the keyboard cursor.
-pub fn separator(
-    props: SeparatorProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn separator(props: SeparatorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let list = use_context::<ListContext>();
     if let Some(ctx) = &list {
         ctx.claim_unreachable();
@@ -710,10 +709,14 @@ fn shown_while(
 pub struct GroupProps {
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// What the heading shows in place of [`label`](Self::label): a strip of icons, a swatch.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A heading over the rows beneath it, or whatever markup its children are: a strip of icons, a swatch. Never takes the keyboard cursor.
-pub fn group(props: GroupProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let GroupProps { label, children } = props;
     let list = use_context::<ListContext>();
     if let Some(ctx) = &list {
         ctx.claim_unreachable();
@@ -721,10 +724,10 @@ pub fn group(props: GroupProps, children: Children) -> Result<Box<dyn LayoutItem
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
     }
-    let mut supplied = children.build()?.take_default();
+    let mut supplied = children.build()?;
     if supplied.is_empty() {
         supplied.push(box_item(Text::declaring(
-            move || props.label.get(),
+            move || label.get(),
             LayoutStyle::new(),
             |t| shared::quiet(t, HEADING_RATIO).with_text_wrap(TextWrap::NoWrap),
         )?));

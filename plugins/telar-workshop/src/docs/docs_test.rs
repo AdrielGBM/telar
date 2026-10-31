@@ -6,9 +6,9 @@ use telar::preview::{
 };
 use telar::testing::{Scoped, centre, key_with, mount, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Children, Color, ComponentList, Event, Key, LayoutError,
-    LayoutItem, LayoutStyle, LocalApp, ModifiersState, Rect, Role, ScrollDelta, StyledContainer,
-    Text, TextStyle, box_item,
+    AccessNode, App, AppRuntime, Color, ComponentList, Event, Key, LayoutError, LayoutItem,
+    LayoutStyle, LocalApp, ModifiersState, Rect, Role, ScrollDelta, StyledContainer, Text,
+    TextStyle, box_item,
 };
 
 use telar_components::{ButtonProps, button};
@@ -78,7 +78,6 @@ fn second(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .label("second body")
             .on_press(Rc::new(move || log.log("on_second", Vec::new())))
             .build(),
-        Children::default(),
     )
 }
 

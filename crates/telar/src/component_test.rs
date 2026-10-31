@@ -17,9 +17,12 @@ fn probe(
     )?))
 }
 
-/// A component that takes what the call site nested inside it, by naming the one argument that is not a prop.
+/// A component that takes what the call site nested inside it, as a prop like any other.
 #[telar::component]
-fn wrapper(children: Children, seen: RwSignal<usize>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn wrapper(
+    #[props(default)] children: Children,
+    seen: RwSignal<usize>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     seen.set(children.build()?.len());
     Ok(Box::new(Container::new(LayoutStyle::new(), vec![])?))
 }
@@ -28,11 +31,8 @@ fn wrapper(children: Children, seen: RwSignal<usize>) -> Result<Box<dyn LayoutIt
 fn the_arguments_are_the_props() {
     telar::reset_layout_runtime();
     let seen = telar::signal((0.0, 0u8));
-    let _built = probe(
-        ProbeProps::props().size(12.0).seen(seen).build(),
-        Children::default(),
-    )
-    .expect("the component builds");
+    let _built =
+        probe(ProbeProps::props().size(12.0).seen(seen).build()).expect("the component builds");
     assert_eq!(
         seen.get(),
         (12.0, 3),
@@ -41,23 +41,26 @@ fn the_arguments_are_the_props() {
 }
 
 #[test]
-fn children_are_taken_by_naming_them() {
+fn children_are_a_prop() {
     telar::reset_layout_runtime();
     let seen = telar::signal(0usize);
-    let nested = Container::new(LayoutStyle::new().width(4.0), vec![]).expect("the child builds");
-    let nested = std::cell::RefCell::new(Some(Box::new(nested) as Box<dyn LayoutItem>));
-    let children = Children::new(move || {
-        let mut slots = telar::Slots::new();
-        if let Some(item) = nested.borrow_mut().take() {
-            slots.push(None, item);
-        }
-        Ok(slots)
+    let children = Children::new(|| {
+        Ok(vec![
+            Box::new(Container::new(LayoutStyle::new().width(4.0), vec![])?) as Box<dyn LayoutItem>,
+        ])
     });
-    let _built =
-        wrapper(WrapperProps::props().seen(seen).build(), children).expect("the component builds");
+    let _built = wrapper(WrapperProps::props().children(children).seen(seen).build())
+        .expect("the component builds");
     assert_eq!(
         seen.get(),
         1,
         "what the call site nested is what the component was handed"
+    );
+
+    let _built = wrapper(WrapperProps::props().seen(seen).build()).expect("the component builds");
+    assert_eq!(
+        seen.get(),
+        0,
+        "and a call site that nested nothing hands over nothing"
     );
 }

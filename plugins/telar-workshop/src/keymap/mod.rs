@@ -11,7 +11,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::preview::PreviewEntry;
-use telar::{Children, Chord, Direction, Key, LayoutError, LayoutItem, RwSignal, focus, signal};
+use telar::{Chord, Direction, Key, LayoutError, LayoutItem, RwSignal, focus, signal};
 
 use self::help::{HelpProps, help};
 use crate::canvas_toolbar::locales;
@@ -266,10 +266,7 @@ impl Keymap {
 
     /// The palette and the shortcuts overlay, each drawn over the workshop while open, for the shell to place.
     pub(crate) fn overlays(&self) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
-        let shortcuts = help(
-            HelpProps::props().open(self.shortcuts).build(),
-            Children::default(),
-        )?;
+        let shortcuts = help(HelpProps::props().open(self.shortcuts).build())?;
         Ok(vec![palette::palette(self)?, shortcuts])
     }
 

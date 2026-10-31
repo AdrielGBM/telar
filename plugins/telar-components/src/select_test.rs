@@ -8,19 +8,15 @@ use super::*;
 /// Three choices as `item` rows, which is how a select is written now.
 fn sizes() -> Children {
     Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for label in ["Small", "Medium", "Large"] {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || label.to_string()))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || label.to_string()))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -28,7 +24,13 @@ fn sizes() -> Children {
 fn builds_and_lays_out() {
     crate::test_support::fresh_layout_runtime();
     let picked = signal(1u32);
-    let item = select(SelectProps::props().selected(picked).build(), sizes()).unwrap();
+    let item = select(
+        SelectProps::props()
+            .selected(picked)
+            .children(sizes())
+            .build(),
+    )
+    .unwrap();
     let root_node = item.layout_node();
     let root_rect = track_layout(root_node).unwrap();
     compute_layout(
@@ -59,8 +61,8 @@ fn selecting_an_option_sets_the_signal_and_closes() {
         SelectProps::props()
             .selected(picked)
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(sizes())
             .build(),
-        sizes(),
     )
     .unwrap();
     // The widget's own root is the parent-less layout host laid out at the origin, so the trigger sits at (0,0) and the panel anchors directly below it.
@@ -106,7 +108,13 @@ fn selecting_an_option_sets_the_signal_and_closes() {
 fn the_trigger_names_the_chosen_row_before_the_panel_has_ever_opened() {
     crate::test_support::fresh_layout_runtime();
     let picked = signal(1u32);
-    let item = select(SelectProps::props().selected(picked).build(), sizes()).unwrap();
+    let item = select(
+        SelectProps::props()
+            .selected(picked)
+            .children(sizes())
+            .build(),
+    )
+    .unwrap();
     compute_layout(
         item.layout_node(),
         AvailableSpace::Definite(400.0),
@@ -133,27 +141,23 @@ fn a_choice_can_be_disabled_which_a_list_of_strings_could_not_say() {
     let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let rows = Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for (label, disabled) in [("Small", false), ("Medium", true), ("Large", false)] {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || label.to_string()))
-                        .disabled(Reactive::of(move || disabled))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || label.to_string()))
+                    .disabled(Reactive::of(move || disabled))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     });
     let item = select(
         SelectProps::props()
             .selected(picked)
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(rows)
             .build(),
-        rows,
     )
     .unwrap();
     compute_layout(
@@ -202,19 +206,15 @@ fn drawn_text(tree: &ComponentList) -> Vec<String> {
 /// Choices of very different lengths, so a trigger sized from what it shows would change width with the pick.
 fn uneven() -> Children {
     Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for label in ["S", "Medium", "An extraordinarily long choice"] {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || label.to_string()))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || label.to_string()))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -236,8 +236,11 @@ fn a_stretched_select_keeps_the_width_of_its_row_after_a_longer_pick() {
     crate::test_support::fresh_layout_runtime();
     let picked = signal(0u32);
     let item = select(
-        SelectProps::props().selected(picked).stretch(true).build(),
-        uneven(),
+        SelectProps::props()
+            .selected(picked)
+            .stretch(true)
+            .children(uneven())
+            .build(),
     )
     .unwrap();
     let field = item.layout_node();
@@ -284,16 +287,16 @@ fn stretched_selects_share_a_row_evenly_whatever_they_show() {
         SelectProps::props()
             .selected(signal(0u32))
             .stretch(true)
+            .children(uneven())
             .build(),
-        uneven(),
     )
     .unwrap();
     let long = select(
         SelectProps::props()
             .selected(signal(2u32))
             .stretch(true)
+            .children(uneven())
             .build(),
-        uneven(),
     )
     .unwrap();
     let (short_rect, long_rect) = (
@@ -322,7 +325,7 @@ fn stretched_selects_share_a_row_evenly_whatever_they_show() {
 fn a_stretched_trigger_keeps_its_height_in_a_taller_row() {
     use telar::LayoutStyle;
     crate::test_support::fresh_layout_runtime();
-    let item = select(SelectProps::props().stretch(true).build(), sizes()).unwrap();
+    let item = select(SelectProps::props().stretch(true).children(sizes()).build()).unwrap();
     let row = telar::new_container(
         LayoutStyle::new().flex_row().width(160.0).height(120.0),
         &[item.layout_node()],
@@ -352,8 +355,8 @@ fn a_stretched_select_in_a_content_sized_row_is_as_wide_as_what_it_shows() {
         SelectProps::props()
             .selected(signal(2u32))
             .stretch(true)
+            .children(uneven())
             .build(),
-        uneven(),
     )
     .unwrap();
     let field_rect = track_layout(item.layout_node()).unwrap();
@@ -383,19 +386,15 @@ fn a_stretched_select_in_a_content_sized_row_is_as_wide_as_what_it_shows() {
 
 fn many(count: u32) -> Children {
     Children::new(move || {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for n in 0..count {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || format!("Row {n}")))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || format!("Row {n}")))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -404,7 +403,13 @@ fn many(count: u32) -> Children {
 fn a_tall_panel_is_capped_to_the_window_and_follows_the_keyboard() {
     crate::test_support::fresh_layout_runtime();
     let picked = signal(0u32);
-    let item = select(SelectProps::props().selected(picked).build(), many(25)).unwrap();
+    let item = select(
+        SelectProps::props()
+            .selected(picked)
+            .children(many(25))
+            .build(),
+    )
+    .unwrap();
     compute_layout(
         item.layout_node(),
         AvailableSpace::Definite(400.0),
@@ -468,7 +473,11 @@ impl telar::ThemeTokens for Themed {
 
 /// A select laid out at the origin of a 400px square, opened when `open` says so.
 fn mounted(props: SelectProps, open: bool) -> ComponentList {
-    let item = select(props, sizes()).unwrap();
+    let item = select(SelectProps {
+        children: sizes(),
+        ..props
+    })
+    .unwrap();
     compute_layout(
         item.layout_node(),
         AvailableSpace::Definite(400.0),

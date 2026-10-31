@@ -12,8 +12,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .title(p.arg("title", "Shipping details"))
                     .open(p.signal("open", true))
                     .color(p.arg("color", Color::TRANSPARENT))
+                    .children(sample::paragraph(
+                        "Orders leave the warehouse within two working days.",
+                    ))
                     .build(),
-                sample::paragraph("Orders leave the warehouse within two working days."),
             )
         })
         .title("Layout/Accordion")

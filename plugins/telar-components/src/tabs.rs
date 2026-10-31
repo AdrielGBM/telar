@@ -15,8 +15,6 @@ use telar::{
 #[cfg(feature = "workbench")]
 use crate::icon_button::{IconSource, picture};
 use crate::shared;
-#[cfg(feature = "workbench")]
-use crate::{TooltipProps, tooltip};
 
 /// The tabs' own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -87,10 +85,11 @@ pub struct TabsProps {
 }
 
 /// One tab of a [`tab_list`]: the value it selects, its name, and optionally an item drawn after the name, such as a count, or an icon drawn in its place.
+#[derive(Clone)]
 pub struct Tab<T> {
     value: T,
     label: Reactive<String>,
-    trailing: Option<Box<dyn LayoutItem>>,
+    trailing: Children,
     #[cfg(feature = "workbench")]
     icon: Option<IconSource>,
     #[cfg(feature = "workbench")]
@@ -103,7 +102,7 @@ impl<T> Tab<T> {
         Self {
             value,
             label: label.into(),
-            trailing: None,
+            trailing: Children::default(),
             #[cfg(feature = "workbench")]
             icon: None,
             #[cfg(feature = "workbench")]
@@ -111,9 +110,9 @@ impl<T> Tab<T> {
         }
     }
 
-    /// Draws `item` after the tab's name. It is not part of the name a reader hears.
-    pub fn trailing(mut self, item: Box<dyn LayoutItem>) -> Self {
-        self.trailing = Some(item);
+    /// Draws `children` after the tab's name. They are not part of the name a reader hears.
+    pub fn trailing(mut self, children: Children) -> Self {
+        self.trailing = children;
         self
     }
 
@@ -133,7 +132,7 @@ impl<T> Tab<T> {
 }
 
 /// A row of pills selecting one index.
-pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TabsProps {
         items,
         selected,
@@ -371,68 +370,105 @@ fn tab<T>(
 where
     T: Copy + PartialEq + 'static,
 {
-    let Tab {
-        value,
-        label,
-        trailing,
-        #[cfg(feature = "workbench")]
-        icon,
-        #[cfg(feature = "workbench")]
-        shortcut,
-    } = entry;
-    let name = label.clone();
     #[cfg(feature = "workbench")]
-    let chord = shortcut.clone();
-    #[cfg(feature = "workbench")]
-    let hint = (icon.is_some() || shortcut.is_some()).then(|| (label.clone(), shortcut));
-    #[cfg(feature = "workbench")]
-    let (face, shape) = match icon {
-        Some(icon) => (pictured(icon, selected, value)?, icon_tab_box as fn() -> _),
-        None => (named(label, selected, value)?, tab_box as fn() -> _),
+    let hint = (entry.icon.is_some() || entry.shortcut.is_some())
+        .then(|| (entry.label.clone(), entry.shortcut.clone()));
+    let button = TabButton {
+        selected,
+        entry,
+        index,
+        paint: paint.clone(),
+        values: Rc::clone(values),
+        focus_ids: Rc::clone(focus_ids),
     };
-    #[cfg(not(feature = "workbench"))]
-    let (face, shape) = (named(label, selected, value)?, tab_box as fn() -> _);
-    let mut content = vec![face];
-    content.extend(trailing);
-
-    let (rest, hover, press) = (paint.clone(), paint.clone(), paint.clone());
-    let tab = StyledContainer::new(
-        shape(),
-        move |_r| rest.surface(selected.get() == value, State::Rest),
-        content,
-    )?
-    .styled_by(shape)
-    .hover_style(move |_r| hover.surface(selected.get() == value, State::Hovered))
-    .active_style(move |_r| press.surface(selected.get() == value, State::Pressed))
-    .control(Role::Tab)
-    .toggled(move || selected.get() == value)
-    .on_press(move || selected.set(value))
-    .a11y_label(move || name.get());
-    #[cfg(feature = "workbench")]
-    let tab = match chord {
-        Some(chord) => tab.keyboard_shortcut(move || chord.get()),
-        None => tab,
-    };
-    if let Some(id) = tab.focus_id() {
-        focus_ids.borrow_mut().push(id);
-    }
-    let values = Rc::clone(values);
-    let focus_ids = Rc::clone(focus_ids);
-    let tab = box_item(tab.on_focused_key(move |key: &Key| {
-        let Some(next) = step(index, values.len(), key) else {
-            return false;
-        };
-        selected.set(values[next]);
-        if let Some(id) = focus_ids.borrow().get(next) {
-            focus::request(*id);
-        }
-        true
-    }));
     #[cfg(feature = "workbench")]
     if let Some((text, shortcut)) = hint {
-        return hinted(tab, text, shortcut);
+        return shared::hinted(move || button.build(), text, shortcut.unwrap_or_default());
     }
-    Ok(tab)
+    button.build()
+}
+
+/// Everything one tab is built from, so a tooltip wrapping it can build it wherever and however often it places it.
+#[derive(Clone)]
+struct TabButton<T: 'static> {
+    selected: RwSignal<T>,
+    entry: Tab<T>,
+    index: usize,
+    paint: Paint,
+    values: Rc<[T]>,
+    focus_ids: Rc<RefCell<Vec<FocusId>>>,
+}
+
+impl<T> TabButton<T>
+where
+    T: Copy + PartialEq + 'static,
+{
+    fn build(&self) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let TabButton {
+            selected,
+            entry,
+            index,
+            paint,
+            values,
+            focus_ids,
+        } = self.clone();
+        let Tab {
+            value,
+            label,
+            trailing,
+            #[cfg(feature = "workbench")]
+            icon,
+            #[cfg(feature = "workbench")]
+            shortcut,
+        } = entry;
+        let name = label.clone();
+        #[cfg(feature = "workbench")]
+        let (face, shape) = match icon {
+            Some(icon) => (pictured(icon, selected, value)?, icon_tab_box as fn() -> _),
+            None => (named(label, selected, value)?, tab_box as fn() -> _),
+        };
+        #[cfg(not(feature = "workbench"))]
+        let (face, shape) = (named(label, selected, value)?, tab_box as fn() -> _);
+        let mut content = vec![face];
+        content.extend(trailing.build()?);
+
+        let (rest, hover, press) = (paint.clone(), paint.clone(), paint);
+        let tab = StyledContainer::new(
+            shape(),
+            move |_r| rest.surface(selected.get() == value, State::Rest),
+            content,
+        )?
+        .styled_by(shape)
+        .hover_style(move |_r| hover.surface(selected.get() == value, State::Hovered))
+        .active_style(move |_r| press.surface(selected.get() == value, State::Pressed))
+        .control(Role::Tab)
+        .toggled(move || selected.get() == value)
+        .on_press(move || selected.set(value))
+        .a11y_label(move || name.get());
+        #[cfg(feature = "workbench")]
+        let tab = match shortcut {
+            Some(chord) => tab.keyboard_shortcut(move || chord.get()),
+            None => tab,
+        };
+        if let Some(id) = tab.focus_id() {
+            let mut ids = focus_ids.borrow_mut();
+            // A rebuilt tab takes its own place rather than a new one, so the arrows still land on the tab at each index.
+            match ids.get_mut(index) {
+                Some(placed) => *placed = id,
+                None => ids.push(id),
+            }
+        }
+        Ok(box_item(tab.on_focused_key(move |key: &Key| {
+            let Some(next) = step(index, values.len(), key) else {
+                return false;
+            };
+            selected.set(values[next]);
+            if let Some(id) = focus_ids.borrow().get(next) {
+                focus::request(*id);
+            }
+            true
+        })))
+    }
 }
 
 fn named<T>(
@@ -469,24 +505,6 @@ where
                 Color::TRANSPARENT
             }
         }),
-    )
-}
-
-/// `tab` under a tooltip naming it, and the binding that selects it when there is one.
-#[cfg(feature = "workbench")]
-fn hinted(
-    tab: Box<dyn LayoutItem>,
-    text: Reactive<String>,
-    shortcut: Option<Reactive<String>>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut slots = telar::Slots::new();
-    slots.push(None, tab);
-    tooltip(
-        TooltipProps::props()
-            .text(text)
-            .shortcut(shortcut.unwrap_or_default())
-            .build(),
-        Children::from(slots),
     )
 }
 

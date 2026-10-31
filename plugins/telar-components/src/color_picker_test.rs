@@ -99,7 +99,6 @@ impl Mounted {
                 .swatch_names(vec!["Red".to_string(), "Blue".to_string()])
                 .on_change(Rc::new(move |color| sink.borrow_mut().push(color)))
                 .build(),
-            Children::default(),
         )
         .unwrap();
         let root = new_container(
@@ -286,7 +285,7 @@ fn painted(start: Color, style: Option<SurfaceAmendment>) -> Vec<(Rect, RectStyl
     telar::testing::scoped(|| {
         let mut props = ColorPickerProps::props().value(signal(start)).build();
         props.style = style;
-        let picker = color_picker(props, Children::default()).unwrap();
+        let picker = color_picker(props).unwrap();
         telar::testing::lay_out(picker.layout_node(), 400.0, 500.0);
         ComponentList::new(picker)
     })

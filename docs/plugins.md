@@ -60,12 +60,12 @@ here than for a Rust crate: a library ships the code `.rsx` transpiled to, and t
 ### The component protocol
 
 A component is a props struct and a function. The struct derives `Props`, which gives it a builder
-(`ButtonProps::props().label("Save").build()`), and the function takes it and the nested children and returns a
-layout item. This is a pill tag in the shape of [`badge`](../plugins/telar-components/src/badge.rs), fully rounded at whatever size it is laid out:
+(`ButtonProps::props().label("Save").build()`), and the function takes it and returns a
+layout item. Nested content is a prop too, `pub children: Children`, declared only by a component that takes children. This is a pill tag in the shape of [`badge`](../plugins/telar-components/src/badge.rs), fully rounded at whatever size it is laid out:
 
 ```rust
 use telar::{
-    BorderRadius, Children, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle,
+    BorderRadius, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle,
     StyledContainer, SurfaceAmendment, SurfaceStyle, Text, amend_surface, box_item, use_theme_tokens,
 };
 
@@ -77,7 +77,7 @@ pub struct PillProps {
     pub style: Option<SurfaceAmendment>,
 }
 
-pub fn pill(props: PillProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn pill(props: PillProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let PillProps { label, style } = props;
     let surface: SurfaceStyle = style;
     let label = Text::declaring(move || label.get(), LayoutStyle::new(), |inherited| {
@@ -98,12 +98,12 @@ pub fn pill(props: PillProps, _children: Children) -> Result<Box<dyn LayoutItem>
 ```
 
 The tag is the function name, and its props type is that name in PascalCase plus `Props`: `pill …` in a `[view]` calls
-`pill(PillProps::props()….build(), children)`, so the two have to be spelled that way. Properties are `#[props(…)]` attributes on the fields: `default`, `into` (accepts anything
+`pill(PillProps::props()….build())`, so the two have to be spelled that way. Properties are `#[props(…)]` attributes on the fields: `default`, `into` (accepts anything
 convertible, which is how a plain string reaches a `Reactive<String>`) and `some` (stores an `Option`).
 
 A widget that a `[view]` cannot build, because it owns a canvas or a document, can skip the struct: `#[telar::component]` on a
-function of named arguments derives the props from the arguments, and an argument named `children` receives the
-nested children instead of becoming a prop.
+function of named arguments derives the props from the arguments, and an argument named `children` becomes the
+`children: Children` prop that receives the nested children.
 
 Re-export every component and its props type from `lib.rs`, so a `prelude` glob sees both:
 
@@ -174,6 +174,16 @@ and an amendment composes with the states where a `radius` prop would have to be
 A component with no principal surface (a layout, a fragment, something that paints three boxes) declares no
 `style` prop, and `@class` on it is a compile error on the author's line saying there is no `style` prop. What an
 entire application should agree on belongs in a theme token, not here.
+
+A component with other pieces a caller restyles, a card's header or a dialog's footer, declares one more prop of the
+same type per piece, named `<part>_style` (`header_style`), and a call site hands it a class with
+`header_style:@flat`, or several with `header_style:(@a @b)`. Parts are per instance only: a theme speaks through
+tokens, and "every sidebar" is a wrapper component. In `.rsx`, `surface:$props.style` and
+`surface:$props.header_style` on a `box`, `row`, `col` or `grid` amend its paint in every state, after its own.
+
+Named content is a prop of type `Children` as well, `pub header: Children`; a call site fills it with a child marked
+`slot:"header"`, and the rest of its children go to `children`. In `.rsx` the component places each with
+`children $props.header` and `children $props.children`.
 
 ### Theme tokens
 

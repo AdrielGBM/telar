@@ -7,9 +7,9 @@ telar::rsx_modules!();
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, BorderRadius, Children, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Memo, NodeId, Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal,
-    StyledContainer, Text, TextWrap, box_item, children, memo, signal, style_follows, track_layout,
+    AlignItems, BorderRadius, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
+    Memo, NodeId, Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, StyledContainer, Text,
+    TextWrap, box_item, children, memo, signal, style_follows, track_layout,
 };
 use telar_components::metrics::{control_height, control_pad_x, radius_control};
 use telar_components::{
@@ -205,7 +205,6 @@ fn sidebar_opener(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutEr
             .shortcut(Action::ToggleSidebar.chords()[0].to_string())
             .on_press(Rc::new(move || drawer.set(true)))
             .build(),
-        Children::default(),
     )
 }
 
@@ -242,7 +241,6 @@ fn middle(
                     .keymap(keymap.clone())
                     .project(Rc::clone(&project))
                     .build(),
-                Children::default(),
             )
         },
     )?;
@@ -305,7 +303,6 @@ fn find_button(
             .shortcut(Action::Find.chords()[0].to_string())
             .on_press(Rc::new(move || keymap.run(Action::Find)))
             .build(),
-        Children::default(),
     )
 }
 
@@ -318,7 +315,6 @@ fn window_controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 paint.with_radius(BorderRadius::all(radius_control()))
             }))
             .build(),
-        Children::default(),
     )
 }
 

@@ -7,6 +7,8 @@ pub struct Context {
 
 pub struct Props {
     pub mode: &'static str = "midnight",
+    #[props(default)]
+    pub children: Children,
 }
 
 let mode = props.mode;
@@ -16,7 +18,7 @@ let ctx = Context { mode };
 [view]
 col theme:(palette) fill:$theme.surface pad:14 radius:10
     col gap:6
-        children in:ctx
+        children $props.children in:ctx
 
 [previews "Sandbox/Themed panel" layout:centered]
 A panel drawn in a theme of its own; whatever the call site nests inside it reads that theme.

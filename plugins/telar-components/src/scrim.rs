@@ -1,6 +1,6 @@
-//! Shared portal-once toggleable-scrim scaffold (latch, take-once body, toggleable overlay, dismiss) behind `modal` and `drawer`.
+//! Shared portal-once toggleable-scrim scaffold (latch, body recipe, toggleable overlay, dismiss) behind `modal`, `drawer` and `command_palette`.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
@@ -111,13 +111,13 @@ fn collapsed() -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?))
 }
 
-/// The portal-once toggleable-scrim scaffold shared by `modal` and `drawer`. Owns the unbound guard, the build latch, the take-once wrapper around `build_inner`, and the toggleable `Overlay`; `build_inner` gets the shared dismiss handler and returns its own scrim container (with the card/panel inside), which is kept mounted and shown/hidden via `open`.
+/// The portal-once toggleable-scrim scaffold shared by `modal`, `drawer` and `command_palette`. Owns the unbound guard, the build latch and the toggleable `Overlay`; `build_inner` gets the shared dismiss handler and returns its own scrim container (with the card/panel inside), which is kept mounted and shown/hidden via `open`.
 ///
 /// `open` `None` (unbound) can never open, so it renders nothing and drops the captured body. Otherwise the scrim is built ONCE — lazily on the first open, so the layout host exists and the portal attaches to the viewport — then kept mounted and shown/hidden via `open` (see `Overlay::toggleable`), preserving the body across close/reopen. The `ReactiveList` is keyed on a latch that flips true on the first open and stays true, so the built scrim is never disposed.
 pub(crate) fn scrim_overlay(
     open: Option<RwSignal<bool>>,
     on_close: Option<Rc<dyn Fn()>>,
-    build_inner: impl FnOnce(DismissFn) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    build_inner: impl Fn(DismissFn) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Some(open) = open else {
         return collapsed();
@@ -129,9 +129,6 @@ pub(crate) fn scrim_overlay(
             cb();
         }
     });
-
-    // `build_inner` consumes the pre-built slot body, so the take-once cell lets the reusable build closure invoke it on the single latch-true build and never again.
-    let build_inner = RefCell::new(Some(build_inner));
 
     let built = Rc::new(Cell::new(false));
     let key = {
@@ -152,11 +149,8 @@ pub(crate) fn scrim_overlay(
                 // Never opened: an empty placeholder (no overlay registered, nothing blocks the page).
                 return collapsed();
             }
-            let Some(build_inner) = build_inner.borrow_mut().take() else {
-                return collapsed();
-            };
             let inner = build_inner(dismiss.clone())?;
-            // Kept mounted; shown only while `open`. So the pre-built body survives a close/reopen (not rebuilt).
+            // Kept mounted; shown only while `open`. So the body survives a close/reopen (not rebuilt).
             let open = open;
             let overlay =
                 Overlay::toggleable(LayoutStyle::column(), children![inner], move || open.get())?;

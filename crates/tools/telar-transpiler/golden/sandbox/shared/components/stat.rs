@@ -16,7 +16,7 @@ pub struct StatProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn stat(props: StatProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn stat(props: StatProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -46,7 +46,7 @@ pub fn stat(props: StatProps, children: Children) -> Result<Box<dyn LayoutItem>,
 pub fn stat_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let __node_0 = stat(StatProps::props().value(::telar::__preview_arg!(__preview, "value", "60 fps")).label(::telar::__preview_arg!(__preview, "label", "software + wgpu")).__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = stat(StatProps::props().value(::telar::__preview_arg!(__preview, "value", "60 fps")).label(::telar::__preview_arg!(__preview, "label", "software + wgpu")).__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }
 

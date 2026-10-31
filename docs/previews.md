@@ -88,7 +88,6 @@ telar::__previews! {
                         .label(p.arg("label", "Save"))
                         .variant(p.arg("variant", ButtonVariant::Solid))
                         .build(),
-                    Children::default(),
                 )
             })
             .title("Inputs/Button")
@@ -100,7 +99,6 @@ telar::__previews! {
                         .label("Press me")
                         .on_press(Rc::new(move || pressed.update(|n| *n += 1)))
                         .build(),
-                    Children::default(),
                 )
             })
             .play(|canvas| {

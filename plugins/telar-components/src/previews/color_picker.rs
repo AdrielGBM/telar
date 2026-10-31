@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Role};
+use telar::{Color, Role};
 
 use crate::color_picker::{ColorPickerProps, color_picker};
 
@@ -32,7 +32,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                             .to_vec(),
                     )
                     .build(),
-                Children::default(),
             )
         })
         .title("Workbench/Color picker")

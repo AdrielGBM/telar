@@ -30,24 +30,19 @@ fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 presses.update(|count| *count += 1)
             }))
             .build(),
-        Children::default(),
     )
 }
 
 fn tipped(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let go = button(
-        ButtonProps::props()
-            .label("Go")
-            .on_press(std::rc::Rc::new(|| {}))
-            .build(),
-        Children::default(),
-    )?;
-    let mut slots = telar::Slots::new();
-    slots.push(None, go);
-    tooltip(
-        TooltipProps::props().text("Explains").build(),
-        Children::from(slots),
-    )
+    let go = Children::one(|| {
+        button(
+            ButtonProps::props()
+                .label("Go")
+                .on_press(std::rc::Rc::new(|| {}))
+                .build(),
+        )
+    });
+    tooltip(TooltipProps::props().text("Explains").children(go).build())
 }
 
 fn entries() -> Vec<PreviewEntry> {
@@ -417,7 +412,6 @@ fn stepper(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .label(Reactive::of(move || format!("Count {}", count.get())))
             .on_press(std::rc::Rc::new(move || count.update(|count| *count += 1)))
             .build(),
-        Children::default(),
     )
 }
 

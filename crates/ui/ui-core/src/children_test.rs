@@ -19,9 +19,7 @@ struct Menu(&'static str);
 fn spy(seen: Rc<RefCell<Vec<Option<&'static str>>>>) -> Children {
     Children::new(move || {
         seen.borrow_mut().push(use_context::<Menu>().map(|m| m.0));
-        let mut slots = Slots::new();
-        slots.push(None, box_item(Container::new(LayoutStyle::new(), vec![])?));
-        Ok(slots)
+        Ok(vec![box_item(Container::new(LayoutStyle::new(), vec![])?)])
     })
 }
 
@@ -32,9 +30,9 @@ fn a_child_built_from_the_recipe_can_see_the_parent_making_it() {
     let seen = Rc::new(RefCell::new(Vec::new()));
     let children = spy(seen.clone());
 
-    let slots = children.build_with(Menu("edit")).unwrap();
+    let built = children.build_with(Menu("edit")).unwrap();
     assert_eq!(*seen.borrow(), vec![Some("edit")]);
-    assert_eq!(slots.len(), 1, "and it is still a child, not just a reader");
+    assert_eq!(built.len(), 1, "and it is still a child, not just a reader");
 }
 
 /// A piece used on its own gets `None` rather than a panic: the mistake was made in markup, and a component that dies on it reports it as a crash in Rust nobody wrote.
@@ -73,7 +71,7 @@ fn a_nested_parent_shadows_the_one_it_sits_in() {
             outer_seen
                 .borrow_mut()
                 .push(use_context::<Menu>().map(|m| m.0));
-            Ok(Slots::new())
+            Ok(Vec::new())
         })
     };
 
@@ -95,22 +93,18 @@ fn the_recipe_can_be_run_more_than_once() {
     assert_eq!(seen.borrow().len(), 3, "a fresh set of rows each time");
 }
 
-fn empty_box() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    Ok(box_item(Container::new(LayoutStyle::new(), vec![])?))
-}
-
-/// A slot built where it is placed sees what the owner around the placement provides, which is what a `theme:` or a context on the node holding a `children` placeholder relies on.
+/// Children built where they are placed see what the owner around the placement provides, which is what a `theme:` or a context on the node holding a `children` placeholder relies on.
 #[test]
-fn a_slot_sees_what_is_provided_where_it_is_placed() {
+fn children_see_what_is_provided_where_they_are_placed() {
     reset_layout_runtime();
     let seen = Rc::new(RefCell::new(Vec::new()));
     let children = spy(seen.clone());
     {
         let _placement = reactive_core::owner_scope();
         services_core::provide(Menu("placed")).unwrap();
-        children.build_slot(None).unwrap();
+        children.build().unwrap();
     }
-    children.build_slot(None).unwrap();
+    children.build().unwrap();
     assert_eq!(*seen.borrow(), vec![Some("placed"), None]);
 }
 
@@ -127,13 +121,11 @@ fn a_context_stays_in_force_when_its_children_draw() {
         let swatch = Rectangle::new(LayoutStyle::new().width(10.0).height(10.0), || {
             RectStyle::default().with_fill(use_context::<Shade>().map_or(Color::BLACK, |s| s.0))
         })?;
-        let mut slots = Slots::new();
-        slots.push(None, box_item(swatch));
-        Ok(slots)
+        Ok(vec![box_item(swatch)])
     });
     let row = Container::new(
         LayoutStyle::new().width(100.0).height(20.0),
-        children.build_slot_with(None, Shade(RED)).unwrap(),
+        children.build_with(Shade(RED)).unwrap(),
     )
     .unwrap();
     compute_layout(
@@ -154,36 +146,26 @@ fn a_context_stays_in_force_when_its_children_draw() {
     assert_eq!(fills, vec![RED]);
 }
 
-/// A recipe that ignores which slot it was asked for still hands back only that slot, and frees what it built for the others rather than leaving their nodes behind.
+/// A component whose caller handed it no children holds the default recipe, which builds nothing.
 #[test]
-fn a_slot_asked_of_a_recipe_that_builds_them_all_frees_the_rest() {
+fn the_default_children_build_nothing() {
     reset_layout_runtime();
-    let children = Children::new(|| {
-        let mut slots = Slots::new();
-        slots.push(Some("header"), empty_box()?);
-        slots.push(None, empty_box()?);
-        slots.push(None, empty_box()?);
-        Ok(slots)
-    });
     let before = live_node_count();
-    let header = children.build_slot(Some("header")).unwrap();
-    assert_eq!(header.len(), 1);
-    assert_eq!(
-        live_node_count(),
-        before + 1,
-        "only the header's node is left"
+    assert!(Children::default().build().unwrap().is_empty());
+    assert!(
+        Children::default()
+            .build_with(Menu("edit"))
+            .unwrap()
+            .is_empty()
     );
+    assert_eq!(live_node_count(), before);
 }
 
-/// Children handed over already built go out one slot per request, and a slot asked for again is empty, since a widget cannot be built twice.
+/// A recipe for one item builds exactly one item, and again on every build.
 #[test]
-fn built_children_hand_out_each_slot_once() {
+fn one_builds_a_single_item_each_time_it_is_asked() {
     reset_layout_runtime();
-    let mut slots = Slots::new();
-    slots.push(Some("header"), empty_box().unwrap());
-    slots.push(None, empty_box().unwrap());
-    let children = Children::from(slots);
-    assert_eq!(children.build_slot(None).unwrap().len(), 1);
-    assert_eq!(children.build_slot(Some("header")).unwrap().len(), 1);
-    assert!(children.build_slot(None).unwrap().is_empty());
+    let children = Children::one(|| Ok(box_item(Container::new(LayoutStyle::new(), vec![])?)));
+    assert_eq!(children.build().unwrap().len(), 1);
+    assert_eq!(children.build().unwrap().len(), 1);
 }

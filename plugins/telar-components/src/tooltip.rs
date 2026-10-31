@@ -7,9 +7,6 @@ use telar::{
     box_item, children, signal, use_theme_tokens,
 };
 
-#[cfg(test)]
-use telar::Slots;
-
 use crate::shared::{self, shown_chord};
 
 /// Leading for the description line, the only one that wraps (`leading-snug`).
@@ -62,7 +59,7 @@ const BUBBLE_RATIO: f32 = 0.85;
 const SHORTCUT_RATIO: f32 = BUBBLE_RATIO * 0.9;
 const DESCRIPTION_RATIO: f32 = BUBBLE_RATIO * 0.92;
 
-/// A hover popup: wraps its slot (the trigger content) and, while the mouse is over it, shows a small `text` bubble anchored just below the trigger. Built on the `overlay` primitive's anchored variant (the bubble is portalled to the top layer and translated to the trigger's rect, so it escapes clipping and only itself blocks). High-level sugar; lives in `telar-components`, not the kernel.
+/// A hover popup: wraps its `children` (the trigger) and, while the mouse is over it, shows a small `text` bubble anchored just below the trigger. Built on the `overlay` primitive's anchored variant (the bubble is portalled to the top layer and translated to the trigger's rect, so it escapes clipping and only itself blocks). High-level sugar; lives in `telar-components`, not the kernel.
 #[derive(Props)]
 pub struct TooltipProps {
     #[props(into, default)]
@@ -89,6 +86,9 @@ pub struct TooltipProps {
     /// The wrapper the tooltip puts around the trigger is a real node in the parent's flow, so without this a tooltipped child cannot be a `flex-1` cell: wrapping it collapses the row it was sharing. Set on a tab, a toolbar segment, or anything else whose whole point is to divide the space evenly.
     #[props(default = false)]
     pub stretch: bool,
+    /// The trigger the bubble describes.
+    #[props(default)]
+    pub children: Children,
 }
 
 fn placement_of(side: &str) -> Placement {
@@ -101,11 +101,7 @@ fn placement_of(side: &str) -> Placement {
 }
 
 /// A bubble anchored to its trigger while the pointer is over it.
-pub fn tooltip(
-    props: TooltipProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut slots = children.build()?;
+pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TooltipProps {
         text,
         shortcut,
@@ -114,10 +110,11 @@ pub fn tooltip(
         color,
         style,
         stretch,
+        children,
     } = props;
     let placement = placement_of(side);
     let shortcut = Reactive::of(move || shown_chord(&shortcut.get()));
-    let trigger_content = slots.take_default();
+    let trigger_content = children.build()?;
     let hovered = signal(false);
 
     let mut trigger_style = LayoutStyle::row();
@@ -129,7 +126,7 @@ pub fn tooltip(
         .on_hover(move |over| hover_sink.set(over));
     let trigger_node = trigger.layout_node();
 
-    // The bubble is a fresh `text` each hover, with no slot children to preserve, so keying on `hovered` mounts and disposes the anchored overlay like a reactive `if`. Both closures are re-erased to `Rc` so each remount can clone them into a fresh bubble.
+    // The bubble is a fresh `text` each hover, with no children of its own to preserve, so keying on `hovered` mounts and disposes the anchored overlay like a reactive `if`. Both closures are re-erased to `Rc` so each remount can clone them into a fresh bubble.
     let style: SurfaceStyle = style;
     let key_hovered = hovered;
     let bubble = ReactiveList::new(

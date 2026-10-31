@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
-use telar::{Children, Container, ImageData, LayoutError, LayoutStyle, ObjectFit, Role};
+use telar::{Container, ImageData, LayoutError, LayoutStyle, ObjectFit, Role};
 
 use crate::image::{ImageProps, ImageSource, image};
 
@@ -38,7 +38,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         .height(96.0)
                         .fit(ObjectFit::Cover)
                         .build(),
-                    Children::default(),
                 )?,
                 image(
                     ImageProps::props()
@@ -47,7 +46,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         .width(96.0)
                         .height(96.0)
                         .build(),
-                    Children::default(),
                 )?,
                 image(
                     ImageProps::props()
@@ -56,7 +54,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         .width(144.0)
                         .height(96.0)
                         .build(),
-                    Children::default(),
                 )?,
             ];
             Ok::<_, LayoutError>(Container::new(LayoutStyle::row().gap(16.0), pictures)?)

@@ -1,9 +1,8 @@
 //! The FPS badge in the corner, and the panel it opens: the frame rate, the frame time, how many components are mounted, which renderer is drawing, and the chords.
 
 use telar::{
-    Accessible, AlignItems, Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    RectStyle, Role, ShapeStyle, SizeDimension, StyledContainer, Text, box_item, children,
-    use_theme_tokens,
+    Accessible, AlignItems, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, RectStyle,
+    Role, ShapeStyle, SizeDimension, StyledContainer, Text, box_item, children, use_theme_tokens,
 };
 use telar_components::{BadgeProps, KbdProps, badge, kbd};
 
@@ -63,7 +62,6 @@ fn fps_badge(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .label(Reactive::of(|| strings::text(DEV)))
             .color(Reactive::of(|| use_theme_tokens().success()))
             .build(),
-        Children::default(),
     )?;
     let fps = Text::declaring(
         move || fps_label(model),
@@ -167,7 +165,7 @@ fn panel(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 fn chord(keys: &'static str, action: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
     row(vec![
-        kbd(KbdProps::props().chord(keys).build(), Children::default())?,
+        kbd(KbdProps::props().chord(keys).build())?,
         box_item(Text::declaring(
             move || strings::text(action),
             LayoutStyle::new(),

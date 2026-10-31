@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Container, LayoutError, LayoutStyle, Reactive, Role};
+use telar::{Color, Container, LayoutError, LayoutStyle, Reactive, Role};
 
 use crate::checkbox::{CheckboxProps, checkbox};
 use crate::metrics;
@@ -13,7 +13,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "I agree to the terms"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Checkbox")
@@ -34,9 +33,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .checked(agree)
                     .label("I agree")
                     .build(),
-                Children::default(),
             )?;
-            let echo = super::sample::text_of(Reactive::of(move || format!("agree · {}", agree.get())))?;
+            let echo =
+                super::sample::text_of(Reactive::of(move || format!("agree · {}", agree.get())))?;
             Ok::<_, LayoutError>(Container::new(
                 LayoutStyle::column().gap(metrics::gap_md()),
                 vec![check, echo],

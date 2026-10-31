@@ -7,9 +7,9 @@ use telar::inspect::a11y::Severity;
 use telar::preview::{PreviewCtx, PreviewEntry, by_role};
 use telar::testing::{Scoped, centre, key_with, mount, named, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Children, ComponentList, DrawCommand, Event, Key, LayoutError,
-    LayoutItem, LocalApp, ModifiersState, NamedKey, NodeId, Reactive, Rect, Role, Size,
-    reset_layout_runtime, signal,
+    AccessNode, App, AppRuntime, ComponentList, DrawCommand, Event, Key, LayoutError, LayoutItem,
+    LocalApp, ModifiersState, NamedKey, NodeId, Reactive, Rect, Role, Size, reset_layout_runtime,
+    signal,
 };
 use telar_components::{ButtonProps, button};
 
@@ -491,7 +491,6 @@ fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .label(Reactive::of(move || format!("Pressed {}", presses.get())))
             .on_press(Rc::new(move || presses.update(|count| *count += 1)))
             .build(),
-        Children::default(),
     )
 }
 

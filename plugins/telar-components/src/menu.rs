@@ -4,8 +4,6 @@
 
 use std::rc::Rc;
 
-#[cfg(test)]
-use telar::Slots;
 use telar::{
     Anchoring, Children, Color, ConsumedKeys, HasPopup, Key, LayoutError, LayoutItem, NamedKey,
     Placement, Props, Reactive, Rect, RwSignal, SurfaceAmendment, box_item, effect,
@@ -196,10 +194,13 @@ pub struct MenuProps {
     /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means when they point at a menu — at rest, hovered and held open. See [`telar::SurfaceStyle`] for when a theme token or [`MenuTriggerTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// The rows: [`item`](crate::item), [`separator`](crate::separator), [`group`](crate::group) and [`submenu`](crate::submenu).
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A button that opens a menu under itself.
-pub fn menu(props: MenuProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let MenuProps {
         label,
         on_select,
@@ -210,6 +211,7 @@ pub fn menu(props: MenuProps, children: Children) -> Result<Box<dyn LayoutItem>,
         fit,
         tokens,
         style,
+        children,
     } = props;
     let open = signal(false);
     // Opening with the down arrow lands on the first row, as a native menu button does; opening with the mouse highlights nothing.
@@ -343,15 +345,15 @@ pub struct ContextMenuProps {
     /// Amends the paint of every panel — this component's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`MenuTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// The rows, as a [`menu`]'s are.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A menu opened where it was asked for: at the pointer, or under the control the keyboard is on.
 ///
 /// Not [`menu`], which is a labelled button that drops the panel under itself. This one has no trigger at all, because the thing it is about is what was under the pointer; the caller mounts it while it is wanted and takes it out on `on_close`. Its rows are its children — `item`, `separator`, `group`, `submenu` — exactly as a `menu`'s are, and the keyboard goes back to whatever held it when it goes.
-pub fn context_menu(
-    props: ContextMenuProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ContextMenuProps {
         at,
         around,
@@ -361,6 +363,7 @@ pub fn context_menu(
         within,
         tokens,
         style,
+        children,
     } = props;
     let config = Rc::new(Config {
         tokens,

@@ -3,13 +3,13 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, Children, Color, Cursor, Direction, Key, LayoutError, LayoutItem, LayoutStyle,
-    NamedKey, NumericValue, Orientation, Props, Reactive, RectStyle, ShapeStyle, Size,
-    StyledContainer, SurfaceAmendment, Transaction, amend_surface, box_item, current_direction,
-    focus::Role, signal, step_factor, track_layout,
+    Accessible, Color, Cursor, Direction, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey,
+    NumericValue, Orientation, Props, Reactive, RectStyle, ShapeStyle, Size, StyledContainer,
+    SurfaceAmendment, Transaction, amend_surface, box_item, current_direction, focus::Role, signal,
+    step_factor, track_layout,
 };
 #[cfg(feature = "workbench")]
-use telar::{Clip, ClippedItem, Container, RwSignal};
+use telar::{Children, Clip, ClippedItem, Container, RwSignal};
 
 use crate::edit::Stroke;
 #[cfg(feature = "workbench")]
@@ -156,7 +156,7 @@ impl ResizeGrowth {
 }
 
 #[cfg(feature = "workbench")]
-/// Content in a box of the size the user gives it, with handles to give it one: dragged, or stepped with the arrow keys, Home and End once an edge handle has focus. Children: the content, laid out in a column of that size that clips what overflows it. Every drag is a [`Transaction`] on the size, so Escape puts it back, and every key step is one of its own.
+/// Content in a box of the size the user gives it, with handles to give it one: dragged, or stepped with the arrow keys, Home and End once an edge handle has focus. Every drag is a [`Transaction`] on the size, so Escape puts it back, and every key step is one of its own.
 #[derive(Props)]
 pub struct ResizableProps {
     /// Bound size of the content, in px. `None` (the default) is uncontrolled: the widget owns a signal starting at [`default_size`](Self::default_size).
@@ -198,6 +198,9 @@ pub struct ResizableProps {
     /// Amends the paint of every handle, the resizable's **principal surface**, at rest, under the pointer and while dragged. See [`telar::SurfaceStyle`] for when a theme token or [`ResizableTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// The content, laid out in a column of that size that clips what overflows it.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// One handle of a [`resizable`], for content whose size is kept elsewhere, such as a canvas its settings size or a surface the window system sizes, and laid out by its caller: [`End`](ResizeEdge::End) after the content in a row, whose height it spans; [`Bottom`](ResizeEdge::Bottom) in a row under the content, whose width it takes beside the corner; [`Corner`](ResizeEdge::Corner) at the end of that row.
@@ -322,10 +325,7 @@ struct Look {
 }
 
 #[cfg(feature = "workbench")]
-pub fn resizable(
-    props: ResizableProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn resizable(props: ResizableProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ResizableProps {
         size,
         default_size,
@@ -340,6 +340,7 @@ pub fn resizable(
         on_start,
         on_end,
         style,
+        children,
     } = props;
     let default_size = if default_size == Size::ZERO {
         DEFAULT_SIZE
@@ -365,8 +366,7 @@ pub fn resizable(
             .height(shown.height)
             .flex_shrink(0.0)
     };
-    let content =
-        Container::new(content_box(), children.build()?.take_default())?.styled_by(content_box);
+    let content = Container::new(content_box(), children.build()?)?.styled_by(content_box);
     let laid_out = track_layout(content.layout_node()).expect("the content is registered");
     let content = box_item(ClippedItem::following(box_item(content), Clip::both));
 
@@ -435,10 +435,7 @@ pub fn resizable(
     Ok(box_item(root))
 }
 
-pub fn resize_handle(
-    props: ResizeHandleProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn resize_handle(props: ResizeHandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ResizeHandleProps {
         edge,
         size,

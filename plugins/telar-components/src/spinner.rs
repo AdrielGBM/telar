@@ -2,9 +2,9 @@
 
 use std::time::Duration;
 use telar::{
-    AlignItems, Border, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface,
-    box_item, box_transform, children,
+    AlignItems, Border, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props,
+    Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item,
+    box_transform, children,
     motion::{Easing, Keyframes, Repeat},
 };
 
@@ -52,10 +52,7 @@ pub struct SpinnerProps {
 }
 
 /// An indeterminate ring, for work with no bound value to show.
-pub fn spinner(
-    props: SpinnerProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SpinnerProps { color, size, style } = props;
     let size = move || {
         if size > 0.0 {

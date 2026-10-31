@@ -1,8 +1,6 @@
 //! [`drawer`]: a panel that slides in from an edge over a dismissing scrim.
 
 use std::rc::Rc;
-#[cfg(test)]
-use telar::Slots;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Direction,
     JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive,
@@ -47,7 +45,7 @@ impl DrawerTokens {
     }
 }
 
-/// A side panel that covers the page from the left or right edge over a dimming scrim. When `open` is true it portals an `Overlay` with a translucent scrim and a full-height opaque panel pinned to `side`, holding the slot children; when false it collapses to a 0-size node. Tapping the scrim dismisses; tapping the panel does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
+/// A side panel that covers the page from the left or right edge over a dimming scrim. When `open` is true it portals an `Overlay` with a translucent scrim and a full-height opaque panel pinned to `side`, holding its `children`; when false it collapses to a 0-size node. Tapping the scrim dismisses; tapping the panel does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
 ///
 /// The panel snaps in (no slide animation): the overlay is built only while open, so there is no off-screen frame to animate from. A slide-in (a `telar::motion::Animated<f32>` x-offset kept mounted across the close transition) is a follow-up.
 #[derive(Props)]
@@ -76,10 +74,13 @@ pub struct DrawerProps {
     /// Amends the paint of the panel — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`DrawerTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// What the panel holds.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A panel that slides in from an edge over a dismissing scrim.
-pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn drawer(props: DrawerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let DrawerProps {
         open,
         id,
@@ -89,6 +90,7 @@ pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutIt
         label,
         color,
         style,
+        children,
     } = props;
     let open = shared::resolve_open(open, id);
     let width = (width > 0.0).then_some(width);
@@ -98,8 +100,8 @@ pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutIt
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {
         // Built on the first open rather than here: a body built while the drawer has never opened would register its focus stops with nothing on screen to take them.
-        let body = children.build()?.take_default();
-        build_open_drawer(width, at_start, body, label, paint, dismiss)
+        let body = children.build()?;
+        build_open_drawer(width, at_start, body, label.clone(), paint.clone(), dismiss)
     })
 }
 

@@ -45,7 +45,6 @@ fn strip() -> Strip {
             .gap(0.0)
             .drag_threshold(0.0)
             .build(),
-        Children::default(),
     )
     .unwrap();
     (widget, items, moves)

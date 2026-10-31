@@ -1,6 +1,6 @@
 //! The codegen engine: turns a parsed [`RsxDocument`] into compilable Rust source, wiring the `[logic]`, `[style]`, `[view]`, and `[preview]` zones together with a per-line source map.
 
-use telar_parser::{RsxDocument, ViewNode};
+use telar_parser::RsxDocument;
 
 use crate::error::TranspileError;
 use crate::lexer::{contains_ident, literal_or_comment_end};
@@ -397,12 +397,8 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         false => generate_classes(&doc.style.classes, &imported, theme_type, theme),
     };
 
-    let mut locals = scan_locals(logic_source);
+    let locals = scan_locals(logic_source);
     let view_locals_bind_scheme = locals.iter().any(|name| name == "scheme");
-    // The recipe is a parameter, not a `[logic]` binding, but a placeholder builds from it wherever it stands, so a closure around one has to clone it in like a local.
-    if view_uses_slot(&doc.view.nodes) && !locals.iter().any(|l| l == "children") {
-        locals.push("children".to_string());
-    }
     let mut view_gen = ViewGen::new(&classes, input.assets)
         .with_theme_access(theme)
         .with_locals(locals)
@@ -413,8 +409,8 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     let logic = logic_source.trim_end().to_string();
 
     let ret = "Result<Box<dyn LayoutItem>, LayoutError>";
-    // One signature for every component removes the need for a registry describing each callee's arity: an unused props builder is empty, and unplaced children never run their recipe.
-    let signature = format!("pub fn {fn_name}(props: {props_type}, children: Children) -> {ret}");
+    // One signature for every component removes the need for a registry describing each callee's arity: whatever a caller hands it, children included, is a prop.
+    let signature = format!("pub fn {fn_name}(props: {props_type}) -> {ret}");
 
     let logic_start0 = doc.logic.start_line.saturating_sub(1) as u32;
     let logic_line_src = |j: usize| -> u32 {
@@ -786,23 +782,6 @@ fn find_move_keyword(line: &str) -> Option<usize> {
         from = pos + 4;
     }
     None
-}
-
-/// Whether any node in the view tree is a `children` slot placeholder, so the component function must take a `Slots` argument. Recurses through element children and `if`/`for` branches.
-fn view_uses_slot(nodes: &[ViewNode]) -> bool {
-    nodes.iter().any(node_uses_slot)
-}
-
-fn node_uses_slot(node: &ViewNode) -> bool {
-    match node {
-        ViewNode::Element(el) => el.tag == "children" || view_uses_slot(&el.children),
-        ViewNode::IfBlock(b) => {
-            view_uses_slot(&b.then_branch) || b.else_branch.as_deref().is_some_and(view_uses_slot)
-        }
-        ViewNode::ForBlock(b) => view_uses_slot(&b.body),
-        ViewNode::MatchBlock(b) => b.arms.iter().any(|arm| view_uses_slot(&arm.body)),
-        ViewNode::LetStmt(_) | ViewNode::Comment(_) => false,
-    }
 }
 
 /// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone, renames it to `{PascalFnName}Props`, and returns `(struct_code, default_impl, span)`. `default_impl` is `Some` only when the struct uses inline `field: Type = expr` defaults (a synthesized `Default` impl); it is emitted after the struct with no source mapping. `span` is the struct's `[start, end]` (inclusive) line span within `logic`, so the caller can map the struct back to source. The emitted struct, the `.rsx` line each of its lines came from (`None` for a line the transpiler injected), and the span of the declaration lifted out of `[logic]`.

@@ -221,7 +221,7 @@ pub struct ViewGen<'a> {
     classes: &'a [StyleClass],
     /// Per-widget-type variable counters, keyed by the descriptive prefix.
     counters: HashMap<String, usize>,
-    /// Identifiers the `[logic]` zone binds. A bare name in the view resolves to one of these before the theme is consulted, so a local shadows a same-named token rather than the other way round — see [`crate::signal_scan::scan_locals`].
+    /// Identifiers the `[logic]` zone binds: what the closures the view emits capture, and so may have to copy rather than move — see [`crate::signal_scan::scan_locals`].
     locals: Vec<String>,
     /// Names the `[logic]` zone bound to a `signal(…)` or `memo(…)`. Read to tell a genuinely static iterable from one that reads reactive state without the `$` that would make the loop follow it — see [`ViewGen::signal_named_in`].
     signals: Vec<String>,
@@ -237,11 +237,9 @@ pub struct ViewGen<'a> {
     transition_count: usize,
     /// The package's baked asset artifact, which a static `svg`/`img` `src:"path"` resolves against. `None` (e.g. an in-memory transpile with no package to anchor it) makes such a `src:` yield a `compile_error!`.
     assets: Option<&'a AssetContext>,
-    /// Signatures of every component in the workspace, so `emit_component_call` emits optional props and the slot argument correctly. `None` falls back to the per-file heuristic. Stack of child accumulators (see [`ChildSink`]); the top is the one an emitted `if`/`for` body pushes into. Pushed before a container's children are emitted, popped after.
+    /// Stack of child accumulators (see [`ChildSink`]); the top is the one an emitted `if`/`for` body pushes into. Pushed before a container's children are emitted, popped after.
     child_sinks: Vec<ChildSink>,
-    /// `[logic]` bindings a lone-identifier prop names more than once in this view, so the first call site cannot move what the second still needs. Computed once from the whole view in [`Self::generate_root`].
-    multi_referenced: Vec<String>,
-    /// How many reactive branch/item closures enclose the node being emitted. Non-zero means the code being generated may run more than once for the same content, which is what makes a one-shot `widget` reference unsound there — see [`ViewGen::in_reactive_region`].
+    /// How many rebuilding regions enclose the node being emitted: reactive branch and item closures, and the `Children` recipes a component call hands over. Non-zero means the code being generated may run more than once for the same content, which is what makes a one-shot `widget` reference unsound there — see [`ViewGen::in_reactive_region`].
     reactive_depth: usize,
     /// Whether each enclosing container lays its children out horizontally. A boxed reactive region reads the top to build its own node the same way round — an `if`/`for` inside a `row` runs horizontally.
     host_rows: Vec<bool>,
@@ -324,7 +322,6 @@ impl<'a> ViewGen<'a> {
             assets,
             child_sinks: Vec::new(),
             host_rows: Vec::new(),
-            multi_referenced: Vec::new(),
             reactive_depth: 0,
             scroll_viewport: None,
             theme_access: ThemeAccess::Handle,
@@ -333,16 +330,12 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Whether a closure built once per view must copy a capture in rather than consume it: the code around it may run again, a loop builds it once per item, or another snippet still reads what it names.
+    /// The one test for whether code the view emits must copy a capture rather than consume it: it sits in a rebuilding region, which may run again, a loop builds it once per item, or another of `readers` still reads what it names.
     pub(super) fn must_copy_capture(&self, readers: usize) -> bool {
         self.in_reactive_region() || self.loop_depth > 0 || readers > 1
     }
 
-    /// Whether the node being emitted sits inside a reactive branch or item closure, i.e. inside code that may build the same content again after the region has disposed it. Whether a lone `[logic]` binding named here must be cloned rather than moved: either the code around it can run again, or another call site still needs it.
-    pub(super) fn must_clone_local(&self, name: &str) -> bool {
-        self.in_reactive_region() || self.multi_referenced.iter().any(|n| n == name)
-    }
-
+    /// Whether the node being emitted sits inside a rebuilding region, i.e. inside code that may build the same content again after the region has disposed it.
     pub(super) fn in_reactive_region(&self) -> bool {
         self.reactive_depth > 0
     }
@@ -412,7 +405,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Whether the child accumulator in scope hosts `ChildSlot`s — i.e. a reactive `for`/`if` here can be a transparent fragment. Outside a slot host (component-slot children, a bare root, overlay/scroll) it must fall back to a boxed `ReactiveList`.
+    /// Whether the child accumulator in scope hosts `ChildSlot`s — i.e. a reactive `for`/`if` here can be a transparent fragment. Outside a slot host (a component's children recipe, a bare root, overlay/scroll) it must fall back to a boxed `ReactiveList`.
     fn in_slot_host(&self) -> bool {
         self.child_sinks.last().is_some_and(|sink| sink.slots)
     }
@@ -453,7 +446,7 @@ impl<'a> ViewGen<'a> {
         self
     }
 
-    /// Whether `name` is a binding the logic zone made, which a bare reference in the view means before any same-named theme token.
+    /// Whether `name` is a binding the logic zone made.
     pub(super) fn is_local(&self, name: &str) -> bool {
         self.locals.iter().any(|local| local == name)
     }
@@ -497,18 +490,6 @@ impl<'a> ViewGen<'a> {
 
     /// Generates the full view body and returns the final `Ok(Box::new(...))` expression.
     pub fn generate_root(&mut self, nodes: &[ViewNode]) -> String {
-        self.multi_referenced = self
-            .locals
-            .iter()
-            .filter(|name| {
-                signals::subtree_snippets(nodes)
-                    .iter()
-                    .filter(|s| s.trim() == name.as_str())
-                    .count()
-                    > 1
-            })
-            .cloned()
-            .collect();
         self.reads = ViewReads::of(nodes, &self.locals, self.theme_access);
         // Returned directly so the branch is the component root: an injected column would trap a `row align:stretch` at content height. A reactive condition keeps the fragment-swap path below.
         if let [ViewNode::IfBlock(block)] = nodes
@@ -652,9 +633,9 @@ impl<'a> ViewGen<'a> {
                 let pad = self.indent_str();
                 let wrapped = self.next_variable_name("clipped");
                 let clipped = if shape.contains('$') {
-                    let read = self.clone_captures(
+                    let read = self.owning(
                         &[shape],
-                        format!("move || {}", substitute_reads(shape, self.theme_access)),
+                        &format!("move || {}", substitute_reads(shape, self.theme_access)),
                     );
                     format!("ClippedItem::following(box_item({name}), {read})")
                 } else {
@@ -681,14 +662,16 @@ impl<'a> ViewGen<'a> {
         el.attributes
             .iter()
             .filter(|attr| !allowed.contains(&attr.key.as_str()))
+            .filter(|attr| !(el.tag == "children" && component::is_placeholder_operand(attr)))
             .map(|attr| {
-                format!(
-                    "{pad}compile_error!({});\n",
-                    signals::rust_str(&format!(
-                        "`{}` is not an attribute of `{}`",
-                        attr.key, el.tag
-                    ))
-                )
+                let message = match attr.key.as_str() {
+                    "surface" => format!(
+                        "`surface:` amends the paint of a `box`, `row`, `col` or `grid`, and `{}` is none of them",
+                        el.tag
+                    ),
+                    key => format!("`{key}` is not an attribute of `{}`", el.tag),
+                };
+                format!("{pad}compile_error!({});\n", signals::rust_str(&message))
             })
             .collect()
     }
@@ -702,6 +685,7 @@ impl<'a> ViewGen<'a> {
         el.attributes
             .iter()
             .filter(|attr| builtin || crate::registry::is_component_instance_attr(&attr.key))
+            .filter(|attr| component::class_list(&attr.value).is_none())
             .filter_map(|attr| {
                 let refused = (!builtin && attr.key == "role")
                     .then(|| crate::registry::refused_component_role(attr.value.text()))
@@ -765,7 +749,9 @@ impl ViewGen<'_> {
         let pad = self.indent_str();
         el.classes
             .iter()
-            .filter(|name| !self.classes.iter().any(|class| &class.name == *name))
+            .cloned()
+            .chain(component::part_class_names(el))
+            .filter(|name| !self.classes.iter().any(|class| &class.name == name))
             .map(|name| {
                 format!(
                     "{pad}compile_error!({});\n",
@@ -777,14 +763,28 @@ impl ViewGen<'_> {
             .collect()
     }
 
+    fn class_value_errors(&self, el: &Element) -> String {
+        let pad = self.indent_str();
+        component::class_value_errors(el)
+            .into_iter()
+            .chain(component::state_key_errors(el))
+            .chain(self.paintless_part_errors(el))
+            .map(|message| format!("{pad}compile_error!({});\n", rust_str(&message)))
+            .collect()
+    }
+
     fn emit_element(&mut self, el: &Element) -> ChildEmit {
         let errors = format!(
-            "{}{}{}",
+            "{}{}{}{}",
             self.unknown_class_errors(el),
+            self.class_value_errors(el),
             self.unknown_attr_errors(el),
             self.value_errors(el)
         );
-        let emit = self.emit_element_inner(el);
+        let emit = match component::without_class_values(el) {
+            Some(stripped) => self.emit_element_inner(&stripped),
+            None => self.emit_element_inner(el),
+        };
         if errors.is_empty() {
             return emit;
         }
@@ -818,7 +818,7 @@ impl ViewGen<'_> {
             "path" => self.emit_path(el),
             "canvas" => self.emit_canvas(el),
             "scroll" => self.emit_scroll(el),
-            "children" => self.emit_slot(el),
+            "children" => self.emit_children_placeholder(el),
             other => self.emit_component_call(el, other),
         }
     }

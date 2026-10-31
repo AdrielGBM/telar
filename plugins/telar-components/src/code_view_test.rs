@@ -78,7 +78,7 @@ impl Mounted {
         crate::test_support::fresh_layout_runtime();
         telar::set_locale("en");
         focus::clear();
-        let item = code_view(props, Children::default()).unwrap();
+        let item = code_view(props).unwrap();
         let node = item.layout_node();
         let root = new_container(frame.width(600.0).height(400.0), &[node]).unwrap();
         compute_layout(

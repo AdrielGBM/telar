@@ -2,8 +2,8 @@
 
 use telar::preview::{ActionCall, ActionLog};
 use telar::{
-    Accessible, Children, Container, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
-    Reactive, ReactiveList, Role, box_item, children, memo,
+    Accessible, Container, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, Reactive,
+    ReactiveList, Role, box_item, children, memo,
 };
 use telar_components::{BadgeProps, badge};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill};
@@ -91,7 +91,6 @@ fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .filter(state.actions_filter())
             .log(state.actions())
             .build(),
-        Children::default(),
     )
 }
 
@@ -109,7 +108,6 @@ pub(super) fn count_badge(log: ActionLog) -> Result<Box<dyn LayoutItem>, LayoutE
                 BadgeProps::props()
                     .label(Reactive::of(move || log.count().to_string()))
                     .build(),
-                Children::default(),
             )
         },
     )?;
@@ -120,12 +118,7 @@ fn calls(listed: Memo<Vec<ActionCall>>) -> Result<Box<dyn LayoutItem>, LayoutErr
     let rows = ReactiveList::keyed(
         move || listed.get(),
         |call: &ActionCall| call.seq,
-        |call| {
-            action_row(
-                ActionRowProps::props().call(call.peek()).build(),
-                Children::default(),
-            )
-        },
+        |call| action_row(ActionRowProps::props().call(call.peek()).build()),
     )?;
     let log = Container::column(children![rows])?
         .role(Role::Log)

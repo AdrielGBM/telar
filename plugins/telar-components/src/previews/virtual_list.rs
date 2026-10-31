@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
+use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
 use crate::selection::SelectionMode;
 use crate::virtual_list::{ListRow, VirtualListProps, virtual_list};
@@ -63,7 +63,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Contacts"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(framed(list)?)
         })
@@ -91,7 +90,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Recipients"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(framed(list)?)
         })
@@ -122,7 +120,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Messages"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(framed(list)?)
         })
@@ -146,7 +143,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Contacts"))
                     .empty_label(p.arg("empty_label", "No contacts yet"))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(framed(list)?)
         })

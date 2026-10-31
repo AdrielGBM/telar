@@ -9,9 +9,9 @@ use std::rc::Rc;
 use telar::focus::{self, Role};
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Container, Key, LayoutError, LayoutItem,
-    LayoutStyle, Memo, NamedKey, NodeId, PointerButton, Reactive, ReactiveList, RectStyle,
-    RwSignal, StyledContainer, Text, box_item, children, effect, memo, pointer_position, signal,
+    Accessible, AlignItems, BorderRadius, Container, Key, LayoutError, LayoutItem, LayoutStyle,
+    Memo, NamedKey, NodeId, PointerButton, Reactive, ReactiveList, RectStyle, RwSignal,
+    StyledContainer, Text, box_item, children, effect, memo, pointer_position, signal,
     use_theme_tokens,
 };
 use telar_components::{
@@ -165,7 +165,6 @@ fn search_field_item(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutErr
                 _ => false,
             }))
             .build(),
-        Children::default(),
     )?;
     if let Some(id) = focus.peek() {
         panel.state.set_search_field(id);
@@ -246,7 +245,6 @@ fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .trailing(drift_badges(state))
             .label(Reactive::of(|| strings::text(PREVIEWS)))
             .build(),
-        Children::default(),
     )?;
     panel.tree.set(Some(tree.layout_node()));
     Ok(tree)

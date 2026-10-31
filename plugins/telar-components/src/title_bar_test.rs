@@ -26,7 +26,7 @@ fn controls(props: WindowControlsProps) -> telar::testing::Scoped<ComponentList>
     crate::test_support::fresh_layout_runtime();
     set_surface_maximized(false);
     take_window_commands();
-    telar::testing::scoped(|| laid_out(window_controls(props, Children::default()).unwrap(), BAR))
+    telar::testing::scoped(|| laid_out(window_controls(props).unwrap(), BAR))
 }
 
 fn nodes(tree: &ComponentList) -> Vec<telar::AccessNode> {
@@ -245,8 +245,7 @@ fn a_bar_that_does_not_drag_leaves_the_window_where_it_is() {
 fn a_drag_from_a_window_control_in_the_bar_does_not_move_the_window() {
     crate::test_support::fresh_layout_runtime();
     take_window_commands();
-    let controls =
-        window_controls(WindowControlsProps::props().build(), Children::default()).unwrap();
+    let controls = window_controls(WindowControlsProps::props().build()).unwrap();
     let bar = StyledContainer::new(
         LayoutStyle::new().width(BAR.0).height(BAR.1),
         |_| RectStyle::default(),

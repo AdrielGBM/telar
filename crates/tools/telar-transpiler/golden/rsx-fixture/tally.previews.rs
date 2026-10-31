@@ -9,14 +9,14 @@
 
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn tally_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let __node_0 = tally(TallyProps::props().label(::telar::__preview_arg!(__preview, "label", "Pears")).count(::telar::__preview_arg!(__preview, "count", 2u32)).__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = tally(TallyProps::props().label(::telar::__preview_arg!(__preview, "label", "Pears")).count(::telar::__preview_arg!(__preview, "count", 2u32)).__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn tally_preview_1(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let count = ::telar::__preview_signal!(__preview, "count", 3u32);
-    let __node_0 = tally(TallyProps::props().label(::telar::__preview_arg!(__preview, "label", "Plums")).count(count.clone()).__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = tally(TallyProps::props().label(::telar::__preview_arg!(__preview, "label", "Plums")).count(count.clone()).__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }
 

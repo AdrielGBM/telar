@@ -3,9 +3,7 @@ use std::cell::RefCell;
 use telar::testing::{
     Scoped, centre, key_with, lay_out, moved, named, press, release, route, scoped,
 };
-use telar::{
-    ComponentList, Container, ModifiersState, RectStyle, Slots, ThemeTokens, relayout_if_dirty,
-};
+use telar::{ComponentList, Container, ModifiersState, RectStyle, ThemeTokens, relayout_if_dirty};
 
 use super::*;
 use crate::list::{GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator};
@@ -36,11 +34,11 @@ type Said = Rc<RefCell<Vec<String>>>;
 fn written(lines: Vec<Line>, said: &Said) -> Children {
     let said = said.clone();
     Children::new(move || {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for line in &lines {
-            slots.push(None, built(line, &said)?);
+            items.push(built(line, &said)?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -55,7 +53,6 @@ fn built(line: &Line, said: &Said) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .label(name)
                 .on_press(picked(name))
                 .build(),
-            Children::default(),
         ),
         Line::Hinted(name, hint) => item(
             ItemProps::props()
@@ -63,7 +60,6 @@ fn built(line: &Line, said: &Said) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .hint(hint)
                 .on_press(picked(name))
                 .build(),
-            Children::default(),
         ),
         Line::Disabled(name) => item(
             ItemProps::props()
@@ -71,13 +67,14 @@ fn built(line: &Line, said: &Said) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .disabled(true)
                 .on_press(picked(name))
                 .build(),
-            Children::default(),
         ),
-        Line::Rule => separator(SeparatorProps::props().build(), Children::default()),
-        Line::Heading(name) => group(GroupProps::props().label(name).build(), Children::default()),
+        Line::Rule => separator(SeparatorProps::props().build()),
+        Line::Heading(name) => group(GroupProps::props().label(name).build()),
         Line::Sub(name, lines) => submenu(
-            SubmenuProps::props().label(name).build(),
-            written(lines, said),
+            SubmenuProps::props()
+                .label(name)
+                .children(written(lines, said))
+                .build(),
         ),
     }
 }
@@ -122,8 +119,8 @@ fn opened_at(at: (f32, f32), lines: Vec<Line>) -> (Scoped<ComponentList>, Said) 
                 .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
                 .width(120.0)
                 .within(WINDOW)
+                .children(written(lines, &said))
                 .build(),
-            written(lines, &said),
         )
         .unwrap();
         lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
@@ -449,30 +446,28 @@ fn ticked_rows_say_what_they_are_and_whether_they_are_on() {
     fresh_layout_runtime();
     focus::clear();
     let rows = Children::new(|| {
-        let mut slots = Slots::new();
-        slots.push(
-            None,
-            item(
-                ItemProps::props().label("Reglas").checked(true).build(),
-                Children::default(),
-            )?,
-        );
+        let mut items = Vec::new();
+        items.push(item(
+            ItemProps::props().label("Reglas").checked(true).build(),
+        )?);
         for (name, on) in [("Claro", false), ("Oscuro", true)] {
-            slots.push(
-                None,
-                item(
-                    ItemProps::props()
-                        .label(name)
-                        .checked(on)
-                        .radio(true)
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(item(
+                ItemProps::props()
+                    .label(name)
+                    .checked(on)
+                    .radio(true)
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     });
-    let menu = context_menu(ContextMenuProps::props().within(WINDOW).build(), rows).unwrap();
+    let menu = context_menu(
+        ContextMenuProps::props()
+            .within(WINDOW)
+            .children(rows)
+            .build(),
+    )
+    .unwrap();
     lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
     let tree = ComponentList::new(menu);
     settle(&tree);
@@ -493,24 +488,18 @@ fn the_labels_line_up_when_one_row_carries_a_tick() {
     fresh_layout_runtime();
     focus::clear();
     let rows = Children::new(|| {
-        let mut slots = Slots::new();
-        slots.push(
-            None,
-            submenu(
-                SubmenuProps::props().label("Modo").build(),
-                Children::default(),
-            )?,
-        );
-        slots.push(
-            None,
-            item(
-                ItemProps::props().label("Reglas").checked(true).build(),
-                Children::default(),
-            )?,
-        );
-        Ok(slots)
+        Ok(vec![
+            submenu(SubmenuProps::props().label("Modo").build())?,
+            item(ItemProps::props().label("Reglas").checked(true).build())?,
+        ])
     });
-    let menu = context_menu(ContextMenuProps::props().within(WINDOW).build(), rows).unwrap();
+    let menu = context_menu(
+        ContextMenuProps::props()
+            .within(WINDOW)
+            .children(rows)
+            .build(),
+    )
+    .unwrap();
     lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
     let tree = ComponentList::new(menu);
     settle(&tree);
@@ -538,34 +527,28 @@ fn a_submenu_reports_its_own_picks() {
     let (sink, outer) = (picked.clone(), top.clone());
     let rows = Children::new(move || {
         let sink = sink.clone();
-        let mut slots = Slots::new();
-        slots.push(
-            None,
-            submenu(
-                SubmenuProps::props()
-                    .label("Modo")
-                    .on_select(Rc::new(move |at| sink.borrow_mut().push(at)))
-                    .build(),
-                Children::new(|| {
-                    let mut slots = Slots::new();
+        let mut items = Vec::new();
+        items.push(submenu(
+            SubmenuProps::props()
+                .label("Modo")
+                .on_select(Rc::new(move |at| sink.borrow_mut().push(at)))
+                .children(Children::new(|| {
+                    let mut items = Vec::new();
                     for name in ["Sistema", "Claro", "Oscuro"] {
-                        slots.push(
-                            None,
-                            item(ItemProps::props().label(name).build(), Children::default())?,
-                        );
+                        items.push(item(ItemProps::props().label(name).build())?);
                     }
-                    Ok(slots)
-                }),
-            )?,
-        );
-        Ok(slots)
+                    Ok(items)
+                }))
+                .build(),
+        )?);
+        Ok(items)
     });
     let menu = context_menu(
         ContextMenuProps::props()
             .within(WINDOW)
             .on_select(Rc::new(move |at| outer.borrow_mut().push(at)))
+            .children(rows)
             .build(),
-        rows,
     )
     .unwrap();
     lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
@@ -584,10 +567,7 @@ fn a_submenu_reports_its_own_picks() {
 #[test]
 fn a_submenu_outside_a_menu_is_an_error() {
     fresh_layout_runtime();
-    let built = submenu(
-        SubmenuProps::props().label("Modo").build(),
-        Children::default(),
-    );
+    let built = submenu(SubmenuProps::props().label("Modo").build());
     assert!(built.is_err());
 }
 
@@ -618,8 +598,8 @@ fn hosted(open: RwSignal<bool>, lines: Vec<Line>) -> (ComponentList, FocusId) {
                     .on_close(Rc::new(move || open.set(false)))
                     .width(120.0)
                     .within(WINDOW)
+                    .children(written(lines.clone(), &said))
                     .build(),
-                written(lines.clone(), &said),
             )
         },
         0.0,
@@ -710,8 +690,8 @@ fn a_menu_asked_for_from_the_keyboard_opens_under_the_focused_control() {
         ContextMenuProps::props()
             .around(control)
             .within(WINDOW)
+            .children(written(rows(3), &said))
             .build(),
-        written(rows(3), &said),
     )
     .unwrap();
     lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
@@ -792,8 +772,8 @@ fn both_openers_open_the_same_panel() {
             ContextMenuProps::props()
                 .at((40.0, 30.0))
                 .within(window)
+                .children(written(lines(), &said))
                 .build(),
-            written(lines(), &said),
         )
         .unwrap();
         lay_out(opened.layout_node(), window.width, window.height);
@@ -807,8 +787,10 @@ fn both_openers_open_the_same_panel() {
     let said: Said = Rc::default();
     let mut tree = scoped(|| {
         let dropped = menu(
-            MenuProps::props().label("Abrir").build(),
-            written(lines(), &said),
+            MenuProps::props()
+                .label("Abrir")
+                .children(written(lines(), &said))
+                .build(),
         )
         .unwrap();
         lay_out(dropped.layout_node(), window.width, window.height);
@@ -996,8 +978,8 @@ fn a_menu_s_tokens_win_over_the_theme_s_and_its_style_amends_the_panel() {
                 border: None,
                 ..style
             }))
+            .children(written(vec![Line::Row("copiar")], &said))
             .build(),
-        written(vec![Line::Row("copiar")], &said),
     )
     .unwrap();
     lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
@@ -1028,14 +1010,16 @@ fn a_panel_widens_to_its_widest_row() {
     let said: Said = Rc::default();
     let tree = scoped(|| {
         let menu = context_menu(
-            ContextMenuProps::props().within(WINDOW).build(),
-            written(
-                vec![Line::Hinted(
-                    "a rather long label here",
-                    "and a long hint too",
-                )],
-                &said,
-            ),
+            ContextMenuProps::props()
+                .within(WINDOW)
+                .children(written(
+                    vec![Line::Hinted(
+                        "a rather long label here",
+                        "and a long hint too",
+                    )],
+                    &said,
+                ))
+                .build(),
         )
         .unwrap();
         lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
@@ -1085,35 +1069,21 @@ fn switching(ticked: bool) -> (Scoped<ComponentList>, RwSignal<bool>, Said) {
     let on = signal(false);
     let tree = scoped(|| {
         let rows = Children::new(move || {
-            let mut slots = Slots::new();
-            slots.push(
-                None,
-                item(
-                    ItemProps::props().label("Modo").build(),
-                    Children::default(),
-                )?,
-            );
-            slots.push(
-                None,
-                item(
-                    ItemProps::props()
-                        .label("Reducir")
-                        .switch(Reactive::of(move || on.get()))
-                        .on_press(Rc::new(move || on.update(|on| *on = !*on)) as Rc<dyn Fn()>)
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            let mut items = Vec::new();
+            items.push(item(ItemProps::props().label("Modo").build())?);
+            items.push(item(
+                ItemProps::props()
+                    .label("Reducir")
+                    .switch(Reactive::of(move || on.get()))
+                    .on_press(Rc::new(move || on.update(|on| *on = !*on)) as Rc<dyn Fn()>)
+                    .build(),
+            )?);
             if ticked {
-                slots.push(
-                    None,
-                    item(
-                        ItemProps::props().label("Reglas").checked(true).build(),
-                        Children::default(),
-                    )?,
-                );
+                items.push(item(
+                    ItemProps::props().label("Reglas").checked(true).build(),
+                )?);
             }
-            Ok(slots)
+            Ok(items)
         });
         let menu = context_menu(
             ContextMenuProps::props()
@@ -1121,8 +1091,8 @@ fn switching(ticked: bool) -> (Scoped<ComponentList>, RwSignal<bool>, Said) {
                 .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
                 .width(160.0)
                 .within(WINDOW)
+                .children(rows)
                 .build(),
-            rows,
         )
         .unwrap();
         lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);

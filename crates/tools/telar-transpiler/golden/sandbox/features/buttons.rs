@@ -23,7 +23,7 @@ fn style_center() -> LayoutStyle {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -32,317 +32,259 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
     let keys = signal(0i32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Buttons").desc("button is a component (from the components feature, not a base tag): it takes a label, a variant, a color and an on_press closure. The variant says how the color is carried (Solid, Outline, Soft or Ghost); the color defaults to the theme's primary.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Buttons").desc("button is a component (from the components feature, not a base tag): it takes a label, a variant, a color and an on_press closure. The variant says how the color is carried (Solid, Outline, Soft or Ghost); the color defaults to the theme's primary.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_0 = {
-                                            let __node_3 = button(ButtonProps::props().label("Solid").build(), Children::default())?;
-                                            let __node_4 = button(ButtonProps::props().label("Outline").variant(ButtonVariant::Outline).build(), Children::default())?;
-                                            let __node_5 = button(ButtonProps::props().label("Soft").variant(ButtonVariant::Soft).build(), Children::default())?;
-                                            let __node_6 = button(ButtonProps::props().label("Ghost").variant(ButtonVariant::Ghost).build(), Children::default())?;
-                                            let __node_7 = button(ButtonProps::props().label("Danger").color(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).build(), Children::default())?;
-                                            let __node_8 = button(ButtonProps::props().label("Success").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
-                                            Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __node_4, __node_5, __node_6, __node_7, __node_8])?
-                                        };
-                                        __children.push(box_item(__row_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_9 = code_line(CodeLineProps::props().code("button label:'Save' variant:ButtonVariant::Outline color:$theme.danger").build(), Children::default())?;
-                        __children.push(box_item(__node_9));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __node_3 = button(ButtonProps::props().label("Solid").build())?;
+                                    let __node_4 = button(ButtonProps::props().label("Outline").variant(ButtonVariant::Outline).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("Soft").variant(ButtonVariant::Soft).build())?;
+                                    let __node_6 = button(ButtonProps::props().label("Ghost").variant(ButtonVariant::Ghost).build())?;
+                                    let __node_7 = button(ButtonProps::props().label("Danger").color(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).build())?;
+                                    let __node_8 = button(ButtonProps::props().label("Success").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __node_4, __node_5, __node_6, __node_7, __node_8])?
+                                };
+                                __children.push(box_item(__row_0));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_9 = code_line(CodeLineProps::props().code("button label:'Save' variant:ButtonVariant::Outline color:$theme.danger").build())?;
+                    __children.push(box_item(__node_9));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Variants").build(), __deferred)?
+            example(ExampleProps::props().title("Variants").children(__recipe_children).build())?
         };
         let __node_10 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let clicks = clicks.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let clicks = clicks.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_11 = {
-                            let __deferred = Children::per_slot(
-                                {
+                    let __node_11 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let clicks = clicks.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_0 = {
                                     let clicks = clicks.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let clicks = clicks.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __text_0 = {
-                                            let clicks = clicks.clone();
-                                            Text::declaring(
-                                                move || format!("Clicks · {}", clicks.get()),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_0));
-                                        let __row_1 = {
-                                            let __node_12 = button(ButtonProps::props().label("+1").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build(), Children::default())?;
-                                            let __node_13 = button(ButtonProps::props().label("+10").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build(), Children::default())?;
-                                            let __node_14 = button(ButtonProps::props().label("Reset").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build(), Children::default())?;
-                                            Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_12, __node_13, __node_14])?
-                                        };
-                                        __children.push(box_item(__row_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_11));
-                        let __node_15 = code_line(CodeLineProps::props().code("button label:'+1' on_press:|| $clicks += 1      ($x += n desugars to .update)").build(), Children::default())?;
-                        __children.push(box_item(__node_15));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                    Text::declaring(
+                                        move || format!("Clicks · {}", clicks.get()),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_0));
+                                let __row_1 = {
+                                    let __node_12 = button(ButtonProps::props().label("+1").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build())?;
+                                    let __node_13 = button(ButtonProps::props().label("+10").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build())?;
+                                    let __node_14 = button(ButtonProps::props().label("Reset").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_12, __node_13, __node_14])?
+                                };
+                                __children.push(box_item(__row_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(12)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_11));
+                    let __node_15 = code_line(CodeLineProps::props().code("button label:'+1' on_press:|| $clicks += 1      ($x += n desugars to .update)").build())?;
+                    __children.push(box_item(__node_15));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("on_press — every click runs a closure that mutates a signal").build(), __deferred)?
+            example(ExampleProps::props().title("on_press — every click runs a closure that mutates a signal").children(__recipe_children).build())?
         };
         let __node_16 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                     let clicks = clicks.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let clicks = clicks.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_17 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                    let clicks = clicks.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let clicks = clicks.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __sbox_0 = {
-                                            let __text_1 = {
-                                                let clicks = clicks.clone();
-                                                Text::declaring(
-                                                    move || format!("Tap anywhere in this card · {}", clicks.get()),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            StyledContainer::new(style_center().flex_column().padding_all(20.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.on_press({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })
-                                        };
-                                        __children.push(box_item(__sbox_0));
-                                        let __text_2 = {
-                                            Text::declaring(
-                                                || "The card itself takes on_press; a child button would still win its own taps.".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_2));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_17));
-                        let __node_18 = code_line(CodeLineProps::props().code("box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)").build(), Children::default())?;
-                        __children.push(box_item(__node_18));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_17 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                                let clicks = clicks.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __sbox_0 = {
+                                    let __text_1 = {
+                                        let clicks = clicks.clone();
+                                        Text::declaring(
+                                            move || format!("Tap anywhere in this card · {}", clicks.get()),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                        )?
+                                    };
+                                    StyledContainer::new(style_center().flex_column().padding_all(20.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.on_press({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })
+                                };
+                                __children.push(box_item(__sbox_0));
+                                let __text_2 = {
+                                    Text::declaring(
+                                        || "The card itself takes on_press; a child button would still win its own taps.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_2));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_17));
+                    let __node_18 = code_line(CodeLineProps::props().code("box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)").build())?;
+                    __children.push(box_item(__node_18));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("A whole box is clickable — on_press works on any container, not just buttons").build(), __deferred)?
+            example(ExampleProps::props().title("A whole box is clickable — on_press works on any container, not just buttons").children(__recipe_children).build())?
         };
         let __node_19 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_20 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_2 = {
-                                            let __sbox_1 = {
-                                                let __text_3 = {
-                                                    Text::declaring(
-                                                        || "Fill on hover".to_string(),
-                                                        LayoutStyle::new(),
-                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
-                                                    )?
-                                                };
-                                                StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) })
-                                            };
-                                            let __sbox_2 = {
-                                                let __text_4 = {
-                                                    Text::declaring(
-                                                        || "Stroke + radius".to_string(),
-                                                        LayoutStyle::new(),
-                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
-                                                    )?
-                                                };
-                                                StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().primary), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } })
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), children![__sbox_1, __sbox_2])?
-                                        };
-                                        __children.push(box_item(__row_2));
-                                        let __text_5 = {
+                    let __node_20 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_2 = {
+                                    let __sbox_1 = {
+                                        let __text_3 = {
                                             Text::declaring(
-                                                || "Each box carries its own hover_style(...) — different hovers in one file, no signals.".to_string(),
+                                                || "Fill on hover".to_string(),
                                                 LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        __children.push(box_item(__text_5));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_20));
-                        let __node_21 = code_line(CodeLineProps::props().code("box fill:$theme.surface_alt hover_style(fill:$theme.primary)      (swap style while hovered)").build(), Children::default())?;
-                        __children.push(box_item(__node_21));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                        StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) })
+                                    };
+                                    let __sbox_2 = {
+                                        let __text_4 = {
+                                            Text::declaring(
+                                                || "Stroke + radius".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().primary), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } })
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), children![__sbox_1, __sbox_2])?
+                                };
+                                __children.push(box_item(__row_2));
+                                let __text_5 = {
+                                    Text::declaring(
+                                        || "Each box carries its own hover_style(...) — different hovers in one file, no signals.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_5));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_20));
+                    let __node_21 = code_line(CodeLineProps::props().code("box fill:$theme.surface_alt hover_style(fill:$theme.primary)      (swap style while hovered)").build())?;
+                    __children.push(box_item(__node_21));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("hover — a container restyles while the pointer is over it (mouse only)").build(), __deferred)?
+            example(ExampleProps::props().title("hover — a container restyles while the pointer is over it (mouse only)").children(__recipe_children).build())?
         };
         let __node_22 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                     let hovering = hovering.clone();
                     let keys = keys.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let hovering = hovering.clone();
-                    let keys = keys.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_23 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                    let hovering = hovering.clone();
-                                    let keys = keys.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let hovering = hovering.clone();
-                                    let keys = keys.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __sbox_3 = {
-                                            let __text_6 = {
-                                                let hovering = hovering.clone();
-                                                Text::declaring(
-                                                    move || format!("hover me — hovering: {}", hovering.get()),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_all(16.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_6])?.on_hover({ let hovering = hovering.clone(); move |h| hovering.set(h) })
-                                        };
-                                        __children.push(box_item(__sbox_3));
-                                        let __col_1 = {
-                                            let __text_7 = {
-                                                let keys = keys.clone();
-                                                Text::declaring(
-                                                    move || format!("keys pressed anywhere: {}", keys.get()),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                                )?
-                                            };
-                                            StyledContainer::new(LayoutStyle::new().flex_column(), move |_| RectStyle::default(), children![__text_7])?.on_key({ let keys = keys.clone(); move |_k| keys.update(|__v| *__v += 1) })
-                                        };
-                                        __children.push(box_item(__col_1));
-                                        let __text_8 = {
-                                            Text::declaring(
-                                                || "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key.".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_8));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_23));
-                        let __node_24 = code_line(CodeLineProps::props().code("box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)").build(), Children::default())?;
-                        __children.push(box_item(__node_24));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_23 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                                let hovering = hovering.clone();
+                                let keys = keys.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __sbox_3 = {
+                                    let __text_6 = {
+                                        let hovering = hovering.clone();
+                                        Text::declaring(
+                                            move || format!("hover me — hovering: {}", hovering.get()),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                        )?
+                                    };
+                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_all(16.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_6])?.on_hover({ let hovering = hovering.clone(); move |h| hovering.set(h) })
+                                };
+                                __children.push(box_item(__sbox_3));
+                                let __col_1 = {
+                                    let __text_7 = {
+                                        let keys = keys.clone();
+                                        Text::declaring(
+                                            move || format!("keys pressed anywhere: {}", keys.get()),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    StyledContainer::new(LayoutStyle::new().flex_column(), move |_| RectStyle::default(), children![__text_7])?.on_key({ let keys = keys.clone(); move |_k| keys.update(|__v| *__v += 1) })
+                                };
+                                __children.push(box_item(__col_1));
+                                let __text_8 = {
+                                    Text::declaring(
+                                        || "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_8));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_23));
+                    let __node_24 = code_line(CodeLineProps::props().code("box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)").build())?;
+                    __children.push(box_item(__node_24));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Event callbacks — on_hover (a bool) and on_key (global shortcut)").build(), __deferred)?
+            example(ExampleProps::props().title("Event callbacks — on_hover (a bool) and on_key (global shortcut)").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_10, __node_16, __node_19, __node_22])?
     };

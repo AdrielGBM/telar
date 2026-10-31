@@ -494,7 +494,9 @@ pub fn matrix_axis_items(doc: &RsxDocument, line: u32, line_text: &str) -> Vec<C
         .into_iter()
         .flat_map(|root| &root.attributes)
         .filter(|attr| {
-            attr.key != "slot" && !attr.value.text().contains('$') && !attr.value.is_closure()
+            attr.key != telar_transpiler::SLOT_ATTR
+                && !attr.value.text().contains('$')
+                && !attr.value.is_closure()
         })
         .map(|attr| attr.key.clone());
     for name in declared.chain(rendered) {

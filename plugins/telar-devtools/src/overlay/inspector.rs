@@ -12,7 +12,7 @@ use telar_components::{
 };
 
 use super::{DrawerTab, Model, banner, mounted_while, stats};
-use crate::panels::{accessibility_panel, inspection_toggles, inspector_panel, panes};
+use crate::panels::{accessibility_panel, inspection_toggles, inspector_panel};
 use crate::strings::{self, ACCESSIBILITY, CLOSE, COMPONENTS, INSPECTOR, NODES, RESIZE_INSPECTOR};
 use crate::workbench::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_muted};
 
@@ -31,8 +31,9 @@ pub(super) fn drawer(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     .max_fraction(DRAWER_MAX_FRACTION)
                     .collapsible(false)
                     .label(Reactive::of(|| strings::text(RESIZE_INSPECTOR)))
+                    .first(Children::one(move || pane(model)))
+                    .second(Children::one(move || uncovered(model)))
                     .build(),
-                panes([pane(model)?, uncovered(model)?]),
             )
         },
     )
@@ -87,7 +88,6 @@ fn header(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .variant(ButtonVariant::Ghost)
             .on_press(Rc::new(move || model.inspector_open.set(false)))
             .build(),
-        Children::default(),
     )?;
     let header = Container::new(
         LayoutStyle::row()

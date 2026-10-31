@@ -1,5 +1,5 @@
+use telar::Color;
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
 
 use crate::spinner::{SpinnerProps, spinner};
 
@@ -11,7 +11,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .color(p.arg("color", Color::TRANSPARENT))
                     .size(p.arg("size", 0.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Feedback/Spinner")

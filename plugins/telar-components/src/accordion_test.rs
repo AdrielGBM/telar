@@ -2,26 +2,18 @@ use telar::testing::{press, release};
 use telar::{AvailableSpace, compute_layout, new_container, track_layout};
 
 use super::*;
-
-fn slot_with_body(label: &'static str) -> Slots {
-    let body = Text::declaring(
-        move || label.to_string(),
-        LayoutStyle::new().height(20.0),
-        |t| t,
-    )
-    .unwrap();
-    let mut slots = Slots::new();
-    slots.push(None, box_item(body));
-    slots
-}
+use crate::test_support::text_body;
 
 #[test]
 fn pressing_the_header_toggles_open() {
     crate::test_support::fresh_layout_runtime();
     let open = signal(false);
     let mut item = accordion(
-        AccordionProps::props().title("Details").open(open).build(),
-        Children::from(slot_with_body("Body")),
+        AccordionProps::props()
+            .title("Details")
+            .open(open)
+            .children(text_body("Body"))
+            .build(),
     )
     .unwrap();
     let node = item.layout_node();
@@ -51,8 +43,11 @@ fn open_expands_body_and_close_collapses_it() {
     crate::test_support::fresh_layout_runtime();
     let open = signal(false);
     let item = accordion(
-        AccordionProps::props().title("Details").open(open).build(),
-        Children::from(slot_with_body("Body")),
+        AccordionProps::props()
+            .title("Details")
+            .open(open)
+            .children(text_body("Body"))
+            .build(),
     )
     .unwrap();
     let node = item.layout_node();
@@ -89,8 +84,10 @@ fn open_expands_body_and_close_collapses_it() {
 fn uncontrolled_accordion_builds_and_starts_closed() {
     crate::test_support::fresh_layout_runtime();
     let item = accordion(
-        AccordionProps::props().title("Details").build(),
-        Children::from(slot_with_body("Body")),
+        AccordionProps::props()
+            .title("Details")
+            .children(text_body("Body"))
+            .build(),
     )
     .unwrap();
     let node = item.layout_node();
@@ -136,7 +133,11 @@ fn header_paint(style: Option<SurfaceAmendment>, hovered: bool) -> (telar::Rect,
     let mut tree = telar::testing::scoped(|| {
         let mut props = AccordionProps::props().title("Details").build();
         props.style = style;
-        let item = accordion(props, Children::from(slot_with_body("Body"))).unwrap();
+        let item = accordion(AccordionProps {
+            children: text_body("Body"),
+            ..props
+        })
+        .unwrap();
         telar::testing::lay_out(item.layout_node(), 400.0, 400.0);
         telar::ComponentList::new(item)
     });

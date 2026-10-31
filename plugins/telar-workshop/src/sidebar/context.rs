@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Children, Container, LayoutError, LayoutItem, LayoutStyle, ReactiveList, Rect, RwSignal, Slots,
+    Children, Container, LayoutError, LayoutItem, LayoutStyle, ReactiveList, Rect, RwSignal,
     box_item,
 };
 use telar_components::{
@@ -164,7 +164,7 @@ pub(super) fn context_layer(
                 Some(around) => props.around(around),
                 None => props,
             };
-            context_menu(props.build(), rows(&state, asked_for.node))
+            context_menu(props.children(rows(&state, asked_for.node)).build())
         },
         0.0,
     )?;
@@ -174,7 +174,7 @@ pub(super) fn context_layer(
 fn rows(state: &WorkshopState, node: Option<TreeNode>) -> Children {
     let state = state.clone();
     Children::new(move || {
-        let mut slots = Slots::new();
+        let mut rows = Vec::new();
         for command in commands(&state, node.as_ref()) {
             let row = match command {
                 Some(command) => {
@@ -184,13 +184,12 @@ fn rows(state: &WorkshopState, node: Option<TreeNode>) -> Children {
                             .label(strings::reactive(command.label()))
                             .on_press(Rc::new(move || run(&state, command, node.as_ref())))
                             .build(),
-                        Children::default(),
                     )?
                 }
-                None => separator(SeparatorProps::props().build(), Children::default())?,
+                None => separator(SeparatorProps::props().build())?,
             };
-            slots.push(None, row);
+            rows.push(row);
         }
-        Ok(slots)
+        Ok(rows)
     })
 }

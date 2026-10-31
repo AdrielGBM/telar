@@ -136,213 +136,181 @@ fn draw_transforms(rect: Rect) -> RenderNode {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn transforms(props: TransformsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn transforms(props: TransformsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Transforms").desc("Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Transforms").desc("Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
+            let __recipe_children = Children::new(
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                move |__request: SlotRequest<'_>| {
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __canvas_0 = Canvas::new(LayoutStyle::new().height(360.0), draw_transforms)?;
-                                        __children.push(box_item(__canvas_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_3 = code_line(CodeLineProps::props().code("Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))").build(), Children::default())?;
-                        __children.push(box_item(__node_3));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __canvas_0 = Canvas::new(LayoutStyle::new().height(360.0), draw_transforms)?;
+                                __children.push(box_item(__canvas_0));
+                                Ok(__children)
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_3 = code_line(CodeLineProps::props().code("Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))").build())?;
+                    __children.push(box_item(__node_3));
+                    Ok(__children)
                 }
             );
-            example(ExampleProps::props().title("Scale, rotate, and a composed rotate-then-scale").build(), __deferred)?
+            example(ExampleProps::props().title("Scale, rotate, and a composed rotate-then-scale").children(__recipe_children).build())?
         };
         let __node_4 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_5 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_0 = {
-                                            let __sbox_0 = {
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(8.0)) }, children![])?
-                                            };
-                                            let __sbox_1 = {
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (20) as f32, (1) as f32, (1) as f32, (0) as f32, (0) as f32))
-                                            };
-                                            let __sbox_2 = {
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (0) as f32, (1.3) as f32, (1.3) as f32, (0) as f32, (0) as f32))
-                                            };
-                                            let __sbox_3 = {
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (15) as f32, (0.85) as f32, (0.85) as f32, (0) as f32, (0) as f32))
-                                            };
-                                            let __sbox_4 = {
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().ink).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (-12) as f32, (1) as f32, (1) as f32, (0) as f32, (-8) as f32))
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(24.0).justify_content(JustifyContent::CENTER).padding_vertical(16.0), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3, __sbox_4])?
-                                        };
-                                        __children.push(box_item(__row_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_5));
-                        let __node_6 = code_line(CodeLineProps::props().code("box fill:$theme.success rotate:20      box fill:$theme.danger rotate:15 scale:0.85").build(), Children::default())?;
-                        __children.push(box_item(__node_6));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_5 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __sbox_0 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(8.0)) }, children![])?
+                                    };
+                                    let __sbox_1 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (20) as f32, (1) as f32, (1) as f32, (0) as f32, (0) as f32))
+                                    };
+                                    let __sbox_2 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (0) as f32, (1.3) as f32, (1.3) as f32, (0) as f32, (0) as f32))
+                                    };
+                                    let __sbox_3 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (15) as f32, (0.85) as f32, (0.85) as f32, (0) as f32, (0) as f32))
+                                    };
+                                    let __sbox_4 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().ink).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (-12) as f32, (1) as f32, (1) as f32, (0) as f32, (-8) as f32))
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(24.0).justify_content(JustifyContent::CENTER).padding_vertical(16.0), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3, __sbox_4])?
+                                };
+                                __children.push(box_item(__row_0));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_5));
+                    let __node_6 = code_line(CodeLineProps::props().code("box fill:$theme.success rotate:20      box fill:$theme.danger rotate:15 scale:0.85").build())?;
+                    __children.push(box_item(__node_6));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)").build(), __deferred)?
+            example(ExampleProps::props().title("Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)").children(__recipe_children).build())?
         };
         let __node_7 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_8 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_1 = {
-                                            let __col_1 = {
-                                                let __sbox_5 = {
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
-                                                };
-                                                let __text_0 = {
-                                                    Text::declaring(
-                                                        || "center (default)".to_string(),
-                                                        LayoutStyle::new(),
-                                                        move |__inherited: TextStyle| __inherited.with_font_size(11.0),
-                                                    )?
-                                                };
-                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_5, __text_0])?
-                                            };
-                                            let __col_2 = {
-                                                let __sbox_6 = {
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(0.0, 0.5), (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
-                                                };
-                                                let __text_1 = {
-                                                    Text::declaring(
-                                                        || "start".to_string(),
-                                                        LayoutStyle::new(),
-                                                        move |__inherited: TextStyle| __inherited.with_font_size(11.0),
-                                                    )?
-                                                };
-                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_6, __text_1])?
-                                            };
-                                            let __col_3 = {
-                                                let __sbox_7 = {
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(1.0, 0.5), (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
-                                                };
-                                                let __text_2 = {
-                                                    Text::declaring(
-                                                        || "end".to_string(),
-                                                        LayoutStyle::new(),
-                                                        move |__inherited: TextStyle| __inherited.with_font_size(11.0),
-                                                    )?
-                                                };
-                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_7, __text_2])?
-                                            };
-                                            let __col_4 = {
-                                                let __sbox_8 = {
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(0.0, 1.0), (30) as f32, (1) as f32, (1) as f32, (0) as f32, (0) as f32))
-                                                };
-                                                let __text_3 = {
-                                                    Text::declaring(
-                                                        || "(start end)".to_string(),
-                                                        LayoutStyle::new(),
-                                                        move |__inherited: TextStyle| __inherited.with_font_size(11.0),
-                                                    )?
-                                                };
-                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_8, __text_3])?
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(56.0).justify_content(JustifyContent::CENTER).padding_vertical(24.0).padding_horizontal(48.0), children![__col_1, __col_2, __col_3, __col_4])?
+                    let __node_8 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_1 = {
+                                    let __col_1 = {
+                                        let __sbox_5 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
                                         };
-                                        __children.push(box_item(__row_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_8));
-                        let __node_9 = code_line(CodeLineProps::props().code("box scale:1.5 transform_origin:start      box rotate:30 transform_origin:(start end)").build(), Children::default())?;
-                        __children.push(box_item(__node_9));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                        let __text_0 = {
+                                            Text::declaring(
+                                                || "center (default)".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(11.0),
+                                            )?
+                                        };
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_5, __text_0])?
+                                    };
+                                    let __col_2 = {
+                                        let __sbox_6 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(0.0, 0.5), (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
+                                        };
+                                        let __text_1 = {
+                                            Text::declaring(
+                                                || "start".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(11.0),
+                                            )?
+                                        };
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_6, __text_1])?
+                                    };
+                                    let __col_3 = {
+                                        let __sbox_7 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(1.0, 0.5), (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
+                                        };
+                                        let __text_2 = {
+                                            Text::declaring(
+                                                || "end".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(11.0),
+                                            )?
+                                        };
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_7, __text_2])?
+                                    };
+                                    let __col_4 = {
+                                        let __sbox_8 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(0.0, 1.0), (30) as f32, (1) as f32, (1) as f32, (0) as f32, (0) as f32))
+                                        };
+                                        let __text_3 = {
+                                            Text::declaring(
+                                                || "(start end)".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(11.0),
+                                            )?
+                                        };
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_8, __text_3])?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(56.0).justify_content(JustifyContent::CENTER).padding_vertical(24.0).padding_horizontal(48.0), children![__col_1, __col_2, __col_3, __col_4])?
+                                };
+                                __children.push(box_item(__row_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_9 = code_line(CodeLineProps::props().code("box scale:1.5 transform_origin:start      box rotate:30 transform_origin:(start end)").build())?;
+                    __children.push(box_item(__node_9));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Pivot — transform_origin picks the point rotate and scale hold still").build(), __deferred)?
+            example(ExampleProps::props().title("Pivot — transform_origin picks the point rotate and scale hold still").children(__recipe_children).build())?
         };
         let __node_10 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
+            let __recipe_children = Children::new(
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_5 = {
-                            let __node_11 = prop_row(PropRowProps::props().name("scale_around").values("sx, sy, cx, cy").about("Scale about a pivot point.").build(), Children::default())?;
-                            let __node_12 = prop_row(PropRowProps::props().name("rotate_around").values("deg, cx, cy").about("Rotate about a pivot point.").build(), Children::default())?;
-                            let __node_13 = prop_row(PropRowProps::props().name(".then(other)").values("Transform").about("Compose two transforms into one matrix.").build(), Children::default())?;
-                            let __node_14 = prop_row(PropRowProps::props().name("transform_with").values("matrix, [nodes]").about("Apply a matrix to child render nodes.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_11, __node_12, __node_13, __node_14])?
-                        };
-                        __children.push(box_item(__col_5));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __col_5 = {
+                        let __node_11 = prop_row(PropRowProps::props().name("scale_around").values("sx, sy, cx, cy").about("Scale about a pivot point.").build())?;
+                        let __node_12 = prop_row(PropRowProps::props().name("rotate_around").values("deg, cx, cy").about("Rotate about a pivot point.").build())?;
+                        let __node_13 = prop_row(PropRowProps::props().name(".then(other)").values("Transform").about("Compose two transforms into one matrix.").build())?;
+                        let __node_14 = prop_row(PropRowProps::props().name("transform_with").values("matrix, [nodes]").about("Apply a matrix to child render nodes.").build())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_11, __node_12, __node_13, __node_14])?
+                    };
+                    __children.push(box_item(__col_5));
+                    Ok(__children)
                 }
             );
-            example(ExampleProps::props().title("The Transform API").build(), __deferred)?
+            example(ExampleProps::props().title("The Transform API").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10])?
     };

@@ -1,36 +1,34 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, Slots, Text, box_item};
+use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, Text, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::modal::{ModalProps, modal};
 
 fn body_in(height: Option<f32>) -> Children {
-    Children::new(move || {
+    Children::one(move || {
         let text = Text::declaring(
             || "This dialog stays inside the canvas.".to_string(),
             height.map_or_else(LayoutStyle::new, |height| LayoutStyle::new().height(height)),
             |t| t,
         )?;
-        let mut slots = Slots::new();
-        slots.push(None, box_item(text));
-        Ok(slots)
+        Ok(box_item(text))
     })
 }
 
 fn long_body() -> Children {
     Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for line in 0..40 {
             let text = Text::declaring(
                 move || format!("Paragraph {line} of a body longer than the window."),
                 LayoutStyle::new().height(20.0),
                 |t| t,
             )?;
-            slots.push(None, box_item(text));
+            items.push(box_item(text));
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -47,15 +45,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label("Reopen")
                     .on_press(Rc::new(move || open.set(true)))
                     .build(),
-                Children::default(),
             )?;
             let dialog = modal(
                 ModalProps::props()
                     .open(open)
                     .title(p.arg("title", "Confirm"))
                     .color(p.arg("color", Color::TRANSPARENT))
+                    .children(body())
                     .build(),
-                body(),
             )?;
             Ok::<_, LayoutError>(Container::new(
                 LayoutStyle::column().gap(8.0),
@@ -81,8 +78,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 ModalProps::props()
                     .open(p.signal("open", true))
                     .title("Terms")
+                    .children(long_body())
                     .build(),
-                long_body(),
             )
         })
         .title("Overlays/Modal")
@@ -97,8 +94,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 ModalProps::props()
                     .open(p.signal("open", true))
                     .title("Confirm")
+                    .children(body_in(None))
                     .build(),
-                body_in(None),
             )
         })
         .title("Overlays/Modal")

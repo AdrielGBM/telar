@@ -15,16 +15,19 @@ pub struct FeatureCardProps {
     /// Supporting sentence; wraps when long.
     #[props(default)]
     pub body: &'static str,
+    /// Drawn above the heading.
+    #[props(default)]
+    pub icon: Children,
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn feature_card(props: FeatureCardProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __sbox_0 = {
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-        __children.extend(children.build_slot(Some("icon"))?);
+        __children.extend(props.icon.build()?);
         let __text_0 = {
             Text::declaring(
                 move || format!("{}", props.title),
@@ -53,23 +56,18 @@ pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __node_0 = {
-        let __deferred = Children::per_slot(
+        let __recipe_icon = Children::new(
             {
                 let theme = theme.clone();
-            move |__request: SlotRequest<'_>| {
-                let theme = theme.clone();
-                let mut __slots = Slots::new();
+            move || {
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                if __request.includes(Some("icon")) {
-                    let __node_1 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
-                    __slots.push(Some("icon"), box_item(__node_1));
-                }
-                __slots.extend_default(__children);
-                Ok(__slots)
+                let __node_1 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                __children.push(box_item(__node_1));
+                Ok(__children)
             }
             }
         );
-        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Fast")).body(::telar::__preview_arg!(__preview, "body", "Software and wgpu renderers with dirty-tracking and scroll-blit detection.")).__preview_actions(&__preview.actions()).build(), __deferred)?
+        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Fast")).body(::telar::__preview_arg!(__preview, "body", "Software and wgpu renderers with dirty-tracking and scroll-blit detection.")).icon(__recipe_icon).__preview_actions(&__preview.actions()).build())?
     };
     Ok(Box::new(__node_0))
 }
@@ -79,23 +77,18 @@ pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Resul
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __node_0 = {
-        let __deferred = Children::per_slot(
+        let __recipe_icon = Children::new(
             {
                 let theme = theme.clone();
-            move |__request: SlotRequest<'_>| {
-                let theme = theme.clone();
-                let mut __slots = Slots::new();
+            move || {
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                if __request.includes(Some("icon")) {
-                    let __node_1 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
-                    __slots.push(Some("icon"), box_item(__node_1));
-                }
-                __slots.extend_default(__children);
-                Ok(__slots)
+                let __node_1 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                __children.push(box_item(__node_1));
+                Ok(__children)
             }
             }
         );
-        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Cross-platform")).body(::telar::__preview_arg!(__preview, "body", "One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.")).__preview_actions(&__preview.actions()).build(), __deferred)?
+        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Cross-platform")).body(::telar::__preview_arg!(__preview, "body", "One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.")).icon(__recipe_icon).__preview_actions(&__preview.actions()).build())?
     };
     Ok(Box::new(__node_0))
 }
@@ -103,19 +96,19 @@ pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Resul
 pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--fast"), "feature_card", "Fast", feature_card_preview_0)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 20)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 23)
         .title("Landing/Feature card")
         .docs("A feature highlighted on the landing page: an icon in the `icon` slot, a one-line heading and a supporting sentence that wraps.")
-        .source("[preview \"Fast\"]\nfeature_card title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"\n    icon name:\"lucide:zap\" size:32 color:$theme.accent slot:\"icon\"", &[::telar::preview::SourceSpan::new(0, 191, 20)])
+        .source("[preview \"Fast\"]\nfeature_card title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"\n    icon name:\"lucide:zap\" size:32 color:$theme.accent slot:\"icon\"", &[::telar::preview::SourceSpan::new(0, 191, 23)])
         .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
         .args(&[::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")])
         .layout(::telar::preview::Layout::Centered),
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--long-body"), "feature_card", "Long body", feature_card_preview_1)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 24)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 27)
         .title("Landing/Feature card")
         .docs("A feature highlighted on the landing page: an icon in the `icon` slot, a one-line heading and a supporting sentence that wraps.")
-        .source("[preview \"Long body\" viewport:360x640]\nfeature_card title:\"Cross-platform\" body:\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"\n    icon name:\"lucide:smartphone\" size:32 color:$theme.accent slot:\"icon\"", &[::telar::preview::SourceSpan::new(0, 284, 24)])
+        .source("[preview \"Long body\" viewport:360x640]\nfeature_card title:\"Cross-platform\" body:\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"\n    icon name:\"lucide:smartphone\" size:32 color:$theme.accent slot:\"icon\"", &[::telar::preview::SourceSpan::new(0, 284, 27)])
         .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
         .args(&[::telar::preview::ArgSpec::new("title").default("\"Cross-platform\""), ::telar::preview::ArgSpec::new("body").default("\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"")])
         .layout(::telar::preview::Layout::Centered)

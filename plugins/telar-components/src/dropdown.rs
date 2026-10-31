@@ -333,7 +333,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     let holder = while_open(open, move || {
         // The registry is cleared first: this builder runs again on every open, and rows left over from the last would leave the keyboard walking positions that no longer exist.
         list.begin();
-        let row_items = rows.build_with(list.clone())?.take_default();
+        let row_items = rows.build_with(list.clone())?;
         let width = panel_width(geometry().width, stretch, trigger_node, &trigger_rect);
         let row_column = Container::column(row_items)?;
         let cursor = {

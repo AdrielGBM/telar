@@ -5,9 +5,9 @@ use std::rc::{Rc, Weak};
 
 use telar::preview::{Globals, Layout};
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Canvas, Children, Clip, ClippedItem, Color,
-    Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, Reactive, ReactiveList,
-    Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, Size, SizeDimension, StyledContainer,
+    Accessible, AlignItems, Border, BorderRadius, Canvas, Clip, ClippedItem, Color, Container,
+    JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, Reactive, ReactiveList, Rect,
+    RectStyle, RenderNode, Role, RwSignal, ShapeStyle, Size, SizeDimension, StyledContainer,
     SurfaceCanvas, SurfaceFrame, Text, TextWrap, box_item, children, effect, memo, signal,
     track_layout,
 };
@@ -351,7 +351,7 @@ fn handle(edge: ResizeEdge, resize: &Resize) -> Result<Box<dyn LayoutItem>, Layo
         ResizeEdge::Bottom => Some(Reactive::of(|| strings::text(VIEWPORT_HEIGHT))),
         ResizeEdge::Corner => None,
     };
-    resize_handle(props, Children::default())
+    resize_handle(props)
 }
 
 /// A transparent background shows through to the checker; anything else covers it, so it is not drawn.

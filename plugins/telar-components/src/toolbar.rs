@@ -173,18 +173,22 @@ pub struct ToolbarProps {
     /// Lay the items out in a column, with the up and down arrows moving between them.
     #[props(default = false)]
     pub vertical: bool,
+    /// The items, laid out along the toolbar.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// One tab stop for all its items: Tab enters and leaves, the arrows walk the items, Home and End jump to the first and last, Enter and Space press the current one.
 ///
 /// Only [`icon_button`](crate::icon_button) takes part. A disabled item is skipped.
-pub fn toolbar(
-    props: ToolbarProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let ToolbarProps { label, vertical } = props;
+pub fn toolbar(props: ToolbarProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let ToolbarProps {
+        label,
+        vertical,
+        children,
+    } = props;
     let context = ToolbarContext::new();
-    let items = children.build_with(context.clone())?.take_default();
+    let items = children.build_with(context.clone())?;
 
     let layout = move || {
         let style = if vertical {

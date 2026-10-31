@@ -57,7 +57,7 @@ fn canvas_reporting(start: f32, ends: Ends) -> Canvas {
         .build();
     props.on_start = ends.on_start;
     props.on_end = ends.on_end;
-    let dot = handle(props, Children::default()).unwrap();
+    let dot = handle(props).unwrap();
     let area = StyledContainer::new(
         LayoutStyle::new().width(200.0).height(200.0),
         |_| RectStyle::default(),
@@ -151,7 +151,6 @@ fn a_handle_joins_a_popover_transaction_on_the_same_value() {
             .transaction(popover)
             .to_point(Rc::new(|value| (value, 50.0)))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let node = dot.layout_node();
@@ -217,7 +216,7 @@ fn a_handle_taken_away_mid_drag_ends_it_undone() {
         .build();
     props.on_start = ends.on_start;
     props.on_end = ends.on_end;
-    let mut dot = handle(props, Children::default()).unwrap();
+    let mut dot = handle(props).unwrap();
     lay_out(dot.layout_node(), 200.0, 200.0);
     dot.on_event(&press(20.0, 50.0));
     dot.on_event(&moved(70.0, 50.0));
@@ -326,7 +325,7 @@ fn a_style_amendment_reshapes_the_dot() {
         .to_point(Rc::new(|value| (value, 50.0)))
         .build();
     props.style = Some(square);
-    let dot = handle(props, Children::default()).unwrap();
+    let dot = handle(props).unwrap();
     let node = dot.layout_node();
     let tree = ComponentList::new(dot);
     lay_out(node, 200.0, 200.0);

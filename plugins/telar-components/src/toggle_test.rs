@@ -19,7 +19,6 @@ fn tap_toggles_bound_signal() {
             .checked(on)
             .label("Notifications")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let (cx, cy) = lay_out(widget.layout_node());
@@ -42,7 +41,6 @@ fn on_toggle_reports_new_state() {
         ToggleProps::props()
             .on_toggle(Rc::new(move |v| sink.set(Some(v))))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let (cx, cy) = lay_out(widget.layout_node());
@@ -107,11 +105,7 @@ fn track_and_knob(
 }
 
 fn switch(on: bool) -> Box<dyn LayoutItem> {
-    toggle(
-        ToggleProps::props().checked(signal(on)).build(),
-        Children::default(),
-    )
-    .unwrap()
+    toggle(ToggleProps::props().checked(signal(on)).build()).unwrap()
 }
 
 fn solid(style: &RectStyle) -> Color {
@@ -225,7 +219,6 @@ fn a_style_amendment_reshapes_the_track_on_and_off() {
                     .checked(signal(on))
                     .style(square.clone())
                     .build(),
-                Children::default(),
             )
             .unwrap()
         });

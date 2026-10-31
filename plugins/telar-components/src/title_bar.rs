@@ -4,8 +4,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Paint, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Accessible, AlignItems, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
+    Paint, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
     amend_surface, box_item, focus::Role, on_cleanup, signal,
 };
 use web_time::Instant;
@@ -52,6 +52,7 @@ pub struct WindowControlsProps {
 }
 
 /// What a window-control button is painted in: its mark at rest, and its fill and mark under the pointer.
+#[derive(Clone)]
 struct ControlPaint {
     glyph: Reactive<Color>,
     hover: Reactive<Color>,
@@ -87,81 +88,89 @@ fn named(color: &Reactive<Color>) -> Option<Color> {
     (color != Color::TRANSPARENT).then_some(color)
 }
 
-/// One window-control button: a mark a reader hears by `name`. It holds every stroke started on it, so a title bar around it never takes a press on it for a move of the window.
+/// One window-control button under a tooltip naming it: a mark a reader hears by `name`. It holds every stroke started on it, so a title bar around it never takes a press on it for a move of the window.
 fn control_button(
-    shape: impl Fn() -> Mark + Clone + 'static,
-    name: impl Fn() -> String + Clone + 'static,
+    shape: impl Fn() -> Mark + 'static,
+    name: impl Fn() -> String + 'static,
     paint: ControlPaint,
     look: ControlLook,
     press: Rc<dyn Fn()>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let ControlPaint {
-        glyph,
-        hover,
-        hover_glyph,
-    } = paint;
-    let hovered = signal(false);
-    let mark = shared::mark(shape, move |inherited| {
-        let color = match hovered.get() {
-            true => named(&hover_glyph).or_else(|| named(&glyph)),
-            false => named(&glyph),
-        };
-        color.map_or(inherited.color, Paint::from)
-    })?;
-    let shell = {
-        let look = look.clone();
-        move || look.shell()
+    let name = Reactive::of(name);
+    let button = ControlButton {
+        shape: Rc::new(shape),
+        name: name.clone(),
+        paint,
+        look,
+        press,
     };
-    let rest = look.style.clone();
-    let over = look.style;
-    let button = StyledContainer::new(
-        shell(),
-        move |_| amend_surface(RectStyle::default(), &rest),
-        vec![mark],
-    )?
-    .styled_by(shell)
-    .hover_style(move |_| {
-        let fill = shared::resolve(&hover, shared::hover_wash);
-        amend_surface(RectStyle::default().with_fill(fill), &over)
-    })
-    .on_hover(move |over| hovered.set(over))
-    .control(Role::Button)
-    .a11y_label(name.clone())
-    .on_press(move || press())
-    .holds_stroke();
-    hinted(button, name)
+    shared::hinted(move || button.build(), name, Reactive::default())
 }
 
-#[cfg(feature = "overlays")]
-fn hinted(
-    button: StyledContainer,
-    name: impl Fn() -> String + 'static,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut slots = telar::Slots::new();
-    slots.push(None, box_item(button));
-    crate::tooltip(
-        crate::TooltipProps::props()
-            .text(Reactive::of(name))
-            .build(),
-        Children::from(slots),
-    )
+/// Everything one window-control button is built from, so the tooltip naming it can build it wherever and however often it places it.
+#[derive(Clone)]
+struct ControlButton {
+    shape: Rc<dyn Fn() -> Mark>,
+    name: Reactive<String>,
+    paint: ControlPaint,
+    look: ControlLook,
+    press: Rc<dyn Fn()>,
 }
 
-#[cfg(not(feature = "overlays"))]
-fn hinted(
-    button: StyledContainer,
-    _name: impl Fn() -> String + 'static,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    Ok(box_item(button))
+impl ControlButton {
+    fn build(&self) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let ControlButton {
+            shape,
+            name,
+            paint,
+            look,
+            press,
+        } = self.clone();
+        let ControlPaint {
+            glyph,
+            hover,
+            hover_glyph,
+        } = paint;
+        let hovered = signal(false);
+        let mark = shared::mark(
+            move || shape(),
+            move |inherited| {
+                let color = match hovered.get() {
+                    true => named(&hover_glyph).or_else(|| named(&glyph)),
+                    false => named(&glyph),
+                };
+                color.map_or(inherited.color, Paint::from)
+            },
+        )?;
+        let shell = {
+            let look = look.clone();
+            move || look.shell()
+        };
+        let rest = look.style.clone();
+        let over = look.style;
+        let button = StyledContainer::new(
+            shell(),
+            move |_| amend_surface(RectStyle::default(), &rest),
+            vec![mark],
+        )?
+        .styled_by(shell)
+        .hover_style(move |_| {
+            let fill = shared::resolve(&hover, shared::hover_wash);
+            amend_surface(RectStyle::default().with_fill(fill), &over)
+        })
+        .on_hover(move |over| hovered.set(over))
+        .control(Role::Button)
+        .a11y_label(move || name.get())
+        .on_press(move || press())
+        .holds_stroke();
+        Ok(box_item(button))
+    }
 }
 
 /// A window's minimize, maximize and close buttons, in that order, as one group a reader hears as the window's.
 ///
 /// Maximize follows the window: while it is maximized the button draws two offset squares and is named Restore, and pressing it restores the window. Minimize and maximize ask the platform through [`telar::window`]; on a surface without a top-level window they do nothing, so a backend that cannot honour them turns them off.
-pub fn window_controls(
-    props: WindowControlsProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn window_controls(props: WindowControlsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let WindowControlsProps {
         minimize,
         maximize,

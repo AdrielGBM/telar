@@ -37,9 +37,9 @@ A plugin's own tokens, the fields a theme marks `#[theme(extension)]` (see [plug
 belong to the theme that carries them: under a subtree's theme a plugin reads that theme's value, or its own
 default when that theme supplies none, never the value of a theme further out.
 
-## Components and their slots
+## Components and their children
 
-A component's `theme:` reaches what a call site nests inside it. The `children` placeholder builds its slot where
+A component's `theme:` reaches what a call site nests inside it. The `children $props.children` placeholder builds that prop where
 it stands, under the node it is placed in, so those children draw in the theme in force there, exactly as a child
 written inline would:
 
@@ -51,19 +51,19 @@ let ctx = Context { progress, calm };
 [view]
 col theme:(palette) fill:$theme.background
     col sticky
-        children in:ctx
+        children $props.children in:ctx
 ```
 
 The same holds for every scope around the placeholder: a context an owner above provides, a locale, and the value
-`in:` hands the slot, which stays readable through `use_context` when the children draw or handle an event later,
-not only while they are built. Each `children` placement builds its own slot, so a placeholder inside a reactive
+`in:` hands the children, which stay readable through `use_context` when the children draw or handle an event later,
+not only while they are built. Each `children` placement builds its own copy, so a placeholder inside a reactive
 `if`/`for` builds its children again whenever the branch is rebuilt.
 
-In Rust, `Children::build_slot(slot)` and `Children::build_slot_with(slot, context)` build one slot under the
-current owner; `build()` and `build_with(context)` build every slot at once. A component written in Rust that wants
-its children inside a scope builds them inside it.
+In Rust, `Children::build()` and `Children::build_with(context)` build a `Children` prop under the current owner,
+and a named one such as `header` is built the same way. A component written in Rust that wants its children inside a
+scope builds them inside it.
 
-Every target behaves the same: slots are built when the tree is, before any backend sees it.
+Every target behaves the same: children are built when the tree is, before any backend sees it.
 
 ## Roles
 
@@ -189,7 +189,7 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 
 ## One instance: `style`
 
-A single call site restyles a component's principal surface with `@class` or the `style` prop, an
+A single call site restyles a component's principal surface with `@class` or the `style` prop (a part such as a header takes `header_style:@class`), an
 `Option<SurfaceAmendment>`: a closure over the paint the component worked out, run in every state, hover and press
 included, after the component's own paint. What every instance should agree on belongs in a role or in the
 component's tokens instead. See [plugins](plugins.md#class-and-surfacestyle) for how a component accepts it.

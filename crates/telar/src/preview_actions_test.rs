@@ -118,18 +118,23 @@ fn the_props_log_their_required_callbacks_too() {
 struct ClickerProps {
     #[props(default = Rc::new(|| {}))]
     on_press: Rc<dyn Fn()>,
+    #[props(default)]
+    children: Children,
 }
 
 /// Presses itself as it builds, standing in for a user's tap.
-fn clicker(props: ClickerProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn clicker(props: ClickerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     (props.on_press)();
-    Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?))
+    Ok(box_item(Container::new(
+        LayoutStyle::new(),
+        props.children.build()?,
+    )?))
 }
 
 #[test]
 fn a_preview_logs_the_calls_of_a_callback_it_leaves_unset() {
     let entry = preview!(clicker: ClickerProps, "Default", |_| {
-        clicker(ClickerProps::props().build(), Children::default())
+        clicker(ClickerProps::props().build())
     });
     reset_layout_runtime();
     let ctx = PreviewCtx::default();
@@ -141,32 +146,29 @@ fn a_preview_logs_the_calls_of_a_callback_it_leaves_unset() {
 fn a_preview_logs_a_callback_it_sets_and_runs_it() {
     let entry = preview!(clicker: ClickerProps, "Counting", |p| {
         let presses = p.signal("presses", 0u32);
-        let nested = Children::new(move || {
-            let mut slots = telar::Slots::new();
-            slots.push(
-                None,
-                clicker(ClickerProps::props().build(), Children::default())?,
-            );
-            Ok(slots)
-        });
+        let nested = Children::new(move || Ok(vec![clicker(ClickerProps::props().build())?]));
         clicker(
             ClickerProps::props()
                 .on_press(Rc::new(move || presses.update(|count| *count += 1)))
+                .children(nested)
                 .build(),
-            nested,
         )
     });
     reset_layout_runtime();
     let ctx = PreviewCtx::default();
     entry.build_root(&ctx).expect("the preview builds");
     assert_eq!(ctx.signal("presses", 0u32).get(), 1);
-    assert_eq!(ctx.actions().count_of("on_press"), 1);
+    assert_eq!(
+        ctx.actions().count_of("on_press"),
+        2,
+        "the nested call is logged too, and the children prop it was handed in passes through"
+    );
 }
 
 #[test]
 fn a_preview_without_props_logs_nothing() {
     let entry = preview!(clicker, "Bare", |_| {
-        clicker(ClickerProps::props().build(), Children::default())
+        clicker(ClickerProps::props().build())
     });
     reset_layout_runtime();
     let ctx = PreviewCtx::default();

@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Key, NamedKey, Role};
+use telar::{Key, NamedKey, Role};
 
 use crate::search_field::{SearchFieldProps, search_field};
 
@@ -12,7 +12,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .value(value)
                     .width(p.arg("width", 280.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Search field")

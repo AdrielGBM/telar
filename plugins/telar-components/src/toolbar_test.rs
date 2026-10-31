@@ -3,7 +3,7 @@ use std::cell::Cell;
 use super::*;
 use crate::{IconButtonProps, icon_button};
 use telar::testing::named;
-use telar::{AvailableSpace, ComponentList, Container, Slots, compute_layout};
+use telar::{AvailableSpace, ComponentList, Container, compute_layout};
 
 struct Bar {
     tree: ComponentList,
@@ -16,7 +16,7 @@ fn bar(disabled: [bool; 3]) -> Bar {
     let fired: Rc<[Cell<u32>; 3]> = Rc::new(Default::default());
     let items = fired.clone();
     let children = Children::new(move || {
-        let mut slots = Slots::new();
+        let mut built = Vec::new();
         for (index, off) in disabled.into_iter().enumerate() {
             let sink = items.clone();
             let item = icon_button(
@@ -26,14 +26,19 @@ fn bar(disabled: [bool; 3]) -> Bar {
                     .disabled(off)
                     .on_press(Rc::new(move || sink[index].set(sink[index].get() + 1)))
                     .build(),
-                Children::default(),
             )
             .unwrap();
-            slots.push(None, item);
+            built.push(item);
         }
-        Ok(slots)
+        Ok(built)
     });
-    let bar = toolbar(ToolbarProps::props().label("Tools").build(), children).unwrap();
+    let bar = toolbar(
+        ToolbarProps::props()
+            .label("Tools")
+            .children(children)
+            .build(),
+    )
+    .unwrap();
     let root = Container::new(
         LayoutStyle::new().flex_row().width(400.0).height(100.0),
         vec![bar],
@@ -231,7 +236,7 @@ fn a_vertical_toolbar_keeps_up_and_down_whatever_the_direction() {
     let fired: Rc<[Cell<u32>; 2]> = Rc::new(Default::default());
     let items = fired.clone();
     let children = Children::new(move || {
-        let mut slots = Slots::new();
+        let mut built = Vec::new();
         for index in 0..2 {
             let sink = items.clone();
             let item = icon_button(
@@ -240,16 +245,18 @@ fn a_vertical_toolbar_keeps_up_and_down_whatever_the_direction() {
                     .label(format!("Item {index}"))
                     .on_press(Rc::new(move || sink[index].set(sink[index].get() + 1)))
                     .build(),
-                Children::default(),
             )
             .unwrap();
-            slots.push(None, item);
+            built.push(item);
         }
-        Ok(slots)
+        Ok(built)
     });
     let item = toolbar(
-        ToolbarProps::props().label("Tools").vertical(true).build(),
-        children,
+        ToolbarProps::props()
+            .label("Tools")
+            .vertical(true)
+            .children(children)
+            .build(),
     )
     .unwrap();
     telar::testing::lay_out(item.layout_node(), 100.0, 400.0);

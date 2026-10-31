@@ -3,8 +3,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use telar::{
-    Axis, Children, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, Rect,
-    RwSignal, StyledContainer, box_item, children, insertion_index, signal, track_layout,
+    Axis, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, Rect, RwSignal,
+    StyledContainer, box_item, children, insertion_index, signal, track_layout,
 };
 
 /// One item's widget, built on demand from its position in the caller's storage.
@@ -48,10 +48,7 @@ pub struct ReorderableProps {
 }
 
 /// A strip whose items are dragged along it to reorder.
-pub fn reorderable(
-    props: ReorderableProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ReorderableProps {
         count,
         item,

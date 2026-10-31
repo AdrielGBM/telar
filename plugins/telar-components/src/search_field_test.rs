@@ -26,7 +26,6 @@ impl Mounted {
                 }))
                 .on_clear(Rc::new(move || cleared.borrow_mut().push("clear".into())))
                 .build(),
-            Children::default(),
         )
         .unwrap();
         lay_out(item.layout_node(), 400.0, 200.0);

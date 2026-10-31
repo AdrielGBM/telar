@@ -79,24 +79,11 @@ impl ViewGen<'_> {
             .iter()
             .any(|hole| hole.contains('$') || self.reads_reactive_context(hole));
         if capturing {
-            let locals: Vec<String> = self
-                .locals
-                .iter()
-                .filter(|local| {
-                    *local != "props" && self.must_copy_capture(self.reads.local(local))
-                })
-                .cloned()
-                .collect();
-            let captured = super::signals::captured_idents_with(
-                &holes,
-                &self.loop_variables,
-                &locals,
-                self.theme_access,
-            );
+            let scoped = super::signals::unscoped(&holes);
             clones.extend(
-                captured.iter().map(|name| {
-                    format!("let {}{name} = {name}.clone();", super::shadow_marker(name))
-                }),
+                self.captured_names(&scoped)
+                    .iter()
+                    .map(|name| super::signals::clone_statement(name)),
             );
         }
         Interpolated::Formatted {
@@ -125,23 +112,12 @@ impl ViewGen<'_> {
             return self.render_interp_expr(expr, raw_start);
         }
         let lead = expr.len() - expr.trim_start().len();
-        let mut rewritten = String::with_capacity(trimmed.len());
-        let mut done = 0;
-        for (start, end) in copied {
-            let place = &trimmed[start..end];
-            let binding = format!("__{}", crate::rust::place_text(place).replace('.', "_"));
-            let marker = raw_start
+        let marker = |start: usize, place: &str| {
+            raw_start
                 .map(|at| expr_marker(at + lead + start, place.len()))
-                .unwrap_or_default();
-            let copy = format!("let {binding} = {marker}{place}.clone();");
-            if !clones.contains(&copy) {
-                clones.push(copy);
-            }
-            rewritten.push_str(&trimmed[done..start]);
-            rewritten.push_str(&binding);
-            done = end;
-        }
-        rewritten.push_str(&trimmed[done..]);
+                .unwrap_or_default()
+        };
+        let rewritten = super::signals::copy_places(trimmed, &copied, marker, clones);
         let body = match rewritten.contains('$') {
             true => substitute_reads(&rewritten, self.theme_access),
             false => rewritten,
@@ -214,15 +190,14 @@ impl ViewGen<'_> {
         format_arg(format!("{marker}{trimmed}"))
     }
 
-    /// Resolves a color reference: an inline hex value, a `$signal` read, a computed reactive expression, a CSS keyword, a `Color::*` literal, a `[style]`-declared local constant, or a theme field.
+    /// Resolves a color reference: an inline hex value, a `$signal` read, a computed reactive expression, a CSS keyword, a `Color::*` literal, or any other expression, emitted as written.
     ///
     /// Lookup order:
     /// 1. Inline hex → static expression.
     /// 2. A bare `$ident` → `ident.get()`, a reactive read of a `RwSignal<Color>` (or compatible) in scope.
-    /// 3. A computed expression — a call, method chain, or arithmetic that yields a `Color`, recognized by a `(` or an embedded `$` beyond a bare handle (e.g. `chip_fill($snapshot, id)` for state-driven paint). `$signal` reads are made reactive via `substitute_reads`; the rest is emitted verbatim. For (2) and (3) the caller clones any captured signal into the enclosing `move` paint closure (see `wrap_signal_clones`), so the color re-reads and the outer handle stays usable.
+    /// 3. A computed expression — a call, method chain, or arithmetic that yields a `Color`, recognized by a `(` or an embedded `$` beyond a bare handle (e.g. `chip_fill($snapshot, id)` for state-driven paint). `$signal` reads are made reactive via `substitute_reads`; the rest is emitted verbatim. For (2) and (3) the enclosing `move` paint closure takes its captures by [`ViewGen::owning`], so the color re-reads and the outer handle stays usable.
     /// 4. `Color::*` literal / CSS keyword → static expression.
-    /// 5. A `[logic]` binding of that name → the binding itself, so a local shadows a same-named token the way it would in Rust.
-    /// 6. Anything else → verbatim: a `[style]` constant, or rustc catches the missing symbol.
+    /// 5. Anything else, a `[logic]` binding included → verbatim: a `[style]` constant, or rustc catches the missing symbol.
     ///
     /// A `$theme.x` is one of (3), so it reads the theme wherever it is written: `theme.get().x`, or a library's `::telar::use_theme_tokens().x()`.
     ///

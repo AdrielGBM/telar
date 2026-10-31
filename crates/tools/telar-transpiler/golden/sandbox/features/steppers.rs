@@ -15,7 +15,7 @@
 pub struct SteppersProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn steppers(props: SteppersProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -25,118 +25,92 @@ pub fn steppers(props: SteppersProps, children: Children) -> Result<Box<dyn Layo
     let last_change = signal("no change yet".to_string());
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Stepper").desc("stepper is a numeric input with − / + buttons that step a bound value within min/max. A component built on the button primitive; the value reads back in your own range, no memo needed.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Stepper").desc("stepper is a numeric input with − / + buttons that step a bound value within min/max. A component built on the button primitive; the value reads back in your own range, no memo needed.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let qty = qty.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let qty = qty.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let qty = qty.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let qty = qty.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_0 = {
-                                            let __node_3 = stepper(StepperProps::props().value(qty.clone()).min(::telar::Int(0)).max(::telar::Int(10)).step(::telar::Int(1)).build(), Children::default())?;
-                                            let __text_0 = {
-                                                let qty = qty.clone();
-                                                Text::declaring(
-                                                    move || format!("qty · {}", qty.get()),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                                )?
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__node_3, __text_0])?
-                                        };
-                                        __children.push(box_item(__row_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_4 = code_line(CodeLineProps::props().code("stepper value:$qty min:0 max:10 step:1").build(), Children::default())?;
-                        __children.push(box_item(__node_4));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let qty = qty.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __node_3 = stepper(StepperProps::props().value(qty.clone()).min(::telar::Int(0)).max(::telar::Int(10)).step(::telar::Int(1)).build())?;
+                                    let __text_0 = {
+                                        let qty = qty.clone();
+                                        Text::declaring(
+                                            move || format!("qty · {}", qty.get()),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__node_3, __text_0])?
+                                };
+                                __children.push(box_item(__row_0));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_4 = code_line(CodeLineProps::props().code("stepper value:$qty min:0 max:10 step:1").build())?;
+                    __children.push(box_item(__node_4));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("stepper — bound value, clamped to min/max, stepped by step").build(), __deferred)?
+            example(ExampleProps::props().title("stepper — bound value, clamped to min/max, stepped by step").children(__recipe_children).build())?
         };
         let __node_5 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let seats = seats.clone();
                     let last_change = last_change.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let seats = seats.clone();
-                    let last_change = last_change.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_6 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let seats = seats.clone();
-                                    let last_change = last_change.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let seats = seats.clone();
-                                    let last_change = last_change.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_1 = {
-                                            let __node_7 = stepper(StepperProps::props().value(seats.clone()).min(::telar::Int(1)).max(::telar::Int(8)).step(::telar::Int(1)).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build(), Children::default())?;
-                                            let __text_1 = {
-                                                let last_change = last_change.clone();
-                                                Text::declaring(
-                                                    move || format!("{}", last_change.get()),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                                )?
-                                            };
-                                            Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__node_7, __text_1])?
-                                        };
-                                        __children.push(box_item(__row_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_6));
-                        let __node_8 = code_line(CodeLineProps::props().code("stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)").build(), Children::default())?;
-                        __children.push(box_item(__node_8));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_6 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let seats = seats.clone();
+                                let last_change = last_change.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_1 = {
+                                    let __node_7 = stepper(StepperProps::props().value(seats.clone()).min(::telar::Int(1)).max(::telar::Int(8)).step(::telar::Int(1)).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build())?;
+                                    let __text_1 = {
+                                        let last_change = last_change.clone();
+                                        Text::declaring(
+                                            move || format!("{}", last_change.get()),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__node_7, __text_1])?
+                                };
+                                __children.push(box_item(__row_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_6));
+                    let __node_8 = code_line(CodeLineProps::props().code("stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)").build())?;
+                    __children.push(box_item(__node_8));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("on_change — a callback beside the binding, for the work a tap has to trigger").build(), __deferred)?
+            example(ExampleProps::props().title("on_change — a callback beside the binding, for the work a tap has to trigger").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5])?
     };

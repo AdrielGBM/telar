@@ -1,7 +1,7 @@
 #[cfg(feature = "overlays")]
 use telar::relayout_if_dirty;
 use telar::{
-    AvailableSpace, Children, ComponentList, DrawCommand, LayoutItem, LayoutStyle, compute_layout,
+    AvailableSpace, ComponentList, DrawCommand, LayoutItem, LayoutStyle, compute_layout,
     new_container, signal,
 };
 #[cfg(feature = "overlays")]
@@ -40,18 +40,14 @@ fn lay_out(item: Box<dyn LayoutItem>) -> ComponentList {
 
 pub fn select_placeholder() -> Vec<String> {
     reset();
-    let item = select(
-        SelectProps::props().selected(signal(0u32)).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = select(SelectProps::props().selected(signal(0u32)).build()).unwrap();
     drawn_text(&lay_out(item))
 }
 
 #[cfg(feature = "overlays")]
 pub fn open_modal(props: ModalProps) -> Vec<String> {
     reset();
-    let item = modal(props, Children::default()).unwrap();
+    let item = modal(props).unwrap();
     let tree = lay_out(item);
     relayout_if_dirty();
     drawn_text(&tree)

@@ -7,28 +7,29 @@
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 
-// The standard surface panel used across the sandbox. The card recipe (fill:$theme.surface stroke:$theme.border
-// radius:12 pad:16) lives here once instead of inline at every call site. `gap` spaces the stacked
-// body children (pass 0 for a single child). `pad` overrides the 16px inset via the `= 16.0` inline
-// default, so an omitted `pad` is 16 while `pad:0` genuinely means zero. An optional "header" slot renders above the body.
+// `pad` defaults through `= 16.0`, so an omitted `pad` is 16 while `pad:0` means zero.
 #[derive(::telar::Props)]
 pub struct CardProps {
     #[props(default)]
     pub gap: f32,
     #[props(default = 16.0)]
     pub pad: f32,
+    #[props(default)]
+    pub header: Children,
+    #[props(default)]
+    pub children: Children,
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn card(props: CardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn card(props: CardProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __sbox_0 = {
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-        __children.extend(children.build_slot(Some("header"))?);
-        __children.extend(children.build_slot(None)?);
-        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, __children)?.styled_by({ let props = props.clone(); move || LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered() })
+        __children.extend(props.header.build()?);
+        __children.extend(props.children.build()?);
+        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, __children)?.styled_by(move || LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered())
     };
     Ok(Box::new(__sbox_0))
 }
@@ -40,47 +41,49 @@ pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
-        let __deferred = Children::per_slot(
+        let __recipe_header = Children::new(
             {
                 let theme = theme.clone();
-            move |__request: SlotRequest<'_>| {
-                let theme = theme.clone();
-                let mut __slots = Slots::new();
+            move || {
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                if __request.includes(Some("header")) {
-                    let __text_0 = {
-                        Text::declaring(
-                            || "Header".to_string(),
-                            LayoutStyle::new(),
-                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
-                        )?
-                    };
-                    __slots.push(Some("header"), box_item(__text_0));
-                }
-                if __request.includes(None) {
-                    let __text_1 = {
-                        Text::declaring(
-                            || "A card is the standard surface panel.".to_string(),
-                            LayoutStyle::new(),
-                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                        )?
-                    };
-                    __children.push(box_item(__text_1));
-                    let __text_2 = {
-                        Text::declaring(
-                            || "Bare children stack with the gap you pass; slot:\"header\" pins a header on top.".to_string(),
-                            LayoutStyle::new(),
-                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                        )?
-                    };
-                    __children.push(box_item(__text_2));
-                }
-                __slots.extend_default(__children);
-                Ok(__slots)
+                let __text_0 = {
+                    Text::declaring(
+                        || "Header".to_string(),
+                        LayoutStyle::new(),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
+                    )?
+                };
+                __children.push(box_item(__text_0));
+                Ok(__children)
             }
             }
         );
-        card(CardProps::props().gap(::telar::__preview_arg!(__preview, "gap", ::telar::Int(8))).__preview_actions(&__preview.actions()).build(), __deferred)?
+        let __recipe_children = Children::new(
+            {
+                let theme = theme.clone();
+            move || {
+                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                let __text_1 = {
+                    Text::declaring(
+                        || "A card is the standard surface panel.".to_string(),
+                        LayoutStyle::new(),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                    )?
+                };
+                __children.push(box_item(__text_1));
+                let __text_2 = {
+                    Text::declaring(
+                        || "Bare children stack with the gap you pass; slot:\"header\" pins a header on top.".to_string(),
+                        LayoutStyle::new(),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                    )?
+                };
+                __children.push(box_item(__text_2));
+                Ok(__children)
+            }
+            }
+        );
+        card(CardProps::props().gap(::telar::__preview_arg!(__preview, "gap", ::telar::Int(8))).header(__recipe_header).children(__recipe_children).__preview_actions(&__preview.actions()).build())?
     };
     Ok(Box::new(__node_0))
 }
@@ -88,10 +91,10 @@ pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
 pub const CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--card--card"), "card", "Card", card_preview_0)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/card.rsx"), 20)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/card.rsx"), 21)
         .title("Sandbox/Card")
         .docs("The standard surface panel: a rounded, bordered container with an optional header slot above its stacked body.")
-        .source("[preview \"Card\" matrix:(mode:[modern midnight])]\ncard gap:8\n    text \"Header\" font_size:16 color:$theme.ink slot:\"header\"\n    text \"A card is the standard surface panel.\" font_size:13 color:$theme.muted\n    text \"Bare children stack with the gap you pass; slot:\\\"header\\\" pins a header on top.\" font_size:13 color:$theme.muted", &[::telar::preview::SourceSpan::new(0, 326, 20)])
+        .source("[preview \"Card\" matrix:(mode:[modern midnight])]\ncard gap:8\n    text \"Header\" font_size:16 color:$theme.ink slot:\"header\"\n    text \"A card is the standard surface panel.\" font_size:13 color:$theme.muted\n    text \"Bare children stack with the gap you pass; slot:\\\"header\\\" pins a header on top.\" font_size:13 color:$theme.muted", &[::telar::preview::SourceSpan::new(0, 326, 21)])
         .props(<CardProps as ::telar::preview::HasPropsSchema>::schema)
         .args(&[::telar::preview::ArgSpec::new("gap").default("8.0")])
         .layout(::telar::preview::Layout::Centered)

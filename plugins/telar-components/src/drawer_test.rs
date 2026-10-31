@@ -1,34 +1,20 @@
 use super::*;
+use crate::test_support::{find_text, tall_body, text_body};
 use telar::{
-    AvailableSpace, ComponentList, DrawCommand, Text, compute_layout, new_container,
-    relayout_if_dirty, signal,
+    AvailableSpace, ComponentList, DrawCommand, compute_layout, new_container, relayout_if_dirty,
+    signal,
 };
-
-fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
-    cmds.iter()
-        .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
-}
-
-fn slot_with_body(label: &'static str) -> Slots {
-    let body = Text::declaring(
-        move || label.to_string(),
-        LayoutStyle::new().height(20.0),
-        |t| t,
-    )
-    .unwrap();
-    let mut slots = Slots::new();
-    slots.push(None, box_item(body));
-    slots
-}
 
 #[test]
 fn open_shows_panel_and_close_hides_it() {
     crate::test_support::fresh_layout_runtime();
     let open = signal(false);
-    let slots = slot_with_body("Drawer body");
     let drawer = drawer(
-        DrawerProps::props().open(open).side("right").build(),
-        Children::from(slots),
+        DrawerProps::props()
+            .open(open)
+            .side("right")
+            .children(text_body("Drawer body"))
+            .build(),
     )
     .unwrap();
 
@@ -68,8 +54,12 @@ fn open_shows_panel_and_close_hides_it() {
 #[test]
 fn unbound_drawer_renders_nothing() {
     crate::test_support::fresh_layout_runtime();
-    let slots = slot_with_body("Drawer body");
-    let drawer = drawer(DrawerProps::props().build(), Children::from(slots)).unwrap();
+    let drawer = drawer(
+        DrawerProps::props()
+            .children(text_body("Drawer body"))
+            .build(),
+    )
+    .unwrap();
     let tree = ComponentList::new(drawer);
     assert!(
         !find_text(&tree.commands(), "Drawer body"),
@@ -82,8 +72,11 @@ fn a_named_drawer_is_a_dialog_to_a_reader() {
     crate::test_support::fresh_layout_runtime();
     let open = signal(true);
     let drawer = drawer(
-        DrawerProps::props().open(open).label("Filters").build(),
-        Children::from(slot_with_body("Drawer body")),
+        DrawerProps::props()
+            .open(open)
+            .label("Filters")
+            .children(text_body("Drawer body"))
+            .build(),
     )
     .unwrap();
     let root = new_container(
@@ -111,7 +104,11 @@ fn a_named_drawer_is_a_dialog_to_a_reader() {
 fn open_drawer(props: DrawerProps) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
     let tree = telar::testing::scoped(|| {
-        let drawer = drawer(props, Children::from(slot_with_body("Drawer body"))).unwrap();
+        let drawer = drawer(DrawerProps {
+            children: text_body("Drawer body"),
+            ..props
+        })
+        .unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             &[drawer.layout_node()],
@@ -227,28 +224,18 @@ fn a_style_amendment_and_the_overlay_role_reach_the_open_drawer() {
     )));
 }
 
-fn tall_body(lines: usize) -> Slots {
-    let mut slots = Slots::new();
-    for line in 0..lines {
-        let text = Text::declaring(
-            move || format!("Line {line}"),
-            LayoutStyle::new().height(20.0),
-            |t| t,
-        )
-        .unwrap();
-        slots.push(None, box_item(text));
-    }
-    slots
-}
-
 fn open_drawer_in(
     window: (f32, f32),
-    body: impl FnOnce() -> Slots,
+    body: Children,
     props: DrawerProps,
 ) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
     let tree = telar::testing::scoped(|| {
-        let drawer = drawer(props, Children::from(body())).unwrap();
+        let drawer = drawer(DrawerProps {
+            children: body,
+            ..props
+        })
+        .unwrap();
         let root = new_container(
             LayoutStyle::new()
                 .flex_column()
@@ -274,7 +261,7 @@ fn a_panel_wider_than_the_window_is_cut_to_the_window() {
     for width in [150.0, 280.0] {
         let tree = open_drawer_in(
             (width, 400.0),
-            || slot_with_body("Drawer body"),
+            text_body("Drawer body"),
             DrawerProps::props().open(signal(true)).width(500.0).build(),
         );
         let rect = panel(&tree).0;
@@ -286,7 +273,7 @@ fn a_panel_wider_than_the_window_is_cut_to_the_window() {
 fn a_tall_body_scrolls_inside_a_panel_as_tall_as_the_window() {
     let tree = open_drawer_in(
         (400.0, 300.0),
-        || tall_body(40),
+        tall_body(40),
         DrawerProps::props().open(signal(true)).build(),
     );
     let rect = panel(&tree).0;

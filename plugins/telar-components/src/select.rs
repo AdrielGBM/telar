@@ -2,8 +2,6 @@
 
 use std::rc::Rc;
 
-#[cfg(test)]
-use telar::Slots;
 use telar::{
     Children, Color, LayoutError, LayoutItem, Props, Reactive, RwSignal, SurfaceAmendment, signal,
 };
@@ -100,23 +98,33 @@ pub struct SelectProps {
     /// Amends the paint of the trigger — this component's **principal surface** — at rest, hovered and held open. See [`telar::SurfaceStyle`] for when a theme token or [`SelectTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// The choices, as [`item`](crate::item)s.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A field that opens a list and writes the picked index back.
-pub fn select(props: SelectProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let rows = children;
+pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let SelectProps {
+        selected,
+        color,
+        on_select,
+        stretch,
+        style,
+        children,
+    } = props;
     // `None` selection is uncontrolled: own an internal signal so the trigger still tracks a choice.
-    let selected = props.selected.unwrap_or_else(|| signal(0u32));
+    let selected = selected.unwrap_or_else(|| signal(0u32));
     dropdown::dropdown(dropdown::Dropdown {
         placeholder: || strings::text(strings::SELECT),
-        rows,
-        color: props.color,
-        on_pick: props.on_select,
+        rows: children,
+        color,
+        on_pick: on_select,
         selected,
-        stretch: props.stretch,
+        stretch,
         geometry: SelectTokens::geometry,
         offset: SelectTokens::current_offset,
-        style: props.style,
+        style,
     })
 }
 

@@ -67,7 +67,7 @@ the app owns the window's title bar.
 use telar_components::{TitleBarOptions, WindowControlsProps, title_bar, window_controls, window_edges};
 
 let title = Text::declaring(telar::window::title, LayoutStyle::new(), |text| text)?;
-let controls = window_controls(WindowControlsProps::props().build(), Children::default())?;
+let controls = window_controls(WindowControlsProps::props().build())?;
 let bar = StyledContainer::new(bar_style(), |_| RectStyle::default(), vec![box_item(title), controls])?
     .role(Role::Banner);
 let bar = title_bar(bar, TitleBarOptions { replace_decorations: true, ..TitleBarOptions::default() });

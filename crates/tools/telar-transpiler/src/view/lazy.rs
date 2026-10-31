@@ -4,10 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::Element;
 
-use super::signals::{
-    captured_in_scope, clone_block_multiline, rust_str, scoped_snippets, substitute_reads,
-    wrap_signal_clones,
-};
+use super::signals::{rust_str, scoped_snippets, substitute_reads};
 use super::{ChildEmit, ChildMode, ViewGen, forces_child_vec};
 
 impl ViewGen<'_> {
@@ -37,10 +34,9 @@ impl ViewGen<'_> {
             Some(attr) => {
                 let raw = attr.value.text();
                 let raw = super::redundant_parens(raw.trim()).unwrap_or(raw.trim());
-                wrap_signal_clones(
+                self.owning(
                     &[raw],
-                    format!("move || {}", substitute_reads(raw, self.theme_access)),
-                    self.theme_access,
+                    &format!("move || {}", substitute_reads(raw, self.theme_access)),
                 )
             }
             // Without a condition there is nothing to defer until, which is a mistake rather than a request to build now.
@@ -64,13 +60,7 @@ impl ViewGen<'_> {
         let _ = write!(body, "{pad}    }}");
 
         let snippets = scoped_snippets(&el.children, &[]);
-        let idents = captured_in_scope(
-            &snippets,
-            &self.loop_variables,
-            &self.locals,
-            self.theme_access,
-        );
-        let build = clone_block_multiline(&idents, body, &format!("{pad}        "));
+        let build = self.owning_subtree(&snippets, body, &format!("{pad}        "));
 
         let _ = writeln!(code, "{pad}    Lazy::new(");
         let _ = writeln!(code, "{pad}        {style},");

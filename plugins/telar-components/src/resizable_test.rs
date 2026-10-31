@@ -17,7 +17,7 @@ fn fresh() {
 
 fn mount(props: ResizableProps) -> telar::testing::Scoped<ComponentList> {
     fresh();
-    telar::testing::scoped(|| tree(resizable(props, Children::default()).unwrap()))
+    telar::testing::scoped(|| tree(resizable(props).unwrap()))
 }
 
 fn tree(item: Box<dyn LayoutItem>) -> ComponentList {
@@ -350,7 +350,7 @@ fn every_drag_starts_once_and_ends_once_with_whether_it_was_kept() {
 
 fn lone_handle(props: ResizeHandleProps) -> ComponentList {
     fresh();
-    let handle = resize_handle(props, Children::default()).unwrap();
+    let handle = resize_handle(props).unwrap();
     let row = Container::new(LayoutStyle::row().height(80.0), vec![handle]).unwrap();
     tree(box_item(row))
 }

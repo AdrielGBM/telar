@@ -28,6 +28,9 @@ struct SliderProps {
     locked: bool,
     #[props(default = Rc::new(|_| {}))]
     on_change: Rc<dyn Fn(f32)>,
+    /// Drawn along the track.
+    #[props(default)]
+    marks: Children,
 }
 
 fn schema() -> &'static PropsSchema {
@@ -52,7 +55,15 @@ fn the_fields_are_listed_in_declaration_order() {
     let names: Vec<&str> = schema().fields.iter().map(|field| field.name).collect();
     assert_eq!(
         names,
-        ["label", "value", "hint", "track", "locked", "on_change"]
+        [
+            "label",
+            "value",
+            "hint",
+            "track",
+            "locked",
+            "on_change",
+            "marks"
+        ]
     );
     assert!(schema().field("missing").is_none());
 }
@@ -116,6 +127,10 @@ fn a_type_without_a_control_is_read_only() {
             .is_read_only(),
         "a callback is not a control"
     );
+    assert!(
+        schema().field("marks").unwrap().control().is_read_only(),
+        "content handed to a component is not a control"
+    );
 }
 
 #[test]
@@ -145,7 +160,7 @@ fn a_component_s_props_carry_its_docs() {
 }
 
 fn build_dot(_: &telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    dot(DotProps::props().build(), Children::default())
+    dot(DotProps::props().build())
 }
 
 const DOT_PREVIEW: PreviewEntry =

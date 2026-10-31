@@ -1,8 +1,6 @@
 //! [`modal`]: a dialog portaled over the page, dismissed by its scrim, its Close or Escape.
 
 use std::rc::Rc;
-#[cfg(test)]
-use telar::Slots;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, RectStyle, RwSignal,
@@ -89,7 +87,7 @@ fn backdrop() -> LayoutStyle {
         .padding_all(ModalTokens::current().pad())
 }
 
-/// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque surface card holding the `title`, the slot children (the dialog body) and a Close affordance; when false it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
+/// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque surface card holding the `title`, its `children` (the dialog body) and a Close affordance; when false it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
 #[derive(Props)]
 pub struct ModalProps {
     /// Bound open/close state. `None` (the default) never opens (no signal to read); `Some` drives the modal.
@@ -113,10 +111,13 @@ pub struct ModalProps {
     /// Amends the paint of the dialog's card — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ModalTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// The dialog body, under its title.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A dialog portaled over the page, dismissed by its scrim, its Close or Escape.
-pub fn modal(props: ModalProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn modal(props: ModalProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ModalProps {
         open,
         id,
@@ -125,14 +126,22 @@ pub fn modal(props: ModalProps, children: Children) -> Result<Box<dyn LayoutItem
         close_label,
         color,
         style,
+        children,
     } = props;
     let open = shared::resolve_open(open, id);
+    let paint: Rc<dyn Fn() -> RectStyle> =
+        Rc::new(move || amend_surface(card_paint(&color), &style));
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {
         // Built on the first open rather than here: a body built while the dialog has never opened would register its focus stops with nothing on screen to take them.
-        let body = children.build()?.take_default();
-        let paint = Rc::new(move || amend_surface(card_paint(&color), &style));
-        build_open_modal(title, close_label, body, paint, dismiss)
+        let body = children.build()?;
+        build_open_modal(
+            title.clone(),
+            close_label.clone(),
+            body,
+            paint.clone(),
+            dismiss,
+        )
     })
 }
 
@@ -146,10 +155,7 @@ fn build_open_modal(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = title.clone();
     let body_name = title.clone();
-    let heading = heading(
-        HeadingProps::props().text(title).build(),
-        Children::default(),
-    )?;
+    let heading = heading(HeadingProps::props().text(title).build())?;
 
     let close_label = Text::declaring(
         move || match &close_label {

@@ -1,9 +1,9 @@
 //! A hot-reload guest the `hot_panic` test in `telar` loads into a host with its own copy of std: its tree, with a text field and a button a screen reader reaches through its host, reaches what an app's does (reactive runtime, layout, theme, text measurer, input registries, plugin slots, baked assets) from an allocator of its own, and its pointer events panic, add a face, leave a task running, start a thread with its own std or leave a worker that cannot be stopped, as each test needs.
 
 use telar::{
-    App, AppCtx, Children, Chord, Component, Event, EventResult, FontAsset, Input, LayoutItem,
-    LayoutStyle, PointerButton, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle,
-    WindowConfig, box_item, signal, spawn_task, use_theme_tokens,
+    App, AppCtx, Chord, Component, Event, EventResult, FontAsset, Input, LayoutItem, LayoutStyle,
+    PointerButton, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle, WindowConfig,
+    box_item, signal, spawn_task, use_theme_tokens,
 };
 use telar_components::{ButtonProps, button};
 use telar_icons::{IconProps, icon};
@@ -42,21 +42,11 @@ impl PanicsOnPress {
             || TextStyle::new(14.0, use_theme_tokens().ink()),
         )
         .expect("the field builds");
-        let save = button(
-            ButtonProps::props().label("Save").build(),
-            Children::default(),
-        )
-        .expect("the button builds");
-        let missing = icon(
-            IconProps::props().name("fixture:unbaked").build(),
-            Children::default(),
-        )
-        .expect("the icon builds");
-        let card = greeting_card(
-            GreetingCardProps::props().name("Ada").build(),
-            Children::default(),
-        )
-        .expect("the card builds");
+        let save = button(ButtonProps::props().label("Save").build()).expect("the button builds");
+        let missing =
+            icon(IconProps::props().name("fixture:unbaked").build()).expect("the icon builds");
+        let card =
+            greeting_card(GreetingCardProps::props().name("Ada").build()).expect("the card builds");
         let panel = StyledContainer::new(
             LayoutStyle::new().padding_all(8.0),
             |_| RectStyle::filled(use_theme_tokens().surface_alt(), 4.0),

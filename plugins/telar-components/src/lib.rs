@@ -213,7 +213,9 @@ pub use virtual_list::{ListRow, RowBuilder, RowHandler, VirtualListProps, virtua
 #[cfg(feature = "chrome")]
 pub use window_edges::window_edges;
 #[cfg(feature = "chrome")]
-pub use window_frame::{MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, window_frame};
+pub use window_frame::{
+    MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, WindowFrameProps, window_frame,
+};
 
 /// The geometry, washes, type and marks every catalogue control is drawn from, for an application drawing controls of its own that have to sit beside the catalogue's.
 ///

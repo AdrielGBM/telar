@@ -2,7 +2,7 @@
 //!
 //! These tables are the single source of truth shared between the transpiler's codegen (`view.rs`, `style.rs`) and downstream tooling such as `telar-analyzer` (completions, hover, go-to-definition). Keep them in sync with the `match` arms in [`crate::view`] (`emit_element`) and [`crate::style`] (`layout_prop_call`).
 
-/// Sentinel constructor for the `children` slot placeholder, which builds no widget of its own: it builds the call site's children for its slot where it stands, from the component's `Children` recipe, and splices them into the enclosing container.
+/// Sentinel constructor for the `children` placeholder, which builds no widget of its own: `children $props.header` builds the `Children` prop it names where it stands and splices them into the enclosing container.
 pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
 
 /// Built-in RSX tags paired with the Rust type they build, spelled as that type's canonical constructor.
@@ -41,6 +41,9 @@ pub fn builtin_tag_doc(tag: &str) -> Option<&'static str> {
         }
         "layer" => {
             "A layer fixed to the surface over the page, out of its flow and its scroll: a bar that stays at the top while the page scrolls under it. Laid out against the whole surface like an `overlay`, so `align`/`justify`/`pad` and its children's sizes place its boxes. Not modal: it takes the pointer only over its own boxes, and its focusables keep their place in the Tab order. Drawn over every box of the page, sticky ones included, and under every overlay."
+        }
+        "children" => {
+            "Places a `Children` prop where it stands: `children $props.children` the call site's bare children, `children $props.header` the ones it wrote with `slot:\"header\"`, each declared in `Props` as `#[props(default)] pub header: Children`. Each placement builds them there, so they see the `theme:` and contexts in force around it, and `in:ctx` provides one more."
         }
         _ => return None,
     })
@@ -147,6 +150,35 @@ pub const VIEW_RANGE_VALUES: &[(&str, &str)] = &[
 pub const A11Y_VALUES: &[(&str, &str)] = &[("hidden", "a11y_hidden")];
 
 /// What a component call may say about the item the component returns, beside its props. Spelled after the `Accessible` methods they call, since `label` and `lang` are a component's own props to declare.
+/// The key a child of a component call names the `Children` prop it is handed through with.
+pub const SLOT_ATTR: &str = "slot";
+
+/// The keys a `box`, `row`, `col` or `grid` paints a state of its own with. On a component call they name nothing: a component's states are its own.
+pub const STATE_STYLE_KEYS: &[&str] = &[
+    "hover_style",
+    "active_style",
+    "disabled_style",
+    "focus_style",
+];
+
+/// A `<part>_style:` key on a component call: the key is the callee's, so no table lists it, and this answers for every one.
+const PART_STYLE: AttrSpec = AttrSpec::free("<part>_style").doc(
+    "Hands classes to the part of the component this names, through its `<part>_style` prop: `header_style:@flat`, or `header_style:(@flat @dense)` for several, the later winning. Only `fill`, `stroke`, `stroke_width` and `radius` reach a part, amending the paint the component worked out for it in every state.",
+);
+
+/// Whether `key` on a component call names a part's surface, `<part>_style`, rather than a state a box paints.
+pub(crate) fn is_part_style_key(key: &str) -> bool {
+    !STATE_STYLE_KEYS.contains(&key)
+        && key
+            .strip_suffix("_style")
+            .is_some_and(|part| !part.is_empty())
+}
+
+/// `slot:` on any child of a component call, whatever its own tag: the call routes it, so neither the child nor the callee lists it.
+const SLOT: AttrSpec = AttrSpec::free(SLOT_ATTR).doc(
+    "Hands this child to the component through the `Children` prop it names, `slot:\"header\"` through `header`, where a child without one goes through `children`. The callee places it with `children $props.header`.",
+);
+
 const COMPONENT_INSTANCE_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("a11y_label").doc(
         "The name assistive technology reads for the item the component returns, over whatever it is named by: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. `label` stays the component's own prop.",
@@ -305,6 +337,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     ),
     AttrSpec::free("backdrop_blur").doc(
         "Blurs what the surface drew beneath the box, a radius in pixels as `shadow_blur` is (CSS `backdrop-filter: blur(10px)` is `backdrop_blur:20`), so a translucent `fill` reads as frosted glass. A `$`-reading value is followed, and `transition(backdrop_blur 300ms)` animates it. A document blurs the page behind the box; TUI ignores it and shows the fill alone.",
+    ),
+    AttrSpec::free("surface").doc(
+        "Hands this box's paint to a caller: a `SurfaceStyle` such as `$props.style`, or `$props.header_style` for a part, run over the finished style of the base paint and of every `hover_style`/`active_style`/`disabled_style` after the box's own, so a caller's `@class` restyles it in every state. The focus ring is drawn over the amended state, not amended itself.",
     ),
     AttrSpec::free("on_press"),
     AttrSpec::free("on_alt_press").doc(
@@ -664,10 +699,19 @@ impl AttrSpec {
 ///
 /// A component tag has no table of its own — its keys are `Props` fields, which rustc checks — but the layout and paint attributes written on one still mean what they mean on a container, so it is read against `box`.
 pub fn attr_spec(tag: &str, key: &str) -> Option<AttrSpec> {
-    if !is_builtin_tag(tag)
-        && let Some(spec) = COMPONENT_INSTANCE_ATTRS.iter().find(|spec| spec.key == key)
-    {
-        return Some(*spec);
+    if key == SLOT_ATTR {
+        return Some(SLOT);
+    }
+    if !is_builtin_tag(tag) {
+        if let Some(spec) = COMPONENT_INSTANCE_ATTRS.iter().find(|spec| spec.key == key) {
+            return Some(*spec);
+        }
+        if STATE_STYLE_KEYS.contains(&key) {
+            return None;
+        }
+        if is_part_style_key(key) {
+            return Some(PART_STYLE);
+        }
     }
     let lens = if is_builtin_tag(tag) { tag } else { "box" };
     tag_attr_specs(lens)
@@ -799,14 +843,9 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             specs
         }
         // Spliced children own their own style, so the placeholder takes no layout or paint keys.
-        "children" => vec![
-            AttrSpec::free("name").doc(
-                "Places the call site's children routed with `slot:\"name\"`; without it, the ones routed nowhere. Each placement builds its slot where it stands, so the children see the `theme:` and contexts in force there.",
-            ),
-            AttrSpec::free("in").doc(
-                "A value the slot's children read with `use_context`, while they are built and whenever they draw or handle an event later.",
-            ),
-        ],
+        "children" => vec![AttrSpec::free("in").doc(
+            "A value the placed children read with `use_context`, while they are built and whenever they draw or handle an event later.",
+        )],
         // box/col/row/grid share one paint set; grid adds its track keys.
         "grid" => {
             let mut specs = with(CONTAINER_PAINT);

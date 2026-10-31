@@ -20,7 +20,6 @@ fn tap_sets_group_selection_to_value() {
             .value(2)
             .label("Large")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let (cx, cy) = lay_out(widget.layout_node());
@@ -42,7 +41,6 @@ fn on_select_reports_value() {
             .value(5)
             .on_select(Rc::new(move |v| sink.set(Some(v))))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let (cx, cy) = lay_out(widget.layout_node());
@@ -94,7 +92,7 @@ fn chosen(style: Option<telar::SurfaceAmendment>) -> Box<dyn LayoutItem> {
         .label("Small")
         .build();
     props.style = style;
-    radio(props, Children::default()).unwrap()
+    radio(props).unwrap()
 }
 
 #[test]

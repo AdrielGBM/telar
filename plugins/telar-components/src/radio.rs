@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Border, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
-    amend_surface, box_item, children, focus::Role, signal,
+    AlignItems, Border, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props,
+    Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface,
+    box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -76,7 +76,7 @@ pub struct RadioProps {
 }
 
 /// One option of a group, selecting into a shared bound value.
-pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let RadioProps {
         selected,
         value,

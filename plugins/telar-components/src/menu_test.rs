@@ -16,8 +16,11 @@ use super::*;
 fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
     crate::test_support::fresh_layout_runtime();
     let item = menu(
-        MenuProps::props().label("File").stretch(true).build(),
-        rows(&["New", "Open…", "Save", "Import STEP…"]),
+        MenuProps::props()
+            .label("File")
+            .stretch(true)
+            .children(rows(&["New", "Open…", "Save", "Import STEP…"]))
+            .build(),
     )
     .unwrap();
     let root_node = item.layout_node();
@@ -66,8 +69,10 @@ fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
 fn builds_and_lays_out() {
     crate::test_support::fresh_layout_runtime();
     let item = menu(
-        MenuProps::props().label("Actions").build(),
-        rows(&["Rename", "Duplicate", "Delete"]),
+        MenuProps::props()
+            .label("Actions")
+            .children(rows(&["Rename", "Duplicate", "Delete"]))
+            .build(),
     )
     .unwrap();
     let root_node = item.layout_node();
@@ -100,8 +105,8 @@ fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
         MenuProps::props()
             .label("Actions")
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(rows(&["Rename", "Duplicate", "Delete"]))
             .build(),
-        rows(&["Rename", "Duplicate", "Delete"]),
     )
     .unwrap();
     let root_node = item.layout_node();
@@ -139,8 +144,8 @@ fn escape_closes_a_menu_whose_trigger_holds_focus() {
         MenuProps::props()
             .label("Actions")
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(rows(&["Rename", "Duplicate"]))
             .build(),
-        rows(&["Rename", "Duplicate"]),
     )
     .unwrap();
     let root_node = item.layout_node();
@@ -171,8 +176,8 @@ fn selecting_an_item_fires_on_select_and_closes() {
         MenuProps::props()
             .label("Actions")
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(rows(&["Rename", "Duplicate", "Delete"]))
             .build(),
-        rows(&["Rename", "Duplicate", "Delete"]),
     )
     .unwrap();
     // The widget's own root is the parent-less layout host laid out at the origin, so the trigger sits at (0,0) and the panel anchors directly below it.
@@ -223,41 +228,32 @@ fn the_keyboard_steps_over_what_it_cannot_commit() {
     let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let structured = Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         let row = |label: &'static str, disabled: bool| {
             crate::list::item(
                 crate::list::ItemProps::props()
                     .label(Reactive::of(move || label.to_string()))
                     .disabled(Reactive::of(move || disabled))
                     .build(),
-                Children::default(),
             )
         };
-        slots.push(None, row("Rename", false)?);
-        slots.push(None, row("Duplicate", true)?);
-        slots.push(
-            None,
-            crate::list::separator(
-                crate::list::SeparatorProps::props().build(),
-                Children::default(),
-            )?,
-        );
-        slots.push(
-            None,
-            crate::list::group(
-                crate::list::GroupProps::props().label("Danger").build(),
-                Children::default(),
-            )?,
-        );
-        slots.push(None, row("Delete", false)?);
-        Ok(slots)
+        items.push(row("Rename", false)?);
+        items.push(row("Duplicate", true)?);
+        items.push(crate::list::separator(
+            crate::list::SeparatorProps::props().build(),
+        )?);
+        items.push(crate::list::group(
+            crate::list::GroupProps::props().label("Danger").build(),
+        )?);
+        items.push(row("Delete", false)?);
+        Ok(items)
     });
     let item = menu(
         MenuProps::props()
             .label("Actions")
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(structured)
             .build(),
-        structured,
     )
     .unwrap();
     compute_layout(
@@ -288,27 +284,23 @@ fn a_disabled_row_does_not_commit_on_a_tap() {
     let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let structured = Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for (label, disabled) in [("Rename", false), ("Duplicate", true)] {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || label.to_string()))
-                        .disabled(Reactive::of(move || disabled))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || label.to_string()))
+                    .disabled(Reactive::of(move || disabled))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     });
     let item = menu(
         MenuProps::props()
             .label("Actions")
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(structured)
             .build(),
-        structured,
     )
     .unwrap();
     compute_layout(
@@ -347,32 +339,28 @@ fn char_key(c: char) -> Event {
 /// Rename · Duplicate · Delete · [disabled] Deploy. Three rows share a first letter and the fourth is out of reach, which is the whole of what type-ahead has to tell apart.
 fn typeahead_menu(sink: Rc<Cell<Option<u32>>>) -> Box<dyn LayoutItem> {
     let structured = Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for (label, disabled) in [
             ("Rename", false),
             ("Duplicate", false),
             ("Delete", false),
             ("Deploy", true),
         ] {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || label.to_string()))
-                        .disabled(Reactive::of(move || disabled))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || label.to_string()))
+                    .disabled(Reactive::of(move || disabled))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     });
     let item = menu(
         MenuProps::props()
             .label("Actions")
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(structured)
             .build(),
-        structured,
     )
     .unwrap();
     compute_layout(
@@ -474,8 +462,10 @@ fn mounted_menu() -> ComponentList {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
     let item = menu(
-        MenuProps::props().label("Actions").build(),
-        rows(&["Rename", "Duplicate", "Delete"]),
+        MenuProps::props()
+            .label("Actions")
+            .children(rows(&["Rename", "Duplicate", "Delete"]))
+            .build(),
     )
     .unwrap();
     compute_layout(
@@ -613,8 +603,8 @@ fn a_trigger_without_a_caret_pads_its_drawn_label_evenly_on_both_sides() {
             .label("Settings")
             .caret(false)
             .fit(true)
+            .children(rows(&["New"]))
             .build(),
-        rows(&["New"]),
     )
     .unwrap();
     let root = telar::new_container(
@@ -699,8 +689,11 @@ fn the_trigger_follows_the_control_role_until_the_trigger_tokens_name_their_own(
         menus: None,
     });
     let item = menu(
-        MenuProps::props().label("File").bordered(true).build(),
-        rows(&["New"]),
+        MenuProps::props()
+            .label("File")
+            .bordered(true)
+            .children(rows(&["New"]))
+            .build(),
     )
     .unwrap();
     let root = telar::new_container(
@@ -751,19 +744,15 @@ fn the_trigger_follows_the_control_role_until_the_trigger_tokens_name_their_own(
 /// A plain row per label, which is what the markup `menu … item label:"…"` compiles to. Enough for the tests that care about the trigger and the panel rather than about what a row can be.
 fn rows(labels: &'static [&'static str]) -> Children {
     Children::new(move || {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for label in labels {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || label.to_string()))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
+            items.push(crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || label.to_string()))
+                    .build(),
+            )?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -782,8 +771,8 @@ fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
                 .label("File")
                 .bordered(bordered)
                 .caret(caret)
+                .children(rows(&["New"]))
                 .build(),
-            rows(&["New"]),
         )
         .unwrap();
         // Laid out first: the caret is drawn by a `Canvas`, which has nothing to draw into until it has a rect.
@@ -844,8 +833,8 @@ fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
                 s.with_radius(BorderRadius::all(0.0))
                     .with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))
             }))
+            .children(rows(&["New"]))
             .build(),
-        rows(&["New"]),
     )
     .unwrap();
     let root = telar::new_container(
@@ -893,8 +882,8 @@ fn laid_out_menu(fit: bool) -> telar::testing::Scoped<telar::ComponentList> {
                 .label("File")
                 .caret(false)
                 .fit(fit)
+                .children(rows(&["New"]))
                 .build(),
-            rows(&["New"]),
         )
         .unwrap();
         let root = telar::new_container(
@@ -960,8 +949,11 @@ fn opened_under(
             offset = crate::shared::popup_offset();
             pad = panel_pad();
             menu(
-                MenuProps::props().label("File").tokens(tokens).build(),
-                rows(&["New", "Open", "Close"]),
+                MenuProps::props()
+                    .label("File")
+                    .tokens(tokens)
+                    .children(rows(&["New", "Open", "Close"]))
+                    .build(),
             )
         })
         .unwrap();
@@ -1038,23 +1030,21 @@ fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
         set_keyboard_convention(convention);
         telar::focus::clear();
         let item = menu(
-            MenuProps::props().label("Edit").build(),
-            Children::new(|| {
-                let mut slots = Slots::new();
-                for (label, shortcut) in [("Undo", "Mod+Z"), ("Redo", "Mod+Shift+Z")] {
-                    slots.push(
-                        None,
-                        crate::list::item(
+            MenuProps::props()
+                .label("Edit")
+                .children(Children::new(|| {
+                    let mut items = Vec::new();
+                    for (label, shortcut) in [("Undo", "Mod+Z"), ("Redo", "Mod+Shift+Z")] {
+                        items.push(crate::list::item(
                             crate::list::ItemProps::props()
                                 .label(label)
                                 .shortcut(shortcut)
                                 .build(),
-                            Children::default(),
-                        )?,
-                    );
-                }
-                Ok(slots)
-            }),
+                        )?);
+                    }
+                    Ok(items)
+                }))
+                .build(),
         )
         .unwrap();
         compute_layout(
@@ -1127,36 +1117,31 @@ fn a_row_comes_and_goes_with_what_it_acts_on_while_the_menu_is_open() {
     let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let structured = Children::new(move || {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         let row = |label: &'static str, shown: Reactive<bool>| {
             crate::list::item(
                 crate::list::ItemProps::props()
                     .label(Reactive::of(move || label.to_string()))
                     .shown(shown)
                     .build(),
-                Children::default(),
             )
         };
-        slots.push(None, row("Rename", Reactive::of(|| true))?);
-        slots.push(
-            None,
-            crate::list::separator(
-                crate::list::SeparatorProps::props()
-                    .shown(Reactive::of(move || shown.get()))
-                    .build(),
-                Children::default(),
-            )?,
-        );
-        slots.push(None, row("Restore", Reactive::of(move || shown.get()))?);
-        slots.push(None, row("Delete", Reactive::of(|| true))?);
-        Ok(slots)
+        items.push(row("Rename", Reactive::of(|| true))?);
+        items.push(crate::list::separator(
+            crate::list::SeparatorProps::props()
+                .shown(Reactive::of(move || shown.get()))
+                .build(),
+        )?);
+        items.push(row("Restore", Reactive::of(move || shown.get()))?);
+        items.push(row("Delete", Reactive::of(|| true))?);
+        Ok(items)
     });
     let item = menu(
         MenuProps::props()
             .label("Actions")
             .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(structured)
             .build(),
-        structured,
     )
     .unwrap();
     compute_layout(

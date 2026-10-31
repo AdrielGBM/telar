@@ -5,7 +5,7 @@ use telar::preview::host::PAGE_PADDING;
 use telar::preview::{ArgValue, Layout, PreviewCtx, PreviewEntry};
 use telar::testing::{Scoped, centre, damage, find_text, mount, moved, press, release, route};
 use telar::{
-    Children, Color, ComponentList, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, Rect,
+    Color, ComponentList, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, Rect,
     RectStyle, Role, ShapeStyle, Size, SizeDimension, StyledContainer, Text, TextStyle, Uri,
     UriOpener, WindowRoot, box_item, dismiss_depth, for_each_with_matrix, relayout_if_dirty,
     reset_layout_runtime, set_uri_opener, signal, transform_clip_rect,
@@ -150,7 +150,6 @@ fn a_modal_preview_stays_inside_its_canvas() {
                     .open(signal(true))
                     .title("Confirm")
                     .build(),
-                Children::default(),
             )
         })
         .viewport(600.0, 400.0),

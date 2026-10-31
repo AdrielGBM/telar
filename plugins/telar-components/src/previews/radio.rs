@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role};
+use telar::{Color, Container, LayoutError, LayoutStyle, Role};
 
 use crate::metrics;
 use crate::radio::{RadioProps, radio};
@@ -21,7 +21,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                             .label(label)
                             .color(color)
                             .build(),
-                        Children::default(),
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;

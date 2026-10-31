@@ -303,7 +303,7 @@ fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
     std::fs::write(src.join("card.rsx"), "[view]\ntext \"body\"\n").unwrap();
     std::fs::write(
         src.join("card.previews.rsx"),
-        "[logic]\nuse crate::card::*;\n\nfn framed(children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {\n    card(CardProps::props().build(), children)\n}\n\n[style]\n@quiet\n    fill: #202020\n\n[previews \"Cards/Card\"]\nA card.\n\n[preview \"Default\" args(title:\"Hi\") decorator:framed]\ncard\n\n[play]\ncanvas.expect_text(\"Hi\")?;\n",
+        "[logic]\nuse crate::card::*;\n\nfn framed(children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {\n    card(CardProps::props().children(children).build())\n}\n\n[style]\n@quiet\n    fill: #202020\n\n[previews \"Cards/Card\"]\nA card.\n\n[preview \"Default\" args(title:\"Hi\") decorator:framed]\ncard\n\n[play]\ncanvas.expect_text(\"Hi\")?;\n",
     )
     .unwrap();
 

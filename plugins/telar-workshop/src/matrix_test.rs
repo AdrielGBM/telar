@@ -7,9 +7,9 @@ use telar::preview::{
 };
 use telar::testing::{Scoped, centre, mount, named as named_key, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Children, Color, ColorScheme, ComponentList, ControlSize,
-    Direction, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect,
-    Role, Size, SystemPreferences, Text, TextStyle, box_item, focus, for_each_with_matrix,
+    AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, ControlSize, Direction,
+    DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect, Role, Size,
+    SystemPreferences, Text, TextStyle, box_item, focus, for_each_with_matrix,
     reset_layout_runtime, set_system_preferences, transform_clip_rect,
 };
 use telar_components::{ButtonProps, ModalProps, button, modal};
@@ -75,12 +75,8 @@ fn confirming(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .label("Ask")
             .on_press(Rc::new(|| telar::open_overlay("confirm")))
             .build(),
-        Children::default(),
     )?;
-    let dialog = modal(
-        ModalProps::props().id("confirm").title("Sure?").build(),
-        Children::default(),
-    )?;
+    let dialog = modal(ModalProps::props().id("confirm").title("Sure?").build())?;
     Ok(box_item(telar::Container::new(
         LayoutStyle::new().flex_column(),
         vec![opener, dialog],
@@ -96,7 +92,6 @@ fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
             }))
             .on_press(Rc::new(move || presses.update(|count| *count += 1)))
             .build(),
-        Children::default(),
     )
 }
 

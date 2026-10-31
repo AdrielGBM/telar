@@ -12,7 +12,7 @@ fn texts_in(convention: KeyboardConvention, chord: &'static str) -> Vec<String> 
     crate::test_support::fresh_layout_runtime();
     set_keyboard_convention(convention);
     let tree = telar::testing::scoped(|| {
-        let cap = kbd(KbdProps::props().chord(chord).build(), Children::default()).unwrap();
+        let cap = kbd(KbdProps::props().chord(chord).build()).unwrap();
         let root = Container::new(
             LayoutStyle::new().flex_column().width(300.0).height(100.0),
             vec![cap],
@@ -72,11 +72,7 @@ fn a_chord_is_spoken_as_the_platform_writes_it() {
 #[test]
 fn a_reader_hears_the_chord_once_and_not_each_cap() {
     crate::test_support::fresh_layout_runtime();
-    let caps = kbd(
-        KbdProps::props().chord("Shift+P").build(),
-        Children::default(),
-    )
-    .unwrap();
+    let caps = kbd(KbdProps::props().chord("Shift+P").build()).unwrap();
     let root = Container::new(
         LayoutStyle::new().flex_column().width(300.0).height(100.0),
         vec![caps],
@@ -98,7 +94,7 @@ fn a_reader_hears_the_chord_once_and_not_each_cap() {
 
 fn mounted(props: KbdProps) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
-    let caps = kbd(props, Children::default()).unwrap();
+    let caps = kbd(props).unwrap();
     compute_layout(
         caps.layout_node(),
         AvailableSpace::MaxContent,
@@ -162,7 +158,7 @@ fn a_style_amendment_reshapes_every_cap() {
 #[test]
 fn a_one_letter_cap_is_never_narrower_than_it_is_tall() {
     crate::test_support::fresh_layout_runtime();
-    let caps = kbd(KbdProps::props().chord("K").build(), Children::default()).unwrap();
+    let caps = kbd(KbdProps::props().chord("K").build()).unwrap();
     compute_layout(
         caps.layout_node(),
         AvailableSpace::MaxContent,

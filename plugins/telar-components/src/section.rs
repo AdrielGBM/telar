@@ -5,25 +5,24 @@ use telar::{Children, Container, LayoutError, LayoutItem, LayoutStyle, Props, Re
 use crate::heading::{HeadingProps, heading};
 use crate::shared;
 
-/// A titled column: a `heading` above its slot children in a small-gap `flex_column`. High-level sugar; lives in `telar-components`, not the kernel.
+/// A titled column: a `heading` above its `children` in a small-gap `flex_column`. High-level sugar; lives in `telar-components`, not the kernel.
 #[derive(Props)]
 pub struct SectionProps {
     #[props(into, default)]
     pub title: Reactive<String>,
+    /// The content under the title.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A titled block grouping the content nested inside it.
-pub fn section(
-    props: SectionProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut slots = children.build()?;
-    let mut children: Vec<Box<dyn LayoutItem>> = vec![heading(
-        HeadingProps::props().text(props.title).build(),
-        Children::default(),
-    )?];
-    children.extend(slots.take_default());
+pub fn section(props: SectionProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let SectionProps { title, children } = props;
+    let content = children.build()?;
+    let mut column_items: Vec<Box<dyn LayoutItem>> =
+        vec![heading(HeadingProps::props().text(title).build())?];
+    column_items.extend(content);
     let column = || LayoutStyle::column().gap(shared::gap_md());
-    let col = Container::new(column(), children)?.styled_by(column);
+    let col = Container::new(column(), column_items)?.styled_by(column);
     Ok(box_item(col))
 }

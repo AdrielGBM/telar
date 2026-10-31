@@ -2,9 +2,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{
-    Children, Color, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Role, signal,
-};
+use telar::{Color, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Role, signal};
 
 use crate::data_table::{CellAlign, Column, DataTableProps, TableRow, data_table};
 use crate::selection::SelectionMode;
@@ -105,7 +103,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Files"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(framed(table)?)
         })
@@ -147,7 +144,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Files"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(framed(table)?)
         })
@@ -176,7 +172,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Tasks"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(framed(table)?)
         })
@@ -203,7 +198,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Files"))
                     .empty_label(p.arg("empty_label", "No files match"))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(framed(table)?)
         })

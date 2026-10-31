@@ -9,7 +9,7 @@ fn lay_out(node: NodeId) {
 #[test]
 fn spinner_builds_with_default_size() {
     crate::test_support::fresh_layout_runtime();
-    let widget = spinner(SpinnerProps::props().build(), Children::default());
+    let widget = spinner(SpinnerProps::props().build());
     assert!(widget.is_ok(), "a spinner builds from its default size");
     lay_out(widget.unwrap().layout_node());
 }
@@ -17,11 +17,7 @@ fn spinner_builds_with_default_size() {
 #[test]
 fn spinner_builds_with_custom_size() {
     crate::test_support::fresh_layout_runtime();
-    let widget = spinner(
-        SpinnerProps::props().size(48.0).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let widget = spinner(SpinnerProps::props().size(48.0).build()).unwrap();
     lay_out(widget.layout_node());
 }
 
@@ -41,7 +37,7 @@ impl telar::ThemeTokens for Plain {
 fn ring(props: SpinnerProps) -> (telar::Rect, RectStyle) {
     crate::test_support::fresh_layout_runtime();
     telar::testing::scoped(|| {
-        let widget = spinner(props, Children::default()).unwrap();
+        let widget = spinner(props).unwrap();
         lay_out(widget.layout_node());
         telar::ComponentList::new(widget)
     })

@@ -211,7 +211,7 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
     if seed {
         list.seed_cursor();
     }
-    let built_rows = rows.build_with(list.clone())?.take_default();
+    let built_rows = rows.build_with(list.clone())?;
     let layers = cascade.layers.take();
     let column = Container::column(built_rows)?;
 
@@ -406,18 +406,19 @@ pub struct SubmenuProps {
     /// Fired with the index of the row picked in the submenu, among its own rows.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(u32)>>,
+    /// The rows of the menu it opens.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A row that opens another menu beside it: pointed at, pressed, or reached with the rightward arrow, Enter or Space; and shut again with the leftward arrow or Escape. Belongs inside a `menu` or a `context_menu`.
-pub fn submenu(
-    props: SubmenuProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn submenu(props: SubmenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SubmenuProps {
         label,
         hint,
         disabled,
         on_select,
+        children,
     } = props;
     let list = use_context::<ListContext>();
     let Some(cascade) = list.as_ref().and_then(|ctx| ctx.cascade().cloned()) else {

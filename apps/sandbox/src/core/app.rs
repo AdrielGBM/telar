@@ -2,7 +2,7 @@
 
 use crate::core::theme::theme;
 use telar::{
-    AlignItems, App, AvailableSpace, BorderRadius, Children, Color, Component, Container, Event,
+    AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event,
     EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
     NodeVec, Reactive, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, SizeDimension,
     StyledContainer, Text, TextStyle, compute_layout, hot_signal, mark_dirty, new_container,
@@ -42,8 +42,8 @@ macro_rules! sections {
     ($(($title:literal, $build:path, $props:ty, $file:literal)),* $(,)?) => {
         &[$(SectionDef {
             title: $title,
-            // A section is a component that names no props and places no children, so it is called like one. The closure captures nothing, which is what lets it stand where a `fn` pointer is wanted.
-            build: || $build(<$props>::props().build(), Children::default()),
+            // A section is a component that names no props, so it is called like one. The closure captures nothing, which is what lets it stand where a `fn` pointer is wanted.
+            build: || $build(<$props>::props().build()),
             file: $file,
             source: include_str!(concat!("../features/", $file)),
         }),*]
@@ -422,7 +422,6 @@ fn build_source_link(
                     .size(12.0)
                     .color(Reactive::of(|| theme().primary))
                     .build(),
-                Children::default(),
             )?,
             Box::new(Text::new(
                 move || file.to_string(),
@@ -583,7 +582,6 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
                 if live(&on_arrow) { t.ink } else { t.muted }
             }))
             .build(),
-        Children::default(),
     )?;
     let label = Text::new(
         || "Back".to_string(),
@@ -689,7 +687,6 @@ fn build_sidebar(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let header_theme = crate::core::sidebar::sidebar(
         crate::core::sidebar::SidebarProps::props().build(),
-        Children::default(),
     )?;
     let nav = build_nav(stacks)?;
     Ok(Box::new(
@@ -716,7 +713,6 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
             .color(Reactive::of(|| theme().ink))
             .label("Menu")
             .build(),
-        Children::default(),
     )?;
     let burger = StyledContainer::new(
         LayoutStyle::new()
@@ -747,7 +743,6 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
             .size(18.0)
             .color(Reactive::of(|| theme().ink))
             .build(),
-        Children::default(),
     )?;
     let logo_text = Text::single_line(|| "rsx".to_string(), || TextStyle::new(18.0, theme().ink))?;
     let logo = Container::new(

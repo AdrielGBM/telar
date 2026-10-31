@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{
-    BorderRadius, Children, Key, LayoutError, LayoutStyle, NamedKey, RectStyle, Role, ShapeStyle,
+    BorderRadius, Key, LayoutError, LayoutStyle, NamedKey, RectStyle, Role, ShapeStyle,
     StyledContainer, box_item,
 };
 
@@ -24,7 +24,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .size(p.arg("size", 0.0f32))
                     .label(p.arg("label", "Opacity"))
                     .build(),
-                Children::default(),
             )?;
             let track = StyledContainer::new(
                 LayoutStyle::new().width(TRACK).height(24.0),

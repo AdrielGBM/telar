@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Key, NamedKey, Role};
+use telar::{Key, NamedKey, Role};
 
 use crate::scrub_field::{ScrubFieldProps, scrub_field};
 
@@ -15,7 +15,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .step(p.arg("step", 1.0f32))
                     .pixels_per_step(p.arg("pixels_per_step", 4.0f32))
                     .build(),
-                Children::default(),
             )
         })
         .title("Inputs/Scrub field")

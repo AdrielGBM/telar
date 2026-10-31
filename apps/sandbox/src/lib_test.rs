@@ -361,11 +361,9 @@ fn all_theme_variants_build() {
     ] {
         telar::set_theme(make());
         telar::reset_layout_runtime();
-        let content = crate::features::color::color(
-            crate::features::color::ColorProps::props().build(),
-            telar::Children::default(),
-        )
-        .expect("color section builds");
+        let content =
+            crate::features::color::color(crate::features::color::ColorProps::props().build())
+                .expect("color section builds");
         let node = telar::LayoutItem::layout_node(content.as_ref());
         compute_layout(
             node,
@@ -395,11 +393,9 @@ fn slot_children_are_built_inside_the_scopes_they_are_placed_in() {
     use crate::core::theme::SandboxTheme;
     telar::set_theme(SandboxTheme::modern());
     telar::reset_layout_runtime();
-    let content = crate::features::color::color(
-        crate::features::color::ColorProps::props().build(),
-        telar::Children::default(),
-    )
-    .expect("color section builds");
+    let content =
+        crate::features::color::color(crate::features::color::ColorProps::props().build())
+            .expect("color section builds");
     let mut tree = telar::ComponentList::new(telar::WindowRoot::new(content));
     let resize = Event::WindowResized {
         width: 1200,

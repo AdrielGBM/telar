@@ -1,9 +1,8 @@
 //! The banner over the app while it is not running what was last saved: a rebuild that failed, with the compiler's report, a build that compiled but that the app would not load, with why, or a build that panicked, with what it said and where.
 
 use telar::{
-    Accessible, AlignItems, Border, BuildOutcome, Children, Container, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, children, memo,
-    use_theme_tokens,
+    Accessible, AlignItems, Border, BuildOutcome, Container, LayoutError, LayoutItem, LayoutStyle,
+    Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, children, memo, use_theme_tokens,
 };
 use telar_components::{CodeSpan, CodeViewProps, TokenKind, code_view};
 
@@ -141,7 +140,6 @@ fn card(kind: Report) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .max_height(REPORT_MAX_HEIGHT)
             .label(Reactive::of(move || strings::text(kind.label)))
             .build(),
-        Children::default(),
     )?;
     let banner = StyledContainer::new(
         LayoutStyle::column()

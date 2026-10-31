@@ -16,10 +16,12 @@
 pub struct ExampleProps {
     #[props(default)]
     pub title: &'static str,
+    #[props(default)]
+    pub children: Children,
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn example(props: ExampleProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn example(props: ExampleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -34,7 +36,7 @@ pub fn example(props: ExampleProps, children: Children) -> Result<Box<dyn Layout
             )?
         };
         __children.push(box_item(__text_0));
-        __children.extend(children.build_slot(None)?);
+        __children.extend(props.children.build()?);
         Container::new(LayoutStyle::new().flex_column().gap(8.0), __children)?
     };
     Ok(Box::new(__col_0))
@@ -47,49 +49,39 @@ pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
-        let __deferred = Children::per_slot(
+        let __recipe_children = Children::new(
             {
                 let theme = theme.clone();
-            move |__request: SlotRequest<'_>| {
-                let theme = theme.clone();
-                let mut __slots = Slots::new();
+            move || {
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                if __request.includes(None) {
-                    let __node_1 = {
-                        let __deferred = Children::per_slot(
-                            {
-                                let theme = theme.clone();
-                            move |__request: SlotRequest<'_>| {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                if __request.includes(None) {
-                                    let __text_0 = {
-                                        Text::declaring(
-                                            || "The demo and its code snippet stack here.".to_string(),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                        )?
-                                    };
-                                    __children.push(box_item(__text_0));
-                                }
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_1));
-                    let __node_2 = code_line(CodeLineProps::props().code("row justify:between").build(), Children::default())?;
-                    __children.push(box_item(__node_2));
-                }
-                __slots.extend_default(__children);
-                Ok(__slots)
+                let __node_1 = {
+                    let __recipe_children = Children::new(
+                        {
+                            let theme = theme.clone();
+                        move || {
+                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                            let __text_0 = {
+                                Text::declaring(
+                                    || "The demo and its code snippet stack here.".to_string(),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                )?
+                            };
+                            __children.push(box_item(__text_0));
+                            Ok(__children)
+                        }
+                        }
+                    );
+                    card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                };
+                __children.push(box_item(__node_1));
+                let __node_2 = code_line(CodeLineProps::props().code("row justify:between").build())?;
+                __children.push(box_item(__node_2));
+                Ok(__children)
             }
             }
         );
-        example(ExampleProps::props().title(::telar::__preview_arg!(__preview, "title", "justify — distribute along the main axis")).__preview_actions(&__preview.actions()).build(), __deferred)?
+        example(ExampleProps::props().title(::telar::__preview_arg!(__preview, "title", "justify — distribute along the main axis")).children(__recipe_children).__preview_actions(&__preview.actions()).build())?
     };
     Ok(Box::new(__node_0))
 }
@@ -97,10 +89,10 @@ pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box
 pub const EXAMPLE_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--example--example"), "example", "Example", example_preview_0)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/example.rsx"), 20)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/example.rsx"), 22)
         .title("Sandbox/Example")
         .docs("A titled block that stacks a demo above its code snippet.")
-        .source("[preview \"Example\"]\nexample title:\"justify — distribute along the main axis\"\n    card gap:10\n        text \"The demo and its code snippet stack here.\" font_size:13 color:$theme.muted\n    code_line code:\"row justify:between\"", &[::telar::preview::SourceSpan::new(0, 224, 20)])
+        .source("[preview \"Example\"]\nexample title:\"justify — distribute along the main axis\"\n    card gap:10\n        text \"The demo and its code snippet stack here.\" font_size:13 color:$theme.muted\n    code_line code:\"row justify:between\"", &[::telar::preview::SourceSpan::new(0, 224, 22)])
         .props(<ExampleProps as ::telar::preview::HasPropsSchema>::schema)
         .args(&[::telar::preview::ArgSpec::new("title").default("\"justify — distribute along the main axis\"")])
         .layout(::telar::preview::Layout::Padded),

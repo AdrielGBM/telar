@@ -1,34 +1,20 @@
 use super::*;
+use crate::test_support::{find_text, tall_body, text_body};
 use telar::{
     AvailableSpace, ComponentList, DrawCommand, compute_layout, new_container, relayout_if_dirty,
     signal,
 };
 
-fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
-    cmds.iter()
-        .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
-}
-
-fn slot_with_body(label: &'static str) -> Slots {
-    let body = Text::declaring(
-        move || label.to_string(),
-        LayoutStyle::new().height(20.0),
-        |t| t,
-    )
-    .unwrap();
-    let mut slots = Slots::new();
-    slots.push(None, box_item(body));
-    slots
-}
-
 #[test]
 fn open_shows_dialog_and_close_hides_it() {
     crate::test_support::fresh_layout_runtime();
     let open = signal(false);
-    let slots = slot_with_body("Body");
     let modal = modal(
-        ModalProps::props().open(open).title("Confirm").build(),
-        Children::from(slots),
+        ModalProps::props()
+            .open(open)
+            .title("Confirm")
+            .children(text_body("Body"))
+            .build(),
     )
     .unwrap();
 
@@ -79,7 +65,7 @@ fn open_shows_dialog_and_close_hides_it() {
     );
     assert!(
         find_text(&tree.commands(), "Body"),
-        "body must survive a close/reopen (kept mounted, not rebuilt from a consumed slot)"
+        "body must survive a close/reopen"
     );
 }
 
@@ -89,8 +75,11 @@ fn open_registers_on_the_dismiss_stack_and_dismissing_closes_it() {
     crate::test_support::fresh_layout_runtime();
     let open = signal(false);
     let modal = modal(
-        ModalProps::props().open(open).title("Confirm").build(),
-        Children::from(slot_with_body("Body")),
+        ModalProps::props()
+            .open(open)
+            .title("Confirm")
+            .children(text_body("Body"))
+            .build(),
     )
     .unwrap();
     let root = new_container(
@@ -150,8 +139,8 @@ fn a_named_modal_opens_from_anywhere_even_before_it_is_built() {
         ModalProps::props()
             .id("confirm-test")
             .title("Confirm")
+            .children(text_body("Body"))
             .build(),
-        Children::from(slot_with_body("Body")),
     )
     .unwrap();
     let root = new_container(
@@ -198,8 +187,8 @@ fn an_explicit_open_signal_wins_over_a_name() {
             .open(open)
             .id("ignored-name")
             .title("Confirm")
+            .children(text_body("Body"))
             .build(),
-        Children::from(slot_with_body("Body")),
     )
     .unwrap();
     let tree = ComponentList::new(modal);
@@ -213,10 +202,11 @@ fn an_explicit_open_signal_wins_over_a_name() {
 #[test]
 fn unbound_modal_renders_nothing() {
     crate::test_support::fresh_layout_runtime();
-    let slots = slot_with_body("Body");
     let modal = modal(
-        ModalProps::props().title("Confirm").build(),
-        Children::from(slots),
+        ModalProps::props()
+            .title("Confirm")
+            .children(text_body("Body"))
+            .build(),
     )
     .unwrap();
     let tree = ComponentList::new(modal);
@@ -231,8 +221,11 @@ fn a_reader_meets_the_dialog_under_its_title() {
     crate::test_support::fresh_layout_runtime();
     let open = signal(true);
     let modal = modal(
-        ModalProps::props().open(open).title("Confirm").build(),
-        Children::from(slot_with_body("Body")),
+        ModalProps::props()
+            .open(open)
+            .title("Confirm")
+            .children(text_body("Body"))
+            .build(),
     )
     .unwrap();
     let root = new_container(
@@ -272,8 +265,11 @@ fn opener_and_dialog(open: telar::RwSignal<bool>) -> (ComponentList, telar::focu
     .control(Role::Button);
     let opener_id = opener.focus_id().expect("a control");
     let dialog = modal(
-        ModalProps::props().open(open).title("Confirm").build(),
-        Children::from(slot_with_body("Body")),
+        ModalProps::props()
+            .open(open)
+            .title("Confirm")
+            .children(text_body("Body"))
+            .build(),
     )
     .unwrap();
     let root = Container::new(
@@ -330,7 +326,11 @@ fn closing_leaves_the_keyboard_where_the_dialog_sent_it() {
 fn open_modal(props: ModalProps) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
     let tree = telar::testing::scoped(|| {
-        let modal = modal(props, Children::from(slot_with_body("Body"))).unwrap();
+        let modal = modal(ModalProps {
+            children: text_body("Body"),
+            ..props
+        })
+        .unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             &[modal.layout_node()],
@@ -472,18 +472,15 @@ fn the_scrim_is_the_theme_overlay_and_follows_a_switch() {
     assert!(!scrim_drawn(&tree, first));
 }
 
-fn open_modal_with(
-    body: impl FnOnce() -> Slots,
-    window: (f32, f32),
-) -> telar::testing::Scoped<ComponentList> {
+fn open_modal_with(body: Children, window: (f32, f32)) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
     let tree = telar::testing::scoped(|| {
         let modal = modal(
             ModalProps::props()
                 .open(signal(true))
                 .title("Confirm")
+                .children(body)
                 .build(),
-            Children::from(body()),
         )
         .unwrap();
         let root = new_container(
@@ -504,20 +501,6 @@ fn open_modal_with(
     });
     relayout_if_dirty();
     tree
-}
-
-fn tall_body(lines: usize) -> Slots {
-    let mut slots = Slots::new();
-    for line in 0..lines {
-        let text = Text::declaring(
-            move || format!("Line {line}"),
-            LayoutStyle::new().height(20.0),
-            |t| t,
-        )
-        .unwrap();
-        slots.push(None, box_item(text));
-    }
-    slots
 }
 
 fn card_rect(tree: &ComponentList) -> telar::Rect {
@@ -544,11 +527,11 @@ fn an_unset_width_is_the_tokens_and_the_window_bounds_it() {
         max_width: Some(250.0),
         ..ModalTokens::default()
     }));
-    let tree = open_modal_with(|| slot_with_body("Body"), (800.0, 400.0));
+    let tree = open_modal_with(text_body("Body"), (800.0, 400.0));
     assert_eq!(card_rect(&tree).width, 250.0, "the tokens size the card");
     drop(tree);
 
-    let tree = open_modal_with(|| slot_with_body("Body"), (240.0, 400.0));
+    let tree = open_modal_with(text_body("Body"), (240.0, 400.0));
     let card = card_rect(&tree);
     assert_eq!(card.width, 200.0, "the window less the tokens' pad wins");
     assert_eq!(
@@ -562,7 +545,7 @@ fn a_narrow_window_never_overflows_the_card() {
     plain_theme(None);
     let pad = ModalTokens::default().pad();
     for width in [120.0, 200.0, 300.0, 368.0] {
-        let tree = open_modal_with(|| slot_with_body("Body"), (width, 400.0));
+        let tree = open_modal_with(text_body("Body"), (width, 400.0));
         let card = card_rect(&tree);
         assert!(card.x >= 0.0, "left edge at {width}: {card:?}");
         assert!(
@@ -577,7 +560,7 @@ fn a_narrow_window_never_overflows_the_card() {
 fn a_tall_body_scrolls_inside_a_card_that_fits_the_window() {
     plain_theme(None);
     let pad = ModalTokens::default().pad();
-    let tree = open_modal_with(|| tall_body(40), (600.0, 400.0));
+    let tree = open_modal_with(tall_body(40), (600.0, 400.0));
     let card = card_rect(&tree);
     assert!(card.y >= 0.0 && card.y + card.height <= 400.0, "{card:?}");
     assert!(card.height <= 400.0 - pad * 2.0 + 0.5, "{card:?}");
@@ -605,7 +588,7 @@ fn a_tall_body_scrolls_inside_a_card_that_fits_the_window() {
 #[test]
 fn a_short_body_is_no_stop_of_its_own() {
     plain_theme(None);
-    let _tree = open_modal_with(|| slot_with_body("Body"), (600.0, 400.0));
+    let _tree = open_modal_with(text_body("Body"), (600.0, 400.0));
     assert!(
         telar::focus::exposed()
             .iter()
@@ -614,7 +597,7 @@ fn a_short_body_is_no_stop_of_its_own() {
 }
 
 /// The body as a document has it: the box its scroll area is, if it has one, carrying its name and whether Tab stops on it.
-fn body_in_document(body: impl FnOnce() -> Slots) -> Option<(Option<String>, bool)> {
+fn body_in_document(body: Children) -> Option<(Option<String>, bool)> {
     let was = telar::testing::set_element_capture(true);
     let tree = open_modal_with(body, (600.0, 400.0));
     let body = tree.commands().iter().find_map(|command| match command {
@@ -633,7 +616,7 @@ fn body_in_document(body: impl FnOnce() -> Slots) -> Option<(Option<String>, boo
 #[test]
 fn a_body_that_scrolls_is_a_stop_named_after_the_dialog() {
     plain_theme(None);
-    let tree = open_modal_with(|| tall_body(40), (600.0, 400.0));
+    let tree = open_modal_with(tall_body(40), (600.0, 400.0));
     let names: Vec<String> = telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .filter(|node| node.role == Role::ScrollArea)
@@ -643,7 +626,7 @@ fn a_body_that_scrolls_is_a_stop_named_after_the_dialog() {
     drop(tree);
 
     assert_eq!(
-        body_in_document(|| tall_body(40)),
+        body_in_document(tall_body(40)),
         Some((Some("Confirm".to_string()), true)),
         "a document makes it a named Tab stop"
     );
@@ -653,7 +636,7 @@ fn a_body_that_scrolls_is_a_stop_named_after_the_dialog() {
 fn a_body_that_fits_says_nothing_of_its_own() {
     plain_theme(None);
     assert_eq!(
-        body_in_document(|| slot_with_body("Body")),
+        body_in_document(text_body("Body")),
         Some((None, false)),
         "the dialog's name is not said a second time on the way in"
     );

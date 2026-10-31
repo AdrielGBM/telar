@@ -3,11 +3,11 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Canvas, Children, Clip, ClippedItem, Color,
-    Container, Cursor, Gradient, Key, LayoutError, LayoutItem, LayoutStyle, ModifiersState,
-    NamedKey, NumericValue, Paint, Point, Props, Reactive, Rect, RectStyle, RenderNode, RwSignal,
-    ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, box_transform,
-    children, effect, focus::Role, signal, step_factor,
+    Accessible, AlignItems, Border, BorderRadius, Canvas, Clip, ClippedItem, Color, Container,
+    Cursor, Gradient, Key, LayoutError, LayoutItem, LayoutStyle, ModifiersState, NamedKey,
+    NumericValue, Paint, Point, Props, Reactive, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle,
+    StyledContainer, SurfaceAmendment, amend_surface, box_item, box_transform, children, effect,
+    focus::Role, signal, step_factor,
 };
 
 use crate::shared;
@@ -215,10 +215,7 @@ impl Picker {
 }
 
 /// A colour picked on a saturation and brightness area, hue and opacity sliders, a hex field and a row of swatches.
-pub fn color_picker(
-    props: ColorPickerProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ColorPickerProps {
         value,
         alpha,
@@ -668,7 +665,6 @@ fn hex_field(picker: &Picker, width: f32, alpha: bool) -> Result<Box<dyn LayoutI
             .on_submit(apply)
             .on_key(on_key)
             .build(),
-        Children::default(),
     )
 }
 
@@ -705,7 +701,6 @@ fn swatch_row(
             .selected(selected)
             .on_select(choose)
             .build(),
-        Children::default(),
     )
 }
 

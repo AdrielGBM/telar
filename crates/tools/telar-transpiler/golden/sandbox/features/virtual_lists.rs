@@ -23,7 +23,7 @@ struct Note {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn virtual_lists(props: VirtualListsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -39,184 +39,158 @@ pub fn virtual_lists(props: VirtualListsProps, children: Children) -> Result<Box
     let rows = signal(None::<VirtualRows>);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Virtual lists").desc("A for loop marked virtual builds only the rows its scroll shows. row_height: says every row is the same height and finds the window by division. estimated_height: lets rows differ: unbuilt rows stand at the estimate, built ones are measured, and the first row on screen holds still while estimates are corrected.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Virtual lists").desc("A for loop marked virtual builds only the rows its scroll shows. row_height: says every row is the same height and finds the window by division. estimated_height: lets rows differ: unbuilt rows stand at the estimate, built ones are measured, and the first row on screen holds still while estimates are corrected.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let notes = notes.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let notes = notes.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let notes = notes.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let notes = notes.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __node_3 = {
-                                            LayoutScrollArea::new_with(LayoutStyle::new().height(260.0).width(SizeDimension::Percent(1.0)), |__viewport| {
-                                            let mut __slots: Vec<ChildSlot> = Vec::new();
-                                            let __node_5 = VirtualRows::new(__viewport.clone(), (64) as f32);
-                                            let __node_4 = VirtualList::measured(
-                                                LayoutStyle::new().flex_column(),
-                                                __node_5,
-                                                (64) as f32 * 2.0,
-                                                { let notes = notes.clone(); move || notes.get() },
-                                                |note| note.id,
-                                                {
-                                                    let theme = theme.clone();
-                                                move |__index: usize, note| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                                    let __col_1 = {
-                                                        let __text_0 = {
-                                                            let note = note.clone();
-                                                            Text::declaring(
-                                                                move || format!("{}", note.title),
-                                                                LayoutStyle::new(),
-                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_font_weight(600) },
-                                                            )?
-                                                        };
-                                                        let __text_1 = {
-                                                            let note = note.clone();
-                                                            Text::declaring(
-                                                                move || format!("{}", note.body),
-                                                                LayoutStyle::new(),
-                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                                            )?
-                                                        };
-                                                        StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).padding_horizontal(12.0).padding_vertical(10.0).gap(4.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_0, __text_1])?
-                                                    };
-                                                    Ok(box_item(__col_1))
-                                                }
-                                                },
-                                            )?;
-                                            __slots.push(ChildSlot::stat(box_item(__node_4)));
-                                            let __scroll_content = Container::from_slots(LayoutStyle::new().flex_column(), __slots)?;
-                                                Ok(Box::new(__scroll_content) as Box<dyn LayoutItem>)
-                                            })?
-                                        };
-                                        __children.push(box_item(__node_3));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_6 = code_line(CodeLineProps::props().code("for note in $notes key note.id virtual estimated_height:64").build(), Children::default())?;
-                        __children.push(box_item(__node_6));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let notes = notes.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_3 = {
+                                    LayoutScrollArea::new_with(LayoutStyle::new().height(260.0).width(SizeDimension::Percent(1.0)), |__viewport| {
+                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                    let __node_5 = VirtualRows::new(__viewport.clone(), (64) as f32);
+                                    let __node_4 = VirtualList::measured(
+                                        LayoutStyle::new().flex_column(),
+                                        __node_5,
+                                        (64) as f32 * 2.0,
+                                        { let notes = notes.clone(); move || notes.get() },
+                                        |note| note.id,
+                                        {
+                                            let theme = theme.clone();
+                                        move |__index: usize, note| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                            let __col_1 = {
+                                                let __text_0 = {
+                                                    let note = note.clone();
+                                                    Text::declaring(
+                                                        move || format!("{}", note.title),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_font_weight(600) },
+                                                    )?
+                                                };
+                                                let __text_1 = {
+                                                    let note = note.clone();
+                                                    Text::declaring(
+                                                        move || format!("{}", note.body),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).padding_horizontal(12.0).padding_vertical(10.0).gap(4.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_0, __text_1])?
+                                            };
+                                            Ok(box_item(__col_1))
+                                        }
+                                        },
+                                    )?;
+                                    __slots.push(ChildSlot::stat(box_item(__node_4)));
+                                    let __scroll_content = Container::from_slots(LayoutStyle::new().flex_column(), __slots)?;
+                                        Ok(Box::new(__scroll_content) as Box<dyn LayoutItem>)
+                                    })?
+                                };
+                                __children.push(box_item(__node_3));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_6 = code_line(CodeLineProps::props().code("for note in $notes key note.id virtual estimated_height:64").build())?;
+                    __children.push(box_item(__node_6));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("Rows of different heights — 400 notes, a handful built").build(), __deferred)?
+            example(ExampleProps::props().title("Rows of different heights — 400 notes, a handful built").children(__recipe_children).build())?
         };
         let __node_7 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let rows = rows.clone();
                     let notes = notes.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let rows = rows.clone();
-                    let notes = notes.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_8 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let rows = rows.clone();
-                                    let notes = notes.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let rows = rows.clone();
-                                    let notes = notes.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __row_0 = {
-                                            let __node_9 = button(ButtonProps::props().label("Note 40").on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(40, 8.0) } })).build(), Children::default())?;
-                                            let __node_10 = button(ButtonProps::props().label("Note 250").on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(250, 8.0) } })).build(), Children::default())?;
-                                            let __node_11 = button(ButtonProps::props().label("Note 399").variant(ButtonVariant::Outline).on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(399, 8.0) } })).build(), Children::default())?;
-                                            Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_9, __node_10, __node_11])?
-                                        };
-                                        __children.push(box_item(__row_0));
-                                        let __node_12 = {
-                                            LayoutScrollArea::new_with(LayoutStyle::new().height(200.0).width(SizeDimension::Percent(1.0)), |__viewport| {
-                                            let mut __slots: Vec<ChildSlot> = Vec::new();
-                                            let __node_14 = VirtualRows::new(__viewport.clone(), (64) as f32);
-                                            rows.set(Some(__node_14.clone()));
-                                            let __node_13 = VirtualList::measured(
-                                                LayoutStyle::new().flex_column(),
-                                                __node_14,
-                                                (96) as f32,
-                                                { let notes = notes.clone(); move || notes.get() },
-                                                |note| note.id,
-                                                {
-                                                    let theme = theme.clone();
-                                                move |__index: usize, note| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                                    let __col_2 = {
-                                                        let __text_2 = {
-                                                            let note = note.clone();
-                                                            Text::declaring(
-                                                                move || format!("{}", note.title),
-                                                                LayoutStyle::new(),
-                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_font_weight(600) },
-                                                            )?
-                                                        };
-                                                        let __text_3 = {
-                                                            let note = note.clone();
-                                                            Text::declaring(
-                                                                move || format!("{}", note.body),
-                                                                LayoutStyle::new(),
-                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                                            )?
-                                                        };
-                                                        StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).padding_horizontal(12.0).padding_vertical(10.0).gap(4.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_2, __text_3])?
-                                                    };
-                                                    Ok(box_item(__col_2))
-                                                }
-                                                },
-                                            )?;
-                                            __slots.push(ChildSlot::stat(box_item(__node_13)));
-                                            let __scroll_content = Container::from_slots(LayoutStyle::new().flex_column(), __slots)?;
-                                                Ok(Box::new(__scroll_content) as Box<dyn LayoutItem>)
-                                            })?
-                                        };
-                                        __children.push(box_item(__node_12));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_8));
-                        let __node_15 = code_line(CodeLineProps::props().code("let rows = signal(None::<VirtualRows>);   for … virtual estimated_height:64 overscan:96 rows:$rows   ·   rows.reveal(index, margin)").build(), Children::default())?;
-                        __children.push(box_item(__node_15));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_8 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let rows = rows.clone();
+                                let notes = notes.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __node_9 = button(ButtonProps::props().label("Note 40").on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(40, 8.0) } })).build())?;
+                                    let __node_10 = button(ButtonProps::props().label("Note 250").on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(250, 8.0) } })).build())?;
+                                    let __node_11 = button(ButtonProps::props().label("Note 399").variant(ButtonVariant::Outline).on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(399, 8.0) } })).build())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_9, __node_10, __node_11])?
+                                };
+                                __children.push(box_item(__row_0));
+                                let __node_12 = {
+                                    LayoutScrollArea::new_with(LayoutStyle::new().height(200.0).width(SizeDimension::Percent(1.0)), |__viewport| {
+                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                    let __node_14 = VirtualRows::new(__viewport.clone(), (64) as f32);
+                                    rows.set(Some(__node_14.clone()));
+                                    let __node_13 = VirtualList::measured(
+                                        LayoutStyle::new().flex_column(),
+                                        __node_14,
+                                        (96) as f32,
+                                        { let notes = notes.clone(); move || notes.get() },
+                                        |note| note.id,
+                                        {
+                                            let theme = theme.clone();
+                                        move |__index: usize, note| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                            let __col_2 = {
+                                                let __text_2 = {
+                                                    let note = note.clone();
+                                                    Text::declaring(
+                                                        move || format!("{}", note.title),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_font_weight(600) },
+                                                    )?
+                                                };
+                                                let __text_3 = {
+                                                    let note = note.clone();
+                                                    Text::declaring(
+                                                        move || format!("{}", note.body),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).padding_horizontal(12.0).padding_vertical(10.0).gap(4.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_2, __text_3])?
+                                            };
+                                            Ok(box_item(__col_2))
+                                        }
+                                        },
+                                    )?;
+                                    __slots.push(ChildSlot::stat(box_item(__node_13)));
+                                    let __scroll_content = Container::from_slots(LayoutStyle::new().flex_column(), __slots)?;
+                                        Ok(Box::new(__scroll_content) as Box<dyn LayoutItem>)
+                                    })?
+                                };
+                                __children.push(box_item(__node_12));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_15 = code_line(CodeLineProps::props().code("let rows = signal(None::<VirtualRows>);   for … virtual estimated_height:64 overscan:96 rows:$rows   ·   rows.reveal(index, margin)").build())?;
+                    __children.push(box_item(__node_15));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("rows: — a handle the view can bring any row into view with").build(), __deferred)?
+            example(ExampleProps::props().title("rows: — a handle the view can bring any row into view with").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7])?
     };

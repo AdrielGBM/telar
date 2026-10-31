@@ -1,33 +1,33 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Key, NamedKey, Reactive, Role, Slots};
+use telar::{Children, Color, Key, NamedKey, Reactive, Role};
 
 use crate::list::{ItemProps, item};
 use crate::select::{SelectProps, select};
 
 fn sizes() -> Children {
     Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for label in ["Small", "Medium", "Large"] {
             let props = ItemProps::props()
                 .label(Reactive::of(move || label.to_string()))
                 .build();
-            slots.push(None, item(props, Children::default())?);
+            items.push(item(props)?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
 /// More choices than a window holds, so the open list is cut to the room it has and scrolls.
 fn options() -> Children {
     Children::new(|| {
-        let mut slots = Slots::new();
+        let mut items = Vec::new();
         for n in 1..=40 {
             let props = ItemProps::props()
                 .label(Reactive::of(move || format!("Option {n}")))
                 .build();
-            slots.push(None, item(props, Children::default())?);
+            items.push(item(props)?);
         }
-        Ok(slots)
+        Ok(items)
     })
 }
 
@@ -38,8 +38,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 SelectProps::props()
                     .color(p.arg("color", Color::TRANSPARENT))
                     .stretch(p.arg("stretch", false))
+                    .children(sizes())
                     .build(),
-                sizes(),
             )
         })
         .title("Inputs/Select")
@@ -59,7 +59,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         }),
         preview!(select: SelectProps, "Bound selection", |p| {
             let selected = p.signal("selected", 1u32);
-            select(SelectProps::props().selected(selected).build(), sizes())
+            select(
+                SelectProps::props()
+                    .selected(selected)
+                    .children(sizes())
+                    .build(),
+            )
         })
         .title("Inputs/Select")
         .layout(Layout::Centered)
@@ -75,7 +80,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         }),
         preview!(select: SelectProps, "Long list", |p| {
             let selected = p.signal("selected", 0u32);
-            select(SelectProps::props().selected(selected).build(), options())
+            select(
+                SelectProps::props()
+                    .selected(selected)
+                    .children(options())
+                    .build(),
+            )
         })
         .title("Inputs/Select")
         .layout(Layout::Centered)

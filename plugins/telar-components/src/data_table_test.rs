@@ -88,7 +88,6 @@ impl Mounted {
                 }))
                 .label("Files")
                 .build(),
-            Children::default(),
         )
         .unwrap();
         lay_out(item.layout_node(), 400.0, height);
@@ -387,12 +386,12 @@ struct Grid {
 }
 
 impl Grid {
-    fn mount(props: DataTableProps, children: Children) -> Self {
+    fn mount(props: DataTableProps) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::testing::reset_keyboard();
         telar::focus::clear();
         telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
-        let item = data_table(props, children).unwrap();
+        let item = data_table(props).unwrap();
         lay_out(item.layout_node(), 400.0, 300.0);
         let mut grid = Self {
             tree: ComponentList::new(item),
@@ -531,7 +530,6 @@ fn resizable(widths: RwSignal<ColumnWidths>) -> Grid {
             .widths(widths)
             .label("Files")
             .build(),
-        Children::default(),
     )
 }
 
@@ -665,7 +663,6 @@ fn several() -> Chosen {
             }))
             .label("Files")
             .build(),
-        Children::default(),
     );
     Chosen { grid, rows, heard }
 }
@@ -743,7 +740,6 @@ fn an_empty_table_keeps_its_header_and_says_so_under_it_until_rows_arrive() {
             .rows(Reactive::of(move || rows.get()))
             .label("Files")
             .build(),
-        Children::default(),
     );
     assert_eq!(grid.names(Role::ColumnHeader), ["Name", "Size", "Kind"]);
     let header = grid.find(Role::ColumnHeader, "Name").rect;
@@ -766,24 +762,23 @@ fn an_empty_table_keeps_its_header_and_says_so_under_it_until_rows_arrive() {
 }
 
 #[test]
-fn an_empty_table_shows_its_own_words_or_its_children() {
+fn an_empty_table_shows_its_own_words_or_its_empty_state() {
     let grid = Grid::mount(
         DataTableProps::props()
             .columns(columns())
             .empty_label("No files yet")
             .build(),
-        Children::default(),
     );
     assert_eq!(grid.names(Role::Label), ["No files yet"]);
     let grid = Grid::mount(
-        DataTableProps::props().columns(columns()).build(),
-        Children::new(|| {
-            let mut slots = telar::Slots::new();
-            let text =
-                Text::declaring(|| "Drop files here".to_string(), LayoutStyle::new(), |t| t)?;
-            slots.push(None, box_item(text));
-            Ok(slots)
-        }),
+        DataTableProps::props()
+            .columns(columns())
+            .empty(Children::one(|| {
+                let text =
+                    Text::declaring(|| "Drop files here".to_string(), LayoutStyle::new(), |t| t)?;
+                Ok(box_item(text))
+            }))
+            .build(),
     );
     assert_eq!(grid.names(Role::Label), ["Drop files here"]);
 }
@@ -1026,7 +1021,6 @@ fn narrowing_a_wrapping_column_runs_its_cells_onto_more_lines() {
             .selection_mode(SelectionMode::Multiple)
             .label("Files")
             .build(),
-        Children::default(),
     );
     for _ in 0..4 {
         grid.settle();

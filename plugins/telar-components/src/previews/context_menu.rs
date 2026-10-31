@@ -6,19 +6,15 @@ use telar::{
     Role, RwSignal, box_item, children,
 };
 
-use super::sample;
 use crate::button::{ButtonProps, button};
 use crate::list::{ItemProps, SeparatorProps, item, separator};
 use crate::menu::{ContextMenuProps, context_menu, focused_rect, is_context_menu_key};
 use crate::menu_panel::{SubmenuProps, submenu};
 
 fn rows() -> Children {
-    sample::children(|| {
+    Children::new(|| {
         let row = |label: &'static str, shortcut: &'static str| {
-            item(
-                ItemProps::props().label(label).shortcut(shortcut).build(),
-                Children::default(),
-            )
+            item(ItemProps::props().label(label).shortcut(shortcut).build())
         };
         Ok(vec![
             row("Cut", "Mod+X")?,
@@ -29,23 +25,18 @@ fn rows() -> Children {
                     .shortcut("Mod+V")
                     .disabled(true)
                     .build(),
-                Children::default(),
             )?,
-            separator(SeparatorProps::props().build(), Children::default())?,
+            separator(SeparatorProps::props().build())?,
             submenu(
-                SubmenuProps::props().label("Share").build(),
-                sample::children(|| {
-                    Ok(vec![
-                        item(
-                            ItemProps::props().label("Copy link").build(),
-                            Children::default(),
-                        )?,
-                        item(
-                            ItemProps::props().label("Email").build(),
-                            Children::default(),
-                        )?,
-                    ])
-                }),
+                SubmenuProps::props()
+                    .label("Share")
+                    .children(Children::new(|| {
+                        Ok(vec![
+                            item(ItemProps::props().label("Copy link").build())?,
+                            item(ItemProps::props().label("Email").build())?,
+                        ])
+                    }))
+                    .build(),
             )?,
         ])
     })
@@ -69,7 +60,7 @@ fn shown_at(
                 Place::Point(x, y) => props.at((x, y)),
                 Place::Around(rect) => props.around(rect),
             };
-            context_menu(props.build(), rows())
+            context_menu(props.children(rows()).build())
         },
         0.0,
     )
@@ -90,7 +81,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label("Show the menu")
                     .on_press(Rc::new(move || open.set(true)))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(Container::column(children![
                 reopen,
@@ -121,7 +111,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label("Document")
                     .on_press(Rc::new(|| {}))
                     .build(),
-                Children::default(),
             )?;
             let asks = telar::StyledContainer::new(
                 LayoutStyle::column(),

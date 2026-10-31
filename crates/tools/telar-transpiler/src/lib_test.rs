@@ -46,6 +46,172 @@ fn a_class_on_a_component_call_reaches_the_surface_it_paints() {
     );
 }
 
+const PART_CLASSES: &str =
+    "[style]\n@flat\n    radius: 0\n    pad: 4\n@inked\n    stroke: #000000\n\n[view]\n";
+
+/// `header_style:@flat` hands the class to the header part through the same amendment `@flat` hands the principal surface, and carries only what the class says about paint.
+#[test]
+fn a_class_as_a_value_reaches_the_part_its_key_names() {
+    let code = transpile_source(
+        &format!("{PART_CLASSES}sidebar header_style:@flat\n"),
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains(
+            "SidebarProps::props().header_style(std::rc::Rc::new(move |__s: RectStyle| __s.with_radius(BorderRadius::all(0.0)))).build()"
+        ),
+        "{code}"
+    );
+    let call = code.lines().find(|line| line.contains("sidebar(")).unwrap();
+    assert!(
+        !call.contains(".style(") && !call.contains("padding"),
+        "{code}"
+    );
+}
+
+/// Several classes for one part stack as they do on the call itself, the later winning, parenthesised as any value holding a space is.
+#[test]
+fn a_part_takes_several_classes_in_parens() {
+    let code = transpile_source(
+        &format!("{PART_CLASSES}sidebar @inked header_style:(@flat @inked)\n"),
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains(
+            ".style(std::rc::Rc::new(move |__s: RectStyle| __s.with_stroke(Stroke::new(Color::rgba(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0), 1.0)))).header_style(std::rc::Rc::new(move |__s: RectStyle| __s.with_stroke(Stroke::new(Color::rgba(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0), 1.0)).with_radius(BorderRadius::all(0.0))))"
+        ),
+        "{code}"
+    );
+}
+
+#[test]
+fn a_principal_class_still_compiles_to_the_style_setter() {
+    let code = transpile_source(
+        &format!("{PART_CLASSES}sidebar @flat\n"),
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains(
+            "SidebarProps::props().style(std::rc::Rc::new(move |__s: RectStyle| __s.with_radius(BorderRadius::all(0.0)))).build()"
+        ),
+        "{code}"
+    );
+}
+
+/// On a box a state key paints that state; on a component call it would name a part called `hover`, and a component's states are its own, so it is an error that says where a class reaches them.
+#[test]
+fn a_state_key_on_a_component_call_is_an_error_naming_where_a_class_restyles_it() {
+    for (line, key) in [
+        ("sidebar hover_style:@flat", "hover_style"),
+        ("sidebar active_style:(@flat @inked)", "active_style"),
+        ("sidebar disabled_style(fill:#ffffff)", "disabled_style"),
+        ("sidebar focus_style:@flat", "focus_style"),
+    ] {
+        let code = transpile_source(&format!("{PART_CLASSES}{line}\n"), "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(&format!(
+                "compile_error!(\"`{key}` paints a state of a `box`, and a component's states are its own: a class restyles them in every state, on the call, `sidebar @…`, or on a part, `<part>_style:@…`\")"
+            )),
+            "{line}:\n{code}"
+        );
+        assert_eq!(code.matches("compile_error!").count(), 1, "{line}:\n{code}");
+        assert!(!code.contains(&format!(".{key}(")), "{line}:\n{code}");
+    }
+}
+
+#[test]
+fn a_class_value_that_cannot_be_handed_over_is_an_error_on_its_line() {
+    let errors = |line: &str| {
+        let code = transpile_source(&format!("{PART_CLASSES}{line}\n"), "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains('@') || code.contains("compile_error!"),
+            "{code}"
+        );
+        code
+    };
+    for (line, expected) in [
+        (
+            "sidebar header_style:@missing",
+            "no class `@missing` here: declare it in `[style]`",
+        ),
+        (
+            "sidebar label:@flat",
+            "`label:@…` hands a class to a part, and a part's prop is named for it, `<part>_style`: `label_style:@flat`",
+        ),
+        (
+            "sidebar style:(@flat @inked)",
+            "`style:@…` names the principal surface, which takes its classes on the call itself: `sidebar @flat @inked`",
+        ),
+        (
+            "box fill:@flat",
+            "`fill:@…` hands a class to a component's part, and `box` is no component: its classes go on the element, `box @flat`",
+        ),
+        (
+            "sidebar header_style:(@flat inked)",
+            "`(@flat inked)` is no class list",
+        ),
+    ] {
+        let code = errors(line);
+        assert!(
+            code.contains(expected),
+            "expected {expected:?} for {line:?}:\n{code}"
+        );
+    }
+    assert!(
+        !errors("box fill:@flat").contains("with_fill"),
+        "the class never reaches the box's Rust, where it would be a syntax error on no line of the markup"
+    );
+}
+
+/// A class handed to a part is there for its paint and nothing else, so one that names none is an error on its line; on the call itself a class may be there for something else, and stays silent.
+#[test]
+fn a_part_handed_classes_without_paint_is_an_error_naming_what_a_part_takes() {
+    let emitted = |line: &str| {
+        transpile_source(
+            &format!("[style]\n@roomy\n    pad: 8\n@airy\n    gap: 4\n\n[view]\n{line}\n"),
+            "demo",
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code
+    };
+    let single = emitted("sidebar header_style:@roomy");
+    assert!(
+        single.contains(
+            "compile_error!(\"`header_style:@roomy` hands the part nothing: a part takes `fill`, `stroke`, `stroke_width`, `radius` from its classes, and `@roomy` names none of them\")"
+        ),
+        "{single}"
+    );
+    let several = emitted("sidebar header_style:(@roomy @airy)");
+    assert!(
+        several.contains("`header_style:(@roomy @airy)` hands the part nothing")
+            && several.contains("and `@roomy @airy` names none of them"),
+        "{several}"
+    );
+    let principal = emitted("sidebar @roomy");
+    assert!(
+        !principal.contains("compile_error!") && !principal.contains(".style("),
+        "{principal}"
+    );
+}
+
 /// `keep:` is what turns a viewport into one whose position survives its tree being rebuilt; without it the emission must not change at all, since every scroll that never asked to be kept is one whose position belongs to the tree it was built with.
 #[test]
 fn a_scroll_keeps_its_position_only_when_it_is_asked_to() {
@@ -327,7 +493,7 @@ fn generates_counter() {
     let out = transpile_source(COUNTER, "counter", Some("SandboxTheme"), None).unwrap();
     let code = out.rust_code;
     assert!(
-        code.contains("pub fn counter(props: CounterProps, children: Children)"),
+        code.contains("pub fn counter(props: CounterProps) ->"),
         "{code}"
     );
     assert!(code.contains("fn style_card() -> LayoutStyle"), "{code}");
@@ -486,13 +652,13 @@ fn section_and_heading_resolve_as_widget_components() {
         "section/heading must not reference removed components in:\n{code}"
     );
     assert!(
-        code.contains("section(SectionProps::props().title(\"Cards\").build()"),
+        code.contains(
+            "section(SectionProps::props().title(\"Cards\").children(__recipe_children).build())"
+        ),
         "expected section component call in:\n{code}"
     );
     assert!(
-        code.contains(
-            "heading(HeadingProps::props().text(\"Subtitle\").build(), Children::default())"
-        ),
+        code.contains("heading(HeadingProps::props().text(\"Subtitle\").build())?"),
         "expected heading component call in:\n{code}"
     );
 }
@@ -507,7 +673,7 @@ fn extracts_props_struct_to_file_scope() {
         "struct should be renamed CardProps"
     );
     assert!(
-        code.contains("pub fn card(props: CardProps, children: Children)"),
+        code.contains("pub fn card(props: CardProps) ->"),
         "fn signature must use CardProps"
     );
     let struct_pos = code.find("pub struct CardProps").unwrap();
@@ -686,7 +852,9 @@ fn preview_section_generates_build_fn_and_entry() {
         "missing preview build fn:\n{code}"
     );
     assert!(
-        code.contains("counter(CounterProps::props().__preview_actions(&__preview.actions()).build(), Children::default())?"),
+        code.contains(
+            "counter(CounterProps::props().__preview_actions(&__preview.actions()).build())?"
+        ),
         "preview body should call the component:\n{code}"
     );
     assert!(
@@ -1160,8 +1328,10 @@ fn a_field_can_open_focused_say_so_and_be_given_up() {
     let code = &out.rust_code;
     assert!(code.contains(".autofocus()"), "it opens focused:\n{code}");
     assert!(
-        code.contains(".on_cancel(move || typed.set(String::new()))"),
-        "escape is answerable:\n{code}"
+        code.contains(
+            ".on_cancel({ let typed = typed.clone(); move || typed.set(String::new()) })"
+        ),
+        "escape is answerable, with its own copy of the signal `value:` reads too:\n{code}"
     );
     assert!(
         code.contains("holds.set(Some(__field.focus_id()));"),
@@ -1364,7 +1534,7 @@ fn a_reactive_for_never_clones_its_own_loop_variable() {
 /// A `$name` is a capture only where `name` comes from outside the closure. A view `let` at the top of a loop body declares *inside* it, so `track_rect:$rect` under `let rect = …` names that binding — and the prelude that cloned it emitted `let rect = rect.clone();` above the closure, against a name nothing had bound yet.
 #[test]
 fn a_view_let_inside_a_loop_is_not_cloned_above_it() {
-    let src = "[logic]\nlet chips = signal(vec![1i32, 2]);\nlet rects = 3i32;\n[view]\ncol\n    for m in $chips key m\n        let rect = chip_rect(&rects, m)\n        row track_rect:$rect\n";
+    let src = "[logic]\nlet chips = signal(vec![1i32, 2]);\nlet rects = 3i32;\n[view]\ncol\n    text \"{rects}\"\n    for m in $chips key m\n        let rect = chip_rect(&rects, m)\n        row track_rect:$rect\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     let builder = code.find("move |m| ->").expect("item builder closure");
     assert!(
@@ -1373,7 +1543,7 @@ fn a_view_let_inside_a_loop_is_not_cloned_above_it() {
     );
     assert!(
         code[..builder].contains("let rects = rects.clone();"),
-        "while the `[logic]` binding the `let` reads still is:\n{code}"
+        "while the `[logic]` binding the `let` reads, which the text reads too, still is:\n{code}"
     );
 }
 
@@ -1961,19 +2131,21 @@ fn transition_color_on_text_wraps_text_style() {
 fn a_compound_component_receives_its_children_as_a_recipe() {
     let code = paint_code("menu label:\"Edit\"\n    item label:\"Undo\"\n    separator");
     assert!(
-        code.contains("Children::per_slot(") && code.contains("Ok(__slots)"),
-        "the children are a closure returning the slots it is asked for:\n{code}"
+        code.contains("let __recipe_children = Children::new(") && code.contains("Ok(__children)"),
+        "the children are a closure returning them:\n{code}"
     );
     assert!(
-        code.contains("menu(MenuProps::props().label(\"Edit\").build(), __deferred)"),
-        "and the recipe is what the callee is handed:\n{code}"
+        code.contains(
+            "menu(MenuProps::props().label(\"Edit\").children(__recipe_children).build())"
+        ),
+        "and the recipe is the prop the callee is handed:\n{code}"
     );
 }
 
-/// A `.rsx` can be compound too, and the markup names its context type by declaring one: a `Context` struct in `[logic]` is what turns the component's children from arguments into a recipe. It was the last thing keeping compound components to the built-in catalogue.
+/// A `.rsx` can be compound too, and the markup names its context type by declaring one: a `Context` struct in `[logic]` is the context its `children` recipe is built inside, lifted to module scope so children in other files can name it.
 #[test]
 fn a_context_struct_makes_an_rsx_component_compound() {
-    let src = "[logic]\n#[derive(Clone)]\npub struct Context {\n    pub pick: u32,\n}\n\nlet ctx = Context { pick: 1 };\n\n[view]\ncol\n    children in:ctx\n";
+    let src = "[logic]\n#[derive(Clone)]\npub struct Context {\n    pub pick: u32,\n}\n\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet ctx = Context { pick: 1 };\n\n[view]\ncol\n    children $props.children in:ctx\n";
     let code = transpile_source(src, "picker", None, None)
         .unwrap()
         .rust_code;
@@ -1983,11 +2155,11 @@ fn a_context_struct_makes_an_rsx_component_compound() {
         "the type is renamed and lifted to module scope, so children in other files can name it:\n{code}"
     );
     assert!(
-        code.contains("pub fn picker(props: PickerProps, children: Children)"),
-        "and the component takes the recipe rather than built children:\n{code}"
+        code.contains("pub fn picker(props: PickerProps) ->"),
+        "and the component takes its children as a prop:\n{code}"
     );
     assert!(
-        code.contains("__children.extend(children.build_slot_with(None, ctx)?);"),
+        code.contains("__children.extend(props.children.build_with(ctx)?);"),
         "built inside the context `[logic]` built, where the placeholder stands:\n{code}"
     );
     // An alias is rewritten, not renamed: renaming in place would shift every column rustc reports for the line.
@@ -2018,14 +2190,15 @@ fn a_recipe_clones_the_signals_it_reads_instead_of_moving_them() {
     );
 }
 
-/// A childless compound call still passes the second argument, or it would not match the callee's arity.
+/// A childless call sets no `children`, so the prop keeps its declared default.
 #[test]
-fn a_childless_compound_call_still_passes_a_recipe() {
+fn a_childless_compound_call_sets_no_recipe() {
     let code = paint_code("menu label:\"Edit\"");
     assert!(
-        code.contains("Children::default()"),
-        "an empty recipe, not an empty Slots:\n{code}"
+        code.contains("menu(MenuProps::props().label(\"Edit\").build())?"),
+        "{code}"
     );
+    assert!(!code.contains("Children"), "{code}");
 }
 
 #[test]
@@ -2701,36 +2874,61 @@ fn a_logic_binding_passed_to_a_component_is_cloned_for_the_author() {
     let src = "[logic]\nlet items = vec![\"a\"];\n\n[view]\ncolumn\n    menu label:\"File\" items:items\n    menu label:\"Edit\" items:items\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert_eq!(
-        code.matches(".items(items.clone())").count(),
+        code.matches(".items(::core::clone::Clone::clone(&items))")
+            .count(),
         2,
         "both call sites get their own copy:\n{code}"
     );
 }
 
-/// The call site itself still moves: a binding named once is handed over once, and cloning there would demand `Clone` of everything a `.rsx` forwards.
+/// A binding named once is handed over once, and the recipe that holds the call site takes it, since nothing else reads it.
 ///
-/// **What now clones is the region around it.** A component's children are a recipe that may run again, so the recipe takes its own copy of every binding its subtree names — the one at the call site is still a move, out of the recipe's copy. The consequence is worth stating: a binding that is not `Clone` cannot be forwarded through a component's children at all, and must become an `Rc` or a `Reactive` to cross that line.
+/// A component's children are a recipe that may run again, so its body is a rebuilding region and the call site inside takes a copy of the recipe's binding on each run. The consequence is worth stating: a binding that is not `Clone` cannot be forwarded through a component's children at all, and must become an `Rc` or a `Reactive` to cross that line.
 #[test]
-fn a_logic_binding_is_moved_at_the_call_site_and_cloned_by_the_region() {
+fn a_logic_binding_forwarded_from_a_recipe_is_copied_on_each_run() {
     let src = "[logic]\nlet save: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncolumn\n    save_row on_press:save\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains(".on_press(save)"),
-        "the call site takes the binding by value:\n{code}"
+        code.contains(".on_press(::core::clone::Clone::clone(&save))"),
+        "each run of the recipe hands over its own copy:\n{code}"
     );
     assert!(
-        code.contains("let save = save.clone();"),
-        "and the recipe around it keeps its own, because it can run again:\n{code}"
+        !code.contains("let save = save.clone();"),
+        "and the recipe takes the binding itself, which nothing else reads:\n{code}"
     );
 }
 
-/// Inside one it must still be cloned: the builder closure runs again on every re-render and cannot consume its capture. `captured_idents` does not cover a plain binding — it collects `$signal`s and loop variables — so nothing else keeps it alive.
+/// Inside one it must still be cloned: the builder closure runs again on every re-render and cannot consume its capture.
+/// A recipe runs again, so a binding its body takes by value outside any closure — a static loop's iterable, a prop's value, a `props` field handed to a component nested in another's children — takes a copy on each run, and the recipe keeps the one it captured.
+#[test]
+fn a_recipe_takes_a_copy_of_what_its_body_uses_by_value() {
+    let src = "[logic]\npub struct Props {\n    #[props(default)]\n    pub names: Vec<String>,\n}\n\nlet items = vec![1i32, 2];\nlet tags = vec![String::from(\"a\")];\n\n[view]\ncolumn\n    for x in items\n        text \"{x}\"\n    panel\n        chips values:tags names:props.names\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("for x in ::core::clone::Clone::clone(&items) {"),
+        "{code}"
+    );
+    assert!(
+        code.contains(".values(::core::clone::Clone::clone(&tags))"),
+        "{code}"
+    );
+    assert!(
+        code.contains(".names(::core::clone::Clone::clone(&__props_names))"),
+        "the nested recipe copies the field in per run of the outer one, and hands a copy on per run of its own:\n{code}"
+    );
+    assert!(
+        !code.contains("let items = items.clone();"),
+        "the outer recipe moves `items` in once, since nothing outside it reads it:\n{code}"
+    );
+    assert_logic_parses(&code);
+}
+
 #[test]
 fn a_logic_binding_inside_a_reactive_branch_is_still_cloned() {
     let src = "[logic]\nlet open = signal(true);\nlet save: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncolumn\n    if $open\n        save_row on_press:save\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains("save.clone()"),
+        code.contains("::core::clone::Clone::clone(&save)"),
         "a re-runnable branch cannot move its capture:\n{code}"
     );
 }
@@ -2885,10 +3083,10 @@ fn an_unknown_blend_mode_is_a_compile_error_not_a_silent_drop() {
     );
 }
 
-/// The scroll-scene shape: a root that provides its own theme and a `children` placeholder one box below it. The slot is built inside the theme's scope, where the placeholder stands, rather than in `[logic]` before that scope exists.
+/// The scroll-scene shape: a root that provides its own theme and a `children` placeholder one box below it. The children are built inside the theme's scope, where the placeholder stands, rather than in `[logic]` before that scope exists.
 #[test]
-fn a_slot_is_built_inside_the_theme_of_the_node_it_is_placed_in() {
-    let src = "[logic]\n#[derive(Clone, Copy)]\npub struct Context {\n    pub pick: u32,\n}\n\nlet palette = follow_theme(|| Palette::night());\nlet ctx = Context { pick: 1 };\n\n[view]\ncol theme:(palette)\n    col sticky\n        children in:ctx\n";
+fn placed_children_are_built_inside_the_theme_of_the_node_they_are_placed_in() {
+    let src = "[logic]\n#[derive(Clone, Copy)]\npub struct Context {\n    pub pick: u32,\n}\n\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet palette = follow_theme(|| Palette::night());\nlet ctx = Context { pick: 1 };\n\n[view]\ncol theme:(palette)\n    col sticky\n        children $props.children in:ctx\n";
     let code = transpile_source(src, "scene", None, None)
         .unwrap()
         .rust_code;
@@ -2896,60 +3094,70 @@ fn a_slot_is_built_inside_the_theme_of_the_node_it_is_placed_in() {
         .find("provide_theme(palette, || {")
         .unwrap_or_else(|| panic!("the root provides the palette:\n{code}"));
     let built = code
-        .find("children.build_slot_with(None, ctx)?")
-        .unwrap_or_else(|| panic!("the placeholder builds its slot:\n{code}"));
+        .find("props.children.build_with(ctx)?")
+        .unwrap_or_else(|| panic!("the placeholder builds its children:\n{code}"));
     assert!(
         themed < built,
-        "the slot is built inside the theme's scope:\n{code}"
+        "the children are built inside the theme's scope:\n{code}"
     );
-    assert!(
-        !code.contains("children.build_with(") && !code.contains("children.build()"),
-        "and nothing builds the children up front:\n{code}"
+    assert_eq!(
+        code.matches(".build_with(").count(),
+        1,
+        "and nothing builds them up front:\n{code}"
     );
 }
 
-/// A placeholder inside a reactive branch builds its slot again each time the branch is rebuilt, so the branch clones the recipe in rather than moving it.
+/// A placeholder inside a reactive branch builds its children again each time the branch is rebuilt, so the branch clones `props` in rather than moving it.
 #[test]
-fn a_slot_inside_a_reactive_branch_is_rebuilt_with_it() {
-    let src = "[logic]\nlet open = signal(true);\n\n[view]\ncol\n    if $open\n        children\n";
+fn placed_children_inside_a_reactive_branch_are_rebuilt_with_it() {
+    let src = "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet open = signal(true);\n\n[view]\ncol\n    if $open\n        children $props.children\n";
     let code = transpile_source(src, "reveal", None, None)
         .unwrap()
         .rust_code;
     assert!(
-        code.contains("let children = children.clone();"),
-        "the branch owns its own handle on the recipe:\n{code}"
+        !code.contains("let props = props.clone();"),
+        "the branch takes the one field it reads, not all of `props`:\n{code}"
     );
     assert!(
-        code.contains("children.build_slot(None)?"),
-        "and builds the slot where the placeholder stands:\n{code}"
+        code.contains("__children.extend(props.children.build()?);"),
+        "and builds the children where the placeholder stands:\n{code}"
     );
 }
 
-/// Each run of children bound for one slot is guarded by the request, so a placeholder asking for the header builds the header and nothing else.
+/// Each prop's children are a recipe of their own, so a placeholder placing the header builds the header and nothing else.
 #[test]
-fn a_call_site_builds_only_the_slot_it_is_asked_for() {
+fn each_routed_prop_gets_a_recipe_of_its_own() {
     let code = paint_code("card\n    text \"Title\" slot:\"header\"\n    text \"Body\"");
+    assert_eq!(code.matches("Children::new(").count(), 2, "{code}");
     assert!(
-        code.contains("if __request.includes(Some(\"header\")) {")
-            && code.contains("if __request.includes(None) {"),
-        "each slot's children sit under their own guard:\n{code}"
+        code.contains(".header(__recipe_header).children(__recipe_children)"),
+        "{code}"
     );
+    assert_logic_parses(&code);
 }
 
-/// A component forwarding its own children into a named slot of another hands them to that slot, the one its guard builds them for.
+/// A component forwarding its own children into a slot of another hands them to that prop's recipe, which builds them from the forwarding component's `props`.
 #[test]
-fn forwarded_children_reach_the_named_slot_they_are_routed_to() {
-    let src = "[view]\ncard\n    children slot:\"header\"\n    text \"Body\"\n";
+fn forwarded_children_reach_the_prop_they_are_routed_to() {
+    let src = "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\n[view]\ncard\n    children $props.children slot:\"header\"\n    text \"Body\"\n";
     let code = transpile_source(src, "titled", None, None)
         .unwrap()
         .rust_code;
-    let guard = code
-        .find("if __request.includes(Some(\"header\")) {")
-        .unwrap_or_else(|| panic!("the forwarded children sit under the header's guard:\n{code}"));
-    let routed = code
-        .find("__slots.push(Some(\"header\"), __item);")
-        .unwrap_or_else(|| panic!("and land in the header slot:\n{code}"));
-    assert!(guard < routed, "inside that guard:\n{code}");
+    let recipe = code
+        .find("let __recipe_header = Children::new(")
+        .unwrap_or_else(|| panic!("the forwarded children are the header's recipe:\n{code}"));
+    let forwarded = code
+        .find("__children.extend(props.children.build()?);")
+        .unwrap_or_else(|| panic!("which builds the forwarded children:\n{code}"));
+    let body = code
+        .find("let __recipe_children")
+        .unwrap_or_else(|| panic!("and the body is the children recipe:\n{code}"));
+    assert!(recipe < forwarded && forwarded < body, "{code}");
+    assert!(
+        !code.contains("let props = props.clone();"),
+        "the recipe takes the one field it reads, not all of `props`:\n{code}"
+    );
+    assert_logic_parses(&code);
 }
 
 fn assert_logic_parses(code: &str) {

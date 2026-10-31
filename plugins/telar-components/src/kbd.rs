@@ -1,10 +1,10 @@
 //! [`kbd`]: a key cap per key of a shortcut, for hints beside a command.
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Chord, Container, JustifyContent,
-    LayoutError, LayoutItem, LayoutStyle, NodeId, Props, Reactive, ReactiveList, RectStyle,
-    ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, amend_surface, box_item,
-    children, keyboard_convention, style_follows,
+    Accessible, AlignItems, Border, BorderRadius, Chord, Container, JustifyContent, LayoutError,
+    LayoutItem, LayoutStyle, NodeId, Props, Reactive, ReactiveList, RectStyle, ShapeStyle,
+    StyledContainer, SurfaceAmendment, Text, TextWrap, amend_surface, box_item, children,
+    keyboard_convention, style_follows,
 };
 
 use crate::shared::{self, shown_chord};
@@ -47,7 +47,7 @@ impl KbdTokens {
 }
 
 /// One cap per key of `chord`.
-pub fn kbd(props: KbdProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn kbd(props: KbdProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let KbdProps { chord, style } = props;
     let spoken = chord.clone();
     let caps = ReactiveList::with_style(

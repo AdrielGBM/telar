@@ -10,9 +10,7 @@ use crate::style::{PropCall, format_f32, in_application_order, layout_prop_call}
 use telar_project::naming::style_function_name;
 
 use super::ViewGen;
-use super::signals::{
-    build_rect_style, captured_idents, is_paint_key, substitute_reads, wrap_signal_clones,
-};
+use super::signals::{build_rect_style, is_paint_key, substitute_reads};
 
 impl ViewGen<'_> {
     /// Every attribute in force on an element: its inline attrs followed by its classes' props.
@@ -66,12 +64,17 @@ impl ViewGen<'_> {
         ))
     }
 
-    /// Builds the `(styling closure, .with_opacity(..) suffix)` for a styled container from paint attributes. The closure's param is `r` only when a gradient needs the rendered bounds. `transitions` maps an animated property to its `motion::` curve; any `fill`/`stroke`/`opacity` it names is wrapped in the animation retarget+get block and its `Animated` handle appended to `hoists`. Any `$ident` among the paint attrs (see `color_attr_keys`) is cloned into the closure (`wrap_signal_clones`) so the outer signal binding stays usable elsewhere.
+    /// Builds the `(styling closure, .with_opacity(..) suffix)` for a styled container from paint attributes. The closure's param is `r` only when a gradient needs the rendered bounds. `transitions` maps an animated property to its `motion::` curve; any `fill`/`stroke`/`opacity` it names is wrapped in the animation retarget+get block and its `Animated` handle appended to `hoists`. Any `$ident` among the paint attrs (see `color_attr_keys`) is cloned into the closure so the outer signal binding stays usable elsewhere.
+    ///
+    /// `surface` is a `surface:` amendment, which the finished style passes through last, so the caller's say comes after the box's own.
+    ///
+    /// Each `props` place the closure reads is copied in, since the base paint and every state of one box are closures of their own reading the same props.
     pub(super) fn rect_style_pieces(
         &mut self,
         pattrs: &[Attr],
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
+        surface: Option<&Attr>,
     ) -> (String, String) {
         let shadow = self.shadow_expr(pattrs);
         let gradient = self.box_gradient_paint(pattrs);
@@ -97,8 +100,14 @@ impl ViewGen<'_> {
         let border_widths = self.border_widths_expr(pattrs);
         let radius = self.radius_expr(pattrs);
         let param = if gradient.is_some() { "r" } else { "_" };
-        let rect_style =
+        let mut rect_style =
             build_rect_style(gradient, solid_fill, stroke, border_widths, shadow, &radius);
+        if let Some(surface) = surface {
+            rect_style = format!(
+                "amend_surface({rect_style}, &{})",
+                self.surface_expr(surface)
+            );
+        }
         let mut layer_calls = String::new();
         for (key, method) in [
             ("opacity", "with_opacity"),
@@ -109,18 +118,27 @@ impl ViewGen<'_> {
                 let _ = write!(layer_calls, ".{method}({closure})");
             }
         }
-        // Every paint value, not just colours: a `$signal` reaching the closure through a radius or a border side has to be cloned in for the same reason a fill does.
+        // Every paint value the closure reads, not just colours: a `$signal` reaching it through a radius or a border side has to be cloned in for the same reason a fill does. Opacity and backdrop blur are closures of their own.
         let raw_values: Vec<&str> = pattrs
             .iter()
-            .filter(|a| is_paint_key(&a.key))
+            .filter(|a| {
+                is_paint_key(&a.key) && !matches!(a.key.as_str(), "opacity" | "backdrop_blur")
+            })
+            .chain(surface)
             .map(|a| a.value.text())
             .collect();
-        let closure = wrap_signal_clones(
-            &raw_values,
-            format!("move |{param}| {rect_style}"),
-            self.theme_access,
-        );
+        let closure = self.owning(&raw_values, &format!("move |{param}| {rect_style}"));
         (closure, layer_calls)
+    }
+
+    /// The `SurfaceStyle` a `surface:` names, as the value rather than a reading of it.
+    fn surface_expr(&self, attr: &Attr) -> String {
+        let text = attr.value.text();
+        let lead = text.len() - text.trim_start().len();
+        match super::redundant_parens(text.trim()) {
+            Some(inner) => self.marked_handles(inner, attr.value_start + lead + 1),
+            None => self.marked_handles(text.trim(), attr.value_start + lead),
+        }
     }
 
     /// The four border thicknesses for a box: the one width on every side while that is all the author wrote, the four sides once one is named on its own, and the hairline a `stroke` draws when no width is written at all.
@@ -194,25 +212,19 @@ impl ViewGen<'_> {
         } else {
             value.to_string()
         };
-        // Cloned in so the closure owns `'static` handles independent of any sibling closure on the same widget. Empty for a static value, whose branches emit no `move` closure.
-        let clone_prefix: String =
-            captured_idents(&[value], &self.loop_variables, self.theme_access)
-                .iter()
-                .map(|s| format!("let {}{s} = {s}.clone(); ", super::shadow_marker(s)))
-                .collect();
         if let Some(curve) = transitions.get(attr.key.as_str()) {
             let name = self.next_transition_name();
             hoists.push(format!(
                 "let {name} = motion::Animated::new({expr}, {curve});"
             ));
-            with_clones(
-                &clone_prefix,
-                format!("move || {{ {name}.retarget({expr}); {name}.get() }}"),
+            self.owning(
+                &[value],
+                &format!("move || {{ {name}.retarget({expr}); {name}.get() }}"),
             )
         } else if is_static {
             format!("|| {expr}")
         } else {
-            with_clones(&clone_prefix, format!("move || {expr}"))
+            self.owning(&[value], &format!("move || {expr}"))
         }
     }
 
@@ -426,14 +438,5 @@ fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
             .all(|token| number(token) || crate::edges::is_radius_key(key) && token == "full"),
         // A colour is paint, already a closure the renderer re-runs; anything else is a key with no schema.
         Some(ValueKind::Color) | None => true,
-    }
-}
-
-/// `closure` behind the clones it captures, or bare when it captures none: a block holding nothing but the closure is the `unused_braces` rustc warns of in the generated code.
-fn with_clones(clone_prefix: &str, closure: String) -> String {
-    if clone_prefix.is_empty() {
-        closure
-    } else {
-        format!("{{ {clone_prefix}{closure} }}")
     }
 }

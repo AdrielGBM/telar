@@ -28,7 +28,6 @@ impl Mounted {
                 .placement(placement)
                 .max_visible(max_visible)
                 .build(),
-            Children::default(),
         )
         .unwrap();
         let mut mounted = Self {
@@ -252,8 +251,7 @@ fn show_toast_posts_to_the_one_shared_queue() {
 fn one_notice(props: ToasterProps, queue: Toasts) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
     set_surface_size(SURFACE);
-    let mut tree =
-        telar::testing::scoped(|| ComponentList::new(toaster(props, Children::default()).unwrap()));
+    let mut tree = telar::testing::scoped(|| ComponentList::new(toaster(props).unwrap()));
     queue.push(Toast::new("Saved").until_dismissed());
     for _ in 0..2 {
         relayout_if_dirty();

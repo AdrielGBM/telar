@@ -80,11 +80,7 @@ impl ViewGen<'_> {
         let closure = format!("move || Declared::default(){modifiers}");
         format!(
             ".authored_text({})",
-            super::signals::wrap_signal_clones(
-                &super::text::raw_reactive_values(&attrs),
-                closure,
-                self.theme_access
-            )
+            self.owning(&super::text::raw_reactive_values(&attrs), &closure)
         )
     }
 
@@ -151,9 +147,9 @@ impl ViewGen<'_> {
                 expr_marker(attr.value_start + lead, inner.len())
             )
         };
-        self.clone_captures(
+        self.owning(
             &[value],
-            format!("move || ::std::string::ToString::to_string(&({read}))"),
+            &format!("move || ::std::string::ToString::to_string(&({read}))"),
         )
     }
 }
@@ -180,7 +176,7 @@ impl ViewGen<'_> {
             let read = substitute_reads(value, self.theme_access);
             format!(
                 "follow_theme({})",
-                self.clone_captures(&[value], format!("move || {read}"))
+                self.owning(&[value], &format!("move || {read}"))
             )
         } else {
             value.to_string()

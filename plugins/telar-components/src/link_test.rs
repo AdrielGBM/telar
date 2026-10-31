@@ -11,7 +11,7 @@ use super::*;
 fn mounted(props: LinkProps) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
     focus::clear();
-    let item = link(props, Children::default()).unwrap();
+    let item = link(props).unwrap();
     lay_out(item.layout_node(), 400.0, 100.0);
     let tree = ComponentList::new(item);
     let _ = tree.commands();

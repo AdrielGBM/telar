@@ -6,11 +6,14 @@ pub struct Props {
     pub title: &'static str,
     /// Supporting sentence; wraps when long.
     pub body: &'static str,
+    /// Drawn above the heading.
+    #[props(default)]
+    pub icon: Children,
 }
 
 [view]
 box fill:$theme.surface stroke:$theme.border radius:16 width:300 min_width:260 grow:1 pad:24 gap:10 axis:col
-    children name:"icon"
+    children $props.icon
     text "{props.title}" font_size:18 color:$theme.dark
     text "{props.body}" font_size:14 color:$theme.muted
 

@@ -85,7 +85,7 @@ Rust names a baked icon with `icon!`, which is the `IconName` the `icon` tag, or
 ```rust
 use telar_icons::{IconProps, icon};
 
-let search = icon(IconProps::props().name(telar_icons::icon!("lucide:search")).build(), Children::default())?;
+let search = icon(IconProps::props().name(telar_icons::icon!("lucide:search")).build())?;
 ```
 
 The bake finds every `icon!("…")` in the crate's `.rs` files, and in the Rust its `.rsx` writes (the logic zone, `[play]`, a `let` or an expression in `[view]`), and bakes those ids as it bakes an `icon name:"…"`, through the crate's own `[telar.icons]`. The call reads the baked artwork from the crate's artifact as it compiles, so an id the bake did not resolve is a compile error on the literal, naming the bake, rather than an empty box at run time. Call it as `icon!` or by its path, `telar_icons::icon!`: the bake looks for that name, and only a string literal names an id. A string given where an `IconName` is taken, `"lucide:search"`, is still an id for a runtime source to resolve.

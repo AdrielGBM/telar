@@ -13,7 +13,7 @@ fn pixels(width: u32, height: u32) -> Arc<ImageData> {
 
 fn mounted(props: ImageProps) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
-    let item = image(props, Children::default()).unwrap();
+    let item = image(props).unwrap();
     lay_out(item.layout_node(), 400.0, 400.0);
     let tree = ComponentList::new(item);
     let _ = tree.commands();

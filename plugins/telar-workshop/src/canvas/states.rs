@@ -1,7 +1,7 @@
 //! What the canvas shows in place of a preview: that there are none, or the card for one that failed.
 
 use telar::preview::PreviewEntry;
-use telar::{BuildFailure, Children, LayoutError, LayoutItem, Uri, UriError, open_uri};
+use telar::{BuildFailure, LayoutError, LayoutItem, Uri, UriError, open_uri};
 
 use super::failure_card::{FailureCardProps, failure_card};
 use super::no_previews::{NoPreviewsProps, no_previews};
@@ -9,7 +9,7 @@ use crate::state::WorkshopState;
 use crate::strings::{BUILD_FAILED, PANICKED};
 
 pub(crate) fn empty() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    no_previews(NoPreviewsProps::props().build(), Children::default())
+    no_previews(NoPreviewsProps::props().build())
 }
 
 /// The card a preview's canvas shows when building it failed, in the workbench theme rather than the application's.
@@ -30,7 +30,6 @@ pub(crate) fn failure(
             .detail(detail)
             .panicked(panicked)
             .build(),
-        Children::default(),
     )
 }
 

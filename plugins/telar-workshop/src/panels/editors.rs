@@ -7,8 +7,7 @@ use telar::preview::host::{ArgState, Args};
 use telar::preview::{ArgValue, ControlKind, NumberControl};
 use telar::{
     Accessible, AlignItems, Children, Color, Container, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, ReadSignal, RwSignal, ShapeStyle, Slots, StyledContainer, Text, box_item, effect,
-    signal,
+    Reactive, ReadSignal, RwSignal, ShapeStyle, StyledContainer, Text, box_item, effect, signal,
 };
 use telar_components::{
     ItemProps, ScrubFieldProps, SelectProps, SliderProps, TabsProps, TextFieldProps, ToggleProps,
@@ -148,11 +147,7 @@ fn switch(binding: &Binding) -> Result<Editor, LayoutError> {
         |on| Some(ArgValue::Bool(*on)),
     );
     let name = binding.name;
-    let item = toggle(
-        ToggleProps::props().checked(bound.shown).build(),
-        Children::default(),
-    )?
-    .a11y_label(move || name);
+    let item = toggle(ToggleProps::props().checked(bound.shown).build())?.a11y_label(move || name);
     Ok(Editor {
         item,
         current: bound.current,
@@ -178,7 +173,6 @@ fn number_editor(binding: &Binding, number: NumberControl) -> Result<Editor, Lay
                     .step(step)
                     .width(SLIDER_WIDTH)
                     .build(),
-                Children::default(),
             )?
             .a11y_label(move || name);
             let shown = binding.clone();
@@ -203,7 +197,7 @@ fn number_editor(binding: &Binding, number: NumberControl) -> Result<Editor, Lay
                 })),
                 false => props,
             };
-            scrub_field(props.build(), Children::default())?.a11y_label(move || name)
+            scrub_field(props.build())?.a11y_label(move || name)
         }
     };
     Ok(Editor {
@@ -248,7 +242,6 @@ fn text_editor(binding: &Binding, multiline: bool) -> Result<Editor, LayoutError
             .multiline(multiline)
             .max_rows(MULTILINE_MAX_ROWS)
             .build(),
-        Children::default(),
     )?;
     Ok(Editor {
         item,
@@ -285,7 +278,6 @@ fn color_editor(binding: &Binding) -> Result<Editor, LayoutError> {
             .placeholder(name)
             .width(FIELD_WIDTH - SWATCH_SIZE - WORKBENCH_GRID)
             .build(),
-        Children::default(),
     )?;
     Ok(Editor {
         item: inline(vec![box_item(swatch), field])?,
@@ -329,23 +321,17 @@ fn choice_editor(
                 .items(variants.to_vec())
                 .selected(bound.shown)
                 .build(),
-            Children::default(),
         )?,
         false => select(
-            SelectProps::props().selected(bound.shown).build(),
-            Children::new(move || {
-                let mut slots = Slots::new();
-                for variant in variants {
-                    slots.push(
-                        None,
-                        item(
-                            ItemProps::props().label(*variant).build(),
-                            Children::default(),
-                        )?,
-                    );
-                }
-                Ok(slots)
-            }),
+            SelectProps::props()
+                .selected(bound.shown)
+                .children(Children::new(move || {
+                    variants
+                        .iter()
+                        .map(|variant| item(ItemProps::props().label(*variant).build()))
+                        .collect()
+                }))
+                .build(),
         )?
         .a11y_label(move || name),
     };
@@ -373,7 +359,6 @@ fn optional_editor(binding: &Binding, inner: ControlKind) -> Result<Editor, Layo
             .checked(unset.shown)
             .label(Reactive::of(|| strings::text(UNSET)))
             .build(),
-        Children::default(),
     )?
     .a11y_label(move || strings::text_with(UNSET_ARG, name));
     Ok(Editor {

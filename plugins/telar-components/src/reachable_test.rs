@@ -7,8 +7,8 @@ use std::rc::Rc;
 
 use telar::testing::named;
 use telar::{
-    AvailableSpace, Children, ComponentList, Container, LayoutItem, LayoutStyle, NamedKey,
-    box_item, compute_layout,
+    AvailableSpace, ComponentList, Container, LayoutItem, LayoutStyle, NamedKey, box_item,
+    compute_layout,
     focus::{self, Role},
     signal,
 };
@@ -47,7 +47,6 @@ fn a_button_can_be_reached_and_pressed_without_a_mouse() {
             .label("Save")
             .on_press(std::rc::Rc::new(move || sink.set(true)))
             .build(),
-        Children::default(),
     )
     .unwrap();
     let mut tree = mount(vec![item]);
@@ -65,11 +64,7 @@ fn a_slider_moves_under_the_arrow_keys() {
     telar::reset_layout_runtime();
     focus::clear();
     let value = signal(0.5f32);
-    let item = slider(
-        SliderProps::props().value(value).step(0.25).build(),
-        Children::default(),
-    )
-    .unwrap();
+    let item = slider(SliderProps::props().value(value).step(0.25).build()).unwrap();
     let mut tree = mount(vec![item]);
 
     focus::focus_next();
@@ -92,7 +87,6 @@ fn enter_toggles_a_focused_checkbox() {
             .checked(checked)
             .label("Wireframe")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let mut tree = mount(vec![item]);
@@ -114,7 +108,6 @@ fn a_checked_box_is_announced_as_checked() {
             .checked(checked)
             .label("Wireframe")
             .build(),
-        Children::default(),
     )
     .unwrap();
     let _tree = mount(vec![item]);
@@ -135,22 +128,10 @@ fn the_catalogue_says_what_each_control_is() {
     telar::reset_layout_runtime();
     focus::clear();
     let items: Vec<Box<dyn LayoutItem>> = vec![
-        button(
-            ButtonProps::props().label("Save").build(),
-            Children::default(),
-        )
-        .unwrap(),
-        checkbox(
-            CheckboxProps::props().label("Wireframe").build(),
-            Children::default(),
-        )
-        .unwrap(),
-        toggle(
-            ToggleProps::props().label("Snap").build(),
-            Children::default(),
-        )
-        .unwrap(),
-        slider(SliderProps::props().build(), Children::default()).unwrap(),
+        button(ButtonProps::props().label("Save").build()).unwrap(),
+        checkbox(CheckboxProps::props().label("Wireframe").build()).unwrap(),
+        toggle(ToggleProps::props().label("Snap").build()).unwrap(),
+        slider(SliderProps::props().build()).unwrap(),
     ];
     let _tree = mount(items);
 

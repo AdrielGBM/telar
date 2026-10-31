@@ -17,12 +17,14 @@ pub struct ThemedPanelContext {
 pub struct ThemedPanelProps {
     #[props(default = "midnight")]
     pub mode: &'static str,
+    #[props(default)]
+    pub children: Children,
 }
 
 #[allow(unused_imports)] use ThemedPanelContext as Context;
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn themed_panel(props: ThemedPanelProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn themed_panel(props: ThemedPanelProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -36,7 +38,7 @@ pub fn themed_panel(props: ThemedPanelProps, children: Children) -> Result<Box<d
     let __col_0 = {
         let __col_1 = {
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            __children.extend(children.build_slot_with(None, ctx)?);
+            __children.extend(props.children.build_with(ctx)?);
             Container::new(LayoutStyle::new().flex_column().gap(6.0), __children)?
         };
         StyledContainer::new(LayoutStyle::new().flex_column().padding_all(14.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::all(10.0)) }, children![__col_1])?
@@ -53,30 +55,25 @@ pub fn themed_panel_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
-        let __deferred = Children::per_slot(
+        let __recipe_children = Children::new(
             {
                 let theme = theme.clone();
-            move |__request: SlotRequest<'_>| {
-                let theme = theme.clone();
-                let mut __slots = Slots::new();
+            move || {
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                if __request.includes(None) {
-                    let __text_0 = {
-                        let theme = theme.clone();
-                        Text::declaring(
-                            move || format!("Nested at the call site, drawn in {}", theme.get().name),
-                            LayoutStyle::new(),
-                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                        )?
-                    };
-                    __children.push(box_item(__text_0));
-                }
-                __slots.extend_default(__children);
-                Ok(__slots)
+                let __text_0 = {
+                    let theme = theme.clone();
+                    Text::declaring(
+                        move || format!("Nested at the call site, drawn in {}", theme.get().name),
+                        LayoutStyle::new(),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                    )?
+                };
+                __children.push(box_item(__text_0));
+                Ok(__children)
             }
             }
         );
-        themed_panel(ThemedPanelProps::props().mode(::telar::__preview_arg!(__preview, "mode", "pastel")).__preview_actions(&__preview.actions()).build(), __deferred)?
+        themed_panel(ThemedPanelProps::props().mode(::telar::__preview_arg!(__preview, "mode", "pastel")).children(__recipe_children).__preview_actions(&__preview.actions()).build())?
     };
     Ok(Box::new(__node_0))
 }
@@ -84,10 +81,10 @@ pub fn themed_panel_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
 pub const THEMED_PANEL_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--themed_panel--themed-panel"), "themed_panel", "Themed panel", themed_panel_preview_0)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/themed_panel.rsx"), 24)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/themed_panel.rsx"), 26)
         .title("Sandbox/Themed panel")
         .docs("A panel drawn in a theme of its own; whatever the call site nests inside it reads that theme.")
-        .source("[preview \"Themed panel\"]\nthemed_panel mode:\"pastel\"\n    text \"Nested at the call site, drawn in {$theme.name}\" font_size:14 color:$theme.ink", &[::telar::preview::SourceSpan::new(0, 140, 24)])
+        .source("[preview \"Themed panel\"]\nthemed_panel mode:\"pastel\"\n    text \"Nested at the call site, drawn in {$theme.name}\" font_size:14 color:$theme.ink", &[::telar::preview::SourceSpan::new(0, 140, 26)])
         .props(<ThemedPanelProps as ::telar::preview::HasPropsSchema>::schema)
         .args(&[::telar::preview::ArgSpec::new("mode").default("\"pastel\"")])
         .layout(::telar::preview::Layout::Centered),

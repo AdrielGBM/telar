@@ -131,7 +131,6 @@ impl Mounted {
                     sink.borrow_mut().push(command.id.to_string())
                 }))
                 .build(),
-            Children::default(),
         )
         .unwrap();
         let root = new_container(
@@ -561,7 +560,7 @@ fn dialog(style: Option<telar::SurfaceAmendment>) -> (telar::Rect, RectStyle) {
         None => props,
     };
     let tree = telar::testing::scoped(|| {
-        let palette = command_palette(props.build(), Children::default()).unwrap();
+        let palette = command_palette(props.build()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(800.0).height(600.0),
             &[palette.layout_node()],

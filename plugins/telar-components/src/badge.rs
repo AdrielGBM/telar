@@ -1,9 +1,9 @@
 //! [`badge`]: a small status label, filled from a semantic colour.
 
 use telar::{
-    AlignItems, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, Rect, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
-    Text, amend_surface, box_item, children,
+    AlignItems, BorderRadius, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props,
+    Reactive, Rect, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface,
+    box_item, children,
 };
 
 use crate::shared;
@@ -59,7 +59,7 @@ pub struct BadgeProps {
 }
 
 /// A small status label, filled from a semantic colour.
-pub fn badge(props: BadgeProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let BadgeProps {
         label,
         color,

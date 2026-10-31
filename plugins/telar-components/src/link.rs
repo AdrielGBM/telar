@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Color, Destination, IntoDestination,
-    LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer,
+    Accessible, AlignItems, BorderRadius, Color, Destination, IntoDestination, LayoutError,
+    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer,
     SurfaceAmendment, Text, TextWrap, amend_surface, box_item, children,
 };
 
@@ -80,7 +80,7 @@ pub struct LinkProps {
 }
 
 /// Words that go somewhere: a route, an anchor or an address outside the application.
-pub fn link(props: LinkProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn link(props: LinkProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let LinkProps {
         label,
         to,

@@ -227,8 +227,7 @@ fn more(
     tools: &Rc<canvas_toolbar::HeaderTools>,
     all: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let tools = Rc::clone(tools);
-    more_button(MORE_TOOLS, Rc::new(move || tools.menu_rows(all)))
+    more_button(MORE_TOOLS, tools.menu_rows(all))
 }
 
 /// How far the wheel turns, in px, for one step of zoom: a notch of a mouse wheel, which a trackpad reaches by many smaller ones.
@@ -273,10 +272,7 @@ fn acting_on(
         });
     Ok(box_item(Container::new(
         fill(),
-        vec![
-            box_item(stage),
-            menu_layer(open, Rc::new(move || tools.menu_rows(true)))?,
-        ],
+        vec![box_item(stage), menu_layer(open, tools.menu_rows(true))?],
     )?))
 }
 

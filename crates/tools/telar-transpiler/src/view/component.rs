@@ -8,91 +8,109 @@ use crate::style::{format_f32, hex_to_color_expr};
 use telar_project::naming::to_pascal_case;
 use telar_project::{AssetContext, IdBaking};
 
-use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
+use super::signals::{rust_str, substitute_reads};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// Emits a non-primitive tag as a component call: its props builder, then its children as a `Children` recipe. Always both, whatever the callee looks like.
+    /// Emits a non-primitive tag as a component call, `tag(TagProps::props()….build())`: one setter per attribute, and one `Children` recipe per prop its markup children are routed to — `.children(…)` for the bare ones, `.header(…)` for those written with `slot:"header"`.
     ///
-    /// **The uniformity is the point.** The emitter used to ask a registry whether the callee took props, whether it took children, and whether it wanted them built or deferred, then emit one of four call shapes. Every component takes the same two arguments now, so there is nothing left to ask — and a callee that wants its children built runs the recipe itself, which is the only place that decision was ever the callee's to make.
+    /// A prop no child is routed to gets no setter, so children handed to a leaf, or to a slot the callee lacks, are rustc's error on the caller's line: a `.rsx` transpiles knowing nothing but itself, so that is the only place the name can be checked.
     pub(super) fn emit_component_call(&mut self, el: &Element, tag: &str) -> ChildEmit {
         let var = self.next_variable_name("node");
         let pad = self.indent_str();
 
-        // `slot:"name"` routes this element into a parent's named slot; it is consumed there, never passed as a prop.
         let props_attrs: Vec<&Attr> = el
             .attributes
             .iter()
-            .filter(|a| a.key != "slot" && !crate::registry::is_component_instance_attr(&a.key))
+            .filter(|a| is_prop_attr(&a.key))
             .collect();
-        let has_children = !el.children.is_empty();
+        let routed = route_children(&el.children);
 
-        let props_arg = self.component_props_arg(el, tag, &props_attrs);
-
-        if !has_children {
-            let code = format!("{pad}let {var} = {tag}({props_arg}, Children::default())?;");
+        if routed.recipes.is_empty() && routed.errors.is_empty() {
+            let props_arg = self.component_props_arg(el, tag, &props_attrs, "");
+            let code = format!("{pad}let {var} = {tag}({props_arg})?;");
             return ChildEmit::Simple { name: var, code };
         }
 
-        // Built inside a block so its temp names never collide with a parent's `__children`.
+        // Built inside a block so its recipe bindings never collide with a sibling call's.
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
         self.indent += 1;
-        let children_arg = self.emit_deferred_children(&el.children, &mut code);
         let inner_pad = self.indent_str();
-        let _ = writeln!(code, "{inner_pad}{tag}({props_arg}, {children_arg})?");
+        for (line, message) in &routed.errors {
+            let error = format!("{inner_pad}compile_error!({});", rust_str(message));
+            let _ = writeln!(code, "{}", super::on_source_line(*line, &error));
+        }
+        let mut setters = String::new();
+        for recipe in &routed.recipes {
+            let binding = format!("__recipe_{}", recipe.prop);
+            let built = self.emit_recipe(&recipe.nodes);
+            let _ = writeln!(
+                code,
+                "{inner_pad}let {binding} = Children::new(\n{built}\n{inner_pad});"
+            );
+            let _ = write!(setters, ".{}({binding})", recipe.prop);
+        }
+        let props_arg = self.component_props_arg(el, tag, &props_attrs, &setters);
+        let _ = writeln!(code, "{inner_pad}{tag}({props_arg})?");
         self.indent -= 1;
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits a compound component's children as a `Children` recipe: the same slot-building body [`Self::emit_slots`] produces, moved inside a closure the callee runs once per slot it places, where it places it.
-    ///
-    /// The closure is `Fn` rather than `FnOnce` — a dropdown remakes its rows on every open — so every signal it reads is cloned in ahead of it, exactly as a reactive `if`/`for` branch does. Bound to a `let` first, because the body is statements and a closure body cannot be spliced into an argument position.
-    fn emit_deferred_children(&mut self, children: &[ViewNode], code: &mut String) -> String {
+    /// The closure is `Fn` rather than `FnOnce` — a dropdown remakes its rows on every open — so its body is a rebuilding region, which copies what it reads rather than moving it, exactly as a reactive `if`/`for` branch does.
+    fn emit_recipe(&mut self, nodes: &[ViewNode]) -> String {
         let pad = self.indent_str();
         let mut body = String::new();
         self.indent += 2;
-        let slots_expr = self.emit_slots(children, &mut body);
         let inner_pad = self.indent_str();
+        let _ = writeln!(
+            body,
+            "{inner_pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
+        );
+        // The callee decides where its children sit, so there is no container here to host a transparent fragment, and the caller's axis must not leak into them.
+        self.in_reactive(|g| {
+            g.within_host(false, |g| {
+                g.with_child_sink(ChildMode::Vec, |g| {
+                    for node in nodes {
+                        match g.emit_node(node) {
+                            ChildEmit::Simple { name, code } => {
+                                let _ = writeln!(body, "{code}");
+                                let _ =
+                                    writeln!(body, "{inner_pad}__children.push(box_item({name}));");
+                            }
+                            ChildEmit::Dynamic { code } => {
+                                let _ = writeln!(body, "{code}");
+                            }
+                            ChildEmit::Fragment { .. } => {
+                                unreachable!("a recipe's children never enter a slot host")
+                            }
+                        }
+                    }
+                })
+            })
+        });
         self.indent -= 2;
 
-        let closure = format!("{body}{inner_pad}Ok({slots_expr})");
-        let idents = super::signals::captured_in_scope(
-            &super::signals::scoped_snippets(children, &[]),
-            &self.loop_variables,
-            &self.locals,
-            self.theme_access,
-        );
-        // Twice on purpose: the outer clone leaves the surrounding view its binding, the inner gives each run its own, since a body that hands a binding to a widget moves it.
-        let per_run: String = idents
-            .iter()
-            .map(|name| {
-                format!(
-                    "{pad}        let {}{name} = {name}.clone();\n",
-                    super::shadow_marker(name)
-                )
-            })
-            .collect();
-        let inner = format!(
-            "{pad}    move |__request: SlotRequest<'_>| {{\n{per_run}{closure}\n{pad}    }}"
-        );
-        let built = super::signals::clone_block_multiline(&idents, inner, &format!("{pad}    "));
-        let _ = writeln!(
-            code,
-            "{pad}let __deferred = Children::per_slot(\n{built}\n{pad});"
-        );
-        "__deferred".to_string()
+        let closure = format!("{pad}    move || {{\n{body}{inner_pad}Ok(__children)\n{pad}    }}");
+        let snippets = super::signals::scoped_snippets(nodes, &[]);
+        self.owning_subtree(&snippets, closure, &format!("{pad}    "))
     }
 
-    /// Builds a component call's props argument: `NameProps::props()`, one setter per attribute the author wrote, `.build()`.
+    /// Builds a component call's props argument: `NameProps::props()`, one setter per attribute the author wrote, the `recipes` setters, `.build()`.
     ///
     /// **This is where the second type system used to live.** The old form was a `NameProps { … }` literal, which meant the emitter had to know the callee's field types to write each value: eight lists on `ComponentSig` said which props were colours, strings, readings, predicates, owned strings or `Option`s, and whether the struct derived `Default` so the tail could be `..Default::default()`. Every one of those was re-deriving something rustc already knew, and for the shipped catalogue they were hand-mirrored and free to drift.
     ///
     /// A setter answers all of it. `into` on the callee's field decides whether a literal coerces, the field's own type decides whether a `$signal` means the handle or a reading, `Option` needs no `Some(…)` because `From<T> for Option<T>` is std's, and a prop nobody set keeps its declared default. The emitter spells names it read from the markup and knows nothing else.
     ///
     /// The root of a preview reads each of its [`Self::implicit_args`] through the preview's args, so a control can change it, and logs the calls its callbacks receive.
-    fn component_props_arg(&self, el: &Element, tag: &str, props_attrs: &[&Attr]) -> String {
+    fn component_props_arg(
+        &self,
+        el: &Element,
+        tag: &str,
+        props_attrs: &[&Attr],
+        recipes: &str,
+    ) -> String {
         let root = self
             .preview_root
             .as_ref()
@@ -103,6 +121,7 @@ impl ViewGen<'_> {
         };
         let mut setters: String = props_attrs
             .iter()
+            .filter(|attr| class_list(&attr.value).is_none())
             .map(|attr| {
                 let value = self
                     .baked_id_expr(tag, attr)
@@ -117,9 +136,8 @@ impl ViewGen<'_> {
                 format!(".{}({value})", attr.key)
             })
             .collect();
-        if let Some(amendment) = self.class_surface_style(&el.classes) {
-            let _ = write!(setters, ".style({amendment})");
-        }
+        setters.push_str(&self.surface_setters(el, props_attrs));
+        setters.push_str(recipes);
         if root.is_some() {
             setters.push_str(".__preview_actions(&__preview.actions())");
         }
@@ -130,9 +148,7 @@ impl ViewGen<'_> {
     pub(crate) fn implicit_args<'e>(&self, el: &'e Element) -> Vec<&'e Attr> {
         el.attributes
             .iter()
-            .filter(|attr| {
-                attr.key != "slot" && !crate::registry::is_component_instance_attr(&attr.key)
-            })
+            .filter(|attr| is_prop_attr(&attr.key))
             .filter(|attr| crate::preview::is_literal(&attr.value))
             .filter(|attr| self.baked_id_expr(&el.tag, attr).is_none())
             .collect()
@@ -156,7 +172,51 @@ impl ViewGen<'_> {
         Some(resolved.unwrap_or_else(|message| format!("compile_error!({})", rust_str(&message))))
     }
 
-    /// A `@class` on a component call, compiled onto the callee's **principal surface**.
+    /// Every class a component call hands the callee's surfaces, one setter per surface: `sidebar @flat` amends the **principal surface** through `.style(…)`, and `sidebar header_style:@flat` the header **part** through `.header_style(…)`. Several classes stack the same way in both places, the later winning — `sidebar @flat @dense`, `header_style:(@flat @dense)` — the parens being the value's delimiters, as any value holding a space takes them.
+    ///
+    /// A class list carrying none of the surface properties sets nothing: silently on the principal surface, and on a part with the error [`Self::paintless_part_errors`] gives.
+    fn surface_setters(&self, el: &Element, props_attrs: &[&Attr]) -> String {
+        let parts = props_attrs.iter().filter_map(|attr| {
+            let classes = class_list(&attr.value)?.ok()?;
+            crate::registry::is_part_style_key(&attr.key).then_some((attr.key.as_str(), classes))
+        });
+        std::iter::once(("style", el.classes.clone()))
+            .chain(parts)
+            .filter_map(|(setter, classes)| {
+                let amendment = self.class_surface_style(&classes)?;
+                Some(format!(".{setter}({amendment})"))
+            })
+            .collect()
+    }
+
+    /// Why a part would be handed nothing: its classes are all declared and none says anything a surface takes. The principal surface is not held to this, since a class on the call itself may be there for something else.
+    pub(super) fn paintless_part_errors(&self, el: &Element) -> Vec<String> {
+        if crate::registry::is_builtin_tag(&el.tag) {
+            return Vec::new();
+        }
+        el.attributes
+            .iter()
+            .filter(|attr| crate::registry::is_part_style_key(&attr.key))
+            .filter_map(|attr| Some((attr, class_list(&attr.value)?.ok()?)))
+            .filter(|(_, classes)| {
+                classes
+                    .iter()
+                    .all(|name| self.classes.iter().any(|class| &class.name == name))
+            })
+            .filter(|(_, classes)| self.class_surface_style(classes).is_none())
+            .map(|(attr, classes)| {
+                format!(
+                    "`{}:{}` hands the part nothing: a part takes `{}` from its classes, and `{}` names none of them",
+                    attr.key,
+                    class_value(&classes),
+                    SURFACE_PAINT.join("`, `"),
+                    written_classes(&classes),
+                )
+            })
+            .collect()
+    }
+
+    /// One surface's classes, compiled into the amendment its setter takes.
     ///
     /// This is the half of styling the DSL used to drop on the floor. An inline attr on a component call is a prop — that meaning is settled and stays. A class was the one thing you could write there that the transpiler parsed, accepted, and then silently ignored: `box @squared` reshapes the box and `menu @squared` reshaped nothing at all, with no error to say why.
     ///
@@ -210,133 +270,30 @@ impl ViewGen<'_> {
         if chain.is_empty() {
             return None;
         }
-        let raw: Vec<&str> = [
-            find("fill"),
-            find("stroke"),
-            find("stroke_width"),
-            find("radius"),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-        let closure = wrap_signal_clones(
-            &raw,
-            format!("move |__s: RectStyle| __s{chain}"),
-            self.theme_access,
-        );
+        let raw: Vec<&str> = SURFACE_PAINT.iter().filter_map(|key| find(key)).collect();
+        let closure = self.owning(&raw, &format!("move |__s: RectStyle| __s{chain}"));
         Some(format!("std::rc::Rc::new({closure})"))
     }
 
-    /// Emits the markup children of a component call into a `Slots` value: a child written with `slot:"name"` goes to that named slot; every other child (including `if`/`for` control flow) goes to the default slot. Returns the expression naming the built value (`__slots`).
+    /// Emits a `children` placeholder, `children $props.header [in:ctx]`: builds the `Children` its expression names where it stands and splices them into the enclosing container's child accumulator, with `ctx` readable to them when `in:` provides one. Dynamic, so the container builds a child vec (see `forces_child_vec`).
     ///
-    /// Each run of children bound for one slot sits under an `if __request.includes(…)`, so a placeholder asking for one slot builds that slot and nothing else. A view `let` stays outside every guard, since a later sibling in any slot may read it.
-    ///
-    /// `slot:` (route, here) and `children name:` (receive, in [`Self::emit_slot`]) deliberately use different keys — the same route/receive asymmetry as HTML slots and Vue's `<template #x>` vs `slot="x"`. This is not a naming inconsistency to fix; do not rename either side to match the other.
-    fn emit_slots(&mut self, children: &[ViewNode], code: &mut String) -> String {
+    /// Built here rather than once up front, so the children are made under the owner of the node they are placed in and see that node's `theme:` and every context provided around it, exactly as a child written inline there would. Each placement builds its own.
+    pub(super) fn emit_children_placeholder(&mut self, el: &Element) -> ChildEmit {
         let pad = self.indent_str();
-        let _ = writeln!(code, "{pad}let mut __slots = Slots::new();");
-        let _ = writeln!(
-            code,
-            "{pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
-        );
-        // Call-site children flow into a `Slots`, so there is no container here to host a transparent fragment and a reactive region must stay on the boxed path. The callee decides where its placeholder sits, so the caller's axis must not leak into the slot bodies.
-        self.within_host(false, |g| {
-            g.with_child_sink(ChildMode::Vec, |g| {
-                let mut guarded: Option<Option<String>> = None;
-                for child in children {
-                    let slot_name = match child {
-                        ViewNode::Element(el) => el
-                            .attributes
-                            .iter()
-                            .find(|a| a.key == "slot")
-                            .map(|a| a.value.text().to_string()),
-                        _ => None,
-                    };
-                    match child {
-                        ViewNode::Comment(_) => {}
-                        ViewNode::LetStmt(_) => g.close_slot_guard(&mut guarded, code),
-                        _ if guarded.as_ref() != Some(&slot_name) => {
-                            g.close_slot_guard(&mut guarded, code);
-                            let _ = writeln!(
-                                code,
-                                "{}if __request.includes({}) {{",
-                                g.indent_str(),
-                                slot_arg(slot_name.as_deref())
-                            );
-                            g.indent += 1;
-                            guarded = Some(slot_name.clone());
-                        }
-                        _ => {}
-                    }
-                    let pad = g.indent_str();
-                    let emit = match (child, &slot_name) {
-                        (ViewNode::Element(el), Some(_)) => {
-                            let mut stripped = el.clone();
-                            stripped.attributes.retain(|a| a.key != "slot");
-                            g.emit_node(&ViewNode::Element(stripped))
-                        }
-                        _ => g.emit_node(child),
-                    };
-                    match emit {
-                        ChildEmit::Simple { name, code: c } => {
-                            let _ = writeln!(code, "{c}");
-                            match &slot_name {
-                                Some(n) => {
-                                    let _ = writeln!(
-                                        code,
-                                        "{pad}__slots.push(Some({}), box_item({name}));",
-                                        rust_str(n)
-                                    );
-                                }
-                                None => {
-                                    let _ =
-                                        writeln!(code, "{pad}__children.push(box_item({name}));");
-                                }
-                            }
-                        }
-                        ChildEmit::Dynamic { code: c } => match &slot_name {
-                            Some(n) => {
-                                let _ = writeln!(
-                                    code,
-                                    "{pad}{{\n{pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();\n{c}\n{pad}for __item in __children {{\n{pad}    __slots.push(Some({}), __item);\n{pad}}}\n{pad}}}",
-                                    rust_str(n)
-                                );
-                            }
-                            None => {
-                                let _ = writeln!(code, "{c}");
-                            }
-                        },
-                        ChildEmit::Fragment { .. } => {
-                            unreachable!("component-slot children never enter a slot host")
-                        }
-                    }
-                }
-                g.close_slot_guard(&mut guarded, code);
-            })
-        });
-        let _ = writeln!(code, "{pad}__slots.extend_default(__children);");
-        "__slots".to_string()
-    }
-
-    /// Emits a `children` slot placeholder: builds the caller-supplied children for this slot where it stands and splices them into the enclosing container's child accumulator. `children` builds the default slot, `children name:"x"` the named slot `"x"`, and `in:ctx` makes `ctx` readable to them. Dynamic, so the container builds a child vec (see `forces_child_vec`).
-    ///
-    /// Built here rather than once up front, so the slot is made under the owner of the node it is placed in and sees that node's `theme:` and every context provided around it, exactly as a child written inline there would. Each placement builds its own slot.
-    ///
-    /// Receives via `name:`, the counterpart to the caller's `slot:` in [`Self::emit_slots`] — see that doc comment for why the two ends intentionally don't share a key.
-    pub(super) fn emit_slot(&mut self, el: &Element) -> ChildEmit {
-        let pad = self.indent_str();
-        let slot = slot_arg(
-            el.attributes
-                .iter()
-                .find(|a| a.key == "name")
-                .map(|a| a.value.text()),
-        );
+        let recipe = match placeholder_recipe(el) {
+            Ok(recipe) => self.marked_handles(&recipe.key, recipe.value_start),
+            Err(message) => {
+                return ChildEmit::Dynamic {
+                    code: format!("{pad}compile_error!({});", rust_str(&message)),
+                };
+            }
+        };
         let built = match el.attributes.iter().find(|a| a.key == "in") {
             Some(context) => format!(
-                "children.build_slot_with({slot}, {})?",
-                self.slot_context_arg(context)
+                "{recipe}.build_with({})?",
+                self.placeholder_context_arg(context)
             ),
-            None => format!("children.build_slot({slot})?"),
+            None => format!("{recipe}.build()?"),
         };
         let code = match self.child_sinks.last() {
             Some(sink) if sink.slots => format!(
@@ -349,8 +306,22 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// The `in:` value a placeholder builds its slot inside. A lone `[logic]` binding is cloned wherever the placement may run again or another placement still needs it, as a component prop is.
-    fn slot_context_arg(&self, attr: &Attr) -> String {
+    /// `expr`, written at `start`, as the value it names rather than a reading of it: `$props.header` reaches through `props` to the field, as it does anywhere in the view, and is marked so a cursor on it maps to the generated code.
+    pub(super) fn marked_handles(&self, expr: &str, start: usize) -> String {
+        let substituted = super::signals::substitute_handles(expr, self.theme_access);
+        let marked = match expr.strip_prefix('$') {
+            Some(rest) if substituted == rest => Some(start + 1),
+            Some(_) => None,
+            None => Some(start),
+        };
+        match marked {
+            Some(start) => format!("{}{substituted}", expr_marker(start, substituted.len())),
+            None => substituted,
+        }
+    }
+
+    /// The `in:` value a placeholder builds its children inside. A lone `[logic]` binding is cloned wherever the placement may run again or another placement still needs it, as a component prop is.
+    fn placeholder_context_arg(&self, attr: &Attr) -> String {
         let text = attr.value.text();
         let lead = text.len() - text.trim_start().len();
         let value = text.trim();
@@ -359,20 +330,8 @@ impl ViewGen<'_> {
             None => (attr.value_start + lead, value),
         };
         let marker = expr_marker(start, expr.len());
-        let reused = self.must_clone_local(expr) || self.loop_depth > 0;
-        if self.is_local(expr) && reused {
-            format!("{marker}{expr}.clone()")
-        } else {
-            format!("{marker}{expr}")
-        }
-    }
-
-    /// Ends the `if __request.includes(…)` block [`Self::emit_slots`] has open, if any.
-    fn close_slot_guard(&mut self, guarded: &mut Option<Option<String>>, code: &mut String) {
-        if guarded.take().is_some() {
-            self.indent -= 1;
-            let _ = writeln!(code, "{}}}", self.indent_str());
-        }
+        let written = format!("{marker}{expr}");
+        self.by_value(expr, written.clone()).unwrap_or(written)
     }
 
     /// Converts a component attribute to a Rust expression:
@@ -419,42 +378,31 @@ impl ViewGen<'_> {
         }
         // Includes the delimiting paren stripped above: `value_start` still points at it, so a span built from `v` would start one byte early and end one short.
         let lead = attr.value.text().len() - attr.value.text().trim_start().len() + delimiters;
-        // Cloned only where the clone is load-bearing: a reactive builder closure runs again and cannot consume its capture. Outside one, moving is correct, and cloning would demand `Clone` of every forwarded binding — which a `Box<dyn Fn()>` prop can never satisfy. A loop variable counts as a local; without that a bare `panel:p` fell through to the style scope and resolved `p` against the theme as a colour.
-        let in_loop = self.loop_bound.iter().any(|l| l == v);
-        if self.is_local(v) || in_loop {
-            let marker = expr_marker(attr.value_start + lead, v.len());
-            // A loop variable is bound once per iteration and the builder closure is `Fn`, so it cannot be moved out.
-            return if in_loop || self.must_clone_local(v) {
-                format!("{marker}{v}.clone()")
-            } else {
-                format!("{marker}{v}")
-            };
+        // Cloned only where the clone is load-bearing, since cloning would demand `Clone` of every forwarded binding — which a `Box<dyn Fn()>` prop can never satisfy.
+        let written = format!("{}{v}", expr_marker(attr.value_start + lead, v.len()));
+        if let Some(taken) = self.by_value(v, written) {
+            return taken;
         }
         // A read has to be re-evaluated or it freezes at construction. A lone `$sig` took the arm above and stays a handle, which is what a two-way binding needs.
         let evaluated_now = crate::lexer::without_deferred_closures(v);
         if evaluated_now.contains('$') {
-            return reads_state(&wrap_signal_clones(
+            return reads_state(&self.owning(
                 &[v],
-                format!("move || {}", substitute_reads(v, self.theme_access)),
-                self.theme_access,
+                &format!("move || {}", substitute_reads(v, self.theme_access)),
             ));
         }
         // The same read written without the sigil: a hook read through, or a signal's `.get()`. A plain value stays one, evaluated once.
         if self.reads_reactive_context(&evaluated_now) {
             let marker = expr_marker(attr.value_start + lead, v.len());
-            return reads_state(&self.clone_captures(&[v], format!("move || {marker}{v}")));
+            return reads_state(&self.owning(&[v], &format!("move || {marker}{v}")));
         }
         // A closure the callee keeps (`Reactive::of(move || …)`) reads when it is called, not here: wrapping it again would nest a `Reactive` in a `Reactive`. It still needs its captures cloned in.
         if v.contains('$') {
-            return wrap_signal_clones(
-                &[v],
-                substitute_reads(v, self.theme_access),
-                self.theme_access,
-            );
+            return self.owning(&[v], &substitute_reads(v, self.theme_access));
         }
         if self.reads_reactive_context(v) {
             let marker = expr_marker(attr.value_start + lead, v.len());
-            return self.clone_captures(&[v], format!("{marker}{v}"));
+            return self.owning(&[v], &format!("{marker}{v}"));
         }
         // The delimiting parens are dropped here rather than at the call, so the span covers the expression and nothing wider.
         match super::redundant_parens(v) {
@@ -512,7 +460,10 @@ impl ViewGen<'_> {
         let text = paint.value.text().trim();
         let closure = match text.starts_with('|') || text.starts_with("move |") {
             true => self.emit_closure_value(paint),
-            false => format!("{}{text}", expr_marker(paint.value_start, text.len())),
+            false => {
+                let written = format!("{}{text}", expr_marker(paint.value_start, text.len()));
+                self.by_value(text, written.clone()).unwrap_or(written)
+            }
         };
         let code = format!("{pad}let {var} = Canvas::new({style}, {closure})?;");
         ChildEmit::Simple { name: var, code }
@@ -529,10 +480,248 @@ pub(crate) fn props_type(tag: &str) -> String {
     }
 }
 
-/// A slot as the runtime names it: `None` for the default slot, `Some("name")` for a named one.
-fn slot_arg(name: Option<&str>) -> String {
-    match name {
-        Some(name) => format!("Some({})", rust_str(name)),
-        None => "None".to_string(),
+struct Routed {
+    recipes: Vec<Recipe>,
+    /// A child whose `slot:` names no field, and the line it sits on.
+    errors: Vec<(usize, String)>,
+}
+
+struct Recipe {
+    prop: String,
+    nodes: Vec<ViewNode>,
+}
+
+/// Bare children go to `children` and a child written with `slot:"header"` to `header`, its `slot:` consumed; the props come in the order they first appear. A view `let` goes into every recipe holding a child after it, since a later sibling in any of them may read it, and a comment into the recipe of the child it precedes.
+fn route_children(children: &[ViewNode]) -> Routed {
+    let mut errors = Vec::new();
+    let props: Vec<Option<String>> = children
+        .iter()
+        .map(|child| match child {
+            ViewNode::Element(el) => match el
+                .attributes
+                .iter()
+                .find(|a| a.key == crate::registry::SLOT_ATTR)
+            {
+                Some(slot) => slot_prop(slot.value.text())
+                    .map_err(|message| errors.push((el.line, message)))
+                    .ok(),
+                None => Some(CHILDREN_PROP.to_string()),
+            },
+            ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::MatchBlock(_) => {
+                Some(CHILDREN_PROP.to_string())
+            }
+            ViewNode::LetStmt(_) | ViewNode::Comment(_) => None,
+        })
+        .collect();
+
+    let mut order: Vec<&String> = Vec::new();
+    for prop in props.iter().flatten() {
+        if !order.contains(&prop) {
+            order.push(prop);
+        }
     }
+    let next_prop = |from: usize| {
+        children[from..]
+            .iter()
+            .zip(&props[from..])
+            .find(|(node, _)| !matches!(node, ViewNode::LetStmt(_) | ViewNode::Comment(_)))
+            .and_then(|(_, prop)| prop.as_ref())
+    };
+    let recipes = order
+        .into_iter()
+        .map(|prop| {
+            let nodes = children
+                .iter()
+                .enumerate()
+                .filter_map(|(at, node)| match node {
+                    ViewNode::LetStmt(_) => props[at..]
+                        .iter()
+                        .any(|later| later.as_ref() == Some(prop))
+                        .then(|| node.clone()),
+                    ViewNode::Comment(_) => (next_prop(at) == Some(prop)).then(|| node.clone()),
+                    ViewNode::Element(el) if props[at].as_ref() == Some(prop) => {
+                        let mut routed = el.clone();
+                        routed
+                            .attributes
+                            .retain(|a| a.key != crate::registry::SLOT_ATTR);
+                        Some(ViewNode::Element(routed))
+                    }
+                    _ => (props[at].as_ref() == Some(prop)).then(|| node.clone()),
+                })
+                .collect();
+            Recipe {
+                prop: prop.clone(),
+                nodes,
+            }
+        })
+        .collect();
+    Routed { recipes, errors }
+}
+
+const CHILDREN_PROP: &str = "children";
+
+fn slot_prop(name: &str) -> Result<String, String> {
+    let name = name.trim();
+    match syn::parse_str::<syn::Ident>(name) {
+        Ok(_) => Ok(name.to_string()),
+        Err(_) => Err(format!(
+            "`slot:\"{name}\"` names the prop this child is handed through, so it has to be a Rust field name"
+        )),
+    }
+}
+
+/// The positional expression a `children` placeholder places, or why the line is not one: a placeholder places one `Children` prop, named by its expression.
+fn placeholder_recipe(el: &Element) -> Result<&Attr, String> {
+    if let Some(name) = el.attributes.iter().find(|a| a.key == "name") {
+        let field = name.value.text().trim();
+        return Err(format!(
+            "`children` places a `Children` prop: write `children $props.{field}`, with `#[props(default)] pub {field}: Children` in `Props`"
+        ));
+    }
+    let mut operands = el.attributes.iter().filter(|a| a.value.is_flag());
+    match (operands.next(), operands.next()) {
+        (Some(recipe), None) => Ok(recipe),
+        (None, _) => Err(
+            "`children` places a `Children` prop: write `children $props.children`, with `#[props(default)] pub children: Children` in `Props`"
+                .to_string(),
+        ),
+        (Some(_), Some(extra)) => Err(format!(
+            "`children` places one `Children`, and `{}` is a second",
+            extra.key
+        )),
+    }
+}
+
+/// The classes a value names, `@flat` or `(@flat @dense)`, or `None` for a value that names none. A value that starts as a class list and is not one is the `Err` saying so.
+pub(super) fn class_list(value: &Value) -> Option<Result<Vec<String>, String>> {
+    let Value::Expr(text) = value else {
+        return None;
+    };
+    let text = text.trim();
+    let listed = super::redundant_parens(text).unwrap_or(text).trim();
+    if !listed.starts_with('@') {
+        return None;
+    }
+    let names = listed.split_whitespace().map(|token| {
+        token
+            .strip_prefix('@')
+            .filter(|name| {
+                !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            })
+            .map(str::to_string)
+            .ok_or_else(|| {
+                format!(
+                    "`{text}` is no class list: a part takes `@name`, or `(@first @second)` for several, the later winning"
+                )
+            })
+    });
+    Some(names.collect())
+}
+
+/// The properties of a class that reach a component's surface.
+const SURFACE_PAINT: &[&str] = &["fill", "stroke", "stroke_width", "radius"];
+
+fn written_classes(classes: &[String]) -> String {
+    classes
+        .iter()
+        .map(|name| format!("@{name}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// `classes` spelled as the value of a part's key.
+fn class_value(classes: &[String]) -> String {
+    match classes.len() {
+        1 => written_classes(classes),
+        _ => format!("({})", written_classes(classes)),
+    }
+}
+
+/// Why each attribute of `el` whose value is a class list cannot hand it over: the list is malformed, its key names no part, or `el` is no component call.
+pub(super) fn class_value_errors(el: &Element) -> Vec<String> {
+    let component = !crate::registry::is_builtin_tag(&el.tag);
+    el.attributes
+        .iter()
+        .filter_map(|attr| {
+            let classes = match class_list(&attr.value)? {
+                Ok(classes) => classes,
+                Err(message) => return Some(message),
+            };
+            let written = written_classes(&classes);
+            let as_value = class_value(&classes);
+            let (key, tag) = (&attr.key, &el.tag);
+            if component && crate::registry::STATE_STYLE_KEYS.contains(&key.as_str()) {
+                None
+            } else if !component {
+                Some(format!(
+                    "`{key}:@…` hands a class to a component's part, and `{tag}` is no component: its classes go on the element, `{tag} {written}`"
+                ))
+            } else if key == "style" {
+                Some(format!(
+                    "`style:@…` names the principal surface, which takes its classes on the call itself: `{tag} {written}`"
+                ))
+            } else if !crate::registry::is_part_style_key(key) {
+                Some(format!(
+                    "`{key}:@…` hands a class to a part, and a part's prop is named for it, `<part>_style`: `{key}_style:{as_value}`"
+                ))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Whether `key` on a component call is one of the callee's props, rather than something the call says about the item it returns or a box's state paint.
+fn is_prop_attr(key: &str) -> bool {
+    key != crate::registry::SLOT_ATTR
+        && !crate::registry::is_component_instance_attr(key)
+        && !crate::registry::STATE_STYLE_KEYS.contains(&key)
+}
+
+/// Why a state key on a component call names nothing: a component's states are its own, and a class reaches them through the surface it amends.
+pub(super) fn state_key_errors(el: &Element) -> Vec<String> {
+    if crate::registry::is_builtin_tag(&el.tag) {
+        return Vec::new();
+    }
+    el.attributes
+        .iter()
+        .filter(|attr| crate::registry::STATE_STYLE_KEYS.contains(&attr.key.as_str()))
+        .map(|attr| {
+            format!(
+                "`{}` paints a state of a `box`, and a component's states are its own: a class restyles them in every state, on the call, `{} @…`, or on a part, `<part>_style:@…`",
+                attr.key, el.tag
+            )
+        })
+        .collect()
+}
+
+/// `el` without its class-valued attributes, where it is a built-in tag that has some: [`class_value_errors`] reports them, and a `@` reaching the Rust would be a syntax error on no line of the markup.
+pub(super) fn without_class_values(el: &Element) -> Option<Element> {
+    let stray = |attr: &Attr| class_list(&attr.value).is_some();
+    if !crate::registry::is_builtin_tag(&el.tag) || !el.attributes.iter().any(stray) {
+        return None;
+    }
+    let mut stripped = el.clone();
+    stripped.attributes.retain(|attr| !stray(attr));
+    Some(stripped)
+}
+
+/// The classes `el` names in its attribute values, where it is a component call that hands them to its parts.
+pub(super) fn part_class_names(el: &Element) -> Vec<String> {
+    if crate::registry::is_builtin_tag(&el.tag) {
+        return Vec::new();
+    }
+    el.attributes
+        .iter()
+        .filter_map(|attr| class_list(&attr.value)?.ok())
+        .flatten()
+        .collect()
+}
+
+/// Whether `attr` on a `children` placeholder is one [`placeholder_recipe`] reads, rather than a key the tag's attribute table answers for: its positional expression, or the retired `name:` it explains.
+pub(super) fn is_placeholder_operand(attr: &Attr) -> bool {
+    attr.value.is_flag() || attr.key == "name"
 }

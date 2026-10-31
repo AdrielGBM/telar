@@ -4,10 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::{ForBlock, IfBlock, MatchBlock, ViewNode, VirtualClause};
 
-use super::signals::{
-    ScopedSnippet, captured_in_scope, clone_block_multiline, pattern_idents, rust_str,
-    scoped_snippets, substitute_reads, wrap_signal_clones,
-};
+use super::signals::{ScopedSnippet, pattern_idents, rust_str, scoped_snippets, substitute_reads};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
@@ -32,24 +29,6 @@ impl ViewGen<'_> {
         self.loop_depth -= 1;
         self.loop_bound.truncate(self.loop_bound.len() - added);
         result
-    }
-
-    /// The clone prelude a `move` closure reading `snippets` needs: one `let x = x.clone();` per `$signal` (and per in-scope loop variable) it names.
-    ///
-    /// Without it the closure *moves* those bindings, so a signal read inside a reactive branch stops being available to the rest of the view — a trap the author never wrote and cannot see in their `.rsx`. What the closure itself declares is left out, which is why the snippets arrive scoped: the prelude runs above the closure, where a loop variable, an arm binding and a view `let` all name nothing yet.
-    fn wrap_branch_closure(
-        &self,
-        snippets: &[ScopedSnippet],
-        closure: String,
-        pad: &str,
-    ) -> String {
-        let idents = captured_in_scope(
-            snippets,
-            &self.loop_variables,
-            &self.locals,
-            self.theme_access,
-        );
-        clone_block_multiline(&idents, closure, pad)
     }
 
     /// `match <expr> [as <name>] [key <expr>]`. A `$` in the scrutinee makes it reactive; without one the arm is chosen once at construction and this is an ordinary Rust `match`.
@@ -84,13 +63,12 @@ impl ViewGen<'_> {
         let var = self.next_variable_name("node");
         let pad = self.indent_str();
         let scrutinee = block.scrutinee.trim();
-        let source = wrap_signal_clones(
+        let source = self.owning(
             &[scrutinee],
-            format!(
+            &format!(
                 "move || vec![{}]",
                 substitute_reads(scrutinee, self.theme_access)
             ),
-            self.theme_access,
         );
 
         let binding = block.binding.as_deref().unwrap_or("__value");
@@ -136,7 +114,7 @@ impl ViewGen<'_> {
             .iter()
             .flat_map(|arm| scoped_snippets(&arm.body, &pattern_idents(&arm.pattern)))
             .collect();
-        let branches = self.wrap_branch_closure(&arm_snippets, body, &format!("{pad}    "));
+        let branches = self.owning_subtree(&arm_snippets, body, &format!("{pad}    "));
 
         let mut code = String::new();
         let opener = if boxed {
@@ -184,20 +162,19 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// A reactive `if $cond`, keyed on the condition boolean: the old branch's nodes are disposed and the new branch built when it flips. Inside a slot host it is a transparent fragment (the shown branch's nodes are real siblings inheriting the parent's flex direction); where a fragment cannot attach — component-slot children, a bare root, overlay/scroll — it is a single-item `ReactiveList` owning a node of its own.
+    /// A reactive `if $cond`, keyed on the condition boolean: the old branch's nodes are disposed and the new branch built when it flips. Inside a slot host it is a transparent fragment (the shown branch's nodes are real siblings inheriting the parent's flex direction); where a fragment cannot attach — a component's children recipe, a bare root, overlay/scroll — it is a single-item `ReactiveList` owning a node of its own.
     fn emit_reactive_if(&mut self, block: &IfBlock) -> ChildEmit {
         let boxed = !self.in_slot_host();
         let var = self.next_variable_name("node");
         let pad = self.indent_str();
         let cond = block.condition.trim();
         // A one-element `vec![<bool>]`: the element is both reconciliation key and branch selector.
-        let source = wrap_signal_clones(
+        let source = self.owning(
             &[cond],
-            format!(
+            &format!(
                 "move || vec![{}]",
                 substitute_reads(cond, self.theme_access)
             ),
-            self.theme_access,
         );
 
         let mut body = String::new();
@@ -210,7 +187,7 @@ impl ViewGen<'_> {
         self.indent -= 2;
         let _ = write!(body, "{pad}    }}");
         let branches =
-            self.wrap_branch_closure(&Self::branch_snippets(block), body, &format!("{pad}    "));
+            self.owning_subtree(&Self::branch_snippets(block), body, &format!("{pad}    "));
 
         let opener = if boxed {
             "ReactiveList::new("
@@ -310,7 +287,10 @@ impl ViewGen<'_> {
                 );
             }
         }
-        let _ = writeln!(code, "{pad}for {} in {iterable} {{", block.pattern.trim());
+        let iterated = self
+            .by_value(iterable, iterable.to_string())
+            .unwrap_or_else(|| iterable.to_string());
+        let _ = writeln!(code, "{pad}for {} in {iterated} {{", block.pattern.trim());
         self.indent += 1;
         // Loop variables are often borrowed, but widget closures need `'static` captures, so bind owned copies.
         let body_pad = self.indent_str();
@@ -343,10 +323,9 @@ impl ViewGen<'_> {
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty());
-        let source = wrap_signal_clones(
+        let source = self.owning(
             &[iterable],
-            format!("move || {}", substitute_reads(iterable, self.theme_access)),
-            self.theme_access,
+            &format!("move || {}", substitute_reads(iterable, self.theme_access)),
         );
         let ctor = match (boxed, key_expr.is_some()) {
             (false, true) => "fragment",
@@ -398,7 +377,7 @@ impl ViewGen<'_> {
         let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
         self.indent -= 2;
         let _ = write!(body, "{pad}    }}");
-        self.wrap_branch_closure(&snippets, body, &format!("{pad}    "))
+        self.owning_subtree(&snippets, body, &format!("{pad}    "))
     }
 
     /// A `virtual` loop: only the rows the enclosing scroll shows get built, instead of every row up front.
@@ -427,10 +406,9 @@ impl ViewGen<'_> {
             .map(str::to_string)
             .unwrap_or_else(|| "__index".to_string());
 
-        let source = wrap_signal_clones(
+        let source = self.owning(
             &[iterable],
-            format!("move || {}", substitute_reads(iterable, self.theme_access)),
-            self.theme_access,
+            &format!("move || {}", substitute_reads(iterable, self.theme_access)),
         );
 
         // `VirtualList` hands a row its index alongside the item; the author's pattern binds the item, `__index` the index.

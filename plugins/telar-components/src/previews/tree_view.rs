@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
+use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
 use crate::tree_view::{TreeNode, TreeViewProps, tree_view};
 
@@ -54,7 +54,8 @@ fn chapters() -> Vec<TreeNode> {
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(tree_view: TreeViewProps, "Project", |p| {
-            let expanded: HashSet<Arc<str>> = ["src", "src/ui"].into_iter().map(Arc::from).collect();
+            let expanded: HashSet<Arc<str>> =
+                ["src", "src/ui"].into_iter().map(Arc::from).collect();
             let tree = tree_view(
                 TreeViewProps::props()
                     .items(project())
@@ -64,7 +65,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Files"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(Container::new(
                 LayoutStyle::column().width(260.0).height(320.0),
@@ -88,7 +88,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect(by_role(Role::TreeItem).named("smoke.rs"))
         }),
         preview!(tree_view: TreeViewProps, "Wrapped labels", |p| {
-            let expanded: HashSet<Arc<str>> = ["start", "views"].into_iter().map(Arc::from).collect();
+            let expanded: HashSet<Arc<str>> =
+                ["start", "views"].into_iter().map(Arc::from).collect();
             let tree = tree_view(
                 TreeViewProps::props()
                     .items(chapters())
@@ -98,7 +99,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Guide"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(Container::new(
                 LayoutStyle::column().width(260.0).height(320.0),

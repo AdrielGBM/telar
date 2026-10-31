@@ -7,9 +7,6 @@ use telar::{
     amend_surface, box_item, children, focus::Role, signal,
 };
 
-#[cfg(test)]
-use telar::Slots;
-
 use crate::shared;
 
 /// An accordion's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -67,9 +64,9 @@ fn header_surface(state: State) -> RectStyle {
     }
 }
 
-/// A single collapsible section: a clickable header (title + caret) that toggles an `open` bool, and the slot children below it, present only while open. This is high-level sugar over the primitives; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
+/// A single collapsible section: a clickable header (title + caret) that toggles an `open` bool, and its `children` below it, present only while open. This is high-level sugar over the primitives; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
 ///
-/// The body is built ONCE from the slot children (they arrive as pre-built widgets and cannot be rebuilt once consumed, like `modal`/`drawer`'s), then shown/hidden by toggling `display:none` on its layout node — the same mechanism the sandbox uses to switch doc sections — instead of a `ReactiveList` rebuild. Unlike `modal`/`drawer`'s `Overlay`, this stays IN FLOW: collapsing the body's node to a zero rect pushes following siblings back up, and expanding it pushes them down again.
+/// The body is built ONCE from its `children`, then shown/hidden by toggling `display:none` on its layout node — the same mechanism the sandbox uses to switch doc sections — instead of a `ReactiveList` rebuild. Unlike `modal`/`drawer`'s `Overlay`, this stays IN FLOW: collapsing the body's node to a zero rect pushes following siblings back up, and expanding it pushes them down again.
 #[derive(Props)]
 pub struct AccordionProps {
     /// Header label.
@@ -84,22 +81,22 @@ pub struct AccordionProps {
     /// Amends the paint of the header — the accordion's **principal surface** — at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`AccordionTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// The body under the header.
+    #[props(default)]
+    pub children: Children,
 }
 
 /// A header that expands and collapses the body nested inside it.
-pub fn accordion(
-    props: AccordionProps,
-    children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut slots = children.build()?;
+pub fn accordion(props: AccordionProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let AccordionProps {
         title,
         open,
         color,
         style,
+        children,
     } = props;
     let open = open.unwrap_or_else(|| signal(false));
-    let body_children = slots.take_default();
+    let body_children = children.build()?;
 
     let caret_open = open;
     let caret_color = color.clone();
@@ -133,7 +130,7 @@ pub fn accordion(
     .toggled(move || announced_open.get())
     .on_press(move || toggle_open.update(|o| *o = !*o));
 
-    // Built once from the slot children, and clipped to its own rect so a collapsed body draws nothing even if a child paints at fixed coordinates.
+    // Built once from its children, and clipped to its own rect so a collapsed body draws nothing even if a child paints at fixed coordinates.
     let body = Container::column(body_children)?;
     let body_node = body.layout_node();
     let clipped_body = ClippedItem::new(box_item(body), Clip::both());

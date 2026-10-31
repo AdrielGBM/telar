@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Container, Key, LayoutError, NamedKey, Role, box_item};
+use telar::{Container, Key, LayoutError, NamedKey, Role, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::command_palette::{Command, CommandPaletteProps, command_palette};
@@ -45,7 +45,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label("Open the palette")
                     .on_press(Rc::new(move || open.set(true)))
                     .build(),
-                Children::default(),
             )?;
             let palette = command_palette(
                 CommandPaletteProps::props()
@@ -53,7 +52,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .commands(commands())
                     .width(p.arg("width", 0.0f32))
                     .build(),
-                Children::default(),
             )?;
             Ok::<_, LayoutError>(Container::column(vec![box_item(reopen), palette])?)
         })

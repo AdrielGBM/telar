@@ -6,10 +6,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, FixedLayer,
-    JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle,
-    RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface,
-    box_item, children, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
+    Accessible, AlignItems, Border, BorderRadius, Color, Container, FixedLayer, JustifyContent,
+    LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle, RwSignal,
+    ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface, box_item,
+    children, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
 };
 
 use crate::shared;
@@ -299,10 +299,7 @@ pub struct ToasterProps {
 }
 
 /// A stack of notices against one edge of the surface, each putting itself away after a while.
-pub fn toaster(
-    props: ToasterProps,
-    _children: Children,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ToasterProps {
         toasts: queue,
         placement,

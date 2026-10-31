@@ -32,7 +32,7 @@ use app_input::{AppInput, preview_const_ident};
 ///
 /// **For the widget a `[view]` cannot build itself** — one that owns a canvas, a register, a document — which reaches the markup as a component with named props, the shape the child position took when the `widget` escape went. Written out by hand that is a struct, a `derive`, a destructuring `let` and a signature nobody reads; the arguments already say all four, and saying them twice is how the two drift apart.
 ///
-/// Each argument carries the same `#[props(…)]` attributes a field of the struct would, and its doc comment. An argument named `children` is bound to the children the call site nested instead of becoming a prop.
+/// Each argument carries the same `#[props(…)]` attributes a field of the struct would, and its doc comment. A prop of type `Children` takes content: `children` is what the call site nested inside the tag, and any other name, such as `header`, a named place the call site fills with a setter of that name. A component without a `children` prop takes no nested content.
 #[proc_macro_attribute]
 pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match component::expand(item.into()) {

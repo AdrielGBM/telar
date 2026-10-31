@@ -6,9 +6,9 @@ use std::rc::Rc;
 use telar::focus::{self, FocusId};
 use telar::preview::Frame;
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Key, LayoutError,
-    LayoutItem, LayoutScrollArea, LayoutStyle, NamedKey, Reactive, ReactiveList, RectStyle, Role,
-    ShapeStyle, StyledContainer, Text, box_item, children, use_theme_tokens,
+    Accessible, AlignItems, Border, BorderRadius, Color, Container, Key, LayoutError, LayoutItem,
+    LayoutScrollArea, LayoutStyle, NamedKey, Reactive, ReactiveList, RectStyle, Role, ShapeStyle,
+    StyledContainer, Text, box_item, children, use_theme_tokens,
 };
 use telar_components::{
     BadgeProps, ButtonProps, ButtonVariant, ToggleProps, badge, button, metrics, toggle,
@@ -115,7 +115,6 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
                     .variant(ButtonVariant::Ghost)
                     .on_press(Rc::new(move || interactions.back_to_live()))
                     .build(),
-                Children::default(),
             )
         },
     )?;
@@ -124,7 +123,6 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
             .checked(state.interactions().auto_run())
             .label(Reactive::of(|| strings::text(RUN_ON_MOUNT)))
             .build(),
-        Children::default(),
     )?;
     let replaying = state.clone();
     let replay = button(
@@ -132,7 +130,6 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
             .label(Reactive::of(|| strings::text(REPLAY)))
             .on_press(Rc::new(move || replay(&replaying)))
             .build(),
-        Children::default(),
     )?;
     let tools = Container::new(
         LayoutStyle::row()
@@ -165,7 +162,6 @@ pub(crate) fn tab_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, La
                     .label(Reactive::of(move || count.to_string()))
                     .color(Reactive::of(move || verdict_color(verdict)))
                     .build(),
-                Children::default(),
             )
         },
     )?;

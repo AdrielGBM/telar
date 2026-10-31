@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Reactive, Role};
+use telar::{Color, Reactive, Role};
 
 use crate::chip::{ChipProps, chip};
 
@@ -13,7 +13,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Design"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
-                Children::default(),
             )
         })
         .title("Display/Chip")
@@ -26,7 +25,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .color(Reactive::of(|| telar::use_theme_tokens().success()))
                     .on_close(Rc::new(|| {}))
                     .build(),
-                Children::default(),
             )
         })
         .title("Display/Chip")

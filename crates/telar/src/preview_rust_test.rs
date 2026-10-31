@@ -22,7 +22,7 @@ struct TallyProps {
     count: Reactive<u32>,
 }
 
-fn tally(props: TallyProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn tally(props: TallyProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TallyProps { label, count } = props;
     let text = Text::new(
         move || format!("{} · {}", label.get(), count.get()),
@@ -39,7 +39,6 @@ fn primary() -> PreviewEntry {
                 .label(p.arg("label", "Apples"))
                 .count(p.arg("count", 3u32))
                 .build(),
-            Children::default(),
         )
     })
 }
@@ -72,8 +71,9 @@ fn the_package_is_the_one_the_preview_is_written_in() {
 
 #[test]
 fn the_location_is_where_the_preview_is_written() {
-    let line = line!() + 1;
-    let entry = preview!(tally: TallyProps, "Here", |_| tally(TallyProps::props().label("x").build(), Children::default()));
+    let line = line!() + 2;
+    let entry =
+        preview!(tally: TallyProps, "Here", |_| tally(TallyProps::props().label("x").build()));
     assert_eq!(
         entry.file,
         concat!(env!("CARGO_MANIFEST_DIR"), "/src/preview_rust_test.rs")
@@ -86,19 +86,18 @@ fn the_location_is_where_the_preview_is_written() {
 fn the_source_is_the_body_as_written() {
     assert_eq!(
         primary().source,
-        "{\n    tally(\n        TallyProps::props()\n            .label(p.arg(\"label\", \"Apples\"))\n            .count(p.arg(\"count\", 3u32))\n            .build(),\n        Children::default(),\n    )\n}"
+        "{\n    tally(\n        TallyProps::props()\n            .label(p.arg(\"label\", \"Apples\"))\n            .count(p.arg(\"count\", 3u32))\n            .build(),\n    )\n}"
     );
 }
 
 #[test]
 fn a_body_that_is_not_a_block_is_read_from_its_first_token_to_its_last() {
     let entry = preview!(tally, "Ünïcode", |_| tally(
-        TallyProps::props().label("é — ü").build(),
-        Children::default()
+        TallyProps::props().label("é — ü").build()
     ));
     assert_eq!(
         entry.source,
-        "tally(\n    TallyProps::props().label(\"é — ü\").build(),\n    Children::default()\n)"
+        "tally(\n    TallyProps::props().label(\"é — ü\").build()\n)"
     );
 }
 
@@ -112,8 +111,7 @@ fn the_props_type_names_the_schema() {
 #[test]
 fn a_component_without_derived_props_names_none() {
     let entry = preview!(tally, "Bare", |_| tally(
-        TallyProps::props().label("x").build(),
-        Children::default()
+        TallyProps::props().label("x").build()
     ));
     assert!(entry.props.is_none());
     assert_eq!(entry.id, "preview_rust--tally--bare");
@@ -144,10 +142,7 @@ fn the_args_the_body_reads_get_controls_and_follow_them() {
 fn a_signal_is_shared_with_its_control() {
     let entry = preview!(tally: TallyProps, "Counting", |p| {
         let count = p.signal("count", 0u32);
-        tally(
-            TallyProps::props().label("Presses").count(count).build(),
-            Children::default(),
-        )
+        tally(TallyProps::props().label("Presses").count(count).build())
     });
     let ctx = PreviewCtx::default();
     assert_eq!(texts(&entry, &ctx), ["Presses · 0"]);
@@ -211,7 +206,7 @@ fn the_builder_collects_into_entries() {
 struct Frame(&'static str);
 
 fn framed(children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let items = children.build_with(Frame("framed"))?.take_default();
+    let items = children.build_with(Frame("framed"))?;
     Ok(box_item(Container::new(
         LayoutStyle::new().padding_all(8.0),
         items,
@@ -222,10 +217,7 @@ fn framed(children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
 fn a_decorator_wraps_the_root_and_its_context_reaches_it() {
     let entry = preview!(tally, "Framed", |_| {
         let frame = use_context::<Frame>().map_or("bare", |frame| frame.0);
-        tally(
-            TallyProps::props().label(frame).build(),
-            Children::default(),
-        )
+        tally(TallyProps::props().label(frame).build())
     });
     assert_eq!(texts(&entry, &PreviewCtx::default()), ["bare · 0"]);
 
@@ -241,28 +233,27 @@ fn the_decorator_builds_the_root_each_time_it_asks() {
     fn twice(children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let mut items = Vec::new();
         for _ in 0..2 {
-            items.extend(children.build_slot(None)?);
+            items.extend(children.build()?);
         }
         Ok(box_item(Container::new(LayoutStyle::new(), items)?))
     }
     let entry = preview!(tally, "Twice", |_| {
         BUILDS.with(|builds| builds.set(builds.get() + 1));
-        tally(TallyProps::props().label("x").build(), Children::default())
+        tally(TallyProps::props().label("x").build())
     })
     .decorate(twice);
     assert_eq!(texts(&entry, &PreviewCtx::default()), ["x · 0", "x · 0"]);
     assert_eq!(BUILDS.with(Cell::get), 2);
 }
 
-fn r#type(props: TallyProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    tally(props, children)
+fn r#type(props: TallyProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    tally(props)
 }
 
 #[test]
 fn a_raw_tag_names_its_component_as_its_id_does() {
     let entry = preview!(r#type, "Default", |_| r#type(
-        TallyProps::props().label("x").build(),
-        Children::default()
+        TallyProps::props().label("x").build()
     ));
     assert_eq!(entry.component, "type");
     assert_eq!(entry.id, "preview_rust--type--default");

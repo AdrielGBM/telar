@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
-use telar::{Key, NamedKey, Role};
+use telar::{Children, Key, NamedKey, Role};
 
 use super::sample;
 use crate::split_pane::{SizedPane, SplitDirection, SplitPaneProps, split_pane};
@@ -16,13 +16,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .min(p.arg("min", 120.0f32))
                     .max(p.arg("max", 0.0f32))
                     .collapsible(p.arg("collapsible", true))
+                    .first(Children::one(|| sample::text("Sidebar")))
+                    .second(Children::one(|| sample::text("Editor")))
                     .build(),
-                sample::children(|| {
-                    Ok(vec![
-                        sample::text("Sidebar")?,
-                        sample::text("Editor")?,
-                    ])
-                }),
             )
         })
         .title("Workbench/Split pane")

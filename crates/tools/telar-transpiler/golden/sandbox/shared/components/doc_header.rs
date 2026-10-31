@@ -18,7 +18,7 @@ pub struct DocHeaderProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn doc_header(props: DocHeaderProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn doc_header(props: DocHeaderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -55,7 +55,7 @@ pub fn doc_header(props: DocHeaderProps, children: Children) -> Result<Box<dyn L
 pub fn doc_header_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let __node_0 = doc_header(DocHeaderProps::props().kicker(::telar::__preview_arg!(__preview, "kicker", "FOUNDATIONS")).title(::telar::__preview_arg!(__preview, "title", "Layout")).desc(::telar::__preview_arg!(__preview, "desc", "Flexbox rows and columns with gaps, padding, alignment and growth.")).__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = doc_header(DocHeaderProps::props().kicker(::telar::__preview_arg!(__preview, "kicker", "FOUNDATIONS")).title(::telar::__preview_arg!(__preview, "title", "Layout")).desc(::telar::__preview_arg!(__preview, "desc", "Flexbox rows and columns with gaps, padding, alignment and growth.")).__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }
 

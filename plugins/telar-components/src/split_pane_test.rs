@@ -1,18 +1,16 @@
 use telar::testing::{hold, moved, named, press, release};
-use telar::{Component, LayoutItem, NamedKey, Orientation, Slots, Text, focus};
+use telar::{Component, LayoutItem, NamedKey, Orientation, Text, focus};
 
 use super::*;
 
 const WIDTH: f32 = 600.0;
 const HEIGHT: f32 = 300.0;
 
-fn pane_content() -> Slots {
-    let mut slots = Slots::new();
-    for label in ["first", "second"] {
-        let text = Text::declaring(move || label.to_string(), LayoutStyle::new(), |t| t).unwrap();
-        slots.push(None, box_item(text));
-    }
-    slots
+fn labelled(label: &'static str) -> Children {
+    Children::one(move || {
+        let text = Text::declaring(move || label.to_string(), LayoutStyle::new(), |t| t)?;
+        Ok(box_item(text))
+    })
 }
 
 struct Split {
@@ -25,15 +23,20 @@ struct Split {
 
 impl Split {
     fn build(props: SplitPaneProps) -> Self {
-        Self::holding(props, pane_content)
+        Self::holding(props, [labelled("first"), labelled("second")])
     }
 
-    fn holding(props: SplitPaneProps, content: impl FnOnce() -> Slots) -> Self {
+    fn holding(props: SplitPaneProps, [first, second]: [Children; 2]) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::testing::reset_keyboard();
         focus::clear();
         let (direction, sized) = (props.direction, props.sized);
-        let item = split_pane(props, Children::from(content())).unwrap();
+        let item = split_pane(SplitPaneProps {
+            first,
+            second,
+            ..props
+        })
+        .unwrap();
         let node = item.layout_node();
         let root = telar::track_layout(node).unwrap();
         telar::testing::lay_out(node, WIDTH, HEIGHT);
@@ -432,16 +435,20 @@ fn a_collapsed_pane_takes_its_controls_out_of_the_tab_order() {
     crate::test_support::fresh_layout_runtime();
     focus::clear();
     let collapsed = signal(true);
-    let mut slots = Slots::new();
-    for _ in 0..2 {
-        let control = StyledContainer::new(LayoutStyle::new(), |_| RectStyle::default(), vec![])
-            .unwrap()
-            .control(Role::Button);
-        slots.push(None, box_item(control));
-    }
+    let control = || {
+        Children::one(|| {
+            let control =
+                StyledContainer::new(LayoutStyle::new(), |_| RectStyle::default(), vec![])?
+                    .control(Role::Button);
+            Ok(box_item(control))
+        })
+    };
     let item = split_pane(
-        SplitPaneProps::props().collapsed(collapsed).build(),
-        Children::from(slots),
+        SplitPaneProps::props()
+            .collapsed(collapsed)
+            .first(control())
+            .second(control())
+            .build(),
     )
     .unwrap();
     telar::testing::lay_out(item.layout_node(), WIDTH, HEIGHT);
@@ -487,22 +494,21 @@ fn heard() -> [Rc<Heard>; 2] {
 }
 
 /// Each pane filled by a box that counts the presses and the wheel turns it hears.
-fn listening(heard: &[Rc<Heard>; 2]) -> Slots {
-    let mut slots = Slots::new();
-    for pane in heard {
-        let (pressed, wheeled) = (pane.clone(), pane.clone());
-        let fill = StyledContainer::new(
-            LayoutStyle::new().flex_grow(1.0),
-            |_| RectStyle::default(),
-            vec![],
-        )
-        .unwrap()
-        .on_press(move || pressed.presses.set(pressed.presses.get() + 1))
-        .on_scroll(move |_, _| wheeled.wheels.set(wheeled.wheels.get() + 1));
-        pane.laid.set(telar::track_layout(fill.layout_node()));
-        slots.push(None, box_item(fill));
-    }
-    slots
+fn listening(heard: &[Rc<Heard>; 2]) -> [Children; 2] {
+    heard.clone().map(|pane| {
+        Children::one(move || {
+            let (pressed, wheeled) = (pane.clone(), pane.clone());
+            let fill = StyledContainer::new(
+                LayoutStyle::new().flex_grow(1.0),
+                |_| RectStyle::default(),
+                vec![],
+            )?
+            .on_press(move || pressed.presses.set(pressed.presses.get() + 1))
+            .on_scroll(move |_, _| wheeled.wheels.set(wheeled.wheels.get() + 1));
+            pane.laid.set(telar::track_layout(fill.layout_node()));
+            Ok(box_item(fill))
+        })
+    })
 }
 
 #[test]
@@ -514,7 +520,7 @@ fn the_thin_bar_alone_divides_the_panes() {
 
 fn divided_by_the_thin_bar_alone(direction: SplitDirection) {
     let panes = heard();
-    let split = Split::holding(sized(direction, signal(200.0)), || listening(&panes));
+    let split = Split::holding(sized(direction, signal(200.0)), listening(&panes));
     let bar = splitter_rect();
     assert_eq!(direction.main(bar), bar_thickness());
     assert_eq!(direction.along(bar.x, bar.y), 200.0);
@@ -549,7 +555,7 @@ fn the_grab_strip_reaches_half_a_gap_over_each_pane_and_no_further() {
 
 fn reaches_half_a_gap_over_each_pane(direction: SplitDirection) {
     let panes = heard();
-    let split = Split::holding(sized(direction, signal(200.0)), || listening(&panes));
+    let split = Split::holding(sized(direction, signal(200.0)), listening(&panes));
     let past: Vec<_> = [-1.0, 1.0]
         .into_iter()
         .map(|side| split.across(side * f64::from(bar_thickness() + 1.0)))
@@ -631,7 +637,7 @@ fn the_grab_area_takes_the_press_but_not_the_wheel_from_the_pane_beneath() {
 fn takes_the_press_but_not_the_wheel(direction: SplitDirection) {
     let size = signal(200.0f32);
     let panes = heard();
-    let mut split = Split::holding(sized(direction, size), || listening(&panes));
+    let mut split = Split::holding(sized(direction, size), listening(&panes));
     for (pane, side) in panes.iter().zip([-1.0, 1.0]) {
         let (x, y) = split.across(side * grab_edge());
         split.item.on_event(&telar::Event::Scrolled {
@@ -778,9 +784,10 @@ fn across_bar(direction: SplitDirection, offset: f64) -> (f64, f64) {
 fn grabbed_from_either_edge_in_a_region(direction: SplitDirection, sized: SizedPane) {
     let size = signal(200.0f32);
     let panes = heard();
-    let mut split = Split::holding(in_region(direction, sized, size, signal(false)), || {
-        listening(&panes)
-    });
+    let mut split = Split::holding(
+        in_region(direction, sized, size, signal(false)),
+        listening(&panes),
+    );
     let before = match direction.inverted() {
         true => &panes[1],
         false => &panes[0],
