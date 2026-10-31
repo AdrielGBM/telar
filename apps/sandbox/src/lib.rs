@@ -35,3 +35,7 @@ fn app_config() -> telar::AppConfig {
 #[cfg(test)]
 #[path = "lib_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "nav_test.rs"]
+mod nav;

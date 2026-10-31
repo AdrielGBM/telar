@@ -17,6 +17,9 @@ use std::time::Duration;
 use platform_core::{Event, EventHandler, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
 // `AppRuntime` and not `App`: `mount` is a runtime concern, and what this drives is a tree that lives in a dylib.
+#[path = "nav_test.rs"]
+mod nav;
+
 use telar::{AppPathsProvider, AppRuntime, NoPaths, build_surface_handler};
 
 fn load(path: &std::path::Path) -> telar::hot::HotApp {
@@ -100,7 +103,15 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     handler.on_redraw(&window);
     handler.about_to_wait();
 
-    let (x, y) = (110.0, 489.0);
+    let (x, y) = {
+        let mut tree =
+            telar::ComponentList::new(telar::App::root(&sandbox::core::app::SandboxRoot));
+        tree.on_event(&Event::WindowResized {
+            width: w,
+            height: h,
+        });
+        nav::nav_button_center(&tree, "Boxes & borders")
+    };
     for event in [
         Event::PointerPressed {
             x,

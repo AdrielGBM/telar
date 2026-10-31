@@ -86,19 +86,19 @@ fn nav_click_switches_section() {
         height: 900,
     });
     let before = tree.commands().to_vec();
-    // Nav button 5 ("Boxes") sits ~36px below button 0 (≈y293) per button; click its center.
+    let (x, y) = crate::nav::nav_button_center(&tree, "Boxes & borders");
     for phase in [true, false] {
         let ev = if phase {
             Event::PointerPressed {
-                x: 110.0,
-                y: 489.0,
+                x,
+                y,
                 button: PointerButton::Primary,
                 source: PointerSource::Mouse,
             }
         } else {
             Event::PointerReleased {
-                x: 110.0,
-                y: 489.0,
+                x,
+                y,
                 button: PointerButton::Primary,
                 source: PointerSource::Mouse,
             }
@@ -122,34 +122,47 @@ fn nav_tracks_theme_after_navigation() {
     fn run_theme_tracking_scenario() {
         // A nav button's composed rect: center point + fill color, walking the matrix stack.
         fn nav_rects(tree: &telar::ComponentList) -> Vec<(f32, f32, telar::Color)> {
-            collect_button_rects(tree, |w, _cy| (190.0..230.0).contains(&w))
-        }
-        fn theme_button_centers(tree: &telar::ComponentList) -> Vec<(f32, f32)> {
-            collect_button_rects(tree, |w, cy| (40.0..140.0).contains(&w) && cy < 220.0)
-                .into_iter()
-                .filter(|(_, _, c)| c.b > 0.5 && c.r < 0.6)
-                .map(|(cx, cy, _)| (cx, cy))
-                .collect()
-        }
-        fn collect_button_rects(
-            tree: &telar::ComponentList,
-            keep: impl Fn(f32, f32) -> bool,
-        ) -> Vec<(f32, f32, telar::Color)> {
             let cmds = tree.commands();
-            let mut out = Vec::new();
-            telar::for_each_with_matrix(&cmds, |c, m| {
-                if let telar::DrawCommand::Rect { rect, style } = c {
-                    let cy = m[5] + rect.y + rect.height / 2.0;
-                    if (18.0..45.0).contains(&rect.height)
-                        && keep(rect.width, cy)
-                        && let Some(p) = style.fill.as_ref()
-                    {
-                        let cx = m[4] + rect.x + rect.width / 2.0;
-                        out.push((cx, cy, p.solid_color()));
+            let nodes = telar::inspect::snapshot(&cmds);
+            let in_list = |mut at: Option<usize>| {
+                while let Some(index) = at {
+                    if nodes[index].role == telar::Role::List {
+                        return true;
                     }
+                    at = nodes[index].parent;
+                }
+                false
+            };
+            let mut drawn = Vec::new();
+            telar::for_each_with_matrix(&cmds, |c, m| {
+                if let telar::DrawCommand::Rect { rect, style } = c
+                    && let Some(fill) = style.fill.as_ref()
+                {
+                    let at = telar::Rect {
+                        x: m[4] + rect.x,
+                        y: m[5] + rect.y,
+                        ..*rect
+                    };
+                    drawn.push((at, fill.solid_color()));
                 }
             });
-            out
+            nodes
+                .iter()
+                .filter(|n| n.role == telar::Role::Button && in_list(n.parent))
+                .map(|button| {
+                    let r = button.rect;
+                    let (_, fill) = drawn
+                        .iter()
+                        .find(|(at, _)| {
+                            (at.x - r.x).abs() < 0.5
+                                && (at.y - r.y).abs() < 0.5
+                                && (at.width - r.width).abs() < 0.5
+                                && (at.height - r.height).abs() < 0.5
+                        })
+                        .unwrap_or_else(|| panic!("no rect drawn at the button {:?}", button.name));
+                    (r.x + r.width / 2.0, r.y + r.height / 2.0, *fill)
+                })
+                .collect()
         }
 
         let feed = move |tree: &mut telar::ComponentList, ev: &Event| {
@@ -204,9 +217,16 @@ fn nav_tracks_theme_after_navigation() {
             let _ = tree.commands();
         };
         let switch_theme = |tree: &mut telar::ComponentList, idx: usize| {
-            let btns = theme_button_centers(tree);
-            assert_eq!(btns.len(), 3, "expected 3 theme buttons, found {btns:?}");
-            let (cx, cy) = btns[idx];
+            let name = ["Modern", "Pastel", "Midnight"][idx];
+            let (cx, cy) = {
+                let nodes = telar::inspect::snapshot(&tree.commands());
+                let button = nodes
+                    .iter()
+                    .find(|n| n.role == telar::Role::Button && n.name == name)
+                    .expect("a theme button by that name");
+                crate::nav::center(button)
+            };
+            let (cx, cy) = (cx as f32, cy as f32);
             feed(tree, &mv(cx, cy));
             feed(tree, &pr(cx, cy));
             feed(tree, &rl(cx, cy));
@@ -301,12 +321,8 @@ fn nav_highlight_follows_selection() {
         button: PointerButton::Primary,
         source: PointerSource::Mouse,
     };
-    for ev in [
-        mv(110.0, 489.0),
-        pr(110.0, 489.0),
-        rl(110.0, 489.0),
-        mv(600.0, 400.0),
-    ] {
+    let (x, y) = crate::nav::nav_button_center(&tree, "Boxes & borders");
+    for ev in [mv(x, y), pr(x, y), rl(x, y), mv(600.0, 400.0)] {
         tree.on_event(&ev);
     }
     let after = active_nav_ys(&tree);

@@ -660,6 +660,7 @@ fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIte
             vec![Box::new(label)],
         )?
         .hover_style(move |_r| nav_rect_hover(on_hover.active() == i))
+        .control(Role::Button)
         .on_press(move || on_press.select(i));
         // A `list` is a role with a content model: every child of one has to be a `listitem`, exactly as under a `<ul>`. The button is the control inside the item, not the item — without the wrapper the rail is a list of twenty-four things a reader is told are not list items, and the count it would have announced goes with them.
         buttons.push(Box::new(
