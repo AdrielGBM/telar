@@ -795,3 +795,38 @@ fn the_box_model_of_a_freed_node_is_an_error() {
     engine.remove(node);
     assert!(engine.box_model(node).is_err());
 }
+
+/// A 60px grid whose first column holds two 40px boxes that may wrap: `max-content` keeps them side by side past the grid's edge, `min-content` stacks them.
+fn content_sized_column(track: crate::track::TemplateTrack) -> f32 {
+    use crate::track::TemplateTrack;
+    let mut engine = LayoutEngine::new();
+    let boxes = [
+        engine
+            .new_leaf(LayoutStyle::new().width(40.0).height(10.0))
+            .unwrap(),
+        engine
+            .new_leaf(LayoutStyle::new().width(40.0).height(10.0))
+            .unwrap(),
+    ];
+    let wrapping = engine
+        .new_container(LayoutStyle::row().flex_wrap(), &boxes)
+        .unwrap();
+    let root = engine
+        .new_container(
+            LayoutStyle::new()
+                .display_grid()
+                .grid_template_columns(vec![track, TemplateTrack::fr(1.0)])
+                .width(60.0),
+            &[wrapping],
+        )
+        .unwrap();
+    lay_out(&mut engine, root);
+    engine.layout(wrapping).unwrap().width
+}
+
+#[test]
+fn engine_grid_content_sized_tracks_take_the_width_their_content_asks() {
+    use crate::track::TemplateTrack;
+    assert_eq!(content_sized_column(TemplateTrack::max_content()), 80.0);
+    assert_eq!(content_sized_column(TemplateTrack::min_content()), 40.0);
+}
