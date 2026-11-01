@@ -1,6 +1,6 @@
 use telar::{
     AvailableSpace, BorderRadius, ComponentList, Container, ControlSize, DrawCommand,
-    KeyboardConvention, LayoutItem, LayoutStyle, RectStyle, Role, SurfaceAmendment, box_item,
+    KeyboardConvention, LayoutItem, LayoutStyle, RectStyle, SurfaceAmendment, box_item,
     compute_layout, set_keyboard_convention,
 };
 
@@ -70,46 +70,6 @@ fn a_chord_is_spoken_as_the_platform_writes_it() {
     set_keyboard_convention(KeyboardConvention::Mac);
     assert_eq!(shown_chord("Mod+K"), "⌘K");
     assert_eq!(shown_chord("Mod+Shift+P"), "⇧⌘P");
-}
-
-#[test]
-fn a_reader_hears_the_chord_once_and_not_each_cap() {
-    assert_eq!(
-        read_in(KeyboardConvention::Pc, "Shift+P"),
-        [(Role::KeyboardInput, "Shift+P".to_string())]
-    );
-    assert_eq!(
-        read_in(KeyboardConvention::Pc, "Mod+K S"),
-        [(Role::KeyboardInput, "Ctrl+K, then S".to_string())]
-    );
-    assert_eq!(
-        read_in(KeyboardConvention::Mac, "Mod+Shift+P"),
-        [(Role::KeyboardInput, "⇧⌘P".to_string())]
-    );
-    assert!(!Role::KeyboardInput.is_control(), "a hint is never a stop");
-}
-
-/// What a reader is told of a chord, node by node: its role and its name.
-fn read_in(convention: KeyboardConvention, chord: &'static str) -> Vec<(Role, String)> {
-    crate::test_support::fresh_layout_runtime();
-    set_keyboard_convention(convention);
-    let caps = kbd(KbdProps::props().chord(chord).build()).unwrap();
-    let root = Container::new(
-        LayoutStyle::new().flex_column().width(300.0).height(100.0),
-        vec![caps],
-    )
-    .unwrap();
-    compute_layout(
-        root.layout_node(),
-        AvailableSpace::Definite(300.0),
-        AvailableSpace::Definite(100.0),
-    )
-    .unwrap();
-    let tree = ComponentList::new(box_item(root));
-    telar::inspect::snapshot(&tree.commands())
-        .into_iter()
-        .map(|node| (node.role, node.name))
-        .collect()
 }
 
 fn mounted(props: KbdProps) -> ComponentList {

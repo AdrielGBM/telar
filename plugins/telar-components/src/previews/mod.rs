@@ -26,8 +26,6 @@ mod heading;
 mod icon_button;
 #[path = "../display/image/image.preview.rs"]
 mod image;
-#[path = "../display/kbd/kbd.preview.rs"]
-mod kbd;
 #[path = "../workbench/line_gutter/line_gutter.preview.rs"]
 mod line_gutter;
 #[path = "../navigation/link/link.preview.rs"]
@@ -113,7 +111,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(tag::previews());
     entries.extend(image::previews());
     entries.extend(link::previews());
-    entries.extend(kbd::previews());
     entries.extend(progress::previews());
     entries.extend(spinner::previews());
     entries.extend(heading::previews());
