@@ -398,7 +398,8 @@ line that adds it, `cargo add -p <package> telar-workshop --optional`; `--list` 
   desktop it is the window's title bar: the window opens without the system's decorations, the bar moves it and a
   double-click maximizes it, minimize, maximize and close sit at its end, and the window's borders resize it.
 - **Sidebar.** Search over the tree of group, component and preview, with a badge on a preview whose snapshot
-  failed. Below 900 px it becomes a drawer.
+  failed. Groups are listed alphabetically, and a component's previews in the order they are written. Below 900 px it
+  becomes a drawer.
 - **Canvas.** One preview, mounted alone on a surface of its own, with its size, device frame, zoom, rulers, grid,
   outline and measure.
 - **Panels,** along the bottom or the right: Controls, Actions, Interactions, Layout, Accessibility, Snapshot.

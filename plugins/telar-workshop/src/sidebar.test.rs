@@ -153,6 +153,23 @@ fn previews_are_grouped_by_their_title_path() {
 }
 
 #[test]
+fn groups_are_listed_alphabetically_and_previews_as_written() {
+    let mut reversed = entries();
+    reversed.reverse();
+    let sidebar = Mounted::new(reversed);
+    let shown = texts(&sidebar.tree);
+    let at = |text: &str| {
+        shown
+            .iter()
+            .position(|shown| shown == text)
+            .unwrap_or_else(|| panic!("{text} is not drawn in {shown:?}"))
+    };
+    assert!(at("Inputs") < at("Overlays"));
+    assert!(at("Button") < at("Checkbox"));
+    assert!(at("Secondary") < at("Primary"));
+}
+
+#[test]
 fn a_group_counts_its_previews() {
     let sidebar = Mounted::new(entries());
     let shown = texts(&sidebar.tree);
