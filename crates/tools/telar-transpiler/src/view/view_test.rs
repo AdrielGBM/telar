@@ -2515,3 +2515,15 @@ fn a_reference_binding_is_owned_by_each_closure_and_handed_on_as_the_reference()
         panic!("generated code does not parse: {e}\n{code}");
     }
 }
+
+#[test]
+fn a_comment_in_a_loop_body_wraps_nothing_around_its_widget() {
+    let code = transpile_view(
+        "[logic]\nlet items = signal(vec![1u32]);\n[view]\nrow\n    for item in $items key *item\n        // One box per item.\n        box width:4\n",
+    );
+    assert!(code.contains("// One box per item."), "{code}");
+    assert!(
+        !code.contains("Container::new(LayoutStyle::new().flex_row(), children!["),
+        "{code}"
+    );
+}

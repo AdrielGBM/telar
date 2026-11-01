@@ -474,7 +474,17 @@ impl ViewGen<'_> {
         let mode = Self::child_mode(body);
         let emits: Vec<ChildEmit> =
             self.with_child_sink(mode, |g| body.iter().map(|n| g.emit_node(n)).collect());
-        if let [ChildEmit::Simple { name, code: c }] = emits.as_slice() {
+        // A comment is a note in the generated file, never a child, so it cannot turn a lone widget into a cell around it.
+        let (notes, widgets): (Vec<_>, Vec<_>) = body
+            .iter()
+            .zip(&emits)
+            .partition(|(node, _)| matches!(node, ViewNode::Comment(_)));
+        if let [(_, ChildEmit::Simple { name, code: c })] = widgets.as_slice() {
+            for (_, note) in &notes {
+                if let ChildEmit::Dynamic { code: note } = note {
+                    let _ = writeln!(code, "{note}");
+                }
+            }
             let _ = writeln!(code, "{c}");
             return name.clone();
         }
