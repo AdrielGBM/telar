@@ -10,7 +10,7 @@ element group
             element group
               clip 28,-1000000 54x2000000
                 matrix 1,0,0,1,28,16
-                  text 0,7 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  text 0,8 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                 end
               end
             end
@@ -42,12 +42,12 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,0
-                    text 0,9 92x16.8 "Theme" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                    text 0,10 92x16.8 "Theme" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                   end
                 end
                 element group
                   matrix 1,0,0,1,108,0
-                    text 0,9 44.2x15.12 "System" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                    text 0,10 44.2x15.12 "System" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
                   end
                 end
                 element group
@@ -65,7 +65,7 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,41
-                    text 0,9 122x16.8 "Reduce motion" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                    text 0,10 122x16.8 "Reduce motion" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                   end
                 end
                 element group
@@ -81,7 +81,7 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,77
-                    text 0,9 122x16.8 "High contrast" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                    text 0,10 122x16.8 "High contrast" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                   end
                 end
                 element group

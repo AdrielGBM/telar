@@ -15,7 +15,7 @@ element group
                     rect 0,0 87x32 radius=10
                     element group
                       matrix 1,0,0,1,12,0
-                        text 0,7 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+                        text 0,8 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
                       end
                     end
                   end
@@ -23,7 +23,7 @@ element group
                     rect 91,0 73x32 radius=10
                     element group
                       matrix 1,0,0,1,103,0
-                        text 0,7 49.61x16.8 "Activity" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+                        text 0,8 49.61x16.8 "Activity" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
                       end
                     end
                   end
@@ -31,7 +31,7 @@ element group
                     rect 168,0 78x32 fill=#3852caff radius=10
                     element group
                       matrix 1,0,0,1,180,0
-                        text 0,7 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+                        text 0,8 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
                       end
                     end
                   end
@@ -39,7 +39,7 @@ element group
                     rect 250,0 64x32 radius=10
                     element group
                       matrix 1,0,0,1,262,0
-                        text 0,7 40x16.8 "Billing" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+                        text 0,8 40x16.8 "Billing" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
                       end
                     end
                   end

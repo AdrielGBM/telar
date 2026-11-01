@@ -10,7 +10,7 @@ element group
               rect 343,268 49x32 fill=#4261edff radius=10
               element group
                 matrix 1,0,0,1,355,268
-                  text 0,7 25.2x16.8 "Info" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                  text 0,8 25.2x16.8 "Info" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                 end
               end
             end
@@ -18,7 +18,7 @@ element group
               rect 400,268 57x32 fill=#3852caff radius=10
               element group
                 matrix 1,0,0,1,412,268
-                  text 0,7 33x16.8 "Error" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                  text 0,8 33x16.8 "Error" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                 end
               end
             end

@@ -11,6 +11,7 @@ use reactive_core::{Effect, effect};
 use renderer_core::{Span, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::cap_band::CapBandCache;
 use crate::context::mark_dirty;
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
@@ -24,14 +25,7 @@ type Measured = (
     Option<(renderer_core::FontFit, geometry_core::Size)>,
 );
 
-/// The run the glyph band is measured from: a capital, an ascender, an x-height letter and a descender, which between them span the extent a Latin face actually draws in. Any string of the same style is then centred by the same amount, which is what puts a row of labels on one baseline. The ascender is there because in most faces it stands above the capitals, and a band stopping at the capitals centred every lowercase label a pixel high.
-const REFERENCE: &str = "Hlxg";
-/// Room the reference cannot fill: it is four characters, and cosmic-text overflows on an unbounded one.
-const REFERENCE_WIDTH: f32 = 1_000.0;
-
 /// The measured text leaf, optically centred in the box its parent gave it.
-type InkKey = (u32, u64);
-
 pub struct Text {
     content: Rc<dyn Fn() -> String>,
     home: HomeSurface,
@@ -39,8 +33,7 @@ pub struct Text {
     spans: Option<Rc<dyn Fn() -> Vec<Span>>>,
     runs_token: Option<u64>,
     cached_content: RefCell<(String, Arc<str>)>,
-    // (font_size bits, text metrics generation) -> (ink_top, ink_height, line_height). Keyed on size and not on text, because the band is measured from a reference run.
-    cached_ink: RefCell<Option<(InkKey, f32, f32, f32)>>,
+    cap_band: CapBandCache,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
     // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and a label that grew soft-wraps into a slot built for the old text.
@@ -360,7 +353,7 @@ impl Text {
             spans: spans_fn,
             runs_token,
             cached_content: RefCell::new((String::new(), Arc::from(""))),
-            cached_ink: RefCell::new(None),
+            cap_band: CapBandCache::default(),
             style,
             leaf: LayoutLeaf { node, rect },
             _remeasure: Some(remeasure),
@@ -393,38 +386,13 @@ impl Text {
         }
     }
 
-    /// Where the text sits inside a box `r`, as `(top, height)`: optically centred, see the comments inside.
+    /// Where the text sits inside a box `r`, as `(top, height)`: its whole line box drawn, with the cap band of its style centred in the box (see [`CapBandCache::top_in`]).
     fn placed(&self, r: Rect, text: &str, style: &TextStyle) -> (f32, f32) {
-        // A text leaf stretches to fill its parent's cross axis, and the font's line box reserves ascent room a run never uses, so line-box-centred text sits visibly high next to an icon. The band is measured from a fixed reference run, which makes the offset a property of the font at this size and shared by every label in the style — centring each string on its own ink moved it by whether it held a descender.
-        let (ink_top, ink_height, reference_line) = {
-            let key = (
-                style.font_size.to_bits(),
-                renderer_core::text_metrics_generation(),
-            );
-            let mut cache = self.cached_ink.borrow_mut();
-            match cache.as_ref() {
-                Some((k, top, h, line)) if *k == key => (*top, *h, *line),
-                _ => {
-                    let (top, h) =
-                        crate::text_metrics::measure_ink_bounds(REFERENCE, REFERENCE_WIDTH, style);
-                    let (_, line) =
-                        crate::text_metrics::measure_text(REFERENCE, None, REFERENCE_WIDTH, style);
-                    *cache = Some((key, top, h, line));
-                    (top, h, line)
-                }
-            }
-        };
-        // Centre the whole block, then nudge by how far the band sits off the middle of one line box. The nudge is a property of the font, so it applies once however many lines there are; centring against the band alone would push an N-line block down by (N-1)/2 lines.
         let (_, text_height) = crate::text_metrics::measure_text(text, None, r.width, style);
-        let nudge = if ink_height > 0.0 {
-            reference_line / 2.0 - ink_top - ink_height / 2.0
-        } else {
-            0.0
-        };
-        // Snapped to the pixel grid: centring lands on a half pixel whenever box and text differ by an odd amount, and a glyph drawn half a row down is resampled across two rows and goes soft. Only the vertical axis — horizontal subpixel placement is what keeps letter spacing even. Clamped within the leaf, since a box no taller than one line has nothing to centre in and the nudge would walk glyphs out through its top.
-        let slack = (r.height - text_height).max(0.0);
-        let y = ((slack / 2.0 + nudge).clamp(0.0, slack)).round();
-        (y, text_height)
+        (
+            self.cap_band.top_in(r.height, text_height, style),
+            text_height,
+        )
     }
 
     /// The link span under `(x, y)`, with its position among the spans, found where the text is drawn.

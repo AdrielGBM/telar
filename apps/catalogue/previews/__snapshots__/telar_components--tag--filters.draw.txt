@@ -18,7 +18,7 @@ element group
               end
               element group
                 matrix 1,0,0,1,346,288
-                  text 0,4 41x14.28 "Images" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                  text 0,5 41x14.28 "Images" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                 end
               end
             end
@@ -38,7 +38,7 @@ element group
               end
               element group
                 matrix 1,0,0,1,425,288
-                  text 0,4 43.02x14.28 "Vectors" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                  text 0,5 43.02x14.28 "Vectors" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                 end
               end
             end

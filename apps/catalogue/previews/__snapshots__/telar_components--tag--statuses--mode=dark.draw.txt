@@ -10,7 +10,7 @@ element group
             element group
               element group
                 matrix 1,0,0,1,248,288
-                  text 0,4 35x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                  text 0,5 35x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
                 end
               end
             end
@@ -22,7 +22,7 @@ element group
             element group
               element group
                 matrix 1,0,0,1,307,288
-                  text 0,4 101x14.28 "Unsaved changes" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                  text 0,5 101x14.28 "Unsaved changes" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
                 end
               end
             end
@@ -34,7 +34,7 @@ element group
             element group
               element group
                 matrix 1,0,0,1,432,288
-                  text 0,4 71x14.28 "Export failed" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                  text 0,5 71x14.28 "Export failed" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
                 end
               end
             end
@@ -46,7 +46,7 @@ element group
             element group
               element group
                 matrix 1,0,0,1,526,288
-                  text 0,4 25.36x14.28 "Beta" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                  text 0,5 25.36x14.28 "Beta" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
                 end
               end
             end

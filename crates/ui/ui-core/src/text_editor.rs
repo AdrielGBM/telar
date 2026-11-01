@@ -16,6 +16,7 @@ use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, LineHeight, RectStyle, Semantics, ShapeStyle, TextStyle, TextWrap};
 use ui_tree::{EventResult, RenderNode};
 
+use crate::cap_band::CapBandCache;
 use crate::caret::Blink;
 use crate::composition::{self, Composed, Composition, Step};
 use crate::context::mark_dirty;
@@ -94,6 +95,7 @@ pub(crate) struct Shape {
     placeholder: RefCell<String>,
     mask: Cell<Option<char>>,
     rows: RowCache,
+    cap_band: CapBandCache,
     // What the box was last measured from: its row count, the width that count was taken at, and the style.
     measured: RefCell<Option<(usize, Option<f32>, TextStyle)>>,
     /// How far the text is scrolled sideways under a box it runs past.
@@ -108,8 +110,10 @@ impl Shape {
 
     /// How a box `width` by `height` frames text in `style`, scrolled `scroll_x` sideways.
     fn frame(&self, width: f32, height: f32, style: &TextStyle, scroll_x: f32) -> Frame {
+        let line_h = crate::text_metrics::line_box(style);
+        // A box of several lines is as tall as its rows and grows from the top as they are typed, so only the single line is placed the way a text leaf is.
         let top = match self.lines {
-            Lines::Single => line_inset(height, style.font_size),
+            Lines::Single => self.cap_band.top_in(height, line_h, &pinned(style.clone())),
             Lines::Multi => 0.0,
         };
         Frame {
@@ -117,7 +121,7 @@ impl Shape {
             width,
             top,
             scroll_x,
-            line_h: crate::text_metrics::line_box(style),
+            line_h,
         }
     }
 
@@ -190,6 +194,7 @@ impl Editor {
             placeholder: RefCell::new(String::new()),
             mask: Cell::new(None),
             rows: RowCache::default(),
+            cap_band: CapBandCache::default(),
             measured: RefCell::new(None),
             scroll_x: signal(0.0),
         });
@@ -796,7 +801,7 @@ impl Editor {
         let line_h = placed.frame.line_h;
         let pinned = pinned(style.clone());
         let height = match self.shape.lines {
-            Lines::Single => area.height - placed.frame.top * 2.0,
+            Lines::Single => line_h,
             Lines::Multi => area.height.max(line_h),
         };
         let placeholder = self.shape.placeholder.borrow();
@@ -970,13 +975,6 @@ fn composing_marks(
         marks.extend(composition::underlines(x0, x1, converting, bottom, color));
     }
     RenderNode::group(marks)
-}
-
-/// How far down a box taller than its single line puts that line, so the text sits mid-box and the whole box is the control.
-fn line_inset(height: f32, font_size: f32) -> f32 {
-    ((height - crate::text_metrics::single_line_box(font_size)) / 2.0)
-        .max(0.0)
-        .round()
 }
 
 /// The width the box's rows wrap at: as wide as layout made it before rounding took any off, since that is the width it was measured at and a row measured to fit must not break again when drawn.

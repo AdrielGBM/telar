@@ -7,7 +7,7 @@ element group
         element group
           element group
             matrix 1,0,0,1,250,273
-              text 0,0 301x14.28 "Name" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
+              text 0,1 301x14.28 "Name" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
             end
           end
           element group
@@ -15,8 +15,8 @@ element group
             element group
               matrix 1,0,0,1,262,296
                 clip 0,0 277x32
-                  text 0,6 277x20 "Ad" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
-                  rect 18.23,6 1.5x16.8 fill=#171a2eff
+                  text 0,8 277x16.8 "Ad" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
+                  rect 18.23,8 1.5x16.8 fill=#171a2eff
                 end
               end
             end

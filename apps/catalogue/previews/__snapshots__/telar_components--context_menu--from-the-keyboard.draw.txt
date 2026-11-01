@@ -11,7 +11,7 @@ element group
               rect 16,16 92x32 fill=#4261edff radius=10
               element group
                 matrix 1,0,0,1,28,16
-                  text 0,7 68.06x16.8 "Document" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                  text 0,8 68.06x16.8 "Document" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                 end
               end
             end
@@ -38,12 +38,12 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,0
-                    text 0,9 112.17x16.8 "Cut" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                    text 0,10 112.17x16.8 "Cut" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                   end
                 end
                 element group
                   matrix 1,0,0,1,128,0
-                    text 0,9 38x15.12 "Ctrl+X" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                    text 0,10 38x15.12 "Ctrl+X" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
                   end
                 end
               end
@@ -53,12 +53,12 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,36
-                    text 0,9 111.14x16.8 "Copy" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                    text 0,10 111.14x16.8 "Copy" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                   end
                 end
                 element group
                   matrix 1,0,0,1,127,36
-                    text 0,9 39x15.12 "Ctrl+C" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                    text 0,10 39x15.12 "Ctrl+C" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
                   end
                 end
               end
@@ -68,12 +68,12 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,72
-                    text 0,9 112.28x16.8 "Paste" size=14 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                    text 0,10 112.28x16.8 "Paste" size=14 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
                   end
                 end
                 element group
                   matrix 1,0,0,1,128,72
-                    text 0,9 38x15.12 "Ctrl+V" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                    text 0,10 38x15.12 "Ctrl+V" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
                   end
                 end
               end
@@ -86,7 +86,7 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,113
-                    text 0,9 144x16.8 "Share" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                    text 0,10 144x16.8 "Share" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                   end
                 end
                 element group
@@ -115,7 +115,7 @@ element group
                   end
                   element group
                     matrix 1,0,0,1,8,0
-                      text 0,9 158x16.8 "Copy link" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                      text 0,10 158x16.8 "Copy link" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                     end
                   end
                 end
@@ -125,7 +125,7 @@ element group
                   end
                   element group
                     matrix 1,0,0,1,8,36
-                      text 0,9 158x16.8 "Email" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                      text 0,10 158x16.8 "Email" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                     end
                   end
                 end

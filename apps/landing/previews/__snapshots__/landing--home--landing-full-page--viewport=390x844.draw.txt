@@ -25,24 +25,24 @@ element group
             element group
               element group
                 matrix 1,0,0,1,24,50
-                  text 0,7 57.33x16.8 "Features" size=14 family=sans-serif weight=400 color=#545973ff lang=en
+                  text 0,8 57.33x16.8 "Features" size=14 family=sans-serif weight=400 color=#545973ff lang=en
                 end
               end
               element group
                 matrix 1,0,0,1,105,50
-                  text 0,7 47x16.8 "Gallery" size=14 family=sans-serif weight=400 color=#545973ff lang=en
+                  text 0,8 47x16.8 "Gallery" size=14 family=sans-serif weight=400 color=#545973ff lang=en
                 end
               end
               element group
                 matrix 1,0,0,1,176,50
-                  text 0,7 46x16.8 "Pricing" size=14 family=sans-serif weight=400 color=#545973ff lang=en
+                  text 0,8 46x16.8 "Pricing" size=14 family=sans-serif weight=400 color=#545973ff lang=en
                 end
               end
               element button
                 rect 246,50 98x32 fill=#4361eeff radius=4
                 element group
                   matrix 1,0,0,1,258,50
-                    text 0,7 74x16.8 "Get started" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                    text 0,8 74x16.8 "Get started" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                   end
                 end
               end
@@ -69,7 +69,7 @@ element group
                     rect 24,430 98x32 fill=#4361eeff radius=4
                     element group
                       matrix 1,0,0,1,36,430
-                        text 0,7 74x16.8 "Get started" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                        text 0,8 74x16.8 "Get started" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                       end
                     end
                   end
@@ -77,7 +77,7 @@ element group
                     rect 134,430 119x32 border=1.5 border-color=#4361eeff radius=4
                     element group
                       matrix 1,0,0,1,146,430
-                        text 0,7 95x16.8 "Read the docs" size=14 family=sans-serif weight=400 color=#4361eeff wrap=none lang=en
+                        text 0,8 95x16.8 "Read the docs" size=14 family=sans-serif weight=400 color=#4361eeff wrap=none lang=en
                       end
                     end
                   end
@@ -384,13 +384,13 @@ element group
                 rect 54,4245 121x32 fill=#bd2461ff radius=4
                 element group
                   matrix 1,0,0,1,66,4245
-                    text 0,7 97.64x16.8 "Reserve a seat" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                    text 0,8 97.64x16.8 "Reserve a seat" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                   end
                 end
               end
               element group
                 matrix 1,0,0,1,188,4245
-                  text 0,7 149x16.8 "0 developers reserved" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+                  text 0,8 149x16.8 "0 developers reserved" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
                 end
               end
             end

@@ -7,7 +7,7 @@ element group
         element group
           element group
             matrix 1,0,0,1,288,285
-              text 0,0 224x14.28 "Volume" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
+              text 0,1 224x14.28 "Volume" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
             end
           end
           element slider

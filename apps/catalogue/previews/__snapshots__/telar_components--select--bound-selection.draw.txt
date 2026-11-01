@@ -10,7 +10,7 @@ element group
             element group
               clip 321,-1000000 38x2000000
                 matrix 1,0,0,1,321,284
-                  text 0,7 38x16.8 "Large" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  text 0,8 38x16.8 "Large" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                 end
               end
             end

@@ -15,12 +15,12 @@ element group
           end
           element group
             matrix 1,0,0,1,48,16
-              text 0,9 54x16.8 "Rename" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+              text 0,10 54x16.8 "Rename" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
             end
           end
           element group
             matrix 1,0,0,1,110,16
-              text 0,9 15.13x15.12 "F2" size=12.6 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+              text 0,10 15.13x15.12 "F2" size=12.6 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
             end
           end
         end

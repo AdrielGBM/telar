@@ -7,7 +7,7 @@ element group
         element group
           element group
             matrix 1,0,0,1,288,155
-              text 0,1 224x14.28 "Accent" size=11.9 family=sans-serif weight=400 color=#99a1b8ff lang=en
+              text 0,2 224x14.28 "Accent" size=11.9 family=sans-serif weight=400 color=#99a1b8ff lang=en
             end
           end
           element group
@@ -180,7 +180,7 @@ element group
               element group
                 matrix 1,0,0,1,300,381
                   clip 0,0 200x32
-                    text 0,6 200x20 "#4dc78c" size=14 family=sans-serif weight=400 color=#ebedf5ff line-height=1.2 wrap=none
+                    text 0,8 200x16.8 "#4dc78c" size=14 family=sans-serif weight=400 color=#ebedf5ff line-height=1.2 wrap=none
                   end
                 end
               end

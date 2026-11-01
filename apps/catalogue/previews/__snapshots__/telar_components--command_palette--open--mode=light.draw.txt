@@ -9,7 +9,7 @@ element group
             rect 333,284 134x32 fill=#4261edff radius=10
             element group
               matrix 1,0,0,1,345,284
-                text 0,7 110x16.8 "Open the palette" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                text 0,8 110x16.8 "Open the palette" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
               end
             end
           end
@@ -29,8 +29,8 @@ element group
       element group
         matrix 1,0,0,1,140,104
           clip 0,0 520x32
-            text 0,6 520x20 "zoom" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
-            rect 36.59,6 1.5x16.8 fill=#171a2eff
+            text 0,8 520x16.8 "zoom" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
+            rect 36.59,8 1.5x16.8 fill=#171a2eff
           end
         end
       end
@@ -53,7 +53,7 @@ element group
               element group
                 clip 8,36 469x36
                   matrix 1,0,0,1,8,36
-                    text 0,9 469.2x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en span=0..4[weight=600 color=#4261edff]
+                    text 0,10 469.2x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en span=0..4[weight=600 color=#4261edff]
                   end
                 end
               end
@@ -83,7 +83,7 @@ element group
               element group
                 clip 8,72 469x36
                   matrix 1,0,0,1,8,72
-                    text 0,9 469.2x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en span=0..4[weight=600 color=#4261edff]
+                    text 0,10 469.2x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en span=0..4[weight=600 color=#4261edff]
                   end
                 end
               end

@@ -11,7 +11,7 @@ element group
               rect 356,284 88x32 fill=#3852caff radius=10
               element group
                 matrix 1,0,0,1,368,284
-                  text 0,7 64x16.8 "Hover me" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                  text 0,8 64x16.8 "Hover me" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                 end
               end
             end

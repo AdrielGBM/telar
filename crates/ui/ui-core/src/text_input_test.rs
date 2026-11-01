@@ -29,6 +29,28 @@ fn spacer(height: f32) -> Box<dyn LayoutItem> {
     Box::new(Container::new(LayoutStyle::new().width(200.0).height(height), vec![]).unwrap())
 }
 
+/// How far below the top of its box a 20px field of [`style`] draws its line.
+fn line_top() -> f32 {
+    fn top_of(node: &ui_tree::RenderNode) -> Option<f32> {
+        match node {
+            ui_tree::RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => {
+                Some(rect.y)
+            }
+            ui_tree::RenderNode::Transform { matrix, children } => {
+                children.iter().find_map(top_of).map(|y| y + matrix[5])
+            }
+            ui_tree::RenderNode::Group { children }
+            | ui_tree::RenderNode::Element { children, .. }
+            | ui_tree::RenderNode::Clip { children, .. }
+            | ui_tree::RenderNode::Layer { children, .. } => children.iter().find_map(top_of),
+            _ => None,
+        }
+    }
+    let input = field("hello");
+    lay_out(&input);
+    top_of(&input.view()).expect("the field draws its line")
+}
+
 fn lay_out(root: &impl LayoutItem) {
     compute_layout(
         root.layout_node(),
@@ -62,7 +84,7 @@ fn the_focused_field_reports_its_caret_where_the_surface_draws_it() {
     focus::request(id);
     root.view();
     let reported = text_input().expect("a field holds the keyboard");
-    assert_eq!(reported.caret.y, 30.0);
+    assert_eq!(reported.caret.y, 30.0 + line_top());
     assert!(reported.caret.x > 0.0, "after the word: {reported:?}");
     assert!(!reported.secret);
 
@@ -108,9 +130,10 @@ fn a_scroll_moves_the_reported_caret_without_the_field_drawing_again() {
     lay_out(&scroll);
     focus::request(id);
     scroll.view();
-    assert_eq!(text_input().expect("focused").caret.y, 150.0);
+    let top = line_top();
+    assert_eq!(text_input().expect("focused").caret.y, 150.0 + top);
     offset.1.set(100.0);
-    assert_eq!(text_input().expect("focused").caret.y, 50.0);
+    assert_eq!(text_input().expect("focused").caret.y, 50.0 + top);
 }
 
 #[test]

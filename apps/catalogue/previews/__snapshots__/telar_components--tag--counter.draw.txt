@@ -9,7 +9,7 @@ element group
           element group
             element group
               matrix 1,0,0,1,396,288
-                text 0,4 8x14.28 "3" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                text 0,5 8x14.28 "3" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
               end
             end
           end

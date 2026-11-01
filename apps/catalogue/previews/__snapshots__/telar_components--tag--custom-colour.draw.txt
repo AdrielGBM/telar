@@ -10,7 +10,7 @@ element group
             element group
               element group
                 matrix 1,0,0,1,297,288
-                  text 0,4 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                  text 0,5 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
                 end
               end
             end
@@ -22,7 +22,7 @@ element group
             element group
               element group
                 matrix 1,0,0,1,354,288
-                  text 0,4 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
+                  text 0,5 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
                 end
               end
             end
@@ -34,7 +34,7 @@ element group
             element group
               element group
                 matrix 1,0,0,1,412,288
-                  text 0,4 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
+                  text 0,5 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
                 end
               end
             end
@@ -46,7 +46,7 @@ element group
             element group
               element group
                 matrix 1,0,0,1,469,288
-                  text 0,4 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
+                  text 0,5 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
                 end
               end
             end

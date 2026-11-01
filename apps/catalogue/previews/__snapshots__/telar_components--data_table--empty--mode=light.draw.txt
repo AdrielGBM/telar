@@ -20,7 +20,7 @@ element group
                           element group
                             clip 8,0 40x36
                               matrix 1,0,0,1,8,0
-                                text 0,9 40x16.8 "Name" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                                text 0,10 40x16.8 "Name" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
                               end
                             end
                           end
@@ -37,7 +37,7 @@ element group
                           element group
                             clip 219,0 31x36
                               matrix 1,0,0,1,219,0
-                                text 0,9 31x16.8 "Kind" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                                text 0,10 31x16.8 "Kind" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
                               end
                             end
                           end
@@ -49,7 +49,7 @@ element group
                           element group
                             clip 375,0 29x36
                               matrix 1,0,0,1,375,0
-                                text 0,9 29x16.8 "Size" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                                text 0,10 29x16.8 "Size" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
                               end
                             end
                           end

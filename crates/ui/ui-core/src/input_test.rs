@@ -108,12 +108,20 @@ fn copy_without_a_selection_is_not_consumed() {
     let (mut input, _) = focused_input("hello");
     assert_eq!(input.on_event(&chord(Key::Char('c'))), EventResult::Ignored);
 }
+
 fn focused_input(initial: &str) -> (Input, RwSignal<String>) {
+    focused_input_of(initial, 20.0)
+}
+
+/// A field `height` tall holding `initial`, focused, laid out at the top of a column.
+fn focused_input_of(initial: &str, height: f32) -> (Input, RwSignal<String>) {
     reset_layout_runtime();
     let value = signal(initial.to_string());
-    let input = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
-        TextStyle::new(14.0, Color::BLACK)
-    })
+    let input = Input::new(
+        value,
+        LayoutStyle::new().width(200.0).height(height),
+        || TextStyle::new(14.0, Color::BLACK),
+    )
     .unwrap();
     let root = new_container(
         LayoutStyle::new().flex_column().width(200.0).height(100.0),
@@ -604,7 +612,7 @@ fn an_underline_runs_under_the_letters_it_is_about() {
     assert!((mark.x - measure("abcdef")).abs() < 0.01, "{mark:?}");
     assert_eq!(mark.width, POINT_MARK);
     let line = crate::text_metrics::line_box(&TextStyle::new(14.0, Color::BLACK));
-    assert_eq!(run.y + run.height, line);
+    assert_eq!(run.y + run.height, drawn_line(&input).y + line);
 
     focus::clear();
     assert_eq!(
@@ -692,32 +700,158 @@ fn a_key_that_moves_focus_to_a_field_is_not_typed_into_it() {
     focus::clear();
 }
 
-/// **A tall field is a tall control with its line in the middle.** A field given more height than one line — padding folded into its own box so the whole of it takes the press and is as big a target as it looks — keeps the caret on the line the text is drawn on.
+/// The line a field draws its text on, in the field's own coordinates.
+fn drawn_line(input: &Input) -> Rect {
+    let mut line = None;
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Text { rect, .. } = command {
+            line = Some(*rect);
+        }
+    });
+    line.expect("the field draws its line")
+}
+
+/// The cap band of the field's style as its line is drawn: `(top, height)` inside the line.
+fn field_cap_band() -> (f32, f32) {
+    let mut style = TextStyle::new(14.0, Color::BLACK);
+    style.line_height = LineHeight::Times(crate::text_metrics::line_box(&style) / 14.0);
+    crate::text_metrics::measure_ink_bounds("H", 1_000.0, &style)
+}
+
+/// A field taller than its line places that line as a text leaf would, with the cap band in the middle of the box, and the caret stands on the line drawn.
 #[test]
-fn a_field_taller_than_its_line_centres_the_line_and_the_caret() {
+fn a_field_taller_than_its_line_centres_its_cap_band_and_the_caret_stands_on_it() {
+    let (top, height) = field_cap_band();
+    assert!(height > 0.0, "the capital inks");
+    for box_height in [20.0_f32, 28.0, 31.0, 40.0] {
+        let (input, _) = focused_input_of("hola", box_height);
+        let line = drawn_line(&input);
+        let middle = line.y + top + height / 2.0;
+        assert!(
+            (middle - box_height / 2.0).abs() <= 0.5,
+            "a {box_height}px field puts its cap band's middle at {middle}"
+        );
+        let caret = caret_of(&input).0;
+        assert_eq!(
+            (caret.y, caret.height),
+            (line.y, line.height),
+            "the caret stands on the line"
+        );
+        focus::clear();
+    }
+}
+
+/// A field leaving an odd number of rows around its cap band puts the spare one below it, as a label does.
+#[test]
+fn a_field_puts_an_odd_spare_row_below_the_cap_band() {
+    let (top, height) = field_cap_band();
+    for box_height in 20..32 {
+        let box_height = box_height as f32;
+        let (input, _) = focused_input_of("hola", box_height);
+        let above = drawn_line(&input).y + top;
+        let below = box_height - above - height;
+        assert_eq!(
+            below - above,
+            ((box_height - height) as u32 % 2) as f32,
+            "a {box_height}px field leaves {above} above the cap band and {below} below"
+        );
+        focus::clear();
+    }
+}
+
+/// A field and a label of one style side by side in a row, each as tall as the row, put their cap bands at one height, so a form's text lines up whatever is editable.
+#[test]
+fn a_field_and_a_label_beside_it_share_the_cap_band() {
     reset_layout_runtime();
-    let value = signal("hola".to_string());
-    let input = Input::new(value, LayoutStyle::new().width(200.0).height(40.0), || {
-        TextStyle::new(14.0, Color::BLACK)
-    })
+    let style = || TextStyle::new(14.0, Color::BLACK);
+    let label = crate::Text::new(|| "Name".to_string(), LayoutStyle::new(), style).unwrap();
+    let input = Input::new(
+        signal("Ada".to_string()),
+        LayoutStyle::new().width(200.0),
+        style,
+    )
     .unwrap();
-    let root = new_container(
-        LayoutStyle::new().flex_column().width(200.0).height(100.0),
-        &[input.layout_node()],
+    let row = new_container(
+        LayoutStyle::new().flex_row().gap(8.0).height(32.0),
+        &[label.layout_node(), input.layout_node()],
     )
     .unwrap();
     compute_layout(
-        root,
-        AvailableSpace::Definite(200.0),
-        AvailableSpace::Definite(100.0),
+        row,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(32.0),
     )
     .unwrap();
-    focus::request(input.editor.id);
+    fn line_of(node: &RenderNode) -> Option<Rect> {
+        let mut line = None;
+        walk_view(node, &mut |command| {
+            if let DrawCommand::Text { rect, .. } = command {
+                line = Some(*rect);
+            }
+        });
+        line
+    }
+    let label_line = line_of(&label.view()).expect("the label draws");
+    let field_line = line_of(&input.view()).expect("the field draws");
+    assert_eq!(
+        (label_line.y, label_line.height),
+        (field_line.y, field_line.height),
+        "the label and the field draw their lines alike"
+    );
+}
 
-    let caret = caret_of(&input).0;
-    let inset = ((40.0 - crate::text_metrics::single_line_box(14.0)) / 2.0).round();
-    assert_eq!(caret.y, inset, "the caret starts where the line does");
-    assert!(inset > 0.0, "and that is below the top of the box");
+/// The selection is drawn on the line the text is, in a field taller than it.
+#[test]
+fn the_selection_follows_the_line_the_text_is_drawn_on() {
+    let (mut input, _) = focused_input_of("hola", 40.0);
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    let line = drawn_line(&input);
+    let mut bands = Vec::new();
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Rect { rect, .. } = command
+            && rect.width > CARET_WIDTH
+        {
+            bands.push(*rect);
+        }
+    });
+    assert_eq!(bands.len(), 1, "one band under the two letters: {bands:?}");
+    assert_eq!((bands[0].y, bands[0].height), (line.y, line.height));
+    focus::clear();
+}
+
+/// A press anywhere along the line lands between the letters drawn under it, in a field taller than its line.
+#[test]
+fn a_press_lands_on_the_letter_drawn_under_it() {
+    let style = TextStyle::new(14.0, Color::BLACK);
+    let before = crate::text_metrics::measure_text("ho", None, 1.0e6, &style).0;
+    for row in [0.1_f32, 0.5, 0.9] {
+        let (mut input, value) = focused_input_of("hola", 40.0);
+        let line = drawn_line(&input);
+        let (x, y) = (
+            f64::from(before + 0.5),
+            f64::from(line.y + line.height * row),
+        );
+        input.on_event(&Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        input.on_event(&Event::PointerReleased {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        input.on_event(&key(Key::Char('X')));
+        assert_eq!(
+            value.get(),
+            "hoXla",
+            "a press at {y} on the line lands after \"ho\""
+        );
+        focus::clear();
+    }
 }
 
 fn ime(event: Ime) -> Event {

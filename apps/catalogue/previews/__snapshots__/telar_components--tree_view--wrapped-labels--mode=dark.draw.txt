@@ -22,7 +22,7 @@ element group
                       element group
                         clip 32,4 216x28
                           matrix 1,0,0,1,32,4
-                            text 0,5 216x16.8 "Getting started" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                            text 0,6 216x16.8 "Getting started" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                           end
                         end
                       end
@@ -39,7 +39,7 @@ element group
                       element group
                         clip 32,40 216x28
                           matrix 1,0,0,1,32,40
-                            text 0,5 216x16.8 "Views" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                            text 0,6 216x16.8 "Views" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                           end
                         end
                       end
@@ -51,7 +51,7 @@ element group
                       element group
                         clip 48,76 200x28
                           matrix 1,0,0,1,48,76
-                            text 0,5 200x16.8 "Writing a view in .rsx" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                            text 0,6 200x16.8 "Writing a view in .rsx" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                           end
                         end
                       end
@@ -87,7 +87,7 @@ element group
                       element group
                         clip 32,229 216x28
                           matrix 1,0,0,1,32,229
-                            text 0,5 216x16.8 "FAQ" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                            text 0,6 216x16.8 "FAQ" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                           end
                         end
                       end

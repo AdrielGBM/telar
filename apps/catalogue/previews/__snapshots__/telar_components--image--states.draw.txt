@@ -25,7 +25,7 @@ element group
               element group
                 clip 497,252 78x96
                   matrix 1,0,0,1,497,252
-                    text 0,40 78.28x14.28 "Chart of sales" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                    text 0,41 78.28x14.28 "Chart of sales" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                   end
                 end
               end

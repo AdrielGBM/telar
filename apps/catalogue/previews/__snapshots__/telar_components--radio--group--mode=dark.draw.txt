@@ -15,7 +15,7 @@ element group
             end
             element group
               matrix 1,0,0,1,385,250
-                text 0,7 36x16.8 "Small" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                text 0,8 36x16.8 "Small" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
               end
             end
           end
@@ -29,7 +29,7 @@ element group
             end
             element group
               matrix 1,0,0,1,385,284
-                text 0,7 54x16.8 "Medium" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                text 0,8 54x16.8 "Medium" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
               end
             end
           end
@@ -43,7 +43,7 @@ element group
             end
             element group
               matrix 1,0,0,1,385,318
-                text 0,7 38x16.8 "Large" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                text 0,8 38x16.8 "Large" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
               end
             end
           end

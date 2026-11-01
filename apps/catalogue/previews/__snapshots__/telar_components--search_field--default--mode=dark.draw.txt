@@ -17,8 +17,8 @@ element group
           element group
             matrix 1,0,0,1,288,284
               clip 0,0 224x32
-                text 0,6 224x20 "Search" size=14 family=sans-serif weight=400 color=#ebedf5b3 line-height=1.2 wrap=none
-                rect 0,6 1.5x16.8 fill=#ebedf5ff
+                text 0,8 224x16.8 "Search" size=14 family=sans-serif weight=400 color=#ebedf5b3 line-height=1.2 wrap=none
+                rect 0,8 1.5x16.8 fill=#ebedf5ff
               end
             end
           end

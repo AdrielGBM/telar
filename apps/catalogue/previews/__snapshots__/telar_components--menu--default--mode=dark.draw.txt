@@ -10,7 +10,7 @@ element group
             element group
               clip 321,-1000000 23x2000000
                 matrix 1,0,0,1,321,284
-                  text 0,7 23.22x16.8 "File" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  text 0,8 23.22x16.8 "File" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                 end
               end
             end
@@ -42,12 +42,12 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,0
-                    text 0,9 111x16.8 "New file" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                    text 0,10 111x16.8 "New file" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                   end
                 end
                 element group
                   matrix 1,0,0,1,127,0
-                    text 0,9 39.16x15.12 "Ctrl+N" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
+                    text 0,10 39.16x15.12 "Ctrl+N" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
                   end
                 end
               end
@@ -57,12 +57,12 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,36
-                    text 0,9 111x16.8 "Open…" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                    text 0,10 111x16.8 "Open…" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                   end
                 end
                 element group
                   matrix 1,0,0,1,127,36
-                    text 0,9 39.3x15.12 "Ctrl+O" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
+                    text 0,10 39.3x15.12 "Ctrl+O" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
                   end
                 end
               end
@@ -75,7 +75,7 @@ element group
                 end
                 element group
                   matrix 1,0,0,1,8,77
-                    text 0,9 158x16.8 "Close" size=14 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
+                    text 0,10 158x16.8 "Close" size=14 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
                   end
                 end
               end

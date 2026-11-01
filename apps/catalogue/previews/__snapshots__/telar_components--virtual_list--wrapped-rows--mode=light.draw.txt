@@ -16,13 +16,13 @@ element group
                         element group
                           clip 8,4 230x28
                             matrix 1,0,0,1,8,4
-                              text 0,5 230.17x16.8 "Ada: Lunch?" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                              text 0,6 230.17x16.8 "Ada: Lunch?" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                             end
                           end
                         end
                         element group
                           matrix 1,0,0,1,246,4
-                            text 0,6 26x14.28 "9:00" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,7 26x14.28 "9:00" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
@@ -37,7 +37,7 @@ element group
                         end
                         element group
                           matrix 1,0,0,1,249,40
-                            text 0,17 23.16x14.28 "9:01" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,18 23.16x14.28 "9:01" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
@@ -52,7 +52,7 @@ element group
                         end
                         element group
                           matrix 1,0,0,1,246,98
-                            text 0,9 26x14.28 "9:02" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,10 26x14.28 "9:02" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
@@ -67,7 +67,7 @@ element group
                         end
                         element group
                           matrix 1,0,0,1,246,140
-                            text 0,34 26x14.28 "9:03" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,35 26x14.28 "9:03" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
@@ -76,13 +76,13 @@ element group
                         element group
                           clip 8,232 230x28
                             matrix 1,0,0,1,8,232
-                              text 0,5 230x16.8 "Ada: Thanks!" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                              text 0,6 230x16.8 "Ada: Thanks!" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                             end
                           end
                         end
                         element group
                           matrix 1,0,0,1,246,232
-                            text 0,6 26.02x14.28 "9:04" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,7 26.02x14.28 "9:04" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
@@ -91,13 +91,13 @@ element group
                         element group
                           clip 8,268 231x28
                             matrix 1,0,0,1,8,268
-                              text 0,5 231x16.8 "Grace: Lunch?" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                              text 0,6 231x16.8 "Grace: Lunch?" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                             end
                           end
                         end
                         element group
                           matrix 1,0,0,1,247,268
-                            text 0,6 25.38x14.28 "9:05" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,7 25.38x14.28 "9:05" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
@@ -112,7 +112,7 @@ element group
                         end
                         element group
                           matrix 1,0,0,1,246,304
-                            text 0,17 26x14.28 "9:06" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,18 26x14.28 "9:06" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
@@ -127,7 +127,7 @@ element group
                         end
                         element group
                           matrix 1,0,0,1,247,362
-                            text 0,9 25x14.28 "9:07" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,10 25x14.28 "9:07" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
@@ -142,7 +142,7 @@ element group
                         end
                         element group
                           matrix 1,0,0,1,246,404
-                            text 0,34 26x14.28 "9:08" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,35 26x14.28 "9:08" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end

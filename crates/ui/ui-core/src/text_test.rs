@@ -37,136 +37,255 @@ fn auto_text_height_grows_when_narrower() {
     );
 }
 
-/// Two labels of the same style sit on the same baseline, whatever letters they happen to contain.
-///
-/// They did not: the optical centring measured each string's own ink, and a string with a descender has ink reaching lower than one without — so `Setup` and `Simulation`, side by side in a row of tabs at the same size in the same box, were drawn 2.5px apart. Measuring the band from a reference run makes the offset a property of the font at that size, which every label in the style then shares.
+/// The line a text leaf draws, in the leaf's own coordinates.
+fn drawn_line(node: &RenderNode) -> Option<Rect> {
+    match node {
+        RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => Some(*rect),
+        RenderNode::Transform { children, .. }
+        | RenderNode::Group { children }
+        | RenderNode::Element { children, .. } => children.iter().find_map(drawn_line),
+        _ => None,
+    }
+}
+
+/// The band from the baseline to the cap height of `style`, as the ink of a capital H: `(top, height)` inside one line, and that line's height.
+fn cap_band(style: &TextStyle) -> (f32, f32, f32) {
+    let (top, height) = crate::text_metrics::measure_ink_bounds("H", 1_000.0, style);
+    let (_, line) = crate::text_metrics::measure_text("H", None, 1_000.0, style);
+    (top, height, line)
+}
+
+/// A text laid out alone in a `width` × `height` box, as the line it draws.
+fn line_in_box(content: &'static str, width: f32, height: f32, style: TextStyle) -> Rect {
+    laid_in_box(content, width, height, style).0
+}
+
+/// A text laid out alone in a `width` × `height` box, as the line it draws and the height layout gave its leaf.
+fn laid_in_box(content: &'static str, width: f32, height: f32, style: TextStyle) -> (Rect, f32) {
+    let text = Text::new(
+        move || content.to_string(),
+        LayoutStyle::new().width(width).height(height),
+        move || style.clone(),
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(width).height(height),
+        &[text.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(width),
+        AvailableSpace::Definite(height),
+    )
+    .unwrap();
+    let leaf = track_layout(text.layout_node()).unwrap().get().height;
+    (
+        drawn_line(&text.view()).expect("a text leaf draws text"),
+        leaf,
+    )
+}
+
+/// A row of labels of one style, stretched across the row, sits on one baseline whatever capitals, ascenders and descenders each holds.
 #[test]
-fn two_labels_of_one_style_share_a_baseline_whatever_letters_they_have() {
+fn a_row_of_labels_shares_one_baseline_whatever_letters_they_have() {
+    const LABELS: [&str; 7] = ["Setup", "Simulation", "HOME", "xo", "lily", "gyp", "Ag"];
     reset_layout_runtime();
-    let drawn = |content: &'static str| {
-        let text = Text::new(
-            move || content.to_string(),
-            LayoutStyle::new().width(200.0).height(30.0),
-            || TextStyle::new(13.0, Color::BLACK),
-        )
-        .unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(200.0).height(30.0),
-            &[text.layout_node()],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(30.0),
-        )
-        .unwrap();
-        // The leaf places itself with a transform, so the text command sits under it.
-        fn text_y(node: &RenderNode) -> Option<f32> {
-            match node {
-                RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => {
-                    Some(rect.y)
-                }
-                RenderNode::Transform { children, .. }
-                | RenderNode::Group { children }
-                | RenderNode::Element { children, .. } => children.iter().find_map(text_y),
-                _ => None,
-            }
-        }
-        text_y(&text.view()).expect("a text leaf draws text")
-    };
-    // `Setup` has a descender and `Simulation` has none — the exact pair that drifted.
-    let (with_tail, without) = (drawn("Setup"), drawn("Simulation"));
+    let labels: Vec<Text> = LABELS
+        .iter()
+        .map(|&label| {
+            Text::new(
+                move || label.to_string(),
+                LayoutStyle::new(),
+                || TextStyle::new(13.0, Color::BLACK),
+            )
+            .unwrap()
+        })
+        .collect();
+    let nodes: Vec<_> = labels.iter().map(|label| label.layout_node()).collect();
+    let row = new_container(LayoutStyle::new().flex_row().gap(8.0).height(30.0), &nodes).unwrap();
+    compute_layout(
+        row,
+        AvailableSpace::Definite(600.0),
+        AvailableSpace::Definite(30.0),
+    )
+    .unwrap();
+    let tops: Vec<f32> = labels
+        .iter()
+        .zip(&nodes)
+        .map(|(label, node)| {
+            track_layout(*node).unwrap().get().y
+                + drawn_line(&label.view()).expect("a label draws").y
+        })
+        .collect();
     assert!(
-        (with_tail - without).abs() < 0.01,
-        "a descender must not move the line: {with_tail} vs {without}"
+        tops.iter().all(|top| *top == tops[0]),
+        "every label's line starts at the same row: {:?}",
+        LABELS.iter().zip(&tops).collect::<Vec<_>>()
     );
 }
 
-/// Text lands on a whole pixel row, whatever its box measures.
-///
-/// Centring puts it on a half pixel whenever the box and the text differ by an odd amount, and a glyph drawn half a row down does not move — it is resampled across two rows and goes **soft**. It read as a *placement* bug: the same bubble was crisp beside a button and blurred under one, because the sideways placement centres on its trigger and happened to contribute a second half pixel that cancelled this one. Only the vertical axis is snapped; horizontal subpixel placement is what keeps letter spacing even, and the shaper bins it deliberately.
+/// The middle of the band from the baseline to the cap height lands on the middle of the box, for any size and any box taller than the line.
 #[test]
-fn text_lands_on_a_whole_pixel_row() {
-    fn text_y(node: &RenderNode) -> Option<f32> {
-        match node {
-            RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => Some(rect.y),
-            RenderNode::Transform { children, .. }
-            | RenderNode::Group { children }
-            | RenderNode::Element { children, .. } => children.iter().find_map(text_y),
-            _ => None,
-        }
-    }
+fn the_cap_band_lands_on_the_middle_of_the_box() {
     reset_layout_runtime();
-    // Odd and fractional box heights, where an unsnapped centre lands on the half.
-    for height in [29.0_f32, 30.0, 31.0, 44.5] {
-        let text = Text::new(
-            || "Setup".to_string(),
-            LayoutStyle::new().width(200.0).height(height),
-            || TextStyle::new(13.0, Color::BLACK),
-        )
-        .unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(200.0).height(height),
-            &[text.layout_node()],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(height),
-        )
-        .unwrap();
-        let y = text_y(&text.view()).expect("a text leaf draws text");
-        assert_eq!(y, y.round(), "a {height}px box put the text at {y}");
+    for size in [11.0_f32, 13.0, 16.0, 20.0] {
+        let style = TextStyle::new(size, Color::BLACK);
+        let (top, height, _) = cap_band(&style);
+        assert!(height > 0.0, "the reference inks at {size}px");
+        for box_height in [28.0_f32, 29.0, 31.0, 40.0, 44.5] {
+            let (line, leaf) = laid_in_box("Setup", 200.0, box_height, style.clone());
+            let middle = line.y + top + height / 2.0;
+            assert!(
+                (middle - leaf / 2.0).abs() <= 0.5,
+                "at {size}px in a {leaf}px box the cap band's middle is at {middle}"
+            );
+        }
     }
 }
 
-/// The optical nudge never walks the glyphs out of the box the layout reserved for them.
-///
-/// The nudge centres the glyph band, and a box no taller than one line has nothing to centre in — so applying it there put the text at a negative `y`. A `pad:6` status line then inked at row 5, one row above its own padding, which is how an out-of-tree app found this.
+/// Where the box leaves an odd number of rows around the cap band, the spare one goes below it, where descenders hang, never above the capitals.
 #[test]
-fn text_stays_inside_a_box_that_is_exactly_one_line_tall() {
-    fn text_rect(node: &RenderNode) -> Option<Rect> {
-        match node {
-            RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => Some(*rect),
-            RenderNode::Transform { children, .. }
-            | RenderNode::Group { children }
-            | RenderNode::Element { children, .. } => children.iter().find_map(text_rect),
-            _ => None,
+fn an_odd_spare_row_goes_below_the_cap_band() {
+    reset_layout_runtime();
+    for size in [11.0_f32, 12.0, 13.0, 14.0, 16.0, 20.0] {
+        let style = TextStyle::new(size, Color::BLACK);
+        let (top, height, line_height) = cap_band(&style);
+        let first = (line_height + 2.0).ceil() as u32;
+        for box_height in first..first + 12 {
+            let box_height = box_height as f32;
+            let (line, leaf) = laid_in_box("Setup", 200.0, box_height, style.clone());
+            let above = line.y + top;
+            let below = leaf - above - height;
+            let spare = (leaf - height) as u32 % 2;
+            assert_eq!(
+                below - above,
+                spare as f32,
+                "at {size}px a {leaf}px box leaves {above} above the cap band and {below} below"
+            );
         }
     }
+}
+
+/// A block of several lines centres the span from its first line's cap height to its last line's baseline, so it moves by the same nudge as one line.
+#[test]
+fn several_lines_centre_the_span_from_the_first_cap_height_to_the_last_baseline() {
+    const PARAGRAPH: &str = "Name regions and say what the model is made of";
     reset_layout_runtime();
-    for size in [11.0_f32, 13.0, 15.0, 24.0] {
-        let text = Text::new(
-            || "Ag".to_string(),
-            LayoutStyle::new().width(200.0),
-            move || TextStyle::new(size, Color::BLACK),
-        )
-        .unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(200.0),
-            &[text.layout_node()],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::MaxContent,
-        )
-        .unwrap();
-        let rect = text_rect(&text.view()).expect("a text leaf draws text");
+    let style = TextStyle::new(13.0, Color::BLACK);
+    let (top, height, line_height) = cap_band(&style);
+    for box_height in [80.0_f32, 81.0, 95.0, 120.0] {
+        let (line, leaf) = laid_in_box(PARAGRAPH, 150.0, box_height, style.clone());
+        let lines = (line.height / line_height).round();
+        assert!(lines >= 2.0, "the paragraph wraps in 150px: {line:?}");
+        let middle = line.y + top + ((lines - 1.0) * line_height + height) / 2.0;
         assert!(
-            rect.y >= 0.0,
-            "at {size}px the text starts {}px above its own box",
-            -rect.y
+            (middle - leaf / 2.0).abs() <= 0.5,
+            "{lines} lines in a {leaf}px box put the band's middle at {middle}"
         );
     }
 }
 
-/// A block that wraps sits where its box is, not half a line below it.
-///
-/// Optical centring works on the glyph band, and the band is measured from a one-line reference — so centring an N-line block against it pushes the block down by (N-1)/2 lines. A two-line tooltip description came out sunk, with its second line hanging out of the bubble. Centring the *block* and nudging by the one-line correction is what makes the two cases the same case.
+/// A style shown lowercased is centred on the same capital as the one written, rather than on a lowercase ascender.
+#[test]
+fn a_cased_style_is_centred_on_the_band_of_its_face() {
+    reset_layout_runtime();
+    let written = TextStyle::new(13.0, Color::BLACK);
+    let lowered = written
+        .clone()
+        .with_text_case(renderer_core::TextCase::Lower);
+    assert_eq!(
+        line_in_box("Setup", 200.0, 30.0, lowered).y,
+        line_in_box("Setup", 200.0, 30.0, written).y
+    );
+}
+
+/// A text whose face changes at the same size measures the band of the face it now has.
+#[test]
+fn a_text_that_changes_face_is_centred_on_the_new_face() {
+    const BOX: f32 = 40.0;
+    renderer_text::fonts::installed();
+    renderer_text::fonts::add_faces(vec![
+        renderer_core::FontAsset::embedded(include_bytes!(
+            "../../../renderer/renderer-text/test-fonts/TelarTest.ttf"
+        ))
+        .named("Telar Centred"),
+    ]);
+    reset_layout_runtime();
+    let first =
+        TextStyle::new(13.0, Color::BLACK).with_font_family(renderer_core::FontFamily::Monospace);
+    let second = TextStyle::new(13.0, Color::BLACK)
+        .with_font_family(renderer_core::FontFamily::Named("Telar Centred".into()));
+    let fresh = line_in_box("Setup", 200.0, BOX, second.clone()).y;
+    assert_ne!(
+        line_in_box("Setup", 200.0, BOX, first.clone()).y,
+        fresh,
+        "the test needs two faces centred apart"
+    );
+    let face = signal(first);
+    let text = Text::new(
+        || "Setup".to_string(),
+        LayoutStyle::new().width(200.0).height(BOX),
+        move || face.get(),
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(200.0).height(BOX),
+        &[text.layout_node()],
+    )
+    .unwrap();
+    let lay_out = || {
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(BOX),
+        )
+        .unwrap()
+    };
+    lay_out();
+    drawn_line(&text.view()).expect("the text draws");
+    face.set(second);
+    lay_out();
+    assert_eq!(drawn_line(&text.view()).expect("the text draws").y, fresh);
+}
+
+/// Text lands on a whole pixel row whatever its box measures: a glyph drawn half a row down is resampled across two rows and goes soft, so only the vertical axis is snapped.
+#[test]
+fn text_lands_on_a_whole_pixel_row() {
+    reset_layout_runtime();
+    for height in [29.0_f32, 30.0, 31.0, 44.5] {
+        let y = line_in_box("Setup", 200.0, height, TextStyle::new(13.0, Color::BLACK)).y;
+        assert_eq!(y, y.round(), "a {height}px box put the text at {y}");
+    }
+}
+
+/// Nothing a text draws leaves its leaf: its whole line box is drawn from inside the top and its descenders stay above the bottom, even where the box is exactly one line tall and centring the cap band would push the line out through its top.
+#[test]
+fn nothing_is_drawn_outside_the_leaf() {
+    const TALL: &str = "Agjpy";
+    reset_layout_runtime();
+    for size in [11.0_f32, 13.0, 15.0, 24.0] {
+        let style = TextStyle::new(size, Color::BLACK);
+        let (_, one_line) = crate::text_metrics::measure_text(TALL, None, 200.0, &style);
+        let (ink_top, ink_height) = crate::text_metrics::measure_ink_bounds(TALL, 200.0, &style);
+        assert!(ink_height > 0.0, "{TALL} inks at {size}px");
+        for extra in [0.0_f32, 1.0, 2.0, 3.0, 7.0] {
+            let (line, leaf) = laid_in_box(TALL, 200.0, one_line + extra, style.clone());
+            assert!(
+                line.y >= 0.0 && line.height == one_line,
+                "at {size}px a {leaf}px leaf draws its whole line from its top down: {line:?}"
+            );
+            assert!(
+                line.y + ink_top >= 0.0 && line.y + ink_top + ink_height <= leaf + 0.01,
+                "at {size}px a {leaf}px leaf inks from {} to {}",
+                line.y + ink_top,
+                line.y + ink_top + ink_height
+            );
+        }
+    }
+}
+
+/// A block that wraps in a box its own size starts at the top of it, since the nudge is one line's correction rather than one per line.
 #[test]
 fn a_wrapped_block_is_not_pushed_down_by_the_lines_it_gained() {
     reset_layout_runtime();
@@ -189,7 +308,7 @@ fn a_wrapped_block_is_not_pushed_down_by_the_lines_it_gained() {
     )
     .unwrap();
 
-    let (_, one_line) = crate::text_metrics::measure_text("Hxg", None, 1_000.0, &style());
+    let (_, _, one_line) = cap_band(&style());
     let (_, block) = crate::text_metrics::measure_text(
         "Name regions and say what the model is made of",
         None,
@@ -200,17 +319,7 @@ fn a_wrapped_block_is_not_pushed_down_by_the_lines_it_gained() {
         block > one_line * 1.5,
         "the test needs a string that actually wraps"
     );
-
-    fn text_y(node: &RenderNode) -> Option<f32> {
-        match node {
-            RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => Some(rect.y),
-            RenderNode::Transform { children, .. }
-            | RenderNode::Group { children }
-            | RenderNode::Element { children, .. } => children.iter().find_map(text_y),
-            _ => None,
-        }
-    }
-    let y = text_y(&text.view()).expect("a text leaf draws text");
+    let y = drawn_line(&text.view()).expect("a text leaf draws text").y;
     assert!(
         y.abs() < one_line / 3.0,
         "a block in a box its own size starts at the top: y = {y} against a {one_line}px line"
@@ -603,9 +712,9 @@ fn spans_scanned_from_an_inheriting_paragraph_follow_both() {
     );
 }
 
-/// A project's name in the workshop's find field sat a pixel high beside the field's icon: the band text is centred by reached the capitals but not the ascenders, which in most faces stand above them, so a lowercase run was centred on a band lower than its own ink. Cut by a clip, as the field cuts it, the text is laid out as any other.
+/// A lowercase name cut by a clip, as a find field cuts it, is laid out as any other text: its face's cap band in the middle of the control, in a system face and in an embedded one.
 #[test]
-fn clipped_lowercase_text_is_centred_in_a_control_by_its_ink() {
+fn clipped_lowercase_text_is_centred_in_a_control_by_its_cap_band() {
     const CONTROL: f32 = 28.0;
     const NAME: &str = "catalogue";
     renderer_text::fonts::installed();
@@ -658,12 +767,11 @@ fn clipped_lowercase_text_is_centred_in_a_control_by_its_ink() {
             }
         });
         let line_top = line_top.expect("the name is drawn");
-        let (ink_top, ink_height) =
-            crate::text_metrics::measure_ink_bounds(NAME, f32::MAX, &style());
-        let centre = line_top + ink_top + ink_height / 2.0;
+        let (band_top, band_height, _) = cap_band(&style());
+        let centre = line_top + band_top + band_height / 2.0;
         assert!(
             (centre - CONTROL / 2.0).abs() <= 0.5,
-            "{:?}: the ink is centred at {centre} in a {CONTROL}px control",
+            "{:?}: the cap band is centred at {centre} in a {CONTROL}px control",
             style().font_family
         );
     }

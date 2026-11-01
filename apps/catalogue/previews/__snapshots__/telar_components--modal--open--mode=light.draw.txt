@@ -9,7 +9,7 @@ element group
             rect 363,280 74x32 fill=#3852caff radius=10
             element group
               matrix 1,0,0,1,375,280
-                text 0,7 50.38x16.8 "Reopen" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                text 0,8 50.38x16.8 "Reopen" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
               end
             end
           end
@@ -45,7 +45,7 @@ element group
           element group
             element group
               matrix 1,0,0,1,0,0
-                text 0,1 304x16.8 "This dialog stays inside the canvas." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                text 0,2 304x16.8 "This dialog stays inside the canvas." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
               end
             end
           end

@@ -11,6 +11,7 @@ mod async_asset;
 mod border;
 mod breakpoints;
 mod canvas;
+mod cap_band;
 mod caret;
 mod child_host;
 mod children;

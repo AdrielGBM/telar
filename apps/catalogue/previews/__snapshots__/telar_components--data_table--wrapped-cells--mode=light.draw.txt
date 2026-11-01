@@ -18,7 +18,7 @@ element group
                             rect 0,36 253x36 radius=6
                             element group
                               matrix 1,0,0,1,8,40
-                                text 0,5 237x16.8 "Ship the release notes" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                                text 0,6 237x16.8 "Ship the release notes" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                               end
                             end
                           end
@@ -27,7 +27,7 @@ element group
                             element group
                               clip 261,40 26x28
                                 matrix 1,0,0,1,261,40
-                                  text 0,5 26.09x16.8 "Ada" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 26.09x16.8 "Ada" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -37,7 +37,7 @@ element group
                             element group
                               clip 375,40 29x28
                                 matrix 1,0,0,1,375,40
-                                  text 0,5 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -58,7 +58,7 @@ element group
                             element group
                               clip 261,76 40x50
                                 matrix 1,0,0,1,261,76
-                                  text 0,16 40x16.8 "Grace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,17 40x16.8 "Grace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -68,7 +68,7 @@ element group
                             element group
                               clip 380,76 24x50
                                 matrix 1,0,0,1,380,76
-                                  text 0,16 24.45x16.8 "Tue" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,17 24.45x16.8 "Tue" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -80,7 +80,7 @@ element group
                             rect 0,130 253x36 radius=6
                             element group
                               matrix 1,0,0,1,8,134
-                                text 0,5 237x16.8 "Fix the flaky test" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                                text 0,6 237x16.8 "Fix the flaky test" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                               end
                             end
                           end
@@ -89,7 +89,7 @@ element group
                             element group
                               clip 261,134 29x28
                                 matrix 1,0,0,1,261,134
-                                  text 0,5 29.19x16.8 "Alan" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 29.19x16.8 "Alan" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -99,7 +99,7 @@ element group
                             element group
                               clip 374,134 30x28
                                 matrix 1,0,0,1,374,134
-                                  text 0,5 30x16.8 "Wed" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 30x16.8 "Wed" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -120,7 +120,7 @@ element group
                             element group
                               clip 261,170 52x51
                                 matrix 1,0,0,1,261,170
-                                  text 0,17 52.22x16.8 "Barbara" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,18 52.22x16.8 "Barbara" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -130,7 +130,7 @@ element group
                             element group
                               clip 378,170 26x51
                                 matrix 1,0,0,1,378,170
-                                  text 0,17 26x16.8 "Thu" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,18 26x16.8 "Thu" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -142,7 +142,7 @@ element group
                             rect 0,225 253x36 radius=6
                             element group
                               matrix 1,0,0,1,8,229
-                                text 0,5 237x16.8 "Order more coffee" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                                text 0,6 237x16.8 "Order more coffee" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                               end
                             end
                           end
@@ -151,7 +151,7 @@ element group
                             element group
                               clip 261,229 25x28
                                 matrix 1,0,0,1,261,229
-                                  text 0,5 25.3x16.8 "Ken" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 25.3x16.8 "Ken" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -161,7 +161,7 @@ element group
                             element group
                               clip 387,229 17x28
                                 matrix 1,0,0,1,387,229
-                                  text 0,5 17x16.8 "Fri" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 17x16.8 "Fri" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -182,7 +182,7 @@ element group
                             element group
                               clip 261,265 46x50
                                 matrix 1,0,0,1,261,265
-                                  text 0,16 46.41x16.8 "Edsger" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,17 46.41x16.8 "Edsger" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -192,7 +192,7 @@ element group
                             element group
                               clip 375,265 29x50
                                 matrix 1,0,0,1,375,265
-                                  text 0,16 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,17 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -204,7 +204,7 @@ element group
                             rect 0,319 253x36 radius=6
                             element group
                               matrix 1,0,0,1,8,323
-                                text 0,5 237x16.8 "Ship the release notes" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                                text 0,6 237x16.8 "Ship the release notes" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                               end
                             end
                           end
@@ -213,7 +213,7 @@ element group
                             element group
                               clip 261,323 26x28
                                 matrix 1,0,0,1,261,323
-                                  text 0,5 26.09x16.8 "Ada" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 26.09x16.8 "Ada" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -223,7 +223,7 @@ element group
                             element group
                               clip 375,323 29x28
                                 matrix 1,0,0,1,375,323
-                                  text 0,5 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -244,7 +244,7 @@ element group
                             element group
                               clip 261,359 40x51
                                 matrix 1,0,0,1,261,359
-                                  text 0,17 40x16.8 "Grace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,18 40x16.8 "Grace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -254,7 +254,7 @@ element group
                             element group
                               clip 380,359 24x51
                                 matrix 1,0,0,1,380,359
-                                  text 0,17 24.45x16.8 "Tue" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,18 24.45x16.8 "Tue" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -266,7 +266,7 @@ element group
                             rect 0,414 253x36 radius=6
                             element group
                               matrix 1,0,0,1,8,418
-                                text 0,5 237x16.8 "Fix the flaky test" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                                text 0,6 237x16.8 "Fix the flaky test" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                               end
                             end
                           end
@@ -275,7 +275,7 @@ element group
                             element group
                               clip 261,418 29x28
                                 matrix 1,0,0,1,261,418
-                                  text 0,5 29.19x16.8 "Alan" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 29.19x16.8 "Alan" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -285,7 +285,7 @@ element group
                             element group
                               clip 374,418 30x28
                                 matrix 1,0,0,1,374,418
-                                  text 0,5 30x16.8 "Wed" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,6 30x16.8 "Wed" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -306,7 +306,7 @@ element group
                             element group
                               clip 261,454 52x50
                                 matrix 1,0,0,1,261,454
-                                  text 0,16 52.22x16.8 "Barbara" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,17 52.22x16.8 "Barbara" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -316,7 +316,7 @@ element group
                             element group
                               clip 378,454 26x50
                                 matrix 1,0,0,1,378,454
-                                  text 0,16 26x16.8 "Thu" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                  text 0,17 26x16.8 "Thu" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                                 end
                               end
                             end
@@ -333,7 +333,7 @@ element group
                           element group
                             clip 8,0 32x36
                               matrix 1,0,0,1,8,0
-                                text 0,9 32x16.8 "Task" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                                text 0,10 32x16.8 "Task" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
                               end
                             end
                           end
@@ -345,7 +345,7 @@ element group
                           element group
                             clip 261,0 45x36
                               matrix 1,0,0,1,261,0
-                                text 0,9 45x16.8 "Owner" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                                text 0,10 45x16.8 "Owner" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
                               end
                             end
                           end
@@ -357,7 +357,7 @@ element group
                           element group
                             clip 377,0 27x36
                               matrix 1,0,0,1,377,0
-                                text 0,9 27x16.8 "Due" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                                text 0,10 27x16.8 "Due" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
                               end
                             end
                           end

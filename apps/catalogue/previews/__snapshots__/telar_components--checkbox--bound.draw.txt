@@ -15,7 +15,7 @@ element group
             end
             element group
               matrix 1,0,0,1,386,272
-                text 0,7 46x16.8 "I agree" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                text 0,8 46x16.8 "I agree" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
               end
             end
           end
