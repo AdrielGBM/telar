@@ -15,6 +15,7 @@ use telar_components::{
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_card, workbench_mono};
 
+use super::controls::ArgCell;
 use crate::strings::{self, UNSET, UNSET_ARG};
 
 const FIELD_WIDTH: f32 = 220.0;
@@ -30,7 +31,25 @@ type Current = Rc<dyn Fn() -> Option<ArgValue>>;
 pub(super) struct Binding {
     pub(super) args: Args,
     pub(super) name: &'static str,
-    pub(super) state: ReadSignal<ArgState>,
+    pub(super) state: ArgView,
+}
+
+/// A live view of one arg, read through the cell of the table that carries it.
+#[derive(Clone, Copy)]
+pub(super) struct ArgView(ReadSignal<ArgCell>);
+
+impl ArgView {
+    pub(super) fn new(cell: ReadSignal<ArgCell>) -> Self {
+        Self(cell)
+    }
+
+    pub(super) fn with<R>(self, f: impl FnOnce(&ArgState) -> R) -> R {
+        self.0.with(|cell| f(&cell.arg))
+    }
+
+    pub(super) fn peek(self) -> ArgState {
+        self.0.peek().arg
+    }
 }
 
 /// An editor, and the value it would set its arg to now.

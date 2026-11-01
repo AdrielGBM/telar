@@ -6,15 +6,16 @@ use telar::Variant;
 use telar::preview::host::{ArgState, Args};
 use telar::preview::{ControlKind, PreviewEntry, PropDefault};
 use telar::{
-    Accessible, AlignItems, Border, Container, LayoutError, LayoutItem, LayoutScrollArea,
-    LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer, Text, box_item, children,
+    Accessible, AlignItems, Border, ChildSlot, Children, Container, LayoutError, LayoutItem,
+    LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer,
+    TemplateTrack, Text, box_item, children, fragment_keyed,
 };
-use telar_components::{ButtonProps, TagProps, button, tag};
+use telar_components::{ButtonProps, TagProps, TooltipProps, button, tag, tooltip};
 use telar_devtools::{
     WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_mono, workbench_muted,
 };
 
-use super::editors::{self, Binding};
+use super::editors::{self, ArgView, Binding};
 use crate::empty_state::{EmptyState, Example};
 use crate::state::WorkshopState;
 use crate::strings::{
@@ -22,11 +23,8 @@ use crate::strings::{
     NO_ARGS_HINT, NOTHING_SELECTED, RESET, RESET_ARG,
 };
 
-const NAME_WIDTH: f32 = 160.0;
-const VALUE_WIDTH: f32 = 300.0;
-const DEFAULT_WIDTH: f32 = 140.0;
 const DOC_MIN_WIDTH: f32 = 160.0;
-const RESET_WIDTH: f32 = 72.0;
+const DOC_LINES: u16 = 2;
 
 const ARG_EXAMPLES: &[Example] = &[
     Example {
@@ -119,78 +117,167 @@ fn scrolling(table: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutEr
     Ok(box_item(scroll))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(super) enum Column {
+    Name,
+    Value,
+    Default,
+    Doc,
+    Reset,
+}
+
+impl Column {
+    const ALL: [Column; 5] = [
+        Column::Name,
+        Column::Value,
+        Column::Default,
+        Column::Doc,
+        Column::Reset,
+    ];
+
+    fn heading(self) -> Option<&'static str> {
+        match self {
+            Column::Name => Some(COLUMN_NAME),
+            Column::Value => Some(COLUMN_VALUE),
+            Column::Default => Some(COLUMN_DEFAULT),
+            Column::Doc => Some(COLUMN_DESCRIPTION),
+            Column::Reset => None,
+        }
+    }
+
+    /// The columns grow to their widest cell and never shrink below what their content needs, so a table too wide for the panel scrolls rather than overlapping; an editor is never cut at all, and the doc takes the rest and gives it up first.
+    fn track(self) -> TemplateTrack {
+        match self {
+            Column::Doc => {
+                TemplateTrack::minmax(TemplateTrack::px(DOC_MIN_WIDTH), TemplateTrack::fr(1.0))
+            }
+            Column::Value => TemplateTrack::max_content(),
+            _ => TemplateTrack::auto(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct ArgCell {
+    column: Column,
+    pub(super) arg: ArgState,
+}
+
+/// One grid, its cells laid straight into it rather than into a box per row, so each column takes the width of its widest cell across every row.
 fn table(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let listed = args.clone();
-    let rows = ReactiveList::keyed(
-        move || listed.states(),
-        |arg: &ArgState| (arg.name, format!("{:?}", arg.control)),
-        move |state| {
-            row(Binding {
-                args: args.clone(),
-                name: state.peek().name,
-                state,
-            })
+    let mut slots = Column::ALL
+        .into_iter()
+        .map(|column| heading(column).map(ChildSlot::stat))
+        .collect::<Result<Vec<_>, _>>()?;
+    slots.push(fragment_keyed(
+        move || {
+            listed
+                .states()
+                .into_iter()
+                .flat_map(|arg| {
+                    Column::ALL.map(|column| ArgCell {
+                        column,
+                        arg: arg.clone(),
+                    })
+                })
+                .collect()
         },
+        |cell: &ArgCell| {
+            (
+                cell.arg.name,
+                format!("{:?}", cell.arg.control),
+                cell.column,
+            )
+        },
+        move |cell| {
+            let column = cell.peek().column;
+            arg_cell(
+                column,
+                Binding {
+                    args: args.clone(),
+                    name: cell.peek().arg.name,
+                    state: ArgView::new(cell),
+                },
+            )
+        },
+        0.0,
+    ));
+    let table = Container::from_slots(
+        LayoutStyle::new()
+            .display_grid()
+            .grid_template_columns(Column::ALL.map(Column::track).to_vec()),
+        slots,
     )?;
-    let table = Container::column(vec![heading()?, box_item(rows)])?;
     Ok(box_item(table))
 }
 
-fn heading() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let label =
-        |key: &'static str, style: LayoutStyle| -> Result<Box<dyn LayoutItem>, LayoutError> {
-            let text = Text::declaring(move || strings::text(key), style, workbench_muted)?;
-            Ok(box_item(text))
-        };
-    line(vec![
-        label(COLUMN_NAME, fixed(NAME_WIDTH))?,
-        label(COLUMN_VALUE, fixed(VALUE_WIDTH))?,
-        label(COLUMN_DEFAULT, fixed(DEFAULT_WIDTH))?,
-        label(COLUMN_DESCRIPTION, growing())?,
-        spacer(RESET_WIDTH)?,
-    ])
+fn heading(column: Column) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let label = match column.heading() {
+        Some(key) => vec![box_item(Text::declaring(
+            move || strings::text(key),
+            LayoutStyle::new(),
+            workbench_muted,
+        )?)],
+        None => Vec::new(),
+    };
+    cell(column, label)
 }
 
-fn row(binding: Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn arg_cell(column: Column, binding: Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let state = binding.state;
-    let name = Text::declaring(
-        move || state.with(|arg| arg.name.to_string()),
-        LayoutStyle::new(),
-        |text| text.with_font_weight(600),
-    )?;
-    let ty = Text::declaring(
-        move || state.with(type_text),
-        LayoutStyle::new(),
-        |text| workbench_muted(workbench_mono(text)),
-    )?;
-    let name = Container::new(
-        fixed(NAME_WIDTH).flex_column().gap(WORKBENCH_GRID / 4.0),
-        children![name, ty],
-    )?;
-    let editor = editors::editor(&binding, state.peek().control)?;
-    let value = Container::new(
-        fixed(VALUE_WIDTH)
-            .flex_row()
-            .align_items(AlignItems::CENTER),
-        vec![editor.item],
-    )?;
-    let default = Text::declaring(
-        move || state.with(default_text),
-        fixed(DEFAULT_WIDTH),
-        |text| workbench_muted(workbench_mono(text)),
-    )?;
-    let doc = Text::declaring(
-        move || state.with(|arg| arg.doc.to_string()),
-        growing(),
-        workbench_muted,
-    )?;
-    line(vec![
-        box_item(name),
-        box_item(value),
-        box_item(default),
-        box_item(doc),
-        reset(&binding)?,
-    ])
+    let content = match column {
+        Column::Name => {
+            let name = Text::declaring(
+                move || state.with(|arg| arg.name.to_string()),
+                LayoutStyle::new(),
+                |text| text.with_font_weight(600),
+            )?;
+            let ty = Text::declaring(
+                move || state.with(type_text),
+                LayoutStyle::new(),
+                |text| workbench_muted(workbench_mono(text)),
+            )?;
+            box_item(Container::new(
+                LayoutStyle::new().flex_column().gap(WORKBENCH_GRID / 4.0),
+                children![name, ty],
+            )?)
+        }
+        Column::Value => editors::editor(&binding, state.peek().control)?.item,
+        Column::Default => box_item(Text::declaring(
+            move || state.with(default_text),
+            LayoutStyle::new(),
+            |text| workbench_muted(workbench_mono(text)),
+        )?),
+        Column::Doc => match state.peek() {
+            arg if arg.doc.is_empty() => return cell(column, Vec::new()),
+            arg => doc(arg.name, arg.doc)?,
+        },
+        Column::Reset => reset(&binding)?,
+    };
+    cell(column, vec![content])
+}
+
+/// The arg's doc, cut to as many lines as the name and type take so a long one does not stretch its row, with the whole of it in a tooltip.
+fn doc(name: &'static str, doc: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    tooltip(
+        TooltipProps::props()
+            .text(Reactive::of(move || name.to_string()))
+            .description(Reactive::of(move || doc.to_string()))
+            .stretch(true)
+            .children(Children::new(move || {
+                let text = Text::declaring(
+                    move || doc.to_string(),
+                    LayoutStyle::new()
+                        .flex_grow(1.0)
+                        .flex_basis(0.0)
+                        .min_width(0.0),
+                    |text| workbench_muted(text).with_clamp(DOC_LINES, true),
+                )?;
+                Ok(vec![box_item(text)])
+            }))
+            .build(),
+    )
 }
 
 /// The prop's type as the struct declares it, or else what the control says of the value.
@@ -229,7 +316,7 @@ fn reset(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let state = binding.state;
     let binding = binding.clone();
     let cell = ReactiveList::with_style(
-        fixed(RESET_WIDTH).flex_row(),
+        LayoutStyle::row(),
         move || match state.with(|arg| arg.edited && arg.default.is_some()) {
             true => vec![()],
             false => Vec::new(),
@@ -260,12 +347,25 @@ fn reset_button(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(button)
 }
 
-fn line(cells: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let line = StyledContainer::new(
+/// A cell of the table, ruled under like the rest of its row and spaced from its neighbours by its own padding, since a gap between the columns would break the rule.
+fn cell(
+    column: Column,
+    content: Vec<Box<dyn LayoutItem>>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let (gutter, between) = (WORKBENCH_GRID * 1.5, WORKBENCH_GRID);
+    let start = match column {
+        Column::Name => gutter,
+        _ => between,
+    };
+    let end = match column {
+        Column::Reset => gutter,
+        _ => between,
+    };
+    let cell = StyledContainer::new(
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
-            .gap(WORKBENCH_GRID * 2.0)
-            .padding_horizontal(WORKBENCH_GRID * 1.5)
+            .padding_start(start)
+            .padding_end(end)
             .padding_vertical(WORKBENCH_GRID),
         |_| {
             RectStyle::default().with_border(Border::per_side(
@@ -276,23 +376,7 @@ fn line(cells: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutEr
                 0.0,
             ))
         },
-        cells,
+        content,
     )?;
-    Ok(box_item(line))
-}
-
-fn fixed(width: f32) -> LayoutStyle {
-    LayoutStyle::new().width(width).flex_shrink(0.0)
-}
-
-fn growing() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_grow(1.0)
-        .flex_basis(0.0)
-        .min_width(DOC_MIN_WIDTH)
-}
-
-fn spacer(width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let spacer = Container::new(fixed(width), Vec::new())?;
-    Ok(box_item(spacer))
+    Ok(box_item(cell))
 }
