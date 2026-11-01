@@ -75,5 +75,5 @@ fn parse_dev_window_position(value: &str) -> platform_core::WindowPosition {
 }
 
 #[cfg(test)]
-#[path = "dev_window_test.rs"]
+#[path = "dev_window.test.rs"]
 mod tests;

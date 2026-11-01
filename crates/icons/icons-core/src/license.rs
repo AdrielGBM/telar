@@ -244,5 +244,5 @@ fn describe_license(info: Option<&SetInfo>) -> String {
 }
 
 #[cfg(test)]
-#[path = "license_test.rs"]
+#[path = "license.test.rs"]
 mod tests;

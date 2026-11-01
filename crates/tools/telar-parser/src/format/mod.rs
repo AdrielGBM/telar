@@ -68,5 +68,5 @@ fn present_sections(source: &str) -> Vec<Section> {
 }
 
 #[cfg(test)]
-#[path = "format_test.rs"]
+#[path = "format.test.rs"]
 mod tests;

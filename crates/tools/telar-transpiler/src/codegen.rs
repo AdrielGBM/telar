@@ -1153,7 +1153,7 @@ pub(crate) fn scheme_binding(view_body: &str, shadowed: bool) -> Option<&'static
 }
 
 #[cfg(test)]
-#[path = "codegen_test.rs"]
+#[path = "codegen.test.rs"]
 mod tests;
 
 /// Whether `doc` is a module of classes for other `.rsx` to `use`, rather than a component: it declares classes, and no `[view]`, preview or props to call it with.

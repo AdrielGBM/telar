@@ -584,5 +584,5 @@ fn outward() -> f32 {
 }
 
 #[cfg(test)]
-#[path = "resizable_test.rs"]
+#[path = "resizable.test.rs"]
 mod tests;

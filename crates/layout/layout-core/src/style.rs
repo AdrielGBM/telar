@@ -959,13 +959,13 @@ impl Default for LayoutStyle {
 }
 
 #[cfg(test)]
-#[path = "style_border_reservation_test.rs"]
+#[path = "style.border_reservation.test.rs"]
 mod border_reservation_tests;
 
 #[cfg(test)]
-#[path = "style_surface_test.rs"]
+#[path = "style.surface.test.rs"]
 mod surface_tests;
 
 #[cfg(test)]
-#[path = "style_test.rs"]
+#[path = "style.test.rs"]
 mod tests;

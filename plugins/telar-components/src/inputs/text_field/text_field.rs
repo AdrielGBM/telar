@@ -476,5 +476,5 @@ pub(crate) fn frame() -> RectStyle {
 }
 
 #[cfg(test)]
-#[path = "text_field_test.rs"]
+#[path = "text_field.test.rs"]
 mod tests;

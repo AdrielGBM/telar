@@ -155,5 +155,5 @@ impl Drop for LayerRegistration {
 }
 
 #[cfg(test)]
-#[path = "scroll_viewports_test.rs"]
+#[path = "scroll_viewports.test.rs"]
 mod tests;

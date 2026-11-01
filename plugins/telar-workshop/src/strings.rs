@@ -473,5 +473,5 @@ pub(crate) fn text_with_values(key: &str, values: &[(&str, &str)]) -> String {
 }
 
 #[cfg(test)]
-#[path = "strings_test.rs"]
+#[path = "strings.test.rs"]
 mod tests;

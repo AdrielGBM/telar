@@ -242,7 +242,7 @@ fn stage_binary(bin_path: &Path, dest: &Path) {
 }
 
 #[cfg(test)]
-#[path = "package_test.rs"]
+#[path = "package.test.rs"]
 mod tests;
 
 /// The message for a tool the build needs and cannot find.

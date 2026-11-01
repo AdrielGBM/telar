@@ -138,5 +138,5 @@ pub fn asset_base() -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "dom_test.rs"]
+#[path = "dom.test.rs"]
 mod tests;

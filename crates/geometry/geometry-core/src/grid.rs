@@ -128,5 +128,5 @@ pub fn layout_grid() -> LayoutGrid {
 }
 
 #[cfg(test)]
-#[path = "grid_test.rs"]
+#[path = "grid.test.rs"]
 mod tests;

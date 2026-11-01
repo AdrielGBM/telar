@@ -161,5 +161,5 @@ fn snippet(example: Example) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "empty_state_test.rs"]
+#[path = "empty_state.test.rs"]
 mod tests;

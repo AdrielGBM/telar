@@ -76,7 +76,7 @@ fn the_location_is_where_the_preview_is_written() {
         preview!(tally: TallyProps, "Here", |_| tally(TallyProps::props().label("x").build()));
     assert_eq!(
         entry.file,
-        concat!(env!("CARGO_MANIFEST_DIR"), "/src/preview_rust_test.rs")
+        concat!(env!("CARGO_MANIFEST_DIR"), "/src/preview_rust.test.rs")
     );
     assert!(std::path::Path::new(entry.file).is_absolute());
     assert_eq!(entry.line, line);

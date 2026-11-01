@@ -68,5 +68,5 @@ impl Needle {
 }
 
 #[cfg(test)]
-#[path = "type_ahead_test.rs"]
+#[path = "type_ahead.test.rs"]
 mod tests;

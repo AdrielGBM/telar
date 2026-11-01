@@ -486,5 +486,5 @@ fn take_ulong(r: &mut Reader<'_>) -> Result<c_ulong, WireError> {
 }
 
 #[cfg(test)]
-#[path = "wire_test.rs"]
+#[path = "wire.test.rs"]
 mod tests;

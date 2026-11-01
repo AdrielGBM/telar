@@ -274,5 +274,5 @@ fn root(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "overlay_test.rs"]
+#[path = "overlay.test.rs"]
 mod tests;

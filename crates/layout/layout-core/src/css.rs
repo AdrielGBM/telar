@@ -525,13 +525,13 @@ fn gap_of(row: LengthPercentage, column: LengthPercentage) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "css_test.rs"]
+#[path = "css.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "css_grid_test.rs"]
+#[path = "css.grid.test.rs"]
 mod grid_tests;
 
 #[cfg(test)]
-#[path = "css_containing_block_test.rs"]
+#[path = "css.containing_block.test.rs"]
 mod containing_block_tests;

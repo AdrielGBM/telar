@@ -77,5 +77,5 @@ impl AssetCache for MemoryCache {
 }
 
 #[cfg(test)]
-#[path = "memory_cache_test.rs"]
+#[path = "memory_cache.test.rs"]
 mod tests;

@@ -120,5 +120,5 @@ fn expand_in(input: BakedIdInput, manifest_dir: &Path) -> syn::Result<TokenStrea
 }
 
 #[cfg(test)]
-#[path = "baked_id_test.rs"]
+#[path = "baked_id.test.rs"]
 mod tests;

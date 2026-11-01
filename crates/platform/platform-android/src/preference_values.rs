@@ -24,5 +24,5 @@ pub fn animator_scale_reduces_motion(scale: f32) -> bool {
 }
 
 #[cfg(test)]
-#[path = "preference_values_test.rs"]
+#[path = "preference_values.test.rs"]
 mod tests;

@@ -175,5 +175,5 @@ pub fn write_if_changed_atomic(path: &Path, content: &str) -> std::io::Result<()
 }
 
 #[cfg(test)]
-#[path = "paths_test.rs"]
+#[path = "paths.test.rs"]
 mod tests;

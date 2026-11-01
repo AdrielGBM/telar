@@ -513,5 +513,5 @@ pub fn submenu(props: SubmenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 }
 
 #[cfg(test)]
-#[path = "menu_panel_test.rs"]
+#[path = "menu_panel.test.rs"]
 mod tests;

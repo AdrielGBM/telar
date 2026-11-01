@@ -274,5 +274,5 @@ fn scale_command_cached(
 }
 
 #[cfg(test)]
-#[path = "preprocess_test.rs"]
+#[path = "preprocess.test.rs"]
 mod tests;

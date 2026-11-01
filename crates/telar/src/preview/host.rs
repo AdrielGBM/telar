@@ -239,5 +239,5 @@ fn place(entry: &PreviewEntry) -> String {
 }
 
 #[cfg(test)]
-#[path = "host_test.rs"]
+#[path = "host.test.rs"]
 mod tests;

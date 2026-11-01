@@ -215,5 +215,5 @@ impl<T: Clone + 'static> Transaction<T> {
 }
 
 #[cfg(test)]
-#[path = "transaction_test.rs"]
+#[path = "transaction.test.rs"]
 mod tests;

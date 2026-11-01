@@ -33,5 +33,5 @@ pub use uri::SystemOpener;
 pub use uri::{UriOpener, open_beside, open_uri, set_uri_opener, uri_opener};
 
 #[cfg(all(test, feature = "di"))]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

@@ -127,5 +127,5 @@ impl LayoutItem for LineGutter {
 }
 
 #[cfg(test)]
-#[path = "line_gutter_test.rs"]
+#[path = "line_gutter.test.rs"]
 mod tests;

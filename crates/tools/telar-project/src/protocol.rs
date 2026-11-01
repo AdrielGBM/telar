@@ -309,5 +309,5 @@ fn page_at<'a>(segments: impl IntoIterator<Item = &'a str>) -> PageLocation {
 }
 
 #[cfg(test)]
-#[path = "protocol_test.rs"]
+#[path = "protocol.test.rs"]
 mod tests;

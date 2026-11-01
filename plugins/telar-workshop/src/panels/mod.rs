@@ -372,5 +372,5 @@ fn divider() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "panels_test.rs"]
+#[path = "panels.test.rs"]
 mod tests;

@@ -64,5 +64,5 @@ pub fn apply_move<T>(items: &mut Vec<T>, from: usize, to: usize) -> bool {
 }
 
 #[cfg(test)]
-#[path = "reorder_test.rs"]
+#[path = "reorder.test.rs"]
 mod tests;

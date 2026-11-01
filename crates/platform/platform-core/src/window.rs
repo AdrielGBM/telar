@@ -350,5 +350,5 @@ pub trait MultiSurfacePlatform {
 }
 
 #[cfg(test)]
-#[path = "window_test.rs"]
+#[path = "window.test.rs"]
 mod tests;

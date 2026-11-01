@@ -496,5 +496,5 @@ fn answer_locally(sender: &Sender<Message>, Request { id, method, params }: Requ
 }
 
 #[cfg(test)]
-#[path = "inner_test.rs"]
+#[path = "inner.test.rs"]
 mod tests;

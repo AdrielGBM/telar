@@ -328,5 +328,5 @@ impl Catalog {
 }
 
 #[cfg(test)]
-#[path = "catalog_test.rs"]
+#[path = "catalog.test.rs"]
 mod tests;

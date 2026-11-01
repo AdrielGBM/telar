@@ -374,5 +374,5 @@ mod empty {
 }
 
 #[cfg(test)]
-#[path = "rows_test.rs"]
+#[path = "rows.test.rs"]
 mod tests;

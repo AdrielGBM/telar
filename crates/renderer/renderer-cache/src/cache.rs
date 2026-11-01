@@ -249,5 +249,5 @@ impl<K: Eq + Hash, V> Cache<K, V> {
 }
 
 #[cfg(test)]
-#[path = "cache_test.rs"]
+#[path = "cache.test.rs"]
 mod tests;

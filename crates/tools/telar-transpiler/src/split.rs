@@ -41,5 +41,5 @@ pub(crate) fn split_top_level(
 }
 
 #[cfg(test)]
-#[path = "split_test.rs"]
+#[path = "split.test.rs"]
 mod tests;

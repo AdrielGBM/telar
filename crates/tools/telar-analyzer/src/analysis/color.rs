@@ -178,5 +178,5 @@ fn line_start_byte(source: &str, line0: usize) -> Option<usize> {
 }
 
 #[cfg(test)]
-#[path = "color_test.rs"]
+#[path = "color.test.rs"]
 mod tests;

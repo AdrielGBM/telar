@@ -342,7 +342,7 @@ serves the export on a loopback port, opens every `preview/<id>` and `matrix/<id
 `?chrome=0`, and runs [axe-core](https://github.com/dequelabs/axe-core) over the canvas. It also audits the
 workshop's own chrome once, as a whole page, so its landmarks are checked too. The rules are WCAG 2.2 A/AA plus
 best practices, read from `crates/renderer/renderer-dom/axe.json`, the same file
-`plugins/telar-components/src/audit_test.rs` uses; `region` is off for the canvas, which is a fragment of a page,
+`plugins/telar-components/src/audit.test.rs` uses; `region` is off for the canvas, which is a fragment of a page,
 and on for the chrome. CI's `workshop-audit` job runs it on `apps/catalogue` and keeps the export as the
 `catalogue-site` artifact. Inside the dev shell, which provides Chrome, `CHROMEDRIVER` and `TELAR_AXE_CORE`, run:
 

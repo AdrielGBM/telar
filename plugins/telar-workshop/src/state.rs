@@ -654,5 +654,5 @@ fn edited_args(args: &Args) -> Vec<(String, ArgValue)> {
 }
 
 #[cfg(test)]
-#[path = "state_test.rs"]
+#[path = "state.test.rs"]
 mod tests;

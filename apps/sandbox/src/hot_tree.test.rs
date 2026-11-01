@@ -17,7 +17,7 @@ use std::time::Duration;
 use platform_core::{Event, EventHandler, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
 // `AppRuntime` and not `App`: `mount` is a runtime concern, and what this drives is a tree that lives in a dylib.
-#[path = "nav_test.rs"]
+#[path = "nav.test.rs"]
 mod nav;
 
 use telar::{AppPathsProvider, AppRuntime, NoPaths, build_surface_handler};

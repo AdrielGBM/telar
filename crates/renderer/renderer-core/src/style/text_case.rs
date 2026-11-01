@@ -168,5 +168,5 @@ pub fn case_text<'a>(text: &'a str, spans: Option<&'a [Span]>, style: &TextStyle
 }
 
 #[cfg(test)]
-#[path = "text_case_test.rs"]
+#[path = "text_case.test.rs"]
 mod tests;

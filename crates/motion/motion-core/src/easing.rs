@@ -128,5 +128,5 @@ fn solve_bezier_x(x: f32, x1: f32, x2: f32) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "easing_test.rs"]
+#[path = "easing.test.rs"]
 mod tests;

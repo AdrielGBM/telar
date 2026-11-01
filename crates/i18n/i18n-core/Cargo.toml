@@ -24,16 +24,16 @@ toml = { workspace = true, optional = true }
 
 [[test]]
 name = "installed_if_unset"
-path = "src/installed_if_unset_test.rs"
+path = "src/installed_if_unset.test.rs"
 
 [[test]]
 name = "installed_plural_rules"
-path = "src/installed_plural_rules_test.rs"
+path = "src/installed_plural_rules.test.rs"
 
 [[test]]
 name = "override_installed"
-path = "src/override_installed_test.rs"
+path = "src/override_installed.test.rs"
 
 [[test]]
 name = "override_uninstalled"
-path = "src/override_uninstalled_test.rs"
+path = "src/override_uninstalled.test.rs"

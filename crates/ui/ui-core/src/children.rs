@@ -125,5 +125,5 @@ pub fn use_context<T: Any + Clone + 'static>() -> Option<T> {
 }
 
 #[cfg(test)]
-#[path = "children_test.rs"]
+#[path = "children.test.rs"]
 mod tests;

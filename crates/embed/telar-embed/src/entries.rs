@@ -52,5 +52,5 @@ platform_core::entry_table! {
 pub const EMBED_CONTRACT: ContractStamp = <EmbedEntries as Entries>::CONTRACT;
 
 #[cfg(test)]
-#[path = "entries_test.rs"]
+#[path = "entries.test.rs"]
 mod tests;

@@ -162,5 +162,5 @@ macro_rules! wire_enum {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

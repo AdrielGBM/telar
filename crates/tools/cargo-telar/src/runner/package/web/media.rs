@@ -74,5 +74,5 @@ pub(crate) fn compressible(path: &Path) -> bool {
 }
 
 #[cfg(test)]
-#[path = "media_test.rs"]
+#[path = "media.test.rs"]
 mod tests;

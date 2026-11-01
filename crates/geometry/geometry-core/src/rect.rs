@@ -58,5 +58,5 @@ impl Default for Rect {
 }
 
 #[cfg(test)]
-#[path = "rect_test.rs"]
+#[path = "rect.test.rs"]
 mod tests;

@@ -603,9 +603,9 @@ fn uproot(root: OwnerKey) -> Vec<OwnerEntry> {
 }
 
 #[cfg(test)]
-#[path = "owner_test.rs"]
+#[path = "owner.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "panic_test.rs"]
+#[path = "panic.test.rs"]
 mod panic_tests;

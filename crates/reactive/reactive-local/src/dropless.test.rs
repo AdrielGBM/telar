@@ -143,7 +143,7 @@ fn collect_sources(root: &Path, dir: &Path, found: &mut Vec<String>) {
             if !NEVER_LINKED.contains(&relative.as_str()) {
                 collect_sources(root, &path, found);
             }
-        } else if (name.ends_with(".rs") || name.ends_with(".rsx")) && !name.ends_with("_test.rs") {
+        } else if (name.ends_with(".rs") || name.ends_with(".rsx")) && !name.ends_with(".test.rs") {
             found.push(relative);
         }
     }

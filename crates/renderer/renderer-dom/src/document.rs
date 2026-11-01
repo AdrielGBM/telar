@@ -1811,5 +1811,5 @@ pub(crate) fn aria_role(role: Role) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "document_test.rs"]
+#[path = "document.test.rs"]
 mod tests;

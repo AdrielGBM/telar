@@ -158,5 +158,5 @@ fn lowest_bit(node: usize) -> usize {
 }
 
 #[cfg(test)]
-#[path = "height_index_test.rs"]
+#[path = "height_index.test.rs"]
 mod tests;

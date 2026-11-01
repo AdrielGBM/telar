@@ -38,5 +38,5 @@ pub fn vocabulary_axis_of(word: &str) -> Option<&'static VocabularyAxis> {
 }
 
 #[cfg(test)]
-#[path = "vocabulary_test.rs"]
+#[path = "vocabulary.test.rs"]
 mod tests;

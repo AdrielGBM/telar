@@ -130,7 +130,7 @@ pub fn map_modifiers(mods: &Modifiers) -> platform_core::ModifiersState {
 }
 
 #[cfg(test)]
-#[path = "map_test.rs"]
+#[path = "map.test.rs"]
 mod tests;
 
 // What a mapped winit `WindowEvent` means at the platform level, decoupled from how it is applied. Keeping the mapping here and the application at the call site lets the single- and multi-window runners share one translation.
@@ -393,5 +393,5 @@ fn back_on_press(state: ElementState) -> SurfaceIntent {
 }
 
 #[cfg(test)]
-#[path = "map_touch_test.rs"]
+#[path = "map.touch.test.rs"]
 mod touch_tests;

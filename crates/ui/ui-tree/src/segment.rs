@@ -567,5 +567,5 @@ impl SegmentRoot {
 }
 
 #[cfg(test)]
-#[path = "segment_test.rs"]
+#[path = "segment.test.rs"]
 mod tests;

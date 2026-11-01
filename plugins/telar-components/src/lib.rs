@@ -23,20 +23,22 @@
 telar::rsx_modules!();
 
 #[cfg(test)]
+#[path = "consistency.test.rs"]
 mod consistency_test;
 #[cfg(test)]
-#[path = "layout/heading/heading_test.rs"]
+#[path = "layout/heading/heading.test.rs"]
 mod heading_test;
 #[cfg(test)]
-#[path = "display/kbd/kbd_test.rs"]
+#[path = "display/kbd/kbd.test.rs"]
 mod kbd_test;
 mod look;
 mod shared;
 mod strings;
 #[cfg(test)]
+#[path = "style_scan.test.rs"]
 mod style_scan_test;
 #[cfg(test)]
-#[path = "display/tag/tag_test.rs"]
+#[path = "display/tag/tag.test.rs"]
 mod tag_test;
 #[cfg(test)]
 mod test_support;

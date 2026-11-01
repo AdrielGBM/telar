@@ -182,5 +182,5 @@ pub fn key_nav_apply_grid(
 }
 
 #[cfg(test)]
-#[path = "keynav_test.rs"]
+#[path = "keynav.test.rs"]
 mod tests;

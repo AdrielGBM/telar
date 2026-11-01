@@ -412,5 +412,5 @@ impl<T: Lerp + 'static> KeyframesBuilder<T> {
 }
 
 #[cfg(test)]
-#[path = "keyframes_test.rs"]
+#[path = "keyframes.test.rs"]
 mod tests;

@@ -370,5 +370,5 @@ impl<'a> Scanner<'a> {
 }
 
 #[cfg(test)]
-#[path = "preview_header_test.rs"]
+#[path = "preview_header.test.rs"]
 mod tests;

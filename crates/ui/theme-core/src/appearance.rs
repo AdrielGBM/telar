@@ -161,5 +161,5 @@ impl From<Memo<Color>> for Tone {
 }
 
 #[cfg(test)]
-#[path = "appearance_test.rs"]
+#[path = "appearance.test.rs"]
 mod tests;

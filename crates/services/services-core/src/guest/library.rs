@@ -172,5 +172,5 @@ impl<E: Entries<Upper = UpperTable>> Drop for GuestLibrary<E> {
 }
 
 #[cfg(test)]
-#[path = "library_test.rs"]
+#[path = "library.test.rs"]
 mod tests;

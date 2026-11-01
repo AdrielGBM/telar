@@ -1509,34 +1509,34 @@ impl ScrollCore {
 }
 
 #[cfg(test)]
-#[path = "scroll_area_test.rs"]
+#[path = "scroll_area.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "scroll_area_scrollbar_test.rs"]
+#[path = "scroll_area.scrollbar.test.rs"]
 mod scrollbar_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_touchpad_test.rs"]
+#[path = "scroll_area.touchpad.test.rs"]
 mod touchpad_tests;
 
 /// The bar on a surface that holds the content itself — a document backend, where the compositor scrolls and this widget is told where the content ended up rather than deciding it.
 #[cfg(test)]
-#[path = "scroll_area_surface_scroll_test.rs"]
+#[path = "scroll_area.surface_scroll.test.rs"]
 mod surface_scroll_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_sticky_test.rs"]
+#[path = "scroll_area.sticky.test.rs"]
 mod sticky_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_intrinsic_test.rs"]
+#[path = "scroll_area.intrinsic.test.rs"]
 mod intrinsic_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_control_test.rs"]
+#[path = "scroll_area.control.test.rs"]
 mod control_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_stop_test.rs"]
+#[path = "scroll_area.stop.test.rs"]
 mod stop_tests;

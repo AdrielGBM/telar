@@ -179,5 +179,5 @@ impl TextMetrics for CellMetrics {
 }
 
 #[cfg(test)]
-#[path = "metrics_test.rs"]
+#[path = "metrics.test.rs"]
 mod tests;

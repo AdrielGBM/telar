@@ -405,5 +405,5 @@ impl Parser<'_> {
 }
 
 #[cfg(test)]
-#[path = "syntax_test.rs"]
+#[path = "syntax.test.rs"]
 mod tests;

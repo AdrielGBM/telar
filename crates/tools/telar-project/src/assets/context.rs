@@ -333,5 +333,5 @@ impl AssetContext {
 }
 
 #[cfg(test)]
-#[path = "context_test.rs"]
+#[path = "context.test.rs"]
 mod tests;

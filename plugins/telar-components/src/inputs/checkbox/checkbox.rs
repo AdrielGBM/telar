@@ -159,5 +159,5 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
 }
 
 #[cfg(test)]
-#[path = "checkbox_test.rs"]
+#[path = "checkbox.test.rs"]
 mod tests;

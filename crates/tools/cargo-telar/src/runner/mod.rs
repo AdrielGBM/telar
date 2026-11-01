@@ -549,5 +549,5 @@ fn select_frontend(
 }
 
 #[cfg(test)]
-#[path = "runner_test.rs"]
+#[path = "runner.test.rs"]
 mod tests;

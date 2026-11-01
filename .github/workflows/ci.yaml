@@ -38,7 +38,7 @@ jobs:
       - run: .github/scripts/check-layering.sh
       - run: cargo clippy --workspace --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics -- -D warnings
 
-  # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off in `test`, which would leave `apps/sandbox/src/hot_tree_test.rs`, the only guard for the split-runtime regression, never type-checked.
+  # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off in `test`, which would leave `apps/sandbox/src/hot_tree.test.rs`, the only guard for the split-runtime regression, never type-checked.
   check-desktop:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -150,7 +150,7 @@ jobs:
           targets: wasm32-unknown-unknown
       - run: cargo check -p sandbox --lib --target wasm32-unknown-unknown --features telar/web
 
-  # Only a browser can say whether CSS lands boxes where Taffy computed them, so this is where that claim is checked; see `crates/renderer/renderer-dom/src/layout_parity_test.rs`.
+  # Only a browser can say whether CSS lands boxes where Taffy computed them, so this is where that claim is checked; see `crates/renderer/renderer-dom/src/layout_parity.test.rs`.
   parity-web-dom:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -309,7 +309,7 @@ jobs:
           path: target/telar-snapshots/
           if-no-files-found: ignore
 
-  # The catalogue's workshop exported as the static site `cargo telar preview --build` writes, kept as an artifact and audited page by page in Chrome with axe-core; see `crates/tools/cargo-telar/src/workshop_audit_test.rs`.
+  # The catalogue's workshop exported as the static site `cargo telar preview --build` writes, kept as an artifact and audited page by page in Chrome with axe-core; see `crates/tools/cargo-telar/src/workshop_audit.test.rs`.
   workshop-audit:
     runs-on: ubuntu-24.04
     timeout-minutes: 60

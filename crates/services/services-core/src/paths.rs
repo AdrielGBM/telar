@@ -47,7 +47,7 @@ impl AppPathsProvider for NoPaths {
 }
 
 #[cfg(test)]
-#[path = "paths_test.rs"]
+#[path = "paths.test.rs"]
 mod tests;
 
 /// The directories the host operating system keeps for a user's applications.

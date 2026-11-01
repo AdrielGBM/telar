@@ -62,7 +62,7 @@ fn a_crate_with_no_rsx_bakes_the_icons_its_rust_names() {
     );
     write(
         &root,
-        "src/toolbar_test.rs",
+        "src/toolbar.test.rs",
         "#[test]\nfn draws() { let _ = icon!(\"demo:star\"); }\n",
     );
     let report = bake_package(&root, "test", VERSION).expect("the crate names icons");

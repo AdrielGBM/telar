@@ -333,5 +333,5 @@ fn decimal(text: &str) -> Option<f32> {
 }
 
 #[cfg(test)]
-#[path = "scrub_field_test.rs"]
+#[path = "scrub_field.test.rs"]
 mod tests;

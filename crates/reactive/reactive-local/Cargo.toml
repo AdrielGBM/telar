@@ -16,4 +16,4 @@ repository = { workspace = true }
 
 [[test]]
 name = "guest_release"
-path = "src/guest_release_test.rs"
+path = "src/guest_release.test.rs"

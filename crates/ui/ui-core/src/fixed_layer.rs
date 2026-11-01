@@ -175,5 +175,5 @@ impl Drop for FixedLayer {
 }
 
 #[cfg(test)]
-#[path = "fixed_layer_test.rs"]
+#[path = "fixed_layer.test.rs"]
 mod tests;

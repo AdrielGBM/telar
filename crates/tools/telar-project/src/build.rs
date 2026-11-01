@@ -81,5 +81,5 @@ pub fn generated_dir(package_dir: &Path, flavour: BuildFlavour) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "build_test.rs"]
+#[path = "build.test.rs"]
 mod tests;

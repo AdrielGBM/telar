@@ -15,5 +15,5 @@ pub(crate) fn placed(node: NodeId, local: TextInput) -> Option<TextInput> {
 }
 
 #[cfg(test)]
-#[path = "text_input_test.rs"]
+#[path = "text_input.test.rs"]
 mod tests;

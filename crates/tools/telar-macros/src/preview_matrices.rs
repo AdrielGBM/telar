@@ -63,5 +63,5 @@ fn axis_tokens(axis: &MatrixAxis) -> TokenStream2 {
 }
 
 #[cfg(test)]
-#[path = "preview_matrices_test.rs"]
+#[path = "preview_matrices.test.rs"]
 mod tests;

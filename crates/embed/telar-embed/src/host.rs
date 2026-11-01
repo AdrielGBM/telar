@@ -412,5 +412,5 @@ impl Drop for LoadedEmbed {
 }
 
 #[cfg(test)]
-#[path = "host_test.rs"]
+#[path = "host.test.rs"]
 mod tests;

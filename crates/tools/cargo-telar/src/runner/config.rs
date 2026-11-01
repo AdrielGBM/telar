@@ -788,5 +788,5 @@ pub(crate) fn warn_if_foreign_version(project_telar: &str) {
 }
 
 #[cfg(test)]
-#[path = "config_test.rs"]
+#[path = "config.test.rs"]
 mod tests;

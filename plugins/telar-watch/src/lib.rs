@@ -196,5 +196,5 @@ fn run(path: &Path, out: Emitter<()>) {
 }
 
 #[cfg(test)]
-#[path = "watch_test.rs"]
+#[path = "watch.test.rs"]
 mod tests;

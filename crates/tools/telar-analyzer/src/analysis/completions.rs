@@ -625,5 +625,5 @@ fn trigger_suggest() -> Command {
 }
 
 #[cfg(test)]
-#[path = "completions_test.rs"]
+#[path = "completions.test.rs"]
 mod tests;

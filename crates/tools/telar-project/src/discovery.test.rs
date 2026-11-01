@@ -262,8 +262,8 @@ fn discover_rust_modules_mirrors_tree() {
         ("main.rs", ""),                    // crate root: skipped
         ("util.rs", ""),                    // top-level module
         ("core/app.rs", ""),                // nested module
-        ("core/app_test.rs", ""),           // `core/app.rs` declares it: not a sibling
-        ("util_test.rs", ""),               // same, at the top level
+        ("core/app.test.rs", ""),           // `core/app.rs` declares it: not a sibling
+        ("util.test.rs", ""),               // same, at the top level
         ("core/theme.rs", ""),              // nested module
         ("core/sidebar.rsx", ""),           // markup: a module where it sits
         ("shared/demo.rs", ""),             // nested module
@@ -325,10 +325,10 @@ fn discover_rust_modules_mirrors_tree() {
         !out.contains("pub mod lib") && !out.contains("pub mod main"),
         "{out}"
     );
-    // Declared here, a `*_test.rs` would be a sibling of the module whose private items it tests rather than its child, and every one of them would read as inaccessible.
+    // Declared here, a `*.test.rs` would be a sibling of the module whose private items it tests rather than its child, and every one of them would read as inaccessible.
     assert!(
-        !out.contains("util_test") && !core_rs.contains("app_test"),
-        "a `*_test.rs` belongs to the module beside it:\n{out}\n---\n{core_rs}"
+        !out.contains(".test") && !core_rs.contains(".test"),
+        "a `*.test.rs` belongs to the module beside it:\n{out}\n---\n{core_rs}"
     );
 }
 
@@ -924,7 +924,7 @@ fn a_previews_file_is_declared_as_a_module_beside_the_component_it_previews() {
     );
 }
 
-/// A library's tree is its own: every module it discovers is `pub(crate)`, so its API is what its root re-exports. A component in a directory of its own, `display/kbd/kbd.rsx` beside `kbd_test.rs` and `kbd.previews.rs`, is declared as the module of that name inside it, which clippy would otherwise read as a slip.
+/// A library's tree is its own: every module it discovers is `pub(crate)`, so its API is what its root re-exports. A component in a directory of its own, `display/kbd/kbd.rsx` beside `kbd.test.rs` and `kbd.previews.rs`, is declared as the module of that name inside it, which clippy would otherwise read as a slip.
 #[test]
 fn a_library_keeps_its_modules_and_a_component_keeps_a_directory_of_its_own() {
     let root = std::env::temp_dir().join(format!("rsx_component_dirs_{}", std::process::id()));
@@ -933,7 +933,7 @@ fn a_library_keeps_its_modules_and_a_component_keeps_a_directory_of_its_own() {
     std::fs::create_dir_all(root.join("inputs/button")).unwrap();
     for path in [
         "display/kbd/kbd.rsx",
-        "display/kbd/kbd_test.rs",
+        "display/kbd/kbd.test.rs",
         "display/kbd/kbd.previews.rs",
         "inputs/button/button.rs",
         "inputs/button/label.rs",

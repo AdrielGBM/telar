@@ -26,5 +26,5 @@ impl Size {
 }
 
 #[cfg(test)]
-#[path = "size_test.rs"]
+#[path = "size.test.rs"]
 mod tests;

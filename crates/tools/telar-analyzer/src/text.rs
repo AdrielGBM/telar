@@ -105,5 +105,5 @@ pub fn byte_offset(source: &str, line: u32, utf16_col: u32) -> Option<usize> {
 }
 
 #[cfg(test)]
-#[path = "text_test.rs"]
+#[path = "text.test.rs"]
 mod tests;

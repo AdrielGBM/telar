@@ -1364,9 +1364,9 @@ where
 }
 
 #[cfg(test)]
-#[path = "handler_test.rs"]
+#[path = "handler.test.rs"]
 mod tests;
 
 #[cfg(all(test, feature = "dev", target_os = "linux"))]
-#[path = "handler_unload_test.rs"]
+#[path = "handler.unload.test.rs"]
 mod unload_tests;

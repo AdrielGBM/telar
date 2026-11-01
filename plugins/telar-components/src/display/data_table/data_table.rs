@@ -1019,5 +1019,5 @@ fn body_row(
 }
 
 #[cfg(test)]
-#[path = "data_table_test.rs"]
+#[path = "data_table.test.rs"]
 mod tests;

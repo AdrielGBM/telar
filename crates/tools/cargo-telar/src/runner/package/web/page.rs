@@ -446,5 +446,5 @@ pub(super) fn escape(text: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "page_test.rs"]
+#[path = "page.test.rs"]
 mod tests;

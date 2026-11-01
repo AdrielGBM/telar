@@ -187,5 +187,5 @@ fn report(panicked: Option<PanicPayload>) {
 }
 
 #[cfg(test)]
-#[path = "disposal_test.rs"]
+#[path = "disposal.test.rs"]
 mod tests;

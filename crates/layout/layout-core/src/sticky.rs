@@ -118,5 +118,5 @@ fn along(axis: Axis, start_inset: Option<f32>, end_inset: Option<f32>) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "sticky_test.rs"]
+#[path = "sticky.test.rs"]
 mod tests;

@@ -307,5 +307,5 @@ impl<'a> Placed<'a> {
 }
 
 #[cfg(test)]
-#[path = "text_place_test.rs"]
+#[path = "text_place.test.rs"]
 mod tests;

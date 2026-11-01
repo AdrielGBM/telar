@@ -185,5 +185,5 @@ pub fn invalidate_text_metrics() {
 }
 
 #[cfg(test)]
-#[path = "metrics_test.rs"]
+#[path = "metrics.test.rs"]
 mod tests;

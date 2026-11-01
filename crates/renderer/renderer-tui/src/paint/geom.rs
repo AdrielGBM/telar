@@ -151,5 +151,5 @@ pub fn cell_center(col: i32, row: i32, cell: CellSize) -> Point {
 }
 
 #[cfg(test)]
-#[path = "geom_test.rs"]
+#[path = "geom.test.rs"]
 mod tests;

@@ -184,5 +184,5 @@ pub fn follows_reduced_motion() -> bool {
 }
 
 #[cfg(test)]
-#[path = "ticker_test.rs"]
+#[path = "ticker.test.rs"]
 mod tests;

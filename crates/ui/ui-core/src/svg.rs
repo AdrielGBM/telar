@@ -84,5 +84,5 @@ impl_leaf_widget!(Svg);
 
 // Gated on `dynamic-svg`: these build `SvgData` with `from_str`, unavailable under bare `svg`.
 #[cfg(all(test, feature = "dynamic-svg"))]
-#[path = "svg_test.rs"]
+#[path = "svg.test.rs"]
 mod tests;

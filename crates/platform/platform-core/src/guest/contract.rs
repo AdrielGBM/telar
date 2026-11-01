@@ -532,5 +532,5 @@ pub unsafe fn open_guest<E: Entries>(
 }
 
 #[cfg(test)]
-#[path = "contract_test.rs"]
+#[path = "contract.test.rs"]
 mod tests;

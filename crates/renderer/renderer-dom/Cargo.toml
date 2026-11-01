@@ -38,108 +38,108 @@ web-sys = { workspace = true, features = ["KeyboardEventInit", "EventInit", "Nod
 
 [[test]]
 name = "layout_parity"
-path = "src/layout_parity_test.rs"
+path = "src/layout_parity.test.rs"
 
 [[test]]
 name = "keyboard"
-path = "src/keyboard_test.rs"
+path = "src/keyboard.test.rs"
 
 [[test]]
 name = "blend"
-path = "src/blend_test.rs"
+path = "src/blend.test.rs"
 
 [[test]]
 name = "semantics"
-path = "src/semantics_test.rs"
+path = "src/semantics.test.rs"
 
 [[test]]
 name = "controls"
-path = "src/controls_test.rs"
+path = "src/controls.test.rs"
 
 [[test]]
 name = "document_scroll"
-path = "src/document_scroll_test.rs"
+path = "src/document_scroll.test.rs"
 
 [[test]]
 name = "font_load"
-path = "src/font_load_test.rs"
+path = "src/font_load.test.rs"
 
 [[test]]
 name = "font_variation"
-path = "src/font_variation_test.rs"
+path = "src/font_variation.test.rs"
 
 [[test]]
 name = "links"
-path = "src/links_test.rs"
+path = "src/links.test.rs"
 
 [[test]]
 name = "picture"
-path = "src/picture_test.rs"
+path = "src/picture.test.rs"
 
 [[test]]
 name = "prerender_parity"
-path = "src/prerender_parity_test.rs"
+path = "src/prerender_parity.test.rs"
 
 [[test]]
 name = "hydration"
-path = "src/hydration_test.rs"
+path = "src/hydration.test.rs"
 
 [[test]]
 name = "reactive_layout"
-path = "src/reactive_layout_test.rs"
+path = "src/reactive_layout.test.rs"
 
 [[test]]
 name = "fixed_layer"
-path = "src/fixed_layer_test.rs"
+path = "src/fixed_layer.test.rs"
 
 [[test]]
 name = "dash"
-path = "src/dash_test.rs"
+path = "src/dash.test.rs"
 
 [[test]]
 name = "transform_origin"
-path = "src/transform_origin_test.rs"
+path = "src/transform_origin.test.rs"
 
 [[test]]
 name = "drawn_box"
-path = "src/drawn_box_test.rs"
+path = "src/drawn_box.test.rs"
 
 [[test]]
 name = "text_paint"
-path = "src/text_paint_test.rs"
+path = "src/text_paint.test.rs"
 
 [[test]]
 name = "current"
-path = "src/current_test.rs"
+path = "src/current.test.rs"
 
 [[test]]
 name = "arrival_margin"
-path = "src/arrival_margin_test.rs"
+path = "src/arrival_margin.test.rs"
 
 [[test]]
 name = "surface"
-path = "src/surface_test.rs"
+path = "src/surface.test.rs"
 
 [[test]]
 name = "frame_tab"
-path = "src/frame_tab_test.rs"
+path = "src/frame_tab.test.rs"
 
 [[test]]
 name = "text_placement"
-path = "src/text_placement_test.rs"
+path = "src/text_placement.test.rs"
 
 [[test]]
 name = "text_area_wrap"
-path = "src/text_area_wrap_test.rs"
+path = "src/text_area_wrap.test.rs"
 
 [[test]]
 name = "composition"
-path = "src/composition_test.rs"
+path = "src/composition.test.rs"
 
 [[test]]
 name = "text_area_entry"
-path = "src/text_area_entry_test.rs"
+path = "src/text_area_entry.test.rs"
 
 [[test]]
 name = "editor"
-path = "src/editor_test.rs"
+path = "src/editor.test.rs"

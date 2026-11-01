@@ -78,5 +78,5 @@ fn link_for(
 }
 
 #[cfg(test)]
-#[path = "links_test.rs"]
+#[path = "links.test.rs"]
 mod tests;

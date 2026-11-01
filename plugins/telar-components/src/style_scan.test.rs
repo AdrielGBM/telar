@@ -88,7 +88,7 @@ fn collect_sources(src: &Path, dir: &Path, files: &mut Vec<String>) {
                 collect_sources(src, &path, files);
             }
         } else if name.ends_with(".rs")
-            && !name.ends_with("_test.rs")
+            && !name.ends_with(".test.rs")
             && !name.ends_with(".previews.rs")
             && name != "test_support.rs"
         {

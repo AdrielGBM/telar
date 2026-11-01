@@ -95,5 +95,5 @@ pub fn address_of(destination: &Destination) -> String {
 }
 
 #[cfg(test)]
-#[path = "destination_test.rs"]
+#[path = "destination.test.rs"]
 mod tests;

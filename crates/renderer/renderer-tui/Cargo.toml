@@ -20,4 +20,4 @@ unicode-width = "0.2.2"
 
 [[test]]
 name = "occlusion_and_shape"
-path = "src/occlusion_and_shape_test.rs"
+path = "src/occlusion_and_shape.test.rs"

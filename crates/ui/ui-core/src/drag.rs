@@ -448,5 +448,5 @@ fn in_drag<R>(start: DragStart, travel: f32, f: impl FnOnce() -> R) -> R {
 }
 
 #[cfg(test)]
-#[path = "drag_test.rs"]
+#[path = "drag.test.rs"]
 mod tests;

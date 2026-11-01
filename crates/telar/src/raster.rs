@@ -347,5 +347,5 @@ fn no_picture() -> RasterError {
 }
 
 #[cfg(test)]
-#[path = "raster_test.rs"]
+#[path = "raster.test.rs"]
 mod tests;

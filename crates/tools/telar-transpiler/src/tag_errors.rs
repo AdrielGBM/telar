@@ -167,5 +167,5 @@ fn identifier_at(text: &str, at: usize) -> Option<&str> {
 }
 
 #[cfg(test)]
-#[path = "tag_errors_test.rs"]
+#[path = "tag_errors.test.rs"]
 mod tests;

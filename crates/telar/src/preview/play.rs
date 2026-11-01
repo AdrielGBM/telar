@@ -697,5 +697,5 @@ fn key_name(key: &Key) -> String {
 }
 
 #[cfg(test)]
-#[path = "play_test.rs"]
+#[path = "play.test.rs"]
 mod tests;

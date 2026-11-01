@@ -159,5 +159,5 @@ impl LeafWidget for Input {
 }
 
 #[cfg(test)]
-#[path = "input_test.rs"]
+#[path = "input.test.rs"]
 mod tests;

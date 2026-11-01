@@ -165,5 +165,5 @@ pub unsafe extern "C" fn detach_thread(_data: *const c_void, thread: HostThread)
 }
 
 #[cfg(test)]
-#[path = "threads_test.rs"]
+#[path = "threads.test.rs"]
 mod tests;

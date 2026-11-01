@@ -281,5 +281,5 @@ pub fn require_gpu(what: &str, error: impl std::fmt::Debug) {
 }
 
 #[cfg(test)]
-#[path = "testing_test.rs"]
+#[path = "testing.test.rs"]
 mod tests;

@@ -101,5 +101,5 @@ fn launcher(uri: &str) -> std::process::Command {
 }
 
 #[cfg(test)]
-#[path = "uri_test.rs"]
+#[path = "uri.test.rs"]
 mod tests;

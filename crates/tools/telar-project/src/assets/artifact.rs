@@ -315,5 +315,5 @@ pub fn write_generated(telar_dir: &Path, generated: &GeneratedAssets) -> std::io
 }
 
 #[cfg(test)]
-#[path = "artifact_test.rs"]
+#[path = "artifact.test.rs"]
 mod tests;

@@ -271,5 +271,5 @@ fn symbol(
 }
 
 #[cfg(test)]
-#[path = "index_test.rs"]
+#[path = "index.test.rs"]
 mod tests;

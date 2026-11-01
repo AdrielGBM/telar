@@ -304,5 +304,5 @@ fn hash_border_radius(r: &BorderRadius, h: &mut FxHasher) {
 }
 
 #[cfg(test)]
-#[path = "style_pool_test.rs"]
+#[path = "style_pool.test.rs"]
 mod tests;

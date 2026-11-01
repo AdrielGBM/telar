@@ -69,5 +69,5 @@ impl FrameCtx {
 }
 
 #[cfg(test)]
-#[path = "frame_ctx_test.rs"]
+#[path = "frame_ctx.test.rs"]
 mod tests;

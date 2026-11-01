@@ -175,5 +175,5 @@ pub fn link(props: LinkProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "link_test.rs"]
+#[path = "link.test.rs"]
 mod tests;

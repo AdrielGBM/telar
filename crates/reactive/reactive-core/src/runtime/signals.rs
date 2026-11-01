@@ -290,5 +290,5 @@ pub(crate) fn notify_signal(id: SignalId) {
 }
 
 #[cfg(test)]
-#[path = "signals_test.rs"]
+#[path = "signals.test.rs"]
 mod tests;

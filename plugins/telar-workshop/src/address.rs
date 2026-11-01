@@ -47,5 +47,5 @@ pub(crate) fn follow(state: &WorkshopState) {
 }
 
 #[cfg(test)]
-#[path = "address_test.rs"]
+#[path = "address.test.rs"]
 mod tests;

@@ -28,5 +28,5 @@ impl SourcedIcon {
 }
 
 #[cfg(test)]
-#[path = "palette_test.rs"]
+#[path = "palette.test.rs"]
 mod tests;

@@ -149,7 +149,7 @@ impl ViewGen<'_> {
 }
 
 #[cfg(test)]
-#[path = "accessible_test.rs"]
+#[path = "accessible.test.rs"]
 mod tests;
 
 impl ViewGen<'_> {

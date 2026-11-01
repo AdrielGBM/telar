@@ -18,4 +18,4 @@ tracing = { workspace = true }
 
 [[test]]
 name = "watch_path"
-path = "src/watch_path_test.rs"
+path = "src/watch_path.test.rs"

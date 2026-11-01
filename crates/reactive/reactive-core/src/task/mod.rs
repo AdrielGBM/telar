@@ -404,5 +404,5 @@ fn pending_task_count() -> usize {
 }
 
 #[cfg(test)]
-#[path = "task_test.rs"]
+#[path = "task.test.rs"]
 mod tests;

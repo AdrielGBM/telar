@@ -190,5 +190,5 @@ fn toggle_words(role: Role, on: bool) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "accessibility_test.rs"]
+#[path = "accessibility.test.rs"]
 mod tests;

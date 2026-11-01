@@ -985,7 +985,7 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;
 
 /// The crate's `telar_all_previews`, listing its `.rsx` previews, inside `::telar::__previews!` so it exists exactly when the previews a crate writes in Rust do.

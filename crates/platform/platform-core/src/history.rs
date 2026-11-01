@@ -545,5 +545,5 @@ fn switch_locale(locale: &str, adopt: bool) -> bool {
 }
 
 #[cfg(test)]
-#[path = "history_test.rs"]
+#[path = "history.test.rs"]
 mod tests;

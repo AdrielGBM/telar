@@ -125,9 +125,9 @@ impl Component for WindowRoot {
 }
 
 #[cfg(test)]
-#[path = "window_root_test.rs"]
+#[path = "window_root.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "window_root_layout_cost_test.rs"]
+#[path = "window_root.layout_cost.test.rs"]
 mod layout_cost;

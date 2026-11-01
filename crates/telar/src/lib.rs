@@ -122,11 +122,11 @@ macro_rules! __without_previews {
 }
 
 #[cfg(test)]
-#[path = "previews_gate_test.rs"]
+#[path = "previews_gate.test.rs"]
 mod previews_gate_tests;
 
 #[cfg(all(test, feature = "shaper"))]
-#[path = "test_face_test.rs"]
+#[path = "test_face.test.rs"]
 mod test_face;
 
 #[cfg(all(test, feature = "dev", target_os = "linux"))]

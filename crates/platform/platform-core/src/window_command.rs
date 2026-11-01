@@ -45,5 +45,5 @@ pub fn take_window_commands() -> Vec<WindowCommand> {
 }
 
 #[cfg(test)]
-#[path = "window_command_test.rs"]
+#[path = "window_command.test.rs"]
 mod tests;

@@ -331,5 +331,5 @@ pub fn shield<T>(fallback: T, call: impl FnOnce() -> T) -> T {
 }
 
 #[cfg(test)]
-#[path = "guest_test.rs"]
+#[path = "guest.test.rs"]
 mod tests;

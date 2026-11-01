@@ -69,5 +69,5 @@ impl Component for Mask {
 }
 
 #[cfg(test)]
-#[path = "mask_test.rs"]
+#[path = "mask.test.rs"]
 mod tests;

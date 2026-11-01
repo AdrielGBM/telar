@@ -125,5 +125,5 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 }
 
 #[cfg(test)]
-#[path = "spinner_test.rs"]
+#[path = "spinner.test.rs"]
 mod tests;

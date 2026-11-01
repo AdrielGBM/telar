@@ -585,5 +585,5 @@ fn connect_hot_channel(port: u16, token: &str) -> std::io::Result<std::net::TcpS
 }
 
 #[cfg(test)]
-#[path = "hot_test.rs"]
+#[path = "hot.test.rs"]
 mod tests;

@@ -36,5 +36,5 @@ pub fn current_locale() -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "locale_test.rs"]
+#[path = "locale.test.rs"]
 mod tests;

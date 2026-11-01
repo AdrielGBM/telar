@@ -53,19 +53,19 @@ criterion = { workspace = true }
 
 [[test]]
 name = "app_owned_texture"
-path = "src/app_owned_texture_test.rs"
+path = "src/app_owned_texture.test.rs"
 
 [[test]]
 name = "headless_smoke"
-path = "src/headless_smoke_test.rs"
+path = "src/headless_smoke.test.rs"
 
 [[test]]
 name = "image_blend"
-path = "src/image_blend_test.rs"
+path = "src/image_blend.test.rs"
 
 [[test]]
 name = "text_decoration"
-path = "src/text_decoration_test.rs"
+path = "src/text_decoration.test.rs"
 
 [[bench]]
 name = "render_frame"

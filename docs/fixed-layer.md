@@ -66,7 +66,7 @@ puts a toolbar at the bottom centre. Percentages and `sw`/`sh` resolve against t
 
 | Target | A layer is |
 | --- | --- |
-| web-dom | An element in the document where the layer was declared, so the browser's Tab order and a screen reader's reading order are the markup's, fixed against the viewport with `position: fixed`, `z-index: 1` and `pointer-events: none`; its children take `pointer-events: auto` back, so the browser too hands it the pointer only over its boxes. The layout root it sits in becomes a stacking context (`isolation: isolate`), so overlays, placed after that root, stay over it. Checked in Firefox by `crates/renderer/renderer-dom/src/fixed_layer_test.rs`. |
+| web-dom | An element in the document where the layer was declared, so the browser's Tab order and a screen reader's reading order are the markup's, fixed against the viewport with `position: fixed`, `z-index: 1` and `pointer-events: none`; its children take `pointer-events: auto` back, so the browser too hands it the pointer only over its boxes. The layout root it sits in becomes a stacking context (`isolation: isolate`), so overlays, placed after that root, stay over it. Checked in Firefox by `crates/renderer/renderer-dom/src/fixed_layer.test.rs`. |
 | Web canvas, desktop, Android | A layout root of its own, composed after the page and before the overlays, and hit-tested before the page but only within its boxes. |
 | TUI | The same, on the cell grid. |
 | headless | The same; its boxes publish their rects through `track_layout`, in surface coordinates, for a test to read. |

@@ -221,5 +221,5 @@ impl UpperServices for NoUpper {
 }
 
 #[cfg(test)]
-#[path = "services_test.rs"]
+#[path = "services.test.rs"]
 mod tests;

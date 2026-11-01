@@ -81,5 +81,5 @@ impl From<&'static str> for Reactive<String> {
 }
 
 #[cfg(test)]
-#[path = "reactive_test.rs"]
+#[path = "reactive.test.rs"]
 mod tests;

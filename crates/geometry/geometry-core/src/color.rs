@@ -231,5 +231,5 @@ fn mix_hue(h1: f32, c1: f32, h2: f32, c2: f32, t: f32) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "color_test.rs"]
+#[path = "color.test.rs"]
 mod tests;

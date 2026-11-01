@@ -207,5 +207,5 @@ fn build_open_drawer(
 }
 
 #[cfg(test)]
-#[path = "drawer_test.rs"]
+#[path = "drawer.test.rs"]
 mod tests;

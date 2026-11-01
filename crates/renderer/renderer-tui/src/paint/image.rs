@@ -158,5 +158,5 @@ fn straight([r, g, b, a]: [f32; 4]) -> Color {
 }
 
 #[cfg(test)]
-#[path = "image_test.rs"]
+#[path = "image.test.rs"]
 mod tests;

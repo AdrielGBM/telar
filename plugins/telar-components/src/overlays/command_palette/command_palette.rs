@@ -774,5 +774,5 @@ fn build_row(
 }
 
 #[cfg(test)]
-#[path = "command_palette_test.rs"]
+#[path = "command_palette.test.rs"]
 mod tests;

@@ -69,5 +69,5 @@ pub(crate) fn follow_stored_reduced_motion() {
 }
 
 #[cfg(test)]
-#[path = "user_preferences_test.rs"]
+#[path = "user_preferences.test.rs"]
 mod tests;

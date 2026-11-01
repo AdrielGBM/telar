@@ -163,7 +163,7 @@ impl Fling {
 }
 
 #[cfg(test)]
-#[path = "fling_test.rs"]
+#[path = "fling.test.rs"]
 mod tests;
 
 /// How much of the distance left is still uncovered after one second.
@@ -261,5 +261,5 @@ impl motion_core::Tickable for Glide {
 }
 
 #[cfg(test)]
-#[path = "fling_glide_test.rs"]
+#[path = "fling.glide.test.rs"]
 mod glide_tests;

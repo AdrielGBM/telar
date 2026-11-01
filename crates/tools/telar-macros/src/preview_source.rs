@@ -103,5 +103,5 @@ fn within_package(file: &Path) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "preview_source_test.rs"]
+#[path = "preview_source.test.rs"]
 mod tests;

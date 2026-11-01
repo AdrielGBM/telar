@@ -171,5 +171,5 @@ fn catalog_keys(package_root: &std::path::Path) -> std::collections::HashSet<Str
 }
 
 #[cfg(test)]
-#[path = "check_test.rs"]
+#[path = "check.test.rs"]
 mod tests;

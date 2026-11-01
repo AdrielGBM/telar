@@ -722,5 +722,5 @@ fn swatch_row(
 }
 
 #[cfg(test)]
-#[path = "color_picker_test.rs"]
+#[path = "color_picker.test.rs"]
 mod tests;

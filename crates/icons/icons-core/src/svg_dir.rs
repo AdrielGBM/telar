@@ -64,5 +64,5 @@ fn read_error(path: &Path, error: std::io::Error) -> IconError {
 }
 
 #[cfg(test)]
-#[path = "svg_dir_test.rs"]
+#[path = "svg_dir.test.rs"]
 mod tests;

@@ -441,5 +441,5 @@ pub trait Scale: Sized {
 }
 
 #[cfg(test)]
-#[path = "style_test.rs"]
+#[path = "style.test.rs"]
 mod tests;

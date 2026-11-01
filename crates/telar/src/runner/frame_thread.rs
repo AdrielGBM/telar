@@ -237,5 +237,5 @@ fn next_message<R: RenderBackend>(
 }
 
 #[cfg(test)]
-#[path = "frame_thread_test.rs"]
+#[path = "frame_thread.test.rs"]
 mod tests;

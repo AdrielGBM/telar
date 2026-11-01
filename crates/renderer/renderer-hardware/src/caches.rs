@@ -473,5 +473,5 @@ pub(crate) fn with_shared<R>(f: impl FnOnce(&mut SharedCaches) -> R) -> Option<R
 }
 
 #[cfg(test)]
-#[path = "caches_test.rs"]
+#[path = "caches.test.rs"]
 mod tests;

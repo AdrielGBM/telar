@@ -328,5 +328,5 @@ fn encode_segment(segment: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "site_test.rs"]
+#[path = "site.test.rs"]
 mod tests;

@@ -1115,5 +1115,5 @@ fn rebuild_until_built(changes: &ChangeFeed<impl WatchScope>, mut rebuild: impl 
 }
 
 #[cfg(test)]
-#[path = "watch_test.rs"]
+#[path = "watch.test.rs"]
 mod tests;

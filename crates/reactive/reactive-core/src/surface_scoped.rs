@@ -154,5 +154,5 @@ macro_rules! surface_scoped {
 }
 
 #[cfg(test)]
-#[path = "surface_scoped_test.rs"]
+#[path = "surface_scoped.test.rs"]
 mod tests;

@@ -74,5 +74,5 @@ fn base64(input: &[u8]) -> String {
 }
 
 #[cfg(test)]
-#[path = "clipboard_test.rs"]
+#[path = "clipboard.test.rs"]
 mod tests;

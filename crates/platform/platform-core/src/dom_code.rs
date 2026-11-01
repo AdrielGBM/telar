@@ -35,5 +35,5 @@ fn lettered_or_digit(code: &str) -> Option<Key> {
 }
 
 #[cfg(test)]
-#[path = "dom_code_test.rs"]
+#[path = "dom_code.test.rs"]
 mod tests;

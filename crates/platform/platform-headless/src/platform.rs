@@ -282,5 +282,5 @@ impl MultiSurfacePlatform for HeadlessPlatform {
 }
 
 #[cfg(test)]
-#[path = "platform_test.rs"]
+#[path = "platform.test.rs"]
 mod tests;

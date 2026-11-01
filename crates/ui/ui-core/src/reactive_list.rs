@@ -495,5 +495,5 @@ impl Component for ReactiveList {
 }
 
 #[cfg(test)]
-#[path = "reactive_list_test.rs"]
+#[path = "reactive_list.test.rs"]
 mod tests;

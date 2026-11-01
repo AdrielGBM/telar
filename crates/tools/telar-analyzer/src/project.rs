@@ -173,5 +173,5 @@ fn parse_color_field(line: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "project_test.rs"]
+#[path = "project.test.rs"]
 mod tests;

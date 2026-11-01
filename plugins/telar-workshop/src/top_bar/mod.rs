@@ -320,5 +320,5 @@ fn window_controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "top_bar_test.rs"]
+#[path = "top_bar.test.rs"]
 mod tests;

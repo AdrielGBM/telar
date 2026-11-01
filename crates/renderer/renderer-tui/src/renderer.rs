@@ -146,5 +146,5 @@ impl<W: 'static> RendererFactory<W> for TuiRendererFactory {
 }
 
 #[cfg(test)]
-#[path = "renderer_test.rs"]
+#[path = "renderer.test.rs"]
 mod tests;

@@ -43,5 +43,5 @@ pub fn kept_by_the_call(key: &str) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "call_keys_test.rs"]
+#[path = "call_keys.test.rs"]
 mod tests;

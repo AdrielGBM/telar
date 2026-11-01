@@ -481,5 +481,5 @@ fn optimise(module: &Path, release: bool) {
 }
 
 #[cfg(test)]
-#[path = "web_test.rs"]
+#[path = "web.test.rs"]
 mod tests;

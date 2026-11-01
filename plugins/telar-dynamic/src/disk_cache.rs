@@ -78,5 +78,5 @@ fn file_name(name: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "disk_cache_test.rs"]
+#[path = "disk_cache.test.rs"]
 mod tests;

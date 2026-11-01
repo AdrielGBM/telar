@@ -1,4 +1,4 @@
-//! The exported workshop audited the way an accessibility review would: axe-core's WCAG 2.2 A/AA and best-practice rules, the ones `plugins/telar-components/src/audit_test.rs` holds the widgets to (`crates/renderer/renderer-dom/axe.json`), run in Chrome over the canvas of every preview and matrix page of a `cargo telar preview --build <dir> --target web` export, and over the workshop's own chrome on one of them.
+//! The exported workshop audited the way an accessibility review would: axe-core's WCAG 2.2 A/AA and best-practice rules, the ones `plugins/telar-components/src/audit.test.rs` holds the widgets to (`crates/renderer/renderer-dom/axe.json`), run in Chrome over the canvas of every preview and matrix page of a `cargo telar preview --build <dir> --target web` export, and over the workshop's own chrome on one of them.
 //!
 //! It needs the export, Chrome and its driver, and axe-core's script, so it is ignored by default. Inside the dev shell, which sets `CHROMEDRIVER` and `TELAR_AXE_CORE`, run it with `TELAR_WORKSHOP_SITE=<dir> cargo test -p cargo-telar --test workshop_audit -- --ignored`; a relative `<dir>` is read from the repository root.
 
@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use telar_project::protocol::preview_location;
 
-#[path = "served_site_test.rs"]
+#[path = "served_site.test.rs"]
 mod served_site;
 
 use served_site::{repo_root, served_at};
@@ -63,7 +63,7 @@ const check = () => {
 check();
 "#;
 
-/// Puts axe-core into the page, as `audit_test.rs` does: a script element carrying its source.
+/// Puts axe-core into the page, as `audit.test.rs` does: a script element carrying its source.
 const INJECT: &str = r#"
 if (window.axe === undefined) {
   const script = document.createElement("script");
@@ -147,7 +147,7 @@ struct Audit {
 }
 
 enum Scope {
-    /// The canvas alone, one fragment of a page, audited within the app's host as `audit_test.rs` audits its fixture.
+    /// The canvas alone, one fragment of a page, audited within the app's host as `audit.test.rs` audits its fixture.
     Canvas,
     /// The workshop's chrome around the canvas, audited as the whole page it is, which has to sit in landmarks.
     Page,

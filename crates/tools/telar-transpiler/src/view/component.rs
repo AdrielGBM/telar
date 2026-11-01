@@ -794,5 +794,5 @@ pub(super) fn is_placeholder_operand(attr: &Attr) -> bool {
 }
 
 #[cfg(test)]
-#[path = "component_test.rs"]
+#[path = "component.test.rs"]
 mod tests;

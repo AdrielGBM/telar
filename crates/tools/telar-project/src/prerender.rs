@@ -170,5 +170,5 @@ pub struct PrerenderState {
 }
 
 #[cfg(test)]
-#[path = "prerender_test.rs"]
+#[path = "prerender.test.rs"]
 mod tests;

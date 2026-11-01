@@ -740,5 +740,5 @@ impl FrameDiff {
 }
 
 #[cfg(test)]
-#[path = "dirty_test.rs"]
+#[path = "dirty.test.rs"]
 mod tests;

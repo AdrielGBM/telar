@@ -156,5 +156,5 @@ pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
 }
 
 #[cfg(test)]
-#[path = "deb_test.rs"]
+#[path = "deb.test.rs"]
 mod tests;

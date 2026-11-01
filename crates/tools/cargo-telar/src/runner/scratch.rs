@@ -15,7 +15,7 @@ pub(super) fn scratch_dir(purpose: &str) -> Result<TempDir, String> {
 }
 
 #[cfg(test)]
-#[path = "scratch_test.rs"]
+#[path = "scratch.test.rs"]
 mod tests;
 
 #[cfg(unix)]

@@ -255,5 +255,5 @@ fn register_transaction_in<T: Clone + 'static>(
 }
 
 #[cfg(test)]
-#[path = "dismiss_test.rs"]
+#[path = "dismiss.test.rs"]
 mod tests;

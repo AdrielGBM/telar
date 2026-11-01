@@ -207,5 +207,5 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
 }
 
 #[cfg(test)]
-#[path = "memo_test.rs"]
+#[path = "memo.test.rs"]
 mod tests;

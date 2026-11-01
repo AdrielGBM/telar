@@ -433,5 +433,5 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> LayoutItem for TabHost<T,
 }
 
 #[cfg(test)]
-#[path = "tabs_test.rs"]
+#[path = "tabs.test.rs"]
 mod tests;

@@ -101,5 +101,5 @@ pub fn system_locales_from_env() -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "system_preferences_test.rs"]
+#[path = "system_preferences.test.rs"]
 mod tests;

@@ -104,5 +104,5 @@ pub fn relative_slashed(path: &Path, base: &Path) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "library_test.rs"]
+#[path = "library.test.rs"]
 mod tests;

@@ -521,5 +521,5 @@ pub struct ReorderZoneProps {
 }
 
 #[cfg(test)]
-#[path = "reorder_zones_test.rs"]
+#[path = "reorder_zones.test.rs"]
 mod tests;

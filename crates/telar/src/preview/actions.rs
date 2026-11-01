@@ -212,5 +212,5 @@ optional_callbacks!(
 );
 
 #[cfg(test)]
-#[path = "actions_test.rs"]
+#[path = "actions.test.rs"]
 mod tests;

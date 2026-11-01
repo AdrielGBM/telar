@@ -197,5 +197,5 @@ fn stepper_button(
 }
 
 #[cfg(test)]
-#[path = "stepper_test.rs"]
+#[path = "stepper.test.rs"]
 mod tests;

@@ -36,12 +36,12 @@ ureq = { workspace = true }
 
 [[test]]
 name = "rsx_library"
-path = "src/rsx_library_test.rs"
+path = "src/rsx_library.test.rs"
 
 [[test]]
 name = "workshop_export"
-path = "src/workshop_export_test.rs"
+path = "src/workshop_export.test.rs"
 
 [[test]]
 name = "workshop_audit"
-path = "src/workshop_audit_test.rs"
+path = "src/workshop_audit.test.rs"

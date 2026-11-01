@@ -294,5 +294,5 @@ impl EmbedInstance {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

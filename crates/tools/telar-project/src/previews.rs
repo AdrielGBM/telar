@@ -522,5 +522,5 @@ fn hosts_a_workshop(
 }
 
 #[cfg(test)]
-#[path = "previews_test.rs"]
+#[path = "previews.test.rs"]
 mod tests;

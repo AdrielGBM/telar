@@ -366,5 +366,5 @@ pub(crate) fn requested_focus_id(
 }
 
 #[cfg(test)]
-#[path = "accessibility_test.rs"]
+#[path = "accessibility.test.rs"]
 mod tests;

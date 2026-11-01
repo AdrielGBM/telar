@@ -62,24 +62,24 @@ web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "El
 
 [[test]]
 name = "reachable"
-path = "src/reachable_test.rs"
+path = "src/reachable.test.rs"
 
 [[test]]
 name = "audit"
-path = "src/audit_test.rs"
+path = "src/audit.test.rs"
 
 [[test]]
 name = "strings"
-path = "src/strings_test.rs"
+path = "src/strings.test.rs"
 
 [[test]]
 name = "strings_override"
-path = "src/strings_override_test.rs"
+path = "src/strings_override.test.rs"
 
 [[test]]
 name = "theme_extension"
-path = "src/theme_extension_test.rs"
+path = "src/theme_extension.test.rs"
 
 [[test]]
 name = "play"
-path = "src/play_test.rs"
+path = "src/play.test.rs"

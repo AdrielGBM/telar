@@ -193,5 +193,5 @@ fn glob_matches(glob: &[char], text: &[char]) -> bool {
 }
 
 #[cfg(test)]
-#[path = "options_test.rs"]
+#[path = "options.test.rs"]
 mod tests;

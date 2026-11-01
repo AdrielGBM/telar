@@ -119,5 +119,5 @@ fn make_hover(text: String) -> Hover {
 }
 
 #[cfg(test)]
-#[path = "hover_test.rs"]
+#[path = "hover.test.rs"]
 mod tests;

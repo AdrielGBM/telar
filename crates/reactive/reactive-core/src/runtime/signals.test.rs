@@ -181,7 +181,7 @@ fn touching_a_signal_inside_its_own_update_panics_naming_it() {
         "{message}"
     );
     assert!(
-        message.contains("signals_test.rs"),
+        message.contains("signals.test.rs"),
         "both call sites are the caller's, not the runtime's: {message}"
     );
 

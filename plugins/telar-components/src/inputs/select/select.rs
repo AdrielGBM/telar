@@ -138,5 +138,5 @@ pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "select_test.rs"]
+#[path = "select.test.rs"]
 mod tests;

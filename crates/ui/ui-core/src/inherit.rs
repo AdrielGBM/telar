@@ -18,7 +18,7 @@ pub struct Inherited {
 }
 
 impl Inherited {
-    /// `telar/src/text_style_baseline_test.rs` asserts these values against a real frame, so changing one is a decision.
+    /// `telar/src/text_style_baseline.test.rs` asserts these values against a real frame, so changing one is a decision.
     pub fn initial() -> Self {
         Self::from_tokens(&*use_theme_tokens())
     }
@@ -369,5 +369,5 @@ pub(crate) fn inherited_text_style_at(node: Option<NodeId>) -> TextStyle {
 }
 
 #[cfg(test)]
-#[path = "inherit_test.rs"]
+#[path = "inherit.test.rs"]
 mod tests;

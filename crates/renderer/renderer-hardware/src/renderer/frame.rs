@@ -3016,5 +3016,5 @@ fn plan_frame(
 }
 
 #[cfg(test)]
-#[path = "frame_test.rs"]
+#[path = "frame.test.rs"]
 mod tests;

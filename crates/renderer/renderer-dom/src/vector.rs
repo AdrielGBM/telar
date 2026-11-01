@@ -681,5 +681,5 @@ fn escape(value: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "vector_test.rs"]
+#[path = "vector.test.rs"]
 mod tests;

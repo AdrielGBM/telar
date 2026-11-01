@@ -562,5 +562,5 @@ impl fmt::Display for MatrixError {
 impl std::error::Error for MatrixError {}
 
 #[cfg(test)]
-#[path = "matrix_test.rs"]
+#[path = "matrix.test.rs"]
 mod tests;

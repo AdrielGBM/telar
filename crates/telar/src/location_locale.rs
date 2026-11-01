@@ -98,5 +98,5 @@ impl platform_core::LocaleFollower for Binding {
 }
 
 #[cfg(test)]
-#[path = "location_locale_test.rs"]
+#[path = "location_locale.test.rs"]
 mod tests;

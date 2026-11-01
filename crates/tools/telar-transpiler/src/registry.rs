@@ -970,7 +970,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "registry_test.rs"]
+#[path = "registry.test.rs"]
 mod tests;
 
 /// The roles an application may name on a box, and the variant each one is.
@@ -1048,11 +1048,11 @@ pub fn role_variant(name: &str) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "registry_role_test.rs"]
+#[path = "registry.role.test.rs"]
 mod role_tests;
 
 #[cfg(test)]
-#[path = "registry_vocabulary_test.rs"]
+#[path = "registry.vocabulary.test.rs"]
 mod vocabulary_tests;
 
 /// The names `consumes_keys:` takes, and the `ConsumedKeys` constant each one is.
@@ -1087,7 +1087,7 @@ pub fn key_constant(name: &str) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "registry_keys_test.rs"]
+#[path = "registry.keys.test.rs"]
 mod keys_tests;
 
 /// What a closure in a component prop value is handed to: the path written before a call's `(` (`Rc::new`, `std::array::from_fn`), or the name of a method called on a value (`.map`).
@@ -1217,5 +1217,5 @@ fn starts_uppercase(segment: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "registry_closure_test.rs"]
+#[path = "registry.closure.test.rs"]
 mod closure_tests;

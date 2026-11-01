@@ -326,5 +326,5 @@ fn follow_canvas_size(canvas: &Rc<SurfaceCanvas>, node: NodeId, style: LayoutSty
 }
 
 #[cfg(test)]
-#[path = "surface_frame_test.rs"]
+#[path = "surface_frame.test.rs"]
 mod tests;

@@ -79,5 +79,5 @@ impl Component for ScopeProvider {
 }
 
 #[cfg(test)]
-#[path = "theme_provider_test.rs"]
+#[path = "theme_provider.test.rs"]
 mod tests;

@@ -147,5 +147,5 @@ pub fn open_surface_title(app: &str, showing: &str) {
 }
 
 #[cfg(test)]
-#[path = "surface_title_test.rs"]
+#[path = "surface_title.test.rs"]
 mod tests;

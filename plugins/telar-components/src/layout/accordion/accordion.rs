@@ -176,5 +176,5 @@ impl Component for Accordion {
 }
 
 #[cfg(test)]
-#[path = "accordion_test.rs"]
+#[path = "accordion.test.rs"]
 mod tests;

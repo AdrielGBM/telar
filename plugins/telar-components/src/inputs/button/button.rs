@@ -186,5 +186,5 @@ fn label_color(variant: Variant, tone: Option<Color>) -> Option<Color> {
 }
 
 #[cfg(test)]
-#[path = "button_test.rs"]
+#[path = "button.test.rs"]
 mod tests;

@@ -392,5 +392,5 @@ impl<R: Clone + Eq + 'static> Drop for NavHost<R> {
 }
 
 #[cfg(test)]
-#[path = "host_test.rs"]
+#[path = "host.test.rs"]
 mod tests;

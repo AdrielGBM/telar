@@ -251,5 +251,5 @@ fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "sidebar_test.rs"]
+#[path = "sidebar.test.rs"]
 mod tests;

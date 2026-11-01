@@ -1468,17 +1468,17 @@ pub fn box_transform(
 }
 
 #[cfg(test)]
-#[path = "styled_container_test.rs"]
+#[path = "styled_container.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "styled_container_paint_state_test.rs"]
+#[path = "styled_container.paint_state.test.rs"]
 mod paint_state_tests;
 
 #[cfg(test)]
-#[path = "styled_container_transaction_test.rs"]
+#[path = "styled_container.transaction.test.rs"]
 mod transaction_tests;
 
 #[cfg(test)]
-#[path = "styled_container_hit_outset_test.rs"]
+#[path = "styled_container.hit_outset.test.rs"]
 mod hit_outset_tests;

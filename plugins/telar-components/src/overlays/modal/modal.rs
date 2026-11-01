@@ -228,5 +228,5 @@ fn card_paint(color: &Reactive<Color>) -> RectStyle {
 }
 
 #[cfg(test)]
-#[path = "modal_test.rs"]
+#[path = "modal.test.rs"]
 mod tests;

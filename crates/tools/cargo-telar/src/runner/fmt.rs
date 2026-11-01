@@ -203,5 +203,5 @@ fn display(path: &Path) -> String {
 }
 
 #[cfg(test)]
-#[path = "fmt_test.rs"]
+#[path = "fmt.test.rs"]
 mod tests;

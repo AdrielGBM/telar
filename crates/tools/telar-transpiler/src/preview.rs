@@ -1051,5 +1051,5 @@ fn axis_expr(axis: &MatrixAxis) -> String {
 }
 
 #[cfg(test)]
-#[path = "preview_test.rs"]
+#[path = "preview.test.rs"]
 mod tests;

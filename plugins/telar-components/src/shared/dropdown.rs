@@ -449,5 +449,5 @@ fn panel_rect_style() -> RectStyle {
 }
 
 #[cfg(test)]
-#[path = "dropdown_test.rs"]
+#[path = "dropdown.test.rs"]
 mod tests;

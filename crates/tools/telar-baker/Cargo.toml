@@ -35,16 +35,16 @@ image = { workspace = true }
 
 [[test]]
 name = "formats"
-path = "src/formats_test.rs"
+path = "src/formats.test.rs"
 
 [[test]]
 name = "icon_bake"
-path = "src/icon_bake_test.rs"
+path = "src/icon_bake.test.rs"
 
 [[test]]
 name = "library_icons"
-path = "src/library_icons_test.rs"
+path = "src/library_icons.test.rs"
 
 [[test]]
 name = "rust_icons"
-path = "src/rust_icons_test.rs"
+path = "src/rust_icons.test.rs"

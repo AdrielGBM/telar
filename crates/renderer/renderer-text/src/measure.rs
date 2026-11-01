@@ -114,5 +114,5 @@ pub fn font_family_available(family: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "measure_test.rs"]
+#[path = "measure.test.rs"]
 mod tests;

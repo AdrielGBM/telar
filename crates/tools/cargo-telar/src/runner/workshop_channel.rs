@@ -275,7 +275,7 @@ fn answers(address: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "workshop_channel_test.rs"]
+#[path = "workshop_channel.test.rs"]
 mod tests;
 
 /// A child forked while a lock is held keeps it until it execs, so a test that expects a lock to be free again takes the read side and every test that starts a process takes the write side.

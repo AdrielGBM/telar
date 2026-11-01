@@ -129,5 +129,5 @@ fn line_start_offsets(source: &str) -> Vec<usize> {
 
 /// A byte offset within `source` → LSP `(line, UTF-16 col)`.
 #[cfg(test)]
-#[path = "format_test.rs"]
+#[path = "format.test.rs"]
 mod tests;

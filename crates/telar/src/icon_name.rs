@@ -96,5 +96,5 @@ macro_rules! icon {
 }
 
 #[cfg(test)]
-#[path = "icon_name_test.rs"]
+#[path = "icon_name.test.rs"]
 mod tests;

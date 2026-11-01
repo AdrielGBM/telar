@@ -623,5 +623,5 @@ fn strip_ansi(text: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "diagnostics_test.rs"]
+#[path = "diagnostics.test.rs"]
 mod tests;

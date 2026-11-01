@@ -13,5 +13,5 @@ pub fn now<F>(f: F) -> F {
 }
 
 #[cfg(test)]
-#[path = "closure_test.rs"]
+#[path = "closure.test.rs"]
 mod tests;

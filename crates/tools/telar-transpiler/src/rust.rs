@@ -665,5 +665,5 @@ impl<'ast, N: Fn(&Ident) -> String, F: FnMut(&Ident, Read)> Visit<'ast> for Scop
 }
 
 #[cfg(test)]
-#[path = "rust_test.rs"]
+#[path = "rust.test.rs"]
 mod tests;

@@ -325,9 +325,9 @@ fn ser_str_list(items: &[String]) -> String {
         .join(", ")
 }
 #[cfg(test)]
-#[path = "catalog_test.rs"]
+#[path = "catalog.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "catalog_plural_test.rs"]
+#[path = "catalog.plural.test.rs"]
 mod plural_tests;

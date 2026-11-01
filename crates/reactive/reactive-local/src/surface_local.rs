@@ -303,5 +303,5 @@ impl<T> Copy for SurfaceSlot<T> {}
 #[cfg(test)]
 // The macro generates a whole Context API; this probe exercises the borrow paths and not all of it.
 #[allow(dead_code)]
-#[path = "surface_local_test.rs"]
+#[path = "surface_local.test.rs"]
 mod tests;

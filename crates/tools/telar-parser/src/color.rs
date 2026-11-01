@@ -35,5 +35,5 @@ pub fn parse_hex(hex: &str) -> Option<[u8; 4]> {
 }
 
 #[cfg(test)]
-#[path = "color_test.rs"]
+#[path = "color.test.rs"]
 mod tests;

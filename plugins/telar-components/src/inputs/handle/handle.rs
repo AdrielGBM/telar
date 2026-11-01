@@ -269,5 +269,5 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "handle_test.rs"]
+#[path = "handle.test.rs"]
 mod tests;

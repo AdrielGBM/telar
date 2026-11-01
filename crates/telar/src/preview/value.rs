@@ -215,5 +215,5 @@ impl<'de> Deserialize<'de> for ArgValue {
 }
 
 #[cfg(test)]
-#[path = "value_test.rs"]
+#[path = "value.test.rs"]
 mod tests;

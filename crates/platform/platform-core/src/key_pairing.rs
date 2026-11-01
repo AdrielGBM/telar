@@ -45,5 +45,5 @@ impl<C: PartialEq> KeyPairing<C> {
 }
 
 #[cfg(test)]
-#[path = "key_pairing_test.rs"]
+#[path = "key_pairing.test.rs"]
 mod tests;

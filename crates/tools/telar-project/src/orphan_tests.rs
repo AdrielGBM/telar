@@ -2,9 +2,11 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::collect_files_by_ext;
 
-/// Every `*_test.rs` under `package_dir/src` that nothing compiles, each said as a warning naming the file and the two ways to wire it.
+const TEST_SUFFIX: &str = ".test.rs";
+
+/// Every `*.test.rs` under `package_dir/src` that nothing compiles, each said as a warning naming the file and the two ways to wire it.
 ///
-/// Module discovery never declares a `*_test.rs` (see `is_rust_module_file`), so a test file is compiled only when a module includes it through `#[path]` or a Cargo target names it. A file neither does is skipped by rustc without a word, and the tests in it never run.
+/// Module discovery never declares a `*.test.rs`, whose name is no identifier, so a test file is compiled only when a module includes it through `#[path]` or a Cargo target names it. A file neither does is skipped by rustc without a word, and the tests in it never run.
 pub fn orphan_test_warnings(package_dir: &Path) -> Vec<String> {
     let src_dir = package_dir.join("src");
     let sources = collect_files_by_ext(&src_dir, &["rs"], &|name| !name.starts_with('.'));
@@ -32,7 +34,7 @@ pub fn orphan_test_warnings(package_dir: &Path) -> Vec<String> {
 fn is_test_file(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
-        .is_some_and(|name| name.ends_with("_test.rs"))
+        .is_some_and(|name| name.ends_with(TEST_SUFFIX))
 }
 
 fn orphan_warning(package_dir: &Path, test: &Path) -> String {
@@ -42,7 +44,7 @@ fn orphan_warning(package_dir: &Path, test: &Path) -> String {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or_default();
-    let module = file_name.trim_end_matches("_test.rs");
+    let module = file_name.split('.').next().unwrap_or_default();
     format!(
         "{shown} is compiled by nothing, so its tests never run: add `#[cfg(test)] #[path = \"{file_name}\"] mod tests;` to {module}.rs, or a `[[test]]` target with `path = \"{shown}\"` to Cargo.toml"
     )
@@ -147,5 +149,5 @@ fn normalized(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "orphan_tests_test.rs"]
+#[path = "orphan_tests.test.rs"]
 mod tests;

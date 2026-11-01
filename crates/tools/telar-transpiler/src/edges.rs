@@ -192,5 +192,5 @@ pub fn collect(
 }
 
 #[cfg(test)]
-#[path = "edges_test.rs"]
+#[path = "edges.test.rs"]
 mod tests;

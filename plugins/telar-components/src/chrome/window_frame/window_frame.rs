@@ -330,5 +330,5 @@ impl SurfaceFrameStyle {
 }
 
 #[cfg(test)]
-#[path = "window_frame_test.rs"]
+#[path = "window_frame.test.rs"]
 mod tests;

@@ -706,5 +706,5 @@ impl<T: PartialEq> Row<T> {
 }
 
 #[cfg(test)]
-#[path = "canvas_toolbar_test.rs"]
+#[path = "canvas_toolbar.test.rs"]
 mod tests;

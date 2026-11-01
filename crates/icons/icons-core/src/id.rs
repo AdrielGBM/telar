@@ -116,5 +116,5 @@ fn is_iconify_word(word: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "id_test.rs"]
+#[path = "id.test.rs"]
 mod tests;

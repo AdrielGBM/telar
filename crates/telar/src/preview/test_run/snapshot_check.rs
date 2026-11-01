@@ -115,5 +115,5 @@ fn changed(result: &SnapshotResult) -> String {
 }
 
 #[cfg(test)]
-#[path = "snapshot_check_test.rs"]
+#[path = "snapshot_check.test.rs"]
 mod tests;

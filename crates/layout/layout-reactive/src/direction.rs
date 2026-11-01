@@ -36,5 +36,5 @@ pub fn current_direction() -> Direction {
 }
 
 #[cfg(test)]
-#[path = "direction_test.rs"]
+#[path = "direction.test.rs"]
 mod tests;

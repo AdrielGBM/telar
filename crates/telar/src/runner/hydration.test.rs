@@ -5,7 +5,7 @@ use telar_project::{Preferences, PrerenderState, STATE_ELEMENT_ID, STATE_VERSION
 
 use super::Hydration;
 
-/// The state the browser half is tested reading (`platform-web`'s `served_test.rs`).
+/// The state the browser half is tested reading (`platform-web`'s `served.test.rs`).
 const READ_BY_THE_BROWSER: &str =
     include_str!("../../../platform/platform-web/src/served_state_fixture.json");
 

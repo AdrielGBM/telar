@@ -548,5 +548,5 @@ home
 "#;
 
 #[cfg(test)]
-#[path = "new_test.rs"]
+#[path = "new.test.rs"]
 mod tests;

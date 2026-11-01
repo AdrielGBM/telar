@@ -532,5 +532,5 @@ impl Component for Text {
 impl_leaf_widget!(Text);
 
 #[cfg(test)]
-#[path = "text_test.rs"]
+#[path = "text.test.rs"]
 mod tests;

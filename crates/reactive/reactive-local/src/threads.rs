@@ -201,5 +201,5 @@ impl Drop for JoinTheRest<'_, '_> {
 }
 
 #[cfg(test)]
-#[path = "threads_test.rs"]
+#[path = "threads.test.rs"]
 mod tests;

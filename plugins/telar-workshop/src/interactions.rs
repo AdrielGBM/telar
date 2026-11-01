@@ -180,5 +180,5 @@ pub(crate) fn drive(
 }
 
 #[cfg(test)]
-#[path = "interactions_test.rs"]
+#[path = "interactions.test.rs"]
 mod tests;

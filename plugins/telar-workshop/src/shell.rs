@@ -279,5 +279,5 @@ fn area(
 }
 
 #[cfg(test)]
-#[path = "shell_test.rs"]
+#[path = "shell.test.rs"]
 mod tests;

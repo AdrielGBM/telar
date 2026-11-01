@@ -29,7 +29,7 @@ const AXE: &str = include_str!(env!(
     "TELAR_AXE_CORE names axe-core's script; the repository's dev shell sets it, so run inside `nix develop`"
 ));
 
-/// What the audit runs: the rules a WCAG 2.2 AA review checks, and the best practices beside them, shared with the audit of the exported workshop (`cargo-telar/src/workshop_audit_test.rs`).
+/// What the audit runs: the rules a WCAG 2.2 AA review checks, and the best practices beside them, shared with the audit of the exported workshop (`cargo-telar/src/workshop_audit.test.rs`).
 ///
 /// `region` asks that a whole page sit inside landmarks, and the fixture is one fragment of a page rather than a page.
 const OPTIONS: &str = include_str!("../../../crates/renderer/renderer-dom/axe.json");
@@ -96,7 +96,7 @@ fn stateful_control(
 
 /// One of everything an application builds most of its screens from.
 ///
-/// `platform-desktop/src/accessibility_test.rs` builds the same screen from `ui-core` primitives standing in for the catalogue's button, field and checkbox, so a change here is mirrored there.
+/// `platform-desktop/src/accessibility.test.rs` builds the same screen from `ui-core` primitives standing in for the catalogue's button, field and checkbox, so a change here is mirrored there.
 /// A scrub field and a select, each in a box the application named: the box is the only name either control has.
 fn labelled_fields() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let speed = scrub_field(ScrubFieldProps::props().label("X").build())?;

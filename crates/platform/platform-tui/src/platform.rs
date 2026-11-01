@@ -222,5 +222,5 @@ impl Reading {
 }
 
 #[cfg(test)]
-#[path = "platform_test.rs"]
+#[path = "platform.test.rs"]
 mod tests;

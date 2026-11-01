@@ -98,5 +98,5 @@ fn axis_items(axis: &Axis, words: &[&str]) -> TokenStream2 {
 }
 
 #[cfg(test)]
-#[path = "vocabulary_test.rs"]
+#[path = "vocabulary.test.rs"]
 mod tests;

@@ -112,5 +112,5 @@ fn probe_text(base: &str, paths: &[String]) -> (String, Vec<usize>) {
 }
 
 #[cfg(test)]
-#[path = "exports_test.rs"]
+#[path = "exports.test.rs"]
 mod tests;

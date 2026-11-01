@@ -97,5 +97,5 @@ fn falling_back(family: FontFamily) -> FontFamily {
 }
 
 #[cfg(test)]
-#[path = "surface_font_test.rs"]
+#[path = "surface_font.test.rs"]
 mod tests;

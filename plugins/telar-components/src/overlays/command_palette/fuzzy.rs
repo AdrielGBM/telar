@@ -140,5 +140,5 @@ fn byte_ranges(hay: &[(usize, char)], len: usize, matched: &[usize]) -> Vec<Rang
 }
 
 #[cfg(test)]
-#[path = "fuzzy_test.rs"]
+#[path = "fuzzy.test.rs"]
 mod tests;

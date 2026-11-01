@@ -282,5 +282,5 @@ fn fill() -> LayoutStyle {
 }
 
 #[cfg(test)]
-#[path = "canvas_test.rs"]
+#[path = "canvas.test.rs"]
 mod tests;

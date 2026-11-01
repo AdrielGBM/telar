@@ -455,5 +455,5 @@ impl TelarSection {
 }
 
 #[cfg(test)]
-#[path = "manifest_test.rs"]
+#[path = "manifest.test.rs"]
 mod tests;

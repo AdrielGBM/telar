@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use platform_core::{Event, EventHandler, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
-#[path = "nav_test.rs"]
+#[path = "nav.test.rs"]
 mod nav;
 
 use telar::{AppPathsProvider, LocalApp, NoPaths, build_surface_handler};

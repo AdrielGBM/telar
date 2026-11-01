@@ -125,5 +125,5 @@ impl PreferencesTracker {
 }
 
 #[cfg(test)]
-#[path = "tracker_test.rs"]
+#[path = "tracker.test.rs"]
 mod tests;

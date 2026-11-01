@@ -392,5 +392,5 @@ pub(crate) fn text_with(key: &str, args: &[(&str, &str)]) -> String {
 }
 
 #[cfg(test)]
-#[path = "strings_catalog_test.rs"]
+#[path = "strings.catalog.test.rs"]
 mod tests;

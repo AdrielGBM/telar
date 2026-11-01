@@ -174,5 +174,5 @@ fn cut_to(text: &str, range: Range<usize>, budget: u16) -> (Range<usize>, u16) {
 }
 
 #[cfg(test)]
-#[path = "wrap_test.rs"]
+#[path = "wrap.test.rs"]
 mod tests;

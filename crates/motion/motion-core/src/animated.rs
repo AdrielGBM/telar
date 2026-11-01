@@ -283,5 +283,5 @@ impl<T: Lerp + 'static> Animated<T> {
 }
 
 #[cfg(test)]
-#[path = "animated_test.rs"]
+#[path = "animated.test.rs"]
 mod tests;

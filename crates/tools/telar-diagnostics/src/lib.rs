@@ -13,5 +13,5 @@ pub use diagnostic::{Diagnostic, Severity, Span};
 pub use semantic::{CatalogView, semantic_diagnostics};
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

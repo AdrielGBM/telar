@@ -137,5 +137,5 @@ fn canvas_alone(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutErro
 }
 
 #[cfg(test)]
-#[path = "app_test.rs"]
+#[path = "app.test.rs"]
 mod tests;

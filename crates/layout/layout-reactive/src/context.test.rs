@@ -61,7 +61,7 @@ fn a_cycle_in_the_parent_links_ends_the_climb_instead_of_spinning() {
     );
 }
 
-// Regression: taffy 0.11 measured a `max-width` box at its uncapped one-line intrinsic width, so this crate pinned every capped box to its resolved width and laid out a second time. That pass went with taffy 0.13; `telar/src/max_width_wrapping_test.rs` covers the same case through the real stack.
+// Regression: taffy 0.11 measured a `max-width` box at its uncapped one-line intrinsic width, so this crate pinned every capped box to its resolved width and laid out a second time. That pass went with taffy 0.13; `telar/src/max_width_wrapping.test.rs` covers the same case through the real stack.
 #[test]
 fn a_maxwidth_box_measures_its_content_at_the_capped_width() {
     reset_layout_runtime();

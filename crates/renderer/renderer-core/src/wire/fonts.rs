@@ -86,5 +86,5 @@ wire_enum!(ExclusiveFontsError {
 });
 
 #[cfg(test)]
-#[path = "fonts_test.rs"]
+#[path = "fonts.test.rs"]
 mod tests;

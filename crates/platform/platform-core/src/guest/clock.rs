@@ -57,5 +57,5 @@ fn shift(instant: Instant, nanos: i128) -> Instant {
 }
 
 #[cfg(test)]
-#[path = "clock_test.rs"]
+#[path = "clock.test.rs"]
 mod tests;

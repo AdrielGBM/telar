@@ -109,5 +109,5 @@ fn message(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "docs_test.rs"]
+#[path = "docs.test.rs"]
 mod tests;

@@ -14,5 +14,5 @@ pub fn marker() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "marker_test.rs"]
+#[path = "marker.test.rs"]
 mod tests;

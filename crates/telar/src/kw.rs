@@ -80,5 +80,5 @@ mod args {
 }
 
 #[cfg(test)]
-#[path = "kw_test.rs"]
+#[path = "kw.test.rs"]
 mod tests;

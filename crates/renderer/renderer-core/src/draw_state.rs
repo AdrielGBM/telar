@@ -136,5 +136,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "draw_state_test.rs"]
+#[path = "draw_state.test.rs"]
 mod tests;

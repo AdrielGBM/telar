@@ -226,5 +226,5 @@ impl Component for Container {
 }
 
 #[cfg(test)]
-#[path = "container_test.rs"]
+#[path = "container.test.rs"]
 mod tests;

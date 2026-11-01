@@ -334,5 +334,5 @@ pub(crate) fn glyph_for(icon: &str) -> &'static str {
 }
 
 #[cfg(test)]
-#[path = "icon_button_test.rs"]
+#[path = "icon_button.test.rs"]
 mod tests;

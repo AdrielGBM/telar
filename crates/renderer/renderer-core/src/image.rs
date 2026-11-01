@@ -205,5 +205,5 @@ pub fn premultiply_rgba(pixels: &mut [u8]) {
 }
 
 #[cfg(test)]
-#[path = "image_test.rs"]
+#[path = "image.test.rs"]
 mod tests;

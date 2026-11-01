@@ -168,5 +168,5 @@ pub fn rsx_source_and_map(
 }
 
 #[cfg(test)]
-#[path = "build_sync_test.rs"]
+#[path = "build_sync.test.rs"]
 mod tests;

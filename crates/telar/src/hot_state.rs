@@ -229,5 +229,5 @@ macro_rules! hot_signal_auto {
 }
 
 #[cfg(test)]
-#[path = "hot_state_test.rs"]
+#[path = "hot_state.test.rs"]
 mod tests;

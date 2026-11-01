@@ -306,5 +306,5 @@ pub fn title_bar(bar: StyledContainer, options: TitleBarOptions) -> StyledContai
 }
 
 #[cfg(test)]
-#[path = "title_bar_test.rs"]
+#[path = "title_bar.test.rs"]
 mod tests;

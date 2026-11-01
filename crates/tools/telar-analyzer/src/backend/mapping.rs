@@ -265,5 +265,5 @@ pub(crate) fn full_document_range(source: &str) -> Range {
 }
 
 #[cfg(test)]
-#[path = "mapping_test.rs"]
+#[path = "mapping.test.rs"]
 mod tests;

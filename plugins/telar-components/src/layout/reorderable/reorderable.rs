@@ -233,5 +233,5 @@ fn snapshot(rects: &Rc<RefCell<Vec<Option<RwSignal<Rect>>>>>) -> Vec<Rect> {
 }
 
 #[cfg(test)]
-#[path = "reorderable_test.rs"]
+#[path = "reorderable.test.rs"]
 mod tests;

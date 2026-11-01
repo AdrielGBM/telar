@@ -133,5 +133,5 @@ impl<E: Entries<Upper = UpperTable>> ForeignSurface for GuestSurface<E> {
 }
 
 #[cfg(test)]
-#[path = "guest_surface_test.rs"]
+#[path = "guest_surface.test.rs"]
 mod tests;

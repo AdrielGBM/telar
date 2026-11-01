@@ -159,5 +159,5 @@ pub fn resolve_base(var: Option<OsString>, home: Option<OsString>, fallback: &st
 }
 
 #[cfg(test)]
-#[path = "app_paths_test.rs"]
+#[path = "app_paths.test.rs"]
 mod tests;

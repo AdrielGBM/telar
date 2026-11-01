@@ -433,5 +433,5 @@ fn cycle<T: Clone + PartialEq>(options: &[T], current: &Option<T>) -> Option<T> 
 }
 
 #[cfg(test)]
-#[path = "keymap_test.rs"]
+#[path = "keymap.test.rs"]
 mod tests;

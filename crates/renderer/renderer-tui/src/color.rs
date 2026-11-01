@@ -226,5 +226,5 @@ pub fn to_ansi16(c: Rgb) -> u8 {
 }
 
 #[cfg(test)]
-#[path = "color_test.rs"]
+#[path = "color.test.rs"]
 mod tests;

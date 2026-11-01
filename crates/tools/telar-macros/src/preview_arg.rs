@@ -72,5 +72,5 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
 }
 
 #[cfg(test)]
-#[path = "preview_arg_test.rs"]
+#[path = "preview_arg.test.rs"]
 mod tests;

@@ -584,5 +584,5 @@ fn percent_decode(text: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "web_dev_test.rs"]
+#[path = "web_dev.test.rs"]
 mod tests;

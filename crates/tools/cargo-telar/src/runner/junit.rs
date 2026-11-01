@@ -165,5 +165,5 @@ fn escape(text: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "junit_test.rs"]
+#[path = "junit.test.rs"]
 mod tests;

@@ -107,9 +107,9 @@ fn glyph(name: IconName) -> Rc<dyn Fn() -> Option<Glyph>> {
 }
 
 #[cfg(test)]
-#[path = "icon_test.rs"]
+#[path = "icon.test.rs"]
 mod tests;
 
 #[cfg(doctest)]
-#[path = "icon_props_test.rs"]
+#[path = "icon.props.test.rs"]
 mod props_tests;

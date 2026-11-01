@@ -641,5 +641,5 @@ fn describe(node: &AccessNode) -> String {
 }
 
 #[cfg(all(test, feature = "previews"))]
-#[path = "a11y_test.rs"]
+#[path = "a11y.test.rs"]
 mod tests;

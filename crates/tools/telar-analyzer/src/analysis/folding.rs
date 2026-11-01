@@ -87,5 +87,5 @@ fn fold(start: usize, end: usize, kind: Option<FoldingRangeKind>) -> FoldingRang
 }
 
 #[cfg(test)]
-#[path = "folding_test.rs"]
+#[path = "folding.test.rs"]
 mod tests;

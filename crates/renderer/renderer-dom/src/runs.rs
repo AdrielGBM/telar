@@ -122,5 +122,5 @@ pub(crate) fn write(
 }
 
 #[cfg(test)]
-#[path = "runs_test.rs"]
+#[path = "runs.test.rs"]
 mod tests;

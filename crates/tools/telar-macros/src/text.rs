@@ -19,5 +19,5 @@ fn indentation(line: &str) -> usize {
 }
 
 #[cfg(test)]
-#[path = "text_test.rs"]
+#[path = "text.test.rs"]
 mod tests;

@@ -196,5 +196,5 @@ fn css_list(entries: impl Iterator<Item = (FontTag, String)>) -> String {
 }
 
 #[cfg(test)]
-#[path = "font_settings_test.rs"]
+#[path = "font_settings.test.rs"]
 mod tests;

@@ -180,5 +180,5 @@ fn mistyped(span: Span) -> Error {
 }
 
 #[cfg(test)]
-#[path = "eval_test.rs"]
+#[path = "eval.test.rs"]
 mod tests;

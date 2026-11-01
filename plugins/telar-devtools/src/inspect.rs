@@ -362,5 +362,5 @@ fn branches(nodes: &[SegmentNodeInfo]) -> impl Iterator<Item = u64> + '_ {
 }
 
 #[cfg(test)]
-#[path = "inspect_test.rs"]
+#[path = "inspect.test.rs"]
 mod tests;

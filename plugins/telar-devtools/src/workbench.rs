@@ -230,5 +230,5 @@ pub fn workbench_fill() -> LayoutStyle {
 }
 
 #[cfg(test)]
-#[path = "workbench_test.rs"]
+#[path = "workbench.test.rs"]
 mod tests;

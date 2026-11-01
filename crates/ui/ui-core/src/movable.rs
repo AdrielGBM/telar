@@ -274,5 +274,5 @@ impl Drop for MovableOutlet {
 }
 
 #[cfg(test)]
-#[path = "movable_test.rs"]
+#[path = "movable.test.rs"]
 mod tests;

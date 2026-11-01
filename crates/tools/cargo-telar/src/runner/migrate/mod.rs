@@ -9,5 +9,5 @@ pub(crate) fn run_migrate_cmd(_args: MigrateArgs) {
 }
 
 #[cfg(test)]
-#[path = "migrate_test.rs"]
+#[path = "migrate.test.rs"]
 mod tests;

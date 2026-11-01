@@ -239,19 +239,19 @@ carried from one field to the next. A document target reads the caret off the fi
 
 ## Tests
 
-`crates/renderer/renderer-dom/src/keyboard_test.rs` checks this contract in a browser: which keys are
+`crates/renderer/renderer-dom/src/keyboard.test.rs` checks this contract in a browser: which keys are
 prevented where, which boxes are Tab stops, that an unconsumed Tab never reaches the app, that a native focus
 move is reported, that focus leaving for the page or for a link inside a paragraph clears the app's, and which
-focused elements keep the browser's outline. `plugins/telar-components/src/audit_test.rs` checks that a
+focused elements keep the browser's outline. `plugins/telar-components/src/audit.test.rs` checks that a
 keyboard-focused control wears Telar's ring in the document (see [accessibility.md](accessibility.md#audits)).
-`crates/renderer/renderer-dom/src/controls_test.rs` sends Space and Enter to a switch and a toggle button
+`crates/renderer/renderer-dom/src/controls.test.rs` sends Space and Enter to a switch and a toggle button
 written as boxes with a role, and checks that the page keeps neither, that the platform hands each to the
-box, and that its state attribute follows. `crates/renderer/renderer-dom/src/composition_test.rs` replays the
+box, and that its state attribute follows. `crates/renderer/renderer-dom/src/composition.test.rs` replays the
 composition events each browser sends and checks where the entry stands, that a composed word reaches the
 field as steps and one commit, and that it stays with the field it began in.
-`crates/renderer/renderer-dom/src/text_area_entry_test.rs` checks the entry stands on the row a wrapped area
-has its caret on. `ui-core`'s `input_test.rs`, `text_area_test.rs`, `composition_test.rs` and
-`text_input_test.rs` cover what a field does with each `Ime` event and the caret it reports.
+`crates/renderer/renderer-dom/src/text_area_entry.test.rs` checks the entry stands on the row a wrapped area
+has its caret on. `ui-core`'s `input.test.rs`, `text_area.test.rs`, `composition.test.rs` and
+`text_input.test.rs` cover what a field does with each `Ime` event and the caret it reports.
 
 None of these press a real key. A synthetic `KeyboardEvent` is untrusted, so the browser runs no default
 action for it: no Tab walk, no scroll, no activation. Trusted input in an automated browser comes only from

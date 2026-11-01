@@ -161,5 +161,5 @@ impl Entry {
 }
 
 #[cfg(test)]
-#[path = "message_test.rs"]
+#[path = "message.test.rs"]
 mod tests;

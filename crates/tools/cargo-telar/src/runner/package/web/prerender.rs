@@ -317,5 +317,5 @@ pub(super) fn write_page(
 }
 
 #[cfg(test)]
-#[path = "prerender_test.rs"]
+#[path = "prerender.test.rs"]
 mod tests;

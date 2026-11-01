@@ -247,5 +247,5 @@ fn string_spans(body: &str) -> Vec<std::ops::Range<usize>> {
 }
 
 #[cfg(test)]
-#[path = "semantic_test.rs"]
+#[path = "semantic.test.rs"]
 mod tests;

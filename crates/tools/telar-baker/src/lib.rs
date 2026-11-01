@@ -65,5 +65,5 @@ pub fn baker_for_id(id: &str) -> Option<&'static dyn Baker> {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

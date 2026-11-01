@@ -202,5 +202,5 @@ impl<T> fmt::Debug for Handle<T> {
 }
 
 #[cfg(test)]
-#[path = "lent_test.rs"]
+#[path = "lent.test.rs"]
 mod tests;

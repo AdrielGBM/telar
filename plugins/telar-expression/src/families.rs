@@ -363,5 +363,5 @@ pub fn color(registry: &mut Registry) {
 }
 
 #[cfg(test)]
-#[path = "families_test.rs"]
+#[path = "families.test.rs"]
 mod tests;

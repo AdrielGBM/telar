@@ -68,28 +68,28 @@ wasm-bindgen-test = { workspace = true }
 
 [[test]]
 name = "preferences"
-path = "src/preferences_test.rs"
+path = "src/preferences.test.rs"
 
 [[test]]
 name = "location"
-path = "src/location_test.rs"
+path = "src/location.test.rs"
 
 [[test]]
 name = "language"
-path = "src/language_test.rs"
+path = "src/language.test.rs"
 
 [[test]]
 name = "safe_area"
-path = "src/safe_area_test.rs"
+path = "src/safe_area.test.rs"
 
 [[test]]
 name = "title"
-path = "src/title_test.rs"
+path = "src/title.test.rs"
 
 [[test]]
 name = "page_hidden"
-path = "src/page_hidden_test.rs"
+path = "src/page_hidden.test.rs"
 
 [[test]]
 name = "idle"
-path = "src/idle_test.rs"
+path = "src/idle.test.rs"

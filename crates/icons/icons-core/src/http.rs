@@ -155,5 +155,5 @@ impl IconSource for HttpProvider {
 }
 
 #[cfg(test)]
-#[path = "http_test.rs"]
+#[path = "http.test.rs"]
 mod tests;

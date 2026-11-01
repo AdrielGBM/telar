@@ -216,5 +216,5 @@ fn gzip(bytes: &[u8]) -> Option<Vec<u8>> {
 }
 
 #[cfg(test)]
-#[path = "assets_test.rs"]
+#[path = "assets.test.rs"]
 mod tests;

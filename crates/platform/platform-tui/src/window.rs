@@ -100,5 +100,5 @@ pub(crate) fn title_sequence(title: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "window_test.rs"]
+#[path = "window.test.rs"]
 mod tests;

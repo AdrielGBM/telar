@@ -219,5 +219,5 @@ fn arabic(n: u64) -> PluralCategory {
 }
 
 #[cfg(test)]
-#[path = "plural_test.rs"]
+#[path = "plural.test.rs"]
 mod tests;

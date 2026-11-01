@@ -388,5 +388,5 @@ impl Component for Presence {
 }
 
 #[cfg(test)]
-#[path = "presence_test.rs"]
+#[path = "presence.test.rs"]
 mod tests;

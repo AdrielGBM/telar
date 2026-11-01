@@ -584,5 +584,5 @@ fn fold(key: Key) -> Key {
 }
 
 #[cfg(test)]
-#[path = "chord_test.rs"]
+#[path = "chord.test.rs"]
 mod tests;

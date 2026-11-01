@@ -212,5 +212,5 @@ impl std::fmt::Display for ExclusiveFontsError {
 impl std::error::Error for ExclusiveFontsError {}
 
 #[cfg(test)]
-#[path = "font_config_test.rs"]
+#[path = "font_config.test.rs"]
 mod tests;

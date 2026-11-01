@@ -265,5 +265,5 @@ fn text_into(out: &mut String, text: &str) {
 }
 
 #[cfg(test)]
-#[path = "html_test.rs"]
+#[path = "html.test.rs"]
 mod tests;

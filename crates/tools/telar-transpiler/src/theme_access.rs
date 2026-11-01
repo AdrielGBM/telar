@@ -87,5 +87,5 @@ fn unknown_token_message(name: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "theme_access_test.rs"]
+#[path = "theme_access.test.rs"]
 mod tests;

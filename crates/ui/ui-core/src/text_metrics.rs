@@ -158,5 +158,5 @@ pub(crate) fn fitted_font_size(
 }
 
 #[cfg(test)]
-#[path = "text_metrics_test.rs"]
+#[path = "text_metrics.test.rs"]
 mod tests;

@@ -295,7 +295,7 @@ fn write_color(out: &mut Vec<u8>, c: Rgb, foreground: bool, depth: ColorDepth) {
 }
 
 #[cfg(test)]
-#[path = "buffer_test.rs"]
+#[path = "buffer.test.rs"]
 mod tests;
 
 /// A model of what a terminal ends up showing, built by replaying the bytes [`CellBuffer::diff_into`] wrote.
@@ -382,5 +382,5 @@ impl TerminalModel {
 }
 
 #[cfg(test)]
-#[path = "buffer_replay_test.rs"]
+#[path = "buffer.replay.test.rs"]
 mod replay_tests;

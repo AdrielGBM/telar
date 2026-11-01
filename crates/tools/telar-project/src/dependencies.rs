@@ -98,5 +98,5 @@ fn feature_list(value: &toml::Value) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "dependencies_test.rs"]
+#[path = "dependencies.test.rs"]
 mod tests;

@@ -75,5 +75,5 @@ impl VisualLines {
 }
 
 #[cfg(test)]
-#[path = "visual_lines_test.rs"]
+#[path = "visual_lines.test.rs"]
 mod tests;

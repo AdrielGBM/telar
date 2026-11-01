@@ -321,5 +321,5 @@ impl DynHost {
 }
 
 #[cfg(test)]
-#[path = "child_host_test.rs"]
+#[path = "child_host.test.rs"]
 mod tests;

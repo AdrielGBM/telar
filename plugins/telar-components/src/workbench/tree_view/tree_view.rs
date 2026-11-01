@@ -716,5 +716,5 @@ fn row_paint(tree: &Tree, id: &str, color: &Reactive<Color>, hovered: bool) -> R
 }
 
 #[cfg(test)]
-#[path = "tree_view_test.rs"]
+#[path = "tree_view.test.rs"]
 mod tests;

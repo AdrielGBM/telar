@@ -740,5 +740,5 @@ fn origin_expr(value: &str, theme: ThemeAccess) -> String {
 }
 
 #[cfg(test)]
-#[path = "container_test.rs"]
+#[path = "container.test.rs"]
 mod tests;

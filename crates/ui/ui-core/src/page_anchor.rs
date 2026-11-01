@@ -79,5 +79,5 @@ fn reveal(node: NodeId) -> bool {
 }
 
 #[cfg(test)]
-#[path = "page_anchor_test.rs"]
+#[path = "page_anchor.test.rs"]
 mod tests;

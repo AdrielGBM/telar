@@ -33,5 +33,5 @@ pub fn expand(input: TokenStream2) -> syn::Result<TokenStream2> {
 }
 
 #[cfg(test)]
-#[path = "preview_id_test.rs"]
+#[path = "preview_id.test.rs"]
 mod tests;

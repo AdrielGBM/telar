@@ -886,7 +886,7 @@ pub(crate) fn forces_child_vec(node: &ViewNode) -> bool {
 }
 
 #[cfg(test)]
-#[path = "view_test.rs"]
+#[path = "view.test.rs"]
 mod tests;
 
 /// The expression inside a redundant paren pair, or `None` when the parens carry meaning.

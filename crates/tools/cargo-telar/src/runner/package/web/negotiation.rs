@@ -111,5 +111,5 @@ location.replace({base} + locale + "/" + location.search + location.hash);
 }
 
 #[cfg(test)]
-#[path = "negotiation_test.rs"]
+#[path = "negotiation.test.rs"]
 mod tests;

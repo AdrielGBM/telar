@@ -145,5 +145,5 @@ fn push(
 }
 
 #[cfg(test)]
-#[path = "semantic_tokens_test.rs"]
+#[path = "semantic_tokens.test.rs"]
 mod tests;

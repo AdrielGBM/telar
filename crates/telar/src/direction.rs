@@ -26,5 +26,5 @@ pub fn follow_locale_direction() {
 }
 
 #[cfg(test)]
-#[path = "direction_test.rs"]
+#[path = "direction.test.rs"]
 mod tests;

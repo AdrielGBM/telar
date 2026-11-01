@@ -1042,5 +1042,5 @@ impl App for SandboxRoot {
 }
 
 #[cfg(test)]
-#[path = "app_test.rs"]
+#[path = "app.test.rs"]
 mod tests;

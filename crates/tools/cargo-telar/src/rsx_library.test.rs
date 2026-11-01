@@ -247,7 +247,7 @@ telar-icons = {{ path = {telar_icons} }}
         ("src/lib.rs", CONSUMER_LIB_RS),
         ("src/theme.rs", CONSUMER_THEME_RS),
         ("src/welcome.rsx", CONSUMER_WELCOME_RSX),
-        ("src/lib_test.rs", CONSUMER_LIB_TEST_RS),
+        ("src/lib.test.rs", CONSUMER_LIB_TEST_RS),
     ];
     for (relative, contents) in files {
         let path = dir.join(relative);
@@ -271,7 +271,7 @@ greeting = "Welcome aboard, {name}!"
 const CONSUMER_LIB_RS: &str = r#"telar::rsx_modules!();
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;
 "#;
 

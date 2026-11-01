@@ -200,5 +200,5 @@ fn clear_button(
 }
 
 #[cfg(test)]
-#[path = "search_field_test.rs"]
+#[path = "search_field.test.rs"]
 mod tests;

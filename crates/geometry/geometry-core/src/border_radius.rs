@@ -81,5 +81,5 @@ impl Default for BorderRadius {
 }
 
 #[cfg(test)]
-#[path = "border_radius_test.rs"]
+#[path = "border_radius.test.rs"]
 mod tests;

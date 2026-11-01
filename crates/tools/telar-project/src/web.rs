@@ -151,5 +151,5 @@ fn is_base_path(base: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "web_test.rs"]
+#[path = "web.test.rs"]
 mod tests;

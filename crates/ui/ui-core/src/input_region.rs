@@ -860,5 +860,5 @@ pub(crate) fn withhold(event: &Event, route: impl FnOnce(&Event) -> EventResult)
 }
 
 #[cfg(test)]
-#[path = "input_region_test.rs"]
+#[path = "input_region.test.rs"]
 mod tests;

@@ -402,5 +402,5 @@ fn copy_button(
 }
 
 #[cfg(test)]
-#[path = "code_view_test.rs"]
+#[path = "code_view.test.rs"]
 mod tests;

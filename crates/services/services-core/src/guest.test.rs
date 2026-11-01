@@ -889,7 +889,7 @@ fn collect_sources(root: &Path, dir: &Path, found: &mut Vec<String>) {
         let name = entry.file_name().to_string_lossy().into_owned();
         if path.is_dir() {
             collect_sources(root, &path, found);
-        } else if name.ends_with(".rs") && !name.ends_with("_test.rs") {
+        } else if name.ends_with(".rs") && !name.ends_with(".test.rs") {
             let relative = path.strip_prefix(root).expect("under the workspace root");
             found.push(relative.to_string_lossy().replace('\\', "/"));
         }

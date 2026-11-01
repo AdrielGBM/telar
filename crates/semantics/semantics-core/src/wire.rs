@@ -327,5 +327,5 @@ impl Wire for Semantics {
 }
 
 #[cfg(test)]
-#[path = "wire_test.rs"]
+#[path = "wire.test.rs"]
 mod tests;

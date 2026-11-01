@@ -388,5 +388,5 @@ fn print_summary(summary: &TestSummary) {
 }
 
 #[cfg(test)]
-#[path = "run_test.rs"]
+#[path = "run.test.rs"]
 mod tests;

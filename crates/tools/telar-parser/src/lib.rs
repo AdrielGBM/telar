@@ -46,5 +46,5 @@ pub fn parse(source: &str) -> Result<RsxDocument, ParseError> {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

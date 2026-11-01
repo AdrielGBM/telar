@@ -15,5 +15,5 @@ pub fn names_locale_settings(area: &[u16]) -> bool {
 }
 
 #[cfg(test)]
-#[path = "wide_test.rs"]
+#[path = "wide.test.rs"]
 mod tests;

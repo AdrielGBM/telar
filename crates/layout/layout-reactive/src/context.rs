@@ -1228,7 +1228,7 @@ fn report_dead_child(engine: &LayoutEngine, parent: NodeId, children: &[NodeId])
 }
 
 #[cfg(test)]
-#[path = "context_test.rs"]
+#[path = "context.test.rs"]
 mod tests;
 
 /// The CSS for what `node` was asked for, resolved against the direction in force and the active surface's size.
@@ -1273,5 +1273,5 @@ pub fn declared_css(node: NodeId) -> Option<layout_core::Css> {
 }
 
 #[cfg(test)]
-#[path = "context_sticky_test.rs"]
+#[path = "context.sticky.test.rs"]
 mod sticky_tests;

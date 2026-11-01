@@ -385,5 +385,5 @@ fn package_name(package_dir: &Path) -> String {
 }
 
 #[cfg(test)]
-#[path = "icons_test.rs"]
+#[path = "icons.test.rs"]
 mod tests;

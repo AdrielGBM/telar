@@ -68,5 +68,5 @@ pub fn translate_with_override(
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

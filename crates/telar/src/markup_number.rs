@@ -103,5 +103,5 @@ integer_props!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
 float_props!(f32, f64);
 
 #[cfg(test)]
-#[path = "markup_number_test.rs"]
+#[path = "markup_number.test.rs"]
 mod tests;

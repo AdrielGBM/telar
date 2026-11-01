@@ -194,5 +194,5 @@ impl fmt::Debug for Globals {
 }
 
 #[cfg(test)]
-#[path = "globals_test.rs"]
+#[path = "globals.test.rs"]
 mod tests;

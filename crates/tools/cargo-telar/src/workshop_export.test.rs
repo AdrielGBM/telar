@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 
 use telar_project::protocol::preview_location;
 
-#[path = "served_site_test.rs"]
+#[path = "served_site.test.rs"]
 mod served_site;
 
 use served_site::{repo_root, served_at};

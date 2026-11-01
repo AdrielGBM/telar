@@ -250,5 +250,5 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "slider_test.rs"]
+#[path = "slider.test.rs"]
 mod tests;

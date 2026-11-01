@@ -185,5 +185,5 @@ fn swatch_rect(color: Color, chosen: bool) -> RectStyle {
 }
 
 #[cfg(test)]
-#[path = "swatches_test.rs"]
+#[path = "swatches.test.rs"]
 mod tests;

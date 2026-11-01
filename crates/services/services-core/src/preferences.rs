@@ -196,5 +196,5 @@ fn parse(text: &str) -> BTreeMap<String, String> {
 }
 
 #[cfg(test)]
-#[path = "preferences_test.rs"]
+#[path = "preferences.test.rs"]
 mod tests;

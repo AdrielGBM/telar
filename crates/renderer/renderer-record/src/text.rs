@@ -481,5 +481,5 @@ pub(crate) fn num(value: f32) -> String {
 }
 
 #[cfg(test)]
-#[path = "text_test.rs"]
+#[path = "text.test.rs"]
 mod tests;

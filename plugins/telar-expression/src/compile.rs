@@ -546,5 +546,5 @@ impl Checker<'_> {
 }
 
 #[cfg(test)]
-#[path = "compile_test.rs"]
+#[path = "compile.test.rs"]
 mod tests;

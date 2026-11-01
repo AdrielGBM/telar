@@ -70,5 +70,5 @@ fn as_drawn(edge: ResizeEdge, direction: Direction) -> ResizeEdge {
 }
 
 #[cfg(test)]
-#[path = "window_edges_test.rs"]
+#[path = "window_edges.test.rs"]
 mod tests;

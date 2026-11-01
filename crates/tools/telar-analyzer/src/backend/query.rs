@@ -239,5 +239,5 @@ pub(crate) fn props_builder_offset(
 }
 
 #[cfg(test)]
-#[path = "query_test.rs"]
+#[path = "query.test.rs"]
 mod tests;

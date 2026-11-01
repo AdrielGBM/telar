@@ -352,5 +352,5 @@ fn parse_canvas_size(word: &str) -> Option<CanvasSize> {
 }
 
 #[cfg(test)]
-#[path = "route_test.rs"]
+#[path = "route.test.rs"]
 mod tests;

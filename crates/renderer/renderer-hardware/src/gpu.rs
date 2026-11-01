@@ -122,5 +122,5 @@ pub fn open() -> Result<SharedGpu, RendererError> {
 }
 
 #[cfg(test)]
-#[path = "gpu_test.rs"]
+#[path = "gpu.test.rs"]
 mod tests;

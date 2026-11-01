@@ -335,5 +335,5 @@ pub(crate) fn dependency_icons(
 }
 
 #[cfg(test)]
-#[path = "icon_dependencies_test.rs"]
+#[path = "icon_dependencies.test.rs"]
 mod tests;

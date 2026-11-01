@@ -125,5 +125,5 @@ impl Clicks {
 }
 
 #[cfg(test)]
-#[path = "text_edit_test.rs"]
+#[path = "text_edit.test.rs"]
 mod tests;

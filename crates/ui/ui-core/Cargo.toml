@@ -46,8 +46,8 @@ renderer-tui = { workspace = true }
 
 [[test]]
 name = "cell_focus"
-path = "src/cell_focus_test.rs"
+path = "src/cell_focus.test.rs"
 
 [[test]]
 name = "cell_text"
-path = "src/cell_text_test.rs"
+path = "src/cell_text.test.rs"

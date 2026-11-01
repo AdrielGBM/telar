@@ -230,5 +230,5 @@ impl Mapper {
 }
 
 #[cfg(test)]
-#[path = "map_test.rs"]
+#[path = "map.test.rs"]
 mod tests;

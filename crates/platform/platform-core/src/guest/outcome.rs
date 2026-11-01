@@ -96,5 +96,5 @@ pub(super) fn release_report() {
 }
 
 #[cfg(test)]
-#[path = "outcome_test.rs"]
+#[path = "outcome.test.rs"]
 mod tests;

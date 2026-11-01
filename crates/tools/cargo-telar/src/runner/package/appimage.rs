@@ -68,5 +68,5 @@ pub(crate) fn build_appimage(cargo_args: Vec<String>, config: TelarSection) -> !
 }
 
 #[cfg(test)]
-#[path = "appimage_test.rs"]
+#[path = "appimage.test.rs"]
 mod tests;

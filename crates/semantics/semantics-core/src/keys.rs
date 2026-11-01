@@ -187,5 +187,5 @@ impl Role {
 }
 
 #[cfg(test)]
-#[path = "keys_test.rs"]
+#[path = "keys.test.rs"]
 mod tests;

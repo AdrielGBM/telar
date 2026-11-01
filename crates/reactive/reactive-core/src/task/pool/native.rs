@@ -138,5 +138,5 @@ pub(crate) fn idle_and_spawned() -> (usize, usize) {
 }
 
 #[cfg(test)]
-#[path = "native_test.rs"]
+#[path = "native.test.rs"]
 mod tests;

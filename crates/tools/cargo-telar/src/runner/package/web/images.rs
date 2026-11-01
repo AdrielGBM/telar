@@ -116,5 +116,5 @@ pub(super) fn local_crates_in(
 }
 
 #[cfg(test)]
-#[path = "images_test.rs"]
+#[path = "images.test.rs"]
 mod tests;

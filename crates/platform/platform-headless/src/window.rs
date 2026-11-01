@@ -152,5 +152,5 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 #[cfg(test)]
-#[path = "window_test.rs"]
+#[path = "window.test.rs"]
 mod tests;

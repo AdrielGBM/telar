@@ -201,5 +201,5 @@ fn diagnostics(report: &str) -> (Vec<CodeSpan>, Vec<u32>) {
 }
 
 #[cfg(test)]
-#[path = "banner_test.rs"]
+#[path = "banner.test.rs"]
 mod tests;

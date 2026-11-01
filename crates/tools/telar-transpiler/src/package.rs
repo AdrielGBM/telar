@@ -323,10 +323,10 @@ fn write_error(path: &Path, result: std::io::Result<()>) -> Result<(), PackageEr
 }
 
 #[cfg(all(test, feature = "transpile"))]
-#[path = "package_test.rs"]
+#[path = "package.test.rs"]
 mod tests;
 
 /// The artifact's own tests live here rather than beside [`BuildIndex`](telar_project::BuildIndex): what they assert is whether an index still answers for sources it was written from, and producing one means running a real transpile.
 #[cfg(test)]
-#[path = "build_artifact_test.rs"]
+#[path = "build_artifact.test.rs"]
 mod artifact_tests;

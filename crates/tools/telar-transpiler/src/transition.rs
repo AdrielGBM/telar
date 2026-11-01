@@ -210,5 +210,5 @@ pub(crate) fn split_top_level_ws(s: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "transition_test.rs"]
+#[path = "transition.test.rs"]
 mod tests;

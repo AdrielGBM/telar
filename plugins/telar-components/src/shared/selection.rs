@@ -196,5 +196,5 @@ impl RowSelection {
 }
 
 #[cfg(test)]
-#[path = "selection_test.rs"]
+#[path = "selection.test.rs"]
 mod tests;

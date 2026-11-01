@@ -349,7 +349,7 @@ platform-android = { workspace = true, optional = true }
 platform-headless = { workspace = true }
 renderer-record = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
-# ships in every binary. Nothing here covers an asset transport any more: `src/http_assets_test.rs` moved to
+# ships in every binary. Nothing here covers an asset transport any more: `src/http_assets.test.rs` moved to
 # `telar-dynamic` along with the transport it exercises.
 telar = { path = ".", features = ["testing", "prerender", "previews"] }
 
@@ -369,121 +369,121 @@ web-sys = { workspace = true, features = ["History", "Location", "Window"] }
 
 [[test]]
 name = "component"
-path = "src/component_test.rs"
+path = "src/component.test.rs"
 
 [[test]]
 name = "damage"
-path = "src/damage_test.rs"
+path = "src/damage.test.rs"
 
 [[test]]
 name = "devtools_seam"
-path = "src/devtools_seam_test.rs"
+path = "src/devtools_seam.test.rs"
 
 [[test]]
 name = "frame_budget"
-path = "src/frame_budget_test.rs"
+path = "src/frame_budget.test.rs"
 
 [[test]]
 name = "guest_contract"
-path = "src/guest_contract_test.rs"
+path = "src/guest_contract.test.rs"
 required-features = ["dev", "shaper"]
 
 [[test]]
 name = "headless_multi_surface"
-path = "src/headless_multi_surface_test.rs"
+path = "src/headless_multi_surface.test.rs"
 
 [[test]]
 name = "headless_pixels"
-path = "src/headless_pixels_test.rs"
+path = "src/headless_pixels.test.rs"
 
 [[test]]
 name = "headless_spawn_task"
-path = "src/headless_spawn_task_test.rs"
+path = "src/headless_spawn_task.test.rs"
 
 [[test]]
 name = "hot_panic"
-path = "src/hot_panic_test.rs"
+path = "src/hot_panic.test.rs"
 required-features = ["dev"]
 
 [[test]]
 name = "installed_renderer"
-path = "src/installed_renderer_test.rs"
+path = "src/installed_renderer.test.rs"
 
 [[test]]
 name = "location_flow"
-path = "src/location_flow_test.rs"
+path = "src/location_flow.test.rs"
 
 [[test]]
 name = "preview_harness"
-path = "src/preview_harness_test.rs"
+path = "src/preview_harness.test.rs"
 
 [[test]]
 name = "preview_actions"
-path = "src/preview_actions_test.rs"
+path = "src/preview_actions.test.rs"
 
 [[test]]
 name = "preview_args"
-path = "src/preview_args_test.rs"
+path = "src/preview_args.test.rs"
 
 [[test]]
 name = "preview_rust"
-path = "src/preview_rust_test.rs"
+path = "src/preview_rust.test.rs"
 
 [[test]]
 name = "preview_snapshot"
-path = "src/preview_snapshot_test.rs"
+path = "src/preview_snapshot.test.rs"
 
 [[test]]
 name = "props_schema"
-path = "src/props_schema_test.rs"
+path = "src/props_schema.test.rs"
 
 [[test]]
 name = "prerender_flow"
-path = "src/prerender_flow_test.rs"
+path = "src/prerender_flow.test.rs"
 
 [[test]]
 name = "location_locale_flow"
-path = "src/location_locale_flow_test.rs"
+path = "src/location_locale_flow.test.rs"
 
 [[test]]
 name = "location_locale_web"
-path = "src/location_locale_web_test.rs"
+path = "src/location_locale_web.test.rs"
 
 [[test]]
 name = "local_tree_repaints"
-path = "src/local_tree_repaints_test.rs"
+path = "src/local_tree_repaints.test.rs"
 
 [[test]]
 name = "max_width_wrapping"
-path = "src/max_width_wrapping_test.rs"
+path = "src/max_width_wrapping.test.rs"
 
 [[test]]
 name = "path_lays_out"
-path = "src/path_lays_out_test.rs"
+path = "src/path_lays_out.test.rs"
 
 [[test]]
 name = "system_preferences_flow"
-path = "src/system_preferences_flow_test.rs"
+path = "src/system_preferences_flow.test.rs"
 
 [[test]]
 name = "surface_size_flow"
-path = "src/surface_size_flow_test.rs"
+path = "src/surface_size_flow.test.rs"
 
 [[test]]
 name = "surface_title_flow"
-path = "src/surface_title_flow_test.rs"
+path = "src/surface_title_flow.test.rs"
 
 [[test]]
 name = "text_style_baseline"
-path = "src/text_style_baseline_test.rs"
+path = "src/text_style_baseline.test.rs"
 
 [[test]]
 name = "texture_ui"
-path = "src/texture_ui_test.rs"
+path = "src/texture_ui.test.rs"
 
 [[test]]
 name = "theme_repaints"
-path = "src/theme_repaints_test.rs"
+path = "src/theme_repaints.test.rs"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

@@ -491,5 +491,5 @@ fn placed_bounds(placement: Transform, size: Size) -> Rect {
 }
 
 #[cfg(test)]
-#[path = "surface_canvas_test.rs"]
+#[path = "surface_canvas.test.rs"]
 mod tests;

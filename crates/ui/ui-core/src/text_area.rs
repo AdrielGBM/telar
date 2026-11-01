@@ -121,5 +121,5 @@ impl LeafWidget for TextArea {
 }
 
 #[cfg(test)]
-#[path = "text_area_test.rs"]
+#[path = "text_area.test.rs"]
 mod tests;

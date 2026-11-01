@@ -79,5 +79,5 @@ fn face_of(style: &TextStyle) -> TextStyle {
 }
 
 #[cfg(test)]
-#[path = "cap_band_test.rs"]
+#[path = "cap_band.test.rs"]
 mod tests;

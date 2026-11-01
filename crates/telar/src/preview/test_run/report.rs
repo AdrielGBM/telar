@@ -314,5 +314,5 @@ impl TestReport {
 }
 
 #[cfg(test)]
-#[path = "report_test.rs"]
+#[path = "report.test.rs"]
 mod tests;

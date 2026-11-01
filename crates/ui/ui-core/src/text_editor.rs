@@ -1111,5 +1111,5 @@ fn keep_in_view(scroll: f32, x: f32, width: f32, max: f32) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "text_editor_test.rs"]
+#[path = "text_editor.test.rs"]
 mod tests;

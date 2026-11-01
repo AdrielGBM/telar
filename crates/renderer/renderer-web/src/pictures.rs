@@ -124,5 +124,5 @@ async fn decode(address: &str) -> Result<ImageData, JsValue> {
 }
 
 #[cfg(test)]
-#[path = "pictures_test.rs"]
+#[path = "pictures.test.rs"]
 mod tests;

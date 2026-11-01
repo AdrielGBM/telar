@@ -240,5 +240,5 @@ fn deregister_flush_notify(id: u64) {
 }
 
 #[cfg(test)]
-#[path = "runtime_test.rs"]
+#[path = "runtime.test.rs"]
 mod tests;

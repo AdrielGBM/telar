@@ -44,5 +44,5 @@ impl From<Direction> for taffy::Direction {
 }
 
 #[cfg(test)]
-#[path = "direction_test.rs"]
+#[path = "direction.test.rs"]
 mod tests;

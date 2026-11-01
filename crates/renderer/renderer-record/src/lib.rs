@@ -148,5 +148,5 @@ impl<W> RendererFactory<W> for RecordingFactory {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

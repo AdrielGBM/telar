@@ -55,31 +55,31 @@ image = { workspace = true, features = ["png"] }
 
 [[test]]
 name = "border_sides"
-path = "src/border_sides_test.rs"
+path = "src/border_sides.test.rs"
 
 [[test]]
 name = "headless"
-path = "src/headless_test.rs"
+path = "src/headless.test.rs"
 
 [[test]]
 name = "input_visual"
-path = "src/input_visual_test.rs"
+path = "src/input_visual.test.rs"
 
 [[test]]
 name = "overlay_visual"
-path = "src/overlay_visual_test.rs"
+path = "src/overlay_visual.test.rs"
 
 [[test]]
 name = "reflow_clear"
-path = "src/reflow_clear_test.rs"
+path = "src/reflow_clear.test.rs"
 
 [[test]]
 name = "shadow_restyle"
-path = "src/shadow_restyle_test.rs"
+path = "src/shadow_restyle.test.rs"
 
 [[test]]
 name = "visual_check"
-path = "src/visual_check_test.rs"
+path = "src/visual_check.test.rs"
 
 [[bench]]
 name = "render_frame"

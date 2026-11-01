@@ -239,5 +239,5 @@ impl<T: PreviewArg> PreviewArg for RwSignal<T> {
 }
 
 #[cfg(test)]
-#[path = "arg_test.rs"]
+#[path = "arg.test.rs"]
 mod tests;

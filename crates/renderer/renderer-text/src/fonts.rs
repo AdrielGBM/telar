@@ -678,7 +678,7 @@ fn declare(info: &mut fontdb::FaceInfo, asset: &FontAsset, family: &str) {
 pub(crate) static FACES_STABLE: RwLock<()> = RwLock::new(());
 
 #[cfg(test)]
-#[path = "fonts_test.rs"]
+#[path = "fonts.test.rs"]
 mod tests;
 
 /// Loads one face from bytes and reports the families it declares, or `None` when the bytes are not a font.

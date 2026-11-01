@@ -157,5 +157,5 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
 }
 
 #[cfg(test)]
-#[path = "transpile_test.rs"]
+#[path = "transpile.test.rs"]
 mod tests;

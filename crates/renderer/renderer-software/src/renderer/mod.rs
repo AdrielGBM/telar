@@ -500,5 +500,5 @@ impl Target {
 }
 
 #[cfg(test)]
-#[path = "renderer_test.rs"]
+#[path = "renderer.test.rs"]
 mod tests;

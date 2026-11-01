@@ -132,5 +132,5 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
 }
 
 #[cfg(test)]
-#[path = "progress_test.rs"]
+#[path = "progress.test.rs"]
 mod tests;

@@ -346,5 +346,5 @@ fn dispatch_to_children(children: &mut TrackedChildren, event: &Event) -> EventR
 }
 
 #[cfg(test)]
-#[path = "pointer_test.rs"]
+#[path = "pointer.test.rs"]
 mod tests;

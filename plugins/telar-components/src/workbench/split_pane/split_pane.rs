@@ -531,5 +531,5 @@ fn rule_width() -> f32 {
 }
 
 #[cfg(test)]
-#[path = "split_pane_test.rs"]
+#[path = "split_pane.test.rs"]
 mod tests;

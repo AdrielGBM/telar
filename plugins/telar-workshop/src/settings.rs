@@ -431,5 +431,5 @@ mod direction_text {
 }
 
 #[cfg(test)]
-#[path = "settings_test.rs"]
+#[path = "settings.test.rs"]
 mod tests;

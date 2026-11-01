@@ -45,7 +45,7 @@ the value.
 
 | Target | Case | Underline |
 | --- | --- | --- |
-| web-dom | `text-transform`, under the element's `lang`. The text is measured cased by the canvas measurer, which is what `layout_parity_test.rs` holds against the browser. | The `text-decoration` longhands, with `text-decoration-skip-ink: none` because no other target lifts the line around a descender. A gradient-filled text's line takes the gradient's first stop: CSS paints a decoration in a colour only. |
+| web-dom | `text-transform`, under the element's `lang`. The text is measured cased by the canvas measurer, which is what `layout_parity.test.rs` holds against the browser. | The `text-decoration` longhands, with `text-decoration-skip-ink: none` because no other target lifts the line around a descender. A gradient-filled text's line takes the gradient's first stop: CSS paints a decoration in a colour only. |
 | web canvas, desktop, Android, headless (GPU and software) | The shaper cases the string before shaping it. | Drawn beneath the glyphs from the shaped lines, one stroke per line per run that asks for it, its edges snapped to device pixels. |
 | TUI | The cells show the cased string, measured in the same cells. | The SGR underline attribute on the run's cells. A cell has no offset, thickness or colour of its own to give the line, so those are ignored. |
 

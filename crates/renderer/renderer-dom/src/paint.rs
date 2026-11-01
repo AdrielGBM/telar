@@ -426,11 +426,11 @@ fn decoration_style(decoration: &renderer_core::TextDecoration, ink: &Paint, out
 }
 
 #[cfg(test)]
-#[path = "paint_test.rs"]
+#[path = "paint.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "paint_text_test.rs"]
+#[path = "paint.text.test.rs"]
 mod text_tests;
 
 /// An absolute-space matrix as the CSS transform of a box whose own top-left is at `(x, y)`.
@@ -455,5 +455,5 @@ pub fn spelled(m: [f32; 6]) -> String {
 }
 
 #[cfg(test)]
-#[path = "paint_matrix_test.rs"]
+#[path = "paint.matrix.test.rs"]
 mod matrix_tests;

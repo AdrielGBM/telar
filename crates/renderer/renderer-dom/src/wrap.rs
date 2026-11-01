@@ -106,5 +106,5 @@ pub fn widest_word(text: &str, width_of: impl Fn(&str) -> f32) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "wrap_test.rs"]
+#[path = "wrap.test.rs"]
 mod tests;

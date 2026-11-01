@@ -515,5 +515,5 @@ fn default_content(
 }
 
 #[cfg(test)]
-#[path = "virtual_list_test.rs"]
+#[path = "virtual_list.test.rs"]
 mod tests;

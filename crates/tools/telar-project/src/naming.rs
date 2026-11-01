@@ -142,5 +142,5 @@ pub fn is_ident(s: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "naming_test.rs"]
+#[path = "naming.test.rs"]
 mod tests;

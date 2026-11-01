@@ -460,5 +460,5 @@ fn default_tokens() -> Rc<dyn ThemeTokens> {
 }
 
 #[cfg(test)]
-#[path = "context_test.rs"]
+#[path = "context.test.rs"]
 mod tests;

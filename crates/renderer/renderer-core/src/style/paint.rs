@@ -137,5 +137,5 @@ impl Shadow {
 }
 
 #[cfg(test)]
-#[path = "paint_test.rs"]
+#[path = "paint.test.rs"]
 mod tests;

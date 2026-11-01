@@ -430,5 +430,5 @@ pub fn focused_rect() -> Option<Rect> {
 }
 
 #[cfg(test)]
-#[path = "menu_test.rs"]
+#[path = "menu.test.rs"]
 mod tests;

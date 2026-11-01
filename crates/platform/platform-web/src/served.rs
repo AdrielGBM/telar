@@ -86,5 +86,5 @@ fn number(value: &JsValue) -> Option<u32> {
 }
 
 #[cfg(test)]
-#[path = "served_test.rs"]
+#[path = "served.test.rs"]
 mod tests;

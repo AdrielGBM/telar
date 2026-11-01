@@ -193,5 +193,5 @@ pub trait Accessible: LayoutItem + Sized {
 impl<T: LayoutItem> Accessible for T {}
 
 #[cfg(test)]
-#[path = "annotation_test.rs"]
+#[path = "annotation.test.rs"]
 mod tests;

@@ -217,7 +217,7 @@ pub(crate) fn format_arg_positions(code: &str, ident: &str) -> Vec<usize> {
 }
 
 #[cfg(all(test, feature = "transpile"))]
-#[path = "lexer_test.rs"]
+#[path = "lexer.test.rs"]
 mod tests;
 
 /// What a call's `(` at the end of `before` calls: a path, with its generic arguments (`::<f32>`, `::<dyn Fn()>`) dropped so `Reactive::<f32>::of` reads as `Reactive::of`, or a method by name. `None` when what precedes is no callee: an operator, a macro's `!`, a keyword opening grouping parens.

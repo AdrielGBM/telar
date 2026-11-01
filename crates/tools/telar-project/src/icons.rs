@@ -142,5 +142,5 @@ impl IconsSection {
 }
 
 #[cfg(test)]
-#[path = "icons_test.rs"]
+#[path = "icons.test.rs"]
 mod tests;

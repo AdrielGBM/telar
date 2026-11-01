@@ -527,9 +527,9 @@ fn slash_separated(path: &Path) -> String {
         .join("/")
 }
 
-/// A `.rs` file that is a declarable module: not a crate root, not a `mod.rs` (the latter is the module root of its own directory, not a sibling child), and not a `*_test.rs`.
+/// A `.rs` file that is a declarable module: not a crate root, not a `mod.rs` (the latter is the module root of its own directory, not a sibling child), and named by an identifier.
 ///
-/// A `*_test.rs` holds the `#[cfg(test)]` body of the module it sits beside, which declares it itself with `#[path]`. Declaring it here too would make it a *sibling* of that module rather than a child, so its `use super::*` would reach the parent directory and every private item it tests would read as inaccessible.
+/// A name that is no identifier, `badge.test.rs` or `badge.previews.rs`, is never one. A `*.test.rs` holds the `#[cfg(test)]` body of the module it sits beside, which declares it itself with `#[path]`. Declaring it here too would make it a *sibling* of that module rather than a child, so its `use super::*` would reach the parent directory and every private item it tests would read as inaccessible.
 fn is_rust_module_file(path: &Path) -> bool {
     if path.extension().and_then(|e| e.to_str()) != Some("rs") {
         return false;
@@ -537,7 +537,8 @@ fn is_rust_module_file(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
         return false;
     };
-    !matches!(name, "lib.rs" | "main.rs" | "mod.rs") && !name.ends_with("_test.rs")
+    let stem = name.trim_end_matches(".rs");
+    !matches!(stem, "lib" | "main" | "mod") && crate::naming::is_ident(stem)
 }
 
 /// Whether a directory earns a module node: it holds a declarable `.rs`, a `mod.rs`, or a `.rsx` — a directory of nothing but markup is still a module once its `.rsx` files live where they sit.
@@ -793,7 +794,7 @@ pub fn prune_stale_sites(src_dir: &Path, sites: &HashSet<PathBuf>) {
     }
 }
 #[cfg(test)]
-#[path = "discovery_test.rs"]
+#[path = "discovery.test.rs"]
 mod tests;
 
 /// The `.rsx` that is a directory's module rather than a component in it.

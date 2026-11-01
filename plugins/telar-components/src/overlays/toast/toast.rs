@@ -578,5 +578,5 @@ fn text_button(
 }
 
 #[cfg(test)]
-#[path = "toast_test.rs"]
+#[path = "toast.test.rs"]
 mod tests;

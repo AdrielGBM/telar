@@ -261,5 +261,5 @@ fn pending_timer_count() -> usize {
 }
 
 #[cfg(test)]
-#[path = "timer_test.rs"]
+#[path = "timer.test.rs"]
 mod tests;

@@ -252,7 +252,7 @@ impl Lerp for Color {
 }
 
 #[cfg(test)]
-#[path = "lerp_test.rs"]
+#[path = "lerp.test.rs"]
 mod tests;
 
 /// Axis by axis: an axis only one side names is taken as `0.0` on the other for the arithmetic a spring runs, and holds its value through a tween (see [`FontVariations::lerp`]).

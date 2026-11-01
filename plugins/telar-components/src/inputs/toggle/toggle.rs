@@ -205,5 +205,5 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "toggle_test.rs"]
+#[path = "toggle.test.rs"]
 mod tests;

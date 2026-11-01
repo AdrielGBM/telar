@@ -1,6 +1,6 @@
 //! Starting from a page that was prerendered: the first tree is built from the inputs the page was written from, so it opens the same layout nodes and the document renderer can take the page over element by element. What the browser really reports follows as an ordinary update.
 //!
-//! The state is the `telar-state` script `cargo telar build --prerender` writes (`telar_project::PrerenderState`). The browser reads it (`platform_web::served_state`) without the packaging crate or a JSON parser of the app's own; `hydration_test.rs` holds the packager to the format it reads.
+//! The state is the `telar-state` script `cargo telar build --prerender` writes (`telar_project::PrerenderState`). The browser reads it (`platform_web::served_state`) without the packaging crate or a JSON parser of the app's own; `hydration.test.rs` holds the packager to the format it reads.
 
 use platform_core::SystemPreferences;
 
@@ -112,5 +112,5 @@ pub(super) fn settle_motion(
 }
 
 #[cfg(all(test, feature = "prerender", not(target_arch = "wasm32")))]
-#[path = "hydration_test.rs"]
+#[path = "hydration.test.rs"]
 mod tests;

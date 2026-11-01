@@ -71,5 +71,5 @@ pub use tag_errors::{GeneratedSite, generated_site, tag_columns, tag_error_messa
 pub use theme::resolve_theme_type;
 
 #[cfg(all(test, feature = "transpile"))]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

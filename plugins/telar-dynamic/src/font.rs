@@ -43,5 +43,5 @@ impl AssetDecoder for FontDecoder {
 }
 
 #[cfg(test)]
-#[path = "font_test.rs"]
+#[path = "font.test.rs"]
 mod tests;

@@ -140,5 +140,5 @@ fn cuts_across(
 }
 
 #[cfg(test)]
-#[path = "image_fill_test.rs"]
+#[path = "image_fill.test.rs"]
 mod tests;

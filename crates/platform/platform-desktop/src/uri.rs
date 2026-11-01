@@ -152,5 +152,5 @@ fn launch(uri: &Uri) -> bool {
 }
 
 #[cfg(all(test, target_os = "linux", feature = "system-theme"))]
-#[path = "uri_test.rs"]
+#[path = "uri.test.rs"]
 mod tests;

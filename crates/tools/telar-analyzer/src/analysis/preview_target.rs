@@ -130,5 +130,5 @@ fn preview_header_above(source: &str, line: usize) -> Option<usize> {
 }
 
 #[cfg(test)]
-#[path = "preview_target_test.rs"]
+#[path = "preview_target.test.rs"]
 mod tests;

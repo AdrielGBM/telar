@@ -1,6 +1,6 @@
 //! Telar composes into a texture the application owns, at a resolution the application picked.
 //!
-//! The mirror of `renderer-hardware/src/app_owned_texture_test.rs`, which proves the other direction. Its own test binary because the shared device is a process-wide `OnceLock` and this one wants to open it.
+//! The mirror of `renderer-hardware/src/app_owned_texture.test.rs`, which proves the other direction. Its own test binary because the shared device is a process-wide `OnceLock` and this one wants to open it.
 
 #[path = "test_common.rs"]
 mod common;

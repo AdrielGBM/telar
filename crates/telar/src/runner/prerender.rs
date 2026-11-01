@@ -222,5 +222,5 @@ fn keyed_signals() -> std::collections::BTreeMap<String, String> {
 }
 
 #[cfg(test)]
-#[path = "prerender_test.rs"]
+#[path = "prerender.test.rs"]
 mod tests;

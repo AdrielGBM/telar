@@ -207,5 +207,5 @@ fn install_enter_hook() {
 }
 
 #[cfg(test)]
-#[path = "surface_context_test.rs"]
+#[path = "surface_context.test.rs"]
 mod tests;

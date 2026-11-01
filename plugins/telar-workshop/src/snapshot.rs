@@ -25,5 +25,5 @@ pub(crate) fn subject(state: &WorkshopState) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "snapshot_test.rs"]
+#[path = "snapshot.test.rs"]
 mod tests;

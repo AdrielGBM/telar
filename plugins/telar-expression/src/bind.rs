@@ -41,5 +41,5 @@ pub fn bind_held(compiled: Compiled, resolver: impl Resolver + 'static) -> Memo<
 }
 
 #[cfg(test)]
-#[path = "bind_test.rs"]
+#[path = "bind.test.rs"]
 mod tests;

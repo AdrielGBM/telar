@@ -30,4 +30,4 @@ toml = { workspace = true }
 
 [[test]]
 name = "golden"
-path = "src/golden_test.rs"
+path = "src/golden.test.rs"

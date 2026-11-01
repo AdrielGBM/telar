@@ -465,7 +465,7 @@ run it for you); a plain `cargo build` is refused with a message naming the comm
 A library's module tree is its own: every module it discovers is `pub(crate)`, so where a file sits in `src/` never
 becomes a path a dependent can name, and the library's API is what its root re-exports. An application's stays
 `pub`, which its benches and integration tests reach by path. A component keeps a directory of its own by sharing
-its name, `display/kbd/kbd.rsx` beside `kbd_test.rs` and `kbd.previews.rs`, since a component takes the name of its
+its name, `display/kbd/kbd.rsx` beside `kbd.test.rs` and `kbd.previews.rs`, since a component takes the name of its
 file; `telar-components` is laid out that way, grouped as its workshop sidebar lists them.
 
 ### Shipping previews

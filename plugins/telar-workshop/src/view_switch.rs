@@ -57,5 +57,5 @@ fn shown_by(view: ViewMode) -> Action {
 }
 
 #[cfg(test)]
-#[path = "view_switch_test.rs"]
+#[path = "view_switch.test.rs"]
 mod tests;

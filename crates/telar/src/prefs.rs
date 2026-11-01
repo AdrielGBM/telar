@@ -66,5 +66,5 @@ fn prefs_path(_app_name: &str, _paths: &dyn AppPathsProvider) -> Option<PathBuf>
 }
 
 #[cfg(test)]
-#[path = "prefs_test.rs"]
+#[path = "prefs.test.rs"]
 mod tests;

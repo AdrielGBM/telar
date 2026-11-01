@@ -75,5 +75,5 @@ pub fn calculate(source: &str) -> Result<f64, Error> {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

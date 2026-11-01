@@ -42,5 +42,5 @@ impl Drop for Idle<'_> {
 }
 
 #[cfg(test)]
-#[path = "serial_test.rs"]
+#[path = "serial.test.rs"]
 mod tests;

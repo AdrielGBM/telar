@@ -85,5 +85,5 @@ fn theme_argument(tokens: &proc_macro2::TokenStream) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "theme_test.rs"]
+#[path = "theme.test.rs"]
 mod tests;

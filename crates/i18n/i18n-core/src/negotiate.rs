@@ -49,5 +49,5 @@ fn primary_language(tag: &str) -> &str {
 }
 
 #[cfg(test)]
-#[path = "negotiate_test.rs"]
+#[path = "negotiate.test.rs"]
 mod tests;

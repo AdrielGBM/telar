@@ -122,5 +122,5 @@ fn encode(image: &DynamicImage, format: ImageFormat) -> Result<WebImageFile, Ima
 }
 
 #[cfg(test)]
-#[path = "web_image_test.rs"]
+#[path = "web_image.test.rs"]
 mod tests;

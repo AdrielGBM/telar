@@ -145,5 +145,5 @@ const KEYWORDS: &[&str] = &[
 ];
 
 #[cfg(test)]
-#[path = "prelude_test.rs"]
+#[path = "prelude.test.rs"]
 mod tests;

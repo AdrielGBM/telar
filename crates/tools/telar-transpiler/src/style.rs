@@ -543,5 +543,5 @@ pub fn hex_to_color_expr(hex: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "style_test.rs"]
+#[path = "style.test.rs"]
 mod tests;

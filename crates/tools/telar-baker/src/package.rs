@@ -331,5 +331,5 @@ fn collect_nodes(nodes: &[ViewNode], out: &mut Vec<(&'static AssetKind, String)>
 }
 
 #[cfg(test)]
-#[path = "package_test.rs"]
+#[path = "package.test.rs"]
 mod tests;

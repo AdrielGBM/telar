@@ -143,5 +143,5 @@ extern "C" fn quiesce() -> CallOutcome {
 }
 
 #[cfg(test)]
-#[path = "lifecycle_test.rs"]
+#[path = "lifecycle.test.rs"]
 mod tests;

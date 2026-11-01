@@ -304,5 +304,5 @@ fn box_blur_h(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut [u
 }
 
 #[cfg(test)]
-#[path = "shadow_test.rs"]
+#[path = "shadow.test.rs"]
 mod tests;

@@ -507,5 +507,5 @@ fn notice(problem: Problem) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "matrix_test.rs"]
+#[path = "matrix.test.rs"]
 mod tests;

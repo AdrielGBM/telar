@@ -777,5 +777,5 @@ fn fail(message: &str) -> ! {
 }
 
 #[cfg(test)]
-#[path = "library_test.rs"]
+#[path = "library.test.rs"]
 mod tests;

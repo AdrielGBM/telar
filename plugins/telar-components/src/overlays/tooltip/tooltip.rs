@@ -323,5 +323,5 @@ fn bubble_text(size: ControlSize, inherited: TextStyle, ratio: f32, ink: Color) 
 }
 
 #[cfg(test)]
-#[path = "tooltip_test.rs"]
+#[path = "tooltip.test.rs"]
 mod tests;

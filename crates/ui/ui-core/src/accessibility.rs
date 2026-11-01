@@ -1262,5 +1262,5 @@ pub fn nested_surfaces(commands: &[DrawCommand]) -> Vec<NestedSurface> {
 }
 
 #[cfg(test)]
-#[path = "accessibility_test.rs"]
+#[path = "accessibility.test.rs"]
 mod tests;

@@ -227,9 +227,9 @@ fn signal_call(expr: &str) -> Option<(Option<&str>, &str)> {
 }
 
 #[cfg(test)]
-#[path = "signal_scan_test.rs"]
+#[path = "signal_scan.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "signal_scan_effect_scan_test.rs"]
+#[path = "signal_scan.effect_scan.test.rs"]
 mod effect_scan_tests;

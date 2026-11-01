@@ -583,5 +583,5 @@ fn tab_text(size: ControlSize, inherited: TextStyle, active: bool) -> TextStyle 
 }
 
 #[cfg(test)]
-#[path = "tabs_test.rs"]
+#[path = "tabs.test.rs"]
 mod tests;

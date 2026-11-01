@@ -189,5 +189,5 @@ pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarSectio
 }
 
 #[cfg(test)]
-#[path = "android_test.rs"]
+#[path = "android.test.rs"]
 mod tests;

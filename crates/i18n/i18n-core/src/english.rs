@@ -45,5 +45,5 @@ macro_rules! english {
 }
 
 #[cfg(test)]
-#[path = "english_test.rs"]
+#[path = "english.test.rs"]
 mod tests;

@@ -83,5 +83,5 @@ impl Gradient {
 }
 
 #[cfg(test)]
-#[path = "gradient_test.rs"]
+#[path = "gradient.test.rs"]
 mod tests;

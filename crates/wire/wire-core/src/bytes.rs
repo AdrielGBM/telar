@@ -184,5 +184,5 @@ impl<'a> Reader<'a> {
 }
 
 #[cfg(test)]
-#[path = "bytes_test.rs"]
+#[path = "bytes.test.rs"]
 mod tests;

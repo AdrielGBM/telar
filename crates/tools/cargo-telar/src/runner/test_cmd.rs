@@ -217,5 +217,5 @@ impl ReportRequest {
 }
 
 #[cfg(test)]
-#[path = "test_cmd_test.rs"]
+#[path = "test_cmd.test.rs"]
 mod tests;

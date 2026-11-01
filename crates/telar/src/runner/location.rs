@@ -110,5 +110,5 @@ fn restore(prefs: &UserPrefs) -> Vec<Location> {
 }
 
 #[cfg(test)]
-#[path = "location_test.rs"]
+#[path = "location.test.rs"]
 mod tests;

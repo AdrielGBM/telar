@@ -176,5 +176,5 @@ fn within(branch: &TreeNode) -> Vec<Arc<str>> {
 }
 
 #[cfg(test)]
-#[path = "tree_menu_test.rs"]
+#[path = "tree_menu.test.rs"]
 mod tests;

@@ -207,5 +207,5 @@ fn module_files(segments: &[String], src_dir: &Path) -> Vec<PathBuf> {
 }
 
 #[cfg(test)]
-#[path = "style_import_test.rs"]
+#[path = "style_import.test.rs"]
 mod tests;

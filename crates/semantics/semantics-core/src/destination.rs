@@ -67,5 +67,5 @@ impl From<Uri> for Destination {
 }
 
 #[cfg(test)]
-#[path = "destination_test.rs"]
+#[path = "destination.test.rs"]
 mod tests;

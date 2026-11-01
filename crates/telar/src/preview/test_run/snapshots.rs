@@ -100,5 +100,5 @@ fn tolerance(options: &TestOptions) -> Tolerance {
 }
 
 #[cfg(test)]
-#[path = "snapshots_test.rs"]
+#[path = "snapshots.test.rs"]
 mod tests;

@@ -151,5 +151,5 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "radio_test.rs"]
+#[path = "radio.test.rs"]
 mod tests;

@@ -484,5 +484,5 @@ impl<'a> Cursor<'a> {
 }
 
 #[cfg(test)]
-#[path = "path_test.rs"]
+#[path = "path.test.rs"]
 mod tests;

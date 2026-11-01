@@ -236,5 +236,5 @@ pub fn toolbar(props: ToolbarProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 }
 
 #[cfg(test)]
-#[path = "toolbar_test.rs"]
+#[path = "toolbar.test.rs"]
 mod tests;

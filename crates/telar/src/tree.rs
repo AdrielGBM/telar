@@ -239,5 +239,5 @@ impl ReportsSurface for HotTree {
 }
 
 #[cfg(test)]
-#[path = "tree_test.rs"]
+#[path = "tree.test.rs"]
 mod tests;

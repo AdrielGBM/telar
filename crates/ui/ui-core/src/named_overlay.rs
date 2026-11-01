@@ -46,5 +46,5 @@ pub fn close(id: &str) {
 }
 
 #[cfg(test)]
-#[path = "named_overlay_test.rs"]
+#[path = "named_overlay.test.rs"]
 mod tests;

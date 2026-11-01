@@ -142,5 +142,5 @@ impl Default for Cell {
 }
 
 #[cfg(test)]
-#[path = "cell_test.rs"]
+#[path = "cell.test.rs"]
 mod tests;

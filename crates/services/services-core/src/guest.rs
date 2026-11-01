@@ -740,5 +740,5 @@ pub unsafe fn install_host_services(table: HostServices<UpperTable>) -> Option<A
 }
 
 #[cfg(test)]
-#[path = "guest_test.rs"]
+#[path = "guest.test.rs"]
 mod tests;
