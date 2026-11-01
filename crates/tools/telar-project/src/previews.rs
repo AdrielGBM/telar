@@ -40,20 +40,30 @@ pub type MatrixAxes = BTreeMap<String, Vec<MatrixValue>>;
 /// The axes a matrix varies the canvas's environment along, rather than an arg, in the order a matrix lists them.
 pub const MATRIX_GLOBAL_AXES: [&str; 4] = ["mode", "locale", "dir", "viewport"];
 
-/// One axis of a named matrix, read and checked.
+/// One axis of a matrix, read and checked: a named one's, or one a preview writes inline.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatrixAxis {
     /// Mode ids.
     Mode(Vec<String>),
+    /// Every mode registered when the matrix expands.
+    RegisteredModes,
     /// BCP 47 language tags.
     Locale(Vec<String>),
+    /// Every locale the application's catalog has.
+    CatalogLocales,
     Dir(Vec<MatrixDirection>),
     /// Each a size like `"390x844"` or a name in `[telar.previews.viewports]`.
     Viewport(Vec<String>),
+    /// Every viewport `[telar.previews.viewports]` names.
+    ProjectViewports,
     /// An arg, by name, and each value in the text form a preview's arg values are written in: a bool, a number, `#ff8800`, a choice such as `Primary`, or text in quotes, `'"Save"'`.
     Arg {
         name: String,
         values: Vec<String>,
+    },
+    /// An arg, by name, across every value its control picks among: its prop's variants, or `false` and `true`.
+    ArgValues {
+        name: String,
     },
 }
 
@@ -61,11 +71,11 @@ impl MatrixAxis {
     /// The key the axis is written under.
     pub fn name(&self) -> &str {
         match self {
-            Self::Mode(_) => "mode",
-            Self::Locale(_) => "locale",
+            Self::Mode(_) | Self::RegisteredModes => "mode",
+            Self::Locale(_) | Self::CatalogLocales => "locale",
             Self::Dir(_) => "dir",
-            Self::Viewport(_) => "viewport",
-            Self::Arg { name, .. } => name,
+            Self::Viewport(_) | Self::ProjectViewports => "viewport",
+            Self::Arg { name, .. } | Self::ArgValues { name } => name,
         }
     }
 }

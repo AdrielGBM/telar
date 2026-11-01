@@ -7,7 +7,6 @@ use telar::{
 
 use crate::display::kbd::kbd::{KbdCaps, KbdProps, kbd};
 use crate::shared;
-use telar::kw::Word;
 use telar::{ControlSize, Tone, Variant};
 
 /// A command beside its chord, on a surface of its own: the page's, or a tooltip's in the page's ink.
@@ -80,8 +79,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .viewport(120.0, 48.0)
         .matrix(Matrix::Axes(&[
             Axis::RegisteredModes,
-            Axis::Arg("variant", Variant::WORDS),
-            Axis::Arg("tone", Tone::WORDS),
+            Axis::ArgValues("variant"),
+            Axis::ArgValues("tone"),
         ])),
         preview!(kbd: KbdProps, "A sequence", |p| {
             kbd(KbdProps::props()

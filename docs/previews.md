@@ -209,9 +209,16 @@ laptop = "1280x800"
   `size:[small regular large]`, or `size = ["small", "regular", "large"]` in `telar.toml`. A link, stored state or matrix
   that still writes the variant's name (`Small`) gives the arg its default, as the removed `control_size` setting is
   skipped; a matrix that still writes the old `control_size` axis is refused, naming that arg.
+- **An axis written alone takes every value it has**: `matrix:(mode variant tone)`. `mode` is every registered mode,
+  `locale` every locale of the application's catalog, `dir` both directions, `viewport` every name in
+  `[telar.previews.viewports]`, and an arg every value its prop picks among: an enum's variants, or `false` and `true`.
+  An arg whose prop has no fixed set of values, or that is no prop of the root, has no cells to give, and the run says
+  so: list its values instead.
 - The cells are the product of the axes, the first outermost. `themes` is built in: every registered mode, side by
   side. A package's own `themes` replaces it.
-- In Rust, `.matrix(Matrix::Named("themes"))` or `.matrix(Matrix::Axes(&[Axis::Dir(&[…]), Axis::Arg("size", &["12", "16"])]))`.
+- In Rust, `.matrix(Matrix::Named("themes"))` or `.matrix(Matrix::Axes(&[Axis::Dir(&[…]), Axis::Arg("size", &["12", "16"])]))`, and
+  `Axis::RegisteredModes`, `Axis::CatalogLocales`, `Axis::ProjectViewports` or `Axis::ArgValues("variant")` for an axis
+  written alone.
 
 `cargo telar test` and the snapshots treat each cell as a preview of its own. The workshop's Matrix view lays the
 cells out in a grid, and builds one from the axes you pick for a preview that has no matrix: the environment's, and

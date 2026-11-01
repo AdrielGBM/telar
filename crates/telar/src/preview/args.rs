@@ -262,6 +262,18 @@ impl Slot {
     }
 }
 
+/// The control the arg `name` of `entry` has before anything is built: its declaration's, or else its prop's. A read is what tells the rest, so this is what a matrix expanded ahead of the build can know.
+pub(crate) fn unbuilt_control(entry: &PreviewEntry, name: &str) -> Option<ControlKind> {
+    let declared = entry
+        .args
+        .iter()
+        .find(|spec| spec.name == name)
+        .and_then(|spec| spec.control)
+        .map(|control| control());
+    let prop = entry.props.and_then(|props| props().field(name));
+    declared.or_else(|| prop.map(|prop| prop_control(prop, None)))
+}
+
 /// The prop's control, which refines the type's: it stands where it is the same kind of control as the type's, carrying its range, step or lines, or where it shows the prop read-only. A `some` prop's setter takes what its `Option` holds, so its control is the one inside.
 fn prop_control(prop: &PropField, typed: Option<ControlKind>) -> ControlKind {
     let control = match (prop.some, prop.control()) {

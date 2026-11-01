@@ -3,9 +3,7 @@
 use serde::{Deserialize, Serialize};
 use telar::Direction;
 use telar::preview::host::ArgState;
-use telar::preview::{
-    Axis, ControlKind, MATRIX_CELL_CAP, Matrices, Matrix, MatrixCell, PreviewEntry,
-};
+use telar::preview::{Axis, MATRIX_CELL_CAP, Matrices, Matrix, MatrixCell, PreviewEntry};
 
 use crate::settings::PRESET_VIEWPORTS;
 use crate::strings::{DIRECTION, LOCALE, MODE, VIEWPORT};
@@ -14,7 +12,6 @@ use crate::strings::{DIRECTION, LOCALE, MODE, VIEWPORT};
 pub(crate) const MATRIX_WARN_AT: usize = 48;
 
 const DIRECTIONS: &[Direction] = &[Direction::Ltr, Direction::Rtl];
-const TOGGLE_VALUES: &[&str] = &["false", "true"];
 
 /// What the Matrix view varies: the selected preview's own matrix, or axes picked in its place, starting from the preview's.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -127,10 +124,10 @@ impl CustomAxis {
     pub(crate) fn of(axis: &Axis) -> Option<Self> {
         Some(match axis {
             Axis::Mode(_) | Axis::RegisteredModes => Self::Mode,
-            Axis::Locale(_) => Self::Locale,
+            Axis::Locale(_) | Axis::CatalogLocales => Self::Locale,
             Axis::Dir(_) => Self::Direction,
             Axis::Viewport(_) | Axis::ProjectViewports => Self::Viewport,
-            Axis::Arg(name, _) => Self::Arg(name.to_string()),
+            Axis::Arg(name, _) | Axis::ArgValues(name) => Self::Arg(name.to_string()),
             _ => return None,
         })
     }
@@ -139,7 +136,7 @@ impl CustomAxis {
     pub(crate) fn axis(&self, args: &[ArgState], matrices: &Matrices) -> Option<Axis> {
         Some(match self {
             Self::Mode => Axis::RegisteredModes,
-            Self::Locale => Axis::Locale(telar::i18n::catalog().map_or(&[], |c| c.locales)),
+            Self::Locale => Axis::CatalogLocales,
             Self::Direction => Axis::Dir(DIRECTIONS),
             Self::Viewport => match matrices.viewports().is_empty() {
                 true => Axis::Viewport(PRESET_VIEWPORTS),
@@ -147,7 +144,7 @@ impl CustomAxis {
             },
             Self::Arg(name) => {
                 let arg = args.iter().find(|arg| arg.name == name)?;
-                Axis::Arg(arg.name, arg_values(&arg.control)?)
+                Axis::Arg(arg.name, arg.control.fixed_values()?)
             }
         })
     }
@@ -177,17 +174,9 @@ pub(crate) fn toggled(axes: &[PickedAxis], axis: &CustomAxis, picked: bool) -> V
 /// The args of `args` a built matrix can vary: those whose control picks among a fixed set of values.
 pub(crate) fn varied_args(args: &[ArgState]) -> Vec<&'static str> {
     args.iter()
-        .filter(|arg| arg_values(&arg.control).is_some())
+        .filter(|arg| arg.control.fixed_values().is_some())
         .map(|arg| arg.name)
         .collect()
-}
-
-fn arg_values(control: &ControlKind) -> Option<&'static [&'static str]> {
-    match control {
-        ControlKind::Toggle => Some(TOGGLE_VALUES),
-        ControlKind::Choice { variants } if !variants.is_empty() => Some(variants),
-        _ => None,
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

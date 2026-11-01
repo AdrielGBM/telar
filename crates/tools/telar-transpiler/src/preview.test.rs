@@ -226,6 +226,18 @@ fn a_matrix_is_named_or_written_out() {
 }
 
 #[test]
+fn an_axis_written_alone_takes_every_value_it_has() {
+    let code = code(
+        "[preview \"Every\" args(agree:false) matrix:(mode locale dir viewport size agree)]\ncheckbox size:regular checked:$agree\n",
+    );
+    assert!(
+        code.contains(".matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::RegisteredModes, ::telar::preview::Axis::CatalogLocales, ::telar::preview::Axis::Dir(&[::telar::Direction::Ltr, ::telar::Direction::Rtl]), ::telar::preview::Axis::ProjectViewports, ::telar::preview::Axis::ArgValues(\"size\"), ::telar::preview::Axis::ArgValues(\"agree\")]))"),
+        "{code}"
+    );
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
 fn a_matrix_the_transpiler_cannot_read_is_refused_on_its_header() {
     for (matrix, error) in [
         (
@@ -247,7 +259,15 @@ fn a_matrix_the_transpiler_cannot_read_is_refused_on_its_header() {
         ("matrix:(size:[12 a+b])", "`a+b` is not an arg value"),
         ("matrix:(mode:[a] mode:[b])", "varies `mode` twice"),
         ("matrix:()", "varies nothing"),
-        ("matrix:(mode)", "needs its values"),
+        ("matrix:(mode mode:[a])", "varies `mode` twice"),
+        (
+            "matrix:(a-b)",
+            "`matrix:` axis `a-b` is neither one of mode, locale, dir, viewport nor an arg name",
+        ),
+        (
+            "matrix:(weight)",
+            "varies `weight`, which is neither one of mode, locale, dir, viewport nor an arg of this preview",
+        ),
         ("matrix:{x}", "is neither a matrix's name"),
         (
             "matrix:(weight:[1 2])",

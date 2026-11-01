@@ -61,6 +61,15 @@ impl ControlKind {
         matches!(self, Self::ReadOnly)
     }
 
+    /// The values this control picks among, in [`ArgValue`]'s text form, when it picks from a fixed set: a toggle's `false` and `true`, a choice's variants. What a matrix varies an arg across.
+    pub const fn fixed_values(&self) -> Option<&'static [&'static str]> {
+        match self {
+            Self::Toggle => Some(&["false", "true"]),
+            Self::Choice { variants } if !variants.is_empty() => Some(variants),
+            _ => None,
+        }
+    }
+
     /// Whether `other` edits the same kind of value, whatever its limits: two number fields of one sort, or two choices of the same variants.
     pub fn is_same_kind(&self, other: &Self) -> bool {
         match (self, other) {

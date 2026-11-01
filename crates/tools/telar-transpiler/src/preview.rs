@@ -578,7 +578,7 @@ fn unknown_arg_axes(
 ) -> Vec<String> {
     axes.iter()
         .filter_map(|axis| match axis {
-            MatrixAxis::Arg { name, .. } => Some(name),
+            MatrixAxis::Arg { name, .. } | MatrixAxis::ArgValues { name } => Some(name),
             _ => None,
         })
         .filter(|name| {
@@ -902,7 +902,7 @@ fn list(value: &str) -> Vec<String> {
 }
 
 impl Matrix {
-    /// `themes`, a matrix named in `[telar.previews.matrices]` or built in, or `(mode:[light dark] size:[12 16])`, its axes written out, the first outermost.
+    /// `themes`, a matrix named in `[telar.previews.matrices]` or built in, or `(mode:[light dark] size:[12 16])`, its axes written out, the first outermost; an axis written alone, `(mode variant)`, takes every value it has.
     fn parse(value: &str) -> Result<Self, String> {
         let value = value.trim();
         let Some(inner) = value
@@ -919,15 +919,14 @@ impl Matrix {
         };
         let mut axes: Vec<MatrixAxis> = Vec::new();
         for token in split_top_level(inner, char::is_whitespace, false) {
-            let Some((name, values)) = token.split_once(':') else {
-                return Err(format!(
-                    "`matrix:` axis `{token}` needs its values, like `{token}:[a b]`"
-                ));
+            let parsed = match token.split_once(':') {
+                Some((name, values)) => axis(name, &items(values))?,
+                None => every_value_axis(token)?,
             };
-            if axes.iter().any(|axis| axis.name() == name) {
-                return Err(format!("`matrix:` varies `{name}` twice"));
+            if axes.iter().any(|held| held.name() == parsed.name()) {
+                return Err(format!("`matrix:` varies `{}` twice", parsed.name()));
             }
-            axes.push(axis(name, &items(values))?);
+            axes.push(parsed);
         }
         match axes.is_empty() {
             true => Err(
@@ -1017,6 +1016,25 @@ fn axis(name: &str, written: &[&str]) -> Result<MatrixAxis, String> {
     })
 }
 
+/// An axis written without values, which takes every value it has: the registered modes, the catalog's locales, both directions, the package's viewports, or every value an arg's control picks among.
+fn every_value_axis(name: &str) -> Result<MatrixAxis, String> {
+    Ok(match name {
+        "mode" => MatrixAxis::RegisteredModes,
+        "locale" => MatrixAxis::CatalogLocales,
+        "dir" => MatrixAxis::Dir(vec![MatrixDirection::Ltr, MatrixDirection::Rtl]),
+        "viewport" => MatrixAxis::ProjectViewports,
+        _ if is_ident(name) => MatrixAxis::ArgValues {
+            name: name.to_string(),
+        },
+        _ => {
+            return Err(format!(
+                "`matrix:` axis `{name}` is neither one of {} nor an arg name",
+                MATRIX_GLOBAL_AXES.join(", ")
+            ));
+        }
+    })
+}
+
 /// Whether `text` is an arg value as a matrix writes one: `true`, `none`, `12`, `1.5`, `#ff8800`, a word such as `small`, a variant name such as `Primary`, or `"Save"`.
 fn is_arg_value_text(text: &str) -> bool {
     match text {
@@ -1034,6 +1052,10 @@ fn axis_expr(axis: &MatrixAxis) -> String {
     let path = "::telar::preview::Axis";
     match axis {
         MatrixAxis::Mode(modes) => format!("{path}::Mode(&{modes:?})"),
+        MatrixAxis::RegisteredModes => format!("{path}::RegisteredModes"),
+        MatrixAxis::CatalogLocales => format!("{path}::CatalogLocales"),
+        MatrixAxis::ProjectViewports => format!("{path}::ProjectViewports"),
+        MatrixAxis::ArgValues { name } => format!("{path}::ArgValues({name:?})"),
         MatrixAxis::Locale(locales) => format!("{path}::Locale(&{locales:?})"),
         MatrixAxis::Dir(directions) => {
             let directions: Vec<&str> = directions

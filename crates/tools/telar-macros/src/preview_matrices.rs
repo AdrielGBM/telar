@@ -49,6 +49,10 @@ fn axis_tokens(axis: &MatrixAxis) -> TokenStream2 {
     let axis_path = quote! { ::telar::preview::Axis };
     match axis {
         MatrixAxis::Mode(modes) => quote! { #axis_path::Mode(&[#(#modes),*]) },
+        MatrixAxis::RegisteredModes => quote! { #axis_path::RegisteredModes },
+        MatrixAxis::CatalogLocales => quote! { #axis_path::CatalogLocales },
+        MatrixAxis::ProjectViewports => quote! { #axis_path::ProjectViewports },
+        MatrixAxis::ArgValues { name } => quote! { #axis_path::ArgValues(#name) },
         MatrixAxis::Locale(locales) => quote! { #axis_path::Locale(&[#(#locales),*]) },
         MatrixAxis::Dir(directions) => {
             let directions = directions.iter().map(|direction| match direction {

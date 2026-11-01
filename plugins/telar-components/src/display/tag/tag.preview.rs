@@ -5,7 +5,6 @@ use telar::{Accessible, Color, Container, Key, LayoutError, LayoutStyle, NamedKe
 
 use crate::metrics;
 use crate::display::tag::tag::{TagProps, tag};
-use telar::kw::Word;
 use telar::{ControlSize, Tone, Variant};
 
 fn row(tags: Vec<Box<dyn telar::LayoutItem>>) -> Result<Container, LayoutError> {
@@ -42,8 +41,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .viewport(120.0, 48.0)
         .matrix(Matrix::Axes(&[
             Axis::RegisteredModes,
-            Axis::Arg("variant", Variant::WORDS),
-            Axis::Arg("tone", Tone::WORDS),
+            Axis::ArgValues("variant"),
+            Axis::ArgValues("tone"),
         ])),
         preview!(tag: TagProps, "Statuses", |p| {
             let variant = p.arg("variant", Variant::Solid);

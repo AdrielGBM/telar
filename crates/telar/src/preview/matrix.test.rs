@@ -1,4 +1,5 @@
 use super::*;
+use crate::preview::{ArgSpec, ControlKind};
 use crate::{Container, LayoutError, LayoutItem, LayoutStyle};
 
 fn empty(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -194,8 +195,8 @@ fn axes_chosen_as_the_program_runs_expand_as_a_written_matrix_does() {
         Matrix::expand(&chosen, &entry(), &matrices),
         written.cells(&entry(), &matrices)
     );
-    assert_eq!(Matrix::count(&chosen, &matrices), 4);
-    assert_eq!(Matrix::count(&[], &matrices), 0);
+    assert_eq!(Matrix::count(&chosen, &entry(), &matrices), 4);
+    assert_eq!(Matrix::count(&[], &entry(), &matrices), 0);
     assert_eq!(
         Matrix::expand(&[Axis::Dir(&[]), Axis::Dir(&[])], &entry(), &matrices),
         Err(MatrixError::RepeatedAxis { axis: "dir" })
@@ -207,7 +208,7 @@ fn an_axis_with_no_values_varies_nothing() {
     let themes = Matrix::Named("themes");
     let matrices = Matrices::default();
     assert_eq!(themes.cells(&entry(), &matrices), Ok(Vec::new()));
-    assert_eq!(themes.cell_count(&matrices), Ok(0));
+    assert_eq!(themes.cell_count(&entry(), &matrices), Ok(0));
 
     let mixed = Matrix::Axes(&[Axis::RegisteredModes, Axis::Locale(&["en", "ar"])]);
     let cells = mixed.cells(&entry(), &matrices).unwrap();
@@ -221,6 +222,51 @@ fn an_axis_with_no_values_varies_nothing() {
 }
 
 #[test]
+fn an_arg_axis_with_no_values_takes_every_value_its_control_picks_among() {
+    const ARGS: &[ArgSpec] = &[
+        ArgSpec::new("ghost").control(|| ControlKind::Toggle),
+        ArgSpec::new("variant").control(|| ControlKind::Choice {
+            variants: &["solid", "soft"],
+        }),
+        ArgSpec::new("label").control(|| ControlKind::TEXT),
+    ];
+    let entry = entry().args(ARGS);
+    let matrices = Matrices::default();
+    let matrix = Matrix::Axes(&[Axis::ArgValues("variant"), Axis::ArgValues("ghost")]);
+    assert_eq!(
+        ids(&matrix.cells(&entry, &matrices).unwrap()),
+        [
+            "kit--button--primary--variant=solid--ghost=false",
+            "kit--button--primary--variant=solid--ghost=true",
+            "kit--button--primary--variant=soft--ghost=false",
+            "kit--button--primary--variant=soft--ghost=true",
+        ]
+    );
+    assert_eq!(matrix.cell_count(&entry, &matrices), Ok(4));
+    for name in ["label", "missing"] {
+        let axes: &'static [Axis] = Box::leak(Box::new([Axis::ArgValues(name)]));
+        assert_eq!(
+            Matrix::Axes(axes).cells(&entry, &matrices),
+            Err(MatrixError::NoFixedValues { axis: name })
+        );
+    }
+}
+
+#[test]
+fn a_catalog_locales_axis_takes_the_locales_the_catalog_has() {
+    let matrices = Matrices::default().with_locales(&["en", "es"]);
+    let matrix = Matrix::Axes(&[Axis::CatalogLocales]);
+    assert_eq!(
+        ids(&matrix.cells(&entry(), &matrices).unwrap()),
+        [
+            "kit--button--primary--locale=en",
+            "kit--button--primary--locale=es"
+        ]
+    );
+    assert_eq!(matrix.cell_count(&entry(), &Matrices::default()), Ok(0));
+}
+
+#[test]
 fn the_cell_count_is_known_before_expanding() {
     let matrices = Matrices::default().with_modes(["light", "dark"]);
     let matrix = Matrix::Axes(&[
@@ -228,10 +274,10 @@ fn the_cell_count_is_known_before_expanding() {
         Axis::Locale(&["en", "ar", "ja"]),
         Axis::Arg("ghost", &["true", "false"]),
     ]);
-    assert_eq!(matrix.cell_count(&matrices), Ok(12));
+    assert_eq!(matrix.cell_count(&entry(), &matrices), Ok(12));
     assert_eq!(matrix.cells(&entry(), &matrices).unwrap().len(), 12);
     assert_eq!(
-        Matrix::Named("missing").cell_count(&matrices),
+        Matrix::Named("missing").cell_count(&entry(), &matrices),
         Err(MatrixError::Unknown { name: "missing" })
     );
 }
@@ -314,7 +360,7 @@ fn the_installed_matrices_are_the_applications() {
     assert_eq!(installed.named(), MATRICES);
     assert_eq!(installed.viewports(), VIEWPORTS);
     assert_eq!(
-        Matrix::Named("layouts").cell_count(&installed),
+        Matrix::Named("layouts").cell_count(&entry(), &installed),
         Ok(4),
         "its viewport names resolve against its own"
     );
@@ -330,7 +376,10 @@ fn the_installed_matrices_take_the_modes_registered_when_they_are_read() {
     let installed = Matrices::installed();
     let registered = theme_core::registered_modes();
     assert_eq!(installed.modes(), registered);
-    assert_eq!(matrix.cell_count(&installed), Ok(registered.len()));
+    assert_eq!(
+        matrix.cell_count(&entry(), &installed),
+        Ok(registered.len())
+    );
 
     theme_core::register_mode("late", || {});
     assert_eq!(

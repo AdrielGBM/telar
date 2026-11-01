@@ -138,7 +138,7 @@ fn pickable(
     };
     let varies = |axis: &CustomAxis| {
         axis.axis(args, matrices)
-            .is_some_and(|axis| Matrix::count(&[axis], matrices) > 1)
+            .is_some_and(|axis| Matrix::count(&[axis], entry, matrices) > 1)
     };
     let mut pickable: Vec<(CustomAxis, Reactive<String>)> = GLOBAL_AXES
         .into_iter()
@@ -147,7 +147,7 @@ fn pickable(
         .collect();
     let mut names = varied_args(args);
     for axis in declared {
-        if let Axis::Arg(name, _) = axis
+        if let Axis::Arg(name, _) | Axis::ArgValues(name) = axis
             && !names.contains(name)
         {
             names.push(name);
