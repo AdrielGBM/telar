@@ -991,7 +991,7 @@ fn text_color_computed_expression_is_reactive() {
     );
 }
 
-/// D2's bug: a layout value that reads state through a *call* was frozen, because the reactivity test was `contains('$')` and a call carries no sigil. `styled_by` is what re-resolves a `LayoutStyle`, and the runtime tracks whatever the closure reads — so the closure is all the emitter has to produce.
+/// A layout value that reads state through a *call* once froze, because the reactivity test was `contains('$')` and a call carries no sigil. `styled_by` is what re-resolves a `LayoutStyle`, and the runtime tracks whatever the closure reads — so the closure is all the emitter has to produce.
 #[test]
 fn a_computed_layout_value_is_re_resolved_even_without_a_sigil() {
     let src = "[logic]\nlet dock = signal(0.0f32);\nfn measured() -> f32 { 12.0 }\n[view]\ncol gap:measured() pad:8\n    text \"x\"\n";
@@ -1481,7 +1481,7 @@ fn a_text_naming_no_family_is_untouched() {
     );
 }
 
-/// T-5.1: a bare generic names its `FontFamily` variant, the fix for the family that used to shape in `SansSerif` no matter which generic was asked for.
+/// A bare generic names its `FontFamily` variant, the fix for the family that used to shape in `SansSerif` no matter which generic was asked for.
 #[test]
 fn a_bare_generic_names_its_variant() {
     let src = "[view]\ntext \"x\" font_family:monospace\n";

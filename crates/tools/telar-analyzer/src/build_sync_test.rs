@@ -13,7 +13,7 @@ fn unbaked_crate(name: &str) -> PathBuf {
     root
 }
 
-/// The whole point of T-6.1: a `src:"…"` the editor sees before any build has must not become a `compile_error!` telling the user to go and run a command.
+/// A `src:"…"` the editor sees before any build has must not become a `compile_error!` telling the user to go and run a command.
 #[test]
 fn a_never_baked_asset_is_baked_rather_than_mirrored_as_an_error() {
     let root = unbaked_crate("never_baked");

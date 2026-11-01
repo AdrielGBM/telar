@@ -246,7 +246,7 @@ fn within(inner: Rect, outer: Rect) -> bool {
         && inner.y + inner.height <= outer.y + outer.height + SLACK
 }
 
-/// Sprint 4's acceptance for the workshop: the chrome passes the checks it runs on a preview, at every width it arranges itself for and with everything it folds away opened.
+/// The workshop's chrome passes the checks it runs on a preview, at every width it arranges itself for and with everything it folds away opened.
 #[test]
 fn the_chrome_passes_its_own_accessibility_checks_in_a_wide_window() {
     let mut workshop = Workshop::app(WIDE, PROJECT);

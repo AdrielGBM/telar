@@ -293,7 +293,7 @@ fn grid_scene(highlight: Option<usize>) -> Vec<DrawCommand> {
     cmds
 }
 
-/// F1 correctness: rendering frame B *after* frame A (so B goes through the damage-prime path — prime the retained frame A, repaint only the changed cell) must produce the same pixels as rendering B from scratch (a full repaint). A missing or ghosted cell would leave a whole cell (~1.6% of the surface) diverging, far above the MSAA-edge tolerance. Skips without a GPU, and is only exercised on the MSAA path (`msaa_samples > 1`); on single-sample GPUs F1 no-ops and the two renders are trivially equal.
+/// Rendering frame B *after* frame A (so B goes through the damage-prime path — prime the retained frame A, repaint only the changed cell) must produce the same pixels as rendering B from scratch (a full repaint). A missing or ghosted cell would leave a whole cell (~1.6% of the surface) diverging, far above the MSAA-edge tolerance. Skips without a GPU, and is only exercised on the MSAA path (`msaa_samples > 1`); on single-sample GPUs the damage path no-ops and the two renders are trivially equal.
 #[test]
 fn damage_prime_matches_full_repaint() {
     const W: u32 = 800;
@@ -315,7 +315,7 @@ fn damage_prime_matches_full_repaint() {
     let mut r1 = match make() {
         Ok(r) => r,
         Err(e) => {
-            common::skip_without_gpu("F1 pixel test", e);
+            common::skip_without_gpu("damage-prime pixel test", e);
             return;
         }
     };
@@ -346,7 +346,7 @@ fn damage_prime_matches_full_repaint() {
     let frac = diff_px as f64 / total as f64;
     assert!(
         frac < 0.003,
-        "F1 damage-prime output diverges from a full repaint: {diff_px}/{total} px differ by >16 ({:.3}%) — a ghosted or unrepainted cell",
+        "damage-prime output diverges from a full repaint: {diff_px}/{total} px differ by >16 ({:.3}%) — a ghosted or unrepainted cell",
         frac * 100.0
     );
 }
@@ -371,7 +371,7 @@ fn translucent_panel_scene(indicator: Color) -> Vec<DrawCommand> {
     ]
 }
 
-/// F1 damage tracking of a frame containing a fill-layer-expanded translucent panel must match a full repaint — this exercises `confine_to_dirty`, which clips the panel's opacity composite to the dirty rect. Without confinement the composite double-applies opacity outside the dirty rect and B-after-A diverges from a full repaint of B by ~54% (measured); confined, it matches.
+/// Damage tracking of a frame containing a fill-layer-expanded translucent panel must match a full repaint — this exercises `confine_to_dirty`, which clips the panel's opacity composite to the dirty rect. Without confinement the composite double-applies opacity outside the dirty rect and B-after-A diverges from a full repaint of B by ~54% (measured); confined, it matches.
 #[test]
 fn damage_confines_translucent_layer_composite() {
     const W: u32 = 800;

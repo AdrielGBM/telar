@@ -8,7 +8,7 @@ use renderer_core::FontFamily;
 use renderer_core::TextWrap;
 use renderer_core::{Color, Declared, Span, TextStyle};
 
-// T-5.1: every generic resolves to the cosmic-text family fontdb actually indexes it under, deterministically — `SystemUi` has no such face and so takes the same route `SansSerif` always has. A bare generic never queries the database at all: `family_exists` treats every generic as always resolvable.
+// Every generic resolves to the cosmic-text family fontdb actually indexes it under, deterministically — `SystemUi` has no such face and so takes the same route `SansSerif` always has. A bare generic never queries the database at all: `family_exists` treats every generic as always resolvable.
 #[test]
 fn every_generic_resolves_to_a_concrete_cosmic_family() {
     let mut sh = TextShaper::new();
@@ -39,7 +39,7 @@ fn every_generic_resolves_to_a_concrete_cosmic_family() {
     );
 }
 
-// T-5.1 follow-up: `Attrs` still takes one family, but which one is now walked against the font database the shaper already holds — a `Named` with no installed face is skipped exactly as the browser skips a missing face in a CSS `font-family` list, rather than being shaped in regardless.
+// `Attrs` still takes one family, but which one is now walked against the font database the shaper already holds — a `Named` with no installed face is skipped exactly as the browser skips a missing face in a CSS `font-family` list, rather than being shaped in regardless.
 #[test]
 fn a_stack_falls_to_the_next_member_whose_face_is_missing() {
     let mut sh = TextShaper::new();

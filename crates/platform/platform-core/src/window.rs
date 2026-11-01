@@ -330,7 +330,7 @@ pub struct SurfaceId(pub u64);
 
 /// A platform that drives **N** independent surfaces from a single run, each with its own [`EventHandler`] — the seam a multi-window app or a desktop shell (a bar/OSD/notification per monitor) needs. It is separate from [`Platform`] so the single-surface contract and every existing single-window entry point stay exactly as they are.
 ///
-/// The handler for each surface is produced by a `factory`, not moved in: this is the *handler-factory* shape, so a factory that builds several surfaces need not clone one app. Under M3 every surface shares one UI thread and one reactive runtime (per-surface isolation comes from `ui_core::Surface`), so the factory runs on the UI thread and neither it nor the handler `H` must be `Send`/`Sync` — which lets a `!Send` app (one holding `Rc` state) be produced by the factory.
+/// The handler for each surface is produced by a `factory`, not moved in: this is the *handler-factory* shape, so a factory that builds several surfaces need not clone one app. Every surface shares one UI thread and one reactive runtime (per-surface isolation comes from `ui_core::Surface`), so the factory runs on the UI thread and neither it nor the handler `H` must be `Send`/`Sync` — which lets a `!Send` app (one holding `Rc` state) be produced by the factory.
 pub trait MultiSurfacePlatform {
     /// The window this backend hands to each handler.
     type Window: Window;

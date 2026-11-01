@@ -1,6 +1,6 @@
 use super::*;
 
-// The M3 hazard: many surfaces share one UI thread, so a `Close` pushed by one window's title bar must land only in that window's queue — otherwise a sibling drains it and the wrong window closes.
+// Hazard: many surfaces share one UI thread, so a `Close` pushed by one window's title bar must land only in that window's queue — otherwise a sibling drains it and the wrong window closes.
 #[test]
 fn command_pushed_under_one_context_does_not_leak_to_another() {
     let root = WindowCommandContext::new();

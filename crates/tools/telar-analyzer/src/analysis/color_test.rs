@@ -35,7 +35,7 @@ fn view_hex_and_keyword_attrs_get_swatches_but_quoted_and_tokens_do_not() {
 
 #[test]
 fn signal_color_reference_degrades_without_panic() {
-    // `fill:$accent` (transpiler T-3.x) is a reactive read, not a literal; it must be silently skipped (no swatch), same as a theme token, rather than panicking on the `$` sigil.
+    // `fill:$accent` is a reactive read, not a literal; it must be silently skipped (no swatch), same as a theme token, rather than panicking on the `$` sigil.
     let src = "[view]\nbox fill:$accent stroke:$accent\n";
     let doc = parse(src).unwrap();
     let infos = document_colors(&doc, src);

@@ -2,9 +2,8 @@
 
 How a value in telar changes over time, and where the framework refuses to let it.
 
-This page is referenced from the code — `telar/src/lib.rs` cites **D2**, `telar-transpiler/src/transition.rs`
-cites **F5** and the `.rsx` syntax below. Those citations outlived the document itself for a while; the
-identifiers here are the ones they name.
+The code cites this page by its section labels: `telar-transpiler/src/transition.rs` names **F5** and the
+`.rsx` syntax below.
 
 ## Design
 
@@ -149,7 +148,7 @@ let sway = memo(move || (time.get().as_secs_f32() * TAU / 0.9).sin() * 0.04);
 | Who keeps it running | A reactive reader: an effect, memo or view segment that calls `get()` (or reads `read()`). The runtime knows who is subscribed, so a read that is conditional on a signal stops the clock the moment the condition is false, and a reader that is disposed releases it. `peek()` and reads outside any reactive scope are not readers. |
 | Scoping | Gate the read, or use `use_frame_time_while(f)`, which reads the clock only while `f()` is true and holds the last reading otherwise. `use_frame_time()` ties the clock to the calling scope; `FrameClock::new()` is the handle for code that owns it. |
 | Time scale | A frame's step is multiplied by `motion::scale()`, so slow motion applies. |
-| Reduced motion | The ticker hands it a scale of `0.0`. It **freezes at its current reading** and stops requesting frames: the same pause a looping `Keyframes` takes (D5), except it holds the reading where a loop snaps to the end of its step, because a clock has no end to jump to. Whatever is derived from it stays at the pose it had. When the preference clears it resumes from the same reading, without the paused gap. |
+| Reduced motion | The ticker hands it a scale of `0.0`. It **freezes at its current reading** and stops requesting frames: the same pause a looping `Keyframes` takes, except it holds the reading where a loop snaps to the end of its step, because a clock has no end to jump to. Whatever is derived from it stays at the pose it had. When the preference clears it resumes from the same reading, without the paused gap. |
 
 **Frames.** The clock registers with the ticker like any animation and reports itself unsettled only while it has a reader and is not paused. That is the one signal every runner already uses to keep scheduling frames (`about_to_wait` → `motion_has_active`), so there is nothing per target to implement: web `requestAnimationFrame`, the desktop and Android frame callbacks (Choreographer on Android), the terminal's tick and the headless loop all take their next frame from it, and all go to sleep when the last reader leaves. Each tick writes the signal, which re-runs only its readers and dirties the tree through the usual path.
 

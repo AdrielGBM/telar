@@ -80,7 +80,7 @@ fn a_shadow_behind_the_glyphs_is_drawn() {
     );
 }
 
-/// The bug T-5.1 starts from: a generic quoted like a face name never reached the browser as the keyword it was — `"monospace"` is not the same declaration as `monospace`.
+/// The bug: a generic quoted like a face name never reached the browser as the keyword it was — `"monospace"` is not the same declaration as `monospace`.
 #[test]
 fn a_generic_family_goes_out_unquoted() {
     let style = TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::Monospace);

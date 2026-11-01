@@ -285,7 +285,7 @@ geometry-core = { workspace = true, optional = true }
 i18n-core = { workspace = true }
 icons-core = { workspace = true, optional = true }
 layout-core = { workspace = true, optional = true }
-# Always-on (D2): the motion engine is small, and the facade must expose `motion::*` for transpiler codegen whatever else is off.
+# Always-on: the motion engine is small, and the facade must expose `motion::*` for transpiler codegen whatever else is off.
 motion-core = { workspace = true }
 platform-core = { workspace = true, optional = true }
 platform-headless = { workspace = true, optional = true }

@@ -35,7 +35,7 @@ impl App for FillApp {
     }
 }
 
-/// A fill app that can be told to panic during build, to exercise the multi-surface panic quarantine (T-4.2): a surface whose build panics must unmount without tumbling the other surfaces.
+/// A fill app that can be told to panic during build, to exercise the multi-surface panic quarantine: a surface whose build panics must unmount without tumbling the other surfaces.
 pub struct MaybePanicApp {
     pub color: Color,
     pub panic_on_build: bool,

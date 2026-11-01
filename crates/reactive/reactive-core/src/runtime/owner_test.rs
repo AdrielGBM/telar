@@ -50,7 +50,7 @@ fn an_effect_stops_running_when_its_owner_is_disposed() {
     assert_eq!(*seen.borrow(), vec![0, 1], "the owner deregistered it");
 }
 
-/// T-1.3's guarantee, for the owner stack. A panic mid-build that leaves the stack deeper than it started puts every later creation under the wrong owner — and a lifetime error surfaces nowhere near the panic that caused it.
+/// A panic mid-build that leaves the owner stack deeper than it started puts every later creation under the wrong owner — and a lifetime error surfaces nowhere near the panic that caused it.
 #[test]
 fn a_panic_mid_build_leaves_the_stack_where_it_found_it() {
     let before = current_owner();

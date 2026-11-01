@@ -1,4 +1,4 @@
-//! Integration test for the M3 multi-surface contract: drive N real rsx apps in one run through `run_multi_with_platform` + `HeadlessPlatform`. All surfaces share **one** thread and one reactive runtime, each with its own `Surface` world; each renders a distinct color at a distinct size and its pixels are captured by SurfaceId — proving N surfaces render isolated on a single shared-runtime thread with no cross-talk (T-8.1).
+//! Integration test for the multi-surface contract: drive N real rsx apps in one run through `run_multi_with_platform` + `HeadlessPlatform`. All surfaces share **one** thread and one reactive runtime, each with its own `Surface` world; each renders a distinct color at a distinct size and its pixels are captured by SurfaceId — proving N surfaces render isolated on a single shared-runtime thread with no cross-talk.
 
 #[path = "test_common.rs"]
 mod common;
