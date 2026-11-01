@@ -117,6 +117,39 @@ fn there_is_nothing_to_grab_when_the_content_fits() {
     );
 }
 
+#[test]
+fn content_a_fraction_wider_than_its_snapped_viewport_does_not_scroll() {
+    reset_layout_runtime();
+    let content = Canvas::new(LayoutStyle::new().width(400.6).height(120.0), |_| {
+        RenderNode::Empty
+    })
+    .unwrap();
+    let node = content.layout_node();
+    let mut sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+    compute_layout(
+        node,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    sa.on_event(&Event::Scrolled {
+        delta: ScrollDelta::Pixels { x: -40.0, y: 0.0 },
+        x: 200.0,
+        y: 150.0,
+    });
+    assert_eq!(
+        sa.core.scroll_x.get(),
+        0.0,
+        "the wheel has nowhere to take it"
+    );
+    sa.on_event(&moved(200.0, 296.0));
+    assert_ne!(
+        sa.on_event(&press(200.0, 296.0)),
+        EventResult::Handled,
+        "no bar is drawn, so nothing there answers a press"
+    );
+}
+
 /// Viewport 400x300 over content 1000x300: a 160px thumb with 240px of travel over 600px of scroll.
 #[test]
 fn the_horizontal_bar_drags_the_same_way() {

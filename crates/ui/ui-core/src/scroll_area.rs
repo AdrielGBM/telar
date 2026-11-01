@@ -98,13 +98,13 @@ impl Thumb {
         content: f32,
         scroll: f32,
     ) -> Option<Self> {
-        if content <= viewport {
+        let max_scroll = scroll_range(viewport, content);
+        if max_scroll <= 0.0 {
             return None;
         }
         let length = axis
             .snap_size(grid, (viewport / content * viewport).max(MIN_THUMB))
             .min(viewport);
-        let max_scroll = (content - viewport).max(1.0);
         let travel = (viewport - length).max(0.0);
         Some(Self {
             start: axis.snap_pos(grid, origin + (scroll / max_scroll) * travel),
@@ -318,8 +318,7 @@ fn handle_scroll_event(core: &mut ScrollCore, event: &Event, viewport: Rect) -> 
         }
         let (delta_x, delta_y) = delta.pixels();
         let content_rect = content_rect_signal.get();
-        let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
-        let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
+        let (max_scroll_x, max_scroll_y) = scroll_ranges(viewport, content_rect);
         let (delta_x, delta_y) = match wheel_sideways && max_scroll_y <= 0.0 {
             true => (delta_x + delta_y, 0.0),
             false => (delta_x, delta_y),
@@ -646,7 +645,7 @@ impl ScrollCore {
         }
         // The offset grows as the content moves up, the opposite sign to the gesture.
         let velocity = -self.motion.velocity.take();
-        let max = (self.content_rect_signal.peek().height - viewport.height).max(0.0);
+        let max = scroll_range(viewport.height, self.content_rect_signal.peek().height);
         self.fling = crate::fling::Fling::start(self.scroll_y, velocity, (0.0, max));
     }
 
@@ -654,8 +653,7 @@ impl ScrollCore {
         // The content resized under it, so the ground it was travelling over is gone.
         self.catch_all();
         let content_rect = self.content_rect_signal.peek();
-        let max_x = (content_rect.width - viewport.width).max(0.0);
-        let max_y = (content_rect.height - viewport.height).max(0.0);
+        let (max_x, max_y) = scroll_ranges(viewport, content_rect);
         let clamped_x = self.scroll_x.peek().clamp(0.0, max_x);
         let clamped_y = self.scroll_y.peek().clamp(0.0, max_y);
         if self.scroll_x.peek() != clamped_x {
@@ -1099,8 +1097,7 @@ impl LayoutScrollArea {
                 if vp.height <= 0.0 || content.height <= 0.0 {
                     return;
                 }
-                let max_x = (content.width - vp.width).max(0.0);
-                let max_y = (content.height - vp.height).max(0.0);
+                let (max_x, max_y) = scroll_ranges(vp, content);
                 // `peek`, not `get`: this effect writes those signals, and reading them would re-run it for its own correction.
                 if scroll_x.peek() > max_x {
                     scroll_x.set(max_x);
@@ -1334,7 +1331,7 @@ impl LayoutScrollArea {
         let (x, y) = (self.core.scroll_x.peek(), self.core.scroll_y.peek());
         let (_, line) = ScrollDelta::Lines { x: 0.0, y: 1.0 }.pixels();
         let page = (viewport.height - line).max(line);
-        let max_y = (content.height - viewport.height).max(0.0);
+        let (max_x, max_y) = scroll_ranges(viewport, content);
         let (to_x, to_y) = match key {
             Key::Named(NamedKey::ArrowDown) => (x, y + line),
             Key::Named(NamedKey::ArrowUp) => (x, y - line),
@@ -1348,7 +1345,6 @@ impl LayoutScrollArea {
             Key::Named(NamedKey::End) => (x, max_y),
             _ => return None,
         };
-        let max_x = (content.width - viewport.width).max(0.0);
         Some((to_x.clamp(0.0, max_x), to_y.clamp(0.0, max_y)))
     }
 
@@ -1462,13 +1458,26 @@ fn overflows(viewport: Rect, content: Rect) -> bool {
 
 /// Along which axes, across and down, content of `content`'s size can scroll in a laid-out `viewport`.
 fn overflow_axes(viewport: Rect, content: Rect) -> (bool, bool) {
-    const SLACK: f32 = 0.5;
     if viewport.width <= 0.0 || viewport.height <= 0.0 {
         return (false, false);
     }
+    let (across, down) = scroll_ranges(viewport, content);
+    (across > 0.0, down > 0.0)
+}
+
+/// How far content `content` long can scroll in a viewport `viewport` long: nowhere within the pixel a laid-out viewport can lose to its content, since both of its edges are snapped to whole pixels and the content's length is not.
+fn scroll_range(viewport: f32, content: f32) -> f32 {
+    const SLACK: f32 = 1.0;
+    match content - viewport {
+        excess if excess > SLACK => excess,
+        _ => 0.0,
+    }
+}
+
+fn scroll_ranges(viewport: Rect, content: Rect) -> (f32, f32) {
     (
-        content.width - viewport.width > SLACK,
-        content.height - viewport.height > SLACK,
+        scroll_range(viewport.width, content.width),
+        scroll_range(viewport.height, content.height),
     )
 }
 
