@@ -19,7 +19,7 @@ on by default:
 
 ```toml
 # Cargo.toml
-telar-components = { version = "0.2.2", features = ["icons"] }
+telar-components = { version = "0.2.3", features = ["icons"] }
 ```
 
 Then list it in the app's `telar.toml`, so every `.rsx` file sees its components without a `use`:

@@ -87,8 +87,8 @@ an optional dependency, which `cargo telar new` writes:
 
 ```toml
 [dependencies]
-telar-devtools = { version = "0.2.2", optional = true }
-telar-workshop = { version = "0.2.2", optional = true }
+telar-devtools = { version = "0.2.3", optional = true }
+telar-workshop = { version = "0.2.3", optional = true }
 
 [features]
 telar-devtools = ["dep:telar-devtools"]

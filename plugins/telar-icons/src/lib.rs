@@ -4,7 +4,7 @@
 //!
 //! ```toml
 //! # Cargo.toml
-//! telar-icons = "0.2.2"
+//! telar-icons = "0.2.3"
 //!
 //! # telar.toml
 //! [telar]

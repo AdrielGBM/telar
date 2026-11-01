@@ -8,10 +8,10 @@ Not the same thing as hot reload, which is dev-only and swaps the *whole* window
 
 ```toml
 # In the guest
-telar-embed = "0.2.2"
+telar-embed = "0.2.3"
 
 # In the host
-telar-embed = { version = "0.2.2", features = ["host"] }
+telar-embed = { version = "0.2.3", features = ["host"] }
 ```
 
 The guest implements `EmbeddedApp` and calls `embed!` to export its entries; the host calls `load_embedded`, an `unsafe fn` because loading a library runs foreign code, and drives what it returns. The host must call `LoadedEmbed::on_frame` every frame for guest timers to fire and wake the event loop.

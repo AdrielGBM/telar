@@ -7,7 +7,7 @@
 //!
 //! ```toml
 //! # Cargo.toml
-//! telar-components = { version = "0.2.2", features = ["icons"] }
+//! telar-components = { version = "0.2.3", features = ["icons"] }
 //!
 //! # telar.toml
 //! [telar]
