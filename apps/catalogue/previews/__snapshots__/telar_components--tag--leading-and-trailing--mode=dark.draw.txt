@@ -6,19 +6,14 @@ element group
       element group
         element group
           element group
-            rect 289,288 64x24 fill=#4dc78cff border=1 border-color=#00000000 radius=6
+            rect 287,288 59x24 fill=#4dc78cff border=1 border-color=#00000000 radius=6
             element group
               element group
-                rect 297,294 12x12
-                element group
-                  matrix 1,0,0,1,297,294
-                    path M10,3 L4.5,8.5 L2,6 stroke=1 stroke-color=#0d0f1fff cap=round join=round
-                  end
-                end
+                rect 295,297 6x6 fill=#0d0f1fff radius=3
               end
               element group
-                matrix 1,0,0,1,311,288
-                  text 0,5 34.83x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                matrix 1,0,0,1,303,288
+                  text 0,5 35x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
                 end
               end
             end
@@ -26,22 +21,22 @@ element group
             end
           end
           element group
-            rect 362,288 84x24 fill=#6badfa1a border=1 border-color=#00000000 radius=6
+            rect 354,288 83x24 fill=#6badfa1a border=1 border-color=#00000000 radius=6
             element group
               element group
-                rect 370,294 12x12 border=1.44 border-color=#99a1b8ff radius=6
+                rect 362,294 12x12 border=1.44 border-color=#99a1b8ff radius=6
                 element group
                   matrix 1,0,0,1,0,0
-                    rect 370,294 12x12
+                    rect 362,294 12x12
                     element group
-                      rect 375,294 3x3 fill=#6badfaff radius=1.5
+                      rect 367,294 3x3 fill=#6badfaff radius=1.5
                     end
                   end
                 end
               end
               element group
-                matrix 1,0,0,1,384,288
-                  text 0,5 54x14.28 "Exporting" size=11.9 family=sans-serif weight=400 color=#6badfaff wrap=none lang=en
+                matrix 1,0,0,1,376,288
+                  text 0,5 53.84x14.28 "Exporting" size=11.9 family=sans-serif weight=400 color=#6badfaff wrap=none lang=en
                 end
               end
             end
@@ -49,19 +44,16 @@ element group
             end
           end
           element group
-            rect 454,288 58x24 fill=#00000000 border=1 border-color=#7394ffff radius=6
+            rect 446,288 68x24 fill=#00000000 border=1 border-color=#7394ffff radius=6
             element group
               element group
-                matrix 1,0,0,1,462,288
-                  text 0,5 28.31x14.28 "Logo" size=11.9 family=sans-serif weight=400 color=#7394ffff wrap=none lang=en
+                matrix 1,0,0,1,454,288
+                  text 0,5 38x14.28 "Layers" size=11.9 family=sans-serif weight=400 color=#7394ffff wrap=none lang=en
                 end
               end
               element group
-                rect 492,294 12x12
-                element group
-                  matrix 1,0,0,1,492,294
-                    path M5.76,1.15 C5.81,1.06 5.9,1 6,1 C6.1,1 6.19,1.06 6.24,1.15 L7.39,3.49 C7.55,3.8 7.84,4.02 8.19,4.07 L10.77,4.45 C10.87,4.46 10.96,4.53 10.99,4.63 C11.02,4.72 10.99,4.83 10.92,4.9 L9.05,6.72 C8.8,6.96 8.69,7.31 8.75,7.66 L9.19,10.23 C9.21,10.32 9.16,10.43 9.08,10.49 C9,10.55 8.89,10.55 8.8,10.51 L6.49,9.29 C6.18,9.13 5.82,9.13 5.51,9.29 L3.2,10.51 C3.11,10.55 3,10.54 2.92,10.49 C2.84,10.43 2.8,10.32 2.81,10.23 L3.25,7.66 C3.31,7.31 3.2,6.96 2.95,6.72 L1.08,4.9 C1.01,4.83 0.98,4.72 1.01,4.63 C1.04,4.53 1.13,4.46 1.23,4.44 L3.81,4.07 C4.15,4.02 4.45,3.8 4.61,3.49 Z stroke=1 stroke-color=#7394ffff cap=round join=round
-                  end
+                matrix 1,0,0,1,493,288
+                  text 0,5 12.45x14.28 "12" size=11.9 family=sans-serif weight=600 color=#7394ffff wrap=none lang=en
                 end
               end
             end

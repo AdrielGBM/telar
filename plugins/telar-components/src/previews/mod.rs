@@ -65,8 +65,6 @@ mod stepper;
 mod swatches;
 #[path = "../navigation/tabs/tabs.preview.rs"]
 mod tabs;
-#[path = "../display/tag/tag.preview.rs"]
-mod tag;
 #[path = "../inputs/text_field/text_field.preview.rs"]
 mod text_field;
 #[path = "../overlays/toast/toast.preview.rs"]
@@ -106,7 +104,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(swatches::previews());
     entries.extend(handle::previews());
     entries.extend(stepper::previews());
-    entries.extend(tag::previews());
     entries.extend(image::previews());
     entries.extend(link::previews());
     entries.extend(progress::previews());

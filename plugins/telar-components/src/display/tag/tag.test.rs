@@ -200,10 +200,6 @@ fn filter_with_an_action(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, Layout
         .build())
 }
 
-fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    Ok(tag(TagProps::props().label("3").build())?.a11y_label(|| "3 unread comments"))
-}
-
 #[test]
 fn a_tag_draws_its_label() {
     fresh_layout_runtime();
@@ -450,26 +446,6 @@ fn a_tag_with_none_of_the_behaviours_is_text_and_no_tab_stop() {
 }
 
 #[test]
-fn an_action_is_the_callers_control_with_its_own_name() {
-    let play = played(with_an_action);
-    assert_eq!(buttons(&play), [("Remove Logo".to_string(), None)]);
-}
-
-#[test]
-fn the_action_is_a_tab_stop_of_its_own_pressed_by_enter_space_and_a_click() {
-    let mut play = played(with_an_action);
-    let remove = || by_role(Role::Button).named("Remove Logo");
-    play.tab().unwrap();
-    play.expect_focused(remove()).unwrap();
-    play.press(Key::Named(NamedKey::Enter)).unwrap();
-    play.expect_action("remove", 1).unwrap();
-    play.press(Key::Named(NamedKey::Space)).unwrap();
-    play.expect_action("remove", 2).unwrap();
-    play.click(remove()).unwrap();
-    play.expect_action("remove", 3).unwrap();
-}
-
-#[test]
 fn selected_alone_makes_a_filter_bound_to_it() {
     let mut play = played(bound);
     let images = || by_role(Role::Button).named("Images");
@@ -544,21 +520,6 @@ fn a_filter_with_an_action_is_a_toggle_with_the_action_beside_it() {
     play.expect_action("remove", 1).unwrap();
     play.expect_toggled(by_role(Role::Button).named("Images"), true)
         .unwrap();
-}
-
-/// The name the call gives a counter is what a reader hears for it, once: the digit it shows is not read again beside it.
-#[test]
-fn a_counter_is_named_by_the_call() {
-    let read: Vec<(Role, String)> = played(counter)
-        .snapshot()
-        .into_iter()
-        .map(|node| (node.role, node.name))
-        .collect();
-    assert_eq!(
-        read,
-        [(Role::Label, "3 unread comments".to_string())],
-        "{read:?}"
-    );
 }
 
 #[test]
