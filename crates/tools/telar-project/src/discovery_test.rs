@@ -90,7 +90,8 @@ fn a_name_the_site_declares_itself_is_left_alone() {
     std::fs::write(root.join("tests.rs"), "").unwrap();
 
     let generated = root.join("build");
-    let out = discover_rust_modules(&root, &root, &generated).declarations;
+    let out =
+        discover_rust_modules(&root, &root, &generated, ModuleVisibility::Public).declarations;
 
     assert!(!out.contains("mod helper;"), "declared by hand: {out}");
     assert!(!out.contains("mod editor;"), "declared by hand: {out}");
@@ -115,12 +116,14 @@ fn a_module_that_must_place_its_own_rsx_is_told_to() {
     std::fs::write(root.join("drawer/panel.rsx"), "[view]\ncol\n").unwrap();
 
     let generated = root.join("build");
-    let out = discover_rust_modules(&root, &root, &generated).declarations;
+    let out =
+        discover_rust_modules(&root, &root, &generated, ModuleVisibility::Public).declarations;
     assert!(out.contains("compile_error!"), "{out}");
     assert!(out.contains("telar::rsx_modules!();"), "{out}");
 
     std::fs::write(root.join("drawer/mod.rs"), "telar::rsx_modules!();\n").unwrap();
-    let quiet = discover_rust_modules(&root, &root, &generated).declarations;
+    let quiet =
+        discover_rust_modules(&root, &root, &generated, ModuleVisibility::Public).declarations;
     assert!(!quiet.contains("compile_error!"), "{quiet}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -152,7 +155,12 @@ fn a_rsx_under_a_directory_beside_its_module_file_is_named() {
     .unwrap();
     std::fs::write(root.join("src/keymap/placed/row.rsx"), "[view]\ncol\n").unwrap();
 
-    let walk = discover_rust_modules(&root.join("src"), &root.join("src"), &root.join("build"));
+    let walk = discover_rust_modules(
+        &root.join("src"),
+        &root.join("src"),
+        &root.join("build"),
+        ModuleVisibility::Public,
+    );
     let _ = std::fs::remove_dir_all(&root);
 
     assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
@@ -187,7 +195,7 @@ fn a_module_file_the_tree_declares_cannot_keep_children_beside_it() {
     std::fs::write(root.join("keymap.rs"), "mod palette;\n").unwrap();
     std::fs::write(root.join("keymap/palette.rs"), "").unwrap();
 
-    let walk = discover_rust_modules(&root, &root, &root.join("build"));
+    let walk = discover_rust_modules(&root, &root, &root.join("build"), ModuleVisibility::Public);
     let _ = std::fs::remove_dir_all(&root);
 
     assert_eq!(
@@ -217,7 +225,13 @@ fn a_nested_invocation_places_its_own_directory() {
     std::fs::write(root.join("app/editor/top_bar.rsx"), "[view]\ncol\n").unwrap();
 
     let generated = root.join("build");
-    let out = discover_rust_modules(&root, &root.join("app/editor"), &generated).declarations;
+    let out = discover_rust_modules(
+        &root,
+        &root.join("app/editor"),
+        &generated,
+        ModuleVisibility::Public,
+    )
+    .declarations;
 
     assert!(
         !out.contains("pub mod app;"),
@@ -268,7 +282,7 @@ fn discover_rust_modules_mirrors_tree() {
         declarations: out,
         files,
         ..
-    } = discover_rust_modules(&root, &root, &generated);
+    } = discover_rust_modules(&root, &root, &generated, ModuleVisibility::Public);
     let core_rs = content(&files, &modtree.join("core.rs"));
     let shared_rs = content(&files, &modtree.join("shared.rs"));
     let features_rs = content(&files, &modtree.join("features.rs"));
@@ -376,7 +390,7 @@ fn no_site_declares_the_file_that_includes_it() {
     std::fs::write(root.join("media/player.rsx"), "[view]\ncol\n").unwrap();
 
     let generated = root.join("build");
-    let written = ModuleTree::discover(&root, &generated, "modules.rs")
+    let written = ModuleTree::discover(&root, &generated, "modules.rs", ModuleVisibility::Public)
         .write()
         .unwrap();
 
@@ -458,7 +472,7 @@ fn a_mod_rsx_owns_its_directory() {
         declarations: out,
         files,
         ..
-    } = discover_rust_modules(&root, &root, &generated);
+    } = discover_rust_modules(&root, &root, &generated, ModuleVisibility::Public);
 
     assert!(
         out.contains("#[path = \"../build/media/mod.rs\"] pub mod media;"),
@@ -496,7 +510,7 @@ fn a_mod_rs_beside_a_mod_rsx_is_included_unless_it_opens_with_an_inner_attribute
     let generated = root.join("build");
     let children_file = generated.join("media").join(MODULE_CHILDREN_FILENAME);
 
-    let files = discover_rust_modules(&root, &root, &generated).files;
+    let files = discover_rust_modules(&root, &root, &generated, ModuleVisibility::Public).files;
     let combined = content(&files, &children_file);
     assert!(combined.contains("include!("), "{combined}");
     assert!(
@@ -509,7 +523,7 @@ fn a_mod_rs_beside_a_mod_rsx_is_included_unless_it_opens_with_an_inner_attribute
         "//! The bar.\npub fn helper() {}\n",
     )
     .unwrap();
-    let files = discover_rust_modules(&root, &root, &generated).files;
+    let files = discover_rust_modules(&root, &root, &generated, ModuleVisibility::Public).files;
     let refused = content(&files, &children_file);
     assert!(refused.contains("compile_error!"), "{refused}");
     assert!(!refused.contains("include!("), "{refused}");
@@ -532,7 +546,7 @@ fn the_crate_roots_bin_directory_is_left_to_cargo() {
         declarations: out,
         files,
         ..
-    } = discover_rust_modules(&root, &root, &generated);
+    } = discover_rust_modules(&root, &root, &generated, ModuleVisibility::Public);
     assert!(!out.contains("pub mod bin;"), "{out}");
 
     let nested = content(&files, &generated.join(MODULE_TREE_DIR).join("app.rs"));
@@ -593,13 +607,13 @@ fn a_tree_written_before_a_module_was_added_differs() {
     std::fs::write(src.join("core/theme.rs"), "").unwrap();
     let generated = root.join(".telar/build");
 
-    let tree = ModuleTree::discover(&src, &generated, "modules.rs");
+    let tree = ModuleTree::discover(&src, &generated, "modules.rs", ModuleVisibility::Public);
     assert!(tree.first_difference().is_some(), "nothing written yet");
     tree.write().unwrap();
     assert_eq!(tree.first_difference(), None);
 
     std::fs::write(src.join("core/menu.rs"), "").unwrap();
-    let grown = ModuleTree::discover(&src, &generated, "modules.rs");
+    let grown = ModuleTree::discover(&src, &generated, "modules.rs", ModuleVisibility::Public);
     let stale = grown.first_difference().map(Path::to_path_buf);
     let _ = std::fs::remove_dir_all(&root);
     assert_eq!(stale, Some(generated.join(MODULE_TREE_DIR).join("core.rs")));
@@ -662,7 +676,7 @@ fn a_tree_compiles_from_a_read_only_copy_in_another_directory() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, body).unwrap();
     }
-    ModuleTree::discover(&src, &generated, "modules.rs")
+    ModuleTree::discover(&src, &generated, "modules.rs", ModuleVisibility::Public)
         .write()
         .unwrap();
 
@@ -675,6 +689,7 @@ fn a_tree_compiles_from_a_read_only_copy_in_another_directory() {
         &moved.join("src"),
         &moved.join(".telar/build"),
         "modules.rs",
+        ModuleVisibility::Public,
     )
     .first_difference()
     .map(Path::to_path_buf);
@@ -891,7 +906,13 @@ fn a_previews_file_is_declared_as_a_module_beside_the_component_it_previews() {
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join("checkbox.rsx"), "").unwrap();
     std::fs::write(root.join("checkbox.previews.rsx"), "").unwrap();
-    let out = discover_rust_modules(&root, &root, &root.join("__generated")).declarations;
+    let out = discover_rust_modules(
+        &root,
+        &root,
+        &root.join("__generated"),
+        ModuleVisibility::Public,
+    )
+    .declarations;
     let _ = std::fs::remove_dir_all(&root);
 
     assert!(out.contains("pub mod checkbox;"), "{out}");
@@ -900,5 +921,51 @@ fn a_previews_file_is_declared_as_a_module_beside_the_component_it_previews() {
             "#[path = \"../__generated/checkbox.previews.rs\"] pub mod checkbox_previews;"
         ),
         "{out}"
+    );
+}
+
+/// A library's tree is its own: every module it discovers is `pub(crate)`, so its API is what its root re-exports. A component in a directory of its own, `display/kbd/kbd.rsx` beside `kbd_test.rs` and `kbd.previews.rs`, is declared as the module of that name inside it, which clippy would otherwise read as a slip.
+#[test]
+fn a_library_keeps_its_modules_and_a_component_keeps_a_directory_of_its_own() {
+    let root = std::env::temp_dir().join(format!("rsx_component_dirs_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("display/kbd")).unwrap();
+    std::fs::create_dir_all(root.join("inputs/button")).unwrap();
+    for path in [
+        "display/kbd/kbd.rsx",
+        "display/kbd/kbd_test.rs",
+        "display/kbd/kbd.previews.rs",
+        "inputs/button/button.rs",
+        "inputs/button/label.rs",
+    ] {
+        std::fs::write(root.join(path), "").unwrap();
+    }
+    let generated = root.join("__generated");
+    let modtree = generated.join(MODULE_TREE_DIR);
+    let SiteWalk {
+        declarations,
+        files,
+        ..
+    } = discover_rust_modules(&root, &root, &generated, ModuleVisibility::Crate);
+    let kbd = content(&files, &modtree.join("display__kbd.rs")).to_owned();
+    let button = content(&files, &modtree.join("inputs__button.rs")).to_owned();
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        declarations.contains("pub(crate) mod display;"),
+        "{declarations}"
+    );
+    assert!(!declarations.contains("] pub mod"), "{declarations}");
+    assert_eq!(
+        kbd,
+        "#[allow(clippy::module_inception)] #[path = \"../display/kbd/kbd.rs\"] pub(crate) mod kbd;\n"
+    );
+    assert!(
+        button.contains("#[allow(clippy::module_inception)] #[path = \"../../inputs/button/button.rs\"] pub(crate) mod button;"),
+        "{button}"
+    );
+    assert!(
+        button.contains("\n#[path = \"../../inputs/button/label.rs\"] pub(crate) mod label;"),
+        "only the module named as its directory: {button}"
     );
 }

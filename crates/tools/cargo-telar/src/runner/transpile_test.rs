@@ -123,7 +123,7 @@ fn an_unreadable_prelude_fails_the_run() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A library is compiled as a dependency from its Plain output whatever the application's build asked for, and selected from the flavour it asked for, so every flavour is written for it — each with the module tree that wires it.
+/// A library is compiled as a dependency from its Plain output whatever the application's build asked for, and selected from the flavour it asked for, so every flavour is written for it — each with the module tree that wires it, whose modules a library keeps to itself.
 #[test]
 fn a_library_member_gets_every_flavour_and_its_module_tree() {
     let root = package("library");
@@ -145,6 +145,7 @@ fn a_library_member_gets_every_flavour_and_its_module_tree() {
             &root.join("src"),
             &telar_project::generated_dir(&root, flavour),
             flavour.site_file_name(),
+            telar_project::ModuleVisibility::Crate,
         );
         assert_eq!(tree.first_difference(), None, "{flavour:?}");
     }
@@ -152,7 +153,7 @@ fn a_library_member_gets_every_flavour_and_its_module_tree() {
     let _ = std::fs::remove_dir_all(&root);
     assert_eq!(
         site,
-        "#[path = \"../../.telar/build/card.rs\"] pub mod card;\n"
+        "#[path = \"../../.telar/build/card.rs\"] pub(crate) mod card;\n"
     );
 }
 

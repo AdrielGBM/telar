@@ -419,6 +419,10 @@ fn a_library_dependency_is_wired_from_a_read_only_package_without_writing() {
         &root.join("src"),
         &telar_project::generated_dir(&root, BuildFlavour::Plain),
         BuildFlavour::Plain.site_file_name(),
+        telar_project::TelarManifest::load(&root)
+            .unwrap()
+            .telar
+            .module_visibility(),
     )
     .write()
     .unwrap();
@@ -475,6 +479,10 @@ fn a_module_tree_older_than_the_sources_is_refused() {
             &root.join("src"),
             &generated,
             BuildFlavour::Plain.site_file_name(),
+            telar_project::TelarManifest::load(&root)
+                .unwrap()
+                .telar
+                .module_visibility(),
         )
     };
     let package = super::Package {
@@ -540,6 +548,10 @@ fn with_baked_catalog(
         &root.join("src"),
         &telar_project::generated_dir(&root, flavour),
         flavour.site_file_name(),
+        telar_project::TelarManifest::load(&root)
+            .unwrap()
+            .telar
+            .module_visibility(),
     )
     .write()
     .unwrap();
@@ -749,6 +761,10 @@ fn a_library_dependency_lists_its_rsx_previews() {
         &root.join("src"),
         &telar_project::generated_dir(&root, BuildFlavour::Plain),
         BuildFlavour::Plain.site_file_name(),
+        telar_project::TelarManifest::load(&root)
+            .unwrap()
+            .telar
+            .module_visibility(),
     )
     .write()
     .unwrap();

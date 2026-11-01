@@ -843,6 +843,7 @@ fn wire_package(
                 &src_dir,
                 &generated_dir,
                 flavour.site_file_name(),
+                manifest.telar.module_visibility(),
             ),
         )?;
         let include_path = telar_project::site_include_path(flavour);

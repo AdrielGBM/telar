@@ -411,6 +411,14 @@ impl TelarSection {
         }
     }
 
+    /// How far the modules discovered in this package reach: a library keeps its own to itself, an application exposes them to its benches and integration tests.
+    pub fn module_visibility(&self) -> crate::ModuleVisibility {
+        match self.library {
+            true => crate::ModuleVisibility::Crate,
+            false => crate::ModuleVisibility::Public,
+        }
+    }
+
     /// The crates this package's `.rsx` glob-imports, in the order declared.
     pub fn prelude(&self) -> &[PreludeEntry] {
         self.prelude.as_deref().unwrap_or_default()

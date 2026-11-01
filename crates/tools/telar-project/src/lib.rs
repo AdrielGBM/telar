@@ -51,11 +51,11 @@ pub use catalog::{
 pub use declared::{DeclaredEntry, EntryProblem};
 pub use dependencies::{DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE, declares_optional_dependency};
 pub use discovery::{
-    MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, MODULE_TREE_DIR, ModuleTree, SITE_DIR,
-    assets_root, collect_files_by_ext, component_name, find_rsx_files, find_rsx_files_in_tree,
-    invokes_placement_macro, is_generated_output, is_module_root, is_previews_file, module_name,
-    placement_sites, prune_stale_generated, prune_stale_sites, relative_output_path,
-    site_include_path, source_for_generated, stray_placement_files,
+    MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, MODULE_TREE_DIR, ModuleTree, ModuleVisibility,
+    SITE_DIR, assets_root, collect_files_by_ext, component_name, find_rsx_files,
+    find_rsx_files_in_tree, invokes_placement_macro, is_generated_output, is_module_root,
+    is_previews_file, module_name, placement_sites, prune_stale_generated, prune_stale_sites,
+    relative_output_path, site_include_path, source_for_generated, stray_placement_files,
 };
 pub use fonts::{
     FontDeclaration, FontDisplay, FontFormat, FontStyleDeclaration, WeightDeclaration,

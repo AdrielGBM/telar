@@ -35,6 +35,10 @@ fn wired(name: &str, telar_toml: &str, flavour: BuildFlavour, invocation: Invoca
         &root.join("src"),
         &telar_project::generated_dir(&root, flavour),
         flavour.site_file_name(),
+        telar_project::TelarManifest::load(&root)
+            .unwrap()
+            .telar
+            .module_visibility(),
     )
     .write()
     .unwrap();

@@ -127,6 +127,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
                 &src_dir,
                 &generated_dir,
                 flavour.site_file_name(),
+                telar.module_visibility(),
             );
             for problem in tree.problems() {
                 all_ok = false;

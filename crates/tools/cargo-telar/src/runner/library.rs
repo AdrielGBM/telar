@@ -505,9 +505,13 @@ pub(super) fn artifact_problems(package_dir: &Path, telar_version: &str) -> Vec<
     }
 
     if telar_project::invokes_placement_macro(&src_dir)
-        && let Some(stale) =
-            telar_project::ModuleTree::discover(&src_dir, &generated_dir, plain.site_file_name())
-                .first_difference()
+        && let Some(stale) = telar_project::ModuleTree::discover(
+            &src_dir,
+            &generated_dir,
+            plain.site_file_name(),
+            telar.module_visibility(),
+        )
+        .first_difference()
     {
         let shown = telar_project::relative_slashed(stale, package_dir)
             .unwrap_or_else(|| stale.display().to_string());
