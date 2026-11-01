@@ -1,0 +1,72 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 310,270 180x26 fill=#1c1f29ff radius=6
+            element group
+              matrix 1,0,0,1,318,274
+                text 0,1 63x16.8 "Duplicate" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+              end
+            end
+            element keyboardinput
+              element group
+                element group
+                  element group
+                    rect 430,274 28x18 fill=#ebedf51a border=1 border-color=#00000000 radius=6
+                    element group
+                      matrix 1,0,0,1,434,276
+                        text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                      end
+                    end
+                  end
+                  element group
+                    rect 460,274 21x18 fill=#ebedf51a border=1 border-color=#00000000 radius=6
+                    element group
+                      matrix 1,0,0,1,466,276
+                        text 0,0 9x14.28 "D" size=11.9 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+          element group
+            rect 310,304 180x26 fill=#ebedf5ff radius=6
+            element group
+              matrix 1,0,0,1,318,308
+                text 0,1 105x16.8 "Group selection" size=14 family=sans-serif weight=400 color=#1c1f29ff lang=en
+              end
+            end
+            element keyboardinput
+              element group
+                element group
+                  element group
+                    rect 430,308 28x18 fill=#1c1f291a border=1 border-color=#00000000 radius=6
+                    element group
+                      matrix 1,0,0,1,434,310
+                        text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#1c1f29ff wrap=none lang=en
+                      end
+                    end
+                  end
+                  element group
+                    rect 460,308 21x18 fill=#1c1f291a border=1 border-color=#00000000 radius=6
+                    element group
+                      matrix 1,0,0,1,466,310
+                        text 0,0 9x14.28 "G" size=11.9 family=sans-serif weight=400 color=#1c1f29ff wrap=none lang=en
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

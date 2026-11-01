@@ -57,21 +57,23 @@ element group
                   end
                 end
               end
-              element group
+              element keyboardinput
                 element group
                   element group
-                    rect 485,45 28x18 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=6
                     element group
-                      matrix 1,0,0,1,489,47
-                        text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                      rect 485,45 28x18 fill=#171a2e14 border=1 border-color=#00000000 radius=6
+                      element group
+                        matrix 1,0,0,1,489,47
+                          text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
                       end
                     end
-                  end
-                  element group
-                    rect 515,45 21x18 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=6
                     element group
-                      matrix 1,0,0,1,521,47
-                        text 0,0 8x14.28 "=" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                      rect 515,45 21x18 fill=#171a2e14 border=1 border-color=#00000000 radius=6
+                      element group
+                        matrix 1,0,0,1,521,47
+                          text 0,0 8x14.28 "=" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
                       end
                     end
                   end
@@ -87,21 +89,23 @@ element group
                   end
                 end
               end
-              element group
+              element keyboardinput
                 element group
                   element group
-                    rect 485,81 28x18 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=6
                     element group
-                      matrix 1,0,0,1,489,83
-                        text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                      rect 485,81 28x18 fill=#171a2e14 border=1 border-color=#00000000 radius=6
+                      element group
+                        matrix 1,0,0,1,489,83
+                          text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
                       end
                     end
-                  end
-                  element group
-                    rect 515,81 21x18 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=6
                     element group
-                      matrix 1,0,0,1,523,83
-                        text 0,0 5.48x14.28 "-" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                      rect 515,81 21x18 fill=#171a2e14 border=1 border-color=#00000000 radius=6
+                      element group
+                        matrix 1,0,0,1,523,83
+                          text 0,0 5.48x14.28 "-" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
                       end
                     end
                   end

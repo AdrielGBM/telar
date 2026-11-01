@@ -40,7 +40,8 @@ mod handle;
 mod heading_test;
 mod icon_button;
 mod image;
-mod kbd;
+#[cfg(test)]
+mod kbd_test;
 mod line_gutter;
 mod link;
 mod list;
@@ -108,7 +109,7 @@ pub use handle::{HandleProps, HandleTokens, ToPoint, ToValue, handle};
 pub use heading::{HeadingProps, heading};
 pub use icon_button::{IconButtonProps, IconButtonTokens, icon_button};
 pub use image::{ImageProps, ImageSource, ImageTokens, image};
-pub use kbd::{KbdProps, KbdTokens, kbd};
+pub use kbd::{KbdCaps, KbdProps, KbdTokens, kbd};
 pub use line_gutter::LineGutter;
 pub use link::{LinkProps, LinkTarget, LinkTokens, link};
 pub use list::{GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator};

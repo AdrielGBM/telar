@@ -35,6 +35,7 @@ pub(crate) const SATURATION_BRIGHTNESS: &str = "saturation_brightness";
 pub(crate) const SEARCH: &str = "search";
 pub(crate) const SEARCH_COMMANDS: &str = "search_commands";
 pub(crate) const SELECT: &str = "select";
+pub(crate) const THEN: &str = "then";
 pub(crate) const WINDOW: &str = "window";
 
 static CATALOG: Catalog = Catalog {
@@ -346,6 +347,27 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("اختر")),
                 ("en", Message::Plain("Select")),
                 ("es", Message::Plain("Seleccionar")),
+            ],
+        },
+        Entry {
+            key: THEN,
+            messages: &[
+                (
+                    "ar",
+                    Message::Format(&[Part::Arg("first"), Part::Lit("، ثم "), Part::Arg("next")]),
+                ),
+                (
+                    "en",
+                    Message::Format(&[Part::Arg("first"), Part::Lit(", then "), Part::Arg("next")]),
+                ),
+                (
+                    "es",
+                    Message::Format(&[
+                        Part::Arg("first"),
+                        Part::Lit(", luego "),
+                        Part::Arg("next"),
+                    ]),
+                ),
             ],
         },
         Entry {

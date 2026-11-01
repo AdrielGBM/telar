@@ -613,10 +613,65 @@ pub(crate) fn hinted(
     )
 }
 
-/// `chord` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere: what a hint shows and a reader hears. Text that names no [`Chord`] is shown as written.
+/// `chord` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere, a sequence step after step (`Ctrl+K, then S`): what a hint shows and a reader hears. Text that names no [`Chord`] is shown as written.
 pub(crate) fn shown_chord(chord: &str) -> String {
-    match Chord::parse(chord) {
-        Ok(parsed) => parsed.to_string(),
-        Err(_) => chord.trim().to_string(),
+    match chord_steps(chord) {
+        Some(steps) => steps
+            .iter()
+            .map(ChordStep::to_string)
+            .reduce(|first, next| {
+                crate::strings::text_with(
+                    crate::strings::THEN,
+                    &[("first", &first), ("next", &next)],
+                )
+            })
+            .unwrap_or_default(),
+        None => chord.trim().to_string(),
     }
+}
+
+/// One step of a sequence: a chord, or a step that names none, kept as written.
+pub(crate) enum ChordStep {
+    Chord(Chord),
+    Written(String),
+}
+
+impl std::fmt::Display for ChordStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChordStep::Chord(chord) => chord.fmt(f),
+            ChordStep::Written(text) => f.write_str(text),
+        }
+    }
+}
+
+/// The steps of a sequence written as editors write one, `"Mod+K S"`: what is pressed together, step after step, each read on its own so one step that names no [`Chord`] is kept as written beside the others. `None` when no step names a chord: text, not a shortcut.
+pub(crate) fn chord_steps(text: &str) -> Option<Vec<ChordStep>> {
+    let steps: Vec<ChordStep> = step_words(text)
+        .into_iter()
+        .map(|step| match Chord::parse(&step) {
+            Ok(chord) => ChordStep::Chord(chord),
+            Err(_) => ChordStep::Written(step),
+        })
+        .collect();
+    steps
+        .iter()
+        .any(|step| matches!(step, ChordStep::Chord(_)))
+        .then_some(steps)
+}
+
+/// Whitespace parts the steps of a sequence, except beside a `+`, which joins the keys of one chord however it is spaced: `Ctrl + K` is one step, as is `Ctrl + +`.
+fn step_words(text: &str) -> Vec<String> {
+    let mut steps: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match steps.last_mut() {
+            Some(step)
+                if word.starts_with('+') || (step.ends_with('+') && !step.ends_with("++")) =>
+            {
+                step.push_str(word)
+            }
+            _ => steps.push(word.to_string()),
+        }
+    }
+    steps
 }
