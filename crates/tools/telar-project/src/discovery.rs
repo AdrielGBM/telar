@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use std::fmt::Write;
 use std::path::{Component, Path, PathBuf};
 
+use crate::prelude::{is_keyword, is_plain_identifier};
+
 /// Recursively collects files with any of `extensions` under `root`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
 ///
 /// A `root` that names a file is that file, if it matches — so a caller taking paths from a command line does not need a second walk for the case where the user pointed at one thing.
@@ -276,6 +278,10 @@ impl TreeWalk<'_> {
             if file_name.starts_with('.') {
                 continue;
             }
+            if let Some(message) = self.unusable_rsx_name(&path, file_name) {
+                self.report(message, out);
+                continue;
+            }
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
             let module = module_name(&path);
             let name = match is_preview_file(&path) {
@@ -293,6 +299,10 @@ impl TreeWalk<'_> {
                     true => name.to_string(),
                     false => format!("{flat_prefix}__{name}"),
                 };
+                if let Some(message) = self.doubled_directory_message(&path, name) {
+                    self.report(message, out);
+                    continue;
+                }
                 if path.join(MODULE_ROOT_FILENAME).is_file() {
                     if declared_here {
                         self.module_root(&path, &flat, holder, out);
@@ -346,6 +356,8 @@ impl TreeWalk<'_> {
                 }
             } else if is_module_root(&path) {
                 // Its own directory's module, declared by the parent and generated with the children included; as a sibling here it would be `pub mod mod;`.
+            } else if let Some(message) = self.doubled_file_message(&path, name) {
+                self.report(message, out);
             } else if declared_here && path.extension().and_then(|e| e.to_str()) == Some("rsx") {
                 // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
                 out.push_str(&self.mod_decl(
@@ -356,6 +368,68 @@ impl TreeWalk<'_> {
                 ));
             }
         }
+    }
+
+    /// Why the entry cannot be a module although it is or holds a `.rsx`, when its name is no plain identifier: left out it would vanish without a word, and declared, rustc would only suggest `r#type`. `None` for what discovery skips by design: a `.rs` of any name, and a directory with no `.rsx` under it.
+    fn unusable_rsx_name(&self, path: &Path, file_name: &str) -> Option<String> {
+        let (base, subject) = if path.is_dir() {
+            if !dir_has_rsx(path) {
+                return None;
+            }
+            (
+                file_name.to_owned(),
+                "holds `.rsx` files, which are Rust modules placed inside it",
+            )
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") && !is_module_root(path)
+        {
+            (component_name(path), "is a `.rsx`, which is a Rust module")
+        } else {
+            return None;
+        };
+        if is_plain_identifier(&base) {
+            return None;
+        }
+        let reason = match is_keyword(&base) {
+            true => format!("`{base}` is a Rust keyword"),
+            false => format!(
+                "`{base}` is not an identifier: only ASCII letters, digits and `_` are allowed, and not first a digit"
+            ),
+        };
+        let renamed = format!("{}{}", valid_name_for(&base), &file_name[base.len()..]);
+        let shown = self.shown(path);
+        let target = match shown.rsplit_once('/') {
+            Some((parent, _)) => format!("{parent}/{renamed}"),
+            None => renamed,
+        };
+        Some(format!(
+            "{shown} {subject}, so its name has to be an identifier: {reason}. Rename it to {target}"
+        ))
+    }
+
+    /// A `foo.rs` and a `foo.rsx` side by side are two modules named `foo`.
+    fn doubled_file_message(&self, path: &Path, name: &str) -> Option<String> {
+        let is_markup = path.extension().is_some_and(|e| e == "rsx") && !is_preview_file(path);
+        let rust = path.with_extension("rs");
+        (is_markup && rust.is_file() && is_rust_module_file(&rust)).then(|| {
+            format!(
+                "{} and {} are both the module `{name}`: rename one of them",
+                self.shown(&rust),
+                self.shown(path)
+            )
+        })
+    }
+
+    /// A directory with its own `mod.rs` or `mod.rsx` beside a `foo.rs` or `foo.rsx` is the module `foo` twice.
+    fn doubled_directory_message(&self, path: &Path, name: &str) -> Option<String> {
+        let owner = module_file_beside(path)?;
+        let root = [MODULE_ROOT_FILENAME, "mod.rs"]
+            .iter()
+            .map(|file| path.join(file))
+            .find(|file| file.is_file())?;
+        let (owner, root) = (self.shown(&owner), self.shown(&root));
+        Some(format!(
+            "{owner} and {root} are both the module `{name}`: keep one, or move {owner} to {root}"
+        ))
     }
 
     /// Declares a directory whose `mod.rsx` makes it telar's, and produces the file that module's `include!` reads: its children, plus the hand-written `mod.rs` when the directory keeps one.
@@ -462,6 +536,21 @@ impl TreeWalk<'_> {
             .map(slash_separated)
             .unwrap_or_else(|_| path.to_string_lossy().into_owned())
     }
+}
+
+/// `name` with every character an identifier cannot hold replaced by `_`, a leading digit prefixed with `_`, and a keyword suffixed with `_`.
+fn valid_name_for(name: &str) -> String {
+    let mut valid: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    if valid.is_empty() || valid.starts_with(|c: char| c.is_ascii_digit()) {
+        valid.insert(0, '_');
+    }
+    if valid == "_" || is_keyword(&valid) {
+        valid.push('_');
+    }
+    valid
 }
 
 /// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or deleted `.rsx`, a directory that lost its last hand-written `.rs`, or a dropped i18n catalog. Also deletes any `.rs.map` sidecar whose `.rs` is not in the written set. Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not followed), so every path it can act on is provably inside the generated tree; it never removes a directory or a non-`.rs`/`.rs.map` file. Best-effort: a removal failure just leaves that orphan for next time.

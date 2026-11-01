@@ -172,7 +172,7 @@ calls it there. `later` and `now` compile to nothing.
 
 ### Components are Rust paths
 
-A `.rsx` file is a module, and its component is the `pub fn` named after the file. Import what you call:
+A `.rsx` file is a module, and its component is the `pub fn` named after the file. Because it is a Rust module, the name has to be an identifier (letters, digits and `_`, no hyphen, no leading digit, no keyword): `my-card.rsx` is a build error naming `my_card.rsx`, never mapped for you. Import what you call:
 
 ```rsx
 [logic]

@@ -965,3 +965,185 @@ fn a_library_keeps_its_modules_and_a_component_keeps_a_directory_of_its_own() {
         "only the module named as its directory: {button}"
     );
 }
+
+fn problems_of(files: &[(&str, &str)], tag: &str) -> SiteWalk {
+    let root = std::env::temp_dir().join(format!("rsx_names_{tag}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "telar::rsx_modules!();\n").unwrap();
+    for (path, body) in files {
+        let file = root.join("src").join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, body).unwrap();
+    }
+    let walk = discover_rust_modules(
+        &root.join("src"),
+        &root.join("src"),
+        &root.join("build"),
+        ModuleVisibility::Public,
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    walk
+}
+
+const VIEW: &str = "[view]\nbox\n";
+
+#[test]
+fn a_hyphenated_rsx_is_refused_with_its_underscore_name_as_the_fix() {
+    let walk = problems_of(&[("mi-componente.rsx", VIEW)], "hyphen");
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    let problem = &walk.problems[0];
+    assert!(problem.starts_with("src/mi-componente.rsx"), "{problem}");
+    assert!(
+        problem.contains("Rename it to src/mi_componente.rsx"),
+        "{problem}"
+    );
+    assert!(problem.contains("a Rust module"), "{problem}");
+    assert!(
+        !walk.declarations.contains("mod mi"),
+        "{}",
+        walk.declarations
+    );
+    assert!(
+        walk.declarations.contains("compile_error!"),
+        "the build reports it too"
+    );
+}
+
+#[test]
+fn a_rsx_starting_with_a_digit_is_refused() {
+    let walk = problems_of(&[("1two.rsx", VIEW)], "digit");
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0].contains("Rename it to src/_1two.rsx"),
+        "{:?}",
+        walk.problems
+    );
+}
+
+#[test]
+fn a_directory_that_is_no_identifier_is_refused_for_the_rsx_at_any_depth() {
+    let walk = problems_of(&[("my-dir/deep/inner.rsx", VIEW)], "dir");
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    let problem = &walk.problems[0];
+    assert!(problem.starts_with("src/my-dir "), "{problem}");
+    assert!(problem.contains("Rename it to src/my_dir"), "{problem}");
+}
+
+#[test]
+fn a_keyword_rsx_is_refused_instead_of_declared() {
+    let walk = problems_of(&[("type.rsx", VIEW)], "keyword");
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0].contains("`type` is a Rust keyword"),
+        "{:?}",
+        walk.problems
+    );
+    assert!(
+        walk.problems[0].contains("src/type_.rsx"),
+        "{:?}",
+        walk.problems
+    );
+    assert!(
+        !walk.declarations.contains("mod type;"),
+        "{}",
+        walk.declarations
+    );
+}
+
+#[test]
+fn a_directory_named_as_a_keyword_is_refused_for_its_rsx() {
+    let walk = problems_of(&[("match/arm.rsx", VIEW)], "keyword_dir");
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0].contains("`match` is a Rust keyword"),
+        "{:?}",
+        walk.problems
+    );
+    assert!(
+        !walk.declarations.contains("mod match;"),
+        "{}",
+        walk.declarations
+    );
+}
+
+#[test]
+fn a_preview_file_of_a_keyword_component_is_refused() {
+    let walk = problems_of(&[("type.preview.rsx", VIEW)], "keyword_preview");
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0].contains("Rename it to src/type_.preview.rsx"),
+        "{:?}",
+        walk.problems
+    );
+}
+
+#[test]
+fn a_rs_beside_a_rsx_of_the_same_name_is_reported_on_both_files() {
+    let walk = problems_of(&[("foo.rs", ""), ("foo.rsx", VIEW)], "doubled_file");
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0].starts_with("src/foo.rs and src/foo.rsx are both the module `foo`"),
+        "{:?}",
+        walk.problems
+    );
+}
+
+#[test]
+fn a_rsx_beside_a_directory_with_its_own_module_file_is_reported_on_both() {
+    for root_file in ["mod.rs", "mod.rsx"] {
+        let body = if root_file == "mod.rs" { "" } else { VIEW };
+        let walk = problems_of(
+            &[("foo.rsx", VIEW), (&format!("foo/{root_file}"), body)],
+            "doubled_dir",
+        );
+        assert_eq!(walk.problems.len(), 1, "{root_file}: {:?}", walk.problems);
+        assert!(
+            walk.problems[0].starts_with(&format!(
+                "src/foo.rsx and src/foo/{root_file} are both the module `foo`"
+            )),
+            "{:?}",
+            walk.problems
+        );
+    }
+}
+
+#[test]
+fn what_discovery_skips_by_design_stays_silent() {
+    let walk = problems_of(
+        &[
+            ("x.test.rs", ""),
+            ("x.preview.rs", ""),
+            ("README.md", ""),
+            ("my-assets/logo.svg", ""),
+            ("my-assets/notes/readme.txt", ""),
+            (".hidden-dir/a.rsx", VIEW),
+            (".hidden.rsx", VIEW),
+            ("foo.rs", ""),
+            ("foo.preview.rsx", VIEW),
+            ("kept/mod.rsx", VIEW),
+            ("kept/inner.rsx", VIEW),
+        ],
+        "silent",
+    );
+    assert!(walk.problems.is_empty(), "{:?}", walk.problems);
+    assert!(
+        walk.declarations.contains("mod foo_preview;"),
+        "{}",
+        walk.declarations
+    );
+}
+
+#[test]
+fn a_bad_name_below_a_generated_directory_is_still_reported() {
+    let walk = problems_of(
+        &[("ui/good.rsx", VIEW), ("ui/bad-name.rsx", VIEW)],
+        "nested",
+    );
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0].starts_with("src/ui/bad-name.rsx"),
+        "{:?}",
+        walk.problems
+    );
+}
