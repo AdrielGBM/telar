@@ -280,7 +280,7 @@ that rule out: `.a11y_ignore(&[Rule::TargetSize])` in Rust.
 
 ## Snapshots
 
-A snapshot is two files per preview and per matrix cell, kept under the package's `previews/__snapshots__/`:
+A snapshot is two files per preview and per matrix cell, kept under the package's `snapshots/`:
 
 | File | Is | Compared |
 | --- | --- | --- |

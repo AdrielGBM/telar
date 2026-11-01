@@ -12,7 +12,7 @@ use super::{Moment, SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
 /// {
 ///   "version": 2,
 ///   "mode": "compare",
-///   "goldens": "/repo/apps/catalogue/previews/__snapshots__",
+///   "goldens": "/repo/apps/catalogue/snapshots",
 ///   "out": "/repo/target/telar-snapshots",
 ///   "tolerance": { "channel": 2, "max_pixels": 0 },
 ///   "summary": { "total": 2, "matched": 1, "updated": 0, "failed": 1 },
@@ -26,7 +26,7 @@ use super::{Moment, SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
 ///       "status": "changed",
 ///       "png": {
 ///         "status": "changed",
-///         "golden": "…/__snapshots__/catalogue--button--primary--mode=dark.png",
+///         "golden": "…/snapshots/catalogue--button--primary--mode=dark.png",
 ///         "actual": "…/telar-snapshots/catalogue--button--primary--mode=dark.png",
 ///         "diff": "…/telar-snapshots/catalogue--button--primary--mode=dark.diff.png",
 ///         "size": [800, 600],
@@ -36,7 +36,7 @@ use super::{Moment, SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
 ///       },
 ///       "draw": {
 ///         "status": "changed",
-///         "golden": "…/__snapshots__/catalogue--button--primary--mode=dark.draw.txt",
+///         "golden": "…/snapshots/catalogue--button--primary--mode=dark.draw.txt",
 ///         "actual": "…/telar-snapshots/catalogue--button--primary--mode=dark.draw.txt",
 ///         "diff": "…/telar-snapshots/catalogue--button--primary--mode=dark.draw.diff"
 ///       },
@@ -50,7 +50,7 @@ use super::{Moment, SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
 pub struct SnapshotReport {
     pub version: u32,
     pub mode: SnapshotMode,
-    /// Where the goldens live: `<package>/previews/__snapshots__`.
+    /// Where the goldens live: `<package>/snapshots`.
     pub goldens: PathBuf,
     /// Where the actual pictures, the diffs and this report are written: `target/telar-snapshots`.
     pub out: PathBuf,

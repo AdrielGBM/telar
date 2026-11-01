@@ -4,7 +4,7 @@
 //!
 //! A preview with a play is snapshotted as its play leaves it, which is what the workshop shows once the play has run: the menu open, the field typed into. [`SnapshotAt`] keeps the canvas as it opens instead, or as well. A preview with no play is snapshotted as it opens.
 //!
-//! The goldens live in `<package>/previews/__snapshots__/`, beside the sources they describe. A run writes nothing there unless it was asked to [update](SnapshotMode::Update); what does not match is written to `target/telar-snapshots/` instead — the picture and text captured, a diff picture, a line diff — with a [`SnapshotReport`] of the whole run as `report.json`.
+//! The goldens live in `<package>/snapshots/`, beside the sources they describe. A run writes nothing there unless it was asked to [update](SnapshotMode::Update); what does not match is written to `target/telar-snapshots/` instead — the picture and text captured, a diff picture, a line diff — with a [`SnapshotReport`] of the whole run as `report.json`.
 //!
 //! Taking and comparing snapshots, `Snapshots`, needs the `preview-snapshots` feature and the rasterizer it brings. Reading a report and [accepting](SnapshotReport::accept) what it found does not: a review panel writes the goldens through [`SnapshotPaths::write_goldens`], the same path an update run takes.
 //!
@@ -146,7 +146,7 @@ impl SnapshotKey {
 /// Where a run reads its goldens and writes what it found.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SnapshotPaths {
-    /// `<package>/previews/__snapshots__`.
+    /// `<package>/snapshots`.
     pub goldens: PathBuf,
     /// `<target>/telar-snapshots`.
     pub out: PathBuf,
@@ -156,7 +156,7 @@ impl SnapshotPaths {
     /// The goldens of the package at `package_dir`, with what a run finds written under the Cargo target directory `target_dir`.
     pub fn new(package_dir: &Path, target_dir: &Path) -> Self {
         Self {
-            goldens: package_dir.join("previews").join("__snapshots__"),
+            goldens: package_dir.join("snapshots"),
             out: target_dir.join(telar_project::protocol::TEST_OUT_DIR),
         }
     }

@@ -484,7 +484,7 @@ include = ["my-plugin"]
 
 A `.rsx` library needs nothing else: its previews are in the Plain artifact it publishes, the only one a library
 has. `cargo telar test -p my-plugin` plays, accessibility-checks and snapshots them without an application. The
-goldens stay in the library's own `previews/__snapshots__/`, in the repository rather than the published
+goldens stay in the library's own `snapshots/`, in the repository rather than the published
 package. See [docs/previews.md](previews.md) for writing previews.
 
 ### The `CARGO_PRIMARY_PACKAGE` caveat

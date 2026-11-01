@@ -71,7 +71,7 @@ impl Run {
     }
 
     fn goldens(&self) -> PathBuf {
-        self.root.join("package/previews/__snapshots__")
+        self.root.join("package/snapshots")
     }
 
     fn out(&self) -> PathBuf {

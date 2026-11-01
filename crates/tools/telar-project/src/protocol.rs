@@ -142,7 +142,7 @@ pub const TEST_A11Y_VAR: &str = "TELAR_TEST_A11Y";
 /// The env var saying what a test run does with snapshots: `compare`, `update` or `off`.
 pub const TEST_SNAPSHOTS_VAR: &str = "TELAR_TEST_SNAPSHOTS";
 
-/// The env var naming the directory of the package under test, whose `previews/__snapshots__` holds the goldens.
+/// The env var naming the directory of the package under test, whose `snapshots/` holds the goldens.
 pub const TEST_PACKAGE_DIR_VAR: &str = "TELAR_TEST_PACKAGE_DIR";
 
 /// The env var naming the Cargo target directory, under which a test run writes `telar-snapshots/report.json` and its diffs.

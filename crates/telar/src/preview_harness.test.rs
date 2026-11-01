@@ -239,7 +239,7 @@ fn snapshots_are_written_on_update_then_matched_cell_by_cell() {
 
     let (passed, stdout) = run.test("badge", &[("TELAR_TEST_SNAPSHOTS", "update")]);
     assert!(passed, "{stdout}");
-    let goldens = run.package().join("previews").join("__snapshots__");
+    let goldens = run.package().join("snapshots");
     for id in [
         "harness--badge--default",
         "harness--badge--default--dir=ltr",

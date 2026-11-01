@@ -103,7 +103,7 @@ cargo telar preview    # open the component workshop on every [preview], hot-rel
 cargo telar preview <ID>         # open the workshop on one preview, or move the open one there
 cargo telar preview --png out/   # render each one, and each matrix cell, to a PNG instead, with no window
 cargo telar test       # build, play, a11y-check and snapshot every preview and matrix cell, headlessly
-cargo telar test --update-snapshots   # write the goldens under previews/__snapshots__ that are missing or changed
+cargo telar test --update-snapshots   # write the goldens under snapshots/ that are missing or changed
 cargo telar check      # type-check, with .rsx errors on the lines you wrote
 cargo telar build --format deb   # appimage | deb | dmg | nsis | apk | dir
 cargo telar doctor     # check the toolchain
