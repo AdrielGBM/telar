@@ -157,9 +157,10 @@ An arg is a value of a preview the workshop can change while the preview is on s
 in `args(…)` or in `values(…)`; setting it there and as a literal on the root is a build error: bind the root to it
 with `agree:$agree`.
 
-In `.rsx` every callback the root component call holds is logged in the Actions panel. A call nothing on the root holds,
-a remove button in a tag's `action` for instance, is logged by the body itself through `actions`, the canvas's action
-log, written bare as a value is: `on_press:(move || actions.log("remove", vec![label.to_string()]))`. No arg takes the
+In `.rsx`, as in Rust, every callback the body hands to the component under preview is logged in the Actions panel: the
+file's own component, or the one a `x.preview.rsx` is named after, wherever the body calls it. A call to another
+component, a remove button in a tag's `action` for instance, is logged by the body itself through `actions`, the
+canvas's action log, written bare as a value is: `on_press:(move || actions.log("remove", vec![label.to_string()]))`. No arg takes the
 name.
 
 The type of an arg decides its control, and the prop of the same name refines it:

@@ -28,7 +28,7 @@ row gap:(metrics::gap_md(ControlSize::Regular))
 [preview "Filters" args(images:true) tags:[stateful] matrix:themes]
 row gap:(metrics::gap_md(ControlSize::Regular))
     tag label:"Images" selected:$images
-    tag label:"Vectors" on_toggle:(move |_| actions.log("on_toggle", Vec::new()))
+    tag label:"Vectors" on_toggle:(|_| {})
 
 [play]
 canvas.expect_toggled(by_role(Role::Button).named("Images"), true)?;

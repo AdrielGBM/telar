@@ -5,7 +5,7 @@
 //! - each `args(name:default)` becomes a two-way signal the body reads as `$name`, through `::telar::__preview_signal!`;
 //! - each `values(name:default)` becomes the arg's value the body reads as `$name`, through `::telar::__preview_arg!`, so a change of its control builds the preview again;
 //! - each literal attribute of the root component call becomes a value its control can change, through `::telar::__preview_arg!`, unless the header says `args:none`;
-//! - the root's builder logs every callback it holds in the canvas's action log.
+//! - every call to the component under preview logs the callbacks it holds in the canvas's action log, as a Rust preview's calls do.
 //!
 //! A `[play]` zone is part of its preview's source and is also compiled, into a `{component}_play_{i}` fn the entry's `.play(…)` runs against the mounted preview.
 
@@ -120,6 +120,7 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
         let root = root_component(&preview.body);
         let mut view = ViewGen::new(previews.classes, previews.assets)
             .with_theme_access(previews.theme)
+            .with_previewed(previews.component)
             .with_locals(
                 explicit
                     .iter()

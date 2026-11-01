@@ -852,10 +852,8 @@ fn preview_section_generates_build_fn_and_entry() {
         "missing preview build fn:\n{code}"
     );
     assert!(
-        code.contains(
-            "counter(CounterProps::props().__preview_actions(&__preview.actions()).build())?"
-        ),
-        "preview body should call the component:\n{code}"
+        code.contains("counter(CounterProps::props().build())?"),
+        "preview body should call the component, logging nothing of a component other than the one under preview:\n{code}"
     );
     assert!(
         code.contains("\"demo\", \"Default\", demo_preview_0)"),

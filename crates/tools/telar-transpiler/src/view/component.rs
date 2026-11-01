@@ -104,7 +104,7 @@ impl ViewGen<'_> {
     ///
     /// A setter answers all of it. `into` on the callee's field decides whether a literal coerces, the field's own type decides whether a `$signal` means the handle or a reading, `Option` needs no `Some(…)` because `From<T> for Option<T>` is std's, and a prop nobody set keeps its declared default. The emitter spells names it read from the markup and knows nothing else.
     ///
-    /// The root of a preview reads each of its [`Self::implicit_args`] through the preview's args, so a control can change it, and logs the calls its callbacks receive.
+    /// The root of a preview reads each of its [`Self::implicit_args`] through the preview's args, so a control can change it, and every call to the component under preview logs the calls its callbacks receive.
     fn component_props_arg(
         &self,
         el: &Element,
@@ -139,7 +139,7 @@ impl ViewGen<'_> {
             .collect();
         setters.push_str(&self.surface_setters(el, props_attrs));
         setters.push_str(recipes);
-        if root.is_some() {
+        if self.previewed == tag.rsplit("::").next() {
             setters.push_str(".__preview_actions(&__preview.actions())");
         }
         format!("{}::props(){setters}.build()", props_type(tag))

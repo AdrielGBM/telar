@@ -101,14 +101,19 @@ fn args_none_keeps_the_roots_literals_fixed() {
     );
 }
 
-/// Only the root is the component under preview: a call nested in a layout is part of what the preview builds around it.
+/// Only the root's literals are args: a call nested in a layout is part of what the preview builds around it, though as a call to the component under preview it still logs its callbacks.
 #[test]
 fn a_root_that_is_no_component_call_reads_no_literals() {
     let code = code(
         "[preview \"Stacked\"]\ncol gap:8\n    checkbox label:\"One\"\n    checkbox label:\"Two\"\n",
     );
     assert!(!code.contains("__preview_arg!"), "{code}");
-    assert!(!code.contains("__preview_actions"), "{code}");
+    assert_eq!(
+        code.matches(".__preview_actions(&__preview.actions())")
+            .count(),
+        2,
+        "{code}"
+    );
     assert!(code.contains(".gap(8.0)"), "{code}");
 }
 

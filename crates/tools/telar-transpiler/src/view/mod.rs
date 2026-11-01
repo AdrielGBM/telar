@@ -249,6 +249,8 @@ pub struct ViewGen<'a> {
     theme_access: ThemeAccess,
     /// The root component call of the preview being emitted, which reads its literal attributes as args and logs its callbacks.
     preview_root: Option<PreviewRoot<'a>>,
+    /// The component a preview's body is previewing, whose every call logs its callbacks in the preview's action log.
+    previewed: Option<&'a str>,
     reads: ViewReads,
     /// What the file binds that no scope tracks while the view is emitted: its items' names and every view `let`'s, wherever it is in scope. A bare word naming one is that binding, not a word of the vocabulary.
     bindings: Vec<String>,
@@ -328,6 +330,7 @@ impl<'a> ViewGen<'a> {
             scroll_viewport: None,
             theme_access: ThemeAccess::Handle,
             preview_root: None,
+            previewed: None,
             reads: ViewReads::default(),
             bindings: Vec::new(),
         }
@@ -446,7 +449,13 @@ impl<'a> ViewGen<'a> {
         self
     }
 
-    /// Marks `element` as the root component call of a preview's body: its builder logs its callbacks in the preview's action log and, unless `implicit_args` is off, reads each of [`Self::implicit_args`] through the preview's args.
+    /// Names the component a preview's body previews: every call to it logs its callbacks in the preview's action log, as a Rust preview's calls to its component do.
+    pub(crate) fn with_previewed(mut self, component: &'a str) -> Self {
+        self.previewed = Some(component);
+        self
+    }
+
+    /// Marks `element` as the root component call of a preview's body: unless `implicit_args` is off, it reads each of [`Self::implicit_args`] through the preview's args.
     pub(crate) fn with_preview_root(mut self, element: &'a Element, implicit_args: bool) -> Self {
         self.preview_root = Some(PreviewRoot {
             element,
