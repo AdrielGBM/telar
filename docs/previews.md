@@ -146,13 +146,16 @@ An arg is a value of a preview the workshop can change while the preview is on s
 - **Plain args** are read when the preview is built: `p.arg("label", "Save")` in Rust, and in `.rsx` every literal
   attribute of the root component call (a string, a number, a bool or flag, a hex colour, a `Path::Variant`). They
   are declared with no extra syntax, and changing one builds the preview again. A value containing `$` or a closure
-  stays fixed, and `args:none` in the header fixes all of them.
+  stays fixed, and `args:none` in the header fixes all of them. A plain arg the body hands anywhere else, to a component
+  nested in a column for instance, is declared in `values(tone:Tone::Ink)` and read as `$tone`: the value itself, so a
+  prop that takes a plain value takes it.
 - **Signals** are shared with the tree: `p.signal("pressed", 0u32)` in Rust and `args(agree:false)` in `.rsx`,
   read as `$agree`. They are two-way, so the tree can write what the control shows, and changing one does not
   rebuild the preview.
 
-`p.arg` returns the default's own type, so a setter's `into` coerces it as a literal would. Setting a name both in
-`args(…)` and as a literal on the root is a build error: bind the root to the signal with `agree:$agree`.
+`p.arg` returns the default's own type, so a setter's `into` coerces it as a literal would. A name is declared once,
+in `args(…)` or in `values(…)`; setting it there and as a literal on the root is a build error: bind the root to it
+with `agree:$agree`.
 
 The type of an arg decides its control, and the prop of the same name refines it:
 
@@ -202,7 +205,7 @@ laptop = "1280x800"
 
 - **Environment axes** are `mode`, `locale`, `dir` and `viewport`. A viewport value is a size such as `390x844` or a
   name from `[telar.previews.viewports]`.
-- **Any other key names an arg** of the preview, declared in `args(…)` or written as a literal on the root, and
+- **Any other key names an arg** of the preview, declared in `args(…)` or `values(…)` or written as a literal on the root, and
   takes values in their text form: `12`, `true`, `small`, `Primary`, `#ff8800`, `"Save"`. A value of the shared
   vocabulary is its word, as a `.rsx` prop writes it (`size`, `variant`, `tone`), and an enum deriving `PreviewArg` its
   variant's name. A component's size is one of them, its `size` arg, since nothing inherits one:
@@ -481,4 +484,4 @@ The [VS Code extension](../editors/vscode/telar/README.md) works on previews fro
   enters. It never starts a workshop.
 - A **▶ Run play** lens above each `[play]` runs `cargo telar test --preview <id> --no-snapshots` in a terminal in
   the package, so a play can be run without a golden being compared.
-- Completion and hover for the header options, `args(…)` and the names of the matrices `telar.toml` defines.
+- Completion and hover for the header options, `args(…)`, `values(…)` and the names of the matrices `telar.toml` defines.

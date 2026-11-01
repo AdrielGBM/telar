@@ -724,6 +724,26 @@ fn parses_the_previews_meta_args_and_play() {
 }
 
 #[test]
+fn values_declare_args_read_as_values_beside_the_signals_of_args() {
+    let src = "[preview \"Mixed\" values(tone:Tone::Ink) args(agree:false) matrix:themes]\nbox\n";
+    let doc = parse(src).unwrap();
+    let declared: Vec<(&str, ArgKind)> = doc.previews[0]
+        .args
+        .iter()
+        .map(|arg| (arg.name.as_str(), arg.kind))
+        .collect();
+    assert_eq!(
+        declared,
+        [("tone", ArgKind::Value), ("agree", ArgKind::Signal)]
+    );
+    assert!(src[doc.previews[0].args[0].default_start..].starts_with("Tone::Ink)"));
+    assert_eq!(
+        crate::format::format_document(src).unwrap(),
+        "[preview \"Mixed\" args(agree:false) values(tone:Tone::Ink) matrix:themes]\nbox\n"
+    );
+}
+
+#[test]
 fn an_args_default_reads_like_an_attribute_value() {
     let src = "[view]\ncol\n\n[preview \"Labels\" args(label:\"I agree\" count:(1 + 2) tint:#3d78fa) args:none]\nbutton label:$label\n";
     let doc = parse(src).unwrap();
@@ -827,7 +847,24 @@ fn misplaced_preview_sections_are_refused() {
 #[test]
 fn malformed_preview_headers_are_refused() {
     let cases = [
-        ("[previews \"T\" args(a:1)]\n", "belongs on a `[preview]`"),
+        ("[previews \"T\" args(a:1)]\n", "belong on a `[preview]`"),
+        ("[previews \"T\" values(a:1)]\n", "belong on a `[preview]`"),
+        (
+            "[preview \"A\" values(a:1 a:2)]\nbox\n",
+            "`values(…)` declares `a` twice",
+        ),
+        (
+            "[preview \"A\" args(a:1) values(a:2)]\nbox\n",
+            "either a signal in `args(…)` or a value in `values(…)`",
+        ),
+        (
+            "[preview \"A\" values(a:1) values(b:2)]\nbox\n",
+            "one `values(…)`",
+        ),
+        (
+            "[preview \"A\" values(v)]\nbox\n",
+            "`values(…)` declares `name:default` pairs",
+        ),
         ("[preview \"A\" args(agree)]\nbox\n", "`name:default`"),
         ("[preview \"A\" args(agree:)]\nbox\n", "needs a default"),
         ("[preview \"A\" args(a:1 a:2)]\nbox\n", "twice"),

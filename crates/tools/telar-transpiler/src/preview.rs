@@ -3,6 +3,7 @@
 //! A variant reads its inputs from the canvas's `PreviewCtx`, named `__preview` in its build fn:
 //!
 //! - each `args(name:default)` becomes a two-way signal the body reads as `$name`, through `::telar::__preview_signal!`;
+//! - each `values(name:default)` becomes the arg's value the body reads as `$name`, through `::telar::__preview_arg!`, so a change of its control builds the preview again;
 //! - each literal attribute of the root component call becomes a value its control can change, through `::telar::__preview_arg!`, unless the header says `args:none`;
 //! - the root's builder logs every callback it holds in the canvas's action log.
 //!
@@ -11,8 +12,8 @@
 use std::fmt::Write;
 
 use telar_parser::{
-    ArgDecl, Attr, Element, Preview, PreviewsMeta, RsxDocument, StyleClass, StyleProp, Value,
-    ViewNode,
+    ArgDecl, ArgKind, Attr, Element, Preview, PreviewsMeta, RsxDocument, StyleClass, StyleProp,
+    Value, ViewNode,
 };
 use telar_project::naming::{
     is_ident, preview_entries_const_name, preview_file_expr, preview_slug, to_pascal_case,
@@ -90,11 +91,17 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
         errors.extend(options.errors(&header));
 
         let explicit: Vec<String> = preview.args.iter().map(|arg| arg.name.clone()).collect();
+        let signals: Vec<String> = preview
+            .args
+            .iter()
+            .filter(|arg| arg.kind == ArgKind::Signal)
+            .map(|arg| arg.name.clone())
+            .collect();
         let root = root_component(&preview.body);
         let mut view = ViewGen::new(previews.classes, previews.assets)
             .with_theme_access(previews.theme)
             .with_locals(explicit.clone())
-            .with_signals(explicit.clone())
+            .with_signals(signals)
             .with_file_bindings(
                 previews
                     .bindings
@@ -241,8 +248,12 @@ fn emit_build_fn(
             on_source_line(
                 preview.line,
                 &format!(
-                    "    let {} = ::telar::__preview_signal!(__preview, {}, {});",
+                    "    let {} = ::telar::{}!(__preview, {}, {});",
                     arg.name,
+                    match arg.kind {
+                        ArgKind::Signal => "__preview_signal",
+                        ArgKind::Value => "__preview_arg",
+                    },
                     rust_str(&arg.name),
                     arg_default_expr(arg)
                 ),
@@ -374,13 +385,16 @@ impl Entry<'_> {
         }
     }
 
-    /// The args the preview declares ahead of being built, so each has its control before the first build: the explicit ones live, the implicit ones read at build. A default is declared only where its text form is certain from the literal.
+    /// The args the preview declares ahead of being built, so each has its control before the first build: the `args(…)` ones live, the `values(…)` and implicit ones read at build. A default is declared only where its text form is certain from the literal.
     fn arg_specs(&self) -> Vec<String> {
         let explicit = self.preview.args.iter().map(|arg| {
-            let spec = format!(
-                "::telar::preview::ArgSpec::new({}).binding(::telar::preview::ArgBinding::Live)",
-                rust_str(&arg.name)
-            );
+            let spec = format!("::telar::preview::ArgSpec::new({})", rust_str(&arg.name));
+            let spec = match arg.kind {
+                ArgKind::Signal => {
+                    format!("{spec}.binding(::telar::preview::ArgBinding::Live)")
+                }
+                ArgKind::Value => spec,
+            };
             with_default(spec, arg_value_text(&arg.default, Numbers::AsWritten))
         });
         let implicit = self.implicit.iter().map(|attr| {
@@ -562,7 +576,7 @@ fn arg_conflicts(header: &str, args: &[ArgDecl], implicit: &[&Attr]) -> Vec<Stri
         .filter(|arg| implicit.iter().any(|attr| attr.key == arg.name))
         .map(|arg| {
             format!(
-                "{header} declares `{name}` in `args(…)` and also sets it as a literal on its root: bind the root to it with `{name}:${name}`, or leave it out of `args(…)`",
+                "{header} declares `{name}` in its header and also sets it as a literal on its root: bind the root to it with `{name}:${name}`, or leave it out of the header",
                 name = arg.name
             )
         })
@@ -586,7 +600,7 @@ fn unknown_arg_axes(
         })
         .map(|name| {
             format!(
-                "{header} `matrix:` varies `{name}`, which is neither one of {} nor an arg of this preview: declare it in `args(…)`, or write it as a literal attribute of the root component",
+                "{header} `matrix:` varies `{name}`, which is neither one of {} nor an arg of this preview: declare it in `args(…)` or `values(…)`, or write it as a literal attribute of the root component",
                 MATRIX_GLOBAL_AXES.join(", ")
             )
         })

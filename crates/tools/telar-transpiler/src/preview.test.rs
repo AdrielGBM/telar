@@ -141,6 +141,26 @@ fn declared_args_are_live_signals_the_body_reads() {
     );
 }
 
+#[test]
+fn declared_values_are_read_once_per_build() {
+    let previews = "[preview \"Valued\" values(agree:false size:Size::Large) args(open:true)]\ncol gap:8\n    checkbox checked:$agree size:$size\n";
+    let out = transpiled(previews);
+    let code = &out.rust_code;
+    for line in [
+        "let agree = ::telar::__preview_arg!(__preview, \"agree\", false);",
+        "let size = ::telar::__preview_arg!(__preview, \"size\", Size::Large);",
+        "let open = ::telar::__preview_signal!(__preview, \"open\", true);",
+    ] {
+        assert!(code.contains(line), "{line}\n{code}");
+    }
+    assert!(code.contains(".checked(agree.clone())"), "{code}");
+    assert!(!code.contains("agree.get()"), "{code}");
+    assert!(
+        code.contains(".args(&[::telar::preview::ArgSpec::new(\"agree\").default(\"false\"), ::telar::preview::ArgSpec::new(\"size\"), ::telar::preview::ArgSpec::new(\"open\").binding(::telar::preview::ArgBinding::Live).default(\"true\")])"),
+        "{code}"
+    );
+}
+
 /// A default written as Rust is copied byte for byte, so an error rustc reports on it lands on the text in the header.
 #[test]
 fn a_declared_default_maps_back_to_the_header() {
@@ -163,7 +183,7 @@ fn a_declared_default_maps_back_to_the_header() {
 fn a_declared_arg_the_root_also_sets_is_refused_on_the_header() {
     let previews = "[preview \"Twice\" args(label:\"A\")]\ncheckbox label:\"B\"\n";
     let out = transpiled(previews);
-    let error = "declares `label` in `args(…)` and also sets it as a literal on its root";
+    let error = "declares `label` in its header and also sets it as a literal on its root";
     assert!(out.rust_code.contains(error), "{}", out.rust_code);
     assert_eq!(
         rsx_line_of(&out, error),

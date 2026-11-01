@@ -20,7 +20,7 @@ impl Parser {
         let header = read_header(line, strip_previews_header)?;
         if header.args.is_some() {
             return Err(ParseError {
-                message: "`args(…)` declares one variant's signals, so it belongs on a `[preview]` header".into(),
+                message: "`args(…)` and `values(…)` declare one variant's args, so they belong on a `[preview]` header".into(),
                 line: header_line,
             });
         }
@@ -122,7 +122,7 @@ struct Header {
     args: Option<Vec<ArgDecl>>,
 }
 
-/// Parses a header's optional quoted name, its options and its `args(…)`. Options are `key:value` (or bare flags with an empty value), kept raw; a value may hold spaces inside brackets or quotes, so `matrix:(mode:[light dark])` is one option.
+/// Parses a header's optional quoted name, its options and its `args(…)` and `values(…)`. Options are `key:value` (or bare flags with an empty value), kept raw; a value may hold spaces inside brackets or quotes, so `matrix:(mode:[light dark])` is one option.
 fn read_header(
     line: &Line,
     strip: fn(&str) -> Option<HeaderRest<'_>>,
@@ -150,6 +150,7 @@ fn read_header(
 
     let mut options = Vec::new();
     let mut args = None;
+    let mut seen: Vec<ArgKind> = Vec::new();
     for (start, end) in header_tokens(&chars, from) {
         let token: String = chars[start..end].iter().collect();
         if token.starts_with('"') {
@@ -171,20 +172,34 @@ fn read_header(
             continue;
         };
         let key: String = chars[start..paren].iter().collect();
-        if key != "args" {
-            return Err(error(format!(
-                "`{key}(…)` is not a header option: only `args(…)` takes parens, and an option's value takes the colon, `{key}:(…)`"
-            )));
+        let kind = match key.as_str() {
+            "args" => ArgKind::Signal,
+            "values" => ArgKind::Value,
+            _ => {
+                return Err(error(format!(
+                    "`{key}(…)` is not a header option: only `args(…)` and `values(…)` take parens, and an option's value takes the colon, `{key}:(…)`"
+                )));
+            }
+        };
+        if seen.contains(&kind) {
+            return Err(error(format!("a preview takes one `{key}(…)`")));
         }
-        if args.is_some() {
-            return Err(error("a preview takes one `args(…)`".into()));
-        }
+        seen.push(kind);
         let (_, next) = read_balanced_parens(&chars[..end], paren)
-            .ok_or_else(|| error("unterminated `(` in `args(…)`".into()))?;
+            .ok_or_else(|| error(format!("unterminated `(` in `{key}(…)`")))?;
         if next != end {
-            return Err(error("`args(…)` ends at its closing paren".into()));
+            return Err(error(format!("`{key}(…)` ends at its closing paren")));
         }
-        args = Some(read_args(&chars[..next - 1], paren + 1, base, line.number)?);
+        let declared = args.get_or_insert_with(Vec::new);
+        for arg in read_args(&chars[..next - 1], paren + 1, base, line.number, &key, kind)? {
+            if declared.iter().any(|held: &ArgDecl| held.name == arg.name) {
+                return Err(error(format!(
+                    "the header declares `{}` twice: an arg is either a signal in `args(…)` or a value in `values(…)`",
+                    arg.name
+                )));
+            }
+            declared.push(arg);
+        }
     }
 
     Ok(Header {
@@ -194,12 +209,14 @@ fn read_header(
     })
 }
 
-/// Reads the `name:default` pairs of an `args(…)` from `from` to the end of `chars`, which stops short of its closing paren. Each default is read exactly like an attribute value.
+/// Reads the `name:default` pairs of an `args(…)` or a `values(…)`, as `key` names it, from `from` to the end of `chars`, which stops short of its closing paren. Each default is read exactly like an attribute value.
 fn read_args(
     chars: &[char],
     from: usize,
     base: usize,
     line: usize,
+    key: &str,
+    kind: ArgKind,
 ) -> Result<Vec<ArgDecl>, ParseError> {
     let error = |message: String| ParseError { message, line };
     let mut args: Vec<ArgDecl> = Vec::new();
@@ -220,12 +237,12 @@ fn read_args(
             || name.starts_with(|c: char| c.is_ascii_digit())
             || chars.get(i) != Some(&':')
         {
-            return Err(error(
-                "`args(…)` declares `name:default` pairs, e.g. `args(agree:false)`".into(),
-            ));
+            return Err(error(format!(
+                "`{key}(…)` declares `name:default` pairs, e.g. `{key}(agree:false)`"
+            )));
         }
         if args.iter().any(|arg| arg.name == name) {
-            return Err(error(format!("`args(…)` declares `{name}` twice")));
+            return Err(error(format!("`{key}(…)` declares `{name}` twice")));
         }
         let (default, next, text_at) = read_colon_value(chars, &name, i + 1, line)?;
         if default == Value::Expr(String::new()) {
@@ -235,6 +252,7 @@ fn read_args(
         }
         args.push(ArgDecl {
             name,
+            kind,
             default,
             default_start: base + byte_at(chars, text_at),
         });

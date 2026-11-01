@@ -216,8 +216,10 @@ fn a_preview_header_completes_its_options_and_their_values() {
 fn only_a_variant_declares_args() {
     let variant = preview_option_items(HeaderKind::Variant);
     let meta = preview_option_items(HeaderKind::Meta);
-    assert!(labels(&variant).contains(&"args(…)"));
-    assert!(!labels(&meta).contains(&"args(…)"));
+    for declares in ["args(…)", "values(…)"] {
+        assert!(labels(&variant).contains(&declares));
+        assert!(!labels(&meta).contains(&declares));
+    }
     for option in preview_header::options() {
         assert!(labels(&meta).contains(&option.key), "{}", option.key);
     }

@@ -390,6 +390,11 @@ pub fn preview_option_items(kind: HeaderKind) -> Vec<CompletionItem> {
             "args(${1:name}:${2:default})",
             preview_header::ARGS_DECL_DOC,
         ));
+        items.push(snippet_item(
+            "values(…)",
+            "values(${1:name}:${2:default})",
+            preview_header::VALUES_DECL_DOC,
+        ));
     }
     items
 }

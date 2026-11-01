@@ -97,12 +97,15 @@ pub fn options() -> impl Iterator<Item = PreviewOption> {
 /// What `args(…)` does, shown where it is completed and hovered.
 pub const ARGS_DECL_DOC: &str = "Declares live, preview-scoped signals, read in the body as `$name`: `args(agree:false)`. Each gets a control in the workshop.";
 
+/// What `values(…)` does, shown where it is completed and hovered.
+pub const VALUES_DECL_DOC: &str = "Declares preview-scoped values, read in the body as `$name`: `values(tone:Tone::Ink)`. Each gets a control in the workshop, and a change builds the preview again, so a prop that takes a plain value can take one.";
+
 /// A name in a header that means something on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
-    /// The key of an option, `args` of `args(…)` included.
+    /// The key of an option, `args` of `args(…)` and `values` of `values(…)` included.
     OptionKey,
-    /// A name `args(…)` declares.
+    /// A name `args(…)` or `values(…)` declares.
     ArgName,
     /// An axis of an inline `matrix:(…)`.
     MatrixAxis,
@@ -268,7 +271,7 @@ impl<'a> Scanner<'a> {
         let key = self.text(start);
         match self.peek() {
             None => Err(Place::OptionKey),
-            Some(b'(') if key == "args" => {
+            Some(b'(') if matches!(key.as_str(), "args" | "values") => {
                 self.push(TokenKind::OptionKey, start);
                 self.at += 1;
                 self.list(TokenKind::ArgName, Place::ArgName, |_| Place::ArgValue)

@@ -33,17 +33,20 @@ fn tells_a_variant_from_the_meta_section() {
 
 #[test]
 fn names_option_keys_arg_names_and_matrix_axes() {
-    let line = "[preview \"Bound\" args(agree:false label:\"a b\") layout:centered matrix:(dir:[ltr rtl] size:[12 16]) animate]";
+    let line = "[preview \"Bound\" args(agree:false label:\"a b\") values(tone:Tone::Ink) layout:centered matrix:(dir:[ltr rtl] size:[12 16] tone) animate]";
     assert_eq!(
         spans(line),
         vec![
             (TokenKind::OptionKey, "args"),
             (TokenKind::ArgName, "agree"),
             (TokenKind::ArgName, "label"),
+            (TokenKind::OptionKey, "values"),
+            (TokenKind::ArgName, "tone"),
             (TokenKind::OptionKey, "layout"),
             (TokenKind::OptionKey, "matrix"),
             (TokenKind::MatrixAxis, "dir"),
             (TokenKind::MatrixAxis, "size"),
+            (TokenKind::MatrixAxis, "tone"),
             (TokenKind::OptionKey, "animate"),
         ]
     );
@@ -70,6 +73,7 @@ fn finds_where_the_cursor_falls_in_a_header_being_typed() {
     assert_eq!(place("[preview \"A\" args("), Place::ArgName);
     assert_eq!(place("[preview \"A\" args(agree:"), Place::ArgValue);
     assert_eq!(place("[preview \"A\" args(agree:false "), Place::ArgName);
+    assert_eq!(place("[preview \"A\" values("), Place::ArgName);
     assert_eq!(place("[preview \"A\" matrix:("), Place::MatrixAxis);
     assert_eq!(
         place("[preview \"A\" matrix:(dir:[ltr "),
