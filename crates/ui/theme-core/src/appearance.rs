@@ -81,13 +81,15 @@ pub enum Tone {
     Warning,
     /// Failed, destructive or wrong: the theme's `error`.
     Danger,
+    /// The ink of the place the component sits in, whatever colour that is: a key cap in a menu row, a tag on a dark banner. The one tone a component resolves against where it paints rather than against the theme.
+    Ink,
     /// A colour of the caller's, re-read wherever the component paints, so a theme token or a signal re-colours it live. `transparent` is transparent.
     Color(Reactive<Color>),
 }
 
 impl Tone {
-    /// The theme's colour for this tone, or the caller's, read now and subscribing the caller to the theme.
-    pub fn color(&self) -> Color {
+    /// The colour for this tone where the component paints: the theme's, the caller's, or `ink`, the ink of the place it sits in, read now and subscribing the caller to the theme.
+    pub fn color(&self, ink: Color) -> Color {
         let theme = use_theme_tokens();
         match self {
             Tone::Accent => theme.primary(),
@@ -96,6 +98,7 @@ impl Tone {
             Tone::Success => theme.success(),
             Tone::Warning => theme.warning(),
             Tone::Danger => theme.error(),
+            Tone::Ink => ink,
             Tone::Color(color) => color.get(),
         }
     }
@@ -120,6 +123,7 @@ impl fmt::Debug for Tone {
             Tone::Success => "Success",
             Tone::Warning => "Warning",
             Tone::Danger => "Danger",
+            Tone::Ink => "Ink",
             Tone::Color(color) => return f.debug_tuple("Color").field(&color.get()).finish(),
         };
         f.write_str(name)

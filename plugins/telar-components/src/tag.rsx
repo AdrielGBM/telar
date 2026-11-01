@@ -1,6 +1,7 @@
 [logic]
 use std::rc::Rc;
 
+use crate::look::Look;
 use crate::shared::{self, GlyphProps, Mark, glyph};
 use telar::{ControlSize, Tone, Variant};
 
@@ -80,95 +81,6 @@ pub struct Props {
     pub style: Option<SurfaceAmendment>,
 }
 
-#[derive(Clone)]
-struct Look {
-    tone: Tone,
-    variant: Variant,
-    selected: Option<RwSignal<bool>>,
-    interactive: bool,
-}
-
-impl Look {
-    fn hue(&self) -> Color {
-        self.tone.color()
-    }
-
-    fn lit(&self) -> bool {
-        self.selected.is_none_or(|on| on.get())
-    }
-
-    fn fill(&self) -> Color {
-        let hue = self.hue();
-        match (self.lit(), self.variant) {
-            (true, Variant::Solid) => hue,
-            // Scaled by the colour's own alpha, so a transparent colour washes nothing in.
-            (true, Variant::Soft) => hue.with_alpha(hue.a * shared::held_wash().a),
-            _ => Color::TRANSPARENT,
-        }
-    }
-
-    fn frame(&self) -> Color {
-        match (self.lit(), self.variant) {
-            (false, _) => shared::border(),
-            (true, Variant::Outline) => self.hue(),
-            (true, _) => Color::TRANSPARENT,
-        }
-    }
-
-    /// What a part the pointer operates lays over the tag while the pointer rests on it, or while it is pressed: a filled tag's fill stepped away from its ink, a wash of the colour over a soft or outline one, and the theme's own wash where the tag has no surface of its own, which is how a ghost's surface appears.
-    fn state(&self, pressed: bool) -> Color {
-        let hue = self.hue();
-        let wash = match pressed {
-            true => shared::pressed_wash(),
-            false => shared::hover_wash(),
-        };
-        match (self.lit(), self.variant) {
-            (true, Variant::Solid) => {
-                let ink = self.ink();
-                match pressed {
-                    true => shared::pressed_fill_under(hue, ink),
-                    false => shared::hovered_fill_under(hue, ink),
-                }
-            }
-            (true, Variant::Soft | Variant::Outline) => hue.with_alpha(hue.a * wash.a),
-            _ => wash,
-        }
-    }
-
-    fn hovered(&self) -> Color {
-        self.state(false)
-    }
-
-    fn pressed(&self) -> Color {
-        self.state(true)
-    }
-
-    // A solid fill's ink is picked for the fill alone, since its states step away from that ink; any other ink is held to every state the tag can show, because a wash only deepens the colour the label is drawn in.
-    fn ink(&self) -> Color {
-        let surface = shared::surface();
-        let rest = shared::over(self.fill(), surface);
-        let wanted = match (self.lit(), self.variant) {
-            (true, Variant::Solid) => {
-                return shared::readable_on(shared::ink_on(rest), rest);
-            }
-            (true, _) => self.hue(),
-            (false, _) => shared::ink_on(surface),
-        };
-        let mut under = vec![rest];
-        if self.interactive {
-            under.extend([
-                shared::over(self.state(false), rest),
-                shared::over(self.state(true), rest),
-            ]);
-        }
-        under
-            .into_iter()
-            .fold(shared::over(wanted, surface), |ink, page| {
-                shared::readable_on(ink, page)
-            })
-    }
-}
-
 /// How tall the tag's body stands at `size`: half a control and a spacing unit, so a tag moves half as far between sizes as a control does, and never below the smallest pointer target where it is a filter.
 fn body_height(size: ControlSize, filter: bool) -> f32 {
     let height = (shared::control_height(size) / 2.0 + shared::spacing(ControlSize::Regular)).round();
@@ -198,9 +110,9 @@ let look = Look {
 };
 
 [view]
-row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill()) stroke:(look.frame()) stroke_width:(TagTokens::current().border_width()) color:(look.ink()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:$props.style
+row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill($text.ink)) stroke:(look.frame($text.ink)) stroke_width:(TagTokens::current().border_width()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:$props.style
     if let Some(selected) = filter
-        row role:button toggled:selected.get() on_press:(move || flip(selected, on_toggle.as_deref())) cursor:pointer fill:transparent radius:(TagTokens::current().radius()) hover_style(fill:(look.hovered()) radius:(TagTokens::current().radius())) active_style(fill:(look.pressed()) radius:(TagTokens::current().radius())) align:center gap:(shared::gap_xs(size)) min_height:(body_height(size, true)) min_width:(shared::MIN_TARGET) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
+        row role:button toggled:selected.get() on_press:(move || flip(selected, on_toggle.as_deref())) cursor:pointer color:(look.ink($text.ink)) fill:transparent radius:(TagTokens::current().radius()) hover_style(fill:(look.hovered($text.ink)) radius:(TagTokens::current().radius())) active_style(fill:(look.pressed($text.ink)) radius:(TagTokens::current().radius())) align:center gap:(shared::gap_xs(size)) min_height:(body_height(size, true)) min_width:(shared::MIN_TARGET) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
             // A leading icon carries an inset round its ink and the drawn tick fills its box, so the tick takes that inset as padding to stand as far from the label.
             row shown:selected.get() pad_end:(shared::gap_xs(size))
                 glyph shape:Mark::Check size:size
@@ -208,9 +120,10 @@ row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill()) stro
             text "{$props.label}"
             children $props.trailing
     else
-        row align:center gap:(shared::gap_xs(size)) min_height:(body_height(size, false)) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
+        row align:center gap:(shared::gap_xs(size)) min_height:(body_height(size, false)) color:(look.ink($text.ink)) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
             children $props.leading
             text "{$props.label}"
             children $props.trailing
-    row align:center
+    // The ink is declared on each part rather than on the tag, so every part reads the ink of the place the tag sits in rather than the one it works out from it.
+    row align:center color:(look.ink($text.ink))
         children $props.action

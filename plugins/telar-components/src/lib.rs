@@ -44,6 +44,7 @@ mod kbd;
 mod line_gutter;
 mod link;
 mod list;
+mod look;
 mod menu;
 mod menu_panel;
 mod modal;

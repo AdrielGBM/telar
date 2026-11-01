@@ -64,9 +64,9 @@ mod args {
         };
 
         fn to_arg_value(&self) -> ArgValue {
-            match self.word() {
-                Some(word) => ArgValue::Choice(word.to_string()),
-                None => ArgValue::Color(self.color()),
+            match self {
+                Tone::Color(color) => ArgValue::Color(color.get()),
+                named => ArgValue::Choice(named.word().unwrap_or_default().to_string()),
             }
         }
 

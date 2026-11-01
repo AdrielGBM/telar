@@ -21,7 +21,9 @@ pub const VOCABULARY: &[VocabularyAxis] = &[
     },
     VocabularyAxis {
         name: "tone",
-        words: &["accent", "neutral", "info", "success", "warning", "danger"],
+        words: &[
+            "accent", "neutral", "info", "success", "warning", "danger", "ink",
+        ],
     },
 ];
 

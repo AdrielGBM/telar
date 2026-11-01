@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Container, FixedLayer, JustifyContent,
+    Accessible, AlignItems, Border, BorderRadius, BoxText, Container, FixedLayer, JustifyContent,
     LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle, RwSignal,
     ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface, box_item,
     children, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
@@ -510,15 +510,17 @@ fn stripe(size: ControlSize, tone: Tone) -> Result<Box<dyn LayoutItem>, LayoutEr
             .align_self_stretch()
             .flex_shrink(0.0)
     };
+    let text = signal(BoxText::initial());
     let stripe = StyledContainer::new(
         stripe_box(),
         move |r| {
             RectStyle::default()
-                .with_fill(tone.color())
+                .with_fill(tone.color(text.get().ink))
                 .with_radius(shared::pill(r))
         },
         vec![],
     )?
+    .following_text(text)
     .styled_by(stripe_box)
     .a11y_hidden();
     Ok(box_item(stripe))
