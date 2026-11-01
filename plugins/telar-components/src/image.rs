@@ -34,7 +34,7 @@ impl ImageTokens {
 
 /// Where an [`image`]'s picture is: still on its way, here, or not coming.
 ///
-/// A decoded picture converts into one, and so does the state an [`AssetLoader`](telar::AssetLoader) hands out under the `async-assets` feature, so an image follows a load by being given the loader's signal.
+/// A decoded picture converts into one, and so does the state a `telar::AssetLoader` hands out under the `async-assets` feature, so an image follows a load by being given the loader's signal.
 #[derive(Clone, Debug, Default)]
 pub enum ImageSource {
     #[default]
