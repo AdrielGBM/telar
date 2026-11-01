@@ -199,3 +199,45 @@ jobs:
           "$GITHUB_WORKSPACE/.github/scripts/publish-vsix.sh"
           pnpx ovsx@1.1.1 publish
           telar-analyzer-${{ matrix.vsce-target }}.vsix
+
+  # Once the tag's version is on crates.io, cargo resolves it from there instead of the workspace, so the
+  # tree has to move on or the publishable check in ci.yaml fails on every push.
+  bump-version:
+    name: Bump the workspace past the release
+    needs: [create-release, publish-crates, publish-vsix]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: true
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+
+      # A branch already past the tag was bumped by hand or by an earlier run, and bumping again would skip a version.
+      - name: Check the branch still sits on the released version
+        id: state
+        run: |
+          if [ "$(.github/scripts/bump-version.sh --current)" = "${GITHUB_REF_NAME#v}" ]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing to bump: the branch is not at ${GITHUB_REF_NAME#v}."
+          fi
+
+      - name: Bump the version
+        if: steps.state.outputs.pending == 'true'
+        id: bump
+        run: echo "next=$(.github/scripts/bump-version.sh)" >> "$GITHUB_OUTPUT"
+
+      # Pushed with the job's token, so no workflow starts from it; the next push to a branch runs the checks.
+      - name: Commit and push
+        if: steps.state.outputs.pending == 'true'
+        env:
+          NEXT: ${{ steps.bump.outputs.next }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -a -m "chore: bump the workspace to $NEXT"
+          git push
