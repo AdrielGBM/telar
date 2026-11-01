@@ -283,7 +283,9 @@ impl TreeWalk<'_> {
             if file_name.starts_with('.') {
                 continue;
             }
-            if let Some(message) = unusable_module_name(self.package_dir, &path, file_name) {
+            if !hand_written.contains(&file_stem(&path))
+                && let Some(message) = unusable_module_name(self.package_dir, &path, file_name)
+            {
                 self.report(message, out);
                 continue;
             }
@@ -485,18 +487,23 @@ fn shown_from(package_dir: &Path, path: &Path) -> String {
         .unwrap_or_else(|_| path.to_string_lossy().into_owned())
 }
 
-/// Why the entry cannot be a module, when its name is no plain identifier: left out it would vanish without a word, and declared, rustc would only suggest `r#type`. `None` for what discovery skips by design: a `.rs` of any name, and a directory with no `.rsx` under it.
+/// Why the entry cannot be a module, when its name is no plain identifier: left out it would vanish without a word, and declared, rustc would only suggest `r#type`. `None` for what discovery skips by design: a `.rs` or a directory of them named with no identifier, which only a `#[path]` reaches, and a directory holding no module at all.
 fn unusable_module_name(package_dir: &Path, path: &Path, file_name: &str) -> Option<String> {
     let (base, subject) = if path.is_dir() {
-        if !dir_has_rsx(path) {
+        if dir_has_rsx(path) {
+            (
+                file_name.to_owned(),
+                "holds `.rsx` files, which are Rust modules placed inside it",
+            )
+        } else if is_keyword_in_every_edition(file_name) && dir_has_rust_file(path) {
+            (file_name.to_owned(), "holds Rust modules placed inside it")
+        } else {
             return None;
         }
-        (
-            file_name.to_owned(),
-            "holds `.rsx` files, which are Rust modules placed inside it",
-        )
     } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") && !is_module_root(path) {
         (component_name(path), "is a `.rsx`, which is a Rust module")
+    } else if is_rust_module_file(path) && is_keyword_in_every_edition(&file_stem(path)) {
+        (file_stem(path), "is a Rust module")
     } else {
         return None;
     };
@@ -518,6 +525,11 @@ fn unusable_module_name(package_dir: &Path, path: &Path, file_name: &str) -> Opt
     Some(format!(
         "{shown} {subject}, so its name has to be an identifier: {reason}. Rename it to {target}"
     ))
+}
+
+/// `gen` is left out because a hand-written `gen.rs` is a legal module in a package on an edition before it was reserved.
+fn is_keyword_in_every_edition(name: &str) -> bool {
+    is_keyword(name) && name != "gen"
 }
 
 /// A `foo.rs` and a `foo.rsx` side by side are two modules named `foo`.

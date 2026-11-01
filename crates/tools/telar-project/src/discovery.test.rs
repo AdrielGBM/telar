@@ -1114,6 +1114,9 @@ fn what_discovery_skips_by_design_stays_silent() {
         &[
             ("x.test.rs", ""),
             ("x.preview.rs", ""),
+            ("my-file.rs", ""),
+            ("my-rust/inner.rs", ""),
+            ("gen.rs", ""),
             ("README.md", ""),
             ("my-assets/logo.svg", ""),
             ("my-assets/notes/readme.txt", ""),
@@ -1225,6 +1228,54 @@ fn a_module_written_in_a_macro_invocation_at_top_level_is_declared() {
         ),
         ["previews", "after"]
     );
+}
+
+#[test]
+fn a_rust_module_named_as_a_keyword_is_refused_instead_of_declared() {
+    let walk = problems_of(&[("type.rs", ""), ("match/arm.rs", "")], "rs_keyword");
+    assert!(
+        walk.problems
+            .iter()
+            .any(|problem| problem.contains("src/type.rs is a Rust module")
+                && problem.contains("Rename it to src/type_.rs")),
+        "{:?}",
+        walk.problems
+    );
+    assert!(
+        walk.problems
+            .iter()
+            .any(|problem| problem.contains("src/match holds Rust modules")),
+        "{:?}",
+        walk.problems
+    );
+    assert!(
+        !walk.declarations.contains("mod type;") && !walk.declarations.contains("mod match;"),
+        "{}",
+        walk.declarations
+    );
+}
+
+#[test]
+fn a_keyword_module_declared_by_hand_stays_the_authors() {
+    let root = std::env::temp_dir().join(format!("rsx_names_raw_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "mod r#type;
+telar::rsx_modules!();
+",
+    )
+    .unwrap();
+    std::fs::write(root.join("src/type.rs"), "").unwrap();
+    let walk = discover_rust_modules(
+        &root.join("src"),
+        &root.join("src"),
+        &root.join("build"),
+        ModuleVisibility::Public,
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(walk.problems.is_empty(), "{:?}", walk.problems);
 }
 
 fn name_problems_of(files: &[(&str, &str)], open: &str, tag: &str) -> Vec<String> {
