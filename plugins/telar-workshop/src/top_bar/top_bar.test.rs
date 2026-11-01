@@ -396,10 +396,10 @@ fn drawn_text(workshop: &Workshop, label: &str) -> (Rect, telar::TextStyle) {
     found.unwrap_or_else(|| panic!("{label} is not drawn"))
 }
 
-/// The middle of the ink of `label` as the bar draws it, top to bottom.
-fn ink_middle(workshop: &Workshop, label: &str) -> f32 {
+/// The middle of the cap band of the line `label` is drawn on: the ink of a capital H in its style, which is what a control centres.
+fn cap_band_middle(workshop: &Workshop, label: &str) -> f32 {
     let (line, style) = drawn_text(workshop, label);
-    let (top, height) = telar::measure_ink_bounds(label, line.width, &style);
+    let (top, height) = telar::measure_ink_bounds("H", line.width, &style);
     line.y + top + height / 2.0
 }
 
@@ -478,15 +478,15 @@ fn a_bar_too_narrow_to_centre_the_field_sets_it_as_far_from_either_group() {
     );
 }
 
-/// The project's name sits in the middle of the field by its ink, beside the icon, as any other text in a control does.
+/// The project's name sits with its style's cap band in the middle of the field, beside the icon, as any other text in a control does, whatever its own letters reach above or below.
 #[test]
-fn the_project_name_is_centred_in_the_field_by_its_ink() {
+fn the_project_name_is_centred_in_the_field_on_its_cap_band() {
     for width in [WIDE, 800] {
         let workshop = Workshop::open(Frame::Own, width);
         let field = workshop
             .control(Role::Button, "Find a preview or command in catalogue")
             .rect;
-        let off = ink_middle(&workshop, PROJECT) - (field.y + field.height / 2.0);
+        let off = cap_band_middle(&workshop, PROJECT) - (field.y + field.height / 2.0);
         assert!(
             off.abs() <= 0.5,
             "{width}: the name is {off} px off the field's middle"
