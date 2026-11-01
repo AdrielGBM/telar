@@ -4,7 +4,7 @@ struct Greeter {
     greeting: String,
 }
 
-unsafe extern "C" fn greet(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn greet(data: *const c_void, request: LentBytes<ServiceBytes>, reply: Reply) {
     unsafe {
         serve(data, request, reply, |greeter: &Greeter, name: String| {
             format!("{}, {name}", greeter.greeting)
@@ -12,7 +12,11 @@ unsafe extern "C" fn greet(data: *const c_void, request: LentBytes, reply: Reply
     }
 }
 
-unsafe extern "C" fn panic_while_serving(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn panic_while_serving(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |_: &Greeter, (): ()| -> String {
             panic!("the backend went away")

@@ -10,7 +10,9 @@ use raw_window_handle::{
     Win32WindowHandle, WinRtWindowHandle, WindowsDisplayHandle, XcbDisplayHandle, XcbWindowHandle,
     XlibDisplayHandle, XlibWindowHandle,
 };
-use wire_core::{Reader, Wire, WireError, Writer, wire_enum, wire_struct};
+use wire_core::{
+    Reader, Shaped, Wire, WireError, Writer, fold_shape, shape_named, wire_enum, wire_struct,
+};
 
 use crate::guest::RawHandles;
 use crate::{
@@ -153,7 +155,7 @@ wire_enum!(Event {
     FocusLeftBoxes = 17,
     BoxActivated { box_id } = 18,
     RunActivated { box_id, run } = 19,
-    InSurface { surface, event } = 20,
+    InSurface { surface, event: Self } = 20,
     AccessAction { id, activate } = 21,
     SafeAreaChanged { insets } = 22,
     SystemPreferencesChanged { preferences } = 23,
@@ -286,6 +288,16 @@ wire_struct!(AccessNode {
 });
 wire_struct!(AccessAudit { nodes, violations });
 
+impl Shaped for LocationFormat {
+    const SHAPE: u64 = fold_shape(
+        fold_shape(
+            fold_shape(shape_named("LocationFormat"), String::SHAPE),
+            bool::SHAPE,
+        ),
+        <Vec<String>>::SHAPE,
+    );
+}
+
 impl Wire for LocationFormat {
     fn put(&self, w: &mut Writer) {
         w.str(self.base());
@@ -304,6 +316,11 @@ impl Wire for LocationFormat {
 }
 
 // Only the handles of the desktops a host loads guests on are spelled; a mobile, web, Orbital or Haiku handle crosses as none.
+impl Shaped for RawHandles {
+    // The handles spell foreign pointers and ids no other wire type is built from, so the name is all there is to fold.
+    const SHAPE: u64 = shape_named("RawHandles");
+}
+
 impl Wire for RawHandles {
     fn put(&self, w: &mut Writer) {
         put_window(w, self.window);

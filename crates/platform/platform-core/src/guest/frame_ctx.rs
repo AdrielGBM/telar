@@ -13,7 +13,7 @@ use crate::AppCtx;
 pub struct FrameCtx {
     pub(super) redraw_requested: bool,
     pub(super) waker: *const CWaker,
-    pub(super) handles: LentBytes,
+    pub(super) handles: LentBytes<RawHandles>,
 }
 
 /// A window's raw handles, as a [`FrameCtx`] spells them.
@@ -51,7 +51,7 @@ impl FrameCtx {
     pub unsafe fn enter<T>(frame: *mut FrameCtx, call: impl FnOnce(&mut AppCtx<'_>) -> T) -> T {
         let frame = unsafe { &mut *frame };
         let waker = unsafe { frame.waker.as_ref() }.map(|waker| waker.clone().into_redraw_waker());
-        let handles = unsafe { frame.handles.decode::<RawHandles>() }.unwrap_or_else(|error| {
+        let handles = unsafe { frame.handles.decode() }.unwrap_or_else(|error| {
             tracing::warn!(%error, "the host lent window handles this guest cannot read");
             RawHandles::default()
         });

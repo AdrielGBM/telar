@@ -11,6 +11,7 @@ use platform_core::guest::LentBytes;
 use platform_core::guest::ReportsSurface;
 use platform_core::{AccessNode, ConsumedKeys, Event, TextInput};
 use renderer_core::DrawCommand;
+use renderer_core::wire::{DrawList, Pixels};
 use services_core::guest::LentFrames;
 use ui_core::{Component, ComponentList, EventResult, OwnedBuild};
 use ui_tree::SegmentNodeInfo;
@@ -149,7 +150,7 @@ impl HotTree {
     }
 
     /// This frame's commands, lent as [`LentFrames::paint`] lends them.
-    pub fn paint(&mut self) -> LentBytes {
+    pub fn paint(&mut self) -> LentBytes<DrawList> {
         let commands = self.tree.list.commands();
         self.frames.paint(&commands)
     }
@@ -159,7 +160,7 @@ impl HotTree {
     /// # Safety
     ///
     /// As [`LentFrames::lend_pixels`].
-    pub unsafe fn lend_pixels(&self, image: u64, pixels: *mut LentBytes, found: *mut bool) {
+    pub unsafe fn lend_pixels(&self, image: u64, pixels: *mut LentBytes<Pixels>, found: *mut bool) {
         unsafe { self.frames.lend_pixels(image, pixels, found) }
     }
 

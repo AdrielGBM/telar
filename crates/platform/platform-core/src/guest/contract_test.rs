@@ -115,7 +115,7 @@ fn every_building_block_is_hashed() {
     assert_eq!(
         names,
         [
-            "LentBytes",
+            "LentBytes<()>",
             "CallOutcome",
             "Handle<()>",
             "CWaker",
@@ -149,7 +149,7 @@ mod guest {
         CallOutcome::OK
     }
 
-    pub(super) extern "C" fn paint(_: Handle<u32>, _: *mut LentBytes) -> CallOutcome {
+    pub(super) extern "C" fn paint(_: Handle<u32>, _: *mut LentBytes<String>) -> CallOutcome {
         CallOutcome::OK
     }
 }
@@ -195,14 +195,14 @@ crate::entry_table! {
         symbol: "telar_declared_entries",
         guest: guest,
         settings: ["shaper" => true],
-        create: fn(LentBytes, *mut Handle<u32>) as CreateDeclared;
+        create: fn(LentBytes<Vec<String>>, *mut Handle<u32>) as CreateDeclared;
         report: u32;
         release: fn(Handle<u32>);
-        paint: fn(Handle<u32>, *mut LentBytes);
+        paint: fn(Handle<u32>, *mut LentBytes<String>);
     }
 }
 
-extern "C" fn create_declared(_: LentBytes, _: *mut Handle<u32>) -> CallOutcome {
+extern "C" fn create_declared(_: LentBytes<Vec<String>>, _: *mut Handle<u32>) -> CallOutcome {
     CallOutcome::OK
 }
 
@@ -219,10 +219,10 @@ fn a_declared_table_starts_with_its_lifecycle_and_hashes_every_entry() {
         fields,
         [
             "lifecycle: Lifecycle",
-            "create: fn(LentBytes, *mut Handle<u32>, )",
+            "create: fn(LentBytes<Vec<String>>, *mut Handle<u32>, )",
             "report: SurfaceReport",
             "release: fn(Handle<u32>, )",
-            "paint: fn(Handle<u32>, *mut LentBytes, )"
+            "paint: fn(Handle<u32>, *mut LentBytes<String>, )"
         ]
     );
     assert_eq!(
@@ -236,4 +236,92 @@ fn a_declared_table_starts_with_its_lifecycle_and_hashes_every_entry() {
         served.lifecycle().install_services,
         installs
     ));
+}
+
+/// One table, `Lending`, whose `paint` lends a `Payload` holding a `$field`, declared in a module of its own so two of them differ in nothing else, the names they write included.
+macro_rules! lending_table {
+    ($module:ident, $field:ty) => {
+        // Only the layouts and stamps are compared: nothing serves the table or reads the payload.
+        #[allow(dead_code)]
+        mod $module {
+            use super::*;
+
+            pub struct Payload {
+                value: $field,
+            }
+
+            wire_core::wire_struct!(Payload { value });
+
+            mod guest {
+                use super::*;
+                use crate::guest::HostServices;
+
+                pub(super) extern "C" fn install_services(_: HostServices) -> CallOutcome {
+                    CallOutcome::OK
+                }
+
+                pub(super) extern "C" fn release(_: Handle<u32>) -> CallOutcome {
+                    CallOutcome::OK
+                }
+
+                pub(super) extern "C" fn paint(
+                    _: Handle<u32>,
+                    _: *mut LentBytes<Payload>,
+                ) -> CallOutcome {
+                    CallOutcome::OK
+                }
+            }
+
+            crate::entry_table! {
+                /// A table lending one value.
+                pub struct Lending {
+                    kind: Embed,
+                    symbol: "telar_lending_entries",
+                    guest: guest,
+                    settings: [],
+                    create: fn(*mut Handle<u32>) as CreateLending;
+                    report: u32;
+                    release: fn(Handle<u32>);
+                    paint: fn(Handle<u32>, *mut LentBytes<Payload>);
+                }
+            }
+
+            #[repr(C)]
+            pub struct Block {
+                pub bytes: LentBytes<Payload>,
+            }
+
+            pub fn block_layout() -> TypeLayout {
+                crate::type_layout!(Block { bytes })
+            }
+        }
+    };
+}
+
+lending_table!(lends_text, String);
+lending_table!(lends_number, u64);
+
+/// Two tables laid out alike whose entries lend different values would read each other's bytes as the wrong thing, so their stamps differ though no offset does.
+#[test]
+fn an_entry_that_lends_something_else_changes_the_stamp() {
+    let (text, number) = (lends_text::Lending::LAYOUT, lends_number::Lending::LAYOUT);
+    assert_eq!(
+        (text.name, text.size, text.fields),
+        (number.name, number.size, number.fields)
+    );
+    assert_ne!(
+        lends_text::Lending::CONTRACT,
+        lends_number::Lending::CONTRACT
+    );
+}
+
+/// What a building block lends is part of its layout, as much as where its fields sit.
+#[test]
+fn what_a_building_block_lends_is_part_of_its_layout() {
+    let (text, number) = (lends_text::block_layout(), lends_number::block_layout());
+    assert_eq!(
+        (text.name, text.size, text.fields),
+        (number.name, number.size, number.fields)
+    );
+    assert_ne!(text.shape, number.shape);
 }

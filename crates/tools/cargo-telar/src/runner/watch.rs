@@ -403,6 +403,9 @@ impl ReloadOutcome {
             ReloadOutcome::Answered(HotOutcome::Refused(reason)) => {
                 format!("Hot reload refused, the app keeps running the build before: {reason}")
             }
+            ReloadOutcome::Answered(HotOutcome::Unreadable(report)) => format!(
+                "The rebuilt library loaded, but the app cannot read what it answers, so nothing of it runs; restart `cargo telar` to build both from the same sources: {report}"
+            ),
             ReloadOutcome::Unanswered { app_answers: true } => format!(
                 "The app has not said within {}s whether it loaded the rebuilt library; its answer is printed when it comes.",
                 REPLY_TIMEOUT.as_secs()

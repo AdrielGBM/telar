@@ -252,6 +252,12 @@ fn each_reload_reply_survives_the_channel_as_one_line_naming_its_library() {
             library,
             HotOutcome::Panicked("panicked at src/app.rs:4:9:\n\tno assets".into()),
         ),
+        reply(
+            library,
+            HotOutcome::Unreadable(
+                "answered in bytes this host cannot read:\nunknown Role tag 48".into(),
+            ),
+        ),
     ];
     for reply in replies {
         let line = reply.line();

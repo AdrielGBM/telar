@@ -9,9 +9,12 @@ use super::lent::{Handle, LentBytes};
 use super::lifecycle::{Entries, LIFECYCLE_LAYOUT, Lifecycle};
 use super::outcome::CallOutcome;
 use super::services::{HOST_SERVICES_LAYOUT, REPLY_LAYOUT};
+use super::services::{HostServices, Reply};
 use super::surface::{SURFACE_REPORT_LAYOUT, SurfaceReport};
 use super::threads::{HostThread, ThreadStart};
 use super::waker::CWaker;
+use std::ffi::c_void;
+use wire_core::{Shaped, fold_shape, shape_named};
 
 /// The version of the contract hot reload and embed both load guests through. Bumped whenever a rule of it changes in a way the layout hash cannot see: what an entry means, who frees what, how long a lent slice lives.
 pub const CONTRACT_VERSION: u32 = 1;
@@ -19,14 +22,104 @@ pub const CONTRACT_VERSION: u32 = 1;
 /// The symbol every guest exports its [`ContractStamp`] as, through [`export_contract_stamp!`](crate::export_contract_stamp).
 pub const CONTRACT_SYMBOL: &[u8] = b"telar_guest_contract\0";
 
-/// The size, alignment and field offsets of one `repr(C)` type of the contract, as [`type_layout!`](crate::type_layout) reads them.
+/// The size, alignment and field offsets of one `repr(C)` type of the contract, and what its fields carry, as [`type_layout!`](crate::type_layout) reads them.
 #[derive(Clone, Copy, Debug)]
 pub struct TypeLayout {
     pub name: &'static str,
     pub size: usize,
     pub align: usize,
     pub fields: &'static [(&'static str, usize)],
+    /// Every field's [`ArgShape`] folded in order: what bytes the fields lend spell, which no offset shows.
+    pub shape: u64,
 }
+
+/// What a value handed across the boundary carries, beyond the bits of its own layout: the shape of the bytes a [`LentBytes`] lends, folded through every pointer, option and entry signature it sits in. A type crossing as itself, whose layout a stamp hashes on its own, is known by its name.
+pub trait ArgShape {
+    const ARG_SHAPE: u64;
+}
+
+/// The [`ArgShape`] of the field `field` points at, which only its type decides: `field` is never called.
+pub const fn field_shape<S, T: ArgShape>(field: fn(&S) -> *const T) -> u64 {
+    let _ = field;
+    T::ARG_SHAPE
+}
+
+macro_rules! named_arg_shapes {
+    ($($ty:ty),+ $(,)?) => {
+        $(impl ArgShape for $ty {
+            const ARG_SHAPE: u64 = shape_named(stringify!($ty));
+        })+
+    };
+}
+
+named_arg_shapes!(
+    (),
+    bool,
+    u8,
+    u16,
+    u32,
+    u64,
+    usize,
+    i32,
+    i64,
+    f32,
+    f64,
+    c_void,
+    CallOutcome,
+    Timestamp,
+    CWaker,
+    FrameCtx,
+    ThreadStart,
+    HostThread,
+    HostServices,
+    Reply,
+    Lifecycle,
+    ContractStamp,
+);
+
+impl<T> ArgShape for Handle<T> {
+    const ARG_SHAPE: u64 = shape_named("Handle");
+}
+
+impl<S> ArgShape for SurfaceReport<S> {
+    const ARG_SHAPE: u64 = shape_named("SurfaceReport");
+}
+
+impl<T: Shaped> ArgShape for LentBytes<T> {
+    const ARG_SHAPE: u64 = fold_shape(shape_named("LentBytes"), T::SHAPE);
+}
+
+impl<T: ArgShape> ArgShape for *const T {
+    const ARG_SHAPE: u64 = fold_shape(shape_named("*const"), T::ARG_SHAPE);
+}
+
+impl<T: ArgShape> ArgShape for *mut T {
+    const ARG_SHAPE: u64 = fold_shape(shape_named("*mut"), T::ARG_SHAPE);
+}
+
+impl<T: ArgShape> ArgShape for Option<T> {
+    const ARG_SHAPE: u64 = fold_shape(shape_named("Option"), T::ARG_SHAPE);
+}
+
+macro_rules! entry_arg_shapes {
+    ($($arg:ident),*) => {
+        impl<R: ArgShape $(, $arg: ArgShape)*> ArgShape for unsafe extern "C" fn($($arg),*) -> R {
+            const ARG_SHAPE: u64 = {
+                let hash = fold_shape(shape_named("fn"), R::ARG_SHAPE);
+                $(let hash = fold_shape(hash, $arg::ARG_SHAPE);)*
+                hash
+            };
+        }
+    };
+}
+
+entry_arg_shapes!();
+entry_arg_shapes!(A);
+entry_arg_shapes!(A, B);
+entry_arg_shapes!(A, B, C);
+entry_arg_shapes!(A, B, C, D);
+entry_arg_shapes!(A, B, C, D, E);
+entry_arg_shapes!(A, B, C, D, E, F);
 
 /// The [`TypeLayout`] of a `repr(C)` type and the listed fields, for a boundary's entry table to put in its [`ContractStamp`]: `type_layout!(Table { create, release })`.
 #[macro_export]
@@ -37,13 +130,21 @@ macro_rules! type_layout {
             size: ::std::mem::size_of::<$ty>(),
             align: ::std::mem::align_of::<$ty>(),
             fields: &[$((stringify!($field), ::std::mem::offset_of!($ty, $field))),*],
+            shape: {
+                let hash = $crate::wire_core::shape_named(stringify!($ty));
+                $(let hash = $crate::wire_core::fold_shape(
+                    hash,
+                    $crate::guest::field_shape(|value: &$ty| &raw const value.$field),
+                );)*
+                hash
+            },
         }
     };
 }
 
 /// The building blocks every boundary shares, hashed into every stamp.
 pub const BUILDING_BLOCKS: [TypeLayout; 13] = [
-    crate::type_layout!(LentBytes { ptr, len }),
+    crate::type_layout!(LentBytes<()> { ptr, len }),
     crate::type_layout!(CallOutcome {
         status,
         message,
@@ -108,7 +209,7 @@ impl fmt::Display for GuestKind {
     }
 }
 
-/// What a guest exports for its host to check before reading anything else of it: the [`CONTRACT_VERSION`] it was built for at offset 0, readable whatever version that is, then the [`GuestKind`] it was built as, then a hash of the layout of every `repr(C)` type between them, of [`WIRE_VERSION`](wire_core::WIRE_VERSION) and of the settings both builds must share.
+/// What a guest exports for its host to check before reading anything else of it: the [`CONTRACT_VERSION`] it was built for at offset 0, readable whatever version that is, then the [`GuestKind`] it was built as, then a hash of the layout of every `repr(C)` type between them, of the shape of everything their [`LentBytes`] lend, of [`WIRE_VERSION`](wire_core::WIRE_VERSION) and of the settings both builds must share.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ContractStamp {
@@ -184,6 +285,7 @@ const fn hash_layouts(mut hash: u64, layouts: &[TypeLayout]) -> u64 {
             hash = hash_bytes(hash, &(offset as u64).to_le_bytes());
             field += 1;
         }
+        hash = hash_bytes(hash, &layout.shape.to_le_bytes());
         index += 1;
     }
     hash
@@ -239,7 +341,7 @@ impl std::error::Error for ContractMismatch {}
 
 /// Declares a boundary's entry table and its [`Entries`] impl: a `repr(C)` struct of `extern "C"` entries after its [`Lifecycle`], the entry that builds an instance with a type of its own, the [`SurfaceReport`] of the instances whose surfaces it reads (`report`, a [`ReportsSurface`](super::ReportsSurface) type), and a `serving` constructor that takes that entry and fills every other from the function of the same name in the `guest` module, the lifecycle's `install_services` included.
 ///
-/// The table's layout hashes every entry with its signature as written, so an entry that changes what it takes changes the stamp as surely as one that moves, and the stamp hashes each setting, on or off, as [`ContractStamp::with_setting`] does.
+/// The table's layout hashes every entry with its signature as written and the shape of what each lends, so an entry that changes what it takes, or a type it lends that changes what it spells, changes the stamp as surely as one that moves, and the stamp hashes each setting, on or off, as [`ContractStamp::with_setting`] does.
 ///
 /// ```ignore
 /// entry_table! {
@@ -249,7 +351,7 @@ impl std::error::Error for ContractMismatch {}
 ///         symbol: "telar_embed_entries",
 ///         guest: guest,
 ///         settings: ["shaper" => cfg!(feature = "shaper")],
-///         create: fn(LentBytes, *mut Handle<GuestInstance>) as CreateInstance;
+///         create: fn(LentBytes<Vec<String>>, *mut Handle<GuestInstance>) as CreateInstance;
 ///         report: GuestInstance;
 ///         release: fn(Handle<GuestInstance>);
 ///     }
@@ -313,6 +415,14 @@ macro_rules! entry_table {
                         ::std::mem::offset_of!($table, $field),
                     ),)*
                 ],
+                shape: {
+                    let hash = $crate::wire_core::shape_named(stringify!($table));
+                    let hash = $crate::wire_core::fold_shape(hash, $crate::guest::field_shape(|table: &$table| &raw const table.lifecycle));
+                    let hash = $crate::wire_core::fold_shape(hash, $crate::guest::field_shape(|table: &$table| &raw const table.$create));
+                    let hash = $crate::wire_core::fold_shape(hash, $crate::guest::field_shape(|table: &$table| &raw const table.report));
+                    $(let hash = $crate::wire_core::fold_shape(hash, $crate::guest::field_shape(|table: &$table| &raw const table.$field));)*
+                    hash
+                },
             };
             const CONTRACT: $crate::guest::ContractStamp = $crate::guest::ContractStamp::of(
                 $crate::guest::GuestKind::$kind,

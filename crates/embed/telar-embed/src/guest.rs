@@ -8,9 +8,10 @@ use platform_core::guest::{
 };
 use platform_core::{AccessNode, ConsumedKeys, Event, SystemPreferences, TextInput};
 use renderer_core::Color;
+use renderer_core::wire::{DrawList, Pixels};
 use services_core::guest::LentFrames;
 
-use crate::{EmbedInstance, EmbeddedApp};
+use crate::{EmbedInstance, EmbeddedApp, WindowCommands};
 
 /// Exports a guest cdylib's [`EmbedEntries`](crate::EmbedEntries), whose `create` builds an instance of the app `$factory` returns, and the [`EMBED_CONTRACT`](crate::EMBED_CONTRACT) its host checks before reading them. `$factory` is any `FnOnce(&[String]) -> Box<dyn EmbeddedApp>`, invoked once per instance with the launch args.
 ///
@@ -24,7 +25,7 @@ macro_rules! embed {
     ($factory:expr) => {
         #[doc(hidden)]
         unsafe extern "C" fn __telar_embed_create(
-            args: $crate::LentBytes,
+            args: $crate::LentBytes<::std::vec::Vec<::std::string::String>>,
             instance: *mut $crate::Handle<$crate::guest::GuestInstance>,
         ) -> $crate::CallOutcome {
             let make = $factory;
@@ -52,7 +53,7 @@ pub struct GuestInstance {
 ///
 /// `args` must be lent for the call, `instance` writable, and the handle written there released only through this library's `release`.
 pub unsafe fn create(
-    args: LentBytes,
+    args: LentBytes<Vec<String>>,
     instance: *mut Handle<GuestInstance>,
     make: impl FnOnce(&[String]) -> Box<dyn EmbeddedApp>,
 ) -> CallOutcome {
@@ -98,7 +99,7 @@ pub(crate) unsafe extern "C" fn relayout_dirty(instance: Handle<GuestInstance>) 
 
 pub(crate) unsafe extern "C" fn paint(
     instance: Handle<GuestInstance>,
-    frame: *mut LentBytes,
+    frame: *mut LentBytes<DrawList>,
 ) -> CallOutcome {
     guest_entry(|| {
         let guest = unsafe { instance.get() };
@@ -110,7 +111,7 @@ pub(crate) unsafe extern "C" fn paint(
 pub(crate) unsafe extern "C" fn pixels(
     instance: Handle<GuestInstance>,
     image: u64,
-    pixels: *mut LentBytes,
+    pixels: *mut LentBytes<Pixels>,
     found: *mut bool,
 ) -> CallOutcome {
     guest_entry(|| unsafe { instance.get().frames.lend_pixels(image, pixels, found) })
@@ -132,7 +133,7 @@ pub(crate) unsafe extern "C" fn generation(
 
 pub(crate) unsafe extern "C" fn on_event(
     instance: Handle<GuestInstance>,
-    event: LentBytes,
+    event: LentBytes<Event>,
     handled: *mut bool,
 ) -> CallOutcome {
     guest_entry(|| {
@@ -144,7 +145,7 @@ pub(crate) unsafe extern "C" fn on_event(
 
 pub(crate) unsafe extern "C" fn dispatch_overlays(
     instance: Handle<GuestInstance>,
-    event: LentBytes,
+    event: LentBytes<Event>,
     handled: *mut bool,
 ) -> CallOutcome {
     guest_entry(|| {
@@ -180,7 +181,7 @@ pub(crate) unsafe extern "C" fn motion_has_active(
 
 pub(crate) unsafe extern "C" fn until_next_timer(
     instance: Handle<GuestInstance>,
-    after: *mut LentBytes,
+    after: *mut LentBytes<Option<Duration>>,
 ) -> CallOutcome {
     guest_entry(|| {
         let due: Option<Duration> = unsafe { instance.get() }.instance.until_next_timer();
@@ -206,7 +207,7 @@ pub(crate) unsafe extern "C" fn next_timer_due(
 
 pub(crate) unsafe extern "C" fn drain_window_commands(
     instance: Handle<GuestInstance>,
-    commands: *mut LentBytes,
+    commands: *mut LentBytes<WindowCommands>,
 ) -> CallOutcome {
     guest_entry(|| {
         let drained = unsafe { instance.get() }.instance.drain_window_commands();
@@ -216,7 +217,7 @@ pub(crate) unsafe extern "C" fn drain_window_commands(
 
 pub(crate) unsafe extern "C" fn set_system_preferences(
     instance: Handle<GuestInstance>,
-    preferences: LentBytes,
+    preferences: LentBytes<SystemPreferences>,
 ) -> CallOutcome {
     guest_entry(|| {
         let preferences: SystemPreferences = unsafe { preferences.read() };
@@ -232,7 +233,7 @@ pub(crate) unsafe extern "C" fn activate(instance: Handle<GuestInstance>) -> Cal
 
 pub(crate) unsafe extern "C" fn clear_color(
     instance: Handle<GuestInstance>,
-    color: *mut LentBytes,
+    color: *mut LentBytes<Option<Color>>,
 ) -> CallOutcome {
     guest_entry(|| {
         let clear: Option<Color> = unsafe { instance.get() }.instance.clear_color();
@@ -242,7 +243,7 @@ pub(crate) unsafe extern "C" fn clear_color(
 
 pub(crate) unsafe extern "C" fn title(
     instance: Handle<GuestInstance>,
-    title: *mut LentBytes,
+    title: *mut LentBytes<String>,
 ) -> CallOutcome {
     guest_entry(|| {
         let titled = unsafe { instance.get() }.instance.title();
@@ -252,7 +253,7 @@ pub(crate) unsafe extern "C" fn title(
 
 pub(crate) unsafe extern "C" fn icon(
     instance: Handle<GuestInstance>,
-    icon: *mut LentBytes,
+    icon: *mut LentBytes<Option<Vec<u8>>>,
 ) -> CallOutcome {
     guest_entry(|| {
         let bytes = unsafe { instance.get() }.instance.icon();
@@ -262,7 +263,7 @@ pub(crate) unsafe extern "C" fn icon(
 
 pub(crate) unsafe extern "C" fn id(
     instance: Handle<GuestInstance>,
-    id: *mut LentBytes,
+    id: *mut LentBytes<String>,
 ) -> CallOutcome {
     guest_entry(|| {
         let named = unsafe { instance.get() }.instance.id();

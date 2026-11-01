@@ -122,7 +122,8 @@ fn a_hot_tree_paints_what_it_composed_and_a_reset_frame_stands_alone() {
     ui_core::relayout_if_dirty();
     let composed = tree.tree.list.commands().clone();
     assert!(!composed.is_empty(), "precondition: the tree draws");
-    let read = |decoder: &mut renderer_core::wire::FrameDecoder, frame: LentBytes| {
+    let read = |decoder: &mut renderer_core::wire::FrameDecoder,
+                frame: LentBytes<renderer_core::wire::DrawList>| {
         let mut commands = Vec::new();
         decoder
             .decode(unsafe { frame.as_slice() }, &mut commands, |_| None)

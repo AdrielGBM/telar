@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::mem::ManuallyDrop;
 
-use super::lent::LentBytes;
+use super::lent::{LentBytes, Utf8};
 use super::{GuestPanic, GuestResult, guest_call};
 
 reactive_local::dropless_thread_local! {
@@ -16,8 +16,8 @@ reactive_local::dropless_thread_local! {
 #[derive(Clone, Copy, Debug)]
 pub struct CallOutcome {
     pub(super) status: u32,
-    pub(super) message: LentBytes,
-    pub(super) location: LentBytes,
+    pub(super) message: LentBytes<Utf8>,
+    pub(super) location: LentBytes<Utf8>,
 }
 
 impl CallOutcome {
@@ -43,7 +43,7 @@ impl CallOutcome {
         match self.status {
             Self::RETURNED => Ok(()),
             Self::PANICKED => {
-                let text = |bytes: LentBytes| {
+                let text = |bytes: LentBytes<Utf8>| {
                     String::from_utf8_lossy(unsafe { bytes.as_slice() }).into_owned()
                 };
                 Err(GuestPanic {

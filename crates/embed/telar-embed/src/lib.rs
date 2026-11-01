@@ -41,9 +41,9 @@ pub use entries::{CreateInstance, EMBED_CONTRACT, EmbedEntries};
 pub use host::{LoadedEmbed, load_embedded};
 #[doc(hidden)]
 pub use platform_core::export_contract_stamp;
-pub use platform_core::guest::GuestPanic;
 #[doc(hidden)]
 pub use platform_core::guest::{CallOutcome, Handle, LentBytes};
+pub use platform_core::guest::{GuestPanic, GuestStop};
 pub use ui_core::{ForeignBoundary, ForeignSurface, FrameFocus};
 
 /// A guest's frame as the host holds it: decoded from the bytes the guest lent into commands the host allocated and owns.

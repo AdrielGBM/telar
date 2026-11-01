@@ -34,8 +34,8 @@ pub trait AppRuntime: 'static {
     /// Called once per frame before rendering.
     fn on_frame(&mut self, ctx: &mut AppCtx);
 
-    /// The report of a panic this runtime stopped at its boundary since it was last asked. A runtime that reports one runs none of the application's code again, and answers every call as an empty application would. Only a runtime behind a dylib stops one: a panic in this process unwinds like any other.
-    fn take_panic(&self) -> Option<String> {
+    /// Why this runtime stopped calling the application, the first time it is asked: a panic it stopped at its boundary, or an answer it could not read. A runtime that reports one runs none of the application's code again, and answers every call as an empty application would. Only a runtime behind a dylib stops: a panic in this process unwinds like any other.
+    fn take_stop(&self) -> Option<platform_core::guest::GuestStop> {
         None
     }
 

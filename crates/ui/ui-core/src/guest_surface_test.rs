@@ -181,7 +181,7 @@ fn once_the_guest_panics_its_surface_reports_nothing_and_holds_no_focus() {
     unsafe { field.get() }.panics = true;
 
     assert!(surface.access_snapshot().is_empty());
-    assert!(library.guest().has_panicked(), "precondition: it panicked");
+    assert!(library.guest().has_stopped(), "precondition: it panicked");
     assert_eq!(surface.text_input(), None);
     assert!(!surface.holds_focus());
     assert!(

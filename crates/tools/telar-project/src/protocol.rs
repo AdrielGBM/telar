@@ -31,13 +31,15 @@ pub const GOTO_PREFIX: &str = "goto:";
 pub const FOCUS_LINE: &str = "focus";
 
 /// The line the app sends right after its token when it answers each [`HOT_RELOAD_PREFIX`] line with one [`HotReply`]; a `cargo telar` that does not know this version treats the app as one that does not answer.
-pub const HOT_REPLIES_LINE: &str = "replies:2";
+pub const HOT_REPLIES_LINE: &str = "replies:3";
 
 pub const HOT_LOADED_PREFIX: &str = "loaded:";
 
 pub const HOT_PANICKED_PREFIX: &str = "panicked:";
 
 pub const HOT_REFUSED_PREFIX: &str = "refused:";
+
+pub const HOT_UNREADABLE_PREFIX: &str = "unreadable:";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HotReply {
@@ -53,6 +55,8 @@ pub enum HotOutcome {
     Panicked(String),
     /// Why, while the app keeps running the build before.
     Refused(String),
+    /// What the host could not read of the build's answers: built from sources the host was not, nothing of it runs until the session restarts.
+    Unreadable(String),
 }
 
 impl HotReply {
@@ -67,6 +71,9 @@ impl HotReply {
             HotOutcome::Refused(reason) => {
                 format!("{HOT_REFUSED_PREFIX}{library}\t{}", escape_lines(reason))
             }
+            HotOutcome::Unreadable(report) => {
+                format!("{HOT_UNREADABLE_PREFIX}{library}\t{}", escape_lines(report))
+            }
         }
     }
 
@@ -76,6 +83,9 @@ impl HotReply {
         } else if let Some(fields) = line.strip_prefix(HOT_PANICKED_PREFIX) {
             let (library, report) = fields.split_once('\t')?;
             (library, HotOutcome::Panicked(unescape_lines(report)))
+        } else if let Some(fields) = line.strip_prefix(HOT_UNREADABLE_PREFIX) {
+            let (library, report) = fields.split_once('\t')?;
+            (library, HotOutcome::Unreadable(unescape_lines(report)))
         } else {
             let (library, reason) = line.strip_prefix(HOT_REFUSED_PREFIX)?.split_once('\t')?;
             (library, HotOutcome::Refused(unescape_lines(reason)))

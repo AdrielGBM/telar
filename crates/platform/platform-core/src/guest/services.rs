@@ -13,8 +13,16 @@ use super::shield;
 use super::threads::{HostThread, ThreadStart};
 
 /// One entry of [`HostServices`]: answers `request` through `reply`, or answers nothing when it cannot read the request or the backend panicked. `None` where the host has no such backend, which the guest takes as its own store left empty.
-pub type Service =
-    Option<unsafe extern "C" fn(data: *const c_void, request: LentBytes, reply: Reply)>;
+pub type Service = Option<
+    unsafe extern "C" fn(data: *const c_void, request: LentBytes<ServiceBytes>, reply: Reply),
+>;
+
+/// A request to one of [`HostServices`]'s entries, or its answer, typed by that entry's documentation: the types live in the crates that serve them, above this one, so [`CONTRACT_VERSION`](super::CONTRACT_VERSION) carries a change to one.
+pub enum ServiceBytes {}
+
+impl wire_core::Shaped for ServiceBytes {
+    const SHAPE: u64 = wire_core::shape_named("service bytes");
+}
 
 /// The entry of [`HostServices`] a guest's threads are started through: has the host spawn a thread with its own std that runs `start`, writing its handle to `thread`, or answers `false` with `start` never run.
 pub type SpawnThread = Option<
@@ -28,7 +36,7 @@ pub type EndThread = Option<unsafe extern "C" fn(data: *const c_void, thread: Ho
 #[repr(C)]
 pub struct Reply {
     pub(super) sink: *mut c_void,
-    pub(super) put: unsafe extern "C" fn(sink: *mut c_void, answer: LentBytes),
+    pub(super) put: unsafe extern "C" fn(sink: *mut c_void, answer: LentBytes<ServiceBytes>),
 }
 
 impl Reply {
@@ -52,7 +60,7 @@ impl Reply {
     }
 }
 
-unsafe extern "C" fn keep_answer(sink: *mut c_void, answer: LentBytes) {
+unsafe extern "C" fn keep_answer(sink: *mut c_void, answer: LentBytes<ServiceBytes>) {
     let kept = unsafe { &mut *sink.cast::<Option<Vec<u8>>>() };
     let _ = catch_unwind(AssertUnwindSafe(|| {
         *kept = Some(unsafe { answer.as_slice() }.to_vec());
@@ -170,7 +178,7 @@ impl HostServices {
 /// `data` must point at the live `D` the table was built over, and `request` and `reply` must be what the entry was called with.
 pub unsafe fn serve<D, Request: Wire, Answer: Wire>(
     data: *const c_void,
-    request: LentBytes,
+    request: LentBytes<ServiceBytes>,
     reply: Reply,
     answer: impl FnOnce(&D, Request) -> Answer,
 ) {

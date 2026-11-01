@@ -4,7 +4,9 @@
 
 use std::sync::Arc;
 
-use wire_core::{Reader, Wire, WireError, Writer, wire_enum, wire_struct};
+use wire_core::{
+    Reader, Shaped, Wire, WireError, Writer, fold, fold_shape, shape_named, wire_enum, wire_struct,
+};
 
 use crate::{
     ExclusiveFontsError, FontAsset, FontAxis, FontConfig, FontSource, FontSources, FontWeight,
@@ -13,6 +15,13 @@ use crate::{
 
 const BYTES: u8 = 0;
 const FILE: u8 = 1;
+
+impl Shaped for FontSource {
+    const SHAPE: u64 = {
+        let hash = fold(fold(shape_named("FontSource"), &[BYTES]), b"bytes");
+        fold_shape(fold(hash, &[FILE]), std::path::PathBuf::SHAPE)
+    };
+}
 
 impl Wire for FontSource {
     fn put(&self, w: &mut Writer) {

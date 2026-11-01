@@ -1,7 +1,7 @@
 use std::cell::Cell;
 
 use telar::testing::{key_with, moved, named, press, release};
-use telar::{Insets, Rect};
+use telar::{GuestPanic, Insets, Rect};
 
 use super::*;
 use web_time::Instant;
@@ -160,9 +160,10 @@ fn the_banner_shows_the_build_error_until_a_build_lands() {
 #[test]
 fn the_banner_says_the_app_panicked_and_where_until_a_build_lands() {
     let mut dev = devtools();
-    dev.set_app_panic(Some(
-        "panicked at src/counter.rs:14:9:\nRUNTIME is already borrowed".to_owned(),
-    ));
+    dev.set_app_stop(Some(GuestStop::Panicked(GuestPanic {
+        message: "RUNTIME is already borrowed".to_owned(),
+        location: Some("src/counter.rs:14:9".to_owned()),
+    })));
     assert!(shows(&mut dev, "App panicked"));
     assert!(shows(&mut dev, "src/counter.rs:14:9"), "where it panicked");
     assert!(
@@ -176,7 +177,7 @@ fn the_banner_says_the_app_panicked_and_where_until_a_build_lands() {
     assert!(shows(&mut dev, "Build failed"));
 
     dev.set_build_outcome(BuildOutcome::Loaded);
-    dev.set_app_panic(None);
+    dev.set_app_stop(None);
     assert!(!shows(&mut dev, "App panicked"), "a landed build clears it");
 }
 
@@ -572,4 +573,22 @@ fn a_secondary_press_on_a_component_offers_to_open_or_shut_the_tree() {
         !text.iter().any(|t| t == "Column"),
         "the tree is shut down to its root: {text:?}"
     );
+}
+
+/// A build that answers in a way this host cannot read is not fixed by saving again, so it is not said the way a panic is: it asks for a restart.
+#[test]
+fn the_banner_asks_for_a_restart_when_the_app_cannot_be_read() {
+    let mut dev = devtools();
+    dev.set_app_stop(Some(GuestStop::Unreadable(
+        "unknown Role tag 48".to_owned(),
+    )));
+    assert!(shows(&mut dev, "Out of step with this host"));
+    assert!(
+        shows(&mut dev, "unknown Role tag 48"),
+        "what could not be read"
+    );
+    assert!(!shows(&mut dev, "App panicked"));
+
+    dev.set_app_stop(None);
+    assert!(!shows(&mut dev, "Out of step with this host"));
 }

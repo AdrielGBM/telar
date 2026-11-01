@@ -27,7 +27,7 @@ use std::borrow::Cow;
 
 use telar::{
     AccessNode, AccessViolation, BuildOutcome, Chord, DevAction, DevOverlay, DrawCommand, Event,
-    Key, ModifiersState, OverlayResponse, SegmentNodeInfo, Size,
+    GuestStop, Key, ModifiersState, OverlayResponse, SegmentNodeInfo, Size,
 };
 
 use meter::{Clock, FrameMeter};
@@ -162,9 +162,9 @@ impl DevOverlay for DevTools {
         }
     }
 
-    fn set_app_panic(&mut self, panic: Option<String>) {
+    fn set_app_stop(&mut self, stop: Option<GuestStop>) {
         if let Some(overlay) = self.overlay() {
-            overlay.set_app_panic(panic);
+            overlay.set_app_stop(stop);
         }
     }
 

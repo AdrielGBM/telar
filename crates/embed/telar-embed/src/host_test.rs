@@ -95,7 +95,7 @@ impl EmbeddedApp for Form {
 }
 
 unsafe extern "C" fn create_form(
-    args: LentBytes,
+    args: LentBytes<Vec<String>>,
     instance: *mut Handle<GuestInstance>,
 ) -> platform_core::guest::CallOutcome {
     unsafe { crate::guest::create(args, instance, |_| Box::new(Form::default())) }
@@ -345,7 +345,7 @@ fn a_guest_that_panics_takes_its_caret_its_stop_and_its_controls_with_it() {
         button: PointerButton::Secondary,
         source: PointerSource::Mouse,
     });
-    assert!(host.embed.panic().is_some(), "precondition: it panicked");
+    assert!(host.embed.stopped().is_some(), "precondition: it panicked");
     assert_eq!(ui_core::text_input(), None);
     assert!(
         host.embed.focus_stop_id().is_none(),

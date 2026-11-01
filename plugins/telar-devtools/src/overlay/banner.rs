@@ -1,15 +1,17 @@
-//! The banner over the app while it is not running what was last saved: a rebuild that failed, with the compiler's report, a build that compiled but that the app would not load, with why, or a build that panicked, with what it said and where.
+//! The banner over the app while it is not running what was last saved: a rebuild that failed, with the compiler's report, a build that compiled but that the app would not load, with why, a build that panicked, with what it said and where, or a build that answers in a way this host cannot read, with what could not be read.
 
 use telar::{
-    Accessible, AlignItems, Border, BuildOutcome, Container, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, children, memo, use_theme_tokens,
+    Accessible, AlignItems, Border, BuildOutcome, Container, GuestStop, LayoutError, LayoutItem,
+    LayoutStyle, Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, children, memo,
+    use_theme_tokens,
 };
 use telar_components::{CodeSpan, CodeViewProps, TokenKind, code_view};
 
 use super::{Model, mounted_while};
 use crate::strings::{
-    self, APP_PANIC, APP_PANICKED, APP_PANICKED_HINT, BUILD_ERROR, BUILD_FAILED, BUILD_FAILED_HINT,
-    REFUSAL_REASON, RELOAD_REFUSED, RELOAD_REFUSED_HINT,
+    self, APP_PANIC, APP_PANICKED, APP_PANICKED_HINT, APP_UNREADABLE, APP_UNREADABLE_HINT,
+    APP_UNREADABLE_REASON, BUILD_ERROR, BUILD_FAILED, BUILD_FAILED_HINT, REFUSAL_REASON,
+    RELOAD_REFUSED, RELOAD_REFUSED_HINT,
 };
 use crate::workbench::{WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_muted};
 
@@ -33,14 +35,31 @@ impl Report {
 }
 
 /// The panic first: while there is one, nothing of the app is running at all.
-fn reports(model: Model) -> [Report; 3] {
+fn reports(model: Model) -> [Report; 4] {
     [
         Report {
             model,
-            read: |model| model.app_panic.get(),
+            read: |model| {
+                model.app_stop.with(|stop| match stop {
+                    Some(GuestStop::Panicked(panic)) => Some(panic.to_string()),
+                    _ => None,
+                })
+            },
             title: APP_PANICKED,
             hint: APP_PANICKED_HINT,
             label: APP_PANIC,
+        },
+        Report {
+            model,
+            read: |model| {
+                model.app_stop.with(|stop| match stop {
+                    Some(GuestStop::Unreadable(error)) => Some(error.clone()),
+                    _ => None,
+                })
+            },
+            title: APP_UNREADABLE,
+            hint: APP_UNREADABLE_HINT,
+            label: APP_UNREADABLE_REASON,
         },
         Report {
             model,

@@ -106,7 +106,7 @@ fn asks(entry: impl FnOnce(*mut bool) -> CallOutcome) -> bool {
     answer
 }
 
-fn reads<T: wire_core::Wire>(entry: impl FnOnce(*mut LentBytes) -> CallOutcome) -> T {
+fn reads<T: wire_core::Wire>(entry: impl FnOnce(*mut LentBytes<T>) -> CallOutcome) -> T {
     let mut lent = LentBytes::EMPTY;
     assert_eq!(entry(&mut lent).status(), CallOutcome::RETURNED);
     unsafe { lent.decode() }.expect("the answer reads back")

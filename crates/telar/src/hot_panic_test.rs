@@ -28,7 +28,7 @@ fn a_panic_in_a_hot_guest_is_reported_and_the_next_build_takes_over() {
 
     let mut broken = load(&library).expect("the guest loads");
     assert_eq!(
-        broken.take_panic(),
+        broken.take_stop(),
         None,
         "precondition: a guest that starts"
     );
@@ -37,8 +37,9 @@ fn a_panic_in_a_hot_guest_is_reported_and_the_next_build_takes_over() {
 
     tree.on_event(&press());
     let report = broken
-        .take_panic()
-        .expect("the host is told the guest panicked");
+        .take_stop()
+        .expect("the host is told the guest panicked")
+        .to_string();
     assert!(
         report.starts_with(&format!("panicked at src/lib.rs:{}:", panic_line())),
         "the report says where: {report}"
@@ -58,7 +59,7 @@ fn a_panic_in_a_hot_guest_is_reported_and_the_next_build_takes_over() {
     let mut next = load(&library).expect("the next build loads beside the one still mapped");
     assert!(runs_a_frame(&mut next), "the next build runs");
     assert_eq!(
-        next.take_panic(),
+        next.take_stop(),
         None,
         "and shares nothing with the guest that panicked"
     );
@@ -119,7 +120,7 @@ fn a_tree_that_outlives_its_hot_app_keeps_its_guest_mapped() {
     app.set_surface_size(Size::new(320.0, 200.0));
     let mut tree = app.mount();
     app.relayout();
-    assert_eq!(app.take_panic(), None, "precondition: the tree mounts");
+    assert_eq!(app.take_stop(), None, "precondition: the tree mounts");
     drop(app);
     assert_eq!(mapped_guests(), 1, "the tree keeps its guest mapped");
     assert_eq!(
@@ -194,7 +195,7 @@ fn a_face_a_hot_guest_adds_while_it_runs_reaches_the_host() {
         EventResult::Handled,
         "precondition: the guest adds the face"
     );
-    assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+    assert_eq!(app.take_stop(), None, "precondition: nothing panicked");
     assert!(
         telar::font_family_available("Arriving Face"),
         "the host can draw in it"
@@ -241,7 +242,7 @@ fn a_hot_guest_that_panicked_with_a_task_running_is_unmapped_once_the_task_is_jo
     let mut tree = app.mount();
     let pressed = std::time::Instant::now();
     tree.on_event(&auxiliary_press());
-    assert!(app.take_panic().is_some(), "precondition: it panicked");
+    assert!(app.take_stop().is_some(), "precondition: it panicked");
     drop(tree);
     assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
     drop(app);
@@ -269,7 +270,7 @@ fn a_hot_guest_that_started_a_task_from_the_host_thread_is_unmapped_when_dropped
         EventResult::Handled,
         "precondition: the guest starts a task"
     );
-    assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+    assert_eq!(app.take_stop(), None, "precondition: nothing panicked");
     drop(tree);
     assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
     drop(app);
@@ -303,7 +304,7 @@ fn a_hot_guest_that_spawns_with_its_own_std_is_unmapped_only_once_the_spawning_t
                     EventResult::Handled,
                     "precondition: the guest spawns"
                 );
-                assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+                assert_eq!(app.take_stop(), None, "precondition: nothing panicked");
                 drop(tree);
                 drop(app);
                 assert_eq!(
@@ -335,7 +336,7 @@ fn a_hot_guest_that_cannot_be_quiesced_stays_mapped() {
         EventResult::Handled,
         "precondition: the guest leaves a worker it cannot stop"
     );
-    assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+    assert_eq!(app.take_stop(), None, "precondition: nothing panicked");
     drop(tree);
     drop(app);
     assert_eq!(mapped_guests(), 1, "its library stays mapped");
@@ -356,14 +357,14 @@ fn run_a_session(library: &Path) {
     app.set_surface_size(Size::new(320.0, 200.0));
     let mut tree = app.mount();
     app.relayout();
-    assert_eq!(app.take_panic(), None, "precondition: the tree mounts");
+    assert_eq!(app.take_stop(), None, "precondition: the tree mounts");
     let mut dispatched = None;
     app.in_event_batch(&mut || {
         dispatched = Some((app.dispatch_overlays(&hover()), tree.on_event(&hover())));
     });
     let (overlaid, handled) = dispatched.expect("the dispatch ran");
     app.relayout();
-    assert_eq!(app.take_panic(), None, "precondition: the move is handled");
+    assert_eq!(app.take_stop(), None, "precondition: the move is handled");
     assert!(!overlaid, "precondition: no overlay takes the move");
     assert_eq!(
         handled,
@@ -373,7 +374,7 @@ fn run_a_session(library: &Path) {
     assert!(runs_a_frame(&mut app), "precondition: its frame runs");
     assert!(!tree.frame().is_empty(), "precondition: the tree paints");
     tree.end_frame();
-    assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+    assert_eq!(app.take_stop(), None, "precondition: nothing panicked");
     assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
     drop(tree);
     drop(app);

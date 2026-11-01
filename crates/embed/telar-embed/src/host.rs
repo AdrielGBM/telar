@@ -18,7 +18,7 @@ use web_time::Instant;
 use wire_core::encode;
 
 use crate::guest::GuestInstance;
-use crate::{DrawList, EmbedEntries, GuestPanic, WindowCommands};
+use crate::{DrawList, EmbedEntries, GuestPanic, GuestStop, WindowCommands};
 
 /// A loaded guest the host drives: one instance its library built, and the library itself, which outlives the instance. `!Send`/`!Sync`: the instance is a foreign reactive runtime, driven only on the UI thread.
 ///
@@ -40,7 +40,7 @@ pub struct LoadedEmbed {
 
 /// Loads a guest cdylib and creates one instance from it, its `create` entry handed `args`.
 ///
-/// Each load opens a private copy of the library, so a rebuilt library at the same path never shares statics with one still mapped, a guest that panicked among them. The library is kept mapped for the guest's lifetime. An error names the library and why it could not be driven: one built against another telar, with other features, as a hot-reload library or as no telar guest at all is refused before anything of it runs but its initializers. A panic while the guest is built comes back as the error too, a [`GuestPanic`] the caller can downcast to.
+/// Each load opens a private copy of the library, so a rebuilt library at the same path never shares statics with one still mapped, a guest that panicked among them. The library is kept mapped for the guest's lifetime. An error names the library and why it could not be driven: one built against another telar, with other features, as a hot-reload library or as no telar guest at all is refused before anything of it runs but its initializers. A guest that stops while it is built, by panicking or by answering in bytes the host cannot read, comes back as the error too, a [`GuestStop`] the caller can downcast to.
 ///
 /// # Safety
 ///
@@ -55,12 +55,12 @@ pub unsafe fn load_embedded(
 }
 
 impl LoadedEmbed {
-    /// Starts the guest `entries` were copied from, creates one instance through them and seeds it with the host's system preferences; `library` is its mapping, `None` for entries this process serves itself. A guest that panicked by then is unloaded, and its report handed back.
+    /// Starts the guest `entries` were copied from, creates one instance through them and seeds it with the host's system preferences; `library` is its mapping, `None` for entries this process serves itself. A guest that stopped by then is unloaded, and why handed back.
     pub(crate) fn start(
         entries: EmbedEntries,
         args: &[String],
         library: Option<libloading::Library>,
-    ) -> Result<Self, GuestPanic> {
+    ) -> Result<Self, GuestStop> {
         let library = GuestLibrary::start(
             entries,
             library.map(|library| Box::new(library) as Box<dyn std::any::Any>),
@@ -71,7 +71,7 @@ impl LoadedEmbed {
             (entries.create)(LentBytes::lend(&args), instance)
         });
         let Some(instance) = instance else {
-            return Err(panic_of(&library));
+            return Err(stop_of(&library));
         };
         let library = Rc::new(library);
         let surface = Rc::new(GuestSurface::new(Rc::clone(&library), instance));
@@ -89,15 +89,15 @@ impl LoadedEmbed {
         };
         // A guest starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
         embed.set_system_preferences(&preferences_core::system_preferences());
-        match embed.panic() {
-            Some(panic) => Err(panic.clone()),
+        match embed.stopped() {
+            Some(stop) => Err(stop.clone()),
             None => Ok(embed),
         }
     }
 
-    /// The panic that stopped this guest, if one has: what it said and where. Nothing of the guest runs after it.
-    pub fn panic(&self) -> Option<&GuestPanic> {
-        self.library.guest().panic()
+    /// Why this guest stopped, if it has: a panic, with what it said and where, or an answer the host could not read. Nothing of the guest runs after it.
+    pub fn stopped(&self) -> Option<&GuestStop> {
+        self.library.guest().stop()
     }
 
     /// What marks the guest's frame in the host's: hand it to [`composite`](crate::composite) with what [`paint`](Self::paint) drew.
@@ -134,9 +134,9 @@ impl LoadedEmbed {
         self.focus.borrow().clone()
     }
 
-    /// Gives the stop focus when something inside the guest took it, and withdraws it once the guest has panicked.
+    /// Gives the stop focus when something inside the guest took it, and withdraws it once the guest has stopped.
     fn follow_guest_focus(&self) {
-        if self.panic().is_some() {
+        if self.stopped().is_some() {
             drop(self.focus.take());
         } else if let Some(stop) = self.stop() {
             stop.follow_inside();
@@ -362,15 +362,13 @@ impl LoadedEmbed {
     }
 }
 
-fn panic_of(library: &GuestLibrary<EmbedEntries>) -> GuestPanic {
-    library
-        .guest()
-        .panic()
-        .cloned()
-        .unwrap_or_else(|| GuestPanic {
+fn stop_of(library: &GuestLibrary<EmbedEntries>) -> GuestStop {
+    library.guest().stop().cloned().unwrap_or_else(|| {
+        GuestStop::Panicked(GuestPanic {
             message: "the guest built no instance".to_owned(),
             location: None,
         })
+    })
 }
 
 /// The guest's earliest timer, held as a timer of the host's own. The host's loop sleeps until the earliest deadline in the host's runtime, and the guest's timers are in a copy of their own it cannot see: this one runs nothing, it only wakes the frame in which the host drives the guest's [`on_frame`](LoadedEmbed::on_frame).

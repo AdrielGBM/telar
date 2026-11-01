@@ -56,7 +56,7 @@ impl<E: Entries> GuestSurface<E> {
 
     fn read<T: wire_core::Wire + Default>(
         &self,
-        entry: impl FnOnce(&E, Handle<E::Surface>, *mut LentBytes) -> CallOutcome,
+        entry: impl FnOnce(&E, Handle<E::Surface>, *mut LentBytes<T>) -> CallOutcome,
     ) -> T {
         let Some(surface) = self.surface.get() else {
             return T::default();

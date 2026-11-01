@@ -140,7 +140,10 @@ unsafe extern "C" fn mount_tree(app: Handle<GuestApp>, tree: *mut Handle<HotTree
     record("mount")
 }
 
-unsafe extern "C" fn paint_tree(tree: Handle<HotTree>, frame: *mut LentBytes) -> CallOutcome {
+unsafe extern "C" fn paint_tree(
+    tree: Handle<HotTree>,
+    frame: *mut LentBytes<renderer_core::wire::DrawList>,
+) -> CallOutcome {
     unsafe { guest::tree_paint(tree, frame) };
     record("tree_paint")
 }
@@ -180,7 +183,7 @@ thread_local! {
 
 unsafe extern "C" fn paint_skipping_one(
     tree: Handle<HotTree>,
-    frame: *mut LentBytes,
+    frame: *mut LentBytes<renderer_core::wire::DrawList>,
 ) -> CallOutcome {
     let painted = unsafe { tree.get() };
     if !SKIPPED.replace(true) {
@@ -213,7 +216,7 @@ fn a_frame_the_host_cannot_read_is_painted_again_on_its_own() {
         CALLS.take(),
         ["tree_paint", "tree_reset_frames", "tree_paint"]
     );
-    assert_eq!(app.take_panic(), None);
+    assert_eq!(app.take_stop(), None);
 }
 
 unsafe extern "C" fn tick_at(now: Timestamp) -> CallOutcome {
@@ -257,7 +260,7 @@ fn what_a_guest_lends_reads_back_as_what_it_spelled() {
     tree.walk(&mut nodes);
     assert!(!nodes.is_empty(), "the tree walks");
     assert!(app.hot_snapshot().is_some());
-    assert_eq!(app.take_panic(), None);
+    assert_eq!(app.take_stop(), None);
 }
 
 unsafe extern "C" fn build_panicking(app: *mut Handle<GuestApp>) -> CallOutcome {
@@ -291,10 +294,12 @@ fn a_guest_that_panicked_is_still_quiesced_before_its_library_is_closed() {
     CALLS.with_borrow_mut(Vec::clear);
     let app = start_as_loaded(build_panicking);
     assert!(
-        app.library().guest().has_panicked(),
+        app.library().guest().has_stopped(),
         "precondition: it panicked"
     );
-    let report = app.library().guest().panic().expect("the panic is kept");
+    let Some(GuestStop::Panicked(report)) = app.library().guest().stop() else {
+        panic!("the panic is kept: {:?}", app.library().guest().stop());
+    };
     assert_eq!(report.message, "the build could not find its assets");
     assert!(report.location.is_some(), "it says where");
     drop(app);

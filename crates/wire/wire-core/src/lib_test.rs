@@ -209,3 +209,101 @@ fn the_bytes_of_every_primitive_are_pinned_to_the_wire_version() {
     }
     crate::assert_golden!("src/wire_golden/primitives.hex", w.as_slice());
 }
+
+mod shapes {
+    use crate::Shaped;
+
+    pub mod point {
+        pub struct Point {
+            pub x: u32,
+            pub y: u32,
+        }
+        crate::wire_struct!(Point { x, y });
+    }
+
+    pub mod point_in_floats {
+        pub struct Point {
+            pub x: f32,
+            pub y: u32,
+        }
+        crate::wire_struct!(Point { x, y });
+    }
+
+    pub mod point_renamed {
+        pub struct Point {
+            pub x: u32,
+            pub z: u32,
+        }
+        crate::wire_struct!(Point { x, z });
+    }
+
+    pub mod shape {
+        pub enum Shape {
+            Dot,
+            Line(u32),
+        }
+        crate::wire_enum!(Shape {
+            Dot = 0,
+            Line(length) = 1,
+        });
+    }
+
+    pub mod shape_with_more {
+        pub enum Shape {
+            Dot,
+            Line(u32),
+            Area(u32),
+        }
+        crate::wire_enum!(Shape {
+            Dot = 0,
+            Line(length) = 1,
+            Area(size) = 2,
+        });
+    }
+
+    pub mod shape_in_floats {
+        pub enum Shape {
+            Dot,
+            Line(f32),
+        }
+        crate::wire_enum!(Shape {
+            Dot = 0,
+            Line(length) = 1,
+        });
+    }
+
+    pub mod tree {
+        pub enum Tree {
+            Leaf(u32),
+            Branch(Vec<Tree>),
+        }
+        crate::wire_enum!(Tree {
+            Leaf(value) = 0,
+            Branch(children: Self) = 1,
+        });
+    }
+
+    /// What a reader would read differently changes the shape: a field's type, a field's name, a variant more, a variant's field's type.
+    #[test]
+    fn a_change_to_what_a_type_spells_changes_its_shape() {
+        let point = point::Point::SHAPE;
+        assert_ne!(point, point_in_floats::Point::SHAPE);
+        assert_ne!(point, point_renamed::Point::SHAPE);
+        let shape = shape::Shape::SHAPE;
+        assert_ne!(shape, shape_with_more::Shape::SHAPE);
+        assert_ne!(shape, shape_in_floats::Shape::SHAPE);
+    }
+
+    /// Containers spell their contents differently, so the same contents in another container are another shape.
+    #[test]
+    fn a_container_is_part_of_the_shape() {
+        assert_ne!(<Vec<u32>>::SHAPE, <Option<u32>>::SHAPE);
+        assert_ne!(<Vec<u32>>::SHAPE, <Vec<u64>>::SHAPE);
+    }
+
+    /// A type that holds itself folds the recursion as one shape, so it has one at all.
+    #[test]
+    fn a_type_that_holds_itself_has_a_shape() {
+        assert_ne!(tree::Tree::SHAPE, 0);
+    }
+}

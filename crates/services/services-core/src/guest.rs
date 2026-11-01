@@ -14,7 +14,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
 use geometry_core::LayoutGrid;
-use platform_core::guest::{HostServices, HostThread, LentBytes, Reply, Service, serve};
+use platform_core::guest::{
+    HostServices, HostThread, LentBytes, Reply, Service, ServiceBytes, serve,
+};
 use platform_core::{KeyboardConvention, LocationFormat};
 use reactive_local::threads::{Joinable, Spawner};
 use renderer_core::{ExclusiveFontsError, FontAsset, FontConfig, FontHost, FontSources};
@@ -102,9 +104,13 @@ impl ServedServices {
     }
 }
 
-type Entry = unsafe extern "C" fn(*const c_void, LentBytes, Reply);
+type Entry = unsafe extern "C" fn(*const c_void, LentBytes<ServiceBytes>, Reply);
 
-unsafe extern "C" fn clipboard_text(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn clipboard_text(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.clipboard
@@ -114,7 +120,11 @@ unsafe extern "C" fn clipboard_text(data: *const c_void, request: LentBytes, rep
     }
 }
 
-unsafe extern "C" fn set_clipboard_text(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn set_clipboard_text(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, text: String| {
             if let Some(clipboard) = &host.clipboard {
@@ -124,7 +134,7 @@ unsafe extern "C" fn set_clipboard_text(data: *const c_void, request: LentBytes,
     }
 }
 
-unsafe extern "C" fn open_uri(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn open_uri(data: *const c_void, request: LentBytes<ServiceBytes>, reply: Reply) {
     unsafe {
         serve(data, request, reply, |host: &Backends, uri: Uri| {
             host.uri_opener
@@ -134,7 +144,11 @@ unsafe extern "C" fn open_uri(data: *const c_void, request: LentBytes, reply: Re
     }
 }
 
-unsafe extern "C" fn open_beside(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn open_beside(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,
@@ -149,7 +163,11 @@ unsafe extern "C" fn open_beside(data: *const c_void, request: LentBytes, reply:
     }
 }
 
-unsafe extern "C" fn open_file(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn open_file(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,
@@ -164,7 +182,11 @@ unsafe extern "C" fn open_file(data: *const c_void, request: LentBytes, reply: R
     }
 }
 
-unsafe extern "C" fn open_files(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn open_files(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,
@@ -179,7 +201,11 @@ unsafe extern "C" fn open_files(data: *const c_void, request: LentBytes, reply: 
     }
 }
 
-unsafe extern "C" fn save_file(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn save_file(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,
@@ -194,7 +220,11 @@ unsafe extern "C" fn save_file(data: *const c_void, request: LentBytes, reply: R
     }
 }
 
-unsafe extern "C" fn pick_folder(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn pick_folder(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,
@@ -209,7 +239,11 @@ unsafe extern "C" fn pick_folder(data: *const c_void, request: LentBytes, reply:
     }
 }
 
-unsafe extern "C" fn stored_preference(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn stored_preference(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, key: String| {
             host.preferences.get(&key)
@@ -217,7 +251,11 @@ unsafe extern "C" fn stored_preference(data: *const c_void, request: LentBytes, 
     }
 }
 
-unsafe extern "C" fn store_preference(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn store_preference(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,
@@ -230,7 +268,7 @@ unsafe extern "C" fn store_preference(data: *const c_void, request: LentBytes, r
     }
 }
 
-unsafe extern "C" fn app_dirs(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn app_dirs(data: *const c_void, request: LentBytes<ServiceBytes>, reply: Reply) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.app_paths.as_ref().map(AppDirs::of)
@@ -238,7 +276,11 @@ unsafe extern "C" fn app_dirs(data: *const c_void, request: LentBytes, reply: Re
     }
 }
 
-unsafe extern "C" fn keyboard_convention(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn keyboard_convention(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.keyboard_convention
@@ -246,7 +288,11 @@ unsafe extern "C" fn keyboard_convention(data: *const c_void, request: LentBytes
     }
 }
 
-unsafe extern "C" fn location_format(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn location_format(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.location_format.clone()
@@ -254,7 +300,11 @@ unsafe extern "C" fn location_format(data: *const c_void, request: LentBytes, re
     }
 }
 
-unsafe extern "C" fn asset_base(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn asset_base(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.asset_base.clone()
@@ -262,11 +312,19 @@ unsafe extern "C" fn asset_base(data: *const c_void, request: LentBytes, reply: 
     }
 }
 
-unsafe extern "C" fn layout_grid(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn layout_grid(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe { serve(data, request, reply, |host: &Backends, ()| host.layout_grid) }
 }
 
-unsafe extern "C" fn wake_loop(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn wake_loop(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             if let Some(wake) = &host.loop_waker {
@@ -276,7 +334,11 @@ unsafe extern "C" fn wake_loop(data: *const c_void, request: LentBytes, reply: R
     }
 }
 
-unsafe extern "C" fn font_sources(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn font_sources(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.fonts.as_ref().and_then(|fonts| fonts.sources())
@@ -284,7 +346,11 @@ unsafe extern "C" fn font_sources(data: *const c_void, request: LentBytes, reply
     }
 }
 
-unsafe extern "C" fn install_fonts(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn install_fonts(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,
@@ -297,7 +363,11 @@ unsafe extern "C" fn install_fonts(data: *const c_void, request: LentBytes, repl
     }
 }
 
-unsafe extern "C" fn add_font_faces(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn add_font_faces(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,
@@ -310,7 +380,11 @@ unsafe extern "C" fn add_font_faces(data: *const c_void, request: LentBytes, rep
     }
 }
 
-unsafe extern "C" fn install_only_fonts(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn install_only_fonts(
+    data: *const c_void,
+    request: LentBytes<ServiceBytes>,
+    reply: Reply,
+) {
     unsafe {
         serve(
             data,

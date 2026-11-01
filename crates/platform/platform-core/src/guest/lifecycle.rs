@@ -58,6 +58,29 @@ pub(super) const LIFECYCLE_LAYOUT: TypeLayout = TypeLayout {
         ),
         ("quiesce: fn()", std::mem::offset_of!(Lifecycle, quiesce)),
     ],
+    shape: {
+        let hash = wire_core::shape_named("Lifecycle");
+        let hash = wire_core::fold_shape(
+            hash,
+            super::field_shape(|it: &Lifecycle| &raw const it.loaded),
+        );
+        let hash = wire_core::fold_shape(
+            hash,
+            super::field_shape(|it: &Lifecycle| &raw const it.adopt_epoch),
+        );
+        let hash = wire_core::fold_shape(
+            hash,
+            super::field_shape(|it: &Lifecycle| &raw const it.install_services),
+        );
+        let hash = wire_core::fold_shape(
+            hash,
+            super::field_shape(|it: &Lifecycle| &raw const it.unloading),
+        );
+        wire_core::fold_shape(
+            hash,
+            super::field_shape(|it: &Lifecycle| &raw const it.quiesce),
+        )
+    },
 };
 
 /// A boundary's table of entries, which starts with its [`Lifecycle`] and carries the [`SurfaceReport`] of the instances it builds, as [`entry_table!`](crate::entry_table) declares one: what [`open_guest`](super::open_guest) copies out of a library, and what a host drives any guest through.

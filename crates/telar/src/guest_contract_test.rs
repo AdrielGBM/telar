@@ -100,10 +100,13 @@ fn a_hot_guest_with_an_allocator_of_its_own_runs_reloads_and_unloads() {
                 .any(|node| node.role == focus::Role::Button),
             "the inspector reads the guest's own audit"
         );
-        assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+        assert_eq!(app.take_stop(), None, "precondition: nothing panicked");
 
         tree.on_event(&pressed(PointerButton::Primary));
-        let report = app.take_panic().expect("its panic report crosses");
+        let report = app
+            .take_stop()
+            .expect("its panic report crosses")
+            .to_string();
         assert!(
             report.ends_with("RUNTIME is already borrowed by the press handler"),
             "{report}"
@@ -195,10 +198,12 @@ fn an_embedded_guest_with_an_allocator_of_its_own_runs_and_unloads() {
         );
         let wait = embed.until_next_timer().expect("its timer crosses");
         assert!(wait.as_secs() <= 60, "{wait:?}");
-        assert_eq!(embed.panic(), None, "precondition: nothing panicked");
+        assert_eq!(embed.stopped(), None, "precondition: nothing panicked");
 
         assert!(!embed.on_event(&pressed(PointerButton::Primary)));
-        let panic = embed.panic().expect("its panic report crosses");
+        let Some(telar_embed::GuestStop::Panicked(panic)) = embed.stopped() else {
+            panic!("its panic report crosses: {:?}", embed.stopped());
+        };
         assert_eq!(
             panic.message,
             "RUNTIME is already borrowed by the press handler"
@@ -288,7 +293,7 @@ fn an_embedded_guests_surface_is_read_acted_on_and_typed_into_where_the_host_dra
     assert!(!embed.on_event(&commit), "a commit no longer reaches it");
 
     embed.on_event(&pressed(PointerButton::Primary));
-    assert!(embed.panic().is_some(), "precondition: it panicked");
+    assert!(embed.stopped().is_some(), "precondition: it panicked");
     assert!(embed.focus_stop_id().is_none(), "its stop is withdrawn");
     assert_eq!(ui_core::text_input(), None);
     assert!(

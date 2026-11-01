@@ -9,9 +9,9 @@ mod stats;
 use std::cell::Ref;
 
 use telar::{
-    BuildOutcome, Container, DevAction, Direction, DrawCommand, Event, EventResult, LayoutError,
-    LayoutItem, LayoutStyle, OverlayResponse, RwSignal, Size, SizeDimension, SurfaceCanvas,
-    box_item, focus, interactive_rects, signal,
+    BuildOutcome, Container, DevAction, Direction, DrawCommand, Event, EventResult, GuestStop,
+    LayoutError, LayoutItem, LayoutStyle, OverlayResponse, RwSignal, Size, SizeDimension,
+    SurfaceCanvas, box_item, focus, interactive_rects, signal,
 };
 
 use crate::inspect::{InspectSource, Inspection};
@@ -35,7 +35,7 @@ pub(crate) struct Model {
     pub reading: RwSignal<Reading>,
     pub renderer: RwSignal<Option<String>>,
     pub build: RwSignal<BuildOutcome>,
-    pub app_panic: RwSignal<Option<String>>,
+    pub app_stop: RwSignal<Option<GuestStop>>,
     pub panel_open: RwSignal<bool>,
     pub inspector_open: RwSignal<bool>,
     pub drawer_tab: RwSignal<DrawerTab>,
@@ -49,7 +49,7 @@ impl Model {
             reading: signal(Reading::default()),
             renderer: signal(None),
             build: signal(BuildOutcome::Loaded),
-            app_panic: signal(None),
+            app_stop: signal(None),
             panel_open: signal(false),
             inspector_open: signal(false),
             drawer_tab: signal(DrawerTab::default()),
@@ -118,9 +118,9 @@ impl Overlay {
         })
     }
 
-    pub fn set_app_panic(&self, panic: Option<String>) {
+    pub fn set_app_stop(&self, stop: Option<GuestStop>) {
         self.canvas.with_entered(|| {
-            self.model.app_panic.set_if_changed(panic);
+            self.model.app_stop.set_if_changed(stop);
         })
     }
 

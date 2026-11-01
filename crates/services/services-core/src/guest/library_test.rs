@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use platform_core::guest::{Handle, Lifecycle, ReportsSurface, guest_entry};
+use platform_core::guest::{GuestStop, Handle, Lifecycle, ReportsSurface, guest_entry};
 use renderer_core::{ExclusiveFontsError, FontAsset, FontConfig, FontSources};
 
 use super::*;
@@ -178,4 +178,29 @@ fn entries_this_process_serves_itself_are_served_nothing_and_never_unloaded() {
         "served nothing"
     );
     assert_eq!(LIFECYCLE_CALLS.get(), 0, "never told it loads or unloads");
+}
+
+/// Bytes the host cannot read come from a guest built from other sources, which would answer them on every call, so the first stops the guest and is reported once, as a panic is.
+#[test]
+fn an_answer_the_host_cannot_read_stops_the_guest() {
+    let library = GuestLibrary::start(bare(returns), None, None);
+    let truncated = [0xffu8];
+    let read: Option<u32> = library.read(|_, out| {
+        unsafe { *out = LentBytes::lend(&truncated) };
+        CallOutcome::OK
+    });
+    assert_eq!(read, None);
+
+    let mut called = false;
+    let after = library.call(|_| {
+        called = true;
+        CallOutcome::OK
+    });
+    assert_eq!(after, None);
+    assert!(!called, "nothing more of it is called");
+    assert!(
+        matches!(library.guest().take_stop(), Some(GuestStop::Unreadable(_))),
+        "the host is told why"
+    );
+    assert_eq!(library.guest().take_stop(), None, "once");
 }

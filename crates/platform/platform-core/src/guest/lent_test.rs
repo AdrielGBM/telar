@@ -10,26 +10,29 @@ use crate::{Event, RedrawWaker};
 #[test]
 fn lent_bytes_read_back_as_the_slice_they_lend() {
     let bytes = [1u8, 2, 3];
-    let lent = LentBytes::lend(&bytes);
+    let lent = LentBytes::<Utf8>::lend(&bytes);
     assert_eq!(lent.len(), 3);
     assert_eq!(unsafe { lent.as_slice() }, &bytes);
-    assert!(LentBytes::EMPTY.is_empty());
-    assert_eq!(unsafe { LentBytes::default().as_slice() }, &[] as &[u8]);
+    assert!(LentBytes::<Utf8>::EMPTY.is_empty());
+    assert_eq!(
+        unsafe { LentBytes::<Utf8>::default().as_slice() },
+        &[] as &[u8]
+    );
 }
 
 #[test]
 fn an_answer_lends_the_latest_value_spelled_on_this_thread() {
     let first = LentBytes::answer(&String::from("first"));
-    assert_eq!(unsafe { first.read::<String>() }, "first");
+    assert_eq!(unsafe { first.read() }, "first");
     let second = LentBytes::answer(&Some(7u64));
-    assert_eq!(unsafe { second.read::<Option<u64>>() }, Some(7));
+    assert_eq!(unsafe { second.read() }, Some(7));
 }
 
 #[test]
 fn bytes_an_entry_cannot_read_are_its_panic() {
     let spelled = wire_core::encode(&String::from("not a number"));
     let outcome = guest_entry(|| {
-        unsafe { LentBytes::lend(&spelled).read::<Option<u64>>() };
+        unsafe { LentBytes::<Option<u64>>::lend(&spelled).read() };
     });
     let panic = unsafe { outcome.into_result() }.expect_err("the entry panics");
     assert!(
@@ -64,9 +67,9 @@ fn a_handle_reaches_its_instance_until_it_is_released_once() {
 
 unsafe extern "C" fn entry(
     handle: Handle<u32>,
-    event: LentBytes,
+    event: LentBytes<Event>,
     waker: CWaker,
-    out: *mut LentBytes,
+    out: *mut LentBytes<(Event, u32)>,
 ) -> CallOutcome {
     guest_entry(|| {
         let event: Event = unsafe { event.read() };

@@ -52,8 +52,9 @@ fn the_host_stops_calling_a_guest_once_an_entry_reports_a_panic() {
     let mut called = false;
     guest.call(|| unsafe { guest_entry(|| called = true).into_result() });
     assert!(!called);
-    assert_eq!(
-        guest.panic().map(|panic| panic.message.as_str()),
-        Some("stop")
+    assert!(
+        matches!(guest.stop(), Some(crate::guest::GuestStop::Panicked(panic)) if panic.message == "stop"),
+        "{:?}",
+        guest.stop()
     );
 }

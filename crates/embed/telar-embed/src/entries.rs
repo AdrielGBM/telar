@@ -1,9 +1,15 @@
 //! [`EmbedEntries`]: the one table an embedded guest exports, and the [`EMBED_CONTRACT`] its host checks before reading it.
 
+use std::time::Duration;
+
 use platform_core::guest::{
     CWaker, ContractStamp, Entries, FrameCtx, Handle, LentBytes, Timestamp,
 };
+use platform_core::{Event, SystemPreferences};
+use renderer_core::Color;
+use renderer_core::wire::{DrawList, Pixels};
 
+use crate::WindowCommands;
 use crate::guest::{self, GuestInstance};
 
 platform_core::entry_table! {
@@ -13,29 +19,29 @@ platform_core::entry_table! {
         symbol: "telar_embed_entries",
         guest: guest,
         settings: ["shaper" => cfg!(feature = "shaper")],
-        create: fn(LentBytes, *mut Handle<GuestInstance>) as CreateInstance;
+        create: fn(LentBytes<Vec<String>>, *mut Handle<GuestInstance>) as CreateInstance;
         report: GuestInstance;
         release: fn(Handle<GuestInstance>);
         relayout: fn(Handle<GuestInstance>, f32, f32);
         relayout_dirty: fn(Handle<GuestInstance>);
-        paint: fn(Handle<GuestInstance>, *mut LentBytes);
-        pixels: fn(Handle<GuestInstance>, u64, *mut LentBytes, *mut bool);
+        paint: fn(Handle<GuestInstance>, *mut LentBytes<DrawList>);
+        pixels: fn(Handle<GuestInstance>, u64, *mut LentBytes<Pixels>, *mut bool);
         reset_frames: fn(Handle<GuestInstance>);
         generation: fn(Handle<GuestInstance>, *mut u64);
-        on_event: fn(Handle<GuestInstance>, LentBytes, *mut bool);
-        dispatch_overlays: fn(Handle<GuestInstance>, LentBytes, *mut bool);
+        on_event: fn(Handle<GuestInstance>, LentBytes<Event>, *mut bool);
+        dispatch_overlays: fn(Handle<GuestInstance>, LentBytes<Event>, *mut bool);
         end_frame: fn(Handle<GuestInstance>);
         motion_tick: fn(Handle<GuestInstance>, Timestamp);
         motion_has_active: fn(Handle<GuestInstance>, *mut bool);
-        until_next_timer: fn(Handle<GuestInstance>, *mut LentBytes);
+        until_next_timer: fn(Handle<GuestInstance>, *mut LentBytes<Option<Duration>>);
         next_timer_due: fn(Handle<GuestInstance>, *mut Timestamp, *mut bool);
-        drain_window_commands: fn(Handle<GuestInstance>, *mut LentBytes);
-        set_system_preferences: fn(Handle<GuestInstance>, LentBytes);
+        drain_window_commands: fn(Handle<GuestInstance>, *mut LentBytes<WindowCommands>);
+        set_system_preferences: fn(Handle<GuestInstance>, LentBytes<SystemPreferences>);
         activate: fn(Handle<GuestInstance>);
-        clear_color: fn(Handle<GuestInstance>, *mut LentBytes);
-        title: fn(Handle<GuestInstance>, *mut LentBytes);
-        icon: fn(Handle<GuestInstance>, *mut LentBytes);
-        id: fn(Handle<GuestInstance>, *mut LentBytes);
+        clear_color: fn(Handle<GuestInstance>, *mut LentBytes<Option<Color>>);
+        title: fn(Handle<GuestInstance>, *mut LentBytes<String>);
+        icon: fn(Handle<GuestInstance>, *mut LentBytes<Option<Vec<u8>>>);
+        id: fn(Handle<GuestInstance>, *mut LentBytes<String>);
         on_frame: fn(Handle<GuestInstance>, *mut FrameCtx);
         install_task_waker: fn(CWaker);
     }

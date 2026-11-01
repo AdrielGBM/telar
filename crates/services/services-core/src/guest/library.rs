@@ -6,7 +6,7 @@ use std::sync::Arc;
 use platform_core::guest::{
     CallOutcome, Entries, Epoch, Guest, HostServices, LentBytes, host_epoch,
 };
-use renderer_core::wire::{FrameDecoder, FrameError};
+use renderer_core::wire::{DrawList, FrameDecoder, FrameError, Pixels};
 use renderer_core::{DrawCommand, FontHost};
 use wire_core::{Wire, encode};
 
@@ -95,24 +95,22 @@ impl<E: Entries> GuestLibrary<E> {
         self.answer(false, entry).unwrap_or(false)
     }
 
-    /// Calls an entry that answers with bytes it lends, and reads them into a `T` of this side's own before anything else of the guest runs.
+    /// Calls an entry that answers with bytes it lends, and reads them into a `T` of this side's own before anything else of the guest runs. Bytes this side cannot read stop the guest: it would answer them on every call.
     pub fn read<T: Wire>(
         &self,
-        entry: impl FnOnce(&E, *mut LentBytes) -> CallOutcome,
+        entry: impl FnOnce(&E, *mut LentBytes<T>) -> CallOutcome,
     ) -> Option<T> {
         let lent = self.answer(LentBytes::EMPTY, entry)?;
         unsafe { lent.decode() }
-            .inspect_err(
-                |error| tracing::warn!(%error, "the guest answered with bytes this host cannot read"),
-            )
+            .inspect_err(|error| self.guest.refuse_answer(error))
             .ok()
     }
 
     /// Lends `value`, spelled as bytes, to one entry for the call.
-    pub fn send(
+    pub fn send<T: Wire>(
         &self,
-        value: &impl Wire,
-        entry: impl FnOnce(&E, LentBytes) -> CallOutcome,
+        value: &T,
+        entry: impl FnOnce(&E, LentBytes<T>) -> CallOutcome,
     ) -> Option<()> {
         let bytes = encode(value);
         self.call(|entries| entry(entries, LentBytes::lend(&bytes)))
@@ -120,12 +118,12 @@ impl<E: Entries> GuestLibrary<E> {
 
     /// The frame an instance lends through `paint`, decoded by `frames` into commands of this side's own, the pixels of an image it has not met copied through `pixels`; no commands once the guest has panicked.
     ///
-    /// A frame that cannot be read leaves the guest's encoder a step ahead of the decoder, so `reset` has the guest make the next one stand alone, and that one is read in its place.
+    /// A frame that cannot be read leaves the guest's encoder a step ahead of the decoder, so `reset` has the guest make the next one stand alone, and that one is read in its place. One standing alone that cannot be read either stops the guest.
     pub fn read_frame(
         &self,
         frames: &mut FrameDecoder,
-        paint: impl Fn(&E, *mut LentBytes) -> CallOutcome,
-        pixels: impl Fn(&E, u64, *mut LentBytes, *mut bool) -> CallOutcome,
+        paint: impl Fn(&E, *mut LentBytes<DrawList>) -> CallOutcome,
+        pixels: impl Fn(&E, u64, *mut LentBytes<Pixels>, *mut bool) -> CallOutcome,
         reset: impl FnOnce(&E) -> CallOutcome,
     ) -> Vec<DrawCommand> {
         let mut commands = Vec::new();
@@ -133,7 +131,7 @@ impl<E: Entries> GuestLibrary<E> {
             tracing::warn!(%error, "a frame the guest drew could not be read, so it draws the next one on its own");
             self.call(reset);
             if let Some(Err(error)) = self.decode_frame(frames, &mut commands, &paint, &pixels) {
-                tracing::error!(%error, "a frame the guest drew on its own could not be read either");
+                self.guest.refuse_answer(error);
             }
         }
         commands
@@ -143,8 +141,8 @@ impl<E: Entries> GuestLibrary<E> {
         &self,
         frames: &mut FrameDecoder,
         commands: &mut Vec<DrawCommand>,
-        paint: &impl Fn(&E, *mut LentBytes) -> CallOutcome,
-        pixels: &impl Fn(&E, u64, *mut LentBytes, *mut bool) -> CallOutcome,
+        paint: &impl Fn(&E, *mut LentBytes<DrawList>) -> CallOutcome,
+        pixels: &impl Fn(&E, u64, *mut LentBytes<Pixels>, *mut bool) -> CallOutcome,
     ) -> Option<Result<(), FrameError>> {
         let frame = self.answer(LentBytes::EMPTY, paint)?;
         // The pixels entry is the one call that leaves the frame it reads from lent.

@@ -45,11 +45,11 @@ fn a_panic_the_hook_never_saw_is_not_given_an_older_location() {
 fn a_guest_that_panicked_is_never_called_again() {
     let guest = Guest::default();
     assert_eq!(guest.call(|| Ok(1)), Some(1));
-    assert_eq!(guest.take_panic(), None);
+    assert_eq!(guest.take_stop(), None);
 
     let panicked = guest.call(|| guest_call(|| -> u32 { panic!("in a handler") }));
     assert_eq!(panicked, None);
-    assert!(guest.has_panicked());
+    assert!(guest.has_stopped());
 
     let mut called = false;
     assert_eq!(
@@ -60,11 +60,11 @@ fn a_guest_that_panicked_is_never_called_again() {
         None
     );
     assert!(!called, "nothing reaches a guest that panicked");
-    let report = guest.take_panic().expect("the panic is reported");
-    assert_eq!(report.message, "in a handler");
-    assert_eq!(guest.take_panic(), None, "and reported once");
+    let report = guest.take_stop().expect("the panic is reported");
+    assert_eq!(panic_message(&report), Some("in a handler"));
+    assert_eq!(guest.take_stop(), None, "and reported once");
     assert_eq!(
-        guest.panic().map(|panic| panic.message.as_str()),
+        guest.stop().and_then(panic_message),
         Some("in a handler"),
         "while what stopped it stays readable"
     );
@@ -198,4 +198,33 @@ mod unique_copies {
         std::fs::remove_dir_all(&dir).expect("clean up");
         assert_eq!(left, vec![path]);
     }
+}
+
+fn panic_message(stop: &GuestStop) -> Option<&str> {
+    match stop {
+        GuestStop::Panicked(panic) => Some(&panic.message),
+        GuestStop::Unreadable(_) => None,
+    }
+}
+
+/// A guest whose answer the host cannot read would answer so on every call, so the host stops calling it and says why, once.
+#[test]
+fn a_guest_whose_answer_cannot_be_read_is_never_called_again() {
+    let guest = Guest::default();
+    guest.refuse_answer("unknown Role tag 48");
+    guest.refuse_answer("a second one, never reported");
+    let mut called = false;
+    assert_eq!(
+        guest.call(|| {
+            called = true;
+            Ok(1)
+        }),
+        None
+    );
+    assert!(!called, "nothing reaches a guest the host cannot read");
+    assert_eq!(
+        guest.take_stop(),
+        Some(GuestStop::Unreadable("unknown Role tag 48".to_owned()))
+    );
+    assert_eq!(guest.take_stop(), None, "and reported once");
 }

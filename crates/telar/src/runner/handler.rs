@@ -496,8 +496,13 @@ where
         match loaded {
             Ok(new_app) => {
                 self.take_build(new_app, window);
-                let outcome = match self.show_app_panic() {
-                    Some(report) => crate::hot::HotOutcome::Panicked(report),
+                let outcome = match self.show_app_stop() {
+                    Some(platform_core::guest::GuestStop::Panicked(panic)) => {
+                        crate::hot::HotOutcome::Panicked(panic.to_string())
+                    }
+                    Some(platform_core::guest::GuestStop::Unreadable(error)) => {
+                        crate::hot::HotOutcome::Unreadable(error)
+                    }
                     None => {
                         tracing::info!("hot reloaded: {}", library.display());
                         crate::hot::HotOutcome::Loaded
@@ -522,7 +527,7 @@ where
     fn take_build(&mut self, app: Box<dyn AppRuntime>, window: &W) {
         self.swap_app(app, window);
         self.dev.set_build_outcome(ui_tree::BuildOutcome::Loaded);
-        self.dev.set_app_panic(None);
+        self.dev.set_app_stop(None);
         window.request_redraw();
     }
 
@@ -576,15 +581,15 @@ where
         self.mount_tree(window);
     }
 
-    /// Shows a panic the app's runtime stopped at its boundary the way the dev overlay shows a failed build, owes the frame that draws it, and hands back its report.
+    /// Shows why the app's runtime stopped calling it, a panic at its boundary or an answer it could not read, the way the dev overlay shows a failed build, owes the frame that draws it, and hands it back.
     ///
     /// The tree goes with it: it can no longer be asked for anything, and the next one this surface draws has to start past every generation the old one handed out.
-    fn show_app_panic(&mut self) -> Option<String> {
-        let report = self.app.take_panic()?;
+    fn show_app_stop(&mut self) -> Option<platform_core::guest::GuestStop> {
+        let report = self.app.take_stop()?;
         self.entered(|this| {
             this.tree = None;
             this.generation.restart();
-            this.dev.set_app_panic(Some(report.clone()));
+            this.dev.set_app_stop(Some(report.clone()));
             this.pacer.presentation_owed = true;
             this.pacer.frame_owed = true;
         });
@@ -1319,7 +1324,7 @@ where
     }
 
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
-        self.show_app_panic();
+        self.show_app_stop();
         self.loop_batch.close();
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
         // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.

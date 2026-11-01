@@ -8,7 +8,7 @@ fn the_table_starts_with_its_lifecycle_and_hashes_every_entry_with_what_it_takes
         .iter()
         .find(|(field, _)| field.starts_with("tree_paint:"))
         .expect("the paint entry is hashed");
-    assert!(paint.0.contains("LentBytes"), "{}", paint.0);
+    assert!(paint.0.contains("LentBytes<DrawList>"), "{}", paint.0);
 }
 
 #[test]

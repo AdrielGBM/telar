@@ -70,10 +70,7 @@ fn the_export_macro_builds_a_table_that_answers_in_bytes() {
     let mut id = LentBytes::EMPTY;
     let outcome = unsafe { (TELAR_EMBED_ENTRIES.id)(instance, &mut id) };
     assert_eq!(outcome.status(), CallOutcome::RETURNED);
-    assert_eq!(
-        unsafe { id.decode::<String>() }.expect("the id is a string"),
-        "stub"
-    );
+    assert_eq!(unsafe { id.decode() }.expect("the id is a string"), "stub");
     let dark = SystemPreferences {
         color_scheme: Some(platform_core::ColorScheme::Dark),
         reduced_motion: Some(true),
@@ -537,7 +534,7 @@ fn a_guest_whose_build_panics_hands_back_no_instance() {
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_panicking(
-    args: LentBytes,
+    args: LentBytes<Vec<String>>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe { guest::create(args, instance, |_| Box::new(BorrowsTwice::new(true))) }
@@ -545,7 +542,7 @@ unsafe extern "C" fn create_panicking(
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_fixed(
-    args: LentBytes,
+    args: LentBytes<Vec<String>>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe { guest::create(args, instance, |_| Box::new(BorrowsTwice::new(false))) }
@@ -553,7 +550,7 @@ unsafe extern "C" fn create_fixed(
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_nothing(
-    args: LentBytes,
+    args: LentBytes<Vec<String>>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe {
@@ -565,7 +562,7 @@ unsafe extern "C" fn create_nothing(
 
 /// A guest served by this process's own table, through the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries, which `telar`'s `guest_contract` suite loads.
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-fn embedded(create: CreateInstance) -> Result<LoadedEmbed, GuestPanic> {
+fn embedded(create: CreateInstance) -> Result<LoadedEmbed, GuestStop> {
     LoadedEmbed::start(
         EmbedEntries {
             create,
@@ -584,7 +581,7 @@ fn a_guest_that_panics_is_reported_and_never_called_again() {
     APPS_DROPPED.with(|dropped| dropped.set(0));
     let broken = embedded(create_panicking).expect("the guest loads");
     broken.relayout(40.0, 20.0);
-    assert_eq!(broken.panic(), None, "precondition: a guest that runs");
+    assert_eq!(broken.stopped(), None, "precondition: a guest that runs");
     assert!(
         !broken.paint().is_empty(),
         "precondition: a guest that paints"
@@ -592,7 +589,12 @@ fn a_guest_that_panics_is_reported_and_never_called_again() {
 
     assert!(!broken.on_event(&press()));
     assert_eq!(PRESSES_HEARD.with(std::cell::Cell::get), 1);
-    let panic = broken.panic().expect("the host is told the guest panicked");
+    let Some(GuestStop::Panicked(panic)) = broken.stopped() else {
+        panic!(
+            "the host is told the guest panicked: {:?}",
+            broken.stopped()
+        );
+    };
     assert_eq!(panic.message, "RUNTIME is already borrowed");
     assert!(
         panic
@@ -629,7 +631,7 @@ fn a_guest_that_panics_is_reported_and_never_called_again() {
         2,
         "the fresh guest hears the press"
     );
-    assert_eq!(fresh.panic(), None);
+    assert_eq!(fresh.stopped(), None);
     drop(fresh);
     assert_eq!(
         APPS_DROPPED.with(std::cell::Cell::get),
@@ -641,9 +643,9 @@ fn a_guest_that_panics_is_reported_and_never_called_again() {
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_guest_whose_build_panics_is_refused_with_the_report() {
-    let panic = embedded(create_nothing)
-        .err()
-        .expect("a guest that cannot build does not load");
+    let Some(GuestStop::Panicked(panic)) = embedded(create_nothing).err() else {
+        panic!("a guest that cannot build does not load, and says why");
+    };
     assert_eq!(panic.message, "the guest could not find its assets");
 }
 
@@ -667,12 +669,12 @@ fn a_host_reads_what_a_guest_answers_into_its_own_values() {
     );
     let from_now = due.saturating_duration_since(Instant::now());
     assert!(from_now <= DELAY && from_now > DELAY / 2, "{from_now:?}");
-    assert_eq!(embed.panic(), None);
+    assert_eq!(embed.stopped(), None);
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_waiting(
-    args: LentBytes,
+    args: LentBytes<Vec<String>>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     let fired = Rc::new(std::cell::Cell::new(false));
@@ -722,7 +724,7 @@ impl EmbeddedApp for WakesTheHost {
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_waking(
-    args: LentBytes,
+    args: LentBytes<Vec<String>>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe { guest::create(args, instance, |_| Box::new(WakesTheHost(Stub::new()))) }
@@ -737,7 +739,7 @@ fn a_panic_in_the_host_waker_does_not_reach_the_guest() {
     let mut redraw_requested = false;
     let mut ctx = AppCtx::new(&mut redraw_requested, Some(&waker), None, None);
     embed.on_frame(&mut ctx);
-    assert_eq!(embed.panic(), None, "the guest kept running");
+    assert_eq!(embed.stopped(), None, "the guest kept running");
     assert!(redraw_requested, "its redraw reaches the host");
 }
 
@@ -757,7 +759,7 @@ unsafe extern "C" fn record_services(services: HostServices) -> CallOutcome {
 
 #[cfg(all(feature = "host", unix))]
 unsafe extern "C" fn create_after_services(
-    args: LentBytes,
+    args: LentBytes<Vec<String>>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     HANDED_BEFORE_BUILD.set(CONVENTION_HANDED.get().is_some());
@@ -877,7 +879,7 @@ extern "C" fn serves_nothing(_services: HostServices) -> CallOutcome {
 
 /// Held with this process as its library, so dropping it runs the unload path a built library's does.
 #[cfg(all(feature = "host", unix))]
-fn embedded_as_loaded(create: CreateInstance) -> Result<LoadedEmbed, GuestPanic> {
+fn embedded_as_loaded(create: CreateInstance) -> Result<LoadedEmbed, GuestStop> {
     LIFE.with_borrow_mut(Vec::clear);
     let this_process = libloading::Library::from(libloading::os::unix::Library::this());
     LoadedEmbed::start(
@@ -914,7 +916,7 @@ fn a_guest_that_panicked_is_still_quiesced_before_its_library_is_closed() {
     let broken = embedded_as_loaded(create_panicking).expect("the guest loads");
     broken.relayout(40.0, 20.0);
     broken.on_event(&press());
-    assert!(broken.panic().is_some(), "precondition: it panicked");
+    assert!(broken.stopped().is_some(), "precondition: it panicked");
     drop(broken);
     assert_eq!(APPS_DROPPED.with(std::cell::Cell::get), 0);
     assert_eq!(LIFE.take(), ["loaded", "quiesce"]);

@@ -4,7 +4,7 @@ use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::thread::JoinHandle;
 
-use super::lent::LentBytes;
+use super::lent::{LentBytes, Utf8};
 use super::services::HostServices;
 use super::shield;
 
@@ -13,7 +13,7 @@ type Body = Box<dyn FnOnce() + Send>;
 /// A body a guest hands its host to run on a thread of the host's: `main(data)`, code of the guest's that owns `data` and frees it, and the thread's name, lent for the call.
 #[repr(C)]
 pub struct ThreadStart {
-    pub(super) name: LentBytes,
+    pub(super) name: LentBytes<Utf8>,
     pub(super) main: unsafe extern "C" fn(data: *mut c_void),
     pub(super) data: *mut c_void,
 }

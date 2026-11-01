@@ -11,7 +11,7 @@ use std::rc::{Rc, Weak};
 pub use entries::{CreateApp, HOT_CONTRACT, HotEntries};
 #[doc(hidden)]
 pub use platform_core::export_contract_stamp;
-pub use platform_core::guest::GuestPanic;
+use platform_core::guest::GuestStop;
 use platform_core::guest::{CWaker, FrameCtx, LentBytes};
 #[doc(hidden)]
 pub use platform_core::guest::{CallOutcome, Handle, HostServices};
@@ -29,7 +29,7 @@ struct HotImage {
     painted: RefCell<Weak<GuestSurface<HotEntries>>>,
 }
 
-/// An application loaded from a dylib, driven through the entries it exports. Every call goes through its [`GuestLibrary`], so once the dylib has panicked none reaches it again; the panic is reported through [`AppRuntime::take_panic`](crate::AppRuntime::take_panic) and the host waits for a rebuild.
+/// An application loaded from a dylib, driven through the entries it exports. Every call goes through its [`GuestLibrary`], so once the dylib has stopped, by panicking or by answering in bytes the host cannot read, none reaches it again; why is reported through [`AppRuntime::take_stop`](crate::AppRuntime::take_stop).
 pub struct HotApp {
     /// `None` once a panic has left the dylib without one to give.
     app: Option<Handle<GuestApp>>,
@@ -253,11 +253,8 @@ impl crate::app_runtime::AppRuntime for HotApp {
         });
     }
 
-    fn take_panic(&self) -> Option<String> {
-        self.library()
-            .guest()
-            .take_panic()
-            .map(|panic| panic.to_string())
+    fn take_stop(&self) -> Option<GuestStop> {
+        self.library().guest().take_stop()
     }
 
     fn hot_snapshot(&self) -> Option<String> {

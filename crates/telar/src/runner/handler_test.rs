@@ -1784,7 +1784,7 @@ fn hot_build(create: crate::hot::CreateApp) -> Box<dyn AppRuntime> {
 #[derive(Default)]
 struct Reporting {
     build: ui_tree::BuildOutcome,
-    app_panic: Option<String>,
+    app_stop: Option<platform_core::guest::GuestStop>,
 }
 
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
@@ -1803,8 +1803,8 @@ impl DevOverlay for Reporting {
         self.build = outcome;
     }
 
-    fn set_app_panic(&mut self, panic: Option<String>) {
-        self.app_panic = panic;
+    fn set_app_stop(&mut self, stop: Option<platform_core::guest::GuestStop>) {
+        self.app_stop = stop;
     }
 }
 
@@ -1908,9 +1908,10 @@ fn a_reload_whose_app_panics_as_it_starts_is_answered_as_panicked_and_shown() {
     );
     let report = handler
         .dev
-        .app_panic
+        .app_stop
         .clone()
-        .expect("the overlay is told the app panicked");
+        .expect("the overlay is told the app panicked")
+        .to_string();
     assert!(
         report.contains("the app's setup could not find its assets"),
         "{report}"
@@ -1928,7 +1929,7 @@ fn a_reload_whose_app_panics_as_it_starts_is_answered_as_panicked_and_shown() {
         replies.try_recv().map(|reply| reply.outcome),
         Ok(HotOutcome::Loaded)
     );
-    assert_eq!(handler.dev.app_panic, None, "the next build clears it");
+    assert_eq!(handler.dev.app_stop, None, "the next build clears it");
 }
 
 /// A panic in the app's event handler used to unwind out of the dylib into the host, whose copy of std can only abort on it: the window closed and the session with it. Now the window stays, says what panicked and where, runs nothing more of that build, and the next build takes over.
@@ -1941,7 +1942,7 @@ fn a_panic_in_the_app_is_shown_and_the_next_build_takes_over() {
     assert!(handler.on_resume(&window));
     handler.about_to_wait();
     assert_eq!(
-        handler.dev.app_panic, None,
+        handler.dev.app_stop, None,
         "precondition: a build that runs"
     );
 
@@ -1951,9 +1952,10 @@ fn a_panic_in_the_app_is_shown_and_the_next_build_takes_over() {
     handler.about_to_wait();
     let report = handler
         .dev
-        .app_panic
+        .app_stop
         .clone()
-        .expect("the overlay is told the app panicked");
+        .expect("the overlay is told the app panicked")
+        .to_string();
     assert!(report.contains("RUNTIME is already borrowed"), "{report}");
     assert!(
         report.contains(&format!("panicked at {}:", file!())),
@@ -1975,7 +1977,7 @@ fn a_panic_in_the_app_is_shown_and_the_next_build_takes_over() {
     handler.new_events();
     handler.take_build(hot_build(create_fixed), &window);
     handler.about_to_wait();
-    assert_eq!(handler.dev.app_panic, None, "a build that loads clears it");
+    assert_eq!(handler.dev.app_stop, None, "a build that loads clears it");
     assert_eq!(handler.dev.build, ui_tree::BuildOutcome::Loaded);
     handler.new_events();
     handler.on_event(press_at(10.0, 10.0), &window);
@@ -1999,9 +2001,10 @@ fn a_build_that_panics_as_it_starts_keeps_the_window_for_the_next() {
     handler.about_to_wait();
     let report = handler
         .dev
-        .app_panic
+        .app_stop
         .clone()
-        .expect("the overlay is told the app panicked");
+        .expect("the overlay is told the app panicked")
+        .to_string();
     assert!(
         report.contains("the app's setup could not find its assets"),
         "{report}"
@@ -2010,7 +2013,7 @@ fn a_build_that_panics_as_it_starts_keeps_the_window_for_the_next() {
     handler.new_events();
     handler.take_build(hot_build(create_fixed), &window);
     handler.about_to_wait();
-    assert_eq!(handler.dev.app_panic, None);
+    assert_eq!(handler.dev.app_stop, None);
     assert!(handler.tree.is_some(), "the next build mounts its tree");
 }
 

@@ -4,6 +4,9 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+// Named by the macros a boundary declares its tables with, which expand in other crates.
+#[doc(hidden)]
+pub use wire_core;
 pub mod access_audit;
 pub mod accessibility;
 pub mod app_ctx;

@@ -160,6 +160,9 @@ pub use runner::font_config::FontSetup;
 pub use tree::{Frame, HotTree, LocalTree, UiTree};
 #[cfg(feature = "runtime")]
 pub use ui_tree::{BuildOutcome, DevAction, DevOverlay, OverlayResponse};
+// What `DevOverlay::set_app_stop` is handed, so an overlay outside this crate can say why the app stopped.
+#[cfg(feature = "runtime")]
+pub use platform_core::guest::{GuestPanic, GuestStop};
 // Named by `UiTree::walk`, which the runner reads a hot-reloaded tree through, so it has to be reachable through the facade.
 #[cfg(feature = "runtime")]
 pub use ui_tree::SegmentNodeInfo;
