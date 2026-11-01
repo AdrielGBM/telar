@@ -37,7 +37,11 @@ impl HostThread {
     /// # Safety
     ///
     /// `services` must be the table the host handed this guest, still kept by the host.
-    pub unsafe fn start(services: &HostServices, name: &str, main: Body) -> Option<Self> {
+    pub unsafe fn start<Upper>(
+        services: &HostServices<Upper>,
+        name: &str,
+        main: Body,
+    ) -> Option<Self> {
         let spawn = services.spawn_thread?;
         let data = Box::into_raw(Box::new(main)).cast::<c_void>();
         let start = ThreadStart {
@@ -59,7 +63,7 @@ impl HostThread {
     /// # Safety
     ///
     /// `services` must be the table [`start`](Self::start) was handed.
-    pub unsafe fn join(self, services: &HostServices) {
+    pub unsafe fn join<Upper>(self, services: &HostServices<Upper>) {
         if let Some(join) = services.join_thread {
             unsafe { join(services.data, self) }
         }
@@ -70,7 +74,7 @@ impl HostThread {
     /// # Safety
     ///
     /// As [`join`](Self::join).
-    pub unsafe fn detach(self, services: &HostServices) {
+    pub unsafe fn detach<Upper>(self, services: &HostServices<Upper>) {
         if let Some(detach) = services.detach_thread {
             unsafe { detach(services.data, self) }
         }

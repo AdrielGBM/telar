@@ -1,12 +1,13 @@
 use super::*;
 use crate::guest::lent::{ANSWER, LentBytes};
 use crate::guest::outcome::REPORT;
+use crate::guest::services::NoUpper;
 
-extern "C" fn installs_nothing(_: HostServices) -> CallOutcome {
+extern "C" fn installs_nothing(_: HostServices<NoUpper>) -> CallOutcome {
     CallOutcome::OK
 }
 
-const SERVED: Lifecycle = Lifecycle::serving(installs_nothing);
+const SERVED: Lifecycle<NoUpper> = Lifecycle::serving(installs_nothing);
 
 #[test]
 fn a_guest_counts_from_the_epoch_its_host_hands_it() {

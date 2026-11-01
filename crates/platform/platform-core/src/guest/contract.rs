@@ -6,10 +6,9 @@ use super::clock::Timestamp;
 use super::frame_ctx::FrameCtx;
 use super::hash_bytes;
 use super::lent::{Handle, LentBytes};
-use super::lifecycle::{Entries, LIFECYCLE_LAYOUT, Lifecycle};
+use super::lifecycle::{Entries, Lifecycle};
 use super::outcome::CallOutcome;
-use super::services::{HOST_SERVICES_LAYOUT, REPLY_LAYOUT};
-use super::services::{HostServices, Reply};
+use super::services::{REPLY_LAYOUT, Reply};
 use super::surface::{SURFACE_REPORT_LAYOUT, SurfaceReport};
 use super::threads::{HostThread, ThreadStart};
 use super::waker::CWaker;
@@ -71,9 +70,6 @@ named_arg_shapes!(
     FrameCtx,
     ThreadStart,
     HostThread,
-    HostServices,
-    Reply,
-    Lifecycle,
     ContractStamp,
 );
 
@@ -87,6 +83,10 @@ impl<S> ArgShape for SurfaceReport<S> {
 
 impl<T: Shaped> ArgShape for LentBytes<T> {
     const ARG_SHAPE: u64 = fold_shape(shape_named("LentBytes"), T::SHAPE);
+}
+
+impl<Answer: Shaped> ArgShape for Reply<Answer> {
+    const ARG_SHAPE: u64 = fold_shape(shape_named("Reply"), Answer::SHAPE);
 }
 
 impl<T: ArgShape> ArgShape for *const T {
@@ -142,8 +142,8 @@ macro_rules! type_layout {
     };
 }
 
-/// The building blocks every boundary shares, hashed into every stamp.
-pub const BUILDING_BLOCKS: [TypeLayout; 13] = [
+/// The building blocks every boundary shares, hashed into every stamp. A boundary hashes its own [`Lifecycle`] and [`HostServices`](super::HostServices) with the entry table naming their `upper` services.
+pub const BUILDING_BLOCKS: [TypeLayout; 11] = [
     crate::type_layout!(LentBytes<()> { ptr, len }),
     crate::type_layout!(CallOutcome {
         status,
@@ -171,8 +171,6 @@ pub const BUILDING_BLOCKS: [TypeLayout; 13] = [
     crate::type_layout!(ThreadStart { name, main, data }),
     crate::type_layout!(HostThread { ptr }),
     REPLY_LAYOUT,
-    HOST_SERVICES_LAYOUT,
-    LIFECYCLE_LAYOUT,
     SURFACE_REPORT_LAYOUT,
 ];
 
@@ -339,7 +337,7 @@ impl fmt::Display for ContractMismatch {
 
 impl std::error::Error for ContractMismatch {}
 
-/// Declares a boundary's entry table and its [`Entries`] impl: a `repr(C)` struct of `extern "C"` entries after its [`Lifecycle`], the entry that builds an instance with a type of its own, the [`SurfaceReport`] of the instances whose surfaces it reads (`report`, a [`ReportsSurface`](super::ReportsSurface) type), and a `serving` constructor that takes that entry and fills every other from the function of the same name in the `guest` module, the lifecycle's `install_services` included.
+/// Declares a boundary's entry table and its [`Entries`] impl: a `repr(C)` struct of `extern "C"` entries after its [`Lifecycle`], the entry that builds an instance with a type of its own, the [`SurfaceReport`] of the instances whose surfaces it reads (`report`, a [`ReportsSurface`](super::ReportsSurface) type), and a `serving` constructor that takes that entry and fills every other from the function of the same name in the `guest` module, the lifecycle's `install_services` included, which installs a [`HostServices`](super::HostServices) whose `upper` table is the one `services` names.
 ///
 /// The table's layout hashes every entry with its signature as written and the shape of what each lends, so an entry that changes what it takes, or a type it lends that changes what it spells, changes the stamp as surely as one that moves, and the stamp hashes each setting, on or off, as [`ContractStamp::with_setting`] does.
 ///
@@ -351,6 +349,7 @@ impl std::error::Error for ContractMismatch {}
 ///         symbol: "telar_embed_entries",
 ///         guest: guest,
 ///         settings: ["shaper" => cfg!(feature = "shaper")],
+///         services: services_core::guest::UpperTable,
 ///         create: fn(LentBytes<Vec<String>>, *mut Handle<GuestInstance>) as CreateInstance;
 ///         report: GuestInstance;
 ///         release: fn(Handle<GuestInstance>);
@@ -366,6 +365,7 @@ macro_rules! entry_table {
             symbol: $symbol:literal,
             guest: $guest:ident,
             settings: [$($setting:literal => $on:expr),* $(,)?],
+            services: $upper:ty,
             $create:ident: fn($($create_arg:ty),* $(,)?) as $create_ty:ident;
             report: $surface:ty;
             $($field:ident: fn($($arg:ty),* $(,)?);)*
@@ -378,7 +378,7 @@ macro_rules! entry_table {
         #[repr(C)]
         #[derive(Clone, Copy)]
         pub struct $table {
-            pub lifecycle: $crate::guest::Lifecycle,
+            pub lifecycle: $crate::guest::Lifecycle<$upper>,
             pub $create: $create_ty,
             pub report: $crate::guest::SurfaceReport<$surface>,
             $(pub $field: unsafe extern "C" fn($($arg),*) -> $crate::guest::CallOutcome,)*
@@ -398,6 +398,7 @@ macro_rules! entry_table {
 
         unsafe impl $crate::guest::Entries for $table {
             type Surface = $surface;
+            type Upper = $upper;
             const SYMBOL: &'static [u8] = concat!($symbol, "\0").as_bytes();
             const LAYOUT: $crate::guest::TypeLayout = $crate::guest::TypeLayout {
                 name: stringify!($table),
@@ -426,11 +427,16 @@ macro_rules! entry_table {
             };
             const CONTRACT: $crate::guest::ContractStamp = $crate::guest::ContractStamp::of(
                 $crate::guest::GuestKind::$kind,
-                &[<Self as $crate::guest::Entries>::LAYOUT],
+                &[
+                    <Self as $crate::guest::Entries>::LAYOUT,
+                    $crate::guest::Lifecycle::<$upper>::LAYOUT,
+                    $crate::guest::HostServices::<$upper>::LAYOUT,
+                    <$upper as $crate::guest::UpperServices>::LAYOUT,
+                ],
             )
             $(.with_setting($setting, $on))*;
 
-            fn lifecycle(&self) -> &$crate::guest::Lifecycle {
+            fn lifecycle(&self) -> &$crate::guest::Lifecycle<$upper> {
                 &self.lifecycle
             }
 
@@ -455,12 +461,12 @@ pub fn check_entry_table<E: Entries>() {
         layout.fields[2],
         (
             "report: SurfaceReport",
-            std::mem::size_of::<Lifecycle>() + entry
+            std::mem::size_of::<Lifecycle<E::Upper>>() + entry
         ),
         "the surface report follows the entry that builds an instance"
     );
     assert_eq!(
-        std::mem::size_of::<Lifecycle>()
+        std::mem::size_of::<Lifecycle<E::Upper>>()
             + std::mem::size_of::<SurfaceReport<()>>()
             + (layout.fields.len() - 2) * entry,
         layout.size,

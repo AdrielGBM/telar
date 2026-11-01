@@ -9,7 +9,7 @@ use platform_core::guest::{
 use platform_core::{AccessNode, ConsumedKeys, Event, SystemPreferences, TextInput};
 use renderer_core::Color;
 use renderer_core::wire::{DrawList, Pixels};
-use services_core::guest::LentFrames;
+use services_core::guest::{LentFrames, UpperTable};
 
 use crate::{EmbedInstance, EmbeddedApp, WindowCommands};
 
@@ -68,7 +68,9 @@ pub unsafe fn create(
 }
 
 /// Fills this copy's stores from the host's table, and has its shaper defer to the host's font database. The table is the host's, kept until it has unloaded this copy.
-pub(crate) unsafe extern "C" fn install_services(services: HostServices) -> CallOutcome {
+pub(crate) unsafe extern "C" fn install_services(
+    services: HostServices<UpperTable>,
+) -> CallOutcome {
     guest_entry(move || {
         let fonts = unsafe { services_core::guest::install_host_services(services) };
         #[cfg(feature = "shaper")]

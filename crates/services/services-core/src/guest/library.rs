@@ -10,12 +10,12 @@ use renderer_core::wire::{DrawList, FrameDecoder, FrameError, Pixels};
 use renderer_core::{DrawCommand, FontHost};
 use wire_core::{Wire, encode};
 
-use super::ServedServices;
+use super::{ServedServices, UpperTable};
 
 /// One guest a host loaded: the entries copied out of its library, the [`Guest`] every call goes through, the epoch the timestamps it is sent count from, and what it was loaded with, kept until it is unloaded.
 ///
 /// Dropping it unloads the guest through its [`Lifecycle`](platform_core::guest::Lifecycle), once whatever holds its instances has released them: `unloading` unless it panicked, then `quiesce`, then its library is unmapped and the backends its services call into are freed. A `quiesce` that panics leaves a thread that may still run the guest's code and call those services, so the library and the services are kept together, for the rest of the process.
-pub struct GuestLibrary<E: Entries> {
+pub struct GuestLibrary<E: Entries<Upper = UpperTable>> {
     guest: Guest,
     entries: E,
     epoch: Epoch,
@@ -28,7 +28,7 @@ struct Loaded {
     services: ServedServices,
 }
 
-impl<E: Entries> GuestLibrary<E> {
+impl<E: Entries<Upper = UpperTable>> GuestLibrary<E> {
     /// Starts the guest `entries` were copied from, handing it the host's epoch and services before anything else of it runs. A panic in any of them is recorded in its [`Guest`] rather than returned.
     ///
     /// `library` is what unmaps the guest when dropped, as [`open_guest`](platform_core::guest::open_guest) hands it back: the guest is told it will be unloaded, adopts an epoch read now and is served this side's stores, with `fonts` the database its shaper defers to, as [`ServedServices::installed`] takes it. `None` for entries this process serves itself, which share its epoch and its stores already: they count from [`host_epoch`], are served nothing and are never unloaded.
@@ -157,7 +157,7 @@ impl<E: Entries> GuestLibrary<E> {
     }
 }
 
-impl<E: Entries> Drop for GuestLibrary<E> {
+impl<E: Entries<Upper = UpperTable>> Drop for GuestLibrary<E> {
     fn drop(&mut self) {
         let Some(loaded) = self.loaded.take() else {
             return;

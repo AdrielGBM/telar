@@ -1769,7 +1769,9 @@ unsafe extern "C" fn create_nothing(app: *mut AppHandle) -> crate::hot::CallOutc
 /// A build served by this process's own entries, through the same table, the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries.
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn hot_build(create: crate::hot::CreateApp) -> Box<dyn AppRuntime> {
-    extern "C" fn keep_services(_: crate::hot::HostServices) -> crate::hot::CallOutcome {
+    extern "C" fn keep_services(
+        _: crate::hot::HostServices<services_core::guest::UpperTable>,
+    ) -> crate::hot::CallOutcome {
         crate::hot::CallOutcome::OK
     }
     let entries = crate::hot::HotEntries {

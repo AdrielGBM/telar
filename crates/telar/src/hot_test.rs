@@ -22,6 +22,7 @@ fn each_line_of_the_channel_is_the_event_its_prefix_names() {
 }
 
 use platform_core::guest::{Lifecycle, Timestamp};
+use services_core::guest::UpperTable;
 
 thread_local! {
     static HANDED: std::cell::Cell<Option<platform_core::KeyboardConvention>> = const { std::cell::Cell::new(None) };
@@ -46,7 +47,7 @@ impl ui_tree::Component for BlankView {
     }
 }
 
-unsafe extern "C" fn hand_over(services: HostServices) -> CallOutcome {
+unsafe extern "C" fn hand_over(services: HostServices<UpperTable>) -> CallOutcome {
     HANDED.set(unsafe { services.ask(services.keyboard_convention, &()) });
     SERVED_NOTHING.set(Some(services.data.is_null()));
     CallOutcome::OK
@@ -81,12 +82,14 @@ extern "C" fn record_quiesce() -> CallOutcome {
     record("quiesce")
 }
 
-extern "C" fn keep_services(_: HostServices) -> CallOutcome {
+extern "C" fn keep_services(_: HostServices<UpperTable>) -> CallOutcome {
     CallOutcome::OK
 }
 
 /// The library's lifecycle with `install_services`, recording the calls that would make this test process a guest rather than running them.
-fn recorded(install_services: unsafe extern "C" fn(HostServices) -> CallOutcome) -> Lifecycle {
+fn recorded(
+    install_services: unsafe extern "C" fn(HostServices<UpperTable>) -> CallOutcome,
+) -> Lifecycle<UpperTable> {
     Lifecycle {
         loaded: record_loaded,
         unloading: record_unloading,

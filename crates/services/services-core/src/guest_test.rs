@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use platform_core::guest::HOST_SERVICES_LAYOUT;
+use platform_core::guest::UpperServices;
 use renderer_core::{FontSource, GenericFamilies};
 
 use super::*;
@@ -233,8 +233,8 @@ fn only_the_backends_the_host_has_are_in_its_table() {
     let table = served(nothing_served()).table();
     assert!(table.clipboard_text.is_none() && table.set_clipboard_text.is_none());
     assert!(table.open_uri.is_none() && table.open_beside.is_none());
-    assert!(table.open_file.is_none() && table.pick_folder.is_none());
-    assert!(table.wake_loop.is_none() && table.font_sources.is_none());
+    assert!(table.upper.open_file.is_none() && table.upper.pick_folder.is_none());
+    assert!(table.wake_loop.is_none() && table.upper.font_sources.is_none());
     assert!(
         table.stored_preference.is_some(),
         "the host always has a store, one in memory at least"
@@ -272,7 +272,7 @@ fn the_guest_reads_the_host_app_name_and_directories() {
         ..nothing_served()
     });
     let dirs = host(&served)
-        .ask::<Option<AppDirs>>(|table| table.app_paths, &())
+        .ask(|table| table.upper.app_paths, &())
         .flatten()
         .expect("the host has paths");
     assert_eq!(dirs.name, "notes");
@@ -822,11 +822,12 @@ fn every_global_store_a_guest_reaches_for_is_served_or_its_own() {
 
 #[test]
 fn every_entry_of_the_table_serves_a_store_and_every_store_names_an_entry() {
-    let entries: Vec<&str> = HOST_SERVICES_LAYOUT
+    let entries: Vec<&str> = HostServices::<UpperTable>::LAYOUT
         .fields
         .iter()
+        .chain(UpperTable::LAYOUT.fields)
         .map(|(name, _)| *name)
-        .filter(|name| *name != "data")
+        .filter(|name| !matches!(*name, "data" | "upper"))
         .collect();
     for (file, store, served_by) in BRIDGED {
         for entry in *served_by {

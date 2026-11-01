@@ -6,7 +6,7 @@ use std::rc::Rc;
 use platform_core::guest::{CallOutcome, Entries, Handle, LentBytes};
 use platform_core::{AccessAudit, AccessNode, ConsumedKeys, Event, TextInput};
 use renderer_core::Color;
-use services_core::guest::GuestLibrary;
+use services_core::guest::{GuestLibrary, UpperTable};
 use wire_core::encode;
 
 use crate::foreign_surface::ForeignSurface;
@@ -18,13 +18,13 @@ pub type GuestAudit<E> =
 /// The [`ForeignSurface`] of one instance a guest library keeps behind `surface`, read through the library's [`SurfaceReport`](platform_core::guest::SurfaceReport): what hot reload and embed both mark their guest's frame with.
 ///
 /// Once the guest has panicked, or once its owner [forgets](Self::forget) the instance, it reports nothing and takes nothing: no node, no caret, no focus.
-pub struct GuestSurface<E: Entries> {
+pub struct GuestSurface<E: Entries<Upper = UpperTable>> {
     library: Rc<GuestLibrary<E>>,
     surface: Cell<Option<Handle<E::Surface>>>,
     audit: Option<GuestAudit<E>>,
 }
 
-impl<E: Entries> GuestSurface<E> {
+impl<E: Entries<Upper = UpperTable>> GuestSurface<E> {
     pub fn new(library: Rc<GuestLibrary<E>>, surface: Handle<E::Surface>) -> Self {
         Self {
             library,
@@ -73,7 +73,7 @@ impl<E: Entries> GuestSurface<E> {
     }
 }
 
-impl<E: Entries> ForeignSurface for GuestSurface<E> {
+impl<E: Entries<Upper = UpperTable>> ForeignSurface for GuestSurface<E> {
     fn access_snapshot(&self) -> Vec<AccessNode> {
         self.read(|entries, surface, nodes| unsafe {
             (entries.report().access_snapshot)(surface, nodes)

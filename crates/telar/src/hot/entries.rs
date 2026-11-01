@@ -21,6 +21,7 @@ platform_core::entry_table! {
         symbol: "telar_hot_entries",
         guest: guest,
         settings: ["shaper" => cfg!(feature = "shaper")],
+        services: services_core::guest::UpperTable,
         create: fn(*mut Handle<GuestApp>) as CreateApp;
         report: HotTree;
         release: fn(Handle<GuestApp>);

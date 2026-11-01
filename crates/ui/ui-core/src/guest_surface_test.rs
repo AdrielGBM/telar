@@ -82,8 +82,9 @@ impl ReportsSurface for Field {
 
 mod guest {
     use platform_core::guest::{CallOutcome, HostServices};
+    use services_core::guest::UpperTable;
 
-    pub(super) extern "C" fn install_services(_: HostServices) -> CallOutcome {
+    pub(super) extern "C" fn install_services(_: HostServices<UpperTable>) -> CallOutcome {
         CallOutcome::OK
     }
 }
@@ -95,6 +96,7 @@ platform_core::entry_table! {
         symbol: "telar_test_fields",
         guest: guest,
         settings: [],
+        services: services_core::guest::UpperTable,
         create: fn(*mut Handle<Field>) as CreateField;
         report: Field;
     }

@@ -6,6 +6,7 @@ use platform_core::guest::Lifecycle;
 use platform_core::guest::{CWaker, HostServices};
 use platform_core::{Key, KeyboardConvention, ModifiersState};
 use renderer_core::RectStyle;
+use services_core::guest::UpperTable;
 
 struct Stub {
     node: Option<NodeId>,
@@ -751,7 +752,7 @@ thread_local! {
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-unsafe extern "C" fn record_services(services: HostServices) -> CallOutcome {
+unsafe extern "C" fn record_services(services: HostServices<UpperTable>) -> CallOutcome {
     CONVENTION_HANDED.set(unsafe { services.ask(services.keyboard_convention, &()) });
     SERVED_NOTHING.set(Some(services.data.is_null()));
     CallOutcome::OK
@@ -873,7 +874,7 @@ extern "C" fn live_quiesce() -> CallOutcome {
 }
 
 #[cfg(all(feature = "host", unix))]
-extern "C" fn serves_nothing(_services: HostServices) -> CallOutcome {
+extern "C" fn serves_nothing(_services: HostServices<UpperTable>) -> CallOutcome {
     CallOutcome::OK
 }
 

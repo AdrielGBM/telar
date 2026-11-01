@@ -7,14 +7,14 @@ use renderer_core::{ExclusiveFontsError, FontAsset, FontConfig, FontSources};
 use super::*;
 
 thread_local! {
-    static SERVED: Cell<Option<HostServices>> = const { Cell::new(None) };
+    static SERVED: Cell<Option<HostServices<UpperTable>>> = const { Cell::new(None) };
     static LIFECYCLE_CALLS: Cell<u32> = const { Cell::new(0) };
 }
 
 mod guest {
     use super::*;
 
-    pub(super) extern "C" fn install_services(services: HostServices) -> CallOutcome {
+    pub(super) extern "C" fn install_services(services: HostServices<UpperTable>) -> CallOutcome {
         SERVED.set(Some(services));
         CallOutcome::OK
     }
@@ -64,6 +64,7 @@ platform_core::entry_table! {
         symbol: "telar_bare_entries",
         guest: guest,
         settings: [],
+        services: crate::guest::UpperTable,
         create: fn(*mut Handle<()>) as CreateBare;
         report: Blank;
     }
@@ -164,7 +165,7 @@ fn a_guest_whose_threads_could_not_be_joined_keeps_its_services_with_its_library
         "its library stays mapped"
     );
     assert_eq!(Arc::strong_count(&fonts), 2, "and its services kept");
-    let answered = unsafe { table.ask::<Option<FontSources>>(table.font_sources, &()) };
+    let answered = unsafe { table.ask(table.upper.font_sources, &()) };
     assert_eq!(answered, Some(None), "a service still answers");
     assert_eq!(fonts.0.load(Ordering::Relaxed), 1);
 }

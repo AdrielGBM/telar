@@ -1,4 +1,6 @@
 use super::*;
+use crate::guest::UpperServices;
+use crate::guest::services::NoUpper;
 
 const TABLE: ContractStamp = ContractStamp::of(
     GuestKind::HotReload,
@@ -124,9 +126,7 @@ fn every_building_block_is_hashed() {
             "FrameCtx",
             "ThreadStart",
             "HostThread",
-            "Reply",
-            "HostServices",
-            "Lifecycle",
+            "Reply<()>",
             "SurfaceReport"
         ]
     );
@@ -140,8 +140,9 @@ fn every_building_block_is_hashed() {
 mod guest {
     use super::*;
     use crate::guest::HostServices;
+    use crate::guest::services::NoUpper;
 
-    pub(super) extern "C" fn install_services(_: HostServices) -> CallOutcome {
+    pub(super) extern "C" fn install_services(_: HostServices<NoUpper>) -> CallOutcome {
         CallOutcome::OK
     }
 
@@ -195,6 +196,7 @@ crate::entry_table! {
         symbol: "telar_declared_entries",
         guest: guest,
         settings: ["shaper" => true],
+        services: crate::guest::services::NoUpper,
         create: fn(LentBytes<Vec<String>>, *mut Handle<u32>) as CreateDeclared;
         report: u32;
         release: fn(Handle<u32>);
@@ -227,10 +229,19 @@ fn a_declared_table_starts_with_its_lifecycle_and_hashes_every_entry() {
     );
     assert_eq!(
         Declared::CONTRACT,
-        ContractStamp::of(GuestKind::Embed, &[Declared::LAYOUT]).with_setting("shaper", true)
+        ContractStamp::of(
+            GuestKind::Embed,
+            &[
+                Declared::LAYOUT,
+                Lifecycle::<NoUpper>::LAYOUT,
+                crate::guest::HostServices::<NoUpper>::LAYOUT,
+                NoUpper::LAYOUT,
+            ]
+        )
+        .with_setting("shaper", true)
     );
     let served = Declared::serving(create_declared);
-    let installs: unsafe extern "C" fn(crate::guest::HostServices) -> CallOutcome =
+    let installs: unsafe extern "C" fn(crate::guest::HostServices<NoUpper>) -> CallOutcome =
         guest::install_services;
     assert!(std::ptr::fn_addr_eq(
         served.lifecycle().install_services,
@@ -255,8 +266,9 @@ macro_rules! lending_table {
             mod guest {
                 use super::*;
                 use crate::guest::HostServices;
+                use crate::guest::services::NoUpper;
 
-                pub(super) extern "C" fn install_services(_: HostServices) -> CallOutcome {
+                pub(super) extern "C" fn install_services(_: HostServices<NoUpper>) -> CallOutcome {
                     CallOutcome::OK
                 }
 
@@ -279,6 +291,7 @@ macro_rules! lending_table {
                     symbol: "telar_lending_entries",
                     guest: guest,
                     settings: [],
+                    services: crate::guest::services::NoUpper,
                     create: fn(*mut Handle<u32>) as CreateLending;
                     report: u32;
                     release: fn(Handle<u32>);

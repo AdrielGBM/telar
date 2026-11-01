@@ -4,8 +4,9 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use super::*;
+use crate::guest::services::NoUpper;
 
-fn served() -> HostServices {
+fn served() -> HostServices<NoUpper> {
     HostServices {
         spawn_thread: Some(spawn_thread),
         join_thread: Some(join_thread),
@@ -101,7 +102,7 @@ fn a_table_with_no_spawn_entry_starts_nothing_and_drops_the_body() {
     let held = Dropped(Arc::clone(&dropped));
     let started = unsafe {
         HostThread::start(
-            &HostServices::NONE,
+            &HostServices::<NoUpper>::NONE,
             "telar-guest-task",
             Box::new(move || drop(held)),
         )

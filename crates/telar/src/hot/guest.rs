@@ -13,6 +13,7 @@ use platform_core::{AccessAudit, Event, Location, SystemPreferences, WindowComma
 use reactive_core::OpenBatch;
 use renderer_core::Color;
 use renderer_core::wire::{DrawList, Pixels};
+use services_core::guest::UpperTable;
 use ui_tree::SegmentNodeInfo;
 
 use crate::app::App;
@@ -63,7 +64,9 @@ pub unsafe fn create(
 }
 
 /// Fills this copy's stores from the host's table, and has its shaper defer to the host's font database. The table is the host's, kept until it has unloaded this copy.
-pub(super) unsafe extern "C" fn install_services(services: HostServices) -> CallOutcome {
+pub(super) unsafe extern "C" fn install_services(
+    services: HostServices<UpperTable>,
+) -> CallOutcome {
     guest_entry(move || {
         let fonts = unsafe { services_core::guest::install_host_services(services) };
         #[cfg(feature = "shaper")]
