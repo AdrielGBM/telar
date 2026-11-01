@@ -1,0 +1,49 @@
+use std::rc::Rc;
+
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Color, Role};
+
+use crate::inputs::swatches::swatches::{SwatchesProps, swatches};
+use telar::ControlSize;
+
+fn palette() -> Vec<Color> {
+    let tokens = telar::use_theme_tokens();
+    vec![
+        tokens.primary(),
+        tokens.info(),
+        tokens.success(),
+        tokens.warning(),
+        tokens.error(),
+    ]
+}
+
+pub(crate) fn previews() -> Vec<PreviewEntry> {
+    vec![
+        preview!(swatches: SwatchesProps, "Theme palette", |p| {
+            swatches(
+                SwatchesProps::props()
+                    .on_select(Rc::new(|_| {}))
+                    .colors(palette())
+                    .names(
+                        ["Primary", "Info", "Success", "Warning", "Error"]
+                            .map(String::from)
+                            .to_vec(),
+                    )
+                    .selected(p.signal("selected", Some(0u32)))
+                    .size(p.arg("size", ControlSize::Regular))
+                    .diameter(p.arg("diameter", 0.0f32))
+                    .build(),
+            )
+        })
+        .title("Inputs/Swatches")
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes"))
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.click(by_role(Role::Radio).named("Warning"))?;
+            canvas.expect_toggled(by_role(Role::Radio).named("Warning"), true)?;
+            canvas.expect_toggled(by_role(Role::Radio).named("Primary"), false)?;
+            canvas.expect_action("on_select", 1)
+        }),
+    ]
+}

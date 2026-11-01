@@ -61,7 +61,7 @@ here than for a Rust crate: a library ships the code `.rsx` transpiled to, and t
 
 A component is a props struct and a function. The struct derives `Props`, which gives it a builder
 (`ButtonProps::props().label("Save").build()`), and the function takes it and returns a
-layout item. Nested content is a prop too, `pub children: Children`, declared only by a component that takes children. This is a pill in the spirit of the catalogue's [`tag`](../plugins/telar-components/src/tag.rsx), fully rounded at whatever size it is laid out:
+layout item. Nested content is a prop too, `pub children: Children`, declared only by a component that takes children. This is a pill in the spirit of the catalogue's [`tag`](../plugins/telar-components/src/display/tag/tag.rsx), fully rounded at whatever size it is laid out:
 
 ```rust
 use telar::{
@@ -461,6 +461,12 @@ owns the module tree: it writes every flavour, the tree with relative `#[path]`s
 refuses an artifact or module tree that disagrees with `src/`. So adding, moving or removing a hand-written
 `.rs` module needs `cargo telar transpile` before the next build (`cargo telar check`, `dev`, `build` and `test`
 run it for you); a plain `cargo build` is refused with a message naming the command.
+
+A library's module tree is its own: every module it discovers is `pub(crate)`, so where a file sits in `src/` never
+becomes a path a dependent can name, and the library's API is what its root re-exports. An application's stays
+`pub`, which its benches and integration tests reach by path. A component keeps a directory of its own by sharing
+its name, `display/kbd/kbd.rsx` beside `kbd_test.rs` and `kbd.previews.rs`, since a component takes the name of its
+file; `telar-components` is laid out that way, grouped as its workshop sidebar lists them.
 
 ### Shipping previews
 

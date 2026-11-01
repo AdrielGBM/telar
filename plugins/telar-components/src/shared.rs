@@ -2,6 +2,15 @@
 //!
 //! **The rule.** A component takes every length, corner, border, wash and weight from a function here (or from its own `XTokens`, which default to one of these), never from a literal or from a primitive token scaled by a factor of its own. Two components that draw the same kind of thing then cannot disagree, and a theme or a size moves them together. The subset an application needs to draw controls of its own that sit beside the catalogue's is public as [`crate::metrics`].
 
+pub(crate) mod dropdown;
+pub(crate) mod edit;
+pub(crate) mod popup;
+pub(crate) mod resize;
+pub(crate) mod rows;
+pub(crate) mod scrim;
+pub(crate) mod selection;
+pub(crate) mod type_ahead;
+
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Chord, Color, Container, LayoutError, LayoutItem,
     LayoutStyle, Reactive, Rect, RectStyle, StyledContainer, Text, TextStyle, box_item, children,

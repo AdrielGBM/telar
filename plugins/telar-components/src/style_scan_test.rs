@@ -17,7 +17,7 @@
 //! Zero is not a literal here: `gap(0.0)` and `BorderRadius::all(0.0)` say "none", which no theme changes.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const PADDING: &[&str] = &[
     "padding_all",
@@ -69,16 +69,33 @@ fn crate_root() -> PathBuf {
 /// The sources the rule covers, relative to `src/`.
 fn sources() -> Vec<String> {
     let src = crate_root().join("src");
-    let mut files: Vec<String> = std::fs::read_dir(&src)
-        .expect("src/ is readable")
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-        .filter_map(|path| Some(path.file_name()?.to_str()?.to_string()))
-        .filter(|name| !name.ends_with("_test.rs") && name != "test_support.rs")
-        .collect();
+    let mut files = Vec::new();
+    collect_sources(&src, &src, &mut files);
     files.sort();
     files
+}
+
+fn collect_sources(src: &Path, dir: &Path, files: &mut Vec<String>) {
+    for path in std::fs::read_dir(dir)
+        .expect("src/ is readable")
+        .filter_map(|entry| Some(entry.ok()?.path()))
+    {
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if path.is_dir() {
+            if !name.starts_with('.') && name != "previews" {
+                collect_sources(src, &path, files);
+            }
+        } else if name.ends_with(".rs")
+            && !name.ends_with("_test.rs")
+            && !name.ends_with(".previews.rs")
+            && name != "test_support.rs"
+        {
+            let relative = path.strip_prefix(src).expect("a source is under src/");
+            files.push(relative.to_string_lossy().replace('\\', "/"));
+        }
+    }
 }
 
 /// `source` with comments and the contents of string and character literals blanked out, so a doc comment quoting `gap(8.0)`, or a label that reads like code, is not an offence.

@@ -22,141 +22,109 @@
 
 telar::rsx_modules!();
 
-mod accordion;
-mod button;
-mod checkbox;
-mod code_view;
-mod color_picker;
-mod command_palette;
 #[cfg(test)]
 mod consistency_test;
-mod data_table;
-mod drawer;
-mod dropdown;
-mod edit;
-mod fuzzy;
-mod handle;
 #[cfg(test)]
+#[path = "layout/heading/heading_test.rs"]
 mod heading_test;
-mod icon_button;
-mod image;
 #[cfg(test)]
+#[path = "display/kbd/kbd_test.rs"]
 mod kbd_test;
-mod line_gutter;
-mod link;
-mod list;
 mod look;
-mod menu;
-mod menu_panel;
-mod modal;
-mod popup;
-mod progress;
-mod radio;
-mod reorder_zones;
-mod reorderable;
-mod resizable;
-mod resize;
-mod rows;
-mod scrim;
-mod scrub_field;
-mod search_field;
-mod section;
-mod select;
-mod selection;
 mod shared;
-mod slider;
-mod spinner;
-mod split_pane;
-mod stepper;
 mod strings;
 #[cfg(test)]
 mod style_scan_test;
-mod swatches;
-mod tabs;
 #[cfg(test)]
+#[path = "display/tag/tag_test.rs"]
 mod tag_test;
 #[cfg(test)]
 mod test_support;
-mod text_field;
-mod title_bar;
-mod toast;
-mod toggle;
-mod toolbar;
-mod tooltip;
-mod tree_view;
-mod type_ahead;
-mod virtual_list;
-mod window_edges;
-mod window_frame;
 
-pub use accordion::{AccordionProps, AccordionTokens, accordion};
-pub use button::{ButtonProps, ButtonTokens, button};
-pub use checkbox::{CheckboxProps, CheckboxTokens, checkbox};
-pub use code_view::{
-    CodeSpan, CodeViewProps, CodeViewTokens, CopyHandler, TokenKind, TokenStyler, code_view,
+pub use chrome::title_bar::title_bar::{
+    TitleBarOptions, WindowControlsProps, title_bar, window_controls,
 };
-pub use color_picker::{ColorPickerProps, ColorPickerTokens, color_picker};
-pub use command_palette::{
-    Command, CommandPaletteProps, CommandPaletteTokens, RunHandler, command_palette,
+pub use chrome::window_frame::window_edges::window_edges;
+pub use chrome::window_frame::window_frame::{
+    MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, WindowFrameProps, window_frame,
 };
-pub use data_table::{
+pub use display::data_table::data_table::{
     CellAlign, CellBuilder, Column, ColumnWidth, ColumnWidths, Comparator, DataTableProps,
     DataTableTokens, SortHandler, TableRow, TableRowHandler, TableSort, data_table,
 };
-pub use drawer::{DrawerProps, DrawerTokens, drawer};
-pub use fuzzy::{FuzzyMatch, fuzzy_match};
-pub use handle::{HandleProps, HandleTokens, ToPoint, ToValue, handle};
-pub use heading::{HeadingProps, heading};
-pub use icon_button::{IconButtonProps, IconButtonTokens, icon_button};
-pub use image::{ImageProps, ImageSource, ImageTokens, image};
-pub use kbd::{KbdCaps, KbdProps, KbdTokens, kbd};
-pub use line_gutter::LineGutter;
-pub use link::{LinkProps, LinkTarget, LinkTokens, link};
-pub use list::{GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator};
-pub use menu::{
+pub use display::image::image::{ImageProps, ImageSource, ImageTokens, image};
+pub use display::kbd::kbd::{KbdCaps, KbdProps, KbdTokens, kbd};
+pub use display::tag::tag::{TagProps, TagTokens, tag};
+pub use feedback::progress::progress::{ProgressProps, ProgressTokens, progress};
+pub use feedback::spinner::spinner::{SpinnerProps, SpinnerTokens, spinner};
+pub use inputs::button::button::{ButtonProps, ButtonTokens, button};
+pub use inputs::checkbox::checkbox::{CheckboxProps, CheckboxTokens, checkbox};
+pub use inputs::handle::handle::{HandleProps, HandleTokens, ToPoint, ToValue, handle};
+pub use inputs::radio::radio::{RadioProps, RadioTokens, radio};
+pub use inputs::scrub_field::scrub_field::{
+    Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field,
+};
+pub use inputs::search_field::search_field::{SearchFieldProps, SearchHandler, search_field};
+pub use inputs::select::select::{SelectProps, SelectTokens, select};
+pub use inputs::slider::slider::{SliderProps, SliderTokens, slider};
+pub use inputs::stepper::stepper::{StepperProps, StepperTokens, stepper};
+pub use inputs::swatches::swatches::{SwatchesProps, SwatchesTokens, swatches};
+pub use inputs::text_field::text_field::{
+    FieldKeyHandler, TextFieldProps, TextFieldTokens, text_field,
+};
+pub use inputs::toggle::toggle::{ToggleProps, ToggleTokens, toggle};
+pub use layout::accordion::accordion::{AccordionProps, AccordionTokens, accordion};
+pub use layout::heading::heading::{HeadingProps, heading};
+pub use layout::list::list::{
+    GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator,
+};
+pub use layout::reorder_zones::reorder_zones::{
+    ReorderGroup, ReorderZoneProps, Slot, apply_zone_move,
+};
+pub use layout::reorderable::reorderable::{ItemBuilder, ReorderableProps, reorderable};
+pub use layout::section::section::{SectionProps, section};
+pub use layout::virtual_list::virtual_list::{
+    ListRow, RowBuilder, RowHandler, VirtualListProps, virtual_list,
+};
+pub use navigation::link::link::{LinkProps, LinkTarget, LinkTokens, link};
+pub use navigation::tabs::tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
+pub use overlays::command_palette::command_palette::{
+    Command, CommandPaletteProps, CommandPaletteTokens, RunHandler, command_palette,
+};
+pub use overlays::command_palette::fuzzy::{FuzzyMatch, fuzzy_match};
+pub use overlays::drawer::drawer::{DrawerProps, DrawerTokens, drawer};
+pub use overlays::menu::menu::{
     ContextMenuProps, MenuProps, MenuTokens, MenuTriggerTokens, context_menu, focused_rect,
     is_context_menu_key, menu,
 };
-pub use menu_panel::{SubmenuProps, submenu};
-pub use modal::{ModalProps, ModalTokens, modal};
-pub use progress::{ProgressProps, ProgressTokens, progress};
-pub use radio::{RadioProps, RadioTokens, radio};
-pub use reorder_zones::{ReorderGroup, ReorderZoneProps, Slot, apply_zone_move};
-pub use reorderable::{ItemBuilder, ReorderableProps, reorderable};
-pub use resizable::{ResizableProps, ResizeEdges, resizable};
-pub use resizable::{ResizableTokens, ResizeEdge, ResizeGrowth, ResizeHandleProps, resize_handle};
-pub use scrub_field::{Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field};
-pub use search_field::{SearchFieldProps, SearchHandler, search_field};
-pub use section::{SectionProps, section};
-pub use select::{SelectProps, SelectTokens, select};
-pub use selection::{SelectionHandler, SelectionMode};
-pub use shared::DOUBLE_CLICK;
-pub use slider::{SliderProps, SliderTokens, slider};
-pub use spinner::{SpinnerProps, SpinnerTokens, spinner};
-pub use split_pane::{
-    SizedPane, SplitDirection, SplitPaneProps, SplitPaneTokens, SplitRegion, split_pane,
-};
-pub use stepper::{StepperProps, StepperTokens, stepper};
-pub use swatches::{SwatchesProps, SwatchesTokens, swatches};
-pub use tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
-pub use tag::{TagProps, TagTokens, tag};
-pub use text_field::{FieldKeyHandler, TextFieldProps, TextFieldTokens, text_field};
-pub use title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
-pub use toast::{
+pub use overlays::menu::menu_panel::{SubmenuProps, submenu};
+pub use overlays::modal::modal::{ModalProps, ModalTokens, modal};
+pub use overlays::toast::toast::{
     Toast, ToastAction, ToastId, ToastPlacement, ToastTokens, ToasterProps, Toasts, show_toast,
     toaster, toasts,
 };
-pub use toggle::{ToggleProps, ToggleTokens, toggle};
-pub use toolbar::{ToolbarProps, toolbar};
-pub use tooltip::{TooltipProps, TooltipTokens, tooltip};
-pub use tree_view::{
+pub use overlays::tooltip::tooltip::{TooltipProps, TooltipTokens, tooltip};
+pub use shared::DOUBLE_CLICK;
+pub use shared::selection::{SelectionHandler, SelectionMode};
+pub use workbench::code_view::code_view::{
+    CodeSpan, CodeViewProps, CodeViewTokens, CopyHandler, TokenKind, TokenStyler, code_view,
+};
+pub use workbench::color_picker::color_picker::{
+    ColorPickerProps, ColorPickerTokens, color_picker,
+};
+pub use workbench::icon_button::icon_button::{IconButtonProps, IconButtonTokens, icon_button};
+pub use workbench::line_gutter::line_gutter::LineGutter;
+pub use workbench::resizable::resizable::{ResizableProps, ResizeEdges, resizable};
+pub use workbench::resizable::resizable::{
+    ResizableTokens, ResizeEdge, ResizeGrowth, ResizeHandleProps, resize_handle,
+};
+pub use workbench::split_pane::split_pane::{
+    SizedPane, SplitDirection, SplitPaneProps, SplitPaneTokens, SplitRegion, split_pane,
+};
+pub use workbench::toolbar::toolbar::{ToolbarProps, toolbar};
+pub use workbench::tree_view::tree_view::{
     ContextHandler, SelectHandler, TrailingBuilder, TreeContext, TreeNode, TreeViewProps,
     TreeViewTokens, tree_view,
-};
-pub use virtual_list::{ListRow, RowBuilder, RowHandler, VirtualListProps, virtual_list};
-pub use window_edges::window_edges;
-pub use window_frame::{
-    MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, WindowFrameProps, window_frame,
 };
 
 /// The geometry, washes, type and marks every catalogue control is drawn from, for an application drawing controls of its own that have to sit beside the catalogue's.
