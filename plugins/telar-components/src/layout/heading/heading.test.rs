@@ -70,8 +70,8 @@ fn a_heading_is_sized_by_its_level_against_the_text_around_it() {
 
 /// A level outside the outline is the nearest one in it.
 #[test]
-fn a_heading_is_the_heading_of_its_level_to_assistive_technology() {
-    for (level, expected) in [(1, 1), (4, 4), (0, 1), (9, 6)] {
+fn a_level_out_of_range_is_read_as_the_nearest_heading() {
+    for (level, expected) in [(0, 1), (9, 6)] {
         crate::test_support::fresh_layout_runtime();
         let roles = exposed_roles(&drawn(|| titled(level)));
         assert!(

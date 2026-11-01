@@ -20,8 +20,6 @@ mod data_table;
 mod drawer;
 #[path = "../inputs/handle/handle.preview.rs"]
 mod handle;
-#[path = "../layout/heading/heading.preview.rs"]
-mod heading;
 #[path = "../workbench/icon_button/icon_button.preview.rs"]
 mod icon_button;
 #[path = "../display/image/image.preview.rs"]
@@ -113,7 +111,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(link::previews());
     entries.extend(progress::previews());
     entries.extend(spinner::previews());
-    entries.extend(heading::previews());
     entries.extend(section::previews());
     entries.extend(list::previews());
     entries.extend(virtual_list::previews());
