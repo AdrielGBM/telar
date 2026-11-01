@@ -8,8 +8,9 @@ use lsp_types::*;
 use serde_json::Value;
 use telar_diagnostics::semantic_diagnostics;
 
+use crate::build_sync::NoTarget;
 use crate::index::WorkspaceIndex;
-use crate::project::{ProjectInfo, manifest_diagnostic};
+use crate::project::{ProjectInfo, manifest_diagnostic, module_name_diagnostics};
 use crate::ra::Analyzer;
 
 use super::{AnalyzerHandle, AnalyzerState, Backend};
@@ -122,6 +123,9 @@ impl Backend {
             let mut semantic =
                 semantic_diagnostics(&parsed.document, catalog_view.as_ref(), &names);
             semantic.extend(manifest_error.as_ref().map(manifest_diagnostic));
+            if let Some(rsx_path) = file_path.as_deref() {
+                semantic.extend(module_name_diagnostics(rsx_path));
+            }
             // A new `.rsx` needs something on disk for the crate graph to load; the live buffer itself travels as an overlay, never through the build directory.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             let mut live_map = None;
@@ -175,14 +179,28 @@ impl Backend {
             if revisions.load(Ordering::Relaxed) != revision {
                 return;
             }
-            let Some(crate::build_sync::GeneratedTarget {
+            let crate::build_sync::GeneratedTarget {
                 path: gen_path,
                 code: gen_text,
                 map,
                 prelude,
-            }) = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())
-            else {
-                return;
+            } = match crate::build_sync::target_or_refusal(&rsx_path, &source, theme.as_deref()) {
+                Ok(target) => target,
+                Err(NoTarget::Unavailable) => return,
+                Err(NoTarget::Refused(message)) => {
+                    if store.read().await.latest_source(&uri) == Some(&source) {
+                        let mut merged = native;
+                        merged.push(
+                            telar_diagnostics::Diagnostic::error(
+                                message,
+                                telar_diagnostics::Span::line(1),
+                            )
+                            .into(),
+                        );
+                        outgoing.publish_diagnostics(uri, merged);
+                    }
+                    return;
+                }
             };
             let Some(root) = crate::build_sync::crate_root(&rsx_path) else {
                 return;

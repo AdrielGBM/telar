@@ -28,16 +28,33 @@ pub struct GeneratedTarget {
     pub prelude: Vec<telar_project::PreludeEntry>,
 }
 
+pub enum NoTarget {
+    /// It is outside a package's `src/`, its `telar.toml` does not load, or it does not parse; the buffer's diagnostics already say so where there is anything to say.
+    Unavailable,
+    /// The transpiler refused it, and the build will refuse it with this same message.
+    Refused(String),
+}
+
 /// Transpiles `source` into a [`GeneratedTarget`] without touching disk. Shared by [`sync_build_file`] and the embedded-analyzer completion path so both see byte-identical generated text.
 ///
-/// `None` when the package's `telar.toml` does not load: the build refuses the package over it rather than transpiling against defaults, and the buffer's diagnostics say so.
+/// `None` when there is nothing to mirror, which [`target_or_refusal`] tells apart for the one caller that reports it.
 pub fn generated_target(
     rsx_path: &Path,
     source: &str,
     theme_type: Option<&str>,
 ) -> Option<GeneratedTarget> {
-    let root = crate_root(rsx_path)?;
-    let telar = TelarManifest::load(&root).ok()?.telar;
+    target_or_refusal(rsx_path, source, theme_type).ok()
+}
+
+pub fn target_or_refusal(
+    rsx_path: &Path,
+    source: &str,
+    theme_type: Option<&str>,
+) -> Result<GeneratedTarget, NoTarget> {
+    let root = crate_root(rsx_path).ok_or(NoTarget::Unavailable)?;
+    let telar = TelarManifest::load(&root)
+        .map_err(|_| NoTarget::Unavailable)?
+        .telar;
     transpile_target(&root, &telar, rsx_path, source, theme_type)
 }
 
@@ -47,9 +64,10 @@ fn transpile_target(
     rsx_path: &Path,
     source: &str,
     theme_type: Option<&str>,
-) -> Option<GeneratedTarget> {
+) -> Result<GeneratedTarget, NoTarget> {
     let src_dir = root.join("src");
-    let rel = telar_project::relative_output_path(rsx_path, &src_dir)?;
+    let rel =
+        telar_project::relative_output_path(rsx_path, &src_dir).ok_or(NoTarget::Unavailable)?;
     // The same artifact the macro reads, so the mirror shows the same `src:"…"` errors the build will. Loaded, never baked: this runs on the completion and hover paths too, and neither should be spawning cargo.
     let assets = AssetContext::load(root, telar, &project_telar_version(root));
     let prelude = telar.prelude().to_vec();
@@ -66,9 +84,12 @@ fn transpile_target(
             flavour: BuildFlavour::Plain,
         },
     )
-    .ok()?;
+    .map_err(|error| match error {
+        telar_transpiler::TranspileError::Codegen(message) => NoTarget::Refused(message),
+        telar_transpiler::TranspileError::Parse(_) => NoTarget::Unavailable,
+    })?;
     let out_path = telar_project::generated_dir(root, BuildFlavour::Plain).join(&rel);
-    Some(GeneratedTarget {
+    Ok(GeneratedTarget {
         path: out_path,
         code: result.rust_code,
         map: {
@@ -138,7 +159,7 @@ pub fn sync_build_file(
     bake_if_unanswered(&root, &telar, document);
     let GeneratedTarget {
         path, code, map, ..
-    } = transpile_target(&root, &telar, rsx_path, source, theme_type)?;
+    } = transpile_target(&root, &telar, rsx_path, source, theme_type).ok()?;
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

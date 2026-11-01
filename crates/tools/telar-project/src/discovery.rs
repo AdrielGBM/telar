@@ -283,7 +283,7 @@ impl TreeWalk<'_> {
             if file_name.starts_with('.') {
                 continue;
             }
-            if let Some(message) = self.unusable_rsx_name(&path, file_name) {
+            if let Some(message) = unusable_module_name(self.package_dir, &path, file_name) {
                 self.report(message, out);
                 continue;
             }
@@ -304,7 +304,7 @@ impl TreeWalk<'_> {
                     true => name.to_string(),
                     false => format!("{flat_prefix}__{name}"),
                 };
-                if let Some(message) = self.doubled_directory_message(&path, name) {
+                if let Some(message) = doubled_directory_message(self.package_dir, &path, name) {
                     self.report(message, out);
                     continue;
                 }
@@ -361,7 +361,7 @@ impl TreeWalk<'_> {
                 }
             } else if is_module_root(&path) {
                 // Its own directory's module, declared by the parent and generated with the children included; as a sibling here it would be `pub mod mod;`.
-            } else if let Some(message) = self.doubled_file_message(&path, name) {
+            } else if let Some(message) = doubled_file_message(self.package_dir, &path, name) {
                 self.report(message, out);
             } else if declared_here && path.extension().and_then(|e| e.to_str()) == Some("rsx") {
                 // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
@@ -373,68 +373,6 @@ impl TreeWalk<'_> {
                 ));
             }
         }
-    }
-
-    /// Why the entry cannot be a module although it is or holds a `.rsx`, when its name is no plain identifier: left out it would vanish without a word, and declared, rustc would only suggest `r#type`. `None` for what discovery skips by design: a `.rs` of any name, and a directory with no `.rsx` under it.
-    fn unusable_rsx_name(&self, path: &Path, file_name: &str) -> Option<String> {
-        let (base, subject) = if path.is_dir() {
-            if !dir_has_rsx(path) {
-                return None;
-            }
-            (
-                file_name.to_owned(),
-                "holds `.rsx` files, which are Rust modules placed inside it",
-            )
-        } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") && !is_module_root(path)
-        {
-            (component_name(path), "is a `.rsx`, which is a Rust module")
-        } else {
-            return None;
-        };
-        if is_plain_identifier(&base) {
-            return None;
-        }
-        let reason = match is_keyword(&base) {
-            true => format!("`{base}` is a Rust keyword"),
-            false => format!(
-                "`{base}` is not an identifier: only ASCII letters, digits and `_` are allowed, and not first a digit"
-            ),
-        };
-        let renamed = format!("{}{}", valid_name_for(&base), &file_name[base.len()..]);
-        let shown = self.shown(path);
-        let target = match shown.rsplit_once('/') {
-            Some((parent, _)) => format!("{parent}/{renamed}"),
-            None => renamed,
-        };
-        Some(format!(
-            "{shown} {subject}, so its name has to be an identifier: {reason}. Rename it to {target}"
-        ))
-    }
-
-    /// A `foo.rs` and a `foo.rsx` side by side are two modules named `foo`.
-    fn doubled_file_message(&self, path: &Path, name: &str) -> Option<String> {
-        let is_markup = path.extension().is_some_and(|e| e == "rsx") && !is_preview_file(path);
-        let rust = path.with_extension("rs");
-        (is_markup && rust.is_file() && is_rust_module_file(&rust)).then(|| {
-            format!(
-                "{} and {} are both the module `{name}`: rename one of them",
-                self.shown(&rust),
-                self.shown(path)
-            )
-        })
-    }
-
-    /// A directory with its own `mod.rs` or `mod.rsx` beside a `foo.rs` or `foo.rsx` is the module `foo` twice.
-    fn doubled_directory_message(&self, path: &Path, name: &str) -> Option<String> {
-        let owner = module_file_beside(path)?;
-        let root = [MODULE_ROOT_FILENAME, "mod.rs"]
-            .iter()
-            .map(|file| path.join(file))
-            .find(|file| file.is_file())?;
-        let (owner, root) = (self.shown(&owner), self.shown(&root));
-        Some(format!(
-            "{owner} and {root} are both the module `{name}`: keep one, or move {owner} to {root}"
-        ))
     }
 
     /// Declares a directory whose `mod.rsx` makes it telar's, and produces the file that module's `include!` reads: its children, plus the hand-written `mod.rs` when the directory keeps one.
@@ -537,10 +475,111 @@ impl TreeWalk<'_> {
 
     /// `path` as a diagnostic names it: from the package root, `/`-separated, so the same tree is generated on every machine.
     fn shown(&self, path: &Path) -> String {
-        path.strip_prefix(self.package_dir)
-            .map(slash_separated)
-            .unwrap_or_else(|_| path.to_string_lossy().into_owned())
+        shown_from(self.package_dir, path)
     }
+}
+
+fn shown_from(package_dir: &Path, path: &Path) -> String {
+    path.strip_prefix(package_dir)
+        .map(slash_separated)
+        .unwrap_or_else(|_| path.to_string_lossy().into_owned())
+}
+
+/// Why the entry cannot be a module, when its name is no plain identifier: left out it would vanish without a word, and declared, rustc would only suggest `r#type`. `None` for what discovery skips by design: a `.rs` of any name, and a directory with no `.rsx` under it.
+fn unusable_module_name(package_dir: &Path, path: &Path, file_name: &str) -> Option<String> {
+    let (base, subject) = if path.is_dir() {
+        if !dir_has_rsx(path) {
+            return None;
+        }
+        (
+            file_name.to_owned(),
+            "holds `.rsx` files, which are Rust modules placed inside it",
+        )
+    } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") && !is_module_root(path) {
+        (component_name(path), "is a `.rsx`, which is a Rust module")
+    } else {
+        return None;
+    };
+    if is_plain_identifier(&base) {
+        return None;
+    }
+    let reason = match is_keyword(&base) {
+        true => format!("`{base}` is a Rust keyword"),
+        false => format!(
+            "`{base}` is not an identifier: only ASCII letters, digits and `_` are allowed, and not first a digit"
+        ),
+    };
+    let renamed = format!("{}{}", valid_name_for(&base), &file_name[base.len()..]);
+    let shown = shown_from(package_dir, path);
+    let target = match shown.rsplit_once('/') {
+        Some((parent, _)) => format!("{parent}/{renamed}"),
+        None => renamed,
+    };
+    Some(format!(
+        "{shown} {subject}, so its name has to be an identifier: {reason}. Rename it to {target}"
+    ))
+}
+
+/// A `foo.rs` and a `foo.rsx` side by side are two modules named `foo`.
+fn doubled_file_message(package_dir: &Path, path: &Path, name: &str) -> Option<String> {
+    let is_markup = path.extension().is_some_and(|e| e == "rsx") && !is_preview_file(path);
+    let rust = path.with_extension("rs");
+    (is_markup && rust.is_file() && is_rust_module_file(&rust)).then(|| {
+        format!(
+            "{} and {} are both the module `{name}`: rename one of them",
+            shown_from(package_dir, &rust),
+            shown_from(package_dir, path)
+        )
+    })
+}
+
+/// A directory with its own `mod.rs` or `mod.rsx` beside a `foo.rs` or `foo.rsx` is the module `foo` twice.
+fn doubled_directory_message(package_dir: &Path, path: &Path, name: &str) -> Option<String> {
+    let owner = module_file_beside(path)?;
+    let root = [MODULE_ROOT_FILENAME, "mod.rs"]
+        .iter()
+        .map(|file| path.join(file))
+        .find(|file| file.is_file())?;
+    let (owner, root) = (
+        shown_from(package_dir, &owner),
+        shown_from(package_dir, &root),
+    );
+    Some(format!(
+        "{owner} and {root} are both the module `{name}`: keep one, or move {owner} to {root}"
+    ))
+}
+
+/// What the build reports about the name of the `.rsx` at `rsx_path` and of the directories holding it, for an editor to show on that file without walking the package. Empty for a file outside `src/` or under a dot-directory, which discovery does not reach.
+pub fn rsx_module_name_problems(rsx_path: &Path, package_dir: &Path) -> Vec<String> {
+    let Ok(relative) = rsx_path.strip_prefix(package_dir.join("src")) else {
+        return Vec::new();
+    };
+    let names: Vec<&str> = relative.iter().filter_map(|part| part.to_str()).collect();
+    if names.iter().any(|name| name.starts_with('.')) {
+        return Vec::new();
+    }
+    let mut problems = Vec::new();
+    let mut dir = package_dir.join("src");
+    for name in &names[..names.len().saturating_sub(1)] {
+        dir.push(name);
+        problems.extend(unusable_module_name(package_dir, &dir, name));
+        problems.extend(doubled_directory_message(package_dir, &dir, name));
+    }
+    let Some(file_name) = names.last() else {
+        return problems;
+    };
+    if let Some(problem) = unusable_module_name(package_dir, rsx_path, file_name) {
+        problems.push(problem);
+        return problems;
+    }
+    let module = module_name(rsx_path);
+    problems.extend(doubled_file_message(package_dir, rsx_path, &module));
+    problems.extend(doubled_directory_message(
+        package_dir,
+        &rsx_path.with_extension(""),
+        &module,
+    ));
+    problems
 }
 
 /// `name` with every character an identifier cannot hold replaced by `_`, a leading digit prefixed with `_`, and a keyword suffixed with `_`.

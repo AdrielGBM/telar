@@ -51,3 +51,22 @@ fn a_telar_toml_that_loads_is_the_projects() {
     let project = loaded.unwrap().unwrap_or_else(|e| panic!("{e}"));
     assert!(project.library);
 }
+
+#[test]
+fn a_name_the_build_refuses_is_reported_on_the_first_line_of_the_file() {
+    let root = package("name", "");
+    let bad = root.join("src/mi-card.rsx");
+
+    let diagnostics = module_name_diagnostics(&bad);
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].span.line, 1);
+    assert!(
+        diagnostics[0].message.contains("src/mi_card.rsx"),
+        "{}",
+        diagnostics[0].message
+    );
+    assert!(module_name_diagnostics(&root.join("src/card.rsx")).is_empty());
+
+    let _ = std::fs::remove_dir_all(&root);
+}

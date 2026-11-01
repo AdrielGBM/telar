@@ -97,6 +97,19 @@ pub fn manifest_diagnostic(error: &ManifestError) -> telar_diagnostics::Diagnost
     telar_diagnostics::Diagnostic::error(error.to_string(), telar_diagnostics::Span::line(1))
 }
 
+/// What the build says about the name of the `.rsx` at `rsx_path` and of the directories holding it, on its first line, since a name has no line of its own.
+pub fn module_name_diagnostics(rsx_path: &Path) -> Vec<telar_diagnostics::Diagnostic> {
+    let Some(root) = telar_project::find_package_root(rsx_path) else {
+        return Vec::new();
+    };
+    telar_project::rsx_module_name_problems(rsx_path, &root)
+        .into_iter()
+        .map(|problem| {
+            telar_diagnostics::Diagnostic::error(problem, telar_diagnostics::Span::line(1))
+        })
+        .collect()
+}
+
 /// The name `CARGO_CRATE_NAME` gives the library of the package at `package_root`, which is what the generated preview ids start with: its `[lib] name` or else its package name, with `-` spelled `_`.
 pub fn crate_name(package_root: &Path) -> Option<String> {
     let manifest: toml::Table = std::fs::read_to_string(package_root.join("Cargo.toml"))

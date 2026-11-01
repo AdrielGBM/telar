@@ -56,7 +56,8 @@ pub use discovery::{
     SITE_DIR, assets_root, collect_files_by_ext, component_name, find_rsx_files,
     find_rsx_files_in_tree, invokes_placement_macro, is_generated_output, is_module_root,
     is_preview_file, module_name, placement_sites, prune_stale_generated, prune_stale_sites,
-    relative_output_path, site_include_path, source_for_generated, stray_placement_files,
+    relative_output_path, rsx_module_name_problems, site_include_path, source_for_generated,
+    stray_placement_files,
 };
 pub use fonts::{
     FontDeclaration, FontDisplay, FontFormat, FontStyleDeclaration, WeightDeclaration,

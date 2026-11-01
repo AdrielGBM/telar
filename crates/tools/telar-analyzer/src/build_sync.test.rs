@@ -183,3 +183,23 @@ fn a_telar_toml_that_does_not_load_is_not_mirrored_against_the_defaults() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_buffer_the_transpiler_refuses_is_told_apart_from_one_with_nothing_to_mirror() {
+    let root = unbaked_crate("refused");
+    let rsx = root.join("src/view.rsx");
+
+    let Err(NoTarget::Refused(message)) = target_or_refusal(&rsx, "[logic]\nlet x = 1;\n", None)
+    else {
+        panic!("a `.rsx` with no view is refused");
+    };
+    assert!(message.contains("view.preview.rsx"), "{message}");
+
+    assert!(target_or_refusal(&rsx, "[view]\nbox\n", None).is_ok());
+    assert!(matches!(
+        target_or_refusal(&root.join("outside/view.rsx"), "[view]\nbox\n", None),
+        Err(NoTarget::Unavailable)
+    ));
+
+    let _ = std::fs::remove_dir_all(&root);
+}

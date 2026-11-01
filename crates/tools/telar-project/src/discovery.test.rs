@@ -1226,3 +1226,56 @@ fn a_module_written_in_a_macro_invocation_at_top_level_is_declared() {
         ["previews", "after"]
     );
 }
+
+fn name_problems_of(files: &[(&str, &str)], open: &str, tag: &str) -> Vec<String> {
+    let root = std::env::temp_dir().join(format!("rsx_open_{tag}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for (path, body) in files {
+        let file = root.join("src").join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, body).unwrap();
+    }
+    let problems = rsx_module_name_problems(&root.join("src").join(open), &root);
+    let _ = std::fs::remove_dir_all(&root);
+    problems
+}
+
+#[test]
+fn an_open_file_hears_what_the_build_says_about_its_name_and_its_directories() {
+    let own = name_problems_of(&[("mi-card.rsx", VIEW)], "mi-card.rsx", "own");
+    assert_eq!(own.len(), 1, "{own:?}");
+    assert!(own[0].contains("Rename it to src/mi_card.rsx"), "{own:?}");
+
+    let held = name_problems_of(&[("my-dir/a/ok.rsx", VIEW)], "my-dir/a/ok.rsx", "held");
+    assert_eq!(held.len(), 1, "{held:?}");
+    assert!(held[0].contains("Rename it to src/my_dir"), "{held:?}");
+
+    let doubled = name_problems_of(&[("foo.rs", ""), ("foo.rsx", VIEW)], "foo.rsx", "doubled");
+    assert_eq!(doubled.len(), 1, "{doubled:?}");
+    assert!(
+        doubled[0].contains("are both the module `foo`"),
+        "{doubled:?}"
+    );
+
+    let beside = name_problems_of(&[("d.rsx", VIEW), ("d/mod.rs", "")], "d.rsx", "beside");
+    assert_eq!(beside.len(), 1, "{beside:?}");
+}
+
+#[test]
+fn an_open_file_with_a_good_name_hears_nothing() {
+    for (files, open) in [
+        (vec![("ui/card.rsx", VIEW)], "ui/card.rsx"),
+        (
+            vec![("foo.rs", ""), ("foo.preview.rsx", VIEW)],
+            "foo.preview.rsx",
+        ),
+        (
+            vec![("media/mod.rsx", VIEW), ("media/mod.rs", "")],
+            "media/mod.rsx",
+        ),
+        (vec![(".cache/bad-name.rsx", VIEW)], ".cache/bad-name.rsx"),
+    ] {
+        let problems = name_problems_of(&files, open, "good");
+        assert!(problems.is_empty(), "{open}: {problems:?}");
+    }
+}
