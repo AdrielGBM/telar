@@ -82,7 +82,8 @@ fn mount(
     let failing = state.clone();
     let failures = CaughtFailures::default();
     let (playing, caught) = (ctx.clone(), failures.clone());
-    let surface = env::canvas(state, &entry, globals, move || {
+    let custom_room = signal(None);
+    let surface = env::canvas(state, &entry, globals, custom_room, move || {
         mount_preview(
             &entry,
             ctx,
@@ -98,7 +99,7 @@ fn mount(
         .inspection()
         .follow(inspected::PreviewOnly(Rc::clone(&surface)));
     on_cleanup(move || drop(following));
-    let stage = frame::stage(state, entry.layout, globals, surface)?;
+    let stage = frame::stage(state, entry.layout, globals, surface, custom_room)?;
     let items = match header {
         Header::Shown => {
             let tools = Rc::new(canvas_toolbar::HeaderTools::new(

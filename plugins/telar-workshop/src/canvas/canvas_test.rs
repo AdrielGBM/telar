@@ -595,3 +595,42 @@ fn no_control_on_the_stage_sits_inside_another() {
     find(&tree, "Save");
     assert_eq!(nested_controls(&tree), []);
 }
+
+fn resize_window(tree: &mut ComponentList, width: u32) {
+    telar::set_surface_size(Size::new(width as f32, HEIGHT as f32));
+    send(
+        tree,
+        Event::WindowResized {
+            width,
+            height: HEIGHT,
+        },
+    );
+}
+
+/// A size the handles set is the user's, held within the stage: a narrower window resizes the canvas instead of zooming it out, and a wider one gives back the size they set.
+#[test]
+fn a_custom_size_gives_way_to_a_narrower_stage_and_comes_back() {
+    let (state, mut tree) = mounted(vec![PreviewEntry::new(
+        "fake--box--custom",
+        "box",
+        "Custom",
+        body,
+    )]);
+    let handle = corner_handle(canvas_rect(&tree, "preview body"));
+    drag(&mut tree, handle, (-100.0, -100.0));
+    let set = CanvasSize::Custom {
+        width: 658.0,
+        height: 418.0,
+    };
+    assert_eq!(state.canvas_settings().get().size, set);
+
+    resize_window(&mut tree, 500);
+    let frame = canvas_rect(&tree, "preview body");
+    assert_eq!((frame.width, frame.height), (500.0 - FRAME_CHROME, 418.0));
+    assert!(find_text(&tree, "458 × 418"), "resized, at actual size");
+    assert_eq!(state.canvas_settings().get().size, set);
+
+    resize_window(&mut tree, WIDTH);
+    let frame = canvas_rect(&tree, "preview body");
+    assert_eq!((frame.width, frame.height), (658.0, 418.0));
+}

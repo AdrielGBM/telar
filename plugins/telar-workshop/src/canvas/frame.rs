@@ -1,6 +1,6 @@
 //! The stage a canvas sits on: centred in its pane inside a viewport frame, or a device's bezel, at the size the toolbar, the handles or the preview ask for or else filling the pane, zoomed as the toolbar asks, with handles that resize it; or, for a fullscreen preview, edge to edge with no frame.
 
-use std::cell::{OnceCell, RefCell};
+use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
 use telar::preview::{Globals, Layout};
@@ -43,6 +43,7 @@ pub(super) fn stage(
     layout: Layout,
     globals: Globals,
     canvas: Rc<SurfaceCanvas>,
+    custom_room: RwSignal<Option<Size>>,
 ) -> Result<Stage, LayoutError> {
     if layout == Layout::Fullscreen {
         let grid = guides::grid(state.canvas_settings(), Rc::downgrade(&canvas), || 0.0)?;
@@ -61,7 +62,7 @@ pub(super) fn stage(
             size: None,
         });
     }
-    framed(state, globals, canvas)
+    framed(state, globals, canvas, custom_room)
 }
 
 /// `size` kept at least [`VIEWPORT_MIN`] each way and at most `room`.
@@ -77,6 +78,7 @@ fn framed(
     state: &WorkshopState,
     globals: Globals,
     canvas: Rc<SurfaceCanvas>,
+    custom_room: RwSignal<Option<Size>>,
 ) -> Result<Stage, LayoutError> {
     let viewport = globals.viewport();
     let background = globals.background();
@@ -123,11 +125,10 @@ fn framed(
     let box_rect =
         track_layout(viewport_box.layout_node()).expect("the viewport box is registered");
 
-    let stage_rect: Rc<OnceCell<RwSignal<Rect>>> = Rc::default();
     let resize = Resize {
         settings,
         viewport: box_rect,
-        stage: Rc::clone(&stage_rect),
+        room: custom_room,
         scale,
     };
     let top = row(
@@ -156,8 +157,8 @@ fn framed(
             .justify_content(JustifyContent::CENTER),
         children![column],
     )?;
-    let stage_rect = *stage_rect
-        .get_or_init(|| track_layout(stage.layout_node()).expect("the stage is registered"));
+    let stage_rect = track_layout(stage.layout_node()).expect("the stage is registered");
+    follow_custom_room(settings, stage_rect, custom_room);
     let rulers = guides::rulers(
         settings,
         Rc::downgrade(&canvas),
@@ -177,6 +178,20 @@ fn framed(
             scale,
         }),
     })
+}
+
+/// Keeps `custom_room` at the largest canvas the stage shows whole at the zoom the toolbar asks for, in the canvas's logical px, once the stage has been laid out. A custom size has no bezel, so it is measured inside a hairline frame.
+fn follow_custom_room(
+    settings: RwSignal<CanvasSettings>,
+    stage: RwSignal<Rect>,
+    custom_room: RwSignal<Option<Size>>,
+) {
+    let zoom = memo(move || settings.with(|settings| settings.zoom.fixed_scale().unwrap_or(1.0)));
+    effect(move || {
+        let stage = stage.get();
+        let measured = stage.width > 0.0 && stage.height > 0.0;
+        custom_room.set_if_changed(measured.then(|| logical(room(stage, BORDER), zoom.get())));
+    });
 }
 
 /// Keeps the canvas at the zoom the toolbar asks for: a fixed one, or, to fit, actual size unless the stage cannot show the whole canvas at that.
@@ -280,12 +295,12 @@ impl SizeLabel {
     }
 }
 
-/// What a handle reads and writes: the settings it sets a custom size in, the frame's box, the stage's and the zoom the canvas is shown at.
+/// What a handle reads and writes: the settings it sets a custom size in, the frame's box, the room the stage gives a custom size and the zoom the canvas is shown at.
 #[derive(Clone)]
 struct Resize {
     settings: RwSignal<CanvasSettings>,
     viewport: RwSignal<Rect>,
-    stage: Rc<OnceCell<RwSignal<Rect>>>,
+    room: RwSignal<Option<Size>>,
     scale: RwSignal<f32>,
 }
 
@@ -298,13 +313,8 @@ impl Resize {
         logical(inner(self.viewport.peek(), edge(device)), self.scale.peek())
     }
 
-    /// The largest canvas the stage shows whole at the zoom the toolbar asks for, in the canvas's logical px. A custom size has no bezel, so it is measured inside a hairline frame.
     fn room(&self) -> Size {
-        let stage = self.stage.get().map_or(Rect::default(), |rect| rect.peek());
-        let zoom = self
-            .settings
-            .peek_with(|settings| settings.zoom.fixed_scale().unwrap_or(1.0));
-        logical(room(stage, BORDER), zoom)
+        self.room.peek().unwrap_or(Size::ZERO)
     }
 
     fn set(&self, size: Size) {
