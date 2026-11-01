@@ -19,7 +19,7 @@ pub use bytes::{Reader, Writer};
 pub use golden::check_golden;
 
 /// Bumped whenever the spelling of any value that crosses changes, a draw list's included: host and guest may be built from different sources, and this is the one number that says they spell alike.
-pub const WIRE_VERSION: u16 = 1;
+pub const WIRE_VERSION: u16 = 2;
 
 /// Bytes that are not the spelling of the value they were read as.
 #[derive(Debug, Clone, PartialEq, Eq)]

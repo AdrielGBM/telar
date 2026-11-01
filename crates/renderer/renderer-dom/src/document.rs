@@ -1415,7 +1415,7 @@ fn speak_names_in_place(nodes: &mut [Node]) {
 }
 
 fn reads_as_its_name(node: &BoxNode) -> bool {
-    node.tag == "div"
+    matches!(node.tag, "div" | "kbd")
         && node.described.label.is_some()
         && node.role.name_replaces_content()
         && draws_words(node, node.key.surface)
@@ -1770,6 +1770,7 @@ pub(crate) fn tag_of(role: &Role) -> &'static str {
         Role::Button => "button",
         Role::Link => "a",
         Role::Drawing => "svg",
+        Role::KeyboardInput => "kbd",
         Role::Heading(level) => match level {
             1 => "h1",
             2 => "h2",
@@ -1800,6 +1801,8 @@ pub(crate) fn aria_role(role: Role) -> Option<&'static str> {
         Role::Drawing => Some("img"),
         // A scroll area is a region a reader can be told about, but `scrollarea` is not an ARIA role and a browser would ignore it.
         Role::ScrollArea => None,
+        // `<kbd>` says it, and ARIA has no role for keyboard input.
+        Role::KeyboardInput => None,
         // `ul` and `li` are a pair with a content model and nothing here can promise an author marked both. The ARIA roles are announced the same and are valid anywhere.
         Role::List => Some("list"),
         Role::ListItem => Some("listitem"),

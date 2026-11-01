@@ -326,7 +326,7 @@ fn holds_what_it_draws(role: Role, named: bool) -> bool {
 
 /// Whether a node read for a box holds the nodes read inside that box. Text, and a picture, are read as what they say; a box named as a group reads as its name, a caption beside what it groups.
 fn holds_what_is_inside(role: Role) -> bool {
-    !matches!(role, Role::Label | Role::Drawing)
+    !matches!(role, Role::Label | Role::KeyboardInput | Role::Drawing)
 }
 
 /// Whether a box given no name is still a node for the nodes inside it, as the element a document makes of it is: a tab list around its tabs, a dialog around what it asks, a landmark around its region. A plain group is scaffolding, a heading is named by its text (see [`is_named_by_content`]), and a section or a form with no name is no landmark.

@@ -98,7 +98,7 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
             out.push_str("  ");
         }
         out.push_str(&node.name);
-        if node.role != Role::Label {
+        if !matches!(node.role, Role::Label | Role::KeyboardInput) {
             let role = match node.role {
                 Role::Drawing => "image",
                 role => role.as_str(),

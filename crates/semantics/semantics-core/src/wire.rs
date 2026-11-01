@@ -58,6 +58,7 @@ wire_enum!(Role {
     Status = 45,
     Log = 46,
     Label = 47,
+    KeyboardInput = 48,
 });
 wire_enum!(Orientation {
     Horizontal = 0,

@@ -456,3 +456,30 @@ fn a_box_read_as_its_name_is_written_with_the_name_before_its_skipped_words() {
     assert!(!written.markup.contains("aria-label"), "{}", written.markup);
     assert!(!written.markup.contains("role="), "{}", written.markup);
 }
+
+/// Keys shown as a hint are a `<kbd>` that says its name in place, as text a reader reads, and keeps the keys it draws one by one from being read again.
+#[test]
+fn keyboard_input_is_a_kbd_that_says_its_name_in_place() {
+    let rect = Rect::new(0.0, 0.0, 80.0, 20.0);
+    let written = prerender(
+        &[
+            open(
+                3,
+                Semantics::of(Role::KeyboardInput).with_label("Ctrl+K, then S"),
+                "",
+                rect,
+            ),
+            text("Ctrl", rect),
+            text("K", rect),
+            text("S", rect),
+            DrawCommand::PopElement,
+        ],
+        None,
+    );
+    let markup = &written.markup;
+    assert!(markup.starts_with("<kbd data-telar-id=\"3\""), "{markup}");
+    assert!(markup.contains("Ctrl+K, then S"), "{markup}");
+    let opening = &markup[..markup.find('>').unwrap_or(markup.len())];
+    assert!(!opening.contains("aria-label"), "{markup}");
+    assert!(!opening.contains("role="), "{markup}");
+}

@@ -22,18 +22,18 @@ fn link_round_trip(link: Option<Destination>) -> Option<Destination> {
 #[test]
 fn every_role_tag_reads_back_as_a_role_of_its_own() {
     let mut roles = HashSet::new();
-    for tag in 0..=47u8 {
+    for tag in 0..=48u8 {
         let bytes = if tag == 10 { vec![tag, 2] } else { vec![tag] };
         let role = decode::<Role>(&bytes).unwrap();
         round_trip(role);
         roles.insert(role);
     }
-    assert_eq!(roles.len(), 48);
+    assert_eq!(roles.len(), 49);
     assert_eq!(
-        decode::<Role>(&[48]),
+        decode::<Role>(&[49]),
         Err(WireError::Tag {
             of: "Role",
-            tag: 48
+            tag: 49
         })
     );
 }

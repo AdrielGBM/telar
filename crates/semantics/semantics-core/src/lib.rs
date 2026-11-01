@@ -142,6 +142,8 @@ pub enum Role {
     Log,
     /// Not a control at all: text the interface is showing. Never focusable — it is here because a reader given only the buttons cannot say what the buttons are for.
     Label,
+    /// Keys a person presses, shown as a hint beside the command they run: `Ctrl+K`, a sequence of chords. Read as text, its name in place of what it draws; never focusable. A document writes it as `<kbd>`, which has no ARIA role of its own.
+    KeyboardInput,
 }
 
 impl Role {
@@ -218,9 +220,9 @@ impl Role {
         *self == Self::Group && !drew_beside_controls && controls_inside == 1
     }
 
-    /// Whether a named box with this role is read as its name in place of the words drawn inside it: a box with no role of its own, such as a counter showing "3" and named "3 unread comments", is one thing said once, so a run of text inside it that no control owns is not read on its own. The controls inside it keep their own names and stay reachable. A box with a role, such as a dialog or a list, holds what it draws under its name instead. Every target applies this one rule, so the same item is announced the same wherever it is read.
+    /// Whether a named box with this role is read as its name in place of the words drawn inside it: a box with no role of its own, such as a counter showing "3" and named "3 unread comments", or keys shown as a hint, named "Ctrl+K, then S" over caps drawing each key, is one thing said once, so a run of text inside it that no control owns is not read on its own. The controls inside it keep their own names and stay reachable. A box with a role, such as a dialog or a list, holds what it draws under its name instead. Every target applies this one rule, so the same item is announced the same wherever it is read.
     pub fn name_replaces_content(&self) -> bool {
-        *self == Self::Group
+        matches!(self, Self::Group | Self::KeyboardInput)
     }
 
     /// The name this role goes by in markup and in a stylesheet — the ARIA role, which is also what an application writes in `.rsx`.
@@ -276,6 +278,7 @@ impl Role {
             Self::Status => "status",
             Self::Log => "log",
             Self::Label => "label",
+            Self::KeyboardInput => "keyboardinput",
         }
     }
 
@@ -372,6 +375,7 @@ impl Role {
             "status" => Self::Status,
             "log" => Self::Log,
             "label" | "text" => Self::Label,
+            "keyboardinput" => Self::KeyboardInput,
             _ => return None,
         })
     }
