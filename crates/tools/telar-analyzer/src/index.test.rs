@@ -73,16 +73,16 @@ fn a_use_line_that_imports_nothing_of_its_own_name_is_not_one() {
     }
 }
 
-/// A previews file declares no component of its own: it is the one it is named after that it previews, and it moves with that one's rename.
+/// A preview file declares no component of its own: it is the one it is named after that it previews, and it moves with that one's rename.
 #[test]
-fn a_previews_file_is_not_a_component_but_previews_one() {
+fn a_preview_file_is_not_a_component_but_previews_one() {
     let mut idx = WorkspaceIndex {
         root: abs("/x"),
         files: HashMap::new(),
     };
     idx.update(&abs("/x/src/tally.rsx"), "[view]\ncol\n");
     idx.update(
-        &abs("/x/src/tally.previews.rsx"),
+        &abs("/x/src/tally.preview.rsx"),
         "[previews \"Fixture/Tally\"]\nProse.\n\n[preview \"A\"]\ntally label:\"x\"\n",
     );
 
@@ -98,9 +98,9 @@ fn a_previews_file_is_not_a_component_but_previews_one() {
         "the defining file and the tag the preview renders"
     );
 
-    let previews = idx.previews_files("tally");
+    let previews = idx.preview_files("tally");
     assert_eq!(previews.len(), 1);
-    assert!(previews[0].as_str().ends_with("tally.previews.rsx"));
+    assert!(previews[0].as_str().ends_with("tally.preview.rsx"));
 
     let syms = idx.symbols("tally");
     assert_eq!(

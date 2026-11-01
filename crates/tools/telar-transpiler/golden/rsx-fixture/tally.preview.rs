@@ -31,7 +31,7 @@ pub fn tally_play_1(canvas: &mut ::telar::preview::Play) -> ::telar::preview::Pl
 pub const TALLY_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--tally--rsx-literal"), "tally", "Rsx literal", tally_preview_0)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.previews.rsx"), 4)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.preview.rsx"), 4)
         .title("Fixture/Tally")
         .docs("The tally written in Rust, previewed from `.rsx`.")
         .source("[preview \"Rsx literal\" matrix:(dir:[ltr rtl] count:[1 2])]\ntally label:\"Pears\" count:2u32", &[::telar::preview::SourceSpan::new(0, 89, 4)])
@@ -42,7 +42,7 @@ pub const TALLY_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
         .matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Dir(&[::telar::Direction::Ltr, ::telar::Direction::Rtl]), ::telar::preview::Axis::Arg("count", &["1", "2"])])),
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--tally--rsx-bound"), "tally", "Rsx bound", tally_preview_1)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.previews.rsx"), 7)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.preview.rsx"), 7)
         .title("Fixture/Tally")
         .docs("The tally written in Rust, previewed from `.rsx`.")
         .source("[preview \"Rsx bound\" args(count:3u32) layout:padded]\ntally label:\"Plums\" count:$count\n\n[play]\ncanvas.expect_text(\"Plums · 3\")?;", &[::telar::preview::SourceSpan::new(0, 128, 7)])

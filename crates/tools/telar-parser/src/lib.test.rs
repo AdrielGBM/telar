@@ -784,7 +784,7 @@ fn previews_is_a_header_of_its_own() {
 }
 
 #[test]
-fn a_previews_file_holds_previews_without_a_view() {
+fn a_preview_file_holds_previews_without_a_view() {
     let src = "[logic]\nuse crate::checkbox::checkbox;\n\n[preview \"Default\"]\ncheckbox\n";
     let doc = parse(src).unwrap();
     assert!(doc.view.nodes.is_empty());

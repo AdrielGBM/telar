@@ -44,7 +44,7 @@ canvas.expect_text("agree · true")?;
   option wins, and `tags` add up.
 - **`[preview "Name" …]`** is a variant. Its body is a node tree, as in `[view]`. A file may hold any number of them.
 - **`[play]`** follows a preview and holds verbatim Rust that drives it; see [Play](#play).
-- A `.rsx` file written for a component keeps its previews beside its `[view]`. A **`checkbox.previews.rsx`** file
+- A `.rsx` file written for a component keeps its previews beside its `[view]`. A **`checkbox.preview.rsx`** file
   holds previews alone, with no `[view]`, for the component named by its file stem: use it when the component is
   written in Rust, or when the previews would drown the component.
 

@@ -115,7 +115,7 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 #[test]
-fn a_previews_file_previews_the_component_it_is_named_after() {
+fn a_preview_file_previews_the_component_it_is_named_after() {
     let root = scratch("app");
     std::fs::write(
         root.join("Cargo.toml"),
@@ -123,7 +123,7 @@ fn a_previews_file_previews_the_component_it_is_named_after() {
     )
     .unwrap();
     std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
-    let file = root.join("src/tally.previews.rsx");
+    let file = root.join("src/tally.preview.rsx");
 
     let host = PreviewHost::discover(&file).unwrap().unwrap();
     assert_eq!(host.crate_name, "rsx_fixture");
@@ -219,7 +219,7 @@ fn a_telar_toml_that_does_not_load_is_an_error_rather_than_a_host_without_worksh
     )
     .unwrap();
 
-    let host = PreviewHost::discover(&root.join("src/tally.previews.rsx"));
+    let host = PreviewHost::discover(&root.join("src/tally.preview.rsx"));
     let _ = std::fs::remove_dir_all(&root);
 
     let Some(Err(error)) = host else {

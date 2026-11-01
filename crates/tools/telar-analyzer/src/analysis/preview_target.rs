@@ -51,7 +51,7 @@ impl Workshop {
 }
 
 impl PreviewHost {
-    /// The host of the `.rsx` at `rsx_path`: `None` outside a package, `Err` when a `telar.toml` deciding which workshops list it does not load. A `*.previews.rsx` previews the component it is named after, so its ids are that component's.
+    /// The host of the `.rsx` at `rsx_path`: `None` outside a package, `Err` when a `telar.toml` deciding which workshops list it does not load. A `*.preview.rsx` previews the component it is named after, so its ids are that component's.
     pub fn discover(rsx_path: &Path) -> Option<Result<Self, ManifestError>> {
         let package_root = telar_project::find_package_root(rsx_path)?;
         let crate_name = crate::project::crate_name(&package_root)?;

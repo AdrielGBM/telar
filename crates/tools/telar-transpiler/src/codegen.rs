@@ -989,14 +989,14 @@ fn field_line(lines: &[&str], name: &str) -> Option<usize> {
     })
 }
 
-/// The module a `*.previews.rsx` compiles to: previews of a component written elsewhere, beside it, under the component's name.
+/// The module a `*.preview.rsx` compiles to: previews of a component written elsewhere, beside it, under the component's name.
 ///
 /// Everything in it exists for its previews, so its `[logic]` — the `use` lines and the items its previews name, such as a `fixture:` or a `decorator:` — and its `[style]` sit inside the same `::telar::__previews!` as the previews. In a build without `telar/previews` the module is empty. A `[view]` is refused rather than compiled into a component nothing calls.
-pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
+pub(crate) fn preview_file(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
     let doc = input.document;
     if !doc.view.nodes.is_empty() {
         return Err(TranspileError::Codegen(
-            "a `.previews.rsx` holds previews of components written elsewhere, so it has no `[view]`: move the view to a `.rsx` of its own".into(),
+            "a `.preview.rsx` holds previews of components written elsewhere, so it has no `[view]`: move the view to a `.rsx` of its own".into(),
         ));
     }
     let mut code = Code::default();

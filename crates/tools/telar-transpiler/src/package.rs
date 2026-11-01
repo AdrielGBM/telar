@@ -192,8 +192,8 @@ fn generate(
         rsx_path: package_path.as_deref(),
         imports: &imports,
     };
-    match telar_project::is_previews_file(rsx_path) {
-        true => crate::codegen::previews_file(input),
+    match telar_project::is_preview_file(rsx_path) {
+        true => crate::codegen::preview_file(input),
         false => transpile(input),
     }
 }

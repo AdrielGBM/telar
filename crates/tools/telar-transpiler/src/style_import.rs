@@ -159,7 +159,7 @@ fn resolve_one(
     }
 }
 
-/// The module path of the `.rsx` at `path` under `src_dir`: its directories and its stem, a `mod.rsx` being its directory's module and a `checkbox.previews.rsx` the `checkbox_previews` beside `checkbox`.
+/// The module path of the `.rsx` at `path` under `src_dir`: its directories and its stem, a `mod.rsx` being its directory's module and a `checkbox.preview.rsx` the `checkbox_preview` beside `checkbox`.
 fn module_path(path: &Path, src_dir: &Path) -> Option<Vec<String>> {
     let relative = path.strip_prefix(src_dir).ok()?;
     let mut segments: Vec<String> = relative

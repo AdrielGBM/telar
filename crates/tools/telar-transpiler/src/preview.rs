@@ -36,7 +36,7 @@ pub(crate) struct Previews<'a> {
     pub document: &'a RsxDocument,
     /// The snake-case name of the component the previews belong to, which names their build fns, their ids and their table.
     pub component: &'a str,
-    /// The props type of that component, which describes it to the docs and refines its args' controls. `None` to read it from the root of each preview, as a previews file does.
+    /// The props type of that component, which describes it to the docs and refines its args' controls. `None` to read it from the root of each preview, as a preview file does.
     pub props_type: Option<&'a str>,
     /// The `.rsx` text, which each preview's source is cut from.
     pub source: &'a str,

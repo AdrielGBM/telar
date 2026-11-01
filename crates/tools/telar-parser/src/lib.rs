@@ -5,7 +5,7 @@
 //! - a `[style]` section of style classes,
 //! - a `[view]` section describing an indentation-based node tree.
 //!
-//! Previews follow: an optional `[previews "Group/Title" …]` meta section with a prose body, then `[preview "Name" args(…) …]` variants, each optionally followed by a `[play]` zone of verbatim Rust. A `*.previews.rsx` file holds only these, with no `[view]`.
+//! Previews follow: an optional `[previews "Group/Title" …]` meta section with a prose body, then `[preview "Name" args(…) …]` variants, each optionally followed by a `[play]` zone of verbatim Rust. A `*.preview.rsx` file holds only these, with no `[view]`.
 //!
 //! [`parse`] turns the source into an [`RsxDocument`] AST consumed by the transpiler.
 //!

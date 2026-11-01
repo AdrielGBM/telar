@@ -888,24 +888,22 @@ fn set_permissions(path: &Path, read_only: bool) {
 }
 
 #[test]
-fn a_previews_file_is_declared_as_a_module_beside_the_component_it_previews() {
-    assert!(is_previews_file(Path::new(
-        "src/forms/checkbox.previews.rsx"
-    )));
-    assert!(!is_previews_file(Path::new("src/forms/checkbox.rsx")));
-    assert!(!is_previews_file(Path::new("src/.previews.rsx")));
-    assert!(!is_previews_file(Path::new("src/previews.rsx")));
-    let previews = Path::new("src/forms/checkbox.previews.rsx");
+fn a_preview_file_is_declared_as_a_module_beside_the_component_it_previews() {
+    assert!(is_preview_file(Path::new("src/forms/checkbox.preview.rsx")));
+    assert!(!is_preview_file(Path::new("src/forms/checkbox.rsx")));
+    assert!(!is_preview_file(Path::new("src/.preview.rsx")));
+    assert!(!is_preview_file(Path::new("src/previews.rsx")));
+    let previews = Path::new("src/forms/checkbox.preview.rsx");
     assert_eq!(component_name(previews), "checkbox");
-    assert_eq!(module_name(previews), "checkbox_previews");
+    assert_eq!(module_name(previews), "checkbox_preview");
     assert_eq!(module_name(Path::new("src/forms/checkbox.rsx")), "checkbox");
     assert_eq!(component_name(Path::new("src/previews.rsx")), "previews");
 
-    let root = std::env::temp_dir().join(format!("rsx_previews_file_{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("rsx_preview_file_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join("checkbox.rsx"), "").unwrap();
-    std::fs::write(root.join("checkbox.previews.rsx"), "").unwrap();
+    std::fs::write(root.join("checkbox.preview.rsx"), "").unwrap();
     let out = discover_rust_modules(
         &root,
         &root,
@@ -917,14 +915,12 @@ fn a_previews_file_is_declared_as_a_module_beside_the_component_it_previews() {
 
     assert!(out.contains("pub mod checkbox;"), "{out}");
     assert!(
-        out.contains(
-            "#[path = \"../__generated/checkbox.previews.rs\"] pub mod checkbox_previews;"
-        ),
+        out.contains("#[path = \"../__generated/checkbox.preview.rs\"] pub mod checkbox_preview;"),
         "{out}"
     );
 }
 
-/// A library's tree is its own: every module it discovers is `pub(crate)`, so its API is what its root re-exports. A component in a directory of its own, `display/kbd/kbd.rsx` beside `kbd.test.rs` and `kbd.previews.rs`, is declared as the module of that name inside it, which clippy would otherwise read as a slip.
+/// A library's tree is its own: every module it discovers is `pub(crate)`, so its API is what its root re-exports. A component in a directory of its own, `display/kbd/kbd.rsx` beside `kbd.test.rs` and `kbd.preview.rs`, is declared as the module of that name inside it, which clippy would otherwise read as a slip.
 #[test]
 fn a_library_keeps_its_modules_and_a_component_keeps_a_directory_of_its_own() {
     let root = std::env::temp_dir().join(format!("rsx_component_dirs_{}", std::process::id()));
@@ -934,7 +930,7 @@ fn a_library_keeps_its_modules_and_a_component_keeps_a_directory_of_its_own() {
     for path in [
         "display/kbd/kbd.rsx",
         "display/kbd/kbd.test.rs",
-        "display/kbd/kbd.previews.rs",
+        "display/kbd/kbd.preview.rs",
         "inputs/button/button.rs",
         "inputs/button/label.rs",
     ] {

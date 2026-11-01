@@ -176,7 +176,7 @@ telar::__previews! {
             assert_eq!(entry.layout, Layout::Centered);
             assert_eq!(entry.docs, "The tally written in Rust, previewed from `.rsx`.");
             assert_eq!(entry.tags, ["rsx"]);
-            assert_eq!(entry.file, concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.previews.rsx"));
+            assert_eq!(entry.file, concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.preview.rsx"));
             assert_eq!(entry.line, 4);
             assert!(entry.source.starts_with("[preview \"Rsx literal\""), "{}", entry.source);
             assert_eq!(

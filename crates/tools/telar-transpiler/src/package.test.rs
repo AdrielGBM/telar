@@ -295,14 +295,14 @@ fn a_buffer_transpiles_as_the_saved_file_would() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A previews file previews the component beside it, in a module of its own: its previews are named after that component, its `[logic]` and its `[style]` exist for them alone, and all of it sits behind the gate.
+/// A preview file previews the component beside it, in a module of its own: its previews are named after that component, its `[logic]` and its `[style]` exist for them alone, and all of it sits behind the gate.
 #[test]
-fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
-    let root = package("previews_file");
+fn a_preview_file_emits_the_previews_of_the_component_beside_it() {
+    let root = package("preview_file");
     let src = root.join("src");
     std::fs::write(src.join("card.rsx"), "[view]\ntext \"body\"\n").unwrap();
     std::fs::write(
-        src.join("card.previews.rsx"),
+        src.join("card.preview.rsx"),
         "[logic]\nuse crate::card::*;\n\nfn framed(children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {\n    card(CardProps::props().children(children).build())\n}\n\n[style]\n@quiet\n    fill: #202020\n\n[previews \"Cards/Card\"]\nA card.\n\n[preview \"Default\" args(title:\"Hi\") decorator:framed]\ncard\n\n[play]\ncanvas.expect_text(\"Hi\")?;\n",
     )
     .unwrap();
@@ -310,8 +310,8 @@ fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
     let files = transpile_package(&options(&src, BuildFlavour::Plain)).unwrap();
     let previews = files
         .iter()
-        .find(|file| file.rel_out == std::path::Path::new("card.previews.rs"))
-        .expect("the previews file is transpiled");
+        .find(|file| file.rel_out == std::path::Path::new("card.preview.rs"))
+        .expect("the preview file is transpiled");
     let code = &previews.source.rust_code;
     assert_eq!(previews.source.preview_names, ["Default"]);
     let (header, gated) = code
@@ -335,7 +335,7 @@ fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
         gated.contains(".props(<CardProps as ::telar::preview::HasPropsSchema>::schema)"),
         "{code}"
     );
-    assert!(gated.contains("/src/card.previews.rsx\")"), "{code}");
+    assert!(gated.contains("/src/card.preview.rsx\")"), "{code}");
     assert!(syn::parse_file(code).is_ok(), "{code}");
     let framed = code
         .lines()
@@ -347,7 +347,7 @@ fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
         "the logic maps back to its line"
     );
 
-    std::fs::write(src.join("card.previews.rsx"), "[view]\ncol\n").unwrap();
+    std::fs::write(src.join("card.preview.rsx"), "[view]\ncol\n").unwrap();
     let error = transpile_package(&options(&src, BuildFlavour::Plain)).unwrap_err();
     assert!(error.to_string().contains("no `[view]`"), "{error}");
 

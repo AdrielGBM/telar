@@ -143,7 +143,7 @@ fn ends_in_theme_read(prefix: &str) -> bool {
         .is_some_and(|before| !before.ends_with(is_ident))
 }
 
-/// The built-in tags, the components the `[telar] prelude` crates export, and the `.rsx` components discoverable from `dir` — not a `*.previews.rsx` or a `mod.rsx`, which declare none. A name is offered once: a built-in shadows a component of the same name, and a prelude component's entry carries more than a bare `.rsx` stem.
+/// The built-in tags, the components the `[telar] prelude` crates export, and the `.rsx` components discoverable from `dir` — not a `*.preview.rsx` or a `mod.rsx`, which declare none. A name is offered once: a built-in shadows a component of the same name, and a prelude component's entry carries more than a bare `.rsx` stem.
 pub fn element_name_items(dir: Option<&Path>, prelude: &[PreludeComponent]) -> Vec<CompletionItem> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut items: Vec<CompletionItem> = Vec::new();
@@ -166,7 +166,7 @@ pub fn element_name_items(dir: Option<&Path>, prelude: &[PreludeComponent]) -> V
 
     if let Some(dir) = dir {
         let declares_a_component = |path: &Path| {
-            !telar_project::is_previews_file(path) && !telar_project::is_module_root(path)
+            !telar_project::is_preview_file(path) && !telar_project::is_module_root(path)
         };
         for path in telar_project::find_rsx_files_in_tree(dir)
             .into_iter()

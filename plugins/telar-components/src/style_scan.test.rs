@@ -89,7 +89,7 @@ fn collect_sources(src: &Path, dir: &Path, files: &mut Vec<String>) {
             }
         } else if name.ends_with(".rs")
             && !name.ends_with(".test.rs")
-            && !name.ends_with(".previews.rs")
+            && !name.ends_with(".preview.rs")
             && name != "test_support.rs"
         {
             let relative = path.strip_prefix(src).expect("a source is under src/");

@@ -296,7 +296,7 @@ fn a_file_that_declares_no_component_offers_no_tag() {
     std::fs::create_dir_all(dir.join("src").join("ui")).unwrap();
     std::fs::write(dir.join("src").join("tally.rsx"), "[view]\ncol\n").unwrap();
     std::fs::write(
-        dir.join("src").join("tally.previews.rsx"),
+        dir.join("src").join("tally.preview.rsx"),
         "[preview \"A\"]\ntally\n",
     )
     .unwrap();

@@ -278,7 +278,7 @@ impl TreeWalk<'_> {
             }
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
             let module = module_name(&path);
-            let name = match is_previews_file(&path) {
+            let name = match is_preview_file(&path) {
                 true => module.as_str(),
                 false => stem,
             };
@@ -529,7 +529,7 @@ fn slash_separated(path: &Path) -> String {
 
 /// A `.rs` file that is a declarable module: not a crate root, not a `mod.rs` (the latter is the module root of its own directory, not a sibling child), and named by an identifier.
 ///
-/// A name that is no identifier, `badge.test.rs` or `badge.previews.rs`, is never one. A `*.test.rs` holds the `#[cfg(test)]` body of the module it sits beside, which declares it itself with `#[path]`. Declaring it here too would make it a *sibling* of that module rather than a child, so its `use super::*` would reach the parent directory and every private item it tests would read as inaccessible.
+/// A name that is no identifier, `badge.test.rs` or `badge.preview.rs`, is never one. A `*.test.rs` holds the `#[cfg(test)]` body of the module it sits beside, which declares it itself with `#[path]`. Declaring it here too would make it a *sibling* of that module rather than a child, so its `use super::*` would reach the parent directory and every private item it tests would read as inaccessible.
 fn is_rust_module_file(path: &Path) -> bool {
     if path.extension().and_then(|e| e.to_str()) != Some("rs") {
         return false;
@@ -630,24 +630,24 @@ fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
     out.join(format!("{name}.rs"))
 }
 
-/// The name the component in `path` is generated under: its file stem. A previews file names the component it previews, so `checkbox.previews.rsx` is `checkbox`, and its previews get the ids and the entry table a `[preview]` in `checkbox.rsx` would.
+/// The name the component in `path` is generated under: its file stem. A preview file names the component it previews, so `checkbox.preview.rsx` is `checkbox`, and its previews get the ids and the entry table a `[preview]` in `checkbox.rsx` would.
 ///
 /// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules, which is what a path-flattened name existed to work around. One function rather than each caller taking the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and they silently drifted apart when the flattening went.
 pub fn component_name(path: &Path) -> String {
     let stem = file_stem(path);
-    match is_previews_file(path) {
+    match is_preview_file(path) {
         true => stem
-            .strip_suffix(PREVIEWS_STEM_SUFFIX)
+            .strip_suffix(PREVIEW_STEM_SUFFIX)
             .unwrap_or(&stem)
             .to_string(),
         false => stem,
     }
 }
 
-/// The module the `.rsx` at `path` is declared as, where its file sits: its stem, or for a previews file, whose stem is no identifier, the component's name and `_previews`, so `checkbox.previews.rsx` is `checkbox_previews` beside `checkbox`.
+/// The module the `.rsx` at `path` is declared as, where its file sits: its stem, or for a preview file, whose stem is no identifier, the component's name and `_preview`, so `checkbox.preview.rsx` is `checkbox_preview` beside `checkbox`.
 pub fn module_name(path: &Path) -> String {
-    match is_previews_file(path) {
-        true => format!("{}_previews", component_name(path)),
+    match is_preview_file(path) {
+        true => format!("{}_preview", component_name(path)),
         false => file_stem(path),
     }
 }
@@ -809,17 +809,17 @@ pub fn is_module_root(path: &Path) -> bool {
         .is_some_and(|name| name == MODULE_ROOT_FILENAME)
 }
 
-/// The suffix of a `.rsx` that holds only previews of a component written elsewhere: `checkbox.previews.rsx`.
-const PREVIEWS_FILE_SUFFIX: &str = ".previews.rsx";
+/// The suffix of a `.rsx` that holds only previews of a component written elsewhere: `checkbox.preview.rsx`.
+const PREVIEW_FILE_SUFFIX: &str = ".preview.rsx";
 
-const PREVIEWS_STEM_SUFFIX: &str = ".previews";
+const PREVIEW_STEM_SUFFIX: &str = ".preview";
 
 /// Whether `path` holds only previews: `[previews]` and `[preview]` sections, and no `[view]` of its own. Its stem is no identifier, so the module tree declares it under [`module_name`].
-pub fn is_previews_file(path: &Path) -> bool {
+pub fn is_preview_file(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| {
-            name.len() > PREVIEWS_FILE_SUFFIX.len() && name.ends_with(PREVIEWS_FILE_SUFFIX)
+            name.len() > PREVIEW_FILE_SUFFIX.len() && name.ends_with(PREVIEW_FILE_SUFFIX)
         })
 }
 
