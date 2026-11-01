@@ -1,6 +1,6 @@
 //! [`ReactiveList`]: children reconciled from a signal by key, reusing the widgets whose keys persist.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -10,10 +10,11 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use motion_core::Curve;
 use platform_core::Event;
-use reactive_core::{Effect, RwSignal, effect, on_cleanup, signal};
+use reactive_core::{Effect, RwSignal, effect, signal};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{new_container, set_children, track_layout};
+use crate::keyed_values::KeyedValues;
 use crate::layout_item::{BuildPass, Child, LayoutItem, TrackedChildren, dispose_child};
 use crate::pointer::dispatch_container_event;
 use crate::presence::{Transition, watch_exits};
@@ -26,9 +27,6 @@ fn hash_key<K: Hash>(k: &K) -> u64 {
     k.hash(&mut h);
     h.finish()
 }
-
-/// Each key's value handle, with the token of the row that created it.
-type KeyedValues<Item> = Rc<RefCell<HashMap<u64, (u64, RwSignal<Item>)>>>;
 
 /// Shared reconciliation state, never borrowed across user code: a reconcile releases it to build rows and commits the new ones in one borrow at the end, so a build that panics leaves the last committed list standing.
 struct ListState {
@@ -190,40 +188,15 @@ impl ReactiveList {
         B: Fn(reactive_core::ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError>
             + 'static,
     {
-        // One signal per row, held outside `ListState` so that stays non-generic. Each is created in its row's build, so it belongs to the row's owner and is freed with the row, and `sync` runs before the reuse decision so a persisting row's handle already holds the new value. The token tells a row's cleanup whether the entry is still its own.
-        let values: KeyedValues<Item> = Rc::new(RefCell::new(HashMap::new()));
-        let next_token = Rc::new(Cell::new(0u64));
-
-        let sync_values = Rc::clone(&values);
-        let sync = move |item: &Item, k: u64| {
-            let existing = sync_values.borrow().get(&k).map(|(_, value)| *value);
-            if let Some(existing) = existing {
-                existing.set(item.clone());
-            }
-        };
-
-        let build_values = Rc::clone(&values);
+        // Held outside `ListState` so that stays non-generic.
+        let values = KeyedValues::new();
+        let held = values.clone();
         Self::build_with_sync(
             LayoutStyle::new().flex_column(),
             source,
-            move |item: Item, k: u64| {
-                let token = next_token.replace(next_token.get().wrapping_add(1));
-                let held = signal(item);
-                build_values.borrow_mut().insert(k, (token, held));
-                let values = Rc::downgrade(&build_values);
-                on_cleanup(move || {
-                    let Some(values) = values.upgrade() else {
-                        return;
-                    };
-                    let mut values = values.borrow_mut();
-                    if values.get(&k).is_some_and(|(owner, _)| *owner == token) {
-                        values.remove(&k);
-                    }
-                });
-                build(held.read_only())
-            },
+            move |item: Item, k: u64| build(held.hold(item, k)),
             move |item: &Item, _idx: usize| hash_key(&key(item)),
-            sync,
+            move |item: &Item, k: u64| values.sync(item, k),
         )
     }
 

@@ -552,3 +552,39 @@ fn fragment_duplicate_keys_keep_one_item_each_and_leak_nothing() {
     assert_eq!(live(), baseline, "both duplicates went and came back whole");
     assert_eq!(group_len(&container.view()), 3);
 }
+
+#[test]
+fn a_keyed_fragment_item_keeps_its_widget_and_follows_what_it_now_carries() {
+    use std::cell::RefCell;
+
+    reset_layout_runtime();
+    let rows = signal(vec![(1u32, "before")]);
+    let seen = Rc::new(RefCell::new(Vec::<&'static str>::new()));
+    let builds = Rc::new(RefCell::new(0usize));
+    let (sink, counter) = (Rc::clone(&seen), Rc::clone(&builds));
+    let source = rows;
+    let _container = Container::from_slots(
+        LayoutStyle::new().flex_row(),
+        vec![fragment_keyed(
+            move || source.get(),
+            |row: &(u32, &'static str)| row.0,
+            move |held: ReadSignal<(u32, &'static str)>| {
+                *counter.borrow_mut() += 1;
+                let sink = Rc::clone(&sink);
+                effect(move || sink.borrow_mut().push(held.get().1));
+                Ok(leaf10())
+            },
+            0.0,
+        )],
+    )
+    .unwrap();
+
+    rows.set(vec![(1, "after")]);
+
+    assert_eq!(*builds.borrow(), 1, "the item was built once, not rebuilt");
+    assert_eq!(
+        *seen.borrow(),
+        vec!["before", "after"],
+        "while still seeing what it now says"
+    );
+}
