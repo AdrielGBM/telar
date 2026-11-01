@@ -40,6 +40,7 @@ pub fn greeting_card(props: GreetingCardProps) -> Result<Box<dyn LayoutItem>, La
 
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn greeting_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let actions = __preview.actions();
     let __node_0 = greeting_card(GreetingCardProps::props().name(::telar::__preview_arg!(__preview, "name", "Ada")).__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }

@@ -51,6 +51,9 @@ pub(crate) struct Previews<'a> {
     pub bindings: &'a [String],
 }
 
+/// The local a build fn binds the canvas's action log to, which the body reads as `actions` to log a call no root prop holds.
+const ACTIONS: &str = "actions";
+
 /// The opening of the block every preview item is emitted in; [`CLOSE`] ends it.
 pub(crate) const OPEN: &str = "::telar::__previews! {\n";
 pub(crate) const CLOSE: &str = "}\n";
@@ -89,8 +92,25 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
         }
         let options = own.over(&meta);
         errors.extend(options.errors(&header));
+        if preview.args.iter().any(|arg| arg.name == ACTIONS) {
+            errors.push(format!(
+                "{header} declares an arg named `{ACTIONS}`, which is the preview's action log, read as `{ACTIONS}`: give the arg another name"
+            ));
+        }
 
         let explicit: Vec<String> = preview.args.iter().map(|arg| arg.name.clone()).collect();
+        let plain: Vec<String> = preview
+            .args
+            .iter()
+            .filter(|arg| arg.kind == ArgKind::Value)
+            .map(|arg| arg.name.clone())
+            .chain([ACTIONS.to_string()])
+            .collect();
+        errors.extend(signal_reads_of_plain(
+            &header,
+            excerpt(previews.source, &doc.previews, index),
+            &plain,
+        ));
         let signals: Vec<String> = preview
             .args
             .iter()
@@ -100,7 +120,13 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
         let root = root_component(&preview.body);
         let mut view = ViewGen::new(previews.classes, previews.assets)
             .with_theme_access(previews.theme)
-            .with_locals(explicit.clone())
+            .with_locals(
+                explicit
+                    .iter()
+                    .cloned()
+                    .chain([ACTIONS.to_string()])
+                    .collect(),
+            )
             .with_signals(signals)
             .with_file_bindings(
                 previews
@@ -108,6 +134,7 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
                     .iter()
                     .cloned()
                     .chain(crate::view::view_let_names(&preview.body))
+                    .chain(plain.iter().cloned())
                     .collect(),
             );
         let implicit: Vec<&Attr> = match (root, options.implicit_args) {
@@ -241,10 +268,8 @@ fn emit_build_fn(
     if let Some(fixture) = fixture {
         code.push(&format!("    {fixture}();\n"), None);
     }
-    let signals: String = preview
-        .args
-        .iter()
-        .map(|arg| {
+    let signals: String = std::iter::once(format!("    let {ACTIONS} = __preview.actions();\n"))
+        .chain(preview.args.iter().map(|arg| {
             on_source_line(
                 preview.line,
                 &format!(
@@ -258,7 +283,7 @@ fn emit_build_fn(
                     arg_default_expr(arg)
                 ),
             ) + "\n"
-        })
+        }))
         .collect();
     let prefix = code.out.len();
     let resolved = resolve_source_map(&format!("{signals}{body}"));
@@ -581,6 +606,27 @@ fn arg_conflicts(header: &str, args: &[ArgDecl], implicit: &[&Attr]) -> Vec<Stri
             )
         })
         .collect()
+}
+
+/// Each `$name` the preview, as `written`, for a name that holds a plain value, a `values(…)` arg or the action log: `$` reads a signal, so it would ask the value for a read it has none of.
+fn signal_reads_of_plain(header: &str, written: &str, plain: &[String]) -> Vec<String> {
+    plain
+        .iter()
+        .filter(|name| reads_as_signal(written, name))
+        .map(|name| {
+            format!(
+                "{header} reads `${name}`, but `{name}` holds a plain value rather than a signal: write it bare, `{name}`"
+            )
+        })
+        .collect()
+}
+
+fn reads_as_signal(body: &str, name: &str) -> bool {
+    body.match_indices('$').any(|(at, _)| {
+        let rest = &body[at + 1..];
+        rest.starts_with(name)
+            && !rest[name.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+    })
 }
 
 /// A matrix's arg axis that names no arg of the preview, so its cells would differ in nothing.

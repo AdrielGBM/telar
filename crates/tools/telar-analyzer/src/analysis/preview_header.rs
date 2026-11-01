@@ -98,7 +98,7 @@ pub fn options() -> impl Iterator<Item = PreviewOption> {
 pub const ARGS_DECL_DOC: &str = "Declares live, preview-scoped signals, read in the body as `$name`: `args(agree:false)`. Each gets a control in the workshop.";
 
 /// What `values(…)` does, shown where it is completed and hovered.
-pub const VALUES_DECL_DOC: &str = "Declares preview-scoped values, read in the body as `$name`: `values(tone:Tone::Ink)`. Each gets a control in the workshop, and a change builds the preview again, so a prop that takes a plain value can take one.";
+pub const VALUES_DECL_DOC: &str = "Declares preview-scoped values, read in the body bare, as `name`: `values(tone:Tone::Ink)`. Each gets a control in the workshop, and a change builds the preview again, so a prop that takes a plain value can take one.";
 
 /// A name in a header that means something on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

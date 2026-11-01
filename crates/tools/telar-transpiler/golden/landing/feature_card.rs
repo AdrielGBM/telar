@@ -55,6 +55,7 @@ pub fn feature_card(props: FeatureCardProps) -> Result<Box<dyn LayoutItem>, Layo
 pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
+    let actions = __preview.actions();
     let __node_0 = {
         let __recipe_icon = Children::new(
             {
@@ -76,6 +77,7 @@ pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
 pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
+    let actions = __preview.actions();
     let __node_0 = {
         let __recipe_icon = Children::new(
             {

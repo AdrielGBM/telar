@@ -286,7 +286,7 @@ fn an_inline_matrix_varies_the_environment_or_an_arg() {
 
 #[test]
 fn a_preview_body_reads_its_own_args_rather_than_the_components_signals() {
-    let src = "[logic]\nlet open = signal(false);\n\n[view]\ncol\n\n[preview \"A\" args(agree:false)]\ncheckbox checked:$agree\n";
+    let src = "[logic]\nlet open = signal(false);\n\n[view]\ncol\n\n[preview \"A\" args(agree:false) values(tone:Tone::Ink)]\ncheckbox checked:$agree\n";
     let doc = telar_parser::parse(src).unwrap();
     assert_eq!(labels(&signal_items(src, &doc, 7)), ["$agree"]);
     assert_eq!(labels(&signal_items(src, &doc, 4)), ["$open"]);

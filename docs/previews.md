@@ -147,8 +147,8 @@ An arg is a value of a preview the workshop can change while the preview is on s
   attribute of the root component call (a string, a number, a bool or flag, a hex colour, a `Path::Variant`). They
   are declared with no extra syntax, and changing one builds the preview again. A value containing `$` or a closure
   stays fixed, and `args:none` in the header fixes all of them. A plain arg the body hands anywhere else, to a component
-  nested in a column for instance, is declared in `values(tone:Tone::Ink)` and read as `$tone`: the value itself, so a
-  prop that takes a plain value takes it.
+  nested in a column for instance, is declared in `values(tone:Tone::Ink)` and read bare, as `tone`: the value itself,
+  so a prop that takes a plain value takes it. `$` reads a signal, and a `values(…)` name is none.
 - **Signals** are shared with the tree: `p.signal("pressed", 0u32)` in Rust and `args(agree:false)` in `.rsx`,
   read as `$agree`. They are two-way, so the tree can write what the control shows, and changing one does not
   rebuild the preview.
@@ -156,6 +156,11 @@ An arg is a value of a preview the workshop can change while the preview is on s
 `p.arg` returns the default's own type, so a setter's `into` coerces it as a literal would. A name is declared once,
 in `args(…)` or in `values(…)`; setting it there and as a literal on the root is a build error: bind the root to it
 with `agree:$agree`.
+
+In `.rsx` every callback the root component call holds is logged in the Actions panel. A call nothing on the root holds,
+a remove button in a tag's `action` for instance, is logged by the body itself through `actions`, the canvas's action
+log, written bare as a value is: `on_press:(move || actions.log("remove", vec![label.to_string()]))`. No arg takes the
+name.
 
 The type of an arg decides its control, and the prop of the same name refines it:
 

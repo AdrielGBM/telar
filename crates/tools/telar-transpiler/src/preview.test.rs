@@ -143,21 +143,54 @@ fn declared_args_are_live_signals_the_body_reads() {
 
 #[test]
 fn declared_values_are_read_once_per_build() {
-    let previews = "[preview \"Valued\" values(agree:false size:Size::Large) args(open:true)]\ncol gap:8\n    checkbox checked:$agree size:$size\n";
+    let previews = "[preview \"Valued\" values(agree:false size:Size::Large) args(open:true)]\ncol gap:8\n    checkbox checked:agree size:size on_change:(move |on| actions.log(\"on_change\", vec![on.to_string()]))\n";
     let out = transpiled(previews);
     let code = &out.rust_code;
     for line in [
+        "let actions = __preview.actions();",
         "let agree = ::telar::__preview_arg!(__preview, \"agree\", false);",
         "let size = ::telar::__preview_arg!(__preview, \"size\", Size::Large);",
         "let open = ::telar::__preview_signal!(__preview, \"open\", true);",
     ] {
         assert!(code.contains(line), "{line}\n{code}");
     }
-    assert!(code.contains(".checked(agree.clone())"), "{code}");
     assert!(!code.contains("agree.get()"), "{code}");
+    assert!(
+        !code.contains("::telar::kw::size"),
+        "a value is its binding, not a word: {code}"
+    );
+    assert!(code.contains("actions.log(\"on_change\""), "{code}");
+    assert!(!code.contains("compile_error!"), "{code}");
     assert!(
         code.contains(".args(&[::telar::preview::ArgSpec::new(\"agree\").default(\"false\"), ::telar::preview::ArgSpec::new(\"size\"), ::telar::preview::ArgSpec::new(\"open\").binding(::telar::preview::ArgBinding::Live).default(\"true\")])"),
         "{code}"
+    );
+}
+
+#[test]
+fn a_dollar_on_a_value_or_the_action_log_is_refused_on_the_header() {
+    let previews = "[preview \"Sigil\" values(tone:Tone::Ink)]\ncol\n    checkbox label:\"{$tone}\" on_change:(move |_| $actions.log(\"x\", Vec::new()))\n";
+    let out = transpiled(previews);
+    for name in ["tone", "actions"] {
+        let error = format!(
+            "reads `${name}`, but `{name}` holds a plain value rather than a signal: write it bare, `{name}`"
+        );
+        assert!(out.rust_code.contains(&error), "{error}\n{}", out.rust_code);
+        assert_eq!(
+            rsx_line_of(&out, &error),
+            Some(line_in(previews, "[preview \"Sigil\""))
+        );
+    }
+}
+
+#[test]
+fn an_arg_named_like_the_action_log_is_refused() {
+    let out = transpiled("[preview \"Clash\" values(actions:1)]\ncol\n");
+    assert!(
+        out.rust_code
+            .contains("declares an arg named `actions`, which is the preview's action log"),
+        "{}",
+        out.rust_code
     );
 }
 

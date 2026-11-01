@@ -613,6 +613,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 pub fn home_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
+    let actions = __preview.actions();
     let __node_0 = home(HomeProps::props().__preview_actions(&__preview.actions()).build())?;
     Ok(Box::new(__node_0))
 }

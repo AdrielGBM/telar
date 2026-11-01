@@ -348,10 +348,15 @@ pub fn style_class_items(
         .collect()
 }
 
-/// The signals a `$` may read on 0-based `line`, offered after it. A preview builds in a fn of its own, out of reach of the component's `[logic]`, so in a preview's body these are the names its `args(…)` declares; anywhere else, the signals and memos `[logic]` declares. `insert_text` drops the `$` (the trigger char is already typed), so completing leaves a single `$name`.
+/// The signals a `$` may read on 0-based `line`, offered after it. A preview builds in a fn of its own, out of reach of the component's `[logic]`, so in a preview's body these are the signals its `args(…)` declares, a `values(…)` name being a plain value written bare; anywhere else, the signals and memos `[logic]` declares. `insert_text` drops the `$` (the trigger char is already typed), so completing leaves a single `$name`.
 pub fn signal_items(source: &str, doc: &RsxDocument, line: u32) -> Vec<CompletionItem> {
     let names = match preview_at(doc, line) {
-        Some(preview) => preview.args.iter().map(|arg| arg.name.clone()).collect(),
+        Some(preview) => preview
+            .args
+            .iter()
+            .filter(|arg| arg.kind == telar_parser::ArgKind::Signal)
+            .map(|arg| arg.name.clone())
+            .collect(),
         None => declared_signals(source),
     };
     names

@@ -23,7 +23,7 @@ canvas.expect_absent(by_text("H"))?;
 col gap:(shared::gap_md(ControlSize::Regular))
     row align:center justify:between gap:(shared::gap_md(ControlSize::Regular)) pad_x:(shared::gap_md(ControlSize::Regular)) pad_y:(shared::gap_sm(ControlSize::Regular)) fill:$theme.surface color:$theme.ink radius:(shared::radius_item())
         text "Duplicate"
-        kbd chord:"Mod+D" tone:$tone variant:$variant
+        kbd chord:"Mod+D" tone:tone variant:variant
     row align:center justify:between gap:(shared::gap_md(ControlSize::Regular)) pad_x:(shared::gap_md(ControlSize::Regular)) pad_y:(shared::gap_sm(ControlSize::Regular)) fill:$theme.ink color:$theme.surface radius:(shared::radius_item())
         text "Group selection"
-        kbd chord:"Mod+G" tone:$tone variant:$variant
+        kbd chord:"Mod+G" tone:tone variant:variant

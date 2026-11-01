@@ -48,6 +48,7 @@ pub fn example(props: ExampleProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
+    let actions = __preview.actions();
     let __node_0 = {
         let __recipe_children = Children::new(
             {
