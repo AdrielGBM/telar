@@ -85,7 +85,7 @@ mod text_place;
 mod theme_provider;
 mod transform_origin;
 pub use text_metrics::{
-    SINGLE_LINE_LEADING, line_box, single_line_box, use_text_metrics_generation,
+    BoxText, SINGLE_LINE_LEADING, line_box, single_line_box, use_text_metrics_generation,
 };
 mod virtual_list;
 mod visual_lines;

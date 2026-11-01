@@ -725,6 +725,19 @@ impl<'a> ViewGen<'a> {
 /// Why `value` is not one `tag`'s `key` takes, or `None` when it is (or when the key takes anything). Shared by an inline attribute and a `[style]` class property, so a value refused on one line is refused on the other.
 pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess) -> Option<String> {
     let value = value.trim();
+    if signals::reads_box_text(value) && !matches!(tag, "row" | "col" | "grid" | "box") {
+        return Some(format!(
+            "`{key}:{value}` on `{tag}`: `$text` is what a box knows of its own text, so only a `row`, `col`, `grid` or `box` reads it"
+        ));
+    }
+    if let crate::style::PropCall::Call(call) = crate::style::layout_prop_call(key, value, theme)
+        && crate::style::reads_box_text(&call)
+        && !matches!(tag, "row" | "col" | "grid" | "box")
+    {
+        return Some(format!(
+            "`{key}:{value}` on `{tag}`: a length in `em` or `lh` is one of a box's own text, so only a `row`, `col`, `grid` or `box` takes one"
+        ));
+    }
     let Some(kind) = crate::registry::value_kind(tag, key) else {
         return match crate::style::layout_prop_call(key, value, theme) {
             crate::style::PropCall::Invalid(message) => Some(message),

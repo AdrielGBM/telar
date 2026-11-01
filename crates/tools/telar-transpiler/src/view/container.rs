@@ -122,14 +122,27 @@ impl ViewGen<'_> {
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
         // A computed layout prop makes the whole style reactive: `LayoutStyle` is a value handed to the tree once, not a closure the renderer re-runs, so the node keeps an effect that re-resolves it.
         let reactive = self.reactive_layout_values(&el.tag, &el.attributes);
-        let styled_by = if reactive.is_empty() {
+        let raw: Vec<&str> = reactive.iter().map(String::as_str).collect();
+        // A box that reads its own text keeps a signal of it, which its layout, paint and states read as they read any other state.
+        let reads_text = crate::style::reads_box_text(&style)
+            || el
+                .attributes
+                .iter()
+                .any(|a| super::signals::reads_box_text(a.value.text()));
+        let styled_by = if reactive.is_empty() && !reads_text {
             String::new()
         } else {
-            let raw: Vec<&str> = reactive.iter().map(String::as_str).collect();
             format!(
                 ".styled_by({})",
                 self.owning(&raw, &format!("move || {style}"))
             )
+        };
+        let styled_by = match reads_text {
+            true => format!(
+                ".following_text({}){styled_by}",
+                crate::style::BOX_TEXT_BINDING
+            ),
+            false => styled_by,
         };
         // `cursor:pointer` names a variant; anything else is the expression it is, and a reactive value becomes a reading so the shape follows it the way a colour does.
         let cursor = el
@@ -314,6 +327,13 @@ impl ViewGen<'_> {
             "let __tracked = "
         };
         let terminator = if track.is_empty() { "" } else { ";" };
+        if reads_text {
+            let _ = writeln!(
+                code,
+                "{inner_pad}let {} = signal(BoxText::initial());",
+                crate::style::BOX_TEXT_BINDING
+            );
+        }
         match pieces {
             Some((closure, layer_calls)) => {
                 let _ = writeln!(

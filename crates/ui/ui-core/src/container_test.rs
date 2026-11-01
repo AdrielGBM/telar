@@ -276,3 +276,49 @@ fn container_can_be_nested_as_layout_item() {
     let outer = Container::new(LayoutStyle::new().flex_row(), vec![Box::new(inner)]);
     assert!(outer.is_ok(), "a container nests inside another");
 }
+
+/// A length in the box's own text follows the size it declares, as the same length in pixels never would.
+#[test]
+fn a_style_in_the_box_s_text_follows_the_size_it_declares() {
+    reset_layout_runtime();
+    let size = reactive_core::signal(10.0f32);
+    let text = reactive_core::signal(crate::BoxText::initial());
+    let sized = Container::new(LayoutStyle::new(), vec![])
+        .unwrap()
+        .declaring(move || Declared::default().with_font_size(size.get()))
+        .following_text(text)
+        .styled_by(move || {
+            let text = text.get();
+            LayoutStyle::new().width(text.em * 3.0).height(text.lh)
+        });
+    let node = sized.layout_node();
+    let root = new_container(LayoutStyle::new().width(200.0).height(100.0), &[node]).unwrap();
+    let laid = || {
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        let rect = crate::context::absolute_rect(node).unwrap();
+        (rect.width, rect.height)
+    };
+    assert_eq!(laid(), (30.0, crate::single_line_box(10.0)));
+    size.set(20.0);
+    assert_eq!(laid(), (60.0, crate::single_line_box(20.0)));
+}
+
+/// The ink a box sits in is its parent's, never the colour it declares for its own text, so a box that works its text colour out from it reads a value its own declaration cannot move.
+#[test]
+fn a_box_s_ink_is_the_one_around_it_and_not_its_own() {
+    reset_layout_runtime();
+    let text = reactive_core::signal(crate::BoxText::initial());
+    let inner = Container::new(LayoutStyle::new(), vec![])
+        .unwrap()
+        .declaring(|| Declared::default().with_color(Color::WHITE))
+        .following_text(text);
+    let _outer = Container::new(LayoutStyle::new(), vec![Box::new(inner)])
+        .unwrap()
+        .declaring(|| Declared::default().with_color(Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(text.get().ink, Color::rgb(1.0, 0.0, 0.0));
+}

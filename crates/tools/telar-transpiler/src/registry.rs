@@ -624,7 +624,7 @@ pub enum ValueKind {
     KeywordsOrNumber(&'static [(&'static str, &'static str)]),
     /// A closed set of spellings, or any Rust expression yielding the value they name, for a value a component works out from its props: `role:(Role::Heading(level))`. A bare lowercase word is always a spelling.
     KeywordsOrExpression(&'static [(&'static str, &'static str)]),
-    /// A number: a literal, a `50%`, a fraction of the surface on a length (`50sw`, `50sh`, `50smin`, `50smax`), or any Rust expression that yields one.
+    /// A number: a literal, a `50%`, a fraction of the surface on a length (`50sw`, `50sh`, `50smin`, `50smax`), a length in a box's own text on a `row`, `col`, `grid` or `box` (`0.5em` of its size, `1lh` of the height one line of it takes, also inside an expression: `(1lh + $pad * 2)`), or any Rust expression that yields one.
     Number,
     /// A yes or a no: the bare key, `true`/`false`, or any Rust expression that yields one. Only the first three are literals — the rest is read, so a style carrying one re-resolves from what it reads.
     Boolean,

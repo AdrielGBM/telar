@@ -334,3 +334,54 @@ fn a_paint_property_in_a_class_is_not_mistaken_for_an_unknown_key() {
         generate_classes(&section.classes, &[], None, ThemeAccess::Handle)
     );
 }
+
+#[test]
+fn a_length_in_the_box_s_text_reads_its_text_lengths() {
+    assert_eq!(
+        call("min_width", "1lh").as_deref(),
+        Some(".min_width((1.0 * __text.get().lh))")
+    );
+    assert_eq!(
+        call("pad_x", "(scale)em").as_deref(),
+        Some(".padding_horizontal(((scale) * __text.get().em))")
+    );
+    assert_eq!(
+        call("min_width", "(1lh + pad * 2.0)").as_deref(),
+        Some(".min_width((1.0 * __text.get().lh) + pad * 2.0)")
+    );
+}
+
+#[test]
+fn a_unit_is_only_a_unit_after_a_number_or_a_paren() {
+    assert_eq!(text_lengths("item.lh"), None);
+    assert_eq!(text_lengths("x1em"), None);
+    assert_eq!(text_lengths("f(\"2em\")"), None);
+    assert_eq!(text_lengths("1emx"), None);
+}
+
+#[test]
+fn a_class_refuses_a_length_in_the_text_of_a_box_it_cannot_see() {
+    let class = StyleClass {
+        name: "cap".to_string(),
+        props: vec![StyleProp {
+            key: "min_width".to_string(),
+            value: "1lh".to_string(),
+        }],
+        line: 1,
+        public: false,
+    };
+    assert!(
+        class_errors(&class, ThemeAccess::Handle).contains("write it on the box"),
+        "{}",
+        class_errors(&class, ThemeAccess::Handle)
+    );
+}
+
+#[test]
+fn a_rewritten_length_is_never_read_again() {
+    assert_eq!(
+        text_lengths("1lh").as_deref(),
+        Some("(1.0 * __text.get().lh)")
+    );
+    assert_eq!(text_lengths("f().lh"), None);
+}

@@ -349,6 +349,17 @@ pub fn inherited_text_style(node: NodeId) -> TextStyle {
     context(node).text_style()
 }
 
+/// The text style of the place `node` sits in: what it inherits from above, without what it declares itself.
+pub(crate) fn text_around(node: NodeId) -> TextStyle {
+    match lineage(node).nth(1) {
+        Some(parent) => inherited_text_style(parent),
+        None => {
+            let _ = with_cascade_ref(|c| c.structure).get();
+            Inherited::initial().text_style()
+        }
+    }
+}
+
 /// [`inherited_text_style`] for a leaf whose style is read before its node exists — a measured leaf builds its measure first — which resolves against the surface's root until it has one.
 pub(crate) fn inherited_text_style_at(node: Option<NodeId>) -> TextStyle {
     match node {

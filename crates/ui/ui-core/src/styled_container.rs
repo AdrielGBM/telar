@@ -52,6 +52,16 @@ impl KeyAnswer for bool {
     }
 }
 
+/// Sets `text` to what `node` knows of its text now, and again whenever a declaration it reads changes.
+pub(crate) fn text_follows(node: NodeId, text: RwSignal<crate::BoxText>) {
+    effect(move || {
+        let now = crate::BoxText::of(node);
+        if text.peek() != now {
+            text.set(now);
+        }
+    });
+}
+
 /// Re-resolves `node`'s layout style whenever the reactive state `style` reads changes, and once now.
 ///
 /// The general form of [`StyledContainer::styled_by`], for a widget that is not a container — a text leaf sized off the theme's `font_size`, a slider thumb sized off its `spacing`. The returned [`Effect`] must be held for as long as the node lives, which for a leaf means its owning container `keeping` it.
@@ -915,6 +925,12 @@ impl StyledContainer {
     pub fn styled_by(self, style: impl Fn() -> LayoutStyle + 'static) -> Self {
         let node = self.node;
         style_follows(node, style);
+        self
+    }
+
+    /// Keeps `text` at what this box knows of its text: the size it holds and the ink it sits in, as [`BoxText::of`](crate::BoxText::of) reads them. A layout, a paint or a state style written in the box's text reads the signal, so each follows a declaration as it follows any other state.
+    pub fn following_text(self, text: RwSignal<crate::BoxText>) -> Self {
+        text_follows(self.node, text);
         self
     }
 

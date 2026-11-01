@@ -212,7 +212,7 @@ fn substitute_dollar(s: &str, read: bool, theme: ThemeAccess) -> String {
             copied = end + tokens.consumed();
             continue;
         }
-        out.push_str(ident);
+        out.push_str(box_text_binding(ident));
         if read || ident == "theme" {
             out.push_str(".get()");
         }
@@ -220,6 +220,17 @@ fn substitute_dollar(s: &str, read: bool, theme: ThemeAccess) -> String {
     }
     out.push_str(&s[copied..]);
     out
+}
+
+/// The marker a box reads its own text through: what it holds and the ink it sits in, as a `BoxText`.
+pub(crate) const BOX_TEXT: &str = "text";
+
+/// The binding `$ident` names: a box's `$text` is the `BoxText` signal the box keeps under [`crate::style::BOX_TEXT_BINDING`], every other identifier itself.
+fn box_text_binding(ident: &str) -> &str {
+    match ident {
+        BOX_TEXT => crate::style::BOX_TEXT_BINDING,
+        ident => ident,
+    }
 }
 
 /// [`substitute_reads`] that also records where each identifier came from. The expression around it is rewritten — the `$` goes, a `.get()` arrives — but the identifier itself is copied byte for byte, and that is the part a cursor lands on. `base` is the source byte offset of `s`. A library's token read records its token's name instead, the part that names something.
@@ -245,7 +256,7 @@ pub(super) fn substitute_reads_spanned(s: &str, base: usize, theme: ThemeAccess)
             continue;
         }
         out.push_str(&expr_marker(base + marker + 1, ident.len()));
-        out.push_str(ident);
+        out.push_str(box_text_binding(ident));
         out.push_str(".get()");
         copied = end;
     }
@@ -279,6 +290,8 @@ pub(super) fn signal_idents(s: &str, theme: ThemeAccess) -> Vec<String> {
         .filter(|&(marker, end)| prop_read(&s[marker + 1..end], &s[end..]).is_none())
         .map(|(marker, end)| s[marker + 1..end].to_string())
         .filter(|ident| !(theme == ThemeAccess::Tokens && ident == "theme"))
+        // Each box declares its own right before it is built, so no closure takes it in from outside.
+        .filter(|ident| ident != BOX_TEXT)
         .collect()
 }
 
@@ -797,4 +810,9 @@ pub(crate) fn view_let_names(nodes: &[ViewNode]) -> Vec<String> {
         }
     }
     names
+}
+
+/// Whether `s` reads its box's own text through `$text`.
+pub(crate) fn reads_box_text(s: &str) -> bool {
+    dollar_spans(s).any(|(marker, end)| &s[marker + 1..end] == BOX_TEXT)
 }

@@ -2517,6 +2517,15 @@ fn a_reference_binding_is_owned_by_each_closure_and_handed_on_as_the_reference()
 }
 
 #[test]
+fn only_a_box_takes_a_length_in_its_own_text() {
+    let code = transpile_view("[view]\ncol\n    text \"K\" min_width:1lh\n");
+    assert!(
+        code.contains("a length in `em` or `lh` is one of a box's own text"),
+        "{code}"
+    );
+}
+
+#[test]
 fn a_comment_in_a_loop_body_wraps_nothing_around_its_widget() {
     let code = transpile_view(
         "[logic]\nlet items = signal(vec![1u32]);\n[view]\nrow\n    for item in $items key *item\n        // One box per item.\n        box width:4\n",
@@ -2524,6 +2533,29 @@ fn a_comment_in_a_loop_body_wraps_nothing_around_its_widget() {
     assert!(code.contains("// One box per item."), "{code}");
     assert!(
         !code.contains("Container::new(LayoutStyle::new().flex_row(), children!["),
+        "{code}"
+    );
+}
+
+#[test]
+fn a_box_paints_from_the_ink_it_sits_in() {
+    let code = transpile_view("[view]\nrow fill:(dim($text.ink)) min_width:1lh\n    text \"K\"\n");
+    assert!(
+        code.contains("let __text = signal(BoxText::initial());"),
+        "{code}"
+    );
+    assert!(code.contains("dim(__text.get().ink)"), "{code}");
+    assert!(code.contains(".following_text(__text)"), "{code}");
+}
+
+#[test]
+fn a_box_in_a_loop_keeps_its_own_text() {
+    let code = transpile_view(
+        "[logic]\nlet items = signal(vec![1u32]);\n[view]\nrow\n    for item in $items key *item\n        box fill:(dim($text.ink))\n",
+    );
+    assert!(!code.contains("let __text = __text.clone();"), "{code}");
+    assert!(
+        code.contains("let __text = signal(BoxText::initial());"),
         "{code}"
     );
 }
