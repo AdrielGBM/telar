@@ -2,7 +2,7 @@
 
 use crate::core::theme::theme;
 use telar::{
-    AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event,
+    Accessible, AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event,
     EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
     NodeVec, Reactive, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, SizeDimension,
     StyledContainer, Text, TextStyle, compute_layout, hot_signal, mark_dirty, new_container,
@@ -712,9 +712,9 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
             .name(telar_icons::icon!("lucide:menu"))
             .size(20.0)
             .color(Reactive::of(|| theme().ink))
-            .label("Menu")
             .build(),
-    )?;
+    )?
+    .a11y_label(|| "Menu");
     let burger = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()

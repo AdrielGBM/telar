@@ -318,7 +318,7 @@ fn component_calls_offer_the_annotations_of_their_item() {
         .into_iter()
         .map(|item| item.label)
         .collect();
-    assert_eq!(labels, ["a11y_label", "a11y_lang", "a11y", "role"]);
+    assert_eq!(labels, ["a11y_label", "lang", "a11y", "role"]);
 }
 
 /// The classes a `@` may name include the ones the file's `[style]` imports.
@@ -355,6 +355,21 @@ fn the_accessible_name_completes_as_a11y_label_everywhere() {
         assert!(!keys.contains(&"label"), "`{tag}`: {keys:?}");
     }
     assert!(labels(&component_instance_items()).contains(&"a11y_label"));
+}
+
+/// A built-in tag and a component call complete the language under the same key, and the former spelling is offered nowhere.
+#[test]
+fn the_language_completes_as_lang_everywhere() {
+    for tag in ["box", "row", "text", "img", "svg", "scroll"] {
+        let items = attribute_key_items(tag);
+        let keys = labels(&items);
+        assert!(keys.contains(&"lang"), "`{tag}`: {keys:?}");
+        assert!(!keys.contains(&"a11y_lang"), "`{tag}`: {keys:?}");
+    }
+    let items = component_instance_items();
+    let keys = labels(&items);
+    assert!(keys.contains(&"lang"), "{keys:?}");
+    assert!(!keys.contains(&"a11y_lang"), "{keys:?}");
 }
 
 #[test]

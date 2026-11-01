@@ -20,12 +20,12 @@
 //! row gap:8 align:center
 //!     icon name:"mdi:home"
 //!     text "Home"
-//! icon name:"mdi:alert" size:24 color:$theme.error label:"Unsaved changes"
+//! icon name:"mdi:alert" size:24 color:$theme.error a11y_label:"Unsaved changes"
 //! ```
 //!
 //! # The tag
 //!
-//! [`icon()`] draws one icon in a square box of `size` px, the theme's `icon_size` when unset. A monochrome icon takes the colour of the text around it from the cascade, so it follows a `color:` on its row, a theme switch and a hover state like the text beside it; `color:` sets one instead. Which icons are monochrome is Iconify's answer, decided when the icon is resolved: every icon of a set whose `info` declares `palette: false`, none of a set that declares `palette: true` — so a brand logo drawn in one colour keeps it — and, for a set that declares neither, such as a folder of your own SVGs, an icon that paints in `currentColor`. Draw your own monochrome artwork in `currentColor`. A palette icon keeps its own colours unless `color:` is given, which draws it as a silhouette: the renderer tints flat, every paint of the artwork in the one colour, so it never maps only the `currentColor` parts. It is decoration to a screen reader, skipped, unless `label:` names it, which makes it a picture by that name: label the icon that is the only thing saying something, such as a button with no text.
+//! [`icon()`] draws one icon in a square box of `size` px, the theme's `icon_size` when unset. A monochrome icon takes the colour of the text around it from the cascade, so it follows a `color:` on its row, a theme switch and a hover state like the text beside it; `color:` sets one instead. Which icons are monochrome is Iconify's answer, decided when the icon is resolved: every icon of a set whose `info` declares `palette: false`, none of a set that declares `palette: true` — so a brand logo drawn in one colour keeps it — and, for a set that declares neither, such as a folder of your own SVGs, an icon that paints in `currentColor`. Draw your own monochrome artwork in `currentColor`. A palette icon keeps its own colours unless `color:` is given, which draws it as a silhouette: the renderer tints flat, every paint of the artwork in the one colour, so it never maps only the `currentColor` parts. It is decoration to a screen reader, skipped, unless `a11y_label:` names it, which makes it a picture by that name: name the icon that is the only thing saying something, such as a button with no text.
 //!
 //! # Baked by default
 //!

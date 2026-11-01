@@ -6,7 +6,7 @@ use super::signals::substitute_reads;
 use super::{ChildEmit, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A built-in tag and a component call both name it with `a11y_label`; a component call says its language as `a11y_lang`, because `lang` is its own prop to declare, and may also say what the item it returns is with a `role:` that only describes it.
+    /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A built-in tag and a component call both name it with `a11y_label` and say its language with `lang`; a component call may also say what the item it returns is with a `role:` that only describes it.
     pub(super) fn accessible_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
         let find = |key: &str| el.attributes.iter().find(|a| a.key == key);
         let builtin = crate::registry::is_builtin_tag(&el.tag);
@@ -19,8 +19,8 @@ impl ViewGen<'_> {
             };
             calls.push_str(&format!(".{method}({})", self.annotation_text(label)));
         }
-        if let Some(lang) = find(if builtin { "lang" } else { "a11y_lang" }) {
-            calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));
+        if let Some(lang) = find(crate::registry::LANG_ATTR) {
+            calls.push_str(&format!(".lang({})", self.annotation_text(lang)));
         }
         if !builtin {
             calls.push_str(

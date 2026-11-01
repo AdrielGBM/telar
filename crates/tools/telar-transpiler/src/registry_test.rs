@@ -110,3 +110,19 @@ fn a_call_s_slot_and_part_keys_are_described_and_its_state_keys_are_not() {
     }
     assert!(attr_spec("box", "hover_style").is_some());
 }
+
+/// What a call says about the item it returns, and how a child routes, are keys the call keeps for itself: the same list `#[derive(Props)]` refuses a field of, so no prop can be named one a call never hands over.
+#[test]
+fn every_key_a_component_call_takes_is_one_no_prop_may_have() {
+    let keys = COMPONENT_INSTANCE_ATTRS
+        .iter()
+        .map(|spec| spec.key)
+        .chain([SLOT_ATTR, FORMER_LANG_ATTR])
+        .chain(STATE_STYLE_KEYS.iter().copied());
+    for key in keys {
+        assert!(
+            telar_project::call_keys::kept_by_the_call(key).is_some(),
+            "`{key}`"
+        );
+    }
+}

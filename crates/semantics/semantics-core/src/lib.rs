@@ -474,6 +474,8 @@ pub struct Annotation {
     pub role: Option<Role>,
     pub lang: Option<Arc<str>>,
     pub hidden: bool,
+    /// Skipped by readers while it goes by no `label`: artwork that only decorates until whoever places it says what it means.
+    pub decorative: bool,
     pub anchor: Option<Arc<str>>,
     /// Said by the overlay the box is the top of rather than by the application: the box is a modal layer.
     pub modal: Option<Modal>,
@@ -485,8 +487,14 @@ impl Annotation {
             && self.role.is_none()
             && self.lang.is_none()
             && !self.hidden
+            && !self.decorative
             && self.anchor.is_none()
             && self.modal.is_none()
+    }
+
+    /// Whether a reader skips the box and everything under it: hidden outright, or decorative and named by nothing.
+    pub fn hides(&self) -> bool {
+        self.hidden || (self.decorative && self.label.is_none())
     }
 }
 
@@ -552,7 +560,7 @@ impl Semantics {
         if let Some(lang) = &annotation.lang {
             self.lang = Some(lang.clone());
         }
-        self.hidden |= annotation.hidden;
+        self.hidden |= annotation.hides();
         if let Some(anchor) = &annotation.anchor {
             self.anchor = Some(anchor.clone());
         }

@@ -161,7 +161,7 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
         .map(|letter| words(letter).map(|text| box_item(text.a11y_hidden())))
         .collect::<Result<_, _>>()?;
     let word = Container::new(LayoutStyle::new().flex_row(), letters)?.a11y_label(|| "Telar");
-    let greeting = words("Bonjour tout le monde")?.a11y_lang(|| "fr");
+    let greeting = words("Bonjour tout le monde")?.lang(|| "fr");
     let decoration = StyledContainer::new(
         LayoutStyle::new().width(24.0).height(24.0),
         |_| RectStyle::filled(Color::from_rgb_u8(30, 90, 200), 12.0),

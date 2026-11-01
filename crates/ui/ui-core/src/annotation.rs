@@ -140,7 +140,7 @@ pub(crate) fn label_follows<S: Into<Arc<str>>>(
 
 /// The annotations every widget with a layout node takes. See the module docs.
 ///
-/// Prefixed because a widget may well have a `label` of its own that means something else — the text a button draws — and a method of that name here would silently lose to it.
+/// Prefixed because a widget may well have a `label` of its own that means something else — the text a button draws — and a method of that name here would silently lose to it. `lang` is not: the language a box is written in is one thing on every widget, and `lang:` spells it in `.rsx` too.
 pub trait Accessible: LayoutItem + Sized {
     /// The name assistive technology reads for this box. Re-read when what `label` reads changes, so a translated name follows the locale.
     ///
@@ -168,7 +168,7 @@ pub trait Accessible: LayoutItem + Sized {
     }
 
     /// The language this box and everything under it is written in, as a BCP 47 tag. Nearer boxes win, so a quotation inside a paragraph says only its own.
-    fn a11y_lang<S: Into<Arc<str>>>(self, lang: impl Fn() -> S + 'static) -> Self {
+    fn lang<S: Into<Arc<str>>>(self, lang: impl Fn() -> S + 'static) -> Self {
         follow(self.layout_node(), move |annotation| {
             annotation.lang = Some(lang().into());
         });
@@ -178,6 +178,14 @@ pub trait Accessible: LayoutItem + Sized {
     /// Takes this box and everything under it out of what assistive technology is told. It is still drawn and still answers the pointer.
     fn a11y_hidden(self) -> Self {
         follow(self.layout_node(), |annotation| annotation.hidden = true);
+        self
+    }
+
+    /// Takes this box and everything under it out of what assistive technology is told for as long as it goes by no name, for artwork that only decorates unless whoever places it names it with [`Self::a11y_label`], called before or after this.
+    fn a11y_decorative(self) -> Self {
+        follow(self.layout_node(), |annotation| {
+            annotation.decorative = true
+        });
         self
     }
 }

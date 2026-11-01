@@ -112,25 +112,35 @@ fn an_unset_size_is_the_themes_icon_size() {
 }
 
 #[test]
-fn an_icon_is_decoration_unless_it_is_named() {
+fn an_icon_is_decoration_unless_the_call_names_it() {
     reset_layout_runtime();
     let decorative = icon(IconProps::props().name(baked(MONOTONE)).build()).unwrap();
     let laid = lay_out(decorative, Color::RED);
     assert!(telar::inspect::snapshot(&laid.tree.commands()).is_empty());
 
     reset_layout_runtime();
-    let named = icon(
-        IconProps::props()
-            .name(baked(MONOTONE))
-            .label("Home")
-            .build(),
-    )
-    .unwrap();
+    let named = icon(IconProps::props().name(baked(MONOTONE)).build())
+        .unwrap()
+        .a11y_label(|| "Home");
     let laid = lay_out(named, Color::RED);
     let nodes = telar::inspect::snapshot(&laid.tree.commands());
     assert_eq!(nodes.len(), 1, "{nodes:?}");
     assert_eq!(nodes[0].name, "Home");
     assert_eq!(nodes[0].role, Role::Drawing);
+}
+
+#[test]
+fn an_icon_whose_name_empties_is_decoration_again() {
+    reset_layout_runtime();
+    let name = telar::signal(String::from("Home"));
+    let item = icon(IconProps::props().name(baked(MONOTONE)).build())
+        .unwrap()
+        .a11y_label(move || name.get());
+    let laid = lay_out(item, Color::RED);
+    assert_eq!(telar::inspect::snapshot(&laid.tree.commands()).len(), 1);
+
+    name.set(String::new());
+    assert!(telar::inspect::snapshot(&laid.tree.commands()).is_empty());
 }
 
 #[test]

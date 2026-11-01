@@ -888,7 +888,7 @@ impl Reading {
                     }
                     let annotation = crate::annotation::peek(node).unwrap_or_default();
                     let inner = Scope {
-                        hidden: scope.hidden || annotation.hidden,
+                        hidden: scope.hidden || annotation.hides(),
                         lang: annotation.lang.or(scope.lang),
                     };
                     let role = match controls.contains(&node) {

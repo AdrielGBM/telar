@@ -160,7 +160,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    let __text_3 = __text_3.a11y_lang(|| "es");
+                                    let __text_3 = __text_3.lang(|| "es");
                                     let __text_4 = {
                                         Text::declaring(
                                             || "「猿も木から落ちる」".to_string(),
@@ -168,7 +168,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    let __text_4 = __text_4.a11y_lang(|| "ja");
+                                    let __text_4 = __text_4.lang(|| "ja");
                                     Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__text_2, __text_3, __text_4])?
                                 };
                                 __children.push(box_item(__col_1));

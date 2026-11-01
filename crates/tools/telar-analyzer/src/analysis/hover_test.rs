@@ -52,6 +52,19 @@ fn a_component_calls_role_hovers_only_the_roles_a_call_may_say() {
 }
 
 #[test]
+fn lang_hovers_the_language_on_a_built_in_tag_and_a_component_call_alike() {
+    for src in ["[view]\nbox lang:\"es\"\n", "[view]\ncard lang:\"es\"\n"] {
+        let text = hover_text(src, 1, 6).expect("hover over `lang`");
+        assert!(text.contains("BCP 47"), "{src}: {text}");
+        assert!(text.contains("shaped, broken"), "{src}: {text}");
+    }
+    assert!(
+        hover_text("[view]\ncard a11y_lang:\"es\"\n", 1, 8)
+            .is_none_or(|text| !text.contains("BCP 47"))
+    );
+}
+
+#[test]
 fn a_built_in_a11y_label_hovers_the_name_a_reader_hears() {
     let text =
         hover_text("[view]\nbox a11y_label:\"Save\"\n", 1, 6).expect("hover over `a11y_label`");

@@ -691,6 +691,7 @@ impl<'a> ViewGen<'a> {
                         "`label:` on `{}` is spelled `a11y_label:`: it is the name assistive technology reads, and `label` is always a component's visible text",
                         el.tag
                     ),
+                    crate::registry::FORMER_LANG_ATTR => crate::registry::former_lang_error(&el.tag),
                     key => format!("`{key}` is not an attribute of `{}`", el.tag),
                 };
                 format!("{pad}compile_error!({});\n", signals::rust_str(&message))
@@ -790,6 +791,7 @@ impl ViewGen<'_> {
         component::class_value_errors(el)
             .into_iter()
             .chain(component::state_key_errors(el))
+            .chain(component::former_lang_key_error(el))
             .chain(self.paintless_part_errors(el))
             .map(|message| format!("{pad}compile_error!({});\n", rust_str(&message)))
             .collect()

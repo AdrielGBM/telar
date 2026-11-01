@@ -118,8 +118,8 @@ const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
     AttrSpec::free(A11Y_LABEL_ATTR).doc(
         "The name assistive technology reads for the box: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. On a box with no role of its own it replaces what the box draws, so a counter showing \"3\" named \"3 unread comments\" is read as its name alone, while a control inside keeps its own name and stays reachable; a box with a role of its own (a dialog, a list) holds what it draws under the name. An `img` or `svg` without one is decoration. `label` is always a component's visible text, never this.",
     ),
-    AttrSpec::free("lang").doc(
-        "The language of the box and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`); the nearest one wins.",
+    AttrSpec::free(LANG_ATTR).doc(
+        "The language of the box and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`); the nearest one wins. It decides how the text is shaped, broken and cased, and what language a reader speaks it in.",
     ),
     AttrSpec::keywords("a11y", A11Y_VALUES).doc(
         "`a11y:hidden` takes the box and everything under it out of what assistive technology is told; it is still drawn and still answers the pointer.",
@@ -150,18 +150,26 @@ pub const VIEW_RANGE_VALUES: &[(&str, &str)] = &[
 pub const A11Y_VALUES: &[(&str, &str)] = &[("hidden", "a11y_hidden")];
 
 /// The key naming what assistive technology reads, on a built-in tag and a component call alike.
-pub const A11Y_LABEL_ATTR: &str = "a11y_label";
+pub const A11Y_LABEL_ATTR: &str = telar_project::call_keys::A11Y_LABEL;
+
+/// The key naming the language a box is written in, on a built-in tag and a component call alike: it decides how the text is shaped and broken, not only what a reader is told, so a component may not declare a prop of that name.
+pub const LANG_ATTR: &str = telar_project::call_keys::LANG;
+
+/// How a component call once said its language, refused with the spelling that replaced it: see [`former_lang_error`].
+pub(crate) const FORMER_LANG_ATTR: &str = telar_project::call_keys::FORMER_LANG;
+
+/// Why `a11y_lang:` on `tag` names nothing.
+pub(crate) fn former_lang_error(tag: &str) -> String {
+    format!(
+        "`{FORMER_LANG_ATTR}:` on `{tag}` is spelled `{LANG_ATTR}:`, as on every tag: the language decides how the text is shaped and broken, not only what a reader is told"
+    )
+}
 
 /// The key a child of a component call names the `Children` prop it is handed through with.
-pub const SLOT_ATTR: &str = "slot";
+pub const SLOT_ATTR: &str = telar_project::call_keys::SLOT;
 
 /// The keys a `box`, `row`, `col` or `grid` paints a state of its own with. On a component call they name nothing: a component's states are its own.
-pub const STATE_STYLE_KEYS: &[&str] = &[
-    "hover_style",
-    "active_style",
-    "disabled_style",
-    "focus_style",
-];
+pub const STATE_STYLE_KEYS: &[&str] = telar_project::call_keys::STATE_STYLE_KEYS;
 
 /// A `<part>_style:` key on a component call: the key is the callee's, so no table lists it, and this answers for every one.
 const PART_STYLE: AttrSpec = AttrSpec::free("<part>_style").doc(
@@ -181,18 +189,18 @@ const SLOT: AttrSpec = AttrSpec::free(SLOT_ATTR).doc(
     "Hands this child to the component through the `Children` prop it names, `slot:\"header\"` through `header`, where a child without one goes through `children`. The callee places it with `children $props.header`.",
 );
 
-/// What a component call may say about the item the component returns, beside its props, spelled after the `Accessible` methods they call: `a11y_label` as on a built-in tag, and `a11y_lang` where a built-in says `lang`, since `lang` is a component's own prop to declare.
+/// What a component call may say about the item the component returns, beside its props, spelled as on a built-in tag.
 const COMPONENT_INSTANCE_ATTRS: &[AttrSpec] = &[
     AttrSpec::free(A11Y_LABEL_ATTR).doc(
         "The name assistive technology reads for the item the component returns, over whatever it is named by: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. On an item with no role of its own it replaces what the item draws, so `tag label:\"3\" a11y_label:\"3 unread comments\"` is read as its name alone, while a control inside keeps its own name and stays reachable; an item with a role of its own (a dialog, a list) holds what it draws under the name. `label` stays the component's own prop.",
     ),
-    AttrSpec::free("a11y_lang").doc(
-        "The language of the item the component returns and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`).",
+    AttrSpec::free(LANG_ATTR).doc(
+        "The language of the item the component returns and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`); the nearest one wins. It decides how the text is shaped, broken and cased, and what language a reader speaks it in, so it is never a component's own prop.",
     ),
-    AttrSpec::keywords("a11y", A11Y_VALUES).doc(
+    AttrSpec::keywords(telar_project::call_keys::A11Y, A11Y_VALUES).doc(
         "`a11y:hidden` takes the item the component returns, and everything under it, out of what assistive technology is told.",
     ),
-    AttrSpec::keywords_or_expression("role", COMPONENT_ROLE_VALUES).doc(
+    AttrSpec::keywords_or_expression(telar_project::call_keys::ROLE, COMPONENT_ROLE_VALUES).doc(
         "What the item the component returns is, where the component left it a plain box or a region: a landmark (`navigation`, `main`, `complementary`…), an `article`, a heading (`h1`–`h6`), a live region (`status`, `log`), an item of the list the call sits in (`listitem`), or `group`, by name or as an expression yielding one of them. A role a person operates, or one that promises what is inside the item, stays the component's to say; over a control the component made, this says nothing.",
     ),
 ];

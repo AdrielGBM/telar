@@ -27,13 +27,13 @@ svg = "icons"              # icons/app/logo.svg is `app:logo`
 row gap:8 align:center
     icon name:"mdi:home"
     text "Home"
-icon name:"app:logo" size:32 label:"Acme"
+icon name:"app:logo" size:32 a11y_label:"Acme"
 ```
 
 ## The tag
 
 `icon name:"set:name"` draws one icon in a square box of `size` px (the theme's `icon_size` when unset). It is
-decoration a screen reader skips, unless `label:` names it.
+decoration a screen reader skips, unless `a11y_label:` names it.
 
 A monochrome icon takes the colour of the text around it, so it follows its row's `color:`, the theme and a
 hover state like the text beside it; `color:` sets one instead. Which icons are monochrome follows Iconify, and is

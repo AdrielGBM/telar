@@ -733,11 +733,19 @@ pub(super) fn class_value_errors(el: &Element) -> Vec<String> {
         .collect()
 }
 
-/// Whether `key` on a component call is one of the callee's props, rather than something the call says about the item it returns or a box's state paint.
+/// Whether `key` on a component call is one of the callee's props, rather than one the call keeps for itself, the same list `#[derive(Props)]` refuses a field of.
 fn is_prop_attr(key: &str) -> bool {
-    key != crate::registry::SLOT_ATTR
-        && !crate::registry::is_component_instance_attr(key)
-        && !crate::registry::STATE_STYLE_KEYS.contains(&key)
+    telar_project::call_keys::kept_by_the_call(key).is_none()
+}
+
+/// Why `a11y_lang:` on a component call names nothing; a built-in tag's is one of its unknown attributes.
+pub(super) fn former_lang_key_error(el: &Element) -> Option<String> {
+    let component = !crate::registry::is_builtin_tag(&el.tag);
+    let written = el
+        .attributes
+        .iter()
+        .any(|attr| attr.key == crate::registry::FORMER_LANG_ATTR);
+    (component && written).then(|| crate::registry::former_lang_error(&el.tag))
 }
 
 /// Why a state key on a component call names nothing: a component's states are its own, and a class reaches them through the surface it amends.

@@ -184,6 +184,50 @@ fn a_generic_props_struct_is_refused() {
     }
 }
 
+#[test]
+fn a_prop_named_after_a_key_the_call_keeps_is_refused() {
+    for (source, key, does) in [
+        (
+            "struct P { lang: String }",
+            "lang",
+            "says the language of the item the component returns",
+        ),
+        (
+            "struct P { #[props(default)] r#role: String }",
+            "role",
+            "says what the item the component returns is",
+        ),
+        (
+            "struct P { a11y_label: String }",
+            "a11y_label",
+            "names the item the component returns",
+        ),
+        (
+            "struct P { slot: String }",
+            "slot",
+            "hands a child of the call",
+        ),
+        (
+            "struct P { hover_style: String }",
+            "hover_style",
+            "is refused",
+        ),
+    ] {
+        let error = expand_str(source).expect_err("a kept key").to_string();
+        assert!(
+            error.starts_with(&format!(
+                "a component takes no prop named `{key}`: `{key}:` on a call {does}"
+            )),
+            "{source}: {error}"
+        );
+    }
+}
+
+#[test]
+fn a_part_style_prop_is_the_components_own() {
+    expand_str("struct P { #[props(default)] header_style: String }").expect("a part's style");
+}
+
 fn actions_of(source: &str) -> (String, String) {
     let out = expand_str(source).expect("the struct derives");
     let gated = out

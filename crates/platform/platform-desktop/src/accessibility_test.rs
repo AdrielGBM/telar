@@ -519,7 +519,7 @@ mod from_a_screen {
             .map(|letter| words(letter).map(|text| box_item(text.a11y_hidden())))
             .collect::<Result<_, _>>()?;
         let word = Container::new(LayoutStyle::new().flex_row(), letters)?.a11y_label(|| "Telar");
-        let greeting = words("Bonjour tout le monde")?.a11y_lang(|| "fr");
+        let greeting = words("Bonjour tout le monde")?.lang(|| "fr");
         let hidden =
             Container::new(LayoutStyle::new(), vec![box_item(words("Decoration")?)])?.a11y_hidden();
         let column = Container::new(

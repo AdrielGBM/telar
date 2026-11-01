@@ -206,7 +206,7 @@ fn a_named_box_over_hidden_letters_reads_as_one_word() {
     )
     .unwrap()
     .a11y_label(|| "Hi")
-    .a11y_lang(|| "en");
+    .lang(|| "en");
     compute_layout(
         word.layout_node(),
         AvailableSpace::Definite(200.0),
@@ -238,11 +238,11 @@ fn a_language_reaches_the_text_beneath_it() {
     use crate::annotation::Accessible;
     reset_layout_runtime();
     focus::clear();
-    let quote = letter("Hola").a11y_lang(|| "es");
+    let quote = letter("Hola").lang(|| "es");
     let quote_node = quote.layout_node();
     let page = Container::new(LayoutStyle::new(), vec![box_item(quote)])
         .unwrap()
-        .a11y_lang(|| "en");
+        .lang(|| "en");
     let frame = [
         open(page.layout_node(), rect(0.0, 0.0, 100.0, 40.0)),
         text_at("Hello", rect(0.0, 0.0, 40.0, 16.0)),
@@ -802,7 +802,7 @@ fn a_frame_reading_says_what_each_box_is_called_and_whether_it_is_skipped() {
         vec![box_item(named), box_item(hidden)],
     )
     .unwrap()
-    .a11y_lang(|| "en");
+    .lang(|| "en");
     let page_node = page.layout_node();
 
     let reading = FrameReading::of(&[

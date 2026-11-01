@@ -8,6 +8,7 @@
 
 mod assets;
 mod build;
+pub mod call_keys;
 mod cargo_manifest;
 mod catalog;
 mod declared;

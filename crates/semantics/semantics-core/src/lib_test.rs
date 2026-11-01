@@ -142,6 +142,7 @@ fn an_annotation_names_a_box_over_what_the_widget_derived() {
         role: None,
         lang: Some("es".into()),
         hidden: false,
+        decorative: false,
         anchor: Some("logo".into()),
         modal: None,
     };
@@ -164,6 +165,24 @@ fn an_empty_annotation_changes_nothing_and_hiding_is_only_ever_added() {
         derived.annotated(&Annotation::default()).hidden,
         "an annotation that does not hide cannot unhide what the widget hid"
     );
+}
+
+#[test]
+fn decoration_is_hidden_until_it_is_named() {
+    let decoration = Annotation {
+        decorative: true,
+        ..Annotation::default()
+    };
+    assert!(!decoration.is_empty());
+    assert!(Semantics::drawing().annotated(&decoration).hidden);
+
+    let named = Annotation {
+        label: Some("Home".into()),
+        ..decoration
+    };
+    let said = Semantics::drawing().annotated(&named);
+    assert!(!said.hidden);
+    assert_eq!(said.label.as_deref(), Some("Home"));
 }
 
 #[test]

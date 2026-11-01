@@ -67,7 +67,7 @@ pub fn text_case(props: TextCaseProps) -> Result<Box<dyn LayoutItem>, LayoutErro
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_text_case(TextCase::Upper) },
                                     )?
                                 };
-                                let __text_3 = __text_3.a11y_lang(|| "tr");
+                                let __text_3 = __text_3.lang(|| "tr");
                                 __children.push(box_item(__text_3));
                                 Ok(__children)
                             }

@@ -12,17 +12,19 @@ the application knows, and it says them with three attributes that any built-in 
 | `a11y:hidden` | — | Assistive technology skips the box and its whole subtree. It is still drawn and still answers the pointer. |
 
 `label` is always text that is seen, never the name a reader hears, so `label:` on a built-in tag is a build
-error that points at `a11y_label:`. On a component tag (`button`, `tag`, …) `label` and `lang` stay the
-component's own props to declare, so a call says the same three things about the item the component returns
-under the names of the methods they call: `a11y_label:`, `a11y_lang:` and `a11y:hidden`. Said there, they win
-over what the component said about that item itself — a button named by its text can be named for the row it
-acts on:
+error that points at `a11y_label:`. On a component tag (`button`, `tag`, …) `label` stays the component's own
+prop, its visible text, and a call says the same three things about the item the component returns under the
+same keys: `a11y_label:`, `lang:` and `a11y:hidden`. Said there, they win over what the component said about
+that item itself — a button named by its text can be named for the row it acts on:
 
 ```text
 button label:"Open" variant:ghost a11y_label:"Open {name} in the canvas"
 ```
 
 A quoted name or language interpolates `{…}` as text does, wherever it is written.
+
+The language decides how the text under it is shaped, broken and cased, not only what a reader is told, so it
+is `lang:` on every tag, `.lang(|| …)` from Rust, and never a component's own prop.
 
 A call may also say what that item is with `role:`, but only in words that describe the item from outside and
 ask nothing of what it holds:
@@ -52,11 +54,14 @@ The role is laid only over a root the component left a plain box or a region (`R
 component made a control, a heading, a list or anything else keeps its own role on every target, and one the
 keyboard reaches keeps it too, so `role:navigation` on a `button` call cannot announce a navigation that answers
 Enter. The build cannot see which root a component returns, so this is the runtime's answer rather than an error:
-the same rule in the document's element, the snapshot, AccessKit and the terminal's reading. A `role` prop a
-component declares is unreachable from a call, as `a11y_label` would be.
+the same rule in the document's element, the snapshot, AccessKit and the terminal's reading.
+
+A call keeps these keys for itself — `a11y_label`, `lang`, `a11y`, `role`, `slot`, and the state keys
+`hover_style`, `active_style`, `disabled_style` and `focus_style` — so none of them ever reaches a prop, and
+`#[derive(Props)]` refuses a field named after one, saying what the key does on a call.
 
 From Rust the same are methods of `telar::Accessible`, which every widget with a layout node has:
-`.a11y_label(|| …)`, `.a11y_lang(|| …)`, `.a11y_hidden()` and `.a11y_role(Role::…)`, which in a debug build panics
+`.a11y_label(|| …)`, `.lang(|| …)`, `.a11y_hidden()` and `.a11y_role(Role::…)`, which in a debug build panics
 on a role a call could not say (`Role::is_annotatable`).
 
 ## Pictures
@@ -68,6 +73,18 @@ an image with that name.
 svg src:icon                            // decoration
 svg src:icon a11y_label:"Telar logo"    // "Telar logo, image"
 ```
+
+`telar-icons`' `icon` is the same: decoration until its call names it with `a11y_label:`, which makes it a
+picture by that name. It has no `label` of its own, since `label` is always text that is seen.
+
+```text
+icon name:"lucide:x"                         // decoration
+icon name:"lucide:x" a11y_label:"Remove"     // "Remove, image"
+```
+
+From Rust, a component that draws artwork only to decorate unless its caller names it marks its root
+`.a11y_decorative()`: hidden from assistive technology while it goes by no name, a picture once
+`.a11y_label(…)` gives it one.
 
 ## Split letters
 

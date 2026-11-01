@@ -56,7 +56,7 @@ fn split_letters_reach_a_document_as_one_named_word() {
     let word = Container::new(LayoutStyle::new(), vec![box_item(h), box_item(i)])
         .unwrap()
         .a11y_label(|| "Hi")
-        .a11y_lang(|| "en");
+        .lang(|| "en");
     let row = as_document(|| captured(&word.view()));
     assert_eq!(row[0].semantics.label.as_deref(), Some("Hi"));
     assert_eq!(row[0].semantics.lang.as_deref(), Some("en"));
@@ -65,6 +65,26 @@ fn split_letters_reach_a_document_as_one_named_word() {
         letters.iter().all(|letter| letter[0].semantics.hidden),
         "and none of its letters is"
     );
+}
+
+/// A decorative box is hidden from a document while it goes by no name, whichever of the two its caller says first.
+#[test]
+fn a_decorative_box_is_hidden_until_it_is_named() {
+    reset_layout_runtime();
+    let decoration = letter("★").a11y_decorative();
+    assert!(
+        as_document(|| captured(&decoration.view()))[0]
+            .semantics
+            .hidden
+    );
+
+    let named_after = letter("★").a11y_decorative().a11y_label(|| "Starred");
+    let named_before = letter("★").a11y_label(|| "Starred").a11y_decorative();
+    for named in [named_after, named_before] {
+        let element = &as_document(|| captured(&named.view()))[0];
+        assert!(!element.semantics.hidden);
+        assert_eq!(element.semantics.label.as_deref(), Some("Starred"));
+    }
 }
 
 /// A box nobody annotated is exactly the element it always was.

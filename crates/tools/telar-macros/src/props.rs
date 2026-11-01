@@ -327,6 +327,16 @@ fn collect(input: &DeriveInput) -> Result<Vec<Prop>, syn::Error> {
 
 /// Reads a field and its `#[props(…)]`: `default`, `default = expr`, `into`, `some`, `doc = "…"` and `control = …`, in any combination and across any number of attributes. No attribute at all means a required prop whose setter takes its type exactly.
 fn read_prop(field: &syn::Field) -> Result<Prop, syn::Error> {
+    let name = field.ident.clone().expect("named fields have idents");
+    let key = name.unraw().to_string();
+    if let Some(does) = telar_project::call_keys::kept_by_the_call(&key) {
+        return Err(syn::Error::new(
+            name.span(),
+            format!(
+                "a component takes no prop named `{key}`: `{key}:` on a call {does}, so it never reaches a prop; name this one for what it means to the component"
+            ),
+        ));
+    }
     let (mut default, mut into, mut some, mut doc, mut control) = (None, false, false, None, None);
     for attr in field.attrs.iter().filter(|a| a.path().is_ident("props")) {
         attr.parse_nested_meta(|meta| {
@@ -358,7 +368,7 @@ fn read_prop(field: &syn::Field) -> Result<Prop, syn::Error> {
         })?;
     }
     Ok(Prop {
-        name: field.ident.clone().expect("named fields have idents"),
+        name,
         ty: field.ty.clone(),
         default,
         into,

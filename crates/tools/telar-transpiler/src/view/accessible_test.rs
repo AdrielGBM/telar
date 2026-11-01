@@ -17,7 +17,7 @@ fn split_letters_are_named_by_their_parent_and_hidden_one_by_one() {
         "the row carries the word:\n{code}"
     );
     assert!(
-        code.contains(".a11y_lang(|| \"es\")"),
+        code.contains(".lang(|| \"es\")"),
         "and its language:\n{code}"
     );
     assert_eq!(
@@ -134,11 +134,11 @@ fn view_progress_writes_a_boxs_passage_into_a_signal() {
     );
 }
 
-/// A component call names, tags and hides the item the component returns, under spellings that leave its own `label` and `lang` props alone.
+/// A component call names, tags and hides the item the component returns under the spellings a built-in tag takes, none of them passed as a prop, so its own `label` stays its visible text.
 #[test]
-fn a_component_call_is_annotated_with_its_own_spelling() {
+fn a_component_call_is_annotated_as_a_built_in_tag_is() {
     let code = transpile(
-        "button label:\"Open\" a11y_label:\"Open {$name} in the canvas\" a11y_lang:\"es\" a11y:hidden\n",
+        "button label:\"Open\" a11y_label:\"Open {$name} in the canvas\" lang:\"es\" a11y:hidden\n",
     );
     assert!(!code.contains("compile_error!"), "{code}");
     assert!(
@@ -157,8 +157,41 @@ fn a_component_call_is_annotated_with_its_own_spelling() {
         call.starts_with("{ let name = name.clone(); move || format!(\"Open {} in the canvas\""),
         "a quoted name interpolates, reading its signal:\n{code}"
     );
-    assert!(code.contains(".a11y_lang(|| \"es\")"), "{code}");
+    assert!(code.contains(".lang(|| \"es\")"), "{code}");
     assert!(code.contains(".a11y_hidden()"), "{code}");
+}
+
+/// The language a component call says is the language of the item it returns, re-read when it reads state, as on a built-in tag.
+#[test]
+fn a_component_calls_lang_sets_its_items_language() {
+    let code = transpile("card lang:$name\n    text \"Hola\"\n");
+    assert!(!code.contains("compile_error!"), "{code}");
+    let call = code
+        .split(".lang(")
+        .nth(1)
+        .expect("the returned item says its language");
+    assert!(call.contains("name.get()"), "{code}");
+}
+
+/// The spelling a component call once said its language with is refused on every tag, naming the one that replaced it, and reaches no component as a prop.
+#[test]
+fn the_former_language_key_names_lang() {
+    for (view, tag) in [
+        ("button label:\"Open\" a11y_lang:\"es\"\n", "button"),
+        ("text \"Hola\" a11y_lang:\"es\"\n", "text"),
+    ] {
+        let code = transpile(view);
+        let expected = format!(
+            "`a11y_lang:` on `{tag}` is spelled `lang:`, as on every tag: the language decides how the text is shaped and broken, not only what a reader is told"
+        );
+        assert_eq!(
+            code.matches(&format!("compile_error!({expected:?})"))
+                .count(),
+            1,
+            "{code}"
+        );
+        assert!(!code.contains(".lang("), "{code}");
+    }
 }
 
 /// The value check covers a component call's `a11y:` as it does a built-in's.
