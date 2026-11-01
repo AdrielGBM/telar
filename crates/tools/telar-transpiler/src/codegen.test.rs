@@ -212,6 +212,33 @@ fn a_viewless_rsx_is_a_module_of_classes() {
     );
 }
 
+/// A component with no view would draw an empty column, so the file is refused whatever else it holds, and the message names the `.preview.rsx` a file of previews belongs in.
+#[test]
+fn a_rsx_without_a_view_is_refused() {
+    for (label, source) in [
+        ("no content", ""),
+        ("only logic", "[logic]\nlet x = 1;\n"),
+        ("only previews", "[preview \"One\"]\ncol\n"),
+        (
+            "props and previews",
+            "[logic]\npub struct Props {\n    pub label: String,\n}\n\n[preview \"One\"]\ncol\n",
+        ),
+    ] {
+        let error = transpile_source(source, "demo", None, None)
+            .expect_err(&format!("a `.rsx` with {label} and no view is an error"));
+        assert!(
+            error.to_string().contains("demo.preview.rsx"),
+            "{label}: {error}"
+        );
+    }
+}
+
+#[test]
+fn a_rsx_of_classes_without_a_view_still_compiles() {
+    let out = transpile_source("[style]\npub @line\n    gap: 8\n", "demo", None, None);
+    assert!(out.is_ok(), "{:?}", out.err());
+}
+
 /// A directory's `mod.rsx` may hold the classes its modules share, and only those.
 #[test]
 fn a_module_root_shares_pub_classes() {

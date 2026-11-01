@@ -46,7 +46,8 @@ canvas.expect_text("agree · true")?;
 - **`[play]`** follows a preview and holds verbatim Rust that drives it; see [Play](#play).
 - A `.rsx` file written for a component keeps its previews beside its `[view]`. A **`checkbox.preview.rsx`** file
   holds previews alone, with no `[view]`, for the component named by its file stem: use it when the component is
-  written in Rust, or when the previews would drown the component.
+  written in Rust, or when the previews would drown the component. A file of previews with no `[view]` under any other
+  name is a build error.
 
 Header options are `key:value`, on `[previews]` and on `[preview]` alike. A misspelled one is a build error on its
 own line, which lists the keys it takes.

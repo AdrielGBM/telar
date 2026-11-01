@@ -398,6 +398,12 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     let imported = imports.class_list();
     let classes: Vec<StyleClass> = doc.style.classes.iter().chain(&imported).cloned().collect();
     let style_module = is_style_module(doc, props_span.is_some());
+    if doc.view.nodes.is_empty() && !style_module {
+        return Err(TranspileError::Codegen(format!(
+            "`{0}.rsx` has no `[view]`, so it would be a component that draws nothing: add a `[view]`, or, if this file holds only previews of a component written elsewhere, name it `{0}.preview.rsx`",
+            input.component_name
+        )));
+    }
     let style_section = match style_module {
         true => doc
             .style

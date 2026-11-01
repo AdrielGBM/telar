@@ -231,7 +231,8 @@ row @rule align:center
 ```
 
 A `.rsx` with classes and no `[view]` — `src/styles.rsx` above — is a module of them rather than a component, and a
-directory's `mod.rsx` may hold the classes its modules share. A class is a bundle of attributes written onto each
+directory's `mod.rsx` may hold the classes its modules share. Any other `.rsx` with no `[view]` is a build error: a
+component needs one, and a file of previews alone is named `<name>.preview.rsx`. A class is a bundle of attributes written onto each
 element that names it, so its values are Rust read where it is used, the way a `macro_rules!` macro's paths are: a
 shared class names what it reads by a path any file can reach, or each file that uses it imports that name. A class
 no `[style]` declares or imports is an error on the element naming it, and so is an import of a module that is not
