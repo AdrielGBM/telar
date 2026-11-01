@@ -1147,3 +1147,82 @@ fn a_bad_name_below_a_generated_directory_is_still_reported() {
         walk.problems
     );
 }
+
+#[test]
+fn a_module_named_only_in_a_comment_or_string_is_still_declared_for_its_rsx() {
+    let hiding = [
+        ("a block comment", "/* mod foo; */\n"),
+        (
+            "a nested block comment",
+            "/* outer /* mod foo; */ mod foo; */\n",
+        ),
+        ("a string", "const S: &str = \"mod foo;\";\n"),
+        ("a raw string", "const S: &str = r#\"mod foo;\"#;\n"),
+        ("a doc comment", "/// mod foo;\nfn f() {}\n"),
+    ];
+    for (place, source) in hiding {
+        let root = std::env::temp_dir().join(format!(
+            "rsx_hidden_mod_{}_{}",
+            place.replace(' ', "_"),
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("lib.rs"), source).unwrap();
+        std::fs::write(root.join("foo.rsx"), "[view]\ncol\n").unwrap();
+
+        let out =
+            discover_rust_modules(&root, &root, &root.join("build"), ModuleVisibility::Public)
+                .declarations;
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(out.contains("pub mod foo;"), "{place}: {out}");
+    }
+}
+
+#[test]
+fn a_module_declaration_split_over_two_lines_is_declared() {
+    assert_eq!(declared_module_names("mod\n    foo;\n"), ["foo"]);
+}
+
+#[test]
+fn a_module_nested_in_an_inline_module_does_not_reserve_its_name_at_top_level() {
+    assert_eq!(
+        declared_module_names("mod tests { mod inner; }\npub mod outer;\n"),
+        ["tests", "outer"]
+    );
+}
+
+#[test]
+fn a_placement_macro_in_a_string_or_block_comment_does_not_place() {
+    for source in [
+        "const S: &str = \"rsx_modules!(\";\n",
+        "/* telar::app!(Theme); */\n",
+        "const S: &str = r#\"app!(\"#;\n",
+        "foo_app!(x);\n",
+    ] {
+        assert!(!places_its_own_rsx(source), "{source}");
+    }
+}
+
+#[test]
+fn a_placement_macro_counts_under_a_path_and_with_any_delimiter() {
+    for source in [
+        "telar::rsx_modules!();\n",
+        "telar::app!(Theme);\n",
+        "app![Theme];\n",
+        "rsx_modules! { }\n",
+        "rsx_modules !(\n);\n",
+    ] {
+        assert!(places_its_own_rsx(source), "{source}");
+    }
+}
+
+#[test]
+fn a_module_written_in_a_macro_invocation_at_top_level_is_declared() {
+    assert_eq!(
+        declared_module_names(
+            "m! { #[cfg(test)] mod previews; }\nmod after;\nfn f() { mod local {} }\n"
+        ),
+        ["previews", "after"]
+    );
+}

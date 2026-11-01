@@ -25,6 +25,7 @@ mod prelude;
 mod prerender;
 mod previews;
 pub mod protocol;
+mod rust_source;
 mod theme;
 pub mod theme_tokens;
 mod vocabulary;

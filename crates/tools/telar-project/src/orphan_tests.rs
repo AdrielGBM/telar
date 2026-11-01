@@ -1,6 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use crate::collect_files_by_ext;
+use crate::rust_source::{self, Token};
 
 const TEST_SUFFIX: &str = ".test.rs";
 
@@ -60,18 +61,12 @@ fn declared_files(source_file: &Path) -> Vec<PathBuf> {
         true => dir.to_path_buf(),
         false => dir.join(source_file.file_stem().unwrap_or_default()),
     };
-    let code: Vec<&str> = source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect();
-    let by_path = code
-        .iter()
-        .flat_map(|line| line.split("#[").skip(1))
-        .filter_map(path_value)
+    let tokens = rust_source::tokens(&source);
+    let by_path = attribute_paths(&tokens)
+        .into_iter()
         .map(|value| normalized(&dir.join(value)));
-    let by_name = code
-        .iter()
-        .flat_map(|line| plain_module_names(line))
+    let by_name = plain_module_names(&tokens)
+        .into_iter()
         .map(|name| normalized(&module_dir.join(format!("{name}.rs"))));
     by_path.chain(by_name).collect()
 }
@@ -83,38 +78,41 @@ fn is_module_root_file(path: &Path) -> bool {
     )
 }
 
-fn plain_module_names(line: &str) -> Vec<&str> {
-    let mut words = line.split_whitespace();
-    let mut names = Vec::new();
-    while let Some(word) = words.next() {
-        if word != "mod" {
-            continue;
-        }
-        if let Some(name) = words.next().and_then(|next| next.strip_suffix(';')) {
-            names.push(name);
-        }
-    }
-    names
+fn plain_module_names(tokens: &[Token]) -> Vec<&str> {
+    tokens
+        .windows(3)
+        .filter(|decl| decl[0].is_word("mod") && decl[2].is_punct(';'))
+        .filter_map(|decl| decl[1].ident())
+        .collect()
 }
 
-/// The string a `path = "…"` inside one attribute assigns, whether bare or inside a `cfg_attr`.
-fn path_value(attribute: &str) -> Option<&str> {
-    let attribute = attribute.split(']').next()?;
-    let mut rest = attribute;
-    while let Some(at) = rest.find("path") {
-        let before = rest[..at].chars().next_back();
-        let after = rest[at + "path".len()..].trim_start();
-        rest = &rest[at + "path".len()..];
-        if before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
-            continue;
-        }
-        let Some(value) = after.strip_prefix('=').map(str::trim_start) else {
+/// The string every `path = "…"` inside an attribute assigns, whether bare or inside a `cfg_attr`.
+fn attribute_paths(tokens: &[Token]) -> Vec<&str> {
+    let mut values = Vec::new();
+    let mut brackets: Option<usize> = None;
+    for (at, token) in tokens.iter().enumerate() {
+        let Some(open) = brackets else {
+            let bracket_at = match tokens.get(at + 1) {
+                Some(next) if next.is_punct('!') => at + 2,
+                _ => at + 1,
+            };
+            if token.is_punct('#') && tokens.get(bracket_at).is_some_and(|t| t.is_punct('[')) {
+                brackets = Some(0);
+            }
             continue;
         };
-        let value = value.strip_prefix('"')?;
-        return value.split('"').next();
+        if token.is_punct('[') {
+            brackets = Some(open + 1);
+        } else if token.is_punct(']') {
+            brackets = (open > 1).then_some(open - 1);
+        } else if token.is_word("path")
+            && tokens.get(at + 1).is_some_and(|next| next.is_punct('='))
+            && let Some(value) = tokens.get(at + 2).and_then(Token::string)
+        {
+            values.push(value);
+        }
     }
-    None
+    values
 }
 
 /// The `path` of every `[[test]]`, `[[bench]]`, `[[example]]` and `[[bin]]` target of the package's `Cargo.toml`, which cargo compiles as crate roots of their own.

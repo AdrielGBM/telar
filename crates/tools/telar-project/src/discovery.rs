@@ -5,6 +5,7 @@ use std::fmt::Write;
 use std::path::{Component, Path, PathBuf};
 
 use crate::prelude::{is_keyword, is_plain_identifier};
+use crate::rust_source::{self, Token};
 
 /// Recursively collects files with any of `extensions` under `root`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
 ///
@@ -228,7 +229,7 @@ struct TreeWalk<'a> {
 
 /// The module names the site's own file already declares, which the discovered tree leaves alone. Redeclaring one is `E0428`, and `mod menu;` written by hand next to a `pub mod menu;` written here would also be a visibility the author did not ask for.
 ///
-/// Only the site's own file is read, and only the names at its top level: everything below is written into generated files, where nothing of the author's can collide. Reached by stripping line comments and taking the identifier after each `mod`, which also catches an inline `mod tests { … }`.
+/// Only the site's own file is read, and only the names at its top level: everything below is written into generated files, where nothing of the author's can collide. An inline `mod tests { … }` reserves its own name, not the names declared inside it, while a `mod` written in the braces of a macro invocation is an item of the module itself.
 fn hand_written_modules(site_dir: &Path) -> HashSet<String> {
     ["lib.rs", "main.rs", "mod.rs"]
         .iter()
@@ -238,19 +239,23 @@ fn hand_written_modules(site_dir: &Path) -> HashSet<String> {
 }
 
 fn declared_module_names(source: &str) -> Vec<String> {
+    let tokens = rust_source::tokens(source);
     let mut names = Vec::new();
-    for line in source.lines() {
-        let code = line.split("//").next().unwrap_or("");
-        let mut words = code.split_whitespace();
-        while let Some(word) = words.next() {
-            if word != "mod" {
-                continue;
-            }
-            let Some(next) = words.next() else { continue };
-            let name = next.trim_end_matches([';', '{']);
-            if crate::naming::is_ident(name) {
-                names.push(name.to_owned());
-            }
+    let mut macro_depth = 0;
+    for (at, token) in tokens.iter().enumerate() {
+        if token.is_punct('{')
+            && token.depth == macro_depth
+            && at > 0
+            && tokens[at - 1].is_punct('!')
+        {
+            macro_depth += 1;
+        } else if token.is_punct('}') && token.depth < macro_depth {
+            macro_depth = token.depth;
+        } else if token.is_word("mod")
+            && token.depth == macro_depth
+            && let Some(name) = tokens.get(at + 1).and_then(Token::ident)
+        {
+            names.push(name.to_owned());
         }
     }
     names
@@ -697,12 +702,13 @@ fn file_places_its_own(file: &Path) -> bool {
     std::fs::read_to_string(file).is_ok_and(|src| places_its_own_rsx(&src))
 }
 
-/// Whether `source` invokes the placement macro, rather than naming it in prose. The call has to open its delimiter and survive having line comments stripped: a bare substring was harmless while it only decided whether to suppress a diagnostic, and stopped being so once the same answer decides which directories are placement sites — telar's own sandbox has two files whose comments mention `app!`.
+/// Whether `source` invokes the placement macro, rather than naming it in prose or a string. It decides which directories are placement sites, and telar's own sandbox has files whose comments mention `app!`.
 fn places_its_own_rsx(source: &str) -> bool {
-    source
-        .lines()
-        .filter_map(|line| line.split("//").next())
-        .any(|code| code.contains("rsx_modules!(") || code.contains("app!("))
+    rust_source::tokens(source).windows(3).any(|call| {
+        (call[0].is_word("rsx_modules") || call[0].is_word("app"))
+            && call[1].is_punct('!')
+            && ['(', '[', '{'].iter().any(|open| call[2].is_punct(*open))
+    })
 }
 
 /// Whether any `.rsx` sits under `dir`, which is what makes a directory with no `mod.rs` worth declaring even when hand-written modules are the crate's own business.
