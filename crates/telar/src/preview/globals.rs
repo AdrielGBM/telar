@@ -5,7 +5,10 @@ use std::rc::Rc;
 
 use reactive_core::{RwSignal, effect, signal};
 
-use crate::{Color, Direction, Insets, LayoutError, LayoutItem, Size, SurfaceCanvas, SurfaceEnv};
+use crate::{
+    Color, Direction, Insets, LayoutError, LayoutItem, NestedCanvas, Size, SurfaceCanvas,
+    SurfaceEnv,
+};
 
 use super::PreviewEnv;
 
@@ -114,19 +117,18 @@ impl Globals {
     ///
     /// The background is left to the host: it is drawn around the canvas rather than set on it.
     ///
-    /// The canvas [hosts its keyboard](SurfaceCanvas::host_keyboard), as every preview canvas is drawn inside a tree around it: Tab past its last focusable leaves nothing focused rather than wrapping, the same in the workshop as in a play run headless.
+    /// The canvas is a [`NestedCanvas`], as every preview canvas is drawn inside a tree around it: Tab past its last focusable leaves nothing focused rather than wrapping, the same in the workshop as in a play run headless.
     pub fn canvas(
         &self,
         size: Size,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
-    ) -> Result<Rc<SurfaceCanvas>, LayoutError> {
-        let canvas = Rc::new(SurfaceCanvas::new_in(size, &self.env(), build)?);
-        canvas.host_keyboard();
+    ) -> Result<Rc<NestedCanvas>, LayoutError> {
+        let canvas = Rc::new(NestedCanvas::new_in(size, &self.env(), build)?);
         self.bind(&canvas);
         Ok(canvas)
     }
 
-    fn bind(&self, canvas: &Rc<SurfaceCanvas>) {
+    fn bind(&self, canvas: &Rc<NestedCanvas>) {
         let follow = |apply: Box<dyn Fn(&SurfaceCanvas)>| {
             let canvas = Rc::downgrade(canvas);
             effect(move || {

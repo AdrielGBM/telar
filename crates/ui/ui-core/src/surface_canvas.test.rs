@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use geometry_core::{Insets, Rect, Size, Transform};
 use layout_core::{LayoutStyle, SizeDimension};
-use platform_core::{Event, PointerButton, PointerSource};
+use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource};
 use reactive_core::{RwSignal, detached, dispose_owner, effect, owner_scope, signal, with_owner};
 use renderer_core::{Color, RectStyle, ShapeStyle};
 use ui_tree::{EventResult, RenderNode};
@@ -256,4 +256,128 @@ fn a_cache_first_reached_in_a_canvas_outlives_it() {
         7,
         "another canvas reads what the first one's build cached"
     );
+}
+
+fn tab(shift: bool) -> Event {
+    Event::KeyPressed {
+        key: Key::Named(NamedKey::Tab),
+        modifiers: ModifiersState {
+            is_shift: shift,
+            ..ModifiersState::default()
+        },
+        unmodified: None,
+    }
+}
+
+const CANVAS: Size = Size::new(100.0, 100.0);
+
+/// Two 20×20 focusables side by side in the canvas's top-left corner, each telling its signal in `focused` whether it holds focus.
+fn two_focusables(
+    focused: [RwSignal<bool>; 2],
+) -> impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    move || {
+        let boxes = focused
+            .map(|focused| {
+                StyledContainer::new(
+                    LayoutStyle::new().width(20.0).height(20.0),
+                    |_| RectStyle::default().with_fill(Color::BLACK),
+                    vec![],
+                )
+                .map(|swatch| {
+                    Box::new(swatch.on_focus(move |now| focused.set(now))) as Box<dyn LayoutItem>
+                })
+            })
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        Ok(Box::new(Container::new(fill().flex_row(), boxes)?) as Box<dyn LayoutItem>)
+    }
+}
+
+fn shown(canvas: &SurfaceCanvas) {
+    canvas.resize(CANVAS);
+    let _ = canvas.frame_commands();
+}
+
+fn click(canvas: &SurfaceCanvas, x: f64, y: f64) {
+    canvas.dispatch(&press(x, y));
+    canvas.dispatch(&release(x, y));
+}
+
+fn presses_let_the_keyboard_go(canvas: &SurfaceCanvas, first: RwSignal<bool>) {
+    click(canvas, 10.0, 10.0);
+    assert!(first.get(), "a press on a focusable takes focus");
+    click(canvas, 10.0, 10.0);
+    assert!(first.get(), "a press on the focused box keeps it");
+    click(canvas, 80.0, 80.0);
+    assert!(!canvas.holds_focus(), "a press on nothing clears focus");
+}
+
+#[test]
+fn tab_with_nothing_focused_enters_a_canvas_from_either_end() {
+    reset_layout_runtime();
+    let [first, second] = [signal(false), signal(false)];
+    let build = two_focusables([first, second]);
+    let canvas = SurfaceCanvas::new(CANVAS, build).unwrap();
+    shown(&canvas);
+
+    assert_eq!(canvas.dispatch(&tab(false)), EventResult::Handled);
+    assert!(first.get(), "Tab from nothing lands on the first focusable");
+    canvas.dispatch(&tab(false));
+    canvas.dispatch(&tab(false));
+    assert!(
+        first.get(),
+        "Tab past the last focusable wraps round to the first"
+    );
+
+    canvas.blur();
+    canvas.dispatch(&tab(true));
+    assert!(
+        second.get(),
+        "Shift+Tab from nothing lands on the last focusable"
+    );
+}
+
+#[test]
+fn a_press_on_nothing_lets_a_canvas_keyboard_go() {
+    reset_layout_runtime();
+    let [first, second] = [signal(false), signal(false)];
+    let build = two_focusables([first, second]);
+    let canvas = SurfaceCanvas::new(CANVAS, build).unwrap();
+    shown(&canvas);
+    presses_let_the_keyboard_go(&canvas, first);
+}
+
+#[test]
+fn a_press_on_nothing_lets_a_nested_canvas_keyboard_go() {
+    reset_layout_runtime();
+    let [first, second] = [signal(false), signal(false)];
+    let build = two_focusables([first, second]);
+    let canvas = NestedCanvas::new(CANVAS, build).unwrap();
+    shown(&canvas);
+    presses_let_the_keyboard_go(&canvas, first);
+}
+
+#[test]
+fn a_nested_canvas_leaves_tab_from_nothing_to_the_tree_around_and_steps_out_past_its_ends() {
+    reset_layout_runtime();
+    let [first, second] = [signal(false), signal(false)];
+    let build = two_focusables([first, second]);
+    let canvas = NestedCanvas::new(CANVAS, build).unwrap();
+    shown(&canvas);
+
+    assert_eq!(canvas.dispatch(&tab(false)), EventResult::Ignored);
+    assert!(
+        !canvas.holds_focus(),
+        "Tab with nothing focused is the tree around's to move"
+    );
+
+    assert!(
+        canvas.arrive(false),
+        "focus arriving from the stop around lands inside"
+    );
+    assert!(first.get());
+    assert!(!canvas.tab(&tab(false)), "Tab walks the focusables inside");
+    assert!(second.get());
+    assert!(canvas.tab(&tab(false)), "Tab past the last steps out");
+    assert!(!canvas.holds_focus(), "and leaves nothing focused inside");
 }

@@ -1,6 +1,6 @@
 //! The canvas: the selected preview, mounted on a surface of its own so its overlays, focus, size and environment stay inside it, under a header naming it, or with no header where the workshop shows no chrome.
 //!
-//! Each mount is a new [`telar::SurfaceCanvas`] shown through a [`telar::SurfaceFrame`], with the preview built inside an error boundary by [`mount_preview`]: a failed build or a panic shows a card in the canvas, and the workshop around it keeps running. An arg the preview read at build builds it again inside the same canvas; [`WorkshopState::remount`] replaces the canvas itself. The preview's callbacks log their calls in the workshop's one action log, which each mount empties, and its play drives the canvas as the interactions panel says.
+//! Each mount is a new [`telar::NestedCanvas`] shown through a [`telar::SurfaceFrame`], with the preview built inside an error boundary by [`mount_preview`]: a failed build or a panic shows a card in the canvas, and the workshop around it keeps running. An arg the preview read at build builds it again inside the same canvas; [`WorkshopState::remount`] replaces the canvas itself. The preview's callbacks log their calls in the workshop's one action log, which each mount empties, and its play drives the canvas as the interactions panel says.
 
 telar::rsx_modules!();
 

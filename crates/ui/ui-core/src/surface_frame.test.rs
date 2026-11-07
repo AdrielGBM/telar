@@ -207,7 +207,7 @@ fn modal() -> Modal {
 fn a_modal_opened_inside_a_frame_stays_inside_its_bounds_and_its_surface() {
     reset_layout_runtime();
     let modal = modal();
-    let canvas = Rc::new(SurfaceCanvas::new(Size::new(1.0, 1.0), page_with_modal(&modal)).unwrap());
+    let canvas = Rc::new(NestedCanvas::new(Size::new(1.0, 1.0), page_with_modal(&modal)).unwrap());
     let window_hits = Rc::new(Cell::new(0));
     let window = Window::new(
         SurfaceFrame::filling(
@@ -289,7 +289,7 @@ fn pointer_events_reach_the_frame_in_its_own_coordinates_and_scale() {
     let canvas = {
         let moved_to = moved_to.clone();
         Rc::new(
-            SurfaceCanvas::new(Size::new(50.0, 40.0), move || {
+            NestedCanvas::new(Size::new(50.0, 40.0), move || {
                 let target = swatch(Color::BLACK, LayoutStyle::new().width(20.0).height(20.0))?
                     .on_press(move || pressed.set(pressed.get() + 1));
                 Ok(boxed(Probe {
@@ -411,7 +411,7 @@ fn an_overlay_inside_a_frame_hears_a_scroll_end_in_the_frames_coordinates() {
     let canvas = {
         let ended_at = ended_at.clone();
         Rc::new(
-            SurfaceCanvas::new(Size::new(50.0, 40.0), move || {
+            NestedCanvas::new(Size::new(50.0, 40.0), move || {
                 let panel = ScrollEndProbe {
                     inner: boxed(swatch(Color::BLACK, fill())?),
                     ended_at,
@@ -452,7 +452,7 @@ fn focus_window(
     before: Box<dyn LayoutItem>,
     after: Box<dyn LayoutItem>,
 ) -> Window {
-    let canvas = Rc::new(SurfaceCanvas::new(Size::new(1.0, 1.0), content).unwrap());
+    let canvas = Rc::new(NestedCanvas::new(Size::new(1.0, 1.0), content).unwrap());
     Window::new(
         SurfaceFrame::filling(
             canvas,
@@ -614,7 +614,7 @@ fn a_modal_open_inside_a_frame_holds_tab_until_it_closes() {
 fn the_window_hears_that_a_field_inside_the_frame_has_the_caret() {
     reset_layout_runtime();
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), || {
+        NestedCanvas::new(Size::new(1.0, 1.0), || {
             Ok(boxed(Container::new(fill(), vec![])?))
         })
         .unwrap(),
@@ -654,7 +654,7 @@ fn size_and_safe_area_reach_readers_inside_the_frame() {
     let canvas = {
         let (size_read, insets_read) = (size_read.clone(), insets_read.clone());
         Rc::new(
-            SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+            NestedCanvas::new(Size::new(1.0, 1.0), move || {
                 effect(move || size_read.set(use_surface_size()));
                 effect(move || insets_read.set(use_safe_area_insets()));
                 Ok(boxed(Container::new(fill(), vec![])?))
@@ -699,7 +699,7 @@ fn size_and_safe_area_reach_readers_inside_the_frame() {
 fn a_sized_frame_takes_the_box_of_its_surface_at_its_scale() {
     reset_layout_runtime();
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(400.0, 800.0), || {
+        NestedCanvas::new(Size::new(400.0, 800.0), || {
             Ok(boxed(Container::new(fill(), vec![])?))
         })
         .unwrap(),
@@ -723,8 +723,8 @@ const LEAD: Color = Color::rgba(0.9, 0.2, 0.2, 1.0);
 const LEAD_WIDTH: f32 = 40.0;
 
 /// A surface whose first box starts the row, wherever the direction in force says a row starts, and which records the direction its effects read.
-fn leading_swatch(read: Rc<RefCell<Vec<Direction>>>) -> SurfaceCanvas {
-    SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+fn leading_swatch(read: Rc<RefCell<Vec<Direction>>>) -> NestedCanvas {
+    NestedCanvas::new(Size::new(1.0, 1.0), move || {
         effect(move || read.borrow_mut().push(crate::use_direction()));
         let lead = swatch(LEAD, LayoutStyle::new().width(LEAD_WIDTH).height(20.0))?;
         Ok(boxed(Container::new(fill().flex_row(), vec![boxed(lead)])?))
@@ -873,7 +873,7 @@ fn a_locale_set_on_a_frame_translates_the_text_inside_it_only() {
     reset_layout_runtime();
     i18n_core::set_locale("en");
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), || {
+        NestedCanvas::new(Size::new(1.0, 1.0), || {
             Ok(boxed(Container::new(fill(), vec![translated("greeting")])?))
         })
         .unwrap(),
@@ -924,7 +924,7 @@ fn high_contrast_set_on_a_frame_reaches_only_the_readers_inside_it() {
     let canvas = {
         let inside = inside.clone();
         Rc::new(
-            SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+            NestedCanvas::new(Size::new(1.0, 1.0), move || {
                 effect(move || {
                     inside
                         .borrow_mut()
@@ -967,7 +967,7 @@ fn high_contrast_set_on_a_frame_reaches_only_the_readers_inside_it() {
 fn a_modal_open_from_the_start_covers_its_frame_above_the_page() {
     reset_layout_runtime();
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), || {
+        NestedCanvas::new(Size::new(1.0, 1.0), || {
             let scrim = swatch(Color::BLACK, fill())?;
             let modal = Overlay::toggleable(LayoutStyle::new(), vec![boxed(scrim)], || true)?;
             let declared_in = Container::new(
@@ -1027,7 +1027,7 @@ fn painted(
     )
 }
 
-fn framed_window(canvas: &Rc<SurfaceCanvas>, chrome: Box<dyn LayoutItem>) -> Window {
+fn framed_window(canvas: &Rc<NestedCanvas>, chrome: Box<dyn LayoutItem>) -> Window {
     Window::new(
         SurfaceFrame::filling(
             Rc::clone(canvas),
@@ -1049,7 +1049,7 @@ fn a_frame_in_the_dark_mode_paints_dark_defaults_inside_a_light_window() {
     theme_core::set_scheme_preference(theme_core::SchemePreference::Light);
     let ink = |tokens: &dyn theme_core::ThemeTokens| tokens.ink();
     let canvas =
-        Rc::new(SurfaceCanvas::new(Size::new(1.0, 1.0), move || Ok(painted(ink, fill()))).unwrap());
+        Rc::new(NestedCanvas::new(Size::new(1.0, 1.0), move || Ok(painted(ink, fill()))).unwrap());
     let window = framed_window(
         &canvas,
         painted(ink, LayoutStyle::new().width(20.0).height(20.0)),
@@ -1121,7 +1121,7 @@ fn a_frame_in_a_mode_registered_with_its_theme_restyles_inside_only() {
     theme_core::set_mode("day");
     let primary = |tokens: &dyn theme_core::ThemeTokens| tokens.primary();
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), move || Ok(painted(primary, fill()))).unwrap(),
+        NestedCanvas::new(Size::new(1.0, 1.0), move || Ok(painted(primary, fill()))).unwrap(),
     );
     let window = framed_window(
         &canvas,
@@ -1178,7 +1178,7 @@ fn handle_of(canvas: &SurfaceCanvas) -> u64 {
 fn a_frame_marks_the_surface_it_draws_in_the_window_stream() {
     reset_layout_runtime();
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), || {
+        NestedCanvas::new(Size::new(1.0, 1.0), || {
             Ok(boxed(swatch(Color::BLACK, fill())?))
         })
         .unwrap(),
@@ -1217,7 +1217,7 @@ fn a_reader_hears_a_frames_controls_by_their_own_names_where_the_frame_shows_the
     let inside = Rc::new(Cell::new(None));
     let built = Rc::clone(&inside);
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+        NestedCanvas::new(Size::new(1.0, 1.0), move || {
             let button = StyledContainer::new(
                 LayoutStyle::new().width(60.0).height(24.0),
                 |_| RectStyle::default(),
@@ -1306,7 +1306,7 @@ fn a_box_event_for_a_box_in_a_frame_reaches_it_in_the_frames_world() {
     let inner_node = Rc::new(Cell::new(None));
     let built = Rc::clone(&inner_node);
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+        NestedCanvas::new(Size::new(1.0, 1.0), move || {
             let target = swatch(Color::BLACK, LayoutStyle::new().width(20.0).height(20.0))?
                 .on_focus(move |now| inner_focused.set(now));
             built.set(Some(target.layout_node()));
@@ -1350,7 +1350,7 @@ fn a_box_event_reaches_a_frame_inside_an_overlay_of_a_frame() {
     let inner_node = Rc::new(Cell::new(None));
     let built = Rc::clone(&inner_node);
     let inner = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+        NestedCanvas::new(Size::new(1.0, 1.0), move || {
             let target = swatch(Color::BLACK, LayoutStyle::new().width(20.0).height(20.0))?
                 .on_focus(move |now| inner_focused.set(now));
             built.set(Some(target.layout_node()));
@@ -1360,7 +1360,7 @@ fn a_box_event_reaches_a_frame_inside_an_overlay_of_a_frame() {
     );
     let held = Rc::clone(&inner);
     let outer = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+        NestedCanvas::new(Size::new(1.0, 1.0), move || {
             let frame = SurfaceFrame::filling(held, LayoutStyle::new().width(80.0).height(40.0))?;
             let overlay = Overlay::new(LayoutStyle::new(), vec![boxed(frame)])?;
             Ok(boxed(Container::new(
@@ -1396,7 +1396,7 @@ fn a_readers_action_on_a_control_in_a_frame_reaches_it_in_the_frames_world() {
     let presses = Rc::new(Cell::new(0));
     let pressed = Rc::clone(&presses);
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+        NestedCanvas::new(Size::new(1.0, 1.0), move || {
             let button = StyledContainer::new(
                 LayoutStyle::new().width(60.0).height(24.0),
                 |_| RectStyle::default(),
@@ -1440,7 +1440,7 @@ fn a_readers_action_on_a_control_in_a_frame_reaches_it_in_the_frames_world() {
 fn the_windows_walk_lists_a_frames_components_where_the_frame_shows_them() {
     reset_layout_runtime();
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), || {
+        NestedCanvas::new(Size::new(1.0, 1.0), || {
             let padded = StyledContainer::new(
                 LayoutStyle::new().width(40.0).height(20.0).padding_all(4.0),
                 |_| RectStyle::default().with_fill(Color::BLACK),
@@ -1485,7 +1485,7 @@ fn a_field_inside_the_frame_composes_where_the_window_shows_it() {
     reset_layout_runtime();
     let value = signal(String::from("ab"));
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+        NestedCanvas::new(Size::new(1.0, 1.0), move || {
             let field =
                 crate::Input::new(value, LayoutStyle::new().width(100.0).height(20.0), || {
                     renderer_core::TextStyle::new(14.0, Color::BLACK)
@@ -1523,7 +1523,7 @@ fn focus_moved_inside_by_the_app_brings_the_frame_the_keys() {
     reset_layout_runtime();
     let [before, after, first, second] = [(); 4].map(|_| signal(false));
     let canvas =
-        Rc::new(SurfaceCanvas::new(Size::new(1.0, 1.0), row_of(vec![first, second])).unwrap());
+        Rc::new(NestedCanvas::new(Size::new(1.0, 1.0), row_of(vec![first, second])).unwrap());
     let window = Window::new(
         SurfaceFrame::filling(
             Rc::clone(&canvas),
@@ -1551,5 +1551,20 @@ fn focus_moved_inside_by_the_app_brings_the_frame_the_keys() {
     assert!(
         second.get(),
         "so the keys that follow reach the box that shows the focus"
+    );
+}
+
+#[test]
+fn a_press_on_nothing_inside_a_frame_lets_the_keyboard_inside_go() {
+    reset_layout_runtime();
+    let [first, second] = [(); 2].map(|_| signal(false));
+    let window = focus_window(row_of(vec![first, second]), no_focusable(), no_focusable());
+
+    window.click(35.0, 55.0);
+    assert!(first.get());
+    window.click(FRAME.x + 150.0, FRAME.y + 80.0);
+    assert!(
+        !first.get() && !second.get(),
+        "a press on nothing focusable inside the frame clears focus inside it"
     );
 }

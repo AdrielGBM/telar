@@ -182,6 +182,8 @@ impl TextureUi {
     /// Routes an event into the UI, mapping pointer coordinates back through the placement.
     ///
     /// `true` means the UI consumed it and the application should not act on it as well. Non-pointer events (keys, focus) pass through untransformed; the application decides which of them this UI should see at all, which is the only honest answer when several trees share one window's keyboard.
+    ///
+    /// The UI holds its keyboard as a window does: a press on nothing focusable lets focus go, and Tab with nothing focused moves to the first focusable, or Shift+Tab to the last.
     pub fn on_event(&mut self, event: &Event) -> bool {
         self.canvas.dispatch(event) == EventResult::Handled
     }

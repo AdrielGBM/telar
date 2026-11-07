@@ -6,11 +6,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use reactive_core::{OwnerId, dispose_owner, owner_scope};
-use ui_core::focus;
 
 use crate::{
     AccessNode, BuildFailure, Color, Event, EventResult, Key, LayoutError, LayoutItem, LayoutStyle,
-    ModifiersState, NamedKey, Size, SurfaceCanvas, Text, TextStyle, motion, testing,
+    ModifiersState, NamedKey, NestedCanvas, Size, Text, TextStyle, motion, testing,
 };
 
 use super::a11y::{self, Severity};
@@ -32,7 +31,7 @@ use super::{ActionLog, Frame, PreviewCtx, PreviewEntry, Query};
 pub struct Play {
     entry: PreviewEntry,
     ctx: PreviewCtx,
-    canvas: Option<Rc<SurfaceCanvas>>,
+    canvas: Option<Rc<NestedCanvas>>,
     failures: CaughtFailures,
     steps: Vec<PlayStep>,
     owner: Option<OwnerId>,
@@ -124,7 +123,7 @@ impl Play {
     pub fn attach(
         entry: &PreviewEntry,
         ctx: PreviewCtx,
-        canvas: Rc<SurfaceCanvas>,
+        canvas: Rc<NestedCanvas>,
         failures: CaughtFailures,
     ) -> Self {
         Self {
@@ -202,7 +201,7 @@ impl Play {
     }
 
     /// The surface the preview is mounted on, for a host that shows or inspects it.
-    pub fn canvas(&self) -> &Rc<SurfaceCanvas> {
+    pub fn canvas(&self) -> &Rc<NestedCanvas> {
         self.canvas
             .as_ref()
             .expect("a play holds its canvas until it drops")
@@ -553,13 +552,10 @@ impl Play {
         self.canvas().dispatch_own(event)
     }
 
-    /// A primary press and release at the centre of `rect`, with the pointer moved there first, and focus let go first where the press lands on nothing that takes it, as a canvas frame does.
+    /// A primary press and release at the centre of `rect`, with the pointer moved there first.
     fn press_at(&self, rect: crate::Rect) {
         let (x, y) = testing::centre(rect);
         self.dispatch(&testing::moved(x, y));
-        self.canvas().with_entered(|| {
-            focus::blur_from_pointer(x as f32, y as f32);
-        });
         self.dispatch(&testing::press(x, y));
         self.dispatch(&testing::release(x, y));
     }
@@ -628,7 +624,7 @@ fn canvas(
     ctx: &PreviewCtx,
     viewport: Size,
     failures: &CaughtFailures,
-) -> Result<Rc<SurfaceCanvas>, PlayError> {
+) -> Result<Rc<NestedCanvas>, PlayError> {
     let (ctx, globals) = (ctx.clone(), ctx.globals());
     let record = failures.clone();
     let canvas = globals

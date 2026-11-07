@@ -6,9 +6,9 @@ use std::rc::{Rc, Weak};
 use telar::preview::{Globals, Layout};
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Canvas, Clip, ClippedItem, Color, Container,
-    JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, Reactive, ReactiveList, Rect,
-    RectStyle, RenderNode, Role, RwSignal, ShapeStyle, Size, SizeDimension, StyledContainer,
-    SurfaceCanvas, SurfaceFrame, Text, TextWrap, box_item, children, effect, memo, signal,
+    JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, NestedCanvas, Reactive,
+    ReactiveList, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, Size, SizeDimension,
+    StyledContainer, SurfaceFrame, Text, TextWrap, box_item, children, effect, memo, signal,
     track_layout,
 };
 use telar_components::{ResizeEdge, ResizeGrowth, ResizeHandleProps, resize_handle};
@@ -42,7 +42,7 @@ pub(super) fn stage(
     state: &WorkshopState,
     layout: Layout,
     globals: Globals,
-    canvas: Rc<SurfaceCanvas>,
+    canvas: Rc<NestedCanvas>,
     custom_room: RwSignal<Option<Size>>,
 ) -> Result<Stage, LayoutError> {
     if layout == Layout::Fullscreen {
@@ -77,7 +77,7 @@ pub(super) fn clamp_viewport(size: Size, room: Size) -> Size {
 fn framed(
     state: &WorkshopState,
     globals: Globals,
-    canvas: Rc<SurfaceCanvas>,
+    canvas: Rc<NestedCanvas>,
     custom_room: RwSignal<Option<Size>>,
 ) -> Result<Stage, LayoutError> {
     let viewport = globals.viewport();
@@ -201,7 +201,7 @@ fn follow_zoom(
     stage: RwSignal<Rect>,
     device: Memo<bool>,
     scale: RwSignal<f32>,
-    canvas: &Rc<SurfaceCanvas>,
+    canvas: &Rc<NestedCanvas>,
 ) {
     let zoom = memo(move || settings.with(|settings| settings.zoom));
     let canvas = Rc::downgrade(canvas);
@@ -220,7 +220,7 @@ fn follow_zoom(
 
 /// The canvas inside the frame's box: sized by the canvas where it has a fixed viewport, so the zoom never rounds its logical size, and filling the box where it takes the stage's.
 fn surface_frame(
-    canvas: Rc<SurfaceCanvas>,
+    canvas: Rc<NestedCanvas>,
     fixed: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let style = growing().width(SizeDimension::Percent(1.0));
@@ -256,7 +256,7 @@ fn room(stage: Rect, edge: f32) -> Size {
 /// The canvas's size as `W × H`, in its own logical px whatever the zoom, and the zoom where it is not actual size, which resets the viewport when pressed.
 #[derive(Clone)]
 pub(super) struct SizeLabel {
-    canvas: Weak<SurfaceCanvas>,
+    canvas: Weak<NestedCanvas>,
     scale: RwSignal<f32>,
 }
 

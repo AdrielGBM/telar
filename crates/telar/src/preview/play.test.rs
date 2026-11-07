@@ -361,12 +361,12 @@ fn a_drag_carries_the_pointer_from_the_node_and_lets_go_there() {
     );
 }
 
-fn hosted(entry: PreviewEntry, failures: &CaughtFailures) -> (PreviewCtx, Rc<SurfaceCanvas>) {
+fn hosted(entry: PreviewEntry, failures: &CaughtFailures) -> (PreviewCtx, Rc<NestedCanvas>) {
     crate::install_default_text_metrics();
     let ctx = PreviewCtx::for_entry_with(&entry, Args::in_memory_for(&entry));
     let (built, record) = (ctx.clone(), failures.clone());
     let size = Size::new(320.0, 240.0);
-    let canvas = SurfaceCanvas::new(size, move || {
+    let canvas = NestedCanvas::new(size, move || {
         mount_preview(&entry, built, move |failure| failed(&record, failure), None)
     })
     .unwrap();
@@ -455,4 +455,18 @@ fn letting_go_takes_the_play_s_pointer_off_what_it_hovered() {
     play.expect_text("over").unwrap();
     play.let_go();
     play.expect_text("away").unwrap();
+}
+
+#[test]
+fn a_click_on_nothing_focusable_lets_the_field_go() {
+    let mut play = Play::mount(&entry(field)).unwrap();
+    play.click(by_role(Role::TextInput).named("Name")).unwrap();
+    play.expect_focused(by_role(Role::TextInput).named("Name"))
+        .unwrap();
+
+    play.click(by_text("Hello, ")).unwrap();
+    assert!(
+        !play.canvas().holds_focus(),
+        "a click on a run of text clears focus in the canvas"
+    );
 }

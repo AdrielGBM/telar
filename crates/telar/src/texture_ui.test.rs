@@ -10,8 +10,8 @@ use std::rc::Rc;
 
 use telar::gpu::wgpu;
 use telar::{
-    Color, Component, Event, EventResult, LayoutItem, LayoutStyle, NodeId, PointerButton,
-    PointerSource, Rect, RectStyle, RenderNode, ShapeStyle, Size, TextureUi,
+    Color, Component, Event, EventResult, Key, LayoutItem, LayoutStyle, ModifiersState, NamedKey,
+    NodeId, PointerButton, PointerSource, Rect, RectStyle, RenderNode, ShapeStyle, Size, TextureUi,
 };
 
 const APP: [u8; 4] = [40, 90, 200, 255];
@@ -335,5 +335,80 @@ fn pixel_raster_reaches_the_application_texture_without_a_blended_edge() {
         blended(&pixel) == 0,
         "the pixel raster left {} blended pixels in the application's texture",
         blended(&pixel)
+    );
+}
+
+fn press_at(x: f64, y: f64) -> Event {
+    Event::PointerPressed {
+        x,
+        y,
+        button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    }
+}
+
+// A window's two focus rules hold in a texture too, or the keyboard could never get into the UI and a field clicked away from would keep it.
+#[test]
+fn tab_brings_focus_into_a_texture_ui_and_a_press_on_nothing_lets_it_go() {
+    let Ok(gpu) = telar::gpu::open() else {
+        common::skip_without_gpu("the app-owned texture seam");
+        return;
+    };
+
+    let focused = [telar::signal(false), telar::signal(false)];
+    let mut ui = TextureUi::new(app_texture(&gpu, 100, 100), 1.0, move || {
+        let boxes = focused
+            .map(|focused| {
+                telar::StyledContainer::new(
+                    LayoutStyle::new().width(20.0).height(20.0),
+                    |_| RectStyle::default().with_fill(UI),
+                    vec![],
+                )
+                .map(|swatch| {
+                    Box::new(swatch.on_focus(move |now| focused.set(now))) as Box<dyn LayoutItem>
+                })
+            })
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        Ok(Box::new(telar::Container::new(
+            LayoutStyle::new()
+                .flex_row()
+                .width(telar::SizeDimension::Percent(1.0))
+                .height(telar::SizeDimension::Percent(1.0)),
+            boxes,
+        )?) as Box<dyn LayoutItem>)
+    })
+    .expect("texture UI");
+    ui.render().expect("render");
+    let [first, second] = focused;
+
+    assert!(
+        ui.on_event(&Event::KeyPressed {
+            key: Key::Named(NamedKey::Tab),
+            modifiers: ModifiersState::default(),
+            unmodified: None,
+        }),
+        "Tab with nothing focused is the UI's to take"
+    );
+    assert!(first.get(), "Tab from nothing lands on the first focusable");
+
+    ui.on_event(&press_at(80.0, 80.0));
+    assert!(
+        !first.get() && !second.get(),
+        "a press on nothing focusable lets the keyboard go"
+    );
+    assert!(ui.with_entered(|| telar::focus::current().is_none()));
+
+    ui.on_event(&Event::KeyPressed {
+        key: Key::Named(NamedKey::Tab),
+        modifiers: ModifiersState {
+            is_shift: true,
+            ..ModifiersState::default()
+        },
+        unmodified: None,
+    });
+    assert!(
+        second.get(),
+        "Shift+Tab from nothing lands on the last focusable"
     );
 }

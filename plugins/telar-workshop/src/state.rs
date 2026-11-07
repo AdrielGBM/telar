@@ -11,8 +11,8 @@ use telar::focus::{self, FocusId};
 use telar::preview::host::{Args, PreviewRequest, docs_key, docs_path, mount_preview, title_path};
 use telar::preview::{ActionLog, ArgValue, PreviewCtx, PreviewEntry};
 use telar::{
-    Container, LayoutError, LayoutItem, LayoutStyle, Memo, OwnerId, Route, RwSignal, Size,
-    SurfaceCanvas, batch, box_item, effect, hot_signal, owner_scope, signal, with_owner,
+    Container, LayoutError, LayoutItem, LayoutStyle, Memo, NestedCanvas, OwnerId, Route, RwSignal,
+    Size, batch, box_item, effect, hot_signal, owner_scope, signal, with_owner,
 };
 use telar_devtools::Inspection;
 
@@ -606,7 +606,7 @@ impl WorkshopState {
             PreviewCtx::for_entry_with(entry, self.args(entry)).with_actions(ActionLog::new());
         let entry = *entry;
         let built = with_owner(Some(self.owner), || {
-            SurfaceCanvas::new(Size::new(400.0, 300.0), move || {
+            NestedCanvas::new(Size::new(400.0, 300.0), move || {
                 mount_preview(&entry, ctx, |_| nothing(), None)
             })
         });

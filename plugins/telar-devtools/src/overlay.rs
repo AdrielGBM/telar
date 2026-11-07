@@ -205,9 +205,6 @@ impl Overlay {
         self.captured = true;
         self.hovered = true;
         self.keyboard = true;
-        self.canvas.with_entered(|| {
-            focus::blur_from_pointer(x, y);
-        });
         self.dispatch(event);
         CONSUMED
     }

@@ -15,7 +15,7 @@ use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, RenderBackend};
 use telar_renderer_dom::{CanvasTextMetrics, DomRenderer, ID_ATTRIBUTE};
 use ui_core::{
-    ComponentList, Container, LayoutItem, StyledContainer, SurfaceCanvas, SurfaceFrame, WindowRoot,
+    ComponentList, Container, LayoutItem, NestedCanvas, StyledContainer, SurfaceFrame, WindowRoot,
     box_item,
 };
 use wasm_bindgen::JsCast;
@@ -39,7 +39,7 @@ struct Page {
     tree: ComponentList,
     renderer: DomRenderer,
     host: web_sys::HtmlElement,
-    canvas: Rc<SurfaceCanvas>,
+    canvas: Rc<NestedCanvas>,
     frame: String,
     before: Stop,
     inside: [Stop; 2],
@@ -88,7 +88,7 @@ fn mount() {
     let built: Rc<RefCell<Vec<u64>>> = Rc::default();
     let record = Rc::clone(&built);
     let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(200.0, 100.0), move || {
+        NestedCanvas::new(Size::new(200.0, 100.0), move || {
             let controls = inside_focus.map(button);
             record.borrow_mut().extend(
                 controls

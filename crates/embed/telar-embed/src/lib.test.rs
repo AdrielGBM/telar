@@ -967,3 +967,102 @@ fn an_animation_that_panics_mid_tick_leaves_later_flushes_working() {
         "the batch the tick opened ended with the unwind, so the write flushed"
     );
 }
+
+/// Two 20×20 focusables side by side in the guest's top-left corner.
+struct TwoFocusables {
+    content: Option<Box<dyn ui_core::LayoutItem>>,
+}
+
+impl EmbeddedApp for TwoFocusables {
+    fn build(&mut self) {
+        let focusable = || {
+            Box::new(
+                ui_core::StyledContainer::new(
+                    LayoutStyle::new().width(20.0).height(20.0),
+                    |_| RectStyle::default(),
+                    vec![],
+                )
+                .expect("box")
+                .on_focus(|_| {}),
+            ) as Box<dyn ui_core::LayoutItem>
+        };
+        let row = ui_core::Container::new(
+            LayoutStyle::new().flex_row().width(100.0).height(100.0),
+            vec![focusable(), focusable()],
+        )
+        .expect("row");
+        self.content = Some(Box::new(row));
+    }
+    fn layout_root(&self) -> NodeId {
+        self.content
+            .as_ref()
+            .expect("build ran first")
+            .layout_node()
+    }
+    fn view(&self) -> RenderNode {
+        self.content.as_ref().expect("build ran first").view()
+    }
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        self.content
+            .as_mut()
+            .expect("build ran first")
+            .on_event(event)
+    }
+    fn title(&self) -> String {
+        "focusables".into()
+    }
+    fn id(&self) -> String {
+        "focusables".into()
+    }
+}
+
+fn primary_press(x: f64, y: f64) -> Event {
+    Event::PointerPressed {
+        x,
+        y,
+        button: platform_core::PointerButton::Primary,
+        source: platform_core::PointerSource::Mouse,
+    }
+}
+
+fn tab() -> Event {
+    Event::KeyPressed {
+        key: Key::Named(platform_core::NamedKey::Tab),
+        modifiers: ModifiersState::default(),
+        unmodified: None,
+    }
+}
+
+#[test]
+fn a_press_on_nothing_in_a_guest_lets_its_keyboard_go() {
+    let mut inst = EmbedInstance::new(Box::new(TwoFocusables { content: None }));
+    inst.relayout(100.0, 100.0);
+    let _ = inst.paint();
+
+    inst.on_event(&primary_press(10.0, 10.0));
+    assert!(
+        inst.canvas.holds_focus(),
+        "a press on a focusable takes focus"
+    );
+    inst.on_event(&primary_press(80.0, 80.0));
+    assert!(
+        !inst.canvas.holds_focus(),
+        "a press on nothing focusable clears focus inside the guest"
+    );
+}
+
+#[test]
+fn tab_past_a_guests_last_focusable_steps_out_to_the_host() {
+    let mut inst = EmbedInstance::new(Box::new(TwoFocusables { content: None }));
+    inst.relayout(100.0, 100.0);
+    let _ = inst.paint();
+
+    assert!(
+        !inst.on_event(&tab()),
+        "Tab with nothing focused is the host's to move"
+    );
+    assert!(inst.canvas.arrive(false));
+    assert!(!inst.canvas.tab(&tab()), "Tab walks the guest's focusables");
+    assert!(inst.canvas.tab(&tab()), "and past the last one steps out");
+    assert!(!inst.canvas.holds_focus());
+}

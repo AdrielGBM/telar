@@ -27,6 +27,7 @@ mod error_boundary;
 mod fixed_layer;
 mod fling;
 pub mod focus;
+mod focus_mode;
 mod foreign_surface;
 mod frame_focus;
 mod guest_surface;
@@ -171,7 +172,9 @@ pub use styled_container::{
     KeyAnswer, StyledContainer, box_transform, focus_ring_border, style_follows,
 };
 pub use surface::{Edge, Scrim, SurfaceScaffold, SurfaceTransition};
-pub use surface_canvas::{SurfaceCanvas, SurfaceEnv, composite_surface, follow_box_event};
+pub use surface_canvas::{
+    NestedCanvas, SurfaceCanvas, SurfaceEnv, composite_surface, follow_box_event,
+};
 pub use surface_context::Surface;
 pub use surface_font::{open_surface_font_family, set_font_family, use_font_family};
 pub use surface_frame::SurfaceFrame;

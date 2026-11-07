@@ -592,3 +592,26 @@ fn the_banner_asks_for_a_restart_when_the_app_cannot_be_read() {
     dev.set_app_stop(None);
     assert!(!shows(&mut dev, "Out of step with this host"));
 }
+
+#[test]
+fn a_press_on_the_drawer_away_from_its_controls_hands_the_keyboard_back() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    let down = named(telar::NamedKey::ArrowDown);
+    let (x, y) = centre_of(&mut dev, "Column");
+    dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    drawn(&mut dev);
+    assert!(dev.on_event(&down).consumed, "the tree holds the keyboard");
+
+    let (x, y) = centre_of(&mut dev, "4 components");
+    let pressed = dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    drawn(&mut dev);
+    assert!(pressed.consumed, "the press is the drawer's");
+    assert!(
+        !dev.on_event(&down).consumed,
+        "a press on nothing focusable in the drawer lets its keyboard go"
+    );
+}

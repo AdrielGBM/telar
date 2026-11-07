@@ -5,6 +5,7 @@ use platform_core::Event;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{compute_layout, mark_dirty, new_container};
+use crate::focus_mode::FocusMode;
 use crate::layout_item::LayoutItem;
 use crate::surface::{EnterMotion, IDENTITY, SurfaceTransition, apply_enter, enter_transform};
 
@@ -80,31 +81,6 @@ impl Component for WindowRoot {
     ///
     /// `Handled` regardless of what the content answered: the runner requests a redraw only for a handled event (`runner::handler`), so reporting the content's `Ignored` would relayout and never repaint.
     fn on_event(&mut self, event: &Event) -> EventResult {
-        // Before the press goes down the tree, so whatever is pressed takes focus back on the way through and only a press with nothing focusable under it leaves the keyboard unheld.
-        if let Event::PointerPressed {
-            x,
-            y,
-            button: platform_core::PointerButton::Primary,
-            ..
-        } = event
-        {
-            crate::focus::blur_from_pointer(*x as f32, *y as f32);
-        }
-        // Tab is answered by the box that holds focus, which leaves the first one: with nothing focused the key reaches nobody. Asked last, so a control that wants Tab for itself has already taken it.
-        if let Event::KeyPressed { key, modifiers, .. } = event
-            && matches!(key, platform_core::Key::Named(platform_core::NamedKey::Tab))
-            && crate::focus::current().is_none()
-        {
-            if self.content.on_event(event) == EventResult::Handled {
-                return EventResult::Handled;
-            }
-            if modifiers.is_shift {
-                crate::focus::focus_prev();
-            } else {
-                crate::focus::focus_next();
-            }
-            return EventResult::Handled;
-        }
         if let Event::WindowResized { width, height } = event {
             mark_dirty(self.root).ok();
             compute_layout(
@@ -116,7 +92,7 @@ impl Component for WindowRoot {
             self.content.on_event(event);
             return EventResult::Handled;
         }
-        self.content.on_event(event)
+        FocusMode::Standalone.dispatch(event, |event| self.content.on_event(event))
     }
 
     fn debug_name(&self) -> &'static str {

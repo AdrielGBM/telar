@@ -460,7 +460,7 @@ fn run_checks(play: &mut Play, plays: bool) -> Vec<Status> {
 fn follow_while_focused(
     state: &WorkshopState,
     focused: Memo<bool>,
-    canvas: Rc<telar::SurfaceCanvas>,
+    canvas: Rc<telar::NestedCanvas>,
 ) {
     let inspection = state.inspection();
     let following: Rc<RefCell<Option<RelayoutHook>>> = Rc::default();

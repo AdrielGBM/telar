@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use telar::preview::{Globals, Layout, Matrices, PreviewEntry, PreviewEnv};
 use telar::{
-    LayoutError, LayoutItem, RwSignal, Size, SurfaceCanvas, effect, set_reduced_motion_override,
+    LayoutError, LayoutItem, NestedCanvas, RwSignal, Size, effect, set_reduced_motion_override,
     use_resolved_scheme,
 };
 
@@ -19,7 +19,7 @@ pub(super) fn canvas(
     globals: Globals,
     custom_room: RwSignal<Option<Size>>,
     build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
-) -> Result<Rc<SurfaceCanvas>, LayoutError> {
+) -> Result<Rc<NestedCanvas>, LayoutError> {
     resolved_canvas(
         state,
         entry.env,
@@ -36,7 +36,7 @@ pub(crate) fn canvas_unframed(
     env: &PreviewEnv,
     globals: Globals,
     build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
-) -> Result<Rc<SurfaceCanvas>, LayoutError> {
+) -> Result<Rc<NestedCanvas>, LayoutError> {
     resolved_canvas(state, *env, false, globals, None, build)
 }
 
@@ -47,7 +47,7 @@ fn resolved_canvas(
     globals: Globals,
     custom_room: Option<RwSignal<Option<Size>>>,
     build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
-) -> Result<Rc<SurfaceCanvas>, LayoutError> {
+) -> Result<Rc<NestedCanvas>, LayoutError> {
     let settings = state.canvas_settings();
     let project = Matrices::installed().viewports();
     effect(move || {
