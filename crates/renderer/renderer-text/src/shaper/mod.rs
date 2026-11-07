@@ -70,7 +70,7 @@ pub struct TextShaper {
     shaping_cache: Cache<ShapingCacheKey, GlyphPositions>,
     measure_cache: Cache<(u64, u32, u32, u32), (f32, f32)>,
     // Lets the software COLR fallback skip the buffer build and per-glyph lookup for plain UI text after the first evaluation. Symmetric with `blank_glyphs`.
-    has_colr_cache: Cache<(u64, u32, u32), bool>,
+    has_colr_cache: Cache<(u64, u32, u32, u32, u32), bool>,
     // So COLR rasterization does not re-read the font file on every atlas miss.
     colr_font_cache: Cache<fontdb::ID, Arc<(Vec<u8>, u32)>>,
     // Glyphs swash cannot rasterize that are not COLR either, skipped on later frames. Left unbounded, unlike the caches above: an entry is one `CacheKey`, the set is bounded by the glyph repertoire attempted, and evicting one buys 16 bytes in exchange for re-running a rasterization that already failed.

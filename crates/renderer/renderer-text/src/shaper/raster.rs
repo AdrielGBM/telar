@@ -78,8 +78,8 @@ impl TextShaper {
         let key = make_text_cache_key(
             text,
             font_size,
-            width,
-            height,
+            rect.width,
+            rect.height,
             color,
             text_style_bits(style),
         );

@@ -1,7 +1,9 @@
 //! Shaping a string into positioned glyphs, and rasterizing the ones the atlas does not hold.
 
 use super::TextShaper;
-use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
+use super::cache::{
+    ShapingCacheKey, hash_text, line_snapped_height, text_style_bits, visible_lines,
+};
 use super::{
     effective_line_height, from_cosmic_color, glyph_index_at, in_layout_units, make_buffer,
     make_cased_buffer, physical_glyph, resolve_coverage, shape_buffer, visual_line_starts,
@@ -77,10 +79,16 @@ impl TextShaper {
             return;
         }
 
+        let visible_lines = visible_lines(rect.height, style);
+        let shaped_rect = Rect {
+            height: line_snapped_height(visible_lines, style),
+            ..rect
+        };
         let shaping_key = ShapingCacheKey {
             text_hash: hash_text(text),
             font_size_bits: font_size.to_bits(),
-            width,
+            width_bits: rect.width.to_bits(),
+            visible_lines,
             scale_factor_bits: scale_factor.to_bits(),
             style_bits: text_style_bits(style),
         };
@@ -94,7 +102,7 @@ impl TextShaper {
                     &mut self.family_availability,
                     text,
                     None,
-                    rect,
+                    shaped_rect,
                     style,
                 );
                 let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();

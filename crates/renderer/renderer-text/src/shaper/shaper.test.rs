@@ -497,7 +497,13 @@ fn collect_colr_gating_records_and_skips() {
         width: 200.0,
         height: 100.0,
     };
-    let flag_key = (hash_text(text), 16.0f32.to_bits(), text_style_bits(&style));
+    let flag_key = (
+        hash_text(text),
+        16.0f32.to_bits(),
+        text_style_bits(&style),
+        rect.width.to_bits(),
+        super::cache::visible_lines(rect.height, &style),
+    );
 
     assert!(sh.has_colr_cache.get(&flag_key).is_none());
     let mut out = Vec::new();
