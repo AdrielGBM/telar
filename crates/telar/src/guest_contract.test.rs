@@ -1,11 +1,11 @@
-//! End-to-end tests of the one guest contract hot reload and embed share, from a host whose global allocator is not its guests': the guests `tests/fixtures/hot-panic-guest` and `tests/fixtures/embed-guest` each mark every block they allocate apart from this binary's, and either side aborts on freeing a block the other made. They build both under `target/tmp`: run them with `cargo test -p telar --features dev,shaper --test guest_contract -- --ignored`.
+//! End-to-end tests of the one guest contract hot reload and embed share, from a host whose global allocator is not its guests': the guests `fixtures/hot-panic-guest` and `fixtures/embed-guest` at the repository root each mark every block they allocate apart from this binary's, and either side aborts on freeing a block the other made. They build both under `target/tmp`: run them with `cargo test -p telar --features dev,shaper --test guest_contract -- --ignored`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
 #[path = "guest_fixture.rs"]
 mod guest_fixture;
 
-#[path = "../tests/fixtures/tagged_alloc.rs"]
+#[path = "../../../fixtures/tagged_alloc.rs"]
 mod tagged_alloc;
 
 use std::cell::RefCell;

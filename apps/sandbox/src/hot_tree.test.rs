@@ -104,6 +104,8 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     handler.about_to_wait();
 
     let (x, y) = {
+        // The theme the dylib installed lives in its own runtime copy, so the host's copy laying out this tree needs one of its own.
+        telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
         let mut tree =
             telar::ComponentList::new(telar::App::root(&sandbox::core::app::SandboxRoot));
         tree.on_event(&Event::WindowResized {

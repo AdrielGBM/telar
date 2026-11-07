@@ -11,7 +11,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
-manifests=(Cargo.toml crates/telar/tests/fixtures/embed-guest/Cargo.toml crates/telar/tests/fixtures/hot-panic-guest/Cargo.toml)
+manifests=(Cargo.toml fixtures/embed-guest/Cargo.toml fixtures/hot-panic-guest/Cargo.toml)
 extension=editors/vscode/telar/package.json
 
 current=$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^version = "\([^"]*\)"$/\1/p}' Cargo.toml)

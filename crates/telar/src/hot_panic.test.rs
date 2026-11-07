@@ -1,4 +1,4 @@
-//! End-to-end tests of guests loaded from `tests/fixtures/hot-panic-guest`, a cdylib with its own copy of std, which they build under `target/tmp`: run them with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
+//! End-to-end tests of guests loaded from `fixtures/hot-panic-guest` at the repository root, a cdylib with its own copy of std, which they build under `target/tmp`: run them with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -17,7 +17,7 @@ use telar::{
 /// One at a time: both count what the process has mapped and what sits in the build directory.
 static SERIAL: Mutex<()> = Mutex::new(());
 
-const FIXTURE_SOURCE: &str = include_str!("../tests/fixtures/hot-panic-guest/src/lib.rs");
+const FIXTURE_SOURCE: &str = include_str!("../../../fixtures/hot-panic-guest/src/lib.rs");
 
 #[test]
 #[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]

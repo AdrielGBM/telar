@@ -31,10 +31,11 @@ manifest. And a plugin depends on no crate under `crates/` but `telar`: what it 
 re-exported by the facade, and what only a plugin needs sits behind the features `telar` lists under *For
 plugins*, hidden from its documentation. `.github/scripts/check-layering.sh` fails the build on either.
 
-That check sees only this workspace. A plugin you write outside it should hold itself to the second rule all the
-same: depend on `telar` and nothing behind it. The kernel crates are published because `telar` is built from
-them, not as an API of their own, and naming one directly is the easiest way to end up with the two copies the
-next section describes. A plugin that needs something the facade does not re-export is a request for the facade.
+That check sees only this repository: the workspace and every crate in it with a workspace of its own, which
+puts a guest crate under `fixtures/` with the applications, free to depend on anything. A plugin you write
+outside it should hold itself to the second rule all the same: depend on `telar` and nothing behind it. The
+kernel crates are published because `telar` is built from them, not as an API of their own, and naming one
+directly is the easiest way to end up with the two copies the next section describes. A plugin that needs something the facade does not re-export is a request for the facade.
 
 ## Versioning: in lockstep with `telar`
 

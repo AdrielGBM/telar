@@ -20,7 +20,7 @@ static ALLOCATOR: tagged_alloc::Tagged = tagged_alloc::Tagged(0x686f_745f_6775_6
 const TASK_RUNS_FOR: std::time::Duration = std::time::Duration::from_millis(300);
 
 const ARRIVING_FACE: &[u8] =
-    include_bytes!("../../../../../renderer/renderer-text/test-fonts/TelarTest.ttf");
+    include_bytes!("../../../crates/renderer/renderer-text/test-fonts/TelarTest.ttf");
 
 struct PanicsOnPress {
     content: Box<dyn LayoutItem>,

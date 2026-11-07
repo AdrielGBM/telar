@@ -509,18 +509,8 @@ fn damage_confines_opacity_layer() {
     );
 }
 
-// FNV-1a 64-bit over the raw RGBA bytes: a stable, allocation-free content hash for the golden check.
-fn fnv1a_64(bytes: &[u8]) -> u64 {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for &b in bytes {
-        hash ^= b as u64;
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    hash
-}
-
 // A representative dense-UI scene exercising every major primitive path, both shadow resolve kinds and a translucent backdrop-blur overlay layer.
-fn golden_scene() -> Vec<DrawCommand> {
+fn dashboard_scene() -> Vec<DrawCommand> {
     const W: f32 = 1280.0;
     const H: f32 = 800.0;
     let mut cmds = Vec::new();
@@ -626,13 +616,13 @@ fn golden_scene() -> Vec<DrawCommand> {
     cmds
 }
 
-/// Smoke test for the `render_frame` decomposition: renders a fixed scene headless and checks it succeeds with a tightly-packed readback. It also hashes the pixels against a baked constant, but that hash is GPU/platform-specific (see below), so it is enforced only under `TELAR_HARDWARE_GOLDEN` on the baseline machine — cross-platform CI relies on the smoke checks and the software renderer's deterministic golden.
+/// Renders the dashboard scene and reads back the solid fills it is made of, each sampled well inside its shape so antialiased edges, shadows and glyphs stay out of the sample.
 #[test]
-fn render_frame_pixel_golden() {
+fn the_dashboard_scene_paints_its_solid_fills_where_it_puts_them() {
     const WIDTH: u32 = 1280;
     const HEIGHT: u32 = 800;
-    // Baked from the pre-decomposition renderer on this machine's GPU; must not change post-split.
-    const EXPECTED: u64 = 0x3507_0457_a257_bc16;
+    // A pixel hash would break on every Mesa update of the runner image, and drivers may round a blended channel differently, so a fill is allowed a few levels off its colour and no more.
+    const CHANNEL_TOLERANCE: u8 = 3;
 
     let mut renderer = match pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
         WIDTH,
@@ -643,18 +633,17 @@ fn render_frame_pixel_golden() {
     )) {
         Ok(r) => r,
         Err(e) => {
-            common::skip_without_gpu("golden pixel test", e);
+            common::skip_without_gpu("dashboard pixel test", e);
             return;
         }
     };
 
-    let cmds = golden_scene();
-    let clear = Some(Color::from_rgb_u8(18, 18, 24));
-
     renderer
         .begin_frame(WIDTH, HEIGHT, 1.0, 1)
         .expect("begin_frame");
-    renderer.render_frame(&cmds, clear).expect("render_frame");
+    renderer
+        .render_frame(&dashboard_scene(), Some(Color::from_rgb_u8(18, 18, 24)))
+        .expect("render_frame");
 
     let pixels = renderer.read_rgba().expect("read_rgba");
     assert_eq!(
@@ -663,17 +652,32 @@ fn render_frame_pixel_golden() {
         "readback must be tightly packed width*height*4"
     );
 
-    let hash = fnv1a_64(&pixels);
-    // GPU rasterisation is driver- and platform-specific, so this hash only reproduces on the machine EXPECTED was baked on, and is enforced strictly only when opted in. Elsewhere the assertions above are the portable smoke test. The deterministic cross-platform guard lives in renderer-software, where a scene with no text and integer-aligned edges leaves nothing for a driver to round differently.
-    if std::env::var_os("TELAR_HARDWARE_GOLDEN").is_some() {
-        assert_eq!(
-            hash, EXPECTED,
-            "golden pixel hash changed: render_frame behavior differs from baseline (got {hash:#018x})"
-        );
-    } else if hash != EXPECTED {
-        eprintln!(
-            "note: hardware golden hash {hash:#018x} != baseline {EXPECTED:#018x} \
-             (expected on a different GPU/platform); set TELAR_HARDWARE_GOLDEN=1 on the baseline machine to enforce"
+    let backdrop = [24, 24, 32];
+    let card = [52, 58, 74];
+    let triangle = [120, 200, 255];
+    for (x, y, expected, what) in [
+        (2, 2, backdrop, "the backdrop's top-left corner"),
+        (1277, 797, backdrop, "the backdrop's bottom-right corner"),
+        (
+            640,
+            710,
+            backdrop,
+            "the backdrop between the cards and the triangles",
+        ),
+        (87, 76, card, "the first card, below its label"),
+        (1193, 76, card, "the last card of the first row"),
+        (1193, 631, card, "the last card of the last row"),
+        (640, 765, triangle, "a triangle clear of the heading"),
+    ] {
+        let i = ((y * WIDTH + x) * 4) as usize;
+        let got = [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]];
+        let [r, g, b] = expected;
+        assert!(
+            got.iter()
+                .zip([r, g, b, 255])
+                .all(|(&got, want)| got.abs_diff(want) <= CHANNEL_TOLERANCE),
+            "{what} at ({x}, {y}) should be {:?}, got {got:?}",
+            [r, g, b, 255]
         );
     }
 }
@@ -809,7 +813,7 @@ fn sides_keep_their_own_thicknesses_on_the_gpu() {
     assert!(red_at(20, 36) < 40, "which does not reach four rows up");
 }
 
-/// The clip stack's own invariants, which the golden scene never touches: what a `PopClip` restores and what a nested clip intersects to.
+/// The clip stack's own invariants, which the dashboard scene never touches: what a `PopClip` restores and what a nested clip intersects to.
 fn clip_scene() -> Vec<DrawCommand> {
     let red = Arc::new(RectStyle::filled(Color::rgb(0.9, 0.1, 0.1), 0.0));
     let green = Arc::new(RectStyle::filled(Color::rgb(0.1, 0.9, 0.1), 0.0));

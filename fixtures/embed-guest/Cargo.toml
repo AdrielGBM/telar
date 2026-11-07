@@ -9,8 +9,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # `telar-embed` as its README tells a guest to declare it, with the shaper a default `telar` has: the host serves its fonts whatever features either side was built with.
-telar = { path = "../../..", default-features = false, features = ["shaper"] }
-telar-embed = { version = "0.2.3", path = "../../../../embed/telar-embed" }
+telar = { path = "../../crates/telar", default-features = false, features = ["shaper"] }
+telar-embed = { version = "0.2.3", path = "../../crates/embed/telar-embed" }
 
 # Its own workspace root, so it is never a member of the repository's: the `guest_contract` test builds it on demand.
 [workspace]

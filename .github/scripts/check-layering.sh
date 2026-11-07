@@ -4,11 +4,21 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
-metadata=$(cargo metadata --format-version 1 --no-deps)
+workspace=$(cargo metadata --format-version 1 --no-deps)
+root=$(jq -r .workspace_root <<<"$workspace")
+members=$(jq -r '.packages[].manifest_path' <<<"$workspace")
 
-violations=$(jq -r '
-  .workspace_root as $root
-  | .packages[]
+# A tracked manifest that is not a member is a workspace of its own, such as a guest fixture, which the workspace's metadata never lists.
+packages=$(jq '.packages' <<<"$workspace")
+while read -r manifest; do
+  if [[ -f $manifest ]] && ! grep -qxF "$root/$manifest" <<<"$members"; then
+    standalone=$(cargo metadata --format-version 1 --no-deps --manifest-path "$manifest")
+    packages=$(jq -s '.[0] + .[1].packages' <(echo "$packages") <(echo "$standalone"))
+  fi
+done < <(git ls-files --cached --others --exclude-standard --deduplicate -- '*Cargo.toml')
+
+violations=$(jq -r --arg root "$root" '
+  .[]
   | (.manifest_path | startswith($root + "/crates/")) as $core
   | (.manifest_path | startswith($root + "/plugins/")) as $plugin
   | select($core or $plugin)
@@ -23,7 +33,7 @@ violations=$(jq -r '
     else
       empty
     end
-' <<<"$metadata")
+' <<<"$packages")
 
 if [[ -n "$violations" ]]; then
   while read -r violation; do
