@@ -44,7 +44,7 @@ fn a_catalog_that_does_not_parse_fails_the_bake_and_names_the_file() {
     assert!(!failed.status.success(), "{stderr}");
     assert!(stderr.contains("error"), "{stderr}");
     assert!(
-        stderr.contains(&root.join("locales/es.toml").display().to_string()),
+        stderr.contains(&root.join("locales").join("es.toml").display().to_string()),
         "{stderr}"
     );
 

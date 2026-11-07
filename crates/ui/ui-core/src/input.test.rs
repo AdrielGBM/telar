@@ -604,12 +604,25 @@ fn an_underline_runs_under_the_letters_it_is_about() {
     let drawn = underlines_of(&input);
     assert_eq!(drawn.len(), 2);
     let (run, mark) = (drawn[0], drawn[1]);
-    let measure = |text: &str| {
-        crate::text_metrics::measure_text(text, None, 1.0e6, &TextStyle::new(14.0, Color::BLACK)).0
+    let laid =
+        crate::text_metrics::laid_lines("abcdef", 1.0e6, &TextStyle::new(14.0, Color::BLACK));
+    let clusters = &laid[0].clusters;
+    let before = |byte: usize| {
+        clusters
+            .iter()
+            .find(|cluster| cluster.bytes.start == byte)
+            .map(|cluster| cluster.leading_x())
+            .unwrap_or_else(|| {
+                clusters
+                    .iter()
+                    .find(|cluster| cluster.bytes.end == byte)
+                    .expect("a cluster borders every letter boundary")
+                    .trailing_x()
+            })
     };
-    assert!((run.x - measure("ab")).abs() < 0.01, "{run:?}");
-    assert!((run.width - (measure("abcd") - measure("ab"))).abs() < 0.01);
-    assert!((mark.x - measure("abcdef")).abs() < 0.01, "{mark:?}");
+    assert!((run.x - before(2)).abs() < 0.01, "{run:?}");
+    assert!((run.width - (before(4) - before(2))).abs() < 0.01);
+    assert!((mark.x - before(6)).abs() < 0.01, "{mark:?}");
     assert_eq!(mark.width, POINT_MARK);
     let line = crate::text_metrics::line_box(&TextStyle::new(14.0, Color::BLACK));
     assert_eq!(run.y + run.height, drawn_line(&input).y + line);

@@ -194,7 +194,7 @@ fn a_catalog_that_does_not_parse_is_an_error_naming_it_and_keeps_the_previous_ar
 
     assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
     assert!(
-        report.errors[0].contains(&root.join("locales/es.toml").display().to_string()),
+        report.errors[0].contains(&root.join("locales").join("es.toml").display().to_string()),
         "{:?}",
         report.errors
     );
