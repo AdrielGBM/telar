@@ -105,7 +105,7 @@ let steps = memo(move || shown_steps(&chord.get(), caps).into_iter().enumerate()
 [view]
 row role:(Role::KeyboardInput) a11y_label:(shown_chord(&$props.chord))
     // The steps of a sequence stand as far apart as two controls do, well clear of the keys inside one.
-    row align:center gap:(shared::gap_md(size)) a11y:hidden
+    row align:center gap:(shared::gap_md(size))
         for (step, keys) in $steps key (*step, keys.clone())
             row align:center gap:(shared::gap_xs(size))
                 for (separator, key) in keys.iter()
