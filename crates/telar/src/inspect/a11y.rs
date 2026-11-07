@@ -15,10 +15,6 @@ use crate::{
 
 use super::Frame;
 
-/// The contrast body text needs against what is behind it.
-pub const TEXT_CONTRAST: f32 = 4.5;
-/// The contrast large text needs: 24 px, or 18.66 px at a weight of 700 and up.
-pub const LARGE_TEXT_CONTRAST: f32 = 3.0;
 /// The smallest a pointer target may be on either side, unless nothing else is within half of it.
 pub const MIN_TARGET: f32 = 24.0;
 
@@ -88,7 +84,7 @@ impl fmt::Display for Report {
 ///
 /// - **Unnamed controls and pictures:** a control whose name is empty, and a picture (a bitmap or vector art outside every control) that is neither named nor hidden from readers.
 /// - **Symbol-only names:** a control activated by pressing it whose name has no letter or number in it, such as "×" or "⋯".
-/// - **Contrast:** each run of text against the nearest opaque fill behind its centre, with the translucent fills between them composited over it, below [`TEXT_CONTRAST`], or [`LARGE_TEXT_CONTRAST`] for large text. Text over a picture or a gradient, and text in a disabled control, is not judged.
+/// - **Contrast:** each run of text against the nearest opaque fill behind its centre, with the translucent fills between them composited over it, below [`BODY_TEXT_CONTRAST`](geometry_core::BODY_TEXT_CONTRAST), or [`LARGE_TEXT_CONTRAST`](geometry_core::LARGE_TEXT_CONTRAST) for large text. Text over a picture or a gradient, and text in a disabled control, is not judged.
 /// - **Target size:** an enabled control smaller than [`MIN_TARGET`] on a side whose 24 px circle reaches another target or another small target's circle.
 /// - **Hidden focusables:** a Tab stop a reader is not told about, or one collapsed to no size.
 /// - **Focus order:** a Tab stop, in the order Tab walks them, that reads before the previous one — on an earlier line and not in a later column, or earlier on the same line.
@@ -229,9 +225,9 @@ fn contrast(
         let ratio = ink.contrast_ratio(backdrop);
         let large = run.size >= 24.0 || (run.size >= 18.66 && run.weight >= 700);
         let needed = if large {
-            LARGE_TEXT_CONTRAST
+            geometry_core::LARGE_TEXT_CONTRAST
         } else {
-            TEXT_CONTRAST
+            geometry_core::BODY_TEXT_CONTRAST
         };
         if ratio + 0.005 < needed {
             out.push(Violation::new(

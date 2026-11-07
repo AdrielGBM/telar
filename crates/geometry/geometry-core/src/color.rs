@@ -1,5 +1,14 @@
 //! RGBA colour, and the conversions a theme needs to derive one colour from another.
 
+/// The WCAG AA contrast ratio body text needs against what is behind it.
+pub const BODY_TEXT_CONTRAST: f32 = 4.5;
+
+/// The WCAG AA contrast ratio large text needs: 24 px, or 18.66 px at a weight of 700 and up.
+pub const LARGE_TEXT_CONTRAST: f32 = 3.0;
+
+/// The WCAG 1.4.11 contrast ratio a part of a control needs against what it sits on to be told apart from it.
+pub const NON_TEXT_CONTRAST: f32 = 3.0;
+
 /// A straight-alpha RGBA colour with components in `0.0..=1.0`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {
@@ -157,7 +166,7 @@ impl Color {
         0.2126 * r + 0.7152 * g + 0.0722 * b
     }
 
-    /// WCAG 2.x contrast ratio between two colors, from `1.0` (identical) to `21.0` (black vs white). Order-independent. Use it to pick a legible foreground: `>= 4.5` passes AA for body text, `>= 3.0` for large text.
+    /// WCAG 2.x contrast ratio between two colors, from `1.0` (identical) to `21.0` (black vs white). Order-independent. Use it to pick a legible foreground: at least [`BODY_TEXT_CONTRAST`] passes AA for body text, at least [`LARGE_TEXT_CONTRAST`] for large text.
     pub fn contrast_ratio(self, other: Color) -> f32 {
         let a = self.relative_luminance();
         let b = other.relative_luminance();

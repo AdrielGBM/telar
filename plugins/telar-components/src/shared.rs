@@ -12,9 +12,10 @@ pub(crate) mod selection;
 pub(crate) mod type_ahead;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Chord, Color, Container, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, Rect, RectStyle, StyledContainer, Text, TextStyle, box_item, children,
-    focus::Role, style_follows, use_theme_tokens,
+    Accessible, AlignItems, BODY_TEXT_CONTRAST, Border, BorderRadius, Chord, Color, Container,
+    LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect, RectStyle,
+    StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
+    use_theme_tokens,
 };
 
 pub use telar::DOUBLE_CLICK;
@@ -27,9 +28,6 @@ use telar::ControlSize;
 fn base_ink() -> Color {
     telar::Inherited::initial().text.color.solid_color()
 }
-/// The WCAG AA contrast ratio for body text.
-const BODY_TEXT_CONTRAST: f32 = 4.5;
-
 /// Readable ink for a label sitting on `fill`: whichever of the document's own ink and the theme's `on_primary` has the higher WCAG contrast ratio against it. A mid-tone fill neither of them reads on at 4.5:1 takes black or white instead, whichever reads better.
 ///
 /// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A neutral palette — a theme built on greys, say — makes `primary` a near-white in dark mode, and the label disappeared into its own button. Reading both ends of the theme and picking by contrast ratio keeps a caller free to pass any colour at all.
@@ -62,9 +60,6 @@ pub(crate) fn over(top: Color, bottom: Color) -> Color {
         a: bottom.a,
     }
 }
-
-/// WCAG's non-text contrast: what a part of a control needs against what it sits on to be told apart from it.
-const NON_TEXT_CONTRAST: f32 = 3.0;
 
 /// What a knob, a thumb or the ring round one is drawn in over `fill`: the theme's `thumb` wherever it stands out from `fill`, else the ink that reads on `fill`, so a light primary or a light track never swallows the knob. A toggle's knob, a slider's thumb, a handle and a colour picker's thumbs all take it.
 pub fn thumb_on(fill: Color) -> Color {

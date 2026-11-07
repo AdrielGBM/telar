@@ -18,7 +18,7 @@ mod wire;
 
 pub use border_radius::BorderRadius;
 pub use box_model::BoxModel;
-pub use color::Color;
+pub use color::{BODY_TEXT_CONTRAST, Color, LARGE_TEXT_CONTRAST, NON_TEXT_CONTRAST};
 pub use grid::{LayoutGrid, layout_grid, set_layout_grid};
 pub use insets::Insets;
 pub use object_fit::{ObjectFit, fit_rect};

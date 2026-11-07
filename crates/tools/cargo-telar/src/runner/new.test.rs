@@ -1,4 +1,5 @@
 use super::*;
+use geometry_core::{BODY_TEXT_CONTRAST, Color};
 
 fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cargo_telar_new_{name}_{}", std::process::id()));
@@ -335,4 +336,61 @@ fn a_library_takes_no_target() {
     assert!(parse(&["new", "kit", "--lib"]).is_ok());
     assert!(parse(&["new", "kit", "--lib", "--target", "web"]).is_err());
     assert!(parse(&["init", "--lib"]).is_ok());
+}
+
+fn scaffold_theme() -> String {
+    scaffold_files("my-app", Target::Web, None)
+        .into_iter()
+        .find(|(path, _)| *path == "src/theme.rs")
+        .map(|(_, source)| source)
+        .expect("the scaffold writes src/theme.rs")
+}
+
+fn theme_color(source: &str, mode: &str, field: &str) -> Color {
+    let start = source
+        .find(&format!("pub fn {mode}() -> Self"))
+        .expect("the theme defines the mode");
+    let body = &source[start..];
+    let body = &body[..body.find("\n    }\n").expect("the mode ends")];
+    let value = body
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(&format!("{field}: ")))
+        .expect("the mode sets the field")
+        .trim_end_matches(',');
+    if value == "Color::WHITE" {
+        return Color::WHITE;
+    }
+    let channels: Vec<f32> = value
+        .strip_prefix("Color::rgba(")
+        .and_then(|args| args.strip_suffix(')'))
+        .expect("the field is a literal Color::rgba")
+        .split(',')
+        .map(|channel| channel.trim().parse().expect("a number"))
+        .collect();
+    let [r, g, b, a] = channels[..] else {
+        panic!("{field} has {} channels, not four", channels.len());
+    };
+    Color::rgba(r, g, b, a)
+}
+
+#[test]
+fn the_scaffold_theme_meets_body_text_contrast_in_both_modes() {
+    let source = scaffold_theme();
+    let pairs = [
+        ("ink", "surface"),
+        ("ink", "surface_alt"),
+        ("muted", "surface"),
+        ("muted", "surface_alt"),
+        ("on_error", "error"),
+    ];
+    for mode in ["light", "dark"] {
+        for (text, background) in pairs {
+            let ratio = theme_color(&source, mode, text)
+                .contrast_ratio(theme_color(&source, mode, background));
+            assert!(
+                ratio >= BODY_TEXT_CONTRAST,
+                "{mode}: `{text}` on `{background}` is {ratio:.2}:1, below {BODY_TEXT_CONTRAST}:1"
+            );
+        }
+    }
 }
