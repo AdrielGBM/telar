@@ -351,7 +351,7 @@ renderer-record = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
 # ships in every binary. Nothing here covers an asset transport any more: `src/http_assets.test.rs` moved to
 # `telar-dynamic` along with the transport it exercises.
-telar = { path = ".", features = ["testing", "prerender", "previews"] }
+telar = { path = ".", features = ["font-faces", "testing", "prerender", "previews"] }
 
 tiny-skia = { workspace = true }
 

@@ -676,18 +676,33 @@ fn a_theme_button_click_that_repaints_the_tree_does_not_panic() {
     let mut tree = crate::ComponentList::new(card);
     let _ = tree.commands();
 
+    let card_fill = |tree: &mut crate::ComponentList| {
+        tree.commands().iter().find_map(|command| match command {
+            renderer_core::DrawCommand::Rect { rect, style } if rect.width == 200.0 => {
+                match style.fill {
+                    Some(renderer_core::Paint::Solid(color)) => Some(color),
+                    _ => None,
+                }
+            }
+            _ => None,
+        })
+    };
+    assert_eq!(card_fill(&mut tree), Some(Color::RED));
+
+    let x = (br.x + br.width / 2.0) as f64;
+    let y = (br.y + br.height / 2.0) as f64;
     let mut held = reactive_core::OpenBatch::open();
-    let handled = tree.on_event(&Event::PointerPressed {
-        x: (br.x + br.width / 2.0) as f64,
-        y: (br.y + br.height / 2.0) as f64,
-        button: PointerButton::Primary,
-        source: PointerSource::Mouse,
-    });
-    if handled == EventResult::Handled {
-        held.close();
-        held = reactive_core::OpenBatch::open();
-    }
-    let _ = tree.commands();
+    assert_eq!(
+        tree.on_event(&press(x, y, PointerSource::Mouse)),
+        EventResult::Handled
+    );
+    assert_eq!(
+        tree.on_event(&release(x, y, PointerSource::Mouse)),
+        EventResult::Handled
+    );
+    held.close();
+    held = reactive_core::OpenBatch::open();
+    assert_eq!(card_fill(&mut tree), Some(Color::GREEN));
     held.close();
 }
 

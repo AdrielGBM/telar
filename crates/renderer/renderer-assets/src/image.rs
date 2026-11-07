@@ -61,26 +61,6 @@ pub(crate) fn byte_string_literal(bytes: &[u8]) -> String {
     out
 }
 
-/// The baker takes every format `image` ships, and it has to: which format an `img src:"…"` points at is not knowable from the feature list, and a build-time failure over a missing decoder would be a compile error on a file that is perfectly valid. GIF stands in for the set — nothing enables it individually here, so it only decodes because `bake` asks for all of them.
-#[cfg(all(test, feature = "bake"))]
-mod baked_formats {
-    #[test]
-    fn the_baker_reads_a_format_no_runtime_knob_would_have_turned_on() {
-        let source = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-            2,
-            3,
-            image::Rgba([10, 20, 30, 255]),
-        ));
-        let mut bytes = Vec::new();
-        source
-            .write_to(
-                &mut std::io::Cursor::new(&mut bytes),
-                image::ImageFormat::Gif,
-            )
-            .expect("the gif encoder comes with `bake`");
-
-        let (rgba, w, h) = super::decode_rgba8(&bytes).expect("gif decodes for the baker");
-        assert_eq!((w, h), (2, 3));
-        assert_eq!(rgba.len(), 2 * 3 * 4);
-    }
-}
+#[cfg(test)]
+#[path = "image.test.rs"]
+mod tests;

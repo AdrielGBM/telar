@@ -15,6 +15,7 @@ use telar::{
 };
 
 const APP: [u8; 4] = [40, 90, 200, 255];
+const TEST_FACE: &[u8] = include_bytes!("../../renderer/renderer-text/test-fonts/TelarTest.ttf");
 const UI: Color = Color::rgba(1.0, 0.0, 0.0, 1.0);
 
 // Paints a solid rect over the top-left quarter of its box and records where the pointer landed, in its own coordinates. Hand-written so the test asserts against numbers it chose itself.
@@ -307,12 +308,29 @@ fn pixel_raster_reaches_the_application_texture_without_a_blended_edge() {
             .count()
     };
 
+    let inked = |pixels: &[u8]| {
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|px| px[..3] == [255, 255, 255])
+            .count()
+    };
+
+    assert!(
+        telar::install_font_face(TEST_FACE.to_vec()).is_some(),
+        "the bundled face must load"
+    );
     let smooth = render_with(telar::Raster::Smooth);
-    if blended(&smooth) == 0 {
-        eprintln!("skipping: no text was drawn (no fonts on this machine)");
-        return;
-    }
+    assert!(
+        blended(&smooth) > 0,
+        "the smooth raster must blend its edges, or this test proves nothing"
+    );
     let pixel = render_with(telar::Raster::Pixel);
+    assert!(
+        inked(&pixel) > 0,
+        "the pixel raster must draw the text in its colour"
+    );
     assert!(
         blended(&pixel) == 0,
         "the pixel raster left {} blended pixels in the application's texture",

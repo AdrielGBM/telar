@@ -312,6 +312,9 @@ mod equivalence {
                     let b = baked(svg, w, h, tint, fit);
                     assert_eq!(d.len(), 1, "dynamic raster should be one command");
                     assert_eq!(b.len(), 1, "baked raster should be one command");
+                    let context = format!("({w}x{h}) tint={tint:?} fit={fit:?}");
+                    assert_fallback_pixels(&d[0], tint, &format!("dynamic {context}"));
+                    assert_fallback_pixels(&b[0], tint, &format!("baked {context}"));
                     match (&d[0], &b[0]) {
                         (
                             DrawCommand::Image {
@@ -344,6 +347,31 @@ mod equivalence {
     const OPACITY_GROUP: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><g opacity="0.5"><rect width="10" height="10" fill="#00ff00"/></g></svg>"##;
     const DASHED: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20"><rect x="2" y="2" width="16" height="16" fill="none" stroke="#00ff00" stroke-width="2" stroke-dasharray="1 4" stroke-dashoffset="3"/></svg>"##;
     const RASTER: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><filter id="b"><feGaussianBlur stdDeviation="1"/></filter></defs><g filter="url(#b)"><rect width="10" height="10" fill="#ff0000"/></g></svg>"##;
+
+    // The pixmap is premultiplied and covers the blurred red square, whose centre is fully inside the blur. A tint is srcIn: its colour scaled by the coverage and by its own alpha.
+    fn assert_fallback_pixels(command: &DrawCommand, tint: Option<Color>, context: &str) {
+        let DrawCommand::Image { data, .. } = command else {
+            panic!("expected an Image fallback, got {command:?}");
+        };
+        let pixels = data.pixels();
+        let centre = (data.height / 2 * data.width + data.width / 2) as usize;
+        let px: [u8; 4] = pixels[centre * 4..centre * 4 + 4].try_into().unwrap();
+        let near = |a: u8, b: f32| (a as f32 - b).abs() <= 1.0;
+        match tint {
+            None => assert_eq!(px, [255, 0, 0, 255], "untinted centre pixel, {context}"),
+            Some(t) => {
+                let alpha = t.a * 255.0;
+                assert!(near(px[3], alpha), "tinted alpha {px:?}, {context}");
+                assert!(near(px[0], t.r * alpha), "tinted red {px:?}, {context}");
+                assert!(near(px[1], t.g * alpha), "tinted green {px:?}, {context}");
+                assert!(near(px[2], t.b * alpha), "tinted blue {px:?}, {context}");
+            }
+        }
+        assert!(
+            pixels.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3]),
+            "premultiplied red never exceeds alpha, {context}"
+        );
+    }
 
     #[test]
     fn fills_only_equivalent() {
@@ -417,4 +445,34 @@ fn runtime_svg_still_draws_a_data_url_image() {
         cmds.iter().any(|c| matches!(c, DrawCommand::Image { .. })),
         "data URL image was not drawn: {cmds:?}"
     );
+}
+
+mod raster_size {
+    use super::super::raster::raster_px;
+
+    #[test]
+    fn renders_at_twice_the_region_rounded_up() {
+        assert_eq!(raster_px(10.2, 3.1), (21, 7));
+    }
+
+    #[test]
+    fn a_region_below_a_pixel_still_gets_one() {
+        assert_eq!(raster_px(0.0, 0.0), (1, 1));
+    }
+
+    #[test]
+    fn the_long_side_at_the_limit_is_not_scaled() {
+        assert_eq!(raster_px(2048.0, 1024.0), (4096, 2048));
+    }
+
+    #[test]
+    fn a_larger_region_is_clamped_with_its_aspect_kept() {
+        assert_eq!(raster_px(8192.0, 1024.0), (4096, 512));
+        assert_eq!(raster_px(1024.0, 8192.0), (512, 4096));
+    }
+
+    #[test]
+    fn a_thin_strip_clamped_keeps_one_pixel() {
+        assert_eq!(raster_px(1.0e6, 0.001), (4096, 1));
+    }
 }

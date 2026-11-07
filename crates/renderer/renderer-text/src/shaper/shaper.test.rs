@@ -313,9 +313,22 @@ fn text_style_bits_default_unchanged_and_spacing_perturbs() {
     assert_ne!(bits_family, bits_other, "two families must not share a key");
 }
 
-// Coverage under the pixel raster is ink or nothing: a glyph half-covering a pixel is the grid the artist drew being taken apart. Skipped on a font-less machine, where nothing is inked at all.
+const TEST_FACE: &[u8] = include_bytes!("../../test-fonts/TelarTest.ttf");
+
+fn install_test_face() {
+    let _installing = crate::fonts::FACES_STABLE
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    assert!(
+        crate::fonts::install_face(TEST_FACE.to_vec()).is_some(),
+        "the bundled face must load, or text is drawn in whatever the machine has"
+    );
+}
+
+// Coverage under the pixel raster is ink or nothing: a glyph half-covering a pixel is the grid the artist drew being taken apart.
 #[test]
 fn pixel_raster_leaves_no_partial_coverage() {
+    install_test_face();
     let mut sh = TextShaper::new();
     let rect = Rect {
         x: 0.0,
@@ -333,14 +346,25 @@ fn pixel_raster_leaves_no_partial_coverage() {
             .filter(|px| px[3] > 0 && px[3] < 255)
             .count()
     };
-    if partial(&smooth) == 0 {
-        return;
-    }
+    assert!(
+        partial(&smooth) > 0,
+        "the smooth raster must anti-alias, or this test proves nothing"
+    );
     let (pixel, _, _) = sh.rasterize(
         "Hamburgefonstiv",
         None,
         rect,
         &base.with_raster(Raster::Pixel),
+    );
+    let inked = pixel
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|px| **px == [255, 255, 255, 255])
+        .count();
+    assert!(
+        inked > 0,
+        "the pixel raster must ink the text in its colour"
     );
     assert_eq!(
         partial(&pixel),
