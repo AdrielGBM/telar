@@ -69,10 +69,14 @@ impl CellBuffer {
         let Some(i) = self.index(col, row) else {
             return width;
         };
+        self.release(col, row);
         // A wide glyph with only one column left would spill into the next row; a space keeps the grid honest.
         if width == 2 && col + 1 >= self.cols {
             self.cells[i].glyph = Grapheme::SPACE;
             return width;
+        }
+        if width == 2 {
+            self.release(col + 1, row);
         }
         self.cells[i].glyph = glyph;
         self.cells[i].fg = fg;
@@ -111,6 +115,24 @@ impl CellBuffer {
     fn is_wide_head(&self, col: u16, row: u16) -> bool {
         self.get(col + 1, row)
             .is_some_and(|c| c.attrs.contains(Attrs::WIDE_TAIL))
+    }
+
+    /// Blanks the other half of the double-width grapheme the cell at `col` belongs to, so overwriting one half never leaves the other behind.
+    fn release(&mut self, col: u16, row: u16) {
+        let Some(i) = self.index(col, row) else {
+            return;
+        };
+        let partner = if self.cells[i].attrs.contains(Attrs::WIDE_TAIL) {
+            col.checked_sub(1).and_then(|head| self.index(head, row))
+        } else if self.is_wide_head(col, row) {
+            Some(i + 1)
+        } else {
+            None
+        };
+        if let Some(partner) = partner {
+            self.cells[partner].glyph = Grapheme::SPACE;
+            self.cells[partner].attrs = Attrs::NONE;
+        }
     }
 
     /// Appends the escape sequences that turn `previous` into `self`. An unchanged frame appends nothing.
@@ -373,10 +395,10 @@ impl TerminalModel {
         self.cursor = (col + width, row);
     }
 
-    /// The screen as one string per row, for an assertion that reads like the screen.
-    pub(crate) fn row(&self, row: u16) -> String {
+    /// The glyph in each column of one row. A column a wide glyph covers is empty, as it is on screen.
+    pub(crate) fn row(&self, row: u16) -> Vec<String> {
         (0..self.cols)
-            .map(|c| self.glyphs[row as usize * self.cols as usize + c as usize].as_str())
+            .map(|c| self.glyphs[row as usize * self.cols as usize + c as usize].clone())
             .collect()
     }
 }

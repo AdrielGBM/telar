@@ -364,7 +364,7 @@ fn app_text_cannot_inject_terminal_control_sequences() {
         assert!(!out.contains(&0x07), "no BEL in {out:?}");
         let mut model = crate::buffer::TerminalModel::new(30, 1);
         model.apply(&out);
-        assert_eq!(model.row(0).trim_end(), shown, "{text:?}");
+        assert_eq!(model.row(0).concat().trim_end(), shown, "{text:?}");
     }
 }
 
