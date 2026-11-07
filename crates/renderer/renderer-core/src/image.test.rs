@@ -48,3 +48,25 @@ fn both_constructors_address_the_same_finished_image_alike() {
         ImageData::from_premultiplied(premultiplied, 1, 1).id
     );
 }
+
+#[test]
+fn premultiplying_rounds_to_the_nearest_value_and_leaves_opaque_pixels_alone() {
+    for pixel_count in [1, 4, 7] {
+        for alpha in 0..=255u32 {
+            for channel in 0..=255u32 {
+                let mut pixels =
+                    [channel as u8, channel as u8, channel as u8, alpha as u8].repeat(pixel_count);
+                premultiply_rgba(&mut pixels);
+                let expected = (channel * alpha + 127) / 255;
+                for pixel in pixels.as_chunks::<4>().0 {
+                    assert_eq!(
+                        u32::from(pixel[0]),
+                        expected,
+                        "channel {channel} at alpha {alpha}, {pixel_count} pixels"
+                    );
+                    assert_eq!(u32::from(pixel[3]), alpha);
+                }
+            }
+        }
+    }
+}
