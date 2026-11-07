@@ -128,6 +128,39 @@ fn a_paste_is_typed() {
 }
 
 #[test]
+fn the_space_key_arrives_as_named_space() {
+    let out = events(
+        &mut mapper(),
+        TermEvent::Key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
+    );
+    assert!(
+        matches!(
+            out[0],
+            Event::KeyPressed {
+                key: Key::Named(NamedKey::Space),
+                ..
+            }
+        ),
+        "a button or checkbox activates on NamedKey::Space, so the key must arrive as it: {out:?}"
+    );
+}
+
+#[test]
+fn a_space_in_a_paste_stays_a_character() {
+    let out = events(&mut mapper(), TermEvent::Paste(" ".into()));
+    assert!(
+        matches!(
+            out[0],
+            Event::KeyPressed {
+                key: Key::Char(' '),
+                ..
+            }
+        ),
+        "a pasted space is typed text, not the Space key: {out:?}"
+    );
+}
+
+#[test]
 fn a_scroll_carries_the_last_pointer_position() {
     let mut m = mapper();
     events(
