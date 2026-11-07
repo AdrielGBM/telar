@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 
 use crate::analysis::preview_target::{PREVIEW_AT, WORKSHOPS};
 use crate::backend::Backend;
-use crate::rpc::{OutgoingSender, read_message, write_message};
+use crate::rpc::{OutgoingSender, read_message, request_failed, write_message};
 
 pub async fn run() {
     let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
@@ -208,7 +208,10 @@ async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Res
         "textDocument/documentHighlight" => ok(backend.document_highlight(parse(params)?).await),
         "textDocument/references" => ok(backend.references(parse(params)?).await),
         "textDocument/prepareRename" => ok(backend.prepare_rename(parse(params)?).await),
-        "textDocument/rename" => ok(backend.rename(parse(params)?).await),
+        "textDocument/rename" => ok(backend
+            .rename(parse(params)?)
+            .await
+            .map_err(|refused| request_failed(refused.message()))?),
         "workspace/symbol" => ok(backend.workspace_symbol(parse(params)?).await),
         PREVIEW_AT => ok(backend.preview_at(parse(params)?).await),
         WORKSHOPS => ok(backend.workshops(parse(params)?).await),

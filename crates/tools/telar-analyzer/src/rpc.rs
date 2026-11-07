@@ -49,6 +49,11 @@ where
         .map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::InvalidData, e))
 }
 
+/// The JSON-RPC error for a well-formed request that could not be carried out, with the reason the editor shows.
+pub fn request_failed(message: &str) -> Value {
+    json!({ "code": lsp_types::error_codes::REQUEST_FAILED, "message": message })
+}
+
 /// Sends server→client messages (responses, notifications, requests) onto a channel that the stdout writer task drains, so handlers never touch stdout directly and writes never interleave.
 #[derive(Clone)]
 pub struct OutgoingSender {

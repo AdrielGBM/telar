@@ -101,6 +101,16 @@ struct CompletionCache {
     docs: Vec<Option<Documentation>>,
 }
 
+/// A rename that was refused, with the reason the editor is answered with. Only [`Backend::rename_refused`] makes one, so the user has always been told.
+#[derive(Debug)]
+pub struct RenameRefused(String);
+
+impl RenameRefused {
+    pub fn message(&self) -> &str {
+        &self.0
+    }
+}
+
 /// The server's state: the open documents, the workspace index, and the rust-analyzer behind them.
 pub struct Backend {
     outgoing: OutgoingSender,
@@ -893,7 +903,7 @@ impl Backend {
         let gen_code = target.code.clone();
         let raws = self
             .run_analyzer(root, move |a| async move {
-                Some(a.inlay_hints(&gen_path, &gen_code).await)
+                a.inlay_hints(&gen_path, &gen_code).await
             })
             .await?;
 
@@ -960,7 +970,8 @@ impl Backend {
             let rsx_path = file_path?;
             let (locations, _) = self
                 .rust_reference_locations(uri, rsx_path, source, theme, pos)
-                .await?;
+                .await
+                .ok()?;
             locations
                 .into_iter()
                 .filter(|l| &l.uri == uri)
@@ -1033,7 +1044,8 @@ impl Backend {
         let rsx_path = file_path?;
         let (locations, _) = self
             .rust_reference_locations(uri, rsx_path, source, theme, pos)
-            .await?;
+            .await
+            .ok()?;
         (!locations.is_empty()).then_some(locations)
     }
 
@@ -1074,24 +1086,32 @@ impl Backend {
         Some(PrepareRenameResponse::Range(range))
     }
 
-    /// A rename that will not happen, said in both places it has to be said. The editor renders a refused rename as a bare "No results", so the reason has to reach the user — and a toast is easy to miss, while the server log is where anyone debugging one will look.
-    fn rename_refused(&self, why: &str) {
+    /// A rename that will not happen, said everywhere it has to be said: as the request's error, as a message the user sees whatever the editor makes of that error, and in the server log, where anyone debugging one will look.
+    fn rename_refused(&self, why: &str) -> RenameRefused {
+        let message = format!("Rename cancelled: {why}");
         self.outgoing
-            .show_message(MessageType::WARNING, format!("Rename cancelled: {why}"));
+            .show_message(MessageType::WARNING, message.clone());
         self.outgoing.log_message(
             MessageType::WARNING,
             format!("telar-analyzer: rename cancelled — {why}"),
         );
+        RenameRefused(message)
     }
-    /// `textDocument/rename`: rewrite every occurrence of the symbol under the cursor. `@class`/`$signal` are single-file text rewrites; a component tag renames its `.rsx` file + markup usages + Rust references (cross-file); a Rust identifier in `[logic]`/`[play]`/`[view]` is renamed via the analyzer's find-all-references, reverse-mapped onto the `.rsx` (and any real `.rs` files).
-    pub async fn rename(&self, params: RenameParams) -> Option<WorkspaceEdit> {
+
+    /// `textDocument/rename`: rewrite every occurrence of the symbol under the cursor. `@class`/`$signal` are single-file text rewrites; a component tag renames its `.rsx` file + markup usages + Rust references (cross-file); a Rust identifier in `[logic]`/`[play]`/`[view]` is renamed via the analyzer's find-all-references, reverse-mapped onto the `.rsx` (and any real `.rs` files). A rename that cannot be carried out whole is refused rather than applied in part.
+    pub async fn rename(
+        &self,
+        params: RenameParams,
+    ) -> Result<Option<WorkspaceEdit>, RenameRefused> {
         let uri = &params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
         let new_name = params.new_name;
         let file_path = crate::uri::to_path(uri);
         let (source, theme) = {
             let store = self.store.read().await;
-            let source = store.latest_source(uri).cloned()?;
+            let Some(source) = store.latest_source(uri).cloned() else {
+                return Ok(None);
+            };
             let theme = file_path
                 .as_deref()
                 .and_then(ProjectInfo::discover)
@@ -1110,10 +1130,9 @@ impl Backend {
                     .any(|class| class.name == name && !class.public)
             });
             if shared {
-                self.rename_refused(&format!(
+                return Err(self.rename_refused(&format!(
                     "`@{name}` is shared with other modules through `use`, which a rename in one file would leave naming the old name"
-                ));
-                return None;
+                )));
             }
             Some(crate::analysis::occurrences::class_occurrences(
                 &source, &name,
@@ -1131,17 +1150,17 @@ impl Backend {
                 })
                 .collect();
             if edits.is_empty() {
-                return None;
+                return Ok(None);
             }
             // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
             #[allow(clippy::mutable_key_type)]
             let mut changes = std::collections::HashMap::new();
             changes.insert(uri.clone(), edits);
-            return Some(WorkspaceEdit {
+            return Ok(Some(WorkspaceEdit {
                 changes: Some(changes),
                 document_changes: None,
                 change_annotations: None,
-            });
+            }));
         }
 
         // Component tag → cross-file rename (file + markup + Rust references).
@@ -1151,49 +1170,52 @@ impl Backend {
             return self.rename_component(&name, &new_name, uri, theme).await;
         }
 
-        if matches!(
+        let in_rust = matches!(
             find_section_at(&source, pos.line),
             Section::Logic | Section::Play | Section::View
-        ) {
-            let rsx_path = file_path?;
-            let Some((locations, unmapped)) = self
-                .rust_reference_locations(uri, rsx_path, source, theme, pos)
-                .await
-            else {
-                self.rename_refused("rust-analyzer did not answer for this file. It may still be loading the workspace, or the query outran its deadline.");
-                return None;
-            };
-            if locations.is_empty() {
-                self.rename_refused("rust-analyzer answered, but found no reference to the symbol under the cursor.");
-                return None;
+        );
+        let Some(rsx_path) = file_path.filter(|_| in_rust) else {
+            return Ok(None);
+        };
+        let (locations, unmapped) = match self
+            .rust_reference_locations(uri, rsx_path, source, theme, pos)
+            .await
+        {
+            Ok(found) => found,
+            Err(why) => {
+                return Err(self.rename_refused(&format!(
+                    "the symbol's references could not be listed: {why}."
+                )));
             }
-            // A partial rename would leave the code uncompilable, so a reference that could not be precisely located refuses the whole rename rather than half-applying it.
-            if !unmapped.is_empty() {
-                self.rename_refused(&format!(
-                    "{} use of this symbol has no place in the .rsx to rename — {}. Renaming the rest would leave the file uncompilable, so nothing was changed.",
-                    unmapped.len(),
-                    unmapped.join("; ")
-                ));
-                return None;
-            }
-            // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
-            #[allow(clippy::mutable_key_type)]
-            let mut changes: std::collections::HashMap<Uri, Vec<TextEdit>> =
-                std::collections::HashMap::new();
-            for loc in locations {
-                changes.entry(loc.uri).or_default().push(TextEdit {
-                    range: loc.range,
-                    new_text: new_name.clone(),
-                });
-            }
-            return Some(WorkspaceEdit {
-                changes: Some(changes),
-                document_changes: None,
-                change_annotations: None,
+        };
+        if locations.is_empty() {
+            return Err(self.rename_refused(
+                "rust-analyzer answered, but found no reference to the symbol under the cursor.",
+            ));
+        }
+        // A partial rename would leave the code uncompilable, so a reference that could not be precisely located refuses the whole rename rather than half-applying it.
+        if !unmapped.is_empty() {
+            return Err(self.rename_refused(&format!(
+                "{} use of this symbol has no place in the .rsx to rename — {}. Renaming the rest would leave the file uncompilable, so nothing was changed.",
+                unmapped.len(),
+                unmapped.join("; ")
+            )));
+        }
+        // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
+        #[allow(clippy::mutable_key_type)]
+        let mut changes: std::collections::HashMap<Uri, Vec<TextEdit>> =
+            std::collections::HashMap::new();
+        for loc in locations {
+            changes.entry(loc.uri).or_default().push(TextEdit {
+                range: loc.range,
+                new_text: new_name.clone(),
             });
         }
-
-        None
+        Ok(Some(WorkspaceEdit {
+            changes: Some(changes),
+            document_changes: None,
+            change_annotations: None,
+        }))
     }
 
     /// `workspace/symbol`: components and `@classes` across the project, filtered by the query.

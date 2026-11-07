@@ -184,3 +184,103 @@ fn a_turnstile_lets_one_holder_through_at_a_time() {
     );
     second.join().unwrap();
 }
+
+const EDITOR_WAIT: Duration = Duration::from_secs(10);
+
+async fn next_for_editor(editor: &mut tokio::sync::mpsc::UnboundedReceiver<Value>) -> Value {
+    tokio::time::timeout(EDITOR_WAIT, editor.recv())
+        .await
+        .expect("the editor was never answered")
+        .expect("the outgoing channel closed")
+}
+
+#[tokio::test]
+async fn an_error_rust_analyzer_answers_reaches_the_caller_as_an_error() {
+    let (inner, _editor) = fake::session(fake::answering(|request| {
+        Response::new_err(
+            request.id,
+            lsp_server::ErrorCode::ContentModified as i32,
+            "content modified".to_owned(),
+        )
+    }));
+
+    let answer = inner
+        .request("textDocument/references", json!({}), EDITOR_WAIT)
+        .await;
+
+    match answer {
+        Err(RequestError::Answered(error)) => {
+            assert_eq!(error.code, lsp_server::ErrorCode::ContentModified as i32);
+            assert_eq!(error.message, "content modified");
+        }
+        other => panic!("expected rust-analyzer's own error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn an_editor_request_that_cannot_be_sent_is_answered_with_an_error() {
+    let (deaf, went_deaf) = std::sync::mpsc::channel::<()>();
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let (inner, mut editor) = fake::session(move |connection| {
+        let Connection { sender, receiver } = connection;
+        drop(receiver);
+        let _ = deaf.send(());
+        let _ = released.recv();
+        drop(sender);
+    });
+    went_deaf.recv().unwrap();
+
+    inner.pass_request(json!(41), "textDocument/hover", json!({}));
+
+    let reply = next_for_editor(&mut editor).await;
+    assert_eq!(reply["id"], json!(41));
+    assert_eq!(
+        reply["error"]["code"],
+        json!(lsp_types::error_codes::REQUEST_FAILED)
+    );
+    assert!(
+        !inner.ended(),
+        "the reader is still running, so only the send failed"
+    );
+    drop(release);
+}
+
+#[tokio::test]
+async fn requests_still_waiting_when_the_session_ends_are_answered_with_errors() {
+    let (inner, mut editor) = fake::session(|connection| {
+        let mut requests = 0;
+        for message in &connection.receiver {
+            if matches!(message, Message::Request(_)) {
+                requests += 1;
+            }
+            if requests == 2 {
+                return;
+            }
+        }
+    });
+
+    inner.pass_request(json!(7), "textDocument/hover", json!({}));
+    let ours = inner
+        .request("textDocument/references", json!({}), EDITOR_WAIT)
+        .await;
+
+    assert!(
+        matches!(ours, Err(RequestError::SessionEnded)),
+        "our query should end with the session rather than wait out its deadline: {ours:?}"
+    );
+    let reply = next_for_editor(&mut editor).await;
+    assert_eq!(reply["id"], json!(7));
+    assert_eq!(
+        reply["error"]["code"],
+        json!(lsp_types::error_codes::REQUEST_FAILED)
+    );
+    assert!(inner.ended());
+
+    inner.pass_request(json!(8), "textDocument/hover", json!({}));
+    let late = next_for_editor(&mut editor).await;
+    assert_eq!(late["id"], json!(8));
+    assert!(
+        late.get("error").is_some(),
+        "a request after the end is refused at once: {late}"
+    );
+}

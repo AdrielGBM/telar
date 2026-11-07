@@ -24,7 +24,7 @@ impl AnalyzerHandle {
         {
             let mut state = self.state.lock().ok()?;
             match &*state {
-                AnalyzerState::Ready(analyzer) => return Some(analyzer.clone()),
+                AnalyzerState::Ready(_) => return self.live(&mut state),
                 AnalyzerState::Starting | AnalyzerState::Failed => return None,
                 AnalyzerState::Idle => *state = AnalyzerState::Starting,
             }
@@ -68,11 +68,26 @@ impl AnalyzerHandle {
 
     /// The running analyzer, without booting one. The passthrough uses this: an editor request for a `.rs` file cannot sit waiting on a workspace load, and `initialize` has already started the boot.
     pub(crate) fn ready(&self) -> Option<Arc<Analyzer>> {
-        match &*self.state.lock().ok()? {
-            AnalyzerState::Ready(analyzer) => Some(analyzer.clone()),
-            _ => None,
-        }
+        let mut state = self.state.lock().ok()?;
+        self.live(&mut state)
     }
+
+    /// The analyzer `state` holds while its session lasts. One whose session ended is retired to `Failed`, so the editor's `.rs` requests fall back instead of being handed to a session that cannot answer, and the user is told once.
+    fn live(&self, state: &mut AnalyzerState) -> Option<Arc<Analyzer>> {
+        let AnalyzerState::Ready(analyzer) = state else {
+            return None;
+        };
+        if !analyzer.ended() {
+            return Some(analyzer.clone());
+        }
+        *state = AnalyzerState::Failed;
+        self.outgoing.show_message(
+            MessageType::ERROR,
+            "rust-analyzer stopped, so Rust features are unavailable until the language server restarts.",
+        );
+        None
+    }
+
     /// Records what the editor said about itself, for the session we boot. Written once from `initialize`, before any query can ask for the analyzer.
     pub(crate) fn set_client(&self, options: Value, caps: Value) {
         if let Ok(mut slot) = self.options.lock() {
@@ -257,3 +272,7 @@ impl Backend {
         self.analyzer.get(root).await
     }
 }
+
+#[cfg(test)]
+#[path = "lifecycle.test.rs"]
+mod tests;

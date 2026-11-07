@@ -13,7 +13,9 @@ use serde_json::{Value, json};
 
 use super::{
     Analyzer, DefinitionTarget, InlayHintRaw, KEYSTROKE_TIMEOUT, QUERY_TIMEOUT, RefTarget,
+    ReferencesError,
 };
+use crate::inner::RequestError;
 
 impl Analyzer {
     pub async fn completions(
@@ -22,7 +24,7 @@ impl Analyzer {
         generated: &str,
         offset: usize,
     ) -> Vec<CompletionItem> {
-        let Some(result) = self
+        let Ok(result) = self
             .at_offset(
                 "textDocument/completion",
                 gen_path,
@@ -59,7 +61,8 @@ impl Analyzer {
                 None,
                 KEYSTROKE_TIMEOUT,
             )
-            .await?;
+            .await
+            .ok()?;
         serde_json::from_value(result).ok()
     }
 
@@ -74,7 +77,8 @@ impl Analyzer {
                 None,
                 KEYSTROKE_TIMEOUT,
             )
-            .await?;
+            .await
+            .ok()?;
         let mut hover: Hover = serde_json::from_value(result).ok()?;
         hover.range = None;
         Some(hover)
@@ -95,7 +99,9 @@ impl Analyzer {
                 None,
                 QUERY_TIMEOUT,
             )
-            .await?;
+            .await
+            .ok()
+            .filter(|result| !result.is_null())?;
         Some(
             locations(result)
                 .into_iter()
@@ -104,13 +110,13 @@ impl Analyzer {
         )
     }
 
-    /// Find-all-references, declaration included: a component rename needs the definition site as much as the uses.
+    /// Find-all-references, declaration included: a component rename needs the definition site as much as the uses. Because the declaration is asked for, an answer naming no location means nothing was resolved at `offset`, never a symbol nobody uses.
     pub async fn references(
         &self,
         gen_path: &Path,
         generated: &str,
         offset: usize,
-    ) -> Option<Vec<RefTarget>> {
+    ) -> Result<Vec<RefTarget>, ReferencesError> {
         let result = self
             .at_offset(
                 "textDocument/references",
@@ -120,13 +126,16 @@ impl Analyzer {
                 Some(json!({ "context": { "includeDeclaration": true } })),
                 QUERY_TIMEOUT,
             )
-            .await?;
-        Some(
-            locations(result)
-                .into_iter()
-                .map(|(path, range)| RefTarget { path, range })
-                .collect(),
-        )
+            .await
+            .map_err(ReferencesError::Request)?;
+        let refs: Vec<RefTarget> = locations(result)
+            .into_iter()
+            .map(|(path, range)| RefTarget { path, range })
+            .collect();
+        match refs.is_empty() {
+            true => Err(ReferencesError::NoSymbol),
+            false => Ok(refs),
+        }
     }
 
     /// Diagnostics for the generated file, in generated-file coordinates. Pulled rather than taken from the `publishDiagnostics` rust-analyzer also emits, so a stale push cannot be mistaken for the current buffer's answer.
@@ -140,7 +149,7 @@ impl Analyzer {
                 QUERY_TIMEOUT,
             )
             .await;
-        let Some(result) = result else {
+        let Ok(result) = result else {
             return Vec::new();
         };
         serde_json::from_value(result.get("items").cloned().unwrap_or_default()).unwrap_or_default()
@@ -160,7 +169,7 @@ impl Analyzer {
                 QUERY_TIMEOUT,
             )
             .await;
-        let Some(result) = result else {
+        let Ok(result) = result else {
             return Vec::new();
         };
         let hints: Vec<InlayHint> = serde_json::from_value(result).unwrap_or_default();
@@ -196,7 +205,7 @@ impl Analyzer {
         offset: usize,
         extra: Option<Value>,
         timeout: Duration,
-    ) -> Option<Value> {
+    ) -> Result<Value, RequestError> {
         self.inner.sync(gen_path, generated);
         let mut params = json!({
             "textDocument": { "uri": crate::inner::uri_for(gen_path) },
@@ -205,8 +214,7 @@ impl Analyzer {
         if let (Some(Value::Object(extra)), Some(params)) = (extra, params.as_object_mut()) {
             params.extend(extra);
         }
-        let result = self.inner.request(method, params, timeout).await?;
-        (!result.is_null()).then_some(result)
+        self.inner.request(method, params, timeout).await
     }
 }
 
@@ -249,9 +257,14 @@ impl Analyzer {
                 super::QUERY_TIMEOUT,
             )
             .await
+            .ok()
         else {
             return Vec::new();
         };
         serde_json::from_value(result).unwrap_or_default()
     }
 }
+
+#[cfg(test)]
+#[path = "queries.test.rs"]
+mod tests;
