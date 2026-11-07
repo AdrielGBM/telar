@@ -192,7 +192,71 @@ pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, La
             );
             example(ExampleProps::props().title("rows: — a handle the view can bring any row into view with").children(__recipe_children).build())?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7])?
+        let __node_16 = {
+            let __recipe_children = Children::new(
+                {
+                    let notes = notes.clone();
+                    let theme = theme.clone();
+                move || {
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_17 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let notes = notes.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_18 = button(ButtonProps::props().label("Reverse").variant(::telar::kw::outline).on_press(std::rc::Rc::new({ let notes = notes.clone(); move || notes.update(|v| v.reverse()) })).build())?;
+                                __children.push(box_item(__node_18));
+                                let __node_19 = {
+                                    LayoutScrollArea::new_with(LayoutStyle::new().height(200.0).width(SizeDimension::Percent(1.0)), |__viewport| {
+                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                    let __node_20 = VirtualList::positional(
+                                        LayoutStyle::new().flex_column(),
+                                        __viewport.clone(),
+                                        (32) as f32,
+                                        2,
+                                        { let notes = notes.clone(); move || notes.get() },
+                                        {
+                                            let theme = theme.clone();
+                                        move |__index: usize, note| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                            let __row_1 = {
+                                                let __text_4 = {
+                                                    let note = note.clone();
+                                                    Text::declaring(
+                                                        move || format!("{}", note.get().title),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                    )?
+                                                };
+                                                Container::new(LayoutStyle::new().flex_row().height(32.0).align_items(AlignItems::CENTER).padding_horizontal(12.0), children![__text_4])?
+                                            };
+                                            Ok(box_item(__row_1))
+                                        }
+                                        },
+                                    )?;
+                                    __slots.push(ChildSlot::stat(box_item(__node_20)));
+                                    let __scroll_content = Container::from_slots(LayoutStyle::new().flex_column(), __slots)?;
+                                        Ok(Box::new(__scroll_content) as Box<dyn LayoutItem>)
+                                    })?
+                                };
+                                __children.push(box_item(__node_19));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_17));
+                    let __node_21 = code_line(CodeLineProps::props().code("for note in $notes virtual row_height:32   ·   note is the row's item signal: text …$note.title…").build())?;
+                    __children.push(box_item(__node_21));
+                    Ok(__children)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Without a key — each row stays at its index and follows the note now there").children(__recipe_children).build())?
+        };
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_16])?
     };
     Ok(Box::new(__col_0))
 }

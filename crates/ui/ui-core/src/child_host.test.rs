@@ -588,3 +588,49 @@ fn a_keyed_fragment_item_keeps_its_widget_and_follows_what_it_now_carries() {
         "while still seeing what it now says"
     );
 }
+
+#[test]
+fn a_keyless_fragment_shows_its_items_through_a_reorder_and_an_edit_in_place() {
+    reset_layout_runtime();
+    let items = signal(vec!["alpha", "beta", "gamma"]);
+    let source = items;
+    let container = Container::from_slots(
+        LayoutStyle::new().flex_column(),
+        vec![fragment_positional(
+            move || source.get(),
+            |held: ReadSignal<&'static str>| {
+                Ok(Box::new(crate::Text::new(
+                    move || held.get().to_string(),
+                    LayoutStyle::new(),
+                    || renderer_core::TextStyle::new(12.0, renderer_core::Color::BLACK),
+                )?) as Box<dyn LayoutItem>)
+            },
+            0.0,
+        )],
+    )
+    .unwrap();
+    compute_layout(
+        container.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let root = ui_tree::SegmentRoot::mount(container);
+    let shown = || {
+        crate::context::relayout_if_dirty();
+        let mut shown = Vec::new();
+        renderer_core::for_each_with_matrix(&root.commands(), |command, _| {
+            if let renderer_core::DrawCommand::Text { text, .. } = command {
+                shown.push(text.to_string());
+            }
+        });
+        shown
+    };
+    assert_eq!(shown(), ["alpha", "beta", "gamma"]);
+
+    items.set(vec!["gamma", "alpha", "beta"]);
+    assert_eq!(shown(), ["gamma", "alpha", "beta"], "reordered");
+
+    items.set(vec!["gamma", "delta", "epsilon"]);
+    assert_eq!(shown(), ["gamma", "delta", "epsilon"], "edited in place");
+}

@@ -808,3 +808,98 @@ mod first_frame {
         );
     }
 }
+
+mod positional {
+    use layout_core::{AvailableSpace, LayoutStyle};
+    use reactive_core::{RwSignal, signal};
+
+    use super::super::*;
+    use crate::context::{compute_layout, relayout_if_dirty, reset_layout_runtime};
+    use crate::layout_item::box_item;
+    use crate::scroll_area::LayoutScrollArea;
+
+    #[derive(Clone, Copy)]
+    enum Heights {
+        Fixed,
+        Measured,
+    }
+
+    fn label(
+        _at: usize,
+        held: ReadSignal<&'static str>,
+    ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        Ok(box_item(crate::Text::new(
+            move || held.get().to_string(),
+            LayoutStyle::new().height(20.0),
+            || renderer_core::TextStyle::new(12.0, renderer_core::Color::BLACK),
+        )?))
+    }
+
+    /// A keyless virtual list of labels, every one on screen, with the signal that feeds it.
+    fn mounted(
+        heights: Heights,
+        labels: &[&'static str],
+    ) -> (RwSignal<Vec<&'static str>>, ui_tree::SegmentRoot) {
+        reset_layout_runtime();
+        let items = signal(labels.to_vec());
+        let scroll =
+            LayoutScrollArea::new_with(LayoutStyle::new().width(200.0).height(200.0), |viewport| {
+                let source = move || items.get();
+                let list = match heights {
+                    Heights::Fixed => VirtualList::positional(
+                        LayoutStyle::new().flex_column(),
+                        viewport,
+                        20.0,
+                        2,
+                        source,
+                        label,
+                    )?,
+                    Heights::Measured => VirtualList::measured_positional(
+                        LayoutStyle::new().flex_column(),
+                        VirtualRows::new(viewport, 20.0),
+                        40.0,
+                        source,
+                        label,
+                    )?,
+                };
+                Ok(box_item(list))
+            })
+            .unwrap();
+        compute_layout(
+            scroll.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        (items, ui_tree::SegmentRoot::mount(scroll))
+    }
+
+    fn shown(root: &ui_tree::SegmentRoot) -> Vec<String> {
+        relayout_if_dirty();
+        let mut shown = Vec::new();
+        renderer_core::for_each_with_matrix(&root.commands(), |command, _| {
+            if let renderer_core::DrawCommand::Text { text, .. } = command {
+                shown.push(text.to_string());
+            }
+        });
+        shown
+    }
+
+    #[test]
+    fn a_keyless_virtual_list_shows_its_rows_through_a_reorder_and_an_edit_in_place() {
+        for heights in [Heights::Fixed, Heights::Measured] {
+            let (items, root) = mounted(heights, &["alpha", "beta", "gamma"]);
+            assert_eq!(shown(&root), ["alpha", "beta", "gamma"]);
+
+            items.set(vec!["gamma", "alpha", "beta"]);
+            assert_eq!(shown(&root), ["gamma", "alpha", "beta"], "reordered");
+
+            items.set(vec!["gamma", "delta", "epsilon"]);
+            assert_eq!(
+                shown(&root),
+                ["gamma", "delta", "epsilon"],
+                "edited in place"
+            );
+        }
+    }
+}

@@ -17,6 +17,14 @@ impl ViewGen<'_> {
         result
     }
 
+    fn with_row_signals<R>(&mut self, names: Vec<String>, emit: impl FnOnce(&mut Self) -> R) -> R {
+        let added = names.len();
+        self.signals.extend(names);
+        let result = emit(self);
+        self.signals.truncate(self.signals.len() - added);
+        result
+    }
+
     fn with_loop_bindings<R>(
         &mut self,
         names: Vec<String>,
@@ -307,17 +315,18 @@ impl ViewGen<'_> {
     }
 
     /// A reactive `for x in $items [key <expr>] [gap:N]`. Inside a slot host it is a transparent fragment: its items reconcile into the host's node as real siblings, flowing in its flex direction (a `for` in a `row` is horizontal), with `gap:` as a per-item margin. Elsewhere it is a boxed `ReactiveList` owning its own container node.
+    ///
+    /// With a `key`, each row is built from its item by value and rebuilt when its key changes. Without one, the row's index is its key, so a row stays where it is while the items under it move or change: its pattern binds a signal of the item now at that index, which the body reads as `$x`.
     fn emit_reactive_for(&mut self, block: &ForBlock) -> ChildEmit {
-        let boxed = !self.in_slot_host();
-        let var = self.next_variable_name("node");
         let pad = self.indent_str();
         let iterable = block.iterable.trim();
         let pattern = block.pattern.trim();
-        let key_expr = block
-            .key_expr
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty());
+        let key_expr = match row_key(block, &pad) {
+            Ok(key_expr) => key_expr,
+            Err(refused) => return refused,
+        };
+        let boxed = !self.in_slot_host();
+        let var = self.next_variable_name("node");
         let gap_expr = block
             .gap_expr
             .as_deref()
@@ -333,7 +342,7 @@ impl ViewGen<'_> {
             (true, true) => "ReactiveList::new",
             (true, false) => "ReactiveList::positional",
         };
-        let item_builder = self.emit_item_closure(block, pattern, &pad);
+        let item_builder = self.emit_item_closure(block, pattern, key_expr.is_some(), &pad);
         let closer = self.boxed_list_closer(boxed);
 
         let mut code = String::new();
@@ -360,8 +369,14 @@ impl ViewGen<'_> {
 
     /// The `move |params| -> Result<…>` row closure a reactive `for` hands its list constructor, with the clone prelude its body reads.
     ///
-    /// The body is walked with this loop's own pattern idents already bound: those are the closure's parameters, so a `$rect` under `for (m, rect) in $chips` names one of them and cloning it above the closure would name a binding that does not exist there.
-    fn emit_item_closure(&mut self, block: &ForBlock, params: &str, pad: &str) -> String {
+    /// The body is walked with this loop's own pattern idents already bound: those are the closure's parameters, so a `$rect` under `for (m, rect) in $chips` names one of them and cloning it above the closure would name a binding that does not exist there. A keyless loop's pattern binds the row's item signal, so the body is walked with it counted among the signals.
+    fn emit_item_closure(
+        &mut self,
+        block: &ForBlock,
+        params: &str,
+        keyed: bool,
+        pad: &str,
+    ) -> String {
         let mut body = String::new();
         let _ = writeln!(
             body,
@@ -370,8 +385,14 @@ impl ViewGen<'_> {
         self.indent += 2;
         let idents = pattern_idents(block.pattern.trim());
         let snippets = scoped_snippets(&block.body, &idents);
-        let cell = self.with_loop_bindings(idents, |g| {
-            g.in_reactive(|g| g.emit_content_cell(&block.body, &mut body))
+        let row_signals = match keyed {
+            true => Vec::new(),
+            false => idents.clone(),
+        };
+        let cell = self.with_row_signals(row_signals, |g| {
+            g.with_loop_bindings(idents, |g| {
+                g.in_reactive(|g| g.emit_content_cell(&block.body, &mut body))
+            })
         });
         let ipad = self.indent_str();
         let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
@@ -382,7 +403,7 @@ impl ViewGen<'_> {
 
     /// A `virtual` loop: only the rows the enclosing scroll shows get built, instead of every row up front.
     ///
-    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent fragment. `row_height:` is the fixed-height `VirtualList::new`; `estimated_height:` is `VirtualList::measured` over a `VirtualRows` made here, which `rows:$handle` also stores in a signal for the view to `reveal` with.
+    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent fragment. `row_height:` is the fixed-height `VirtualList::new`; `estimated_height:` is `VirtualList::measured` over a `VirtualRows` made here, which `rows:$handle` also stores in a signal for the view to `reveal` with. Without a `key` they are `VirtualList::positional` and `VirtualList::measured_positional`, whose rows bind a signal of their item as a keyless reactive `for`'s do.
     fn emit_virtual_for(&mut self, block: &ForBlock, clause: &VirtualClause) -> ChildEmit {
         let pad = self.indent_str();
         let Some(viewport) = self.scroll_viewport.clone() else {
@@ -395,16 +416,13 @@ impl ViewGen<'_> {
                 ),
             };
         };
-        let var = self.next_variable_name("node");
         let iterable = block.iterable.trim();
         let pattern = block.pattern.trim();
-        let key_expr = block
-            .key_expr
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| "__index".to_string());
+        let key_expr = match row_key(block, &pad) {
+            Ok(key_expr) => key_expr,
+            Err(refused) => return refused,
+        };
+        let var = self.next_variable_name("node");
 
         let source = self.owning(
             &[iterable],
@@ -412,13 +430,24 @@ impl ViewGen<'_> {
         );
 
         // `VirtualList` hands a row its index alongside the item; the author's pattern binds the item, `__index` the index.
-        let item_builder =
-            self.emit_item_closure(block, &format!("__index: usize, {pattern}"), &pad);
+        let item_builder = self.emit_item_closure(
+            block,
+            &format!("__index: usize, {pattern}"),
+            key_expr.is_some(),
+            &pad,
+        );
+        let (fixed, measured) = match key_expr {
+            Some(_) => ("VirtualList::new", "VirtualList::measured"),
+            None => (
+                "VirtualList::positional",
+                "VirtualList::measured_positional",
+            ),
+        };
 
         let mut code = String::new();
         match (&clause.row_height, &clause.estimated_height) {
             (Some(row_height), _) => {
-                let _ = writeln!(code, "{pad}let {var} = VirtualList::new(");
+                let _ = writeln!(code, "{pad}let {var} = {fixed}(");
                 let _ = writeln!(code, "{pad}    LayoutStyle::new().flex_column(),");
                 let _ = writeln!(code, "{pad}    {viewport}.clone(),");
                 let _ = writeln!(code, "{pad}    ({row_height}) as f32,");
@@ -438,7 +467,7 @@ impl ViewGen<'_> {
                     || format!("({estimate}) as f32 * 2.0"),
                     |px| format!("({px}) as f32"),
                 );
-                let _ = writeln!(code, "{pad}let {var} = VirtualList::measured(");
+                let _ = writeln!(code, "{pad}let {var} = {measured}(");
                 let _ = writeln!(code, "{pad}    LayoutStyle::new().flex_column(),");
                 let _ = writeln!(code, "{pad}    {rows},");
                 let _ = writeln!(code, "{pad}    {overscan},");
@@ -453,7 +482,9 @@ impl ViewGen<'_> {
             }
         }
         let _ = writeln!(code, "{pad}    {source},");
-        let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
+        if let Some(key_expr) = key_expr {
+            let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
+        }
         let _ = writeln!(code, "{item_builder},");
         let _ = write!(code, "{pad})?;");
         ChildEmit::Simple { name: var, code }
@@ -522,4 +553,26 @@ impl ViewGen<'_> {
             }
         }
     }
+}
+
+/// A reactive or `virtual` loop's `key` expression, `None` for a keyless loop, or the `compile_error!` refusing a keyless loop whose pattern destructures: without a key each row binds a signal of the item at its index, and a signal cannot be taken apart.
+fn row_key<'a>(block: &'a ForBlock, pad: &str) -> Result<Option<&'a str>, ChildEmit> {
+    let key_expr = block
+        .key_expr
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let pattern = block.pattern.trim();
+    if key_expr.is_some() || pattern == "_" || telar_project::is_plain_identifier(pattern) {
+        return Ok(key_expr);
+    }
+    Err(ChildEmit::Dynamic {
+        code: format!(
+            "{pad}compile_error!({});",
+            rust_str(&format!(
+                "`for {pattern} in {}` has no `key`, so each row is bound to a signal of the item at its index, and a signal cannot be destructured: bind one name and read its parts through it (`$item.0`), or add a `key` to build each row from its item by value",
+                block.iterable.trim()
+            ))
+        ),
+    })
 }

@@ -2,7 +2,7 @@
 
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use reactive_core::{RwSignal, after_settle, batch, effect, signal};
+use reactive_core::{ReadSignal, RwSignal, after_settle, batch, effect, signal};
 use renderer_core::RectStyle;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 use crate::context::{surface_size, track_layout};
 use crate::height_index::HeightIndex;
+use crate::keyed_values::KeyedValues;
 use crate::layout_item::LayoutItem;
 use crate::reactive_list::ReactiveList;
 use crate::scroll_area::ScrollViewport;
@@ -49,23 +50,23 @@ const ESTIMATE_TOLERANCE: f32 = 0.01;
 /// One row of a virtualised list, or the space standing in for the rows that were not built.
 enum Slot<Item> {
     /// The run of skipped rows above or below the window, as a single box of their combined height. Keeping the scrollable content the full height is what makes the scrollbar and the wheel behave as if every row were there — which, as far as the user is concerned, they are.
-    Gap {
-        before: bool,
-        height: f32,
-    },
-    Row(usize, Item),
+    Gap { before: bool, height: f32 },
+    /// The row at index `at`, identified among the list's items by `key`.
+    Row { at: usize, key: u64, item: Item },
 }
 
 /// A keyed list that builds only the rows currently on screen.
 ///
 /// [`ReactiveList`] builds every item it is given, which is right until the list is long: a wallpaper grid or a full application list pays for thousands of widgets to show a dozen. This builds the visible window plus a little overscan and represents the rest as two spacer boxes, so the content keeps its true height and the scrollbar keeps telling the truth.
 ///
-/// Two constructors, for two kinds of row:
+/// Two kinds of row height:
 ///
-/// - [`new`](Self::new) — **fixed row height**, the fast path. Every row must be `row_height` tall, and the window is worked out by division, with nothing to measure or remember. It is what a `.rsx` `virtual row_height:` loop builds, and the right choice whenever the rows are uniform.
-/// - [`measured`](Self::measured) — **variable row height**. Rows that have never been built stand at an estimate, which starts as the caller's and from then on is the mean height of the rows measured so far, so the scrollbar settles on the list's real length instead of drifting by the same error for every row. Each built row is measured once layout has placed it, and the measurement replaces the estimate in a [`HeightIndex`], so finding the rows on screen stays `O(log n)` however long the list. While the estimates are corrected, by a measurement or by the estimate itself moving, the first row on screen holds still: the scroll offset moves by however much the rows above it turned out taller or shorter than guessed. Bringing a row into view goes through the list's [`VirtualRows`] handle, which knows where unbuilt rows stand.
+/// - [`new`](Self::new) and [`positional`](Self::positional) — **fixed row height**, the fast path. Every row must be `row_height` tall, and the window is worked out by division, with nothing to measure or remember. It is what a `.rsx` `virtual row_height:` loop builds, and the right choice whenever the rows are uniform.
+/// - [`measured`](Self::measured) and [`measured_positional`](Self::measured_positional) — **variable row height**. Rows that have never been built stand at an estimate, which starts as the caller's and from then on is the mean height of the rows measured so far, so the scrollbar settles on the list's real length instead of drifting by the same error for every row. Each built row is measured once layout has placed it, and the measurement replaces the estimate in a [`HeightIndex`], so finding the rows on screen stays `O(log n)` however long the list. While the estimates are corrected, by a measurement or by the estimate itself moving, the first row on screen holds still: the scroll offset moves by however much the rows above it turned out taller or shorter than guessed. Bringing a row into view goes through the list's [`VirtualRows`] handle, which knows where unbuilt rows stand.
 ///
-/// `source` still returns every item, but runs only when what it reads changes: either constructor keeps the list it last returned, and a scroll or a moved cursor cuts the new window from that, cloning just the rows it builds — which is why the items must be [`VirtualItem`], any `Clone` type. Producing a `Vec` of plain data is cheap next to what this defers: constructing widgets, decoding images, laying out text.
+/// And two kinds of row identity, as for [`ReactiveList`]: `new` and `measured` key each row on its item and build it from an owned copy, while `positional` and `measured_positional` key it on its index and hand it a live handle on the item now at that index, so a row stays put while the items under it move or change.
+///
+/// `source` still returns every item, but runs only when what it reads changes: every constructor keeps the list it last returned, and a scroll or a moved cursor cuts the new window from that, cloning just the rows it builds — which is why the items must be [`VirtualItem`], any `Clone` type. Producing a `Vec` of plain data is cheap next to what this defers: constructing widgets, decoding images, laying out text.
 pub struct VirtualList;
 
 impl VirtualList {
@@ -90,43 +91,28 @@ impl VirtualList {
         K: Fn(&Item) -> Key + 'static,
         B: Fn(usize, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        let items = stored_items(source, |_| {});
-        let (_, offset_y) = viewport.offset();
-        let rect = viewport.rect();
-        let windowed = move || {
-            let offset = offset_y.get();
-            let viewport_height = laid_out_or_surface(rect.get().height);
-            items.with(|items| {
-                let count = items.len();
-                let (first, last) =
-                    visible_window(offset, viewport_height, row_height, count, overscan);
-                let mut slots = Vec::with_capacity(last - first + 2);
-                if first > 0 {
-                    slots.push(Slot::Gap {
-                        before: true,
-                        height: first as f32 * row_height,
-                    });
-                }
-                slots.extend((first..last).map(|at| Slot::Row(at, items[at].clone())));
-                if last < count {
-                    slots.push(Slot::Gap {
-                        before: false,
-                        height: (count - last) as f32 * row_height,
-                    });
-                }
-                slots
-            })
-        };
+        let slots = fixed_slots(viewport, row_height, overscan, source, move |_, item| {
+            hash_key(&key(item))
+        });
+        by_value(container_style, slots, None, build)
+    }
 
-        let keyer = move |slot: &Slot<Item>| match slot {
-            Slot::Gap { before, height } => gap_key(*before, *height),
-            Slot::Row(at, item) => row_key(*at, hash_key(&key(item))),
-        };
-
-        ReactiveList::with_style(container_style, windowed, keyer, move |slot| match slot {
-            Slot::Gap { height, .. } => spacer(height),
-            Slot::Row(at, item) => build(at, item),
-        })
+    /// [`new`](Self::new) without a key: each row is keyed on its index, and `build` receives a handle on the item now at that index rather than a copy, so the row follows whatever moves into its place.
+    pub fn positional<Item, S, B>(
+        container_style: LayoutStyle,
+        viewport: ScrollViewport,
+        row_height: f32,
+        overscan: usize,
+        source: S,
+        build: B,
+    ) -> Result<ReactiveList, LayoutError>
+    where
+        Item: VirtualItem,
+        S: Fn() -> Vec<Item> + 'static,
+        B: Fn(usize, ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    {
+        let slots = fixed_slots(viewport, row_height, overscan, source, |at, _| at as u64);
+        by_handle(container_style, slots, None, build)
     }
 
     /// A list whose rows may each be a different height, building the rows on screen and `overscan` px more beyond each edge.
@@ -151,63 +137,196 @@ impl VirtualList {
         K: Fn(&Item) -> Key + 'static,
         B: Fn(usize, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        let rows = rows.0;
-        let items = {
-            let rows = Rc::clone(&rows);
-            stored_items(source, move |fresh: &[Item]| {
-                rows.adopt(fresh.iter().map(|item| hash_key(&key(item))).collect());
-            })
-        };
+        let slots = measured_slots(&rows.0, overscan, source, move |_, item| {
+            hash_key(&key(item))
+        });
+        by_value(container_style, slots, Some(rows.0), build)
+    }
 
-        let (_, offset_y) = rows.viewport.offset();
-        let rect = rows.viewport.rect();
-        let windowed = {
-            let rows = Rc::clone(&rows);
-            move || {
-                rows.revision.get();
-                let offset = offset_y.get();
-                let viewport_height = laid_out_or_surface(rect.get().height);
-                items.with(|items| {
-                    let heights = rows.heights.borrow();
-                    let keys = rows.keys.borrow();
-                    let count = items.len().min(heights.len());
-                    let (first, last) = heights.window(offset, viewport_height, overscan);
-                    let last = last.min(count);
-                    let first = first.min(last);
-                    let mut slots = Vec::with_capacity(last - first + 2);
-                    if first > 0 {
-                        slots.push(Slot::Gap {
-                            before: true,
-                            height: heights.span(0, first),
-                        });
-                    }
-                    slots.extend(
-                        (first..last).map(|at| Slot::Row(at, (keys[at], items[at].clone()))),
-                    );
-                    if last < heights.len() {
-                        slots.push(Slot::Gap {
-                            before: false,
-                            height: heights.span(last, heights.len()),
-                        });
-                    }
-                    slots
-                })
+    /// [`measured`](Self::measured) without a key: each row is keyed on its index, and `build` receives a handle on the item now at that index rather than a copy. Heights are remembered by index too, and a row whose new item lays out taller or shorter is measured again.
+    pub fn measured_positional<Item, S, B>(
+        container_style: LayoutStyle,
+        rows: VirtualRows,
+        overscan: f32,
+        source: S,
+        build: B,
+    ) -> Result<ReactiveList, LayoutError>
+    where
+        Item: VirtualItem,
+        S: Fn() -> Vec<Item> + 'static,
+        B: Fn(usize, ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    {
+        let slots = measured_slots(&rows.0, overscan, source, |at, _| at as u64);
+        by_handle(container_style, slots, Some(rows.0), build)
+    }
+}
+
+/// The window of a list whose every row is `row_height` tall, between the spacers standing for the rows outside it.
+fn fixed_slots<Item: VirtualItem>(
+    viewport: ScrollViewport,
+    row_height: f32,
+    overscan: usize,
+    source: impl Fn() -> Vec<Item> + 'static,
+    key: impl Fn(usize, &Item) -> u64 + 'static,
+) -> impl Fn() -> Vec<Slot<Item>> + 'static {
+    let items = stored_items(source, |_| {});
+    let (_, offset_y) = viewport.offset();
+    let rect = viewport.rect();
+    move || {
+        let offset = offset_y.get();
+        let viewport_height = laid_out_or_surface(rect.get().height);
+        items.with(|items| {
+            let count = items.len();
+            let (first, last) =
+                visible_window(offset, viewport_height, row_height, count, overscan);
+            let mut slots = Vec::with_capacity(last - first + 2);
+            if first > 0 {
+                slots.push(Slot::Gap {
+                    before: true,
+                    height: first as f32 * row_height,
+                });
             }
-        };
+            slots.extend((first..last).map(|at| Slot::Row {
+                at,
+                key: key(at, &items[at]),
+                item: items[at].clone(),
+            }));
+            if last < count {
+                slots.push(Slot::Gap {
+                    before: false,
+                    height: (count - last) as f32 * row_height,
+                });
+            }
+            slots
+        })
+    }
+}
 
-        let keyer = |slot: &Slot<(u64, Item)>| match slot {
-            Slot::Gap { before, height } => gap_key(*before, *height),
-            Slot::Row(at, (key, _)) => row_key(*at, *key),
-        };
+/// The window of a list whose rows are measured, between the spacers standing for the rows outside it, with each row's key handed to `rows` so its height is remembered under it.
+fn measured_slots<Item: VirtualItem>(
+    rows: &Rc<Rows>,
+    overscan: f32,
+    source: impl Fn() -> Vec<Item> + 'static,
+    key: impl Fn(usize, &Item) -> u64 + 'static,
+) -> impl Fn() -> Vec<Slot<Item>> + 'static {
+    let items = {
+        let rows = Rc::clone(rows);
+        stored_items(source, move |fresh: &[Item]| {
+            rows.adopt(
+                fresh
+                    .iter()
+                    .enumerate()
+                    .map(|(at, item)| key(at, item))
+                    .collect(),
+            );
+        })
+    };
 
-        ReactiveList::with_style(container_style, windowed, keyer, move |slot| match slot {
+    let (_, offset_y) = rows.viewport.offset();
+    let rect = rows.viewport.rect();
+    let rows = Rc::clone(rows);
+    move || {
+        rows.revision.get();
+        let offset = offset_y.get();
+        let viewport_height = laid_out_or_surface(rect.get().height);
+        items.with(|items| {
+            let heights = rows.heights.borrow();
+            let keys = rows.keys.borrow();
+            let count = items.len().min(heights.len());
+            let (first, last) = heights.window(offset, viewport_height, overscan);
+            let last = last.min(count);
+            let first = first.min(last);
+            let mut slots = Vec::with_capacity(last - first + 2);
+            if first > 0 {
+                slots.push(Slot::Gap {
+                    before: true,
+                    height: heights.span(0, first),
+                });
+            }
+            slots.extend((first..last).map(|at| Slot::Row {
+                at,
+                key: keys[at],
+                item: items[at].clone(),
+            }));
+            if last < heights.len() {
+                slots.push(Slot::Gap {
+                    before: false,
+                    height: heights.span(last, heights.len()),
+                });
+            }
+            slots
+        })
+    }
+}
+
+/// Rows built from an owned copy of their item: a row whose key and index persist is kept as it was built.
+fn by_value<Item: VirtualItem>(
+    container_style: LayoutStyle,
+    slots: impl Fn() -> Vec<Slot<Item>> + 'static,
+    measured: Option<Rc<Rows>>,
+    build: impl Fn(usize, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+) -> Result<ReactiveList, LayoutError> {
+    reconciled(
+        container_style,
+        slots,
+        measured,
+        move |at, item, _| build(at, item),
+        |_, _| {},
+    )
+}
+
+/// Rows built from a handle on their item, which a kept row's handle follows to the item now in its place.
+fn by_handle<Item: VirtualItem>(
+    container_style: LayoutStyle,
+    slots: impl Fn() -> Vec<Slot<Item>> + 'static,
+    measured: Option<Rc<Rows>>,
+    build: impl Fn(usize, ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+) -> Result<ReactiveList, LayoutError> {
+    let values = KeyedValues::new();
+    let held = values.clone();
+    reconciled(
+        container_style,
+        slots,
+        measured,
+        move |at, item, k| build(at, held.hold(item, k)),
+        move |item, k| values.sync(item, k),
+    )
+}
+
+fn reconciled<Item: VirtualItem>(
+    container_style: LayoutStyle,
+    slots: impl Fn() -> Vec<Slot<Item>> + 'static,
+    measured: Option<Rc<Rows>>,
+    build: impl Fn(usize, Item, u64) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    sync: impl Fn(&Item, u64) + 'static,
+) -> Result<ReactiveList, LayoutError> {
+    ReactiveList::build_with_sync(
+        container_style,
+        slots,
+        move |slot, k| match slot {
             Slot::Gap { height, .. } => spacer(height),
-            Slot::Row(at, (key, item)) => {
-                let row = build(at, item)?;
-                rows.watch(at, key, row.layout_node());
+            Slot::Row { at, key, item } => {
+                let row = build(at, item, k)?;
+                if let Some(rows) = &measured {
+                    rows.watch(at, key, row.layout_node());
+                }
                 Ok(row)
             }
-        })
+        },
+        |slot, _| slot_key(slot),
+        move |slot, k| {
+            if let Slot::Row { item, .. } = slot {
+                sync(item, k);
+            }
+        },
+    )
+}
+
+/// What a row or a spacer is reconciled under. A spacer keys on its height, so a scroll that changes it rebuilds the spacer; a row keys on its index as well as its key, because the same item at a new index sits at a new height.
+fn slot_key<Item>(slot: &Slot<Item>) -> u64 {
+    match slot {
+        Slot::Gap { before, height } => hash_key(&(0u8, *before, height.to_bits())),
+        Slot::Row { at, key, .. } => hash_key(&(1u8, *at, *key)),
     }
 }
 
@@ -240,16 +359,6 @@ fn laid_out_or_surface(height: f32) -> f32 {
         laid_out if laid_out > 0.0 => laid_out,
         _ => surface_size().height,
     }
-}
-
-/// A gap keys on its height so a scroll that changes it rebuilds the spacer.
-fn gap_key(before: bool, height: f32) -> String {
-    format!("gap:{before}:{height}")
-}
-
-/// A row keys on the caller's key and its index, because the same item at a new index sits at a new height.
-fn row_key(at: usize, key: u64) -> String {
-    format!("row:{at}:{key}")
 }
 
 fn hash_key<Key: Hash>(key: &Key) -> u64 {

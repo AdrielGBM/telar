@@ -27,7 +27,7 @@ fn hash_key<K: Hash>(k: &K) -> u64 {
     h.finish()
 }
 
-/// One child position in a container: a fixed widget, or a reactive fragment (built lazily once the host node exists). Produced by [`ChildSlot::stat`] / [`fragment`] / [`fragment_positional`].
+/// One child position in a container: a fixed widget, or a reactive fragment (built lazily once the host node exists). Produced by [`ChildSlot::stat`] / [`fragment`] / [`fragment_keyed`] / [`fragment_positional`].
 pub enum ChildSlot {
     Static(Box<dyn LayoutItem>),
     Dynamic(FragmentSpec),
@@ -73,29 +73,38 @@ where
     K: Fn(&Item) -> Key + 'static,
     B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 {
-    let values = KeyedValues::new();
-    let held = values.clone();
-    make_fragment(
+    make_held_fragment(
         source,
         move |item: &Item, _idx: usize| hash_key(&key(item)),
-        move |item, k| build(held.hold(item, k)),
-        move |item, k| values.sync(item, k),
+        build,
         gap,
     )
 }
 
-/// A keyless reactive region — `for item in $items` (reconciles by position). `gap` as in [`fragment`].
+/// A keyless reactive region — `for item in $items`. It is a [`fragment_keyed`] whose key is the item's index, so the item at a position keeps its widget and its handle follows whatever now sits there, through an append, a reorder or an edit in place alike. `gap` as in [`fragment`].
 pub fn fragment_positional<Item, S, B>(source: S, build: B, gap: f32) -> ChildSlot
 where
-    Item: 'static,
+    Item: Clone + 'static,
     S: Fn() -> Vec<Item> + 'static,
-    B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 {
+    make_held_fragment(source, |_item: &Item, idx: usize| idx as u64, build, gap)
+}
+
+fn make_held_fragment<Item, S, KeyFn, B>(source: S, keyer: KeyFn, build: B, gap: f32) -> ChildSlot
+where
+    Item: Clone + 'static,
+    S: Fn() -> Vec<Item> + 'static,
+    KeyFn: Fn(&Item, usize) -> u64 + 'static,
+    B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+{
+    let values = KeyedValues::new();
+    let held = values.clone();
     make_fragment(
         source,
-        |_item: &Item, idx: usize| idx as u64,
-        move |item, _| build(item),
-        |_, _| {},
+        keyer,
+        move |item, k| build(held.hold(item, k)),
+        move |item, k| values.sync(item, k),
         gap,
     )
 }

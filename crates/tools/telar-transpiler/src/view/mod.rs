@@ -223,7 +223,7 @@ pub struct ViewGen<'a> {
     counters: HashMap<String, usize>,
     /// Identifiers the `[logic]` zone binds: what the closures the view emits capture, and so may have to copy rather than move — see [`crate::signal_scan::scan_locals`].
     locals: Vec<String>,
-    /// Names the `[logic]` zone bound to a `signal(…)` or `memo(…)`. Read to tell a genuinely static iterable from one that reads reactive state without the `$` that would make the loop follow it — see [`ViewGen::signal_named_in`].
+    /// Names the `[logic]` zone bound to a `signal(…)` or `memo(…)`, plus the item signal of each enclosing keyless reactive `for` row. Read to tell a genuinely static iterable from one that reads reactive state without the `$` that would make the loop follow it — see [`ViewGen::signal_named_in`].
     signals: Vec<String>,
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,

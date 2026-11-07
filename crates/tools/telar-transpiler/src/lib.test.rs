@@ -1004,7 +1004,7 @@ fn a_virtual_loop_builds_only_the_rows_its_scroll_shows() {
 /// A scroll with no virtual loop under it keeps the cheaper constructor: the viewport is handed over only where something asked for it.
 #[test]
 fn an_ordinary_scroll_does_not_expose_a_viewport() {
-    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows\n        text \"{row.name}\"\n";
+    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows\n        text \"{$row.name}\"\n";
     let out = transpile_source(src, "demo", None, None).unwrap();
     assert!(
         !out.rust_code.contains("__viewport"),
@@ -1050,12 +1050,45 @@ fn a_measured_virtual_loop_builds_over_a_rows_handle() {
 
 #[test]
 fn a_measured_virtual_loop_overscans_two_estimates_by_default() {
-    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows virtual estimated_height:48\n        text \"{row.name}\"\n";
+    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows virtual estimated_height:48\n        text \"{$row.name}\"\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
         code.contains("(48) as f32 * 2.0,"),
         "two estimated rows on each side:\n{code}"
     );
+}
+
+#[test]
+fn a_keyless_virtual_loop_keys_rows_on_their_index_and_reads_the_item_signal() {
+    let fixed = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows virtual row_height:32\n        text \"{$row.name}\"\n";
+    let measured = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows virtual estimated_height:48\n        text \"{$row.name}\"\n";
+    for (src, ctor) in [
+        (fixed, "VirtualList::positional("),
+        (measured, "VirtualList::measured_positional("),
+    ] {
+        let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+        assert!(code.contains(ctor), "the keyless list is {ctor}:\n{code}");
+        assert!(
+            !code.contains("|row| __index") && !code.contains("compile_error!"),
+            "no key closure is written for it:\n{code}"
+        );
+        assert!(
+            code.contains("move |__index: usize, row|")
+                && code.contains("move || format!(\"{}\", row.get().name)"),
+            "the row takes its item signal and its text follows it:\n{code}"
+        );
+    }
+}
+
+#[test]
+fn a_keyless_virtual_loop_refuses_a_destructuring_pattern() {
+    let src = "[logic]\n[view]\nscroll height:400\n    for (a, b) in $pairs virtual row_height:32\n        text \"x\"\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("compile_error!") && code.contains("cannot be destructured"),
+        "{code}"
+    );
+    assert!(!code.contains("VirtualList::"), "{code}");
 }
 
 #[test]

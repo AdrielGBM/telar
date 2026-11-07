@@ -281,7 +281,7 @@ impl Parser {
 
 const FOR_USAGE: &str = "expected `for <pattern> in <expr> [key <expr>] [gap:<expr>] [virtual row_height:<expr> | virtual estimated_height:<expr> [overscan:<px>] [rows:$handle]]`";
 
-/// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr, virtual clause)`: on the first ` in ` keyword, then an optional trailing `virtual …` clause, then an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional ` key <expr>` clause (identity for reconciliation; without it a reactive list reconciles by position). `gap` is the last token once `virtual` is gone, so it's peeled off before the `key` search.
+/// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr, virtual clause)`: on the first ` in ` keyword, then an optional trailing `virtual …` clause, then an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional ` key <expr>` clause (identity for reconciliation; without it a reactive list keys each row on its index). `gap` is the last token once `virtual` is gone, so it's peeled off before the `key` search.
 fn split_for_in(rest: &str) -> Result<ForHeader, String> {
     let malformed = || format!("{FOR_USAGE}, got `for {rest}`");
     let tokens: Vec<&str> = rest.split_whitespace().collect();

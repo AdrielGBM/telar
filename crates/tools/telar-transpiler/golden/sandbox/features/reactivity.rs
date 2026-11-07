@@ -260,12 +260,60 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
         let __node_17 = {
             let __recipe_children = Children::new(
                 {
+                    let todos = todos.clone();
+                    let theme = theme.clone();
+                move || {
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_18 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let todos = todos.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_19 = ReactiveList::positional(
+                                    { let todos = todos.clone(); move || todos.get() },
+                                    {
+                                        let theme = theme.clone();
+                                    move |todo| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                        let __text_6 = {
+                                            let todo = todo.clone();
+                                            Text::declaring(
+                                                move || format!("{}", todo.get().label),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        Ok(box_item(__text_6))
+                                    }
+                                    },
+                                    0.0,
+                                )?;
+                                __children.push(box_item(__node_19));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_18));
+                    let __node_20 = code_line(CodeLineProps::props().code("for todo in $todos   >   text …$todo.label…   (todo is the row's item signal)").build())?;
+                    __children.push(box_item(__node_20));
+                    Ok(__children)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Reactive list without a key — each row stays at its index and follows the item now there").children(__recipe_children).build())?
+        };
+        let __node_21 = {
+            let __recipe_children = Children::new(
+                {
                     let theme = theme.clone();
                     let show = show.clone();
                     let count = count.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_18 = {
+                    let __node_22 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -273,9 +321,9 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let count = count.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_19 = button(ButtonProps::props().label("Toggle").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show = show.clone(); move || show.toggle() })).build())?;
-                                __children.push(box_item(__node_19));
-                                let __node_20 = ReactiveList::new(
+                                let __node_23 = button(ButtonProps::props().label("Toggle").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show = show.clone(); move || show.toggle() })).build())?;
+                                __children.push(box_item(__node_23));
+                                let __node_24 = ReactiveList::new(
                                     { let show = show.clone(); move || vec![show.get()] },
                                     |__cond: &bool| *__cond,
                                     {
@@ -287,7 +335,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                                 let __sbox_2 = {
                                                     StyledContainer::new(LayoutStyle::new().flex_column().width(8.0).height(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(4.0)) }, children![])?
                                                 };
-                                                let __text_6 = {
+                                                let __text_7 = {
                                                     let count = count.clone();
                                                     Text::declaring(
                                                         move || format!("Now you see me — and the count above is {}", count.get()),
@@ -295,40 +343,40 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                     )?
                                                 };
-                                                Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER).padding_vertical(4.0), children![__sbox_2, __text_6])?
+                                                Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER).padding_vertical(4.0), children![__sbox_2, __text_7])?
                                             };
                                             Ok(box_item(__row_3))
                                         } else {
-                                            let __text_7 = {
+                                            let __text_8 = {
                                                 Text::declaring(
                                                     || "…now you don't".to_string(),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            Ok(box_item(__text_7))
+                                            Ok(box_item(__text_8))
                                         }
                                     }
                                     },
                                     0.0,
                                 )?;
-                                __children.push(box_item(__node_20));
+                                __children.push(box_item(__node_24));
                                 Ok(__children)
                             }
                             }
                         );
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_18));
-                    let __node_21 = code_line(CodeLineProps::props().code("if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)").build())?;
-                    __children.push(box_item(__node_21));
+                    __children.push(box_item(__node_22));
+                    let __node_25 = code_line(CodeLineProps::props().code("if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)").build())?;
+                    __children.push(box_item(__node_25));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("Reactive if/else — the shown branch swaps on a signal").children(__recipe_children).build())?
         };
-        let __node_22 = {
+        let __node_26 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
@@ -337,7 +385,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                     let panel_note = panel_note.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_23 = {
+                    let __node_27 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -346,16 +394,16 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let panel_note = panel_note.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __text_8 = {
+                                let __text_9 = {
                                     Text::declaring(
                                         || "This panel costs nothing until you open it the first time. Type into it, close it, open it again: the text is still there. An if would have disposed the whole branch and rebuilt it empty.".to_string(),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_8));
-                                let __node_24 = button(ButtonProps::props().label("Toggle panel").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_panel = show_panel.clone(); move || show_panel.toggle() })).build())?;
-                                __children.push(box_item(__node_24));
+                                __children.push(box_item(__text_9));
+                                let __node_28 = button(ButtonProps::props().label("Toggle panel").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_panel = show_panel.clone(); move || show_panel.toggle() })).build())?;
+                                __children.push(box_item(__node_28));
                                 let __lazy_0 = {
                                     Lazy::new(
                                         LayoutStyle::new().flex_column(),
@@ -368,7 +416,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                         let _ = panel_builds.update(|n| *n += 1);
                                         let __col_1 = {
-                                            let __text_9 = {
+                                            let __text_10 = {
                                                 let panel_builds = panel_builds.clone();
                                                 Text::declaring(
                                                     move || format!("this subtree has been built {} time(s) — reopening never adds one", panel_builds.get()),
@@ -380,7 +428,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                                 let __input_0 = Input::declaring(panel_note.clone(), LayoutStyle::new().height(15.0 * 1.4), { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) })?;
                                                 StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(theme.get().gutter).padding_vertical(12.0).width(300.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_0])?.styled_by({ let theme = theme.clone(); move || LayoutStyle::new().flex_column().padding_horizontal(theme.get().gutter).padding_vertical(12.0).width(300.0).bordered() })
                                             };
-                                            Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_9, __sbox_3])?
+                                            Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_10, __sbox_3])?
                                         };
                                         __children.push(box_item(__col_1));
                                         Ok(__children)
@@ -395,16 +443,16 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         );
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_23));
-                    let __node_25 = code_line(CodeLineProps::props().code("lazy when:$open  >  …   (deferred until first shown, then kept)").build())?;
-                    __children.push(box_item(__node_25));
+                    __children.push(box_item(__node_27));
+                    let __node_29 = code_line(CodeLineProps::props().code("lazy when:$open  >  …   (deferred until first shown, then kept)").build())?;
+                    __children.push(box_item(__node_29));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("lazy — a subtree built on its first display, then only shown and hidden").children(__recipe_children).build())?
         };
-        let __node_26 = {
+        let __node_30 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
@@ -412,7 +460,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                     let email = email.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_27 = {
+                    let __node_31 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -430,7 +478,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(10.0).width(300.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_2])?
                                 };
                                 __children.push(box_item(__sbox_5));
-                                let __text_10 = {
+                                let __text_11 = {
                                     let name = name.clone();
                                     let email = email.clone();
                                     Text::declaring(
@@ -439,30 +487,30 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_10));
+                                __children.push(box_item(__text_11));
                                 Ok(__children)
                             }
                             }
                         );
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_27));
-                    let __node_28 = code_line(CodeLineProps::props().code("input value:$name      (tap or Tab to focus · type · arrows, Home, End, Backspace · Esc blurs)").build())?;
-                    __children.push(box_item(__node_28));
+                    __children.push(box_item(__node_31));
+                    let __node_32 = code_line(CodeLineProps::props().code("input value:$name      (tap or Tab to focus · type · arrows, Home, End, Backspace · Esc blurs)").build())?;
+                    __children.push(box_item(__node_32));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("input + focus — two editable fields; Tab moves focus, each binds a signal (wrap a box for the look)").children(__recipe_children).build())?
         };
-        let __node_29 = {
+        let __node_33 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                     let box_focused = box_focused.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_30 = {
+                    let __node_34 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -470,7 +518,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_6 = {
-                                    let __text_11 = {
+                                    let __text_12 = {
                                         let box_focused = box_focused.clone();
                                         Text::declaring(
                                             move || format!("Tab to me — focused: {}", box_focused.get()),
@@ -478,7 +526,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                         )?
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_all(16.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_11])?.on_focus({ let box_focused = box_focused.clone(); move |f| box_focused.set(f) })
+                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_all(16.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_12])?.on_focus({ let box_focused = box_focused.clone(); move |f| box_focused.set(f) })
                                 };
                                 __children.push(box_item(__sbox_6));
                                 Ok(__children)
@@ -487,16 +535,16 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         );
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_30));
-                    let __node_31 = code_line(CodeLineProps::props().code("box on_focus(|f| $box_focused.set(f))      (Tab-focusable; drive a focus ring)").build())?;
-                    __children.push(box_item(__node_31));
+                    __children.push(box_item(__node_34));
+                    let __node_35 = code_line(CodeLineProps::props().code("box on_focus(|f| $box_focused.set(f))      (Tab-focusable; drive a focus ring)").build())?;
+                    __children.push(box_item(__node_35));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("on_focus — any box can be focusable: it joins the Tab order and observes its own focus").children(__recipe_children).build())?
         };
-        let __node_32 = {
+        let __node_36 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
@@ -505,7 +553,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                     let pct = pct.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_33 = {
+                    let __node_37 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -521,7 +569,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     StyledContainer::new(LayoutStyle::new().flex_column().height(14.0).width(280.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(7.0)) }, children![__sbox_8])?.on_drag({ let slider = slider.clone(); move |px, _py| slider.set((px / 280.0).clamp(0.0, 1.0)) })
                                 };
                                 __children.push(box_item(__sbox_7));
-                                let __text_12 = {
+                                let __text_13 = {
                                     let pct = pct.clone();
                                     Text::declaring(
                                         move || format!("value · {}%", pct.get()),
@@ -529,46 +577,46 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_12));
+                                __children.push(box_item(__text_13));
                                 Ok(__children)
                             }
                             }
                         );
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_33));
-                    let __node_34 = code_line(CodeLineProps::props().code("box on_drag(|px, _| $slider.set(px / 280))      (keeps tracking even off the track)").build())?;
-                    __children.push(box_item(__node_34));
+                    __children.push(box_item(__node_37));
+                    let __node_38 = code_line(CodeLineProps::props().code("box on_drag(|px, _| $slider.set(px / 280))      (keeps tracking even off the track)").build())?;
+                    __children.push(box_item(__node_38));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("on_drag — the drag base primitive: press-and-move reports the pointer, mapped to a value").children(__recipe_children).build())?
         };
-        let __node_35 = {
+        let __node_39 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                     let show_modal = show_modal.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_36 = {
+                    let __node_40 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
                                 let show_modal = show_modal.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_37 = button(ButtonProps::props().label("Open modal").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(true) })).build())?;
-                                __children.push(box_item(__node_37));
+                                let __node_41 = button(ButtonProps::props().label("Open modal").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(true) })).build())?;
+                                __children.push(box_item(__node_41));
                                 Ok(__children)
                             }
                             }
                         );
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_36));
-                    let __node_38 = ReactiveList::new(
+                    __children.push(box_item(__node_40));
+                    let __node_42 = ReactiveList::new(
                         { let show_modal = show_modal.clone(); move || vec![show_modal.get()] },
                         |__cond: &bool| *__cond,
                         {
@@ -579,22 +627,22 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let __overlay_0 = {
                                     let __sbox_9 = {
                                         let __sbox_10 = {
-                                            let __text_13 = {
+                                            let __text_14 = {
                                                 Text::declaring(
                                                     || "I'm rendered in an overlay".to_string(),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink) },
                                                 )?
                                             };
-                                            let __text_14 = {
+                                            let __text_15 = {
                                                 Text::declaring(
                                                     || "Above the page and outside any clip. Click the dim area to dismiss.".to_string(),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            let __node_39 = button(ButtonProps::props().label("Close").variant(::telar::kw::outline).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(false) })).build())?;
-                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0).gap(12.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_13, __text_14, __node_39])?.on_press(move || ())
+                                            let __node_43 = button(ButtonProps::props().label("Close").variant(::telar::kw::outline).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(false) })).build())?;
+                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0).gap(12.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_14, __text_15, __node_43])?.on_press(move || ())
                                         };
                                         StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default().with_fill(Color::rgba(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 128.0 / 255.0)).with_radius(BorderRadius::zero()), children![__sbox_10])?.on_press({ let show_modal = show_modal.clone(); move || show_modal.set(false) })
                                     };
@@ -608,25 +656,25 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         },
                         0.0,
                     )?;
-                    __children.push(box_item(__node_38));
-                    let __node_40 = code_line(CodeLineProps::props().code("if $open  >  overlay  >  box (scrim, on_press dismiss)  >  box (dialog)").build())?;
-                    __children.push(box_item(__node_40));
+                    __children.push(box_item(__node_42));
+                    let __node_44 = code_line(CodeLineProps::props().code("if $open  >  overlay  >  box (scrim, on_press dismiss)  >  box (dialog)").build())?;
+                    __children.push(box_item(__node_44));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("overlay — a top-layer portal (modal/dropdown/toast): draws above everything, escapes clipping").children(__recipe_children).build())?
         };
-        let __node_41 = {
+        let __node_45 = {
             let __recipe_children = Children::new(
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __col_2 = {
-                        let __node_42 = prop_row(PropRowProps::props().name("signal(v)").values("RwSignal<T>").about("Reactive state. .get() .set() .update() .peek().").build())?;
-                        let __node_43 = prop_row(PropRowProps::props().name("memo(f)").values("Memo<T>").about("Cached value that recomputes when its deps change.").build())?;
-                        let __node_44 = prop_row(PropRowProps::props().name("{$name}").values("interpolation").about("Read a signal or memo inside a string.").build())?;
-                        let __node_45 = prop_row(PropRowProps::props().name("$name").values("in closures").about("The handle itself, for .set / .update.").build())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_42, __node_43, __node_44, __node_45])?
+                        let __node_46 = prop_row(PropRowProps::props().name("signal(v)").values("RwSignal<T>").about("Reactive state. .get() .set() .update() .peek().").build())?;
+                        let __node_47 = prop_row(PropRowProps::props().name("memo(f)").values("Memo<T>").about("Cached value that recomputes when its deps change.").build())?;
+                        let __node_48 = prop_row(PropRowProps::props().name("{$name}").values("interpolation").about("Read a signal or memo inside a string.").build())?;
+                        let __node_49 = prop_row(PropRowProps::props().name("$name").values("in closures").about("The handle itself, for .set / .update.").build())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_46, __node_47, __node_48, __node_49])?
                     };
                     __children.push(box_item(__col_2));
                     Ok(__children)
@@ -634,7 +682,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
             );
             example(ExampleProps::props().title("Primitives").children(__recipe_children).build())?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_10, __node_17, __node_22, __node_26, __node_29, __node_32, __node_35, __node_41])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_10, __node_17, __node_21, __node_26, __node_30, __node_33, __node_36, __node_39, __node_45])?
     };
     Ok(Box::new(__col_0))
 }

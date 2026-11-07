@@ -157,6 +157,62 @@ fn positional_reuses_nodes_on_append() {
     );
 }
 
+fn label_row(held: ReadSignal<&'static str>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    Ok(Box::new(crate::Text::new(
+        move || held.get().to_string(),
+        LayoutStyle::new(),
+        || renderer_core::TextStyle::new(12.0, renderer_core::Color::BLACK),
+    )?))
+}
+
+/// A keyless list of labels mounted and laid out, with the signal that feeds it.
+fn mounted_labels(labels: &[&'static str]) -> (RwSignal<Vec<&'static str>>, ui_tree::SegmentRoot) {
+    use crate::context::compute_layout;
+    use layout_core::AvailableSpace;
+
+    reset_layout_runtime();
+    let items = signal(labels.to_vec());
+    let list = ReactiveList::positional(move || items.get(), label_row, 0.0).unwrap();
+    compute_layout(
+        list.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    (items, ui_tree::SegmentRoot::mount(list))
+}
+
+fn shown_labels(root: &ui_tree::SegmentRoot) -> Vec<String> {
+    crate::context::relayout_if_dirty();
+    let mut shown = Vec::new();
+    renderer_core::for_each_with_matrix(&root.commands(), |command, _| {
+        if let renderer_core::DrawCommand::Text { text, .. } = command {
+            shown.push(text.to_string());
+        }
+    });
+    shown
+}
+
+#[test]
+fn a_reordered_keyless_list_shows_every_row_in_its_new_order() {
+    let (items, root) = mounted_labels(&["alpha", "beta", "gamma"]);
+    assert_eq!(shown_labels(&root), ["alpha", "beta", "gamma"]);
+
+    items.set(vec!["gamma", "alpha", "beta"]);
+
+    assert_eq!(shown_labels(&root), ["gamma", "alpha", "beta"]);
+}
+
+#[test]
+fn a_keyless_list_edited_in_place_shows_the_new_values() {
+    let (items, root) = mounted_labels(&["alpha", "beta", "gamma"]);
+    assert_eq!(shown_labels(&root), ["alpha", "beta", "gamma"]);
+
+    items.set(vec!["alpha", "delta", "epsilon"]);
+
+    assert_eq!(shown_labels(&root), ["alpha", "delta", "epsilon"]);
+}
+
 /// The trap this exists to remove: with an owned snapshot a persisting key reuses the widget and the new value is thrown away, so a row that must follow its data has to be keyed on that data — which rebuilds it, and takes its local state with it. `keyed` lets the row keep its widget *and* see the new value.
 #[test]
 fn a_keyed_row_keeps_its_widget_and_still_sees_its_new_value() {

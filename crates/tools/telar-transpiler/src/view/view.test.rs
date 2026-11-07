@@ -654,19 +654,68 @@ fn reactive_for_emits_reactive_list() {
 }
 
 #[test]
-fn reactive_for_without_key_uses_positional_reconciliation() {
-    let src = "[view]\ncol\n    for n in $items\n        text \"x\"\n";
+fn a_keyless_reactive_for_row_reads_its_item_signal() {
+    let src = "[view]\ncol\n    for n in $items\n        text \"{$n}\"\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
     assert!(
         code.contains("fragment_positional("),
-        "a keyless reactive for should reconcile by position:\n{code}"
+        "a keyless reactive for keys its rows on their index:\n{code}"
+    );
+    assert!(
+        code.contains("move |n| -> Result<Box<dyn LayoutItem>, LayoutError>"),
+        "the row closure takes the item signal under the pattern's name:\n{code}"
+    );
+    assert!(
+        code.contains("move || format!(\"{}\", n.get())"),
+        "the row's text reads the item through its signal, so it follows it:\n{code}"
     );
     assert!(
         !code.contains("compile_error!"),
         "a keyless reactive for must compile, not error:\n{code}"
     );
+}
+
+#[test]
+fn a_keyless_reactive_for_row_reading_its_signal_by_get_still_follows_it() {
+    let src = "[view]\ncol\n    for n in $items\n        button label:(n.get().to_string())\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("Reactive::of({ let n = n.clone(); move || n.get().to_string() })"),
+        "a `.get()` on the row's signal is a reactive read, as on any signal:\n{code}"
+    );
+}
+
+#[test]
+fn a_keyless_reactive_for_refuses_a_destructuring_pattern() {
+    let src = "[view]\ncol\n    for (a, b) in $pairs\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("compile_error!") && code.contains("cannot be destructured"),
+        "a keyless reactive for binds a signal, which a tuple pattern cannot take apart:\n{code}"
+    );
+    assert!(
+        !code.contains("fragment_positional("),
+        "no list is built around the refused pattern:\n{code}"
+    );
+}
+
+#[test]
+fn a_keyed_reactive_for_still_destructures_its_item() {
+    let src = "[view]\ncol\n    for (a, b) in $pairs key *a\n        text \"{b}\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("fragment(") && code.contains("move |(a, b)|"),
+        "a keyed reactive for builds each row from its item by value:\n{code}"
+    );
+    assert!(!code.contains("compile_error!"), "{code}");
 }
 
 #[test]

@@ -145,7 +145,9 @@ wraps them.
 A `virtual row_height:` loop is `VirtualList::new(style, viewport, row_height, overscan, source, key, build)?`, every
 row the same height. Rows that differ are `virtual estimated_height:<expr>`, which makes a `VirtualRows::new(viewport,
 estimate)` handle and builds `VirtualList::measured(style, rows, overscan_px, source, key, build)?` over it. The two are
-alternatives. Either way the items must be `Clone`: the list keeps what the source last returned and builds each row
+alternatives. A loop without a `key` is `VirtualList::positional` or `VirtualList::measured_positional`, the same calls
+without the key: each row is keyed on its index and `build` gets a `ReadSignal` of the item now there, which the row's
+body reads as `$item`. Either way the items must be `Clone`: the list keeps what the source last returned and builds each row
 from a clone of its item, so the source runs again only when what it reads changes, not on every scroll; a type that
 is not is refused with a message naming `Clone`. `overscan:<px>` is how far beyond each edge to build (two estimated
 rows by default), and `rows:$handle` stores the handle in a `signal(None::<VirtualRows>)` so the view can call

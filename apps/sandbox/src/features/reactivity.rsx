@@ -85,6 +85,11 @@ col gap:20
                     box fill:$theme.primary radius:4 width:8 height:8
                     text "{todo.label}" font_size:14 color:$theme.ink
         code_line code:"for todo in $todos key todo.id   >   row …   (reused/moved/dropped by key)"
+    example title:"Reactive list without a key — each row stays at its index and follows the item now there"
+        card gap:10
+            for todo in $todos
+                text "{$todo.label}" font_size:14 color:$theme.ink
+        code_line code:"for todo in $todos   >   text …$todo.label…   (todo is the row's item signal)"
     example title:"Reactive if/else — the shown branch swaps on a signal"
         card gap:10
             button label:"Toggle" color:$theme.primary on_press:(|| $show.toggle())
