@@ -232,17 +232,30 @@ pub struct TelarManifest {
 pub enum ManifestError {
     /// The file is there and does not parse, or names something the schema has no place for. The message is serde's, which names the key and the line.
     Invalid { path: PathBuf, message: String },
+    /// The file exists and could not be read as text: a directory, a file that is not UTF-8, one the process may not open.
+    Unreadable {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 }
 
 impl std::fmt::Display for ManifestError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Invalid { path, message } => write!(f, "{}: {message}", path.display()),
+            Self::Unreadable { path, source } => write!(f, "{}: {source}", path.display()),
         }
     }
 }
 
-impl std::error::Error for ManifestError {}
+impl std::error::Error for ManifestError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Invalid { .. } => None,
+            Self::Unreadable { source, .. } => Some(source),
+        }
+    }
+}
 
 impl TelarManifest {
     /// Reads `<package_root>/telar.toml`, over the workspace root's if there is one.
@@ -306,8 +319,10 @@ impl TelarManifest {
 
     fn read(dir: &Path) -> Result<Option<Self>, ManifestError> {
         let path = dir.join(MANIFEST_FILENAME);
-        let Ok(content) = std::fs::read_to_string(&path) else {
-            return Ok(None);
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(source) => return Err(ManifestError::Unreadable { path, source }),
         };
         let manifest: Self = toml::from_str(&content).map_err(|e| ManifestError::Invalid {
             path: path.clone(),

@@ -492,3 +492,32 @@ fn a_library_keeps_the_keys_it_declares_itself() {
     let prelude: Vec<&str> = telar.prelude().iter().map(PreludeEntry::path).collect();
     assert_eq!(prelude, ["telar_navigate"]);
 }
+
+#[test]
+fn a_manifest_that_is_a_directory_is_an_error_naming_it() {
+    let root = package("directory", None);
+    std::fs::create_dir(root.join(MANIFEST_FILENAME)).unwrap();
+    let error = TelarManifest::load(&root).unwrap_err();
+    assert!(matches!(error, ManifestError::Unreadable { .. }));
+    assert!(error.to_string().contains(MANIFEST_FILENAME), "{error}");
+}
+
+#[test]
+fn a_manifest_that_is_not_utf8_is_an_error_naming_it() {
+    let root = package("utf16", None);
+    let utf16: Vec<u8> = [0xff, 0xfe]
+        .into_iter()
+        .chain("[telar]\n".encode_utf16().flat_map(u16::to_le_bytes))
+        .collect();
+    std::fs::write(root.join(MANIFEST_FILENAME), utf16).unwrap();
+    let error = TelarManifest::load(&root).unwrap_err();
+    assert!(matches!(error, ManifestError::Unreadable { .. }));
+    assert!(error.to_string().contains(MANIFEST_FILENAME), "{error}");
+}
+
+#[test]
+fn the_files_a_build_tracks_leave_out_a_manifest_that_is_not_a_file() {
+    let root = package("files_tolerant", None);
+    std::fs::create_dir(root.join(MANIFEST_FILENAME)).unwrap();
+    assert!(TelarManifest::files(&root).is_empty());
+}
