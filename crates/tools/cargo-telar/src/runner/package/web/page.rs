@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use layout_core::Direction;
+use i18n_core::Direction;
 use telar_project::FontDeclaration;
 
 use super::fonts::{FAMILY_ATTRIBUTE, font_face};

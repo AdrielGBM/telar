@@ -2,7 +2,7 @@
 //!
 //! The value is not read by the widgets themselves — [`compute_layout`](crate::compute_layout) reconciles each surface's layout engine with it before laying out, so a flip re-resolves the existing nodes rather than rebuilding any part of the tree. The override is per surface rather than per subtree for the same reason: one layout engine resolves one direction for its whole tree.
 
-use layout_core::Direction;
+use i18n_core::Direction;
 
 reactive_core::surface_scoped! {
     /// The active surface's own writing direction, in place of the thread's while it has one.

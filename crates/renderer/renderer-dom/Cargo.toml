@@ -26,6 +26,7 @@ web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanva
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 
+i18n-core = { workspace = true }
 js-sys = { workspace = true }
 layout-core = { workspace = true }
 platform-web = { workspace = true }

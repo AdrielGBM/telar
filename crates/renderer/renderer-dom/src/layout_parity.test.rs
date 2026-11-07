@@ -13,9 +13,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use geometry_core::{Rect, Size};
+use i18n_core::Direction;
 use layout_core::{
-    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutEngine, LayoutStyle, MeasureInput,
-    NodeId, SizeDimension, TemplateTrack,
+    AlignItems, AvailableSpace, JustifyContent, LayoutEngine, LayoutStyle, MeasureInput, NodeId,
+    SizeDimension, TemplateTrack,
 };
 use renderer_core::{
     BorderRadius, Color, DrawCommand, Element, ElementId, FontFit, RenderBackend, Role, Semantics,

@@ -4,8 +4,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use taffy::{TaffyTree, TraversePartialTree};
 
 use geometry_core::Size;
+use i18n_core::Direction;
 
-use crate::direction::Direction;
 use crate::error::LayoutError;
 use crate::sticky::StickyInsets;
 use crate::style::{AvailableSpace, LayoutStyle};

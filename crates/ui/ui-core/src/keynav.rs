@@ -4,7 +4,7 @@
 //!
 //! The important half of the contract is the negative one: **everything [`KeyNav::interpret`] returns `None` for must still reach a focused text field as typing.** A list that swallows `j` cannot also be searched, which is why the vim bindings are off unless a caller asks for them.
 
-use layout_core::Direction;
+use i18n_core::Direction;
 use platform_core::{Key, NamedKey};
 
 /// A default vertical list: arrows, Home/End, Enter and Escape, and no vim bindings.

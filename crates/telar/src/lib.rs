@@ -149,8 +149,8 @@ pub use geometry_core::{
 };
 #[cfg(feature = "runtime")]
 pub use layout_core::{
-    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, Margin,
-    MeasureInput, SizeDimension, TemplateTrack,
+    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, Margin, MeasureInput,
+    SizeDimension, TemplateTrack,
 };
 #[cfg(feature = "runtime")]
 pub use prefs::UserPrefs;
@@ -180,7 +180,7 @@ pub use i18n_core::set_catalog;
 #[doc(hidden)]
 pub use ctor as __ctor;
 // The notice of the icons an application baked, installed by the same constructor and read back by `telar-icons`.
-pub use i18n_core::{current_locale, negotiate_locale, set_locale, use_locale};
+pub use i18n_core::{Direction, current_locale, negotiate_locale, set_locale, use_locale};
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use icon_name::IconName;
 pub use licenses::icon_licenses;

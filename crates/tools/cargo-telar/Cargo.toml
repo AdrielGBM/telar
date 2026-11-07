@@ -12,7 +12,6 @@ repository = { workspace = true }
 
 [dependencies]
 i18n-core = { workspace = true, features = ["runtime-catalog"] }
-layout-core = { workspace = true }
 telar-baker = { workspace = true }
 telar-diagnostics = { workspace = true }
 telar-parser = { workspace = true }

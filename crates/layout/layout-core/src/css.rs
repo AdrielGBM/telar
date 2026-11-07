@@ -8,8 +8,8 @@ use taffy::{
 };
 
 use geometry_core::Size;
+use i18n_core::Direction;
 
-use crate::direction::Direction;
 use crate::sticky::StickyInsets;
 use crate::style::LayoutStyle;
 

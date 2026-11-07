@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use layout_core::Direction;
+use i18n_core::Direction;
 use renderer_core::{
     Color, DrawCommand, Element, ElementId, RectStyle, RenderBackend, Semantics, ShapeStyle,
 };

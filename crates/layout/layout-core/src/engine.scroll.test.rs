@@ -1,5 +1,4 @@
 use super::*;
-use crate::direction::Direction;
 use crate::style::AlignItems;
 use geometry_core::Size;
 

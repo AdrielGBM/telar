@@ -34,10 +34,13 @@ fn resolving_twice_does_not_accumulate() {
 #[test]
 fn a_row_follows_the_direction_taffy_is_told_but_an_explicit_reverse_stays_right_to_left() {
     let row = LayoutStyle::new().flex_row();
-    for direction in [Direction::Ltr, Direction::Rtl] {
+    for (direction, told) in [
+        (Direction::Ltr, taffy::Direction::Ltr),
+        (Direction::Rtl, taffy::Direction::Rtl),
+    ] {
         let resolved = row.resolve(direction, Size::ZERO);
         assert_eq!(resolved.flex_direction, FlexDirection::Row);
-        assert_eq!(resolved.direction, direction.into());
+        assert_eq!(resolved.direction, told);
     }
     let reversed = LayoutStyle::new().flex_row_reverse();
     assert_eq!(
@@ -54,10 +57,13 @@ fn a_row_follows_the_direction_taffy_is_told_but_an_explicit_reverse_stays_right
 #[test]
 fn a_column_keeps_its_axis_and_is_told_the_direction() {
     let col = LayoutStyle::new().flex_column();
-    for direction in [Direction::Ltr, Direction::Rtl] {
+    for (direction, told) in [
+        (Direction::Ltr, taffy::Direction::Ltr),
+        (Direction::Rtl, taffy::Direction::Rtl),
+    ] {
         let resolved = col.resolve(direction, Size::ZERO);
         assert_eq!(resolved.flex_direction, FlexDirection::Column);
-        assert_eq!(resolved.direction, direction.into());
+        assert_eq!(resolved.direction, told);
     }
 }
 

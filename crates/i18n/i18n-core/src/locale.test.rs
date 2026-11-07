@@ -48,3 +48,17 @@ fn a_surface_locale_shadows_the_thread_locale_until_cleared() {
     });
     reset();
 }
+
+#[test]
+fn a_locale_is_kept_with_hyphens_whichever_separator_it_was_set_with() {
+    reset();
+    set_locale("pt_BR");
+    assert_eq!(current_locale().as_deref(), Some("pt-BR"));
+
+    let surface = LocaleContext::new();
+    surface.with_entered(|| {
+        set_surface_locale(Some("sr_Cyrl"));
+        assert_eq!(use_surface_locale().as_deref(), Some("sr-Cyrl"));
+    });
+    reset();
+}

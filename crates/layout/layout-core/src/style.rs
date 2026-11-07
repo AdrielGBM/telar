@@ -8,8 +8,8 @@ use taffy::{
 pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
 
 use geometry_core::{LayoutGrid, Size};
+use i18n_core::Direction;
 
-use crate::direction::Direction;
 use crate::sticky::StickyInsets;
 use crate::track::TemplateTrack;
 
@@ -878,7 +878,11 @@ impl LayoutStyle {
             slot.write(&mut style, slot.snap(d.against(surface)));
         }
         let logical = &self.logical;
-        style.direction = direction.into();
+        // Taffy is told the direction on every node rather than only having a row's main axis reversed for it: a column's cross-axis alignment, a block's placement of a narrower child and a grid's columns all follow the inline direction too, and only taffy sees all of them.
+        style.direction = match direction {
+            Direction::Ltr => taffy::Direction::Ltr,
+            Direction::Rtl => taffy::Direction::Rtl,
+        };
         if logical.row_follows_direction || logical.row_forced {
             style.flex_direction = FlexDirection::Row;
         } else if style.flex_direction == FlexDirection::RowReverse && direction.is_rtl() {

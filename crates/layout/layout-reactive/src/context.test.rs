@@ -669,7 +669,7 @@ fn ctx_compute_updates_rect() {
 #[test]
 fn setting_the_direction_signal_reaches_the_engine_on_the_next_layout_pass() {
     reset_layout_runtime();
-    crate::set_direction(layout_core::Direction::Ltr);
+    crate::set_direction(i18n_core::Direction::Ltr);
     let (first, first_rect) = new_leaf(LayoutStyle::new().width(40.0).height(10.0)).unwrap();
     let (second, second_rect) = new_leaf(LayoutStyle::new().width(40.0).height(10.0)).unwrap();
     let root = new_container(
@@ -688,13 +688,13 @@ fn setting_the_direction_signal_reaches_the_engine_on_the_next_layout_pass() {
     assert_eq!(first_rect.get().x, 0.0);
     assert_eq!(second_rect.get().x, 40.0);
 
-    crate::set_direction(layout_core::Direction::Rtl);
+    crate::set_direction(i18n_core::Direction::Rtl);
     mark_dirty(root).unwrap();
     let (w, h) = space();
     compute_layout(root, w, h).unwrap();
     assert_eq!(first_rect.get().x, 160.0, "the row now starts at the right");
     assert_eq!(second_rect.get().x, 120.0);
-    crate::set_direction(layout_core::Direction::Ltr);
+    crate::set_direction(i18n_core::Direction::Ltr);
 }
 
 // An overlay's content, attached to the host, fills the viewport — not the small box it was declared in.

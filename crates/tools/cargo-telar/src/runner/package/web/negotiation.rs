@@ -67,7 +67,7 @@ pub(crate) fn root_page(
         })
         .collect();
     let available = serde_json::Value::from(pages.locales.clone());
-    let dir = if layout_core::Direction::for_locale(base_locale).is_rtl() {
+    let dir = if i18n_core::Direction::for_locale(base_locale).is_rtl() {
         "rtl"
     } else {
         "ltr"

@@ -133,14 +133,14 @@ reactive_core::dropless_thread_local! {
 }
 
 /// Keeps `<html lang>`/`<html dir>` matching the active locale, so switching locale relabels the whole
-/// document the way `follow_locale_direction` relabels the layout — the same rule, `layout_core::Direction::for_locale`, applied to the page's own root rather than to a widget's.
+/// document the way `follow_locale_direction` relabels the layout — the same rule, `i18n_core::Direction::for_locale`, applied to the page's own root rather than to a widget's.
 fn follow_locale_language() {
     let effect = reactive_core::effect(|| {
         let locale = i18n_core::use_locale();
         let lang = locale
             .as_deref()
             .unwrap_or_else(|| i18n_core::default_locale());
-        let is_rtl = layout_core::Direction::for_locale(lang).is_rtl();
+        let is_rtl = i18n_core::Direction::for_locale(lang).is_rtl();
         platform_web::set_document_language(lang, is_rtl);
     });
     FOLLOW_LANGUAGE.with(|f| *f.borrow_mut() = Some(effect));

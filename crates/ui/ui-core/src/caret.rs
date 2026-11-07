@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use layout_core::Direction;
+use i18n_core::Direction;
 use layout_reactive::current_direction;
 use motion_core::{Easing, Keyframes, Repeat};
 use renderer_core::TextAlign;

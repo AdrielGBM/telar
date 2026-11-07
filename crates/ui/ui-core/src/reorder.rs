@@ -6,7 +6,7 @@
 
 use geometry_core::Rect;
 
-/// Which way a strip runs. Not [`layout_core::Direction`], which is text direction (LTR/RTL) and answers a different question.
+/// Which way a strip runs. Not [`i18n_core::Direction`], which is text direction (LTR/RTL) and answers a different question.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Axis {
     Horizontal,

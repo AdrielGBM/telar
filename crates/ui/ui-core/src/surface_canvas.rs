@@ -6,7 +6,8 @@ use std::cell::{Cell, Ref};
 use std::rc::Rc;
 
 use geometry_core::{Insets, Rect, Size, Transform};
-use layout_core::{AvailableSpace, Direction, LayoutError, LayoutStyle, NodeId, SizeDimension};
+use i18n_core::Direction;
+use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId, SizeDimension};
 use platform_core::{AccessNode, ConsumedKeys, Event, TextInput, WindowCommand};
 use reactive_core::{RwSignal, in_surface_world, root_scope, signal};
 use renderer_core::{BorderRadius, DrawCommand};

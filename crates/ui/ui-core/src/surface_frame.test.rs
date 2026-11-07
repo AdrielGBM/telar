@@ -2,8 +2,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use geometry_core::{Insets, Rect, Size};
+use i18n_core::Direction;
 use i18n_core::{Catalog, Entry, Message};
-use layout_core::{AvailableSpace, Direction, LayoutError, LayoutStyle, SizeDimension};
+use layout_core::{AvailableSpace, LayoutError, LayoutStyle, SizeDimension};
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource};
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{Color, DrawCommand, RectStyle, ShapeStyle};

@@ -1,4 +1,4 @@
-//! Runtime for rsx internationalization: the baked message model, the reactive active-locale signal, and the `translate` lookup that binds them.
+//! Runtime for rsx internationalization: the baked message model, the reactive active-locale signal, the `translate` lookup that binds them, and the [`Direction`] a locale is written in.
 //!
 //! This crate is always-on and dependency-light (only `reactive-core`). The heavy work — parsing translation catalogs — happens at build time in the transpiler's i18n baker, which emits a `static CATALOG: Catalog` of pure `&'static` data. At runtime a translated string is nothing more than `translate(&CATALOG, key, args)`, which reads the active locale reactively and renders the matching [`Message`].
 
@@ -6,19 +6,23 @@
 
 #[cfg(feature = "runtime-catalog")]
 mod catalog;
+mod direction;
 mod english;
 mod installed;
 mod locale;
+mod locale_tag;
 mod message;
 mod negotiate;
 mod plural;
 
 #[cfg(feature = "runtime-catalog")]
 pub use catalog::{CatalogModel, MessageModel, PartModel, flatten, is_plural_table, parse_message};
+pub use direction::Direction;
 pub use installed::{catalog, default_locale, set_catalog, set_catalog_if_unset, t};
 pub use locale::{
     LocaleContext, current_locale, set_locale, set_surface_locale, use_locale, use_surface_locale,
 };
+pub use locale_tag::canonical_tag;
 pub use message::{Catalog, Entry, Message, Part};
 pub use negotiate::negotiate_locale;
 pub use plural::{

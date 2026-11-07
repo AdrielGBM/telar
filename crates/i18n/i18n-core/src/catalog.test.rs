@@ -175,3 +175,47 @@ fn a_directory_of_locale_files_loads_as_one_catalog() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn locale_tags_are_read_with_hyphens_whichever_separator_they_were_written_with() {
+    let catalog = CatalogModel::from_sources(
+        &[
+            ("pt_BR", "title = \"Ajustes\"\n", "pt_BR/settings.toml"),
+            ("pt-BR", "save = \"Salvar\"\n", "pt-BR/editor.toml"),
+            ("sr_Cyrl", "title = \"Подешавања\"\n", "sr_Cyrl.toml"),
+        ],
+        Some("pt_BR"),
+    )
+    .unwrap();
+    assert_eq!(catalog.locales, ["pt-BR", "sr-Cyrl"]);
+    assert_eq!(catalog.default_locale, "pt-BR");
+}
+
+#[test]
+fn one_key_in_both_spellings_of_a_locale_is_defined_twice() {
+    let err = CatalogModel::from_sources(
+        &[
+            ("pt_BR", "title = \"A\"\n", "a.toml"),
+            ("pt-BR", "title = \"B\"\n", "b.toml"),
+        ],
+        None,
+    )
+    .unwrap_err();
+    assert!(err.contains("for locale `pt-BR`"), "{err}");
+}
+
+#[test]
+fn a_locale_set_with_underscores_finds_the_catalog_written_with_them() {
+    let catalog = CatalogModel::from_sources(
+        &[
+            ("en", "title = \"Settings\"\n", "en.toml"),
+            ("pt_BR", "title = \"Ajustes\"\n", "pt_BR.toml"),
+        ],
+        Some("en"),
+    )
+    .unwrap()
+    .leak();
+    crate::set_locale("pt_BR");
+    assert_eq!(crate::translate(catalog, "title", &[]), "Ajustes");
+    crate::set_locale("en");
+}

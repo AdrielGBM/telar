@@ -5,7 +5,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use geometry_core::Rect;
-use layout_core::Direction;
+use i18n_core::Direction;
 use renderer_core::{TextAlign, TextStyle, TextWrap};
 
 use crate::text_edit::next_boundary;

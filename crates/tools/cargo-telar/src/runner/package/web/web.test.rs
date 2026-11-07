@@ -352,3 +352,10 @@ fn a_baked_picture_ships_at_the_address_the_module_was_baked_with() {
     );
     cleanup(&package);
 }
+
+#[test]
+fn the_page_lang_is_the_default_locale_in_bcp_47_form() {
+    assert_eq!(page_locale(Some("pt_BR".to_string())), "pt-BR");
+    assert_eq!(page_locale(Some("es".to_string())), "es");
+    assert_eq!(page_locale(None), "en");
+}

@@ -1,4 +1,4 @@
-use layout_core::Direction;
+use i18n_core::Direction;
 
 use super::*;
 use crate::context::set_direction;

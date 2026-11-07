@@ -2,7 +2,8 @@
 
 use std::rc::Rc;
 
-use layout_core::{Direction, NodeId};
+use i18n_core::Direction;
+use layout_core::NodeId;
 use platform_core::Cursor;
 use reactive_core::{OwnerId, RwSignal, signal};
 use renderer_core::{Declared, TextStyle};

@@ -277,7 +277,7 @@ fn page_for(
     let mut filled = base.clone();
     if let Some(lang) = &page.lang {
         filled.lang = lang.clone();
-        filled.dir = layout_core::Direction::for_locale(lang);
+        filled.dir = i18n_core::Direction::for_locale(lang);
     }
     if !page.title.is_empty() {
         filled.title = page.title.clone();

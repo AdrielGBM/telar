@@ -173,7 +173,7 @@ pub(crate) fn build_web_site(
 
     recreate_dir(&staging)?;
 
-    let locale = config.default_locale().unwrap_or_else(|| "en".to_string());
+    let locale = page_locale(config.default_locale());
     let site = Site::new(&config.web, &package_root, &resolved.name())?;
     let host = config.web.host();
     run_wasm_bindgen(&module, &staging)?;
@@ -270,6 +270,11 @@ fn write_sitemap(out: &Path, site: &Site, pages: &SitePages) -> Result<(), Strin
     }
 }
 
+/// The locale the plain page is written in: the project's default in BCP 47 form, `en` where it names none.
+fn page_locale(default_locale: Option<String>) -> String {
+    default_locale.map_or_else(|| "en".to_string(), |tag| i18n_core::canonical_tag(&tag))
+}
+
 /// What the page around the app is built from, beyond the project's own files.
 struct Shell<'a> {
     app_name: &'a str,
@@ -318,7 +323,7 @@ fn assemble(
 
     let mut page = Page::new(shell.app_name, Bootstrap { glue, module });
     page.lang = shell.locale.to_string();
-    page.dir = layout_core::Direction::for_locale(shell.locale);
+    page.dir = i18n_core::Direction::for_locale(shell.locale);
     page.renderer = shell.renderer;
     page.base = shell.site.base().to_string();
     page.meta = shell.site.head_tags(&PageMeta {

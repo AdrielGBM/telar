@@ -51,3 +51,13 @@ fn owned_lists_work_as_well_as_borrowed_ones() {
     let shipped: Vec<String> = vec!["es".into(), "en".into()];
     assert_eq!(negotiate_locale(&preferred, &shipped, "es"), "en");
 }
+
+#[test]
+fn an_underscore_separates_subtags_as_a_hyphen_does() {
+    assert_eq!(negotiate_locale(&["pt_BR"], &SHIPPED, "es"), "pt-BR");
+    assert_eq!(negotiate_locale(&["es_CL"], &SHIPPED, "en"), "es");
+    assert_eq!(
+        negotiate_locale(&["pt-PT"], &["es", "pt_BR"], "es"),
+        "pt_BR"
+    );
+}
