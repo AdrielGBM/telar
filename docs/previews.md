@@ -334,7 +334,8 @@ max_differing_pixels = 0     # how many pixels may differ and the picture still 
 ## `cargo telar test`
 
 For each preview, and each cell of its matrix, the run builds and lays it out, plays it, checks it for
-accessibility, and compares its snapshots. It prints a line for each and exits non-zero when any failed.
+accessibility, compares its snapshots, and unmounts it. It prints a line for each and exits non-zero when any
+failed, a panic while one is unmounted included.
 
 | Flag | Does |
 | --- | --- |
@@ -345,11 +346,13 @@ accessibility, and compares its snapshots. It prints a line for each and exits n
 | `--report <json\|junit> <PATH>` | Also write the run's report to a path, as `report.json` or JUnit XML for a CI |
 
 `-p`, `-F`, `--target` and `--release` work as they do for the other commands. `--target web` and `--target
-android` are refused: the run renders on the host. The run always writes `target/telar-snapshots/report.json`.
+android` are refused: the run renders on the host. The run always writes `target/telar-snapshots/report.json`;
+a run that wrote none, or whose `--report` copy could not be written, fails even when cargo succeeded.
 
-A library has no binary to run. `rsx_modules!` gives it a unit test, `telar_previews`, in preview builds, and
-`cargo telar test -p <library>` runs it through `cargo test`. The first-party components are tested this way
-through `apps/catalogue`: `cargo telar test -p catalogue`.
+A library has no binary to run. `rsx_modules!` gives it a unit test, `__telar_library_previews`, in preview
+builds, wherever in the crate the macro is called, and `cargo telar test -p <library>` runs it through
+`cargo test`. The first-party components are tested this way through `apps/catalogue`:
+`cargo telar test -p catalogue`.
 
 ### Auditing the exported workshop
 

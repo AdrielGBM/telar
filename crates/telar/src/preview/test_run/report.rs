@@ -93,6 +93,7 @@ pub struct CellReport {
     pub play: PlayCheck,
     pub a11y: A11yCheck,
     pub snapshot: SnapshotCheck,
+    pub teardown: TeardownCheck,
 }
 
 impl CellReport {
@@ -111,6 +112,7 @@ impl CellReport {
             self.play.status,
             self.a11y.status,
             self.snapshot.status,
+            self.teardown.status,
         ]
         .iter()
         .all(|status| *status != CheckStatus::Failed);
@@ -139,6 +141,9 @@ impl CellReport {
             && let Some(detail) = &self.snapshot.detail
         {
             lines.push(format!("snapshot: {detail}"));
+        }
+        if let Some(error) = &self.teardown.error {
+            lines.push(format!("teardown: {error}"));
         }
         lines
     }
@@ -238,6 +243,14 @@ pub struct SnapshotCheck {
     pub detail: Option<String>,
 }
 
+/// Unmounting the preview once every other check has run: a panic there fails the cell like any other check.
+#[non_exhaustive]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TeardownCheck {
+    pub status: CheckStatus,
+    pub error: Option<String>,
+}
+
 /// `report.json`: the snapshot report, which a review panel reads as it is, with the test run beside it under `test`.
 ///
 /// ```json
@@ -254,7 +267,8 @@ pub struct SnapshotCheck {
 ///         "build": { "status": "passed", "draw_commands": 14, "error": null },
 ///         "play": { "status": "failed", "steps": [{ "action": "click button \"Save\"", "error": "found no button \"Save\"" }], "error": "found no button \"Save\"" },
 ///         "a11y": { "status": "passed", "violations": [], "error": null },
-///         "snapshot": { "status": "passed", "detail": "matched" }
+///         "snapshot": { "status": "passed", "detail": "matched" },
+///         "teardown": { "status": "passed", "error": null }
 ///       }]
 ///     }]
 ///   }

@@ -83,3 +83,28 @@ fn a_report_without_a_test_section_is_refused() {
     let error = junit_from_report(&json!({ "version": 1, "snapshots": [] })).unwrap_err();
     assert!(error.contains("`test`"), "{error}");
 }
+
+#[test]
+fn a_cell_that_panicked_while_torn_down_fails_with_the_panic() {
+    let report = json!({
+        "test": {
+            "errors": [],
+            "previews": [{
+                "id": "demo--leaky",
+                "cells": [{
+                    "id": "demo--leaky",
+                    "passed": false,
+                    "build": { "status": "passed", "error": null },
+                    "teardown": { "status": "failed", "error": "panicked: the subscription outlived its canvas" }
+                }]
+            }]
+        }
+    });
+    let xml = junit_from_report(&report).unwrap();
+    assert!(
+        xml.contains(
+            "<failure message=\"teardown: panicked: the subscription outlived its canvas\">"
+        ),
+        "{xml}"
+    );
+}

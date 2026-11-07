@@ -20,7 +20,7 @@ use std::path::Path;
 pub use options::{A11yLevel, OptionsError, PreviewFilter, SnapshotSetting, TestOptions};
 pub use report::{
     A11yCheck, A11yFinding, BuildCheck, CellReport, CheckStatus, PlayCheck, PlayStepReport,
-    PreviewReport, SnapshotCheck, TestReport, TestRun, TestSummary,
+    PreviewReport, SnapshotCheck, TeardownCheck, TestReport, TestRun, TestSummary,
 };
 #[cfg(not(target_os = "android"))]
 pub use run::{__test_library, run_previews};

@@ -45,3 +45,7 @@ path = "src/workshop_export.test.rs"
 [[test]]
 name = "workshop_audit"
 path = "src/workshop_audit.test.rs"
+
+[[test]]
+name = "library_previews"
+path = "src/library_previews.test.rs"

@@ -125,6 +125,9 @@ fn details(cell: &Value) -> Vec<String> {
     {
         lines.push(format!("snapshot: {detail}"));
     }
+    if let Some(error) = cell["teardown"]["error"].as_str() {
+        lines.push(format!("teardown: {error}"));
+    }
     if lines.is_empty() {
         lines.push(String::from("failed"));
     }

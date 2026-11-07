@@ -943,7 +943,7 @@ fn wire_package(
 ///
 /// In an application crate it also installs the catalog the crate baked as the binary loads, unless one is installed already, so the one `app!` installs wins over it; a `[telar] library` never installs its own.
 ///
-/// In a `[telar] library` built with its previews, it also emits `#[test] fn telar_previews()`, which tests every preview the way an application binary does under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary.
+/// In a `[telar] library` built with its previews, it also emits `#[test] fn __telar_library_previews()`, which tests every preview the way an application binary does under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary.
 #[proc_macro]
 pub fn rsx_modules(input: TokenStream) -> TokenStream {
     let theme_type_str = if input.is_empty() {

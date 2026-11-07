@@ -116,3 +116,34 @@ fn a_run_keeps_the_language_the_app_chose() {
     speak_the_app_language();
     assert_eq!(i18n_core::current_locale().as_deref(), Some("es"));
 }
+
+fn panics_when_torn_down(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    crate::on_cleanup(|| panic!("the subscription outlived its canvas"));
+    empty(ctx)
+}
+
+#[test]
+fn a_panic_while_a_preview_is_torn_down_fails_its_cell() {
+    let entry = PreviewEntry::new(
+        "demo--leaky--plain",
+        "leaky",
+        "plain",
+        panics_when_torn_down,
+    );
+    let cell = check(&entry, None, A11yLevel::Off, None);
+    assert_eq!(cell.build.status, CheckStatus::Passed);
+    assert_eq!(cell.teardown.status, CheckStatus::Failed);
+    assert!(!cell.passed);
+    assert_eq!(
+        cell.details(),
+        ["teardown: panicked: the subscription outlived its canvas"]
+    );
+}
+
+#[test]
+fn a_preview_torn_down_cleanly_passes_its_teardown() {
+    let entry = PreviewEntry::new("demo--card--plain", "card", "plain", empty);
+    let cell = check(&entry, None, A11yLevel::Off, None);
+    assert_eq!(cell.teardown.status, CheckStatus::Passed);
+    assert!(cell.passed);
+}

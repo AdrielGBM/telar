@@ -11,8 +11,8 @@ use crate::preview::{Matrices, MatrixCell, Play, PlayError, PlayStep, PreviewEnt
 use super::snapshots::{self, SnapshotRun};
 use super::{
     A11yCheck, A11yFinding, A11yLevel, BuildCheck, CellReport, CheckStatus, PlayCheck,
-    PlayStepReport, PreviewFilter, PreviewReport, SnapshotCheck, SnapshotSetting, TestOptions,
-    TestRun, TestSummary, shown,
+    PlayStepReport, PreviewFilter, PreviewReport, SnapshotCheck, SnapshotSetting, TeardownCheck,
+    TestOptions, TestRun, TestSummary, shown,
 };
 
 /// Tests `entries` as `options` asks, printing a line for each preview and cell as it goes, and writes `report.json` when the options name a target directory.
@@ -101,7 +101,7 @@ pub fn run_previews(
     run
 }
 
-/// Runs [`run_previews`] with the options `cargo telar test` set, and fails the test calling it when a preview fails: what `rsx_modules!` emits as a library's `#[test] fn telar_previews()`, since a library has no binary to run.
+/// Runs [`run_previews`] with the options `cargo telar test` set, and fails the test calling it when a preview fails: what `rsx_modules!` emits as a library's `#[test] fn __telar_library_previews()`, since a library has no binary to run.
 #[doc(hidden)]
 pub fn __test_library(entries: Vec<PreviewEntry>, config: AppConfig) {
     let options = TestOptions::from_env().unwrap_or_else(|error| panic!("{error}"));
@@ -246,8 +246,21 @@ fn check(
             detail: Some(error),
         });
     }
-    let _ = guarded(move || drop(play));
+    report.teardown = tear_down(play);
     report.settle()
+}
+
+fn tear_down(play: Play) -> TeardownCheck {
+    match guarded(move || drop(play)) {
+        Ok(()) => TeardownCheck {
+            status: CheckStatus::Passed,
+            error: None,
+        },
+        Err(error) => TeardownCheck {
+            status: CheckStatus::Failed,
+            error: Some(error),
+        },
+    }
 }
 
 fn mount(entry: &PreviewEntry, cell: Option<&MatrixCell>) -> Result<Play, String> {

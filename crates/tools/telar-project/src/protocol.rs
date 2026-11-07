@@ -160,8 +160,8 @@ pub const TEST_OUT_DIR: &str = "telar-snapshots";
 /// The report a test run writes in [`TEST_OUT_DIR`].
 pub const TEST_REPORT_FILE: &str = "report.json";
 
-/// The name of the test `rsx_modules!` emits in a library's preview build, which `cargo telar test -p <library>` runs.
-pub const LIBRARY_TEST_NAME: &str = "telar_previews";
+/// The name of the test `rsx_modules!` emits in a library's preview build, which `cargo telar test -p <library>` runs by this name alone, wherever the macro sits in the module tree: no other test should contain it.
+pub const LIBRARY_TEST_NAME: &str = "__telar_library_previews";
 
 /// Where the session running `package`'s workshop names the loopback port it takes `goto:` and [`FOCUS_LINE`] requests on.
 pub fn workshop_channel_file(workspace_root: &Path, package: &str) -> PathBuf {

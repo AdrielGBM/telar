@@ -794,7 +794,7 @@ fn a_library_tests_its_previews_from_a_unit_test_at_the_call_site() {
     let test = spaced(super::library_previews_test(fonts));
     assert!(test.starts_with(":: telar :: __previews !"), "{test}");
     assert!(
-        test.contains("# [cfg (test)] # [test] fn telar_previews ()"),
+        test.contains("# [cfg (test)] # [test] fn __telar_library_previews ()"),
         "{test}"
     );
     assert!(

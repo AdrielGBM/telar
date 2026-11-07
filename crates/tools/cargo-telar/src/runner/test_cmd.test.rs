@@ -88,8 +88,7 @@ fn an_application_is_run_and_a_library_runs_its_previews_test() {
             "demo",
             "--lib",
             "--",
-            "telar_previews",
-            "--exact",
+            "__telar_library_previews",
             "--nocapture"
         ]
     );
@@ -169,4 +168,42 @@ fn a_requested_report_is_written_from_the_one_the_run_left() {
 #[test]
 fn the_feature_a_test_run_injects_is_one_a_project_can_lock() {
     assert!(crate::runner::config::TOOLING_FEATURES.contains(&TEST_FEATURE));
+}
+
+#[test]
+fn a_successful_cargo_run_that_wrote_no_report_fails() {
+    let root = tempfile::tempdir().unwrap();
+    assert_eq!(
+        exit_code(Some(0), &root.path().join("report.json"), None),
+        1
+    );
+}
+
+#[test]
+fn a_run_that_wrote_its_report_exits_as_cargo_did() {
+    let root = tempfile::tempdir().unwrap();
+    let written = root.path().join("report.json");
+    std::fs::write(&written, r#"{"test": {"previews": [], "errors": []}}"#).unwrap();
+    assert_eq!(exit_code(Some(0), &written, None), 0);
+    assert_eq!(exit_code(Some(101), &written, None), 101);
+    assert_eq!(exit_code(None, &written, None), 1);
+}
+
+#[test]
+fn a_report_copy_that_cannot_be_written_fails_the_run() {
+    let root = tempfile::tempdir().unwrap();
+    let written = root.path().join("report.json");
+    std::fs::write(&written, r#"{"test": {"previews": [], "errors": []}}"#).unwrap();
+    let into_a_directory = ReportRequest {
+        format: ReportFormat::Json,
+        path: root.path().to_path_buf(),
+    };
+    assert_eq!(exit_code(Some(0), &written, Some(&into_a_directory)), 1);
+    let not_json = root.path().join("not-json.json");
+    std::fs::write(&not_json, "{").unwrap();
+    let junit = ReportRequest {
+        format: ReportFormat::Junit,
+        path: root.path().join("junit.xml"),
+    };
+    assert_eq!(exit_code(Some(0), &not_json, Some(&junit)), 1);
 }
