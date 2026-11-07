@@ -1,6 +1,6 @@
 //! The function families this crate ships. Each is a plain function registering into a [`Registry`], which is all a host's own family needs to be too.
 //!
-//! The families follow KLWP's — `tc`, `mu` and the rest — but as one function per operation rather than a mode word as the first argument, so every form has a signature the checker can hold it to: KLWP's `tc(up, x)` is `upper(x)`, `mu(round, x)` is `round(x)`.
+//! Each family is one function per operation rather than a mode word as the first argument, so every form has a signature the checker can hold it to: `upper(x)` rather than `case(up, x)`, `round(x)` rather than `math(round, x)`.
 
 use std::fmt::Write;
 
