@@ -15,7 +15,9 @@ use web_time::Instant;
 use crate::app::App;
 use crate::app_config::AppConfig;
 use crate::app_runtime::{AppRuntime, LocalApp};
-use crate::runner::font_config::{FontSetup, SystemFonts, build_font_config};
+use crate::runner::font_config::{SystemFonts, build_font_config};
+
+use super::boot::{StoredChoices, split_config};
 
 /// The frames a page is given to settle in, as the runner's clock counts them: ten seconds of motion.
 const MAX_FRAMES: u32 = 600;
@@ -76,18 +78,11 @@ pub fn prerender_page<A: App>(
     request: &PrerenderRequest,
 ) -> PrerenderedPage {
     let previous_capture = ui_tree::set_element_capture(true);
-    services_core::app_paths::install(app_name, Arc::new(NoPaths));
-    crate::user_preferences::install(app_name);
-    let AppConfig {
-        window,
-        fonts: faces,
-        font_family,
-    } = config;
+    super::boot::install_app(app_name, Arc::new(NoPaths), StoredChoices::Now);
+    let (window, fonts) = split_config(config);
+    let font_family = fonts.family.clone();
     renderer_text::fonts::install(build_font_config(
-        FontSetup {
-            faces,
-            family: font_family.clone(),
-        },
+        fonts,
         &SystemFonts::from_provider(&NoPaths),
     ));
     let window = super::resolved_window(window, &app, app_name);

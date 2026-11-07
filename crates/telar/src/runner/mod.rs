@@ -2,6 +2,7 @@
 
 #[cfg(all(feature = "android-bare", target_os = "android"))]
 mod android;
+mod boot;
 #[cfg(all(
     feature = "desktop-bare",
     not(target_os = "android"),

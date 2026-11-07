@@ -3,14 +3,11 @@
 use std::sync::Arc;
 
 use platform_core::Platform;
-use platform_desktop::{DesktopPathsProvider, WinitPlatform, WinitWindow};
+use platform_desktop::{DesktopPathsProvider, WinitWindow};
 
 use crate::app_runtime::AppRuntime;
-use crate::config;
-use crate::prefs::UserPrefs;
 
-use super::font_config::FontSetup;
-use super::handler::build_app_handler;
+use super::boot::{StoredChoices, SurfaceBoot, split_config};
 
 /// Runs the dev host: a window whose application comes from a dylib and is swapped on each rebuild, with `D` drawn over it.
 ///
@@ -34,37 +31,18 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     config: crate::app_config::AppConfig,
     app_name: &str,
 ) {
-    super::logging::install_stderr();
+    let platform = super::desktop::start_desktop();
     let Ok(port) = hot_port.parse::<u16>() else {
         tracing::error!("invalid TELAR_HOT_PORT value: {hot_port}");
         std::process::exit(1);
     };
-    // Before the library loads, which is handed whatever is installed here.
-    #[cfg(feature = "dialogs")]
-    platform_desktop::DesktopFileDialogs::install();
-    #[cfg(feature = "clipboard")]
-    platform_desktop::DesktopClipboard::install();
-    platform_desktop::DesktopUriOpener::install();
+    platform_core::set_keyboard_convention(platform.keyboard_convention());
     let paths: Arc<dyn services_core::AppPathsProvider> = Arc::new(DesktopPathsProvider);
-    let crate::app_config::AppConfig {
-        mut window,
-        fonts: faces,
-        font_family,
-    } = config;
-    let fonts = FontSetup {
-        faces,
-        family: font_family,
-    };
+    let (mut window, fonts) = split_config(config);
+    // Installed before the library loads, because the guest is handed the fonts, paths and store installed here.
     #[cfg(feature = "shaper")]
     super::font_config::install_window_fonts(&fonts, paths.as_ref());
-    let platform = match WinitPlatform::try_new() {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::error!("Failed to create event loop: {e}");
-            std::process::exit(1);
-        }
-    };
-    platform_core::set_keyboard_convention(platform.keyboard_convention());
+    let boot = SurfaceBoot::new(app_name, paths, fonts, StoredChoices::Now);
     // SAFETY: the library is the one `cargo telar dev` built from this app against this telar and named to the host it started.
     let initial_app = match unsafe { crate::hot::load_hot_app(std::path::Path::new(lib_path)) } {
         Ok(app) => app,
@@ -74,31 +52,20 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         }
     };
     let hot = crate::hot::listen_hot_reload(port);
-    let prefs = UserPrefs::load(app_name, paths.as_ref());
-    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     #[cfg(feature = "hot-reload")]
     super::dev_window::apply_dev_window_overrides(&mut window);
     if let Some(custom) = initial_app.window_config() {
         window = custom;
     }
     let window = window.titled_or(app_name);
-    // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload channel differs from a normal single-window handler.
-    let mut handler = build_app_handler::<WinitWindow, D>(
+    let mut handler = boot.handler::<WinitWindow, D>(
         Box::new(initial_app),
-        paths,
-        fonts,
-        backend,
-        prefs,
-        app_name.to_owned(),
+        &window.title,
         super::host::SurfaceRenderer::builtin(),
     );
     handler.hot = Some(hot);
-    handler.title = Some(super::state::WindowTitle::opened_as(&window.title));
     handler.location = Some(super::location::LocationBinding::for_window(Box::new(
         platform_core::ArgumentLocation::from_env(),
     )));
-    if let Err(e) = platform.run(window, handler) {
-        tracing::error!("Event loop error: {e}");
-        std::process::exit(1);
-    }
+    super::desktop::exit_on_error(platform.run(window, handler));
 }

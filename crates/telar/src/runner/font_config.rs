@@ -41,13 +41,9 @@ pub(super) fn install_window_fonts(fonts: &FontSetup, paths: &dyn AppPathsProvid
 /// No paths provider, as in [`prerender_page`](super::prerender_page): a measurement-only run has no platform to ask where the system fonts are.
 #[cfg(all(feature = "previews", not(target_os = "android")))]
 pub(super) fn install_shaper_fonts(config: crate::AppConfig) {
-    let crate::AppConfig {
-        fonts: faces,
-        font_family: family,
-        ..
-    } = config;
+    let (_, fonts) = super::boot::split_config(config);
     renderer_text::fonts::install(build_font_config(
-        FontSetup { faces, family },
+        fonts,
         &SystemFonts::from_provider(&services_core::NoPaths),
     ));
 }

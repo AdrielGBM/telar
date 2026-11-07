@@ -1,5 +1,8 @@
 //! What a person chose, kept between runs in the store of the target the app runs on, and the choices Telar keeps for itself.
 
+use std::cell::Cell;
+use std::sync::Once;
+
 use theme_core::SchemePreference;
 
 /// The key the colour scheme a person chose is kept under.
@@ -11,30 +14,34 @@ pub const LOCALE_KEY: &str = "telar.locale";
 /// The key the app's reduced-motion override is kept under (see [`set_reduced_motion_override`](crate::set_reduced_motion_override)): `true` or `false`, and absent while the app follows the system.
 pub const REDUCED_MOTION_KEY: &str = "telar.reduced_motion";
 
-/// Installs the target's preference store for `app_name` and brings back what Telar keeps in it. Every runner calls it once, where it installs the app's paths.
-pub(crate) fn install(app_name: &str) {
-    install_store(app_name);
-    follow_stored_choices();
+reactive_core::dropless_thread_local! {
+    static FOLLOWING: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Installs the target's preference store for `app_name` alone, for a runner that brings back what is kept in it later: one taking over a prerendered page builds its first tree from the choices the page was written with.
+/// Installs the target's preference store for `app_name`, once per process: a store opened again for a later surface would hold only what its file held when read, and write that back over whatever another thread kept since.
 pub(crate) fn install_store(app_name: &str) {
-    #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
-    services_core::set_preference_store(std::sync::Arc::new(platform_web::WebStorage::new(
-        app_name,
-    )));
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(dir) = services_core::app_paths::config() {
-        services_core::set_preference_store(std::sync::Arc::new(services_core::FileStore::open(
-            dir.join("preferences"),
+    static INSTALLED: Once = Once::new();
+    INSTALLED.call_once(|| {
+        #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
+        services_core::set_preference_store(std::sync::Arc::new(platform_web::WebStorage::new(
+            app_name,
         )));
-    }
-    #[cfg(not(all(feature = "web-dom", target_arch = "wasm32")))]
-    let _ = app_name;
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(dir) = services_core::app_paths::config() {
+            services_core::set_preference_store(std::sync::Arc::new(
+                services_core::FileStore::open(dir.join("preferences")),
+            ));
+        }
+        #[cfg(not(all(feature = "web-dom", target_arch = "wasm32")))]
+        let _ = app_name;
+    });
 }
 
-/// Restores every choice Telar keeps in the installed store, then keeps each as it changes.
+/// Restores every choice Telar keeps in the installed store, then keeps each as it changes, once per thread: the choices live in the thread's reactive runtime, and a second follower there would write every change again.
 pub(crate) fn follow_stored_choices() {
+    if FOLLOWING.replace(true) {
+        return;
+    }
     follow_stored_scheme();
     follow_stored_reduced_motion();
 }
