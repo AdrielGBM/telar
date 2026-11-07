@@ -1,4 +1,4 @@
-//! Regenerates `test-fonts/TelarTest.ttf` from Inter 4.1: `cargo run -p telar-renderer-text --example build-test-font -- "$(nix build nixpkgs#inter --no-link --print-out-paths)/share/fonts/truetype/InterVariable.ttf"`
+//! Regenerates `test-fonts/` from Inter 4.1: Telar Test, and the copies of it that declare another ascent and descent. `cargo run -p telar-renderer-text --example build-test-font -- "$(nix build nixpkgs#inter --no-link --print-out-paths)/share/fonts/truetype/InterVariable.ttf"`
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -56,7 +56,39 @@ fn subset(source: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     Ok(subset_font(&font, &plan)?)
 }
 
-fn rename(subset: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+/// A face the example writes: Telar Test itself, or a copy of it that declares another ascent and descent, for tests of where a line sits in its box whatever a face declares.
+struct Face {
+    file: &'static str,
+    family: &'static str,
+    postscript: &'static str,
+    /// The ascender and descender declared in place of Inter's, in font units.
+    vertical: Option<(i16, i16)>,
+}
+
+const FACES: [Face; 3] = [
+    Face {
+        file: "TelarTest.ttf",
+        family: "Telar Test",
+        postscript: "TelarTest",
+        vertical: None,
+    },
+    // Room above the capitals for stacked accents, as a platform's UI face reserves, so a line centred on what it declares hangs its descenders below a 1.2 em line box.
+    Face {
+        file: "TelarTestHighAscent.ttf",
+        family: "Telar Test High Ascent",
+        postscript: "TelarTestHighAscent",
+        vertical: Some((2560, -494)),
+    },
+    // A descent so deep that a line centred on what it declares lifts its ascenders above a 1.2 em line box.
+    Face {
+        file: "TelarTestDeepDescent.ttf",
+        family: "Telar Test Deep Descent",
+        postscript: "TelarTestDeepDescent",
+        vertical: Some((1984, -2048)),
+    },
+];
+
+fn rename(subset: &[u8], face: &Face) -> Result<Vec<u8>, Box<dyn Error>> {
     let font = FontRef::new(subset)?;
     let mut name: Name = font.name()?.to_owned_table();
     let copyright = name
@@ -69,21 +101,29 @@ fn rename(subset: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         })
         .map(|record| (*record.string).trim_end_matches('.').to_owned())
         .ok_or("the source font has no English copyright record")?;
+    let Face {
+        family, postscript, ..
+    } = face;
+    let altered = if face.vertical.is_some() {
+        ", with its declared ascent and descent changed"
+    } else {
+        ""
+    };
     let replacements = [
         (
             NameId::COPYRIGHT_NOTICE,
             format!(
-                "{copyright}. Telar Test is a Basic Latin and typographic-symbol subset of Inter 4.1, renamed."
+                "{copyright}. {family} is a Basic Latin and typographic-symbol subset of Inter 4.1, renamed{altered}."
             ),
         ),
-        (NameId::FAMILY_NAME, "Telar Test".to_owned()),
+        (NameId::FAMILY_NAME, (*family).to_owned()),
         (
             NameId::UNIQUE_ID,
-            "TelarTest-Regular;subset of Inter 4.1".to_owned(),
+            format!("{postscript}-Regular;subset of Inter 4.1"),
         ),
-        (NameId::FULL_NAME, "Telar Test Regular".to_owned()),
-        (NameId::POSTSCRIPT_NAME, "TelarTest-Regular".to_owned()),
-        (NameId::new(25), "TelarTest".to_owned()),
+        (NameId::FULL_NAME, format!("{family} Regular")),
+        (NameId::POSTSCRIPT_NAME, format!("{postscript}-Regular")),
+        (NameId::new(25), (*postscript).to_owned()),
     ];
     for (name_id, value) in replacements {
         name.name_record
@@ -106,7 +146,7 @@ fn rename(subset: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     });
     let mut builder = FontBuilder::new();
     builder.add_table(&name)?;
-    add_recomputed_metrics(&font, &mut builder)?;
+    add_recomputed_metrics(&font, &mut builder, face.vertical)?;
     builder.copy_missing_tables(font);
     Ok(builder.build())
 }
@@ -121,13 +161,15 @@ fn is_english_record(record: &NameRecord, name_id: NameId) -> bool {
 fn main() -> Result<(), Box<dyn Error>> {
     let source = std::env::args()
         .nth(1)
-        .ok_or("usage: build-test-font <InterVariable.ttf> [output]")?;
-    let target = std::env::args().nth(2).map_or_else(
-        || Path::new(env!("CARGO_MANIFEST_DIR")).join("test-fonts/TelarTest.ttf"),
+        .ok_or("usage: build-test-font <InterVariable.ttf> [directory]")?;
+    let directory = std::env::args().nth(2).map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("test-fonts"),
         PathBuf::from,
     );
-    let bytes = rename(&subset(&std::fs::read(source)?)?)?;
-    std::fs::write(target, bytes)?;
+    let subset = subset(&std::fs::read(source)?)?;
+    for face in &FACES {
+        std::fs::write(directory.join(face.file), rename(&subset, face)?)?;
+    }
     Ok(())
 }
 
@@ -155,7 +197,11 @@ fn point_and_contour_counts(
     })
 }
 
-fn add_recomputed_metrics(font: &FontRef, builder: &mut FontBuilder) -> Result<(), Box<dyn Error>> {
+fn add_recomputed_metrics(
+    font: &FontRef,
+    builder: &mut FontBuilder,
+    vertical: Option<(i16, i16)>,
+) -> Result<(), Box<dyn Error>> {
     let glyf = font.glyf()?;
     let loca = font.loca(None)?;
     let hmtx = font.hmtx()?;
@@ -213,6 +259,14 @@ fn add_recomputed_metrics(font: &FontRef, builder: &mut FontBuilder) -> Result<(
     maxp.max_composite_contours = Some(max_composite_contours as u16);
     maxp.max_component_elements = Some(max_components as u16);
     os2.ul_code_page_range_1 = Some(LATIN_1_CODE_PAGE);
+    if let Some((ascender, descender)) = vertical {
+        hhea.ascender = ascender.into();
+        hhea.descender = descender.into();
+        os2.s_typo_ascender = ascender;
+        os2.s_typo_descender = descender;
+        os2.us_win_ascent = u16::try_from(ascender)?;
+        os2.us_win_descent = u16::try_from(-descender)?;
+    }
     builder
         .add_table(&head)?
         .add_table(&hhea)?

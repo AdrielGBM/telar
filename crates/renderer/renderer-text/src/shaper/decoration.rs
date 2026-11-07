@@ -58,6 +58,7 @@ impl TextShaper {
                 .collect(),
             None => Vec::new(),
         };
+        let shift = self.baseline_shift(style) as f32;
         let buffer = make_cased_buffer(
             &mut self.font_system,
             &mut self.family_availability,
@@ -69,7 +70,7 @@ impl TextShaper {
         let mut stretches: Vec<(f32, Vec<LayoutGlyph>)> = Vec::new();
         for run in buffer.layout_runs() {
             for stretch in run.glyphs.chunk_by(|a, b| a.metadata == b.metadata) {
-                stretches.push((run.line_y, stretch.to_vec()));
+                stretches.push((run.line_y + shift, stretch.to_vec()));
             }
         }
         drop(buffer);

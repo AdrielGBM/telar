@@ -939,7 +939,8 @@ fn an_underline_sits_its_offset_below_the_baseline_across_the_glyphs() {
         rect,
         &style,
     );
-    let baseline = buffer.layout_runs().next().expect("one line").line_y;
+    let baseline =
+        buffer.layout_runs().next().expect("one line").line_y + sh.baseline_shift(&style) as f32;
     assert_eq!(stroke.rect.y, (20.0 + baseline + 4.0).round());
     assert_eq!(
         stroke.paint, style.color,
@@ -962,7 +963,8 @@ fn an_underline_from_the_font_is_at_least_a_device_pixel_and_below_the_baseline(
         rect,
         &plain(12.0),
     );
-    let baseline = buffer.layout_runs().next().expect("one line").line_y;
+    let baseline = buffer.layout_runs().next().expect("one line").line_y
+        + sh.baseline_shift(&plain(12.0)) as f32;
     assert!(strokes[0].rect.y >= baseline);
 }
 

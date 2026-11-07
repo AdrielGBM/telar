@@ -43,6 +43,7 @@ impl TextShaper {
             return;
         }
         let start_len = out.len();
+        let shift = self.baseline_shift(style) as f32;
         let shaped_rect = Rect {
             height: line_snapped_height(visible_lines(rect.height, style), style),
             ..rect
@@ -58,7 +59,7 @@ impl TextShaper {
         let color = style.color.solid_color();
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {
-                let physical = glyph.physical((0., run.line_y), 1.0);
+                let physical = glyph.physical((0., run.line_y + shift), 1.0);
                 let swash_empty = match self
                     .swash_cache
                     .get_image(&mut self.font_system, physical.cache_key)
@@ -72,7 +73,7 @@ impl TextShaper {
                         font_id: glyph.font_id,
                         glyph_id: glyph.glyph_id as u32,
                         x: rect.x + glyph.x,
-                        y: rect.y + run.line_y,
+                        y: rect.y + run.line_y + shift,
                         font_size: style.font_size,
                         color,
                     });

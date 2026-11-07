@@ -39,6 +39,7 @@ impl TextShaper {
         if width == 0 || height == 0 || text.is_empty() {
             return;
         }
+        let shift = self.baseline_shift(style) as f32;
 
         if let Some(spans) = spans.filter(|s| !s.is_empty()) {
             let buffer = make_buffer(
@@ -54,7 +55,7 @@ impl TextShaper {
                 for glyph in run.glyphs.iter() {
                     let physical = physical_glyph(
                         glyph,
-                        (0., run.line_y * scale_factor),
+                        (0., (run.line_y + shift) * scale_factor),
                         scale_factor,
                         style.raster,
                     );
@@ -112,7 +113,7 @@ impl TextShaper {
                         // cosmic-text's `physical` adds the offset without scaling it, and `screen_y` below divides the whole thing by the scale factor, so `line_y` must be pre-scaled here or every line packs onto the first at high DPI.
                         let physical = physical_glyph(
                             glyph,
-                            (0., run.line_y * scale_factor),
+                            (0., (run.line_y + shift) * scale_factor),
                             scale_factor,
                             style.raster,
                         );
@@ -550,16 +551,22 @@ impl TextShaper {
             rect,
             style,
         );
+        let shift = self.baseline_shift(style) as f32;
         // Collected first, so the immutable `layout_runs` borrow ends before the mutable lookups below.
         let mut glyphs: Vec<(CacheKey, i32)> = Vec::new();
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {
-                let p = physical_glyph(glyph, (0.0, run.line_y), 1.0, style.raster);
+                let p = physical_glyph(glyph, (0.0, run.line_y + shift), 1.0, style.raster);
                 glyphs.push((p.cache_key, p.y));
             }
         }
         drop(buffer);
+        self.ink_extent(glyphs)
+            .map_or((0.0, 0.0), |(top, bottom)| (top, bottom - top))
+    }
 
+    /// The rows `glyphs` ink, each placed on its baseline row: `(top, bottom)`, or `None` when none of them inks.
+    pub(super) fn ink_extent(&mut self, glyphs: Vec<(CacheKey, i32)>) -> Option<(f32, f32)> {
         let mut min_top = f32::INFINITY;
         let mut max_bottom = f32::NEG_INFINITY;
         for (cache_key, baseline_y) in glyphs {
@@ -572,10 +579,7 @@ impl TextShaper {
                 max_bottom = max_bottom.max(top + img.placement.height as f32);
             }
         }
-        if !min_top.is_finite() || max_bottom <= min_top {
-            return (0.0, 0.0);
-        }
-        (min_top, max_bottom - min_top)
+        (min_top.is_finite() && max_bottom > min_top).then_some((min_top, max_bottom))
     }
 }
 

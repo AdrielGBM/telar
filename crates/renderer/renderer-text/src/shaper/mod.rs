@@ -11,6 +11,7 @@ use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
 mod atlas;
+mod baseline;
 mod cache;
 mod colr;
 mod decoration;
@@ -72,6 +73,7 @@ pub struct TextShaper {
     raster_cache: Cache<TextCacheKey, Arc<[u8]>>,
     shaping_cache: Cache<ShapingCacheKey, GlyphPositions>,
     measure_cache: Cache<(u64, u32, u32, u32), (f32, f32)>,
+    baseline_cache: Cache<(u32, u32), i32>,
     // Lets the software COLR fallback skip the buffer build and per-glyph lookup for plain UI text after the first evaluation. Symmetric with `blank_glyphs`.
     has_colr_cache: Cache<(u64, u32, u32, u32, u32), bool>,
     // So COLR rasterization does not re-read the font file on every atlas miss.
@@ -538,6 +540,7 @@ impl TextShaper {
                     .saturating_mul(size_of::<(CacheKey, i32, i32)>())
             }),
             measure_cache: Cache::new(limits::TEXT_MEASURE, |_| limits::SMALL_ENTRY_BYTES),
+            baseline_cache: Cache::new(limits::TEXT_MEASURE, |_| limits::SMALL_ENTRY_BYTES),
             has_colr_cache: Cache::new(limits::TEXT_HAS_COLR, |_| limits::SMALL_ENTRY_BYTES),
             colr_font_cache: Cache::new(limits::FONT_FILE, |font| font.0.len()),
             blank_glyphs: FxHashSet::default(),
@@ -554,6 +557,7 @@ impl TextShaper {
         self.raster_cache.sweep();
         self.shaping_cache.sweep();
         self.measure_cache.sweep();
+        self.baseline_cache.sweep();
         self.has_colr_cache.sweep();
         self.colr_font_cache.sweep();
         self.trim_glyph_rasters();
@@ -574,6 +578,7 @@ impl TextShaper {
             self.raster_cache.stat("text.raster"),
             self.shaping_cache.stat("text.shaping"),
             self.measure_cache.stat("text.measure"),
+            self.baseline_cache.stat("text.baseline"),
             self.has_colr_cache.stat("text.has_colr"),
             self.colr_font_cache.stat("text.font_file"),
             CacheStat {
@@ -632,6 +637,7 @@ impl TextShaper {
         self.raster_cache.clear();
         self.shaping_cache.clear();
         self.measure_cache.clear();
+        self.baseline_cache.clear();
         self.has_colr_cache.clear();
         self.blank_glyphs.clear();
         self.font_metrics_cache = None;

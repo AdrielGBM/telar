@@ -200,20 +200,38 @@ fn a_cased_style_is_centred_on_the_band_of_its_face() {
     );
 }
 
-/// A text whose face changes at the same size measures the band of the face it now has.
-#[test]
-fn a_text_that_changes_face_is_centred_on_the_new_face() {
-    const BOX: f32 = 40.0;
+/// Installs the bundled faces under the families the tests below name, so a test that needs faces apart does not rely on what the machine has.
+fn add_bundled_faces() {
     renderer_text::fonts::installed();
     renderer_text::fonts::add_faces(vec![
         renderer_core::FontAsset::embedded(include_bytes!(
             "../../../renderer/renderer-text/test-fonts/TelarTest.ttf"
         ))
         .named("Telar Centred"),
+        renderer_core::FontAsset::embedded(include_bytes!(
+            "../../../renderer/renderer-text/test-fonts/TelarTestHighAscent.ttf"
+        ))
+        .named(HIGH_ASCENT),
+        renderer_core::FontAsset::embedded(include_bytes!(
+            "../../../renderer/renderer-text/test-fonts/TelarTestDeepDescent.ttf"
+        ))
+        .named(DEEP_DESCENT),
     ]);
+}
+
+/// A face that declares room above its capitals, as a platform's UI face does for stacked accents, and more ascent and descent than a line holds.
+const HIGH_ASCENT: &str = "Telar Test High Ascent";
+/// A face that declares a descent deep enough that centring what it declares lifts its ascenders out of the top of the line box.
+const DEEP_DESCENT: &str = "Telar Test Deep Descent";
+
+/// A text whose face changes at the same size measures the band of the face it now has.
+#[test]
+fn a_text_that_changes_face_is_centred_on_the_new_face() {
+    const BOX: f32 = 40.0;
+    add_bundled_faces();
     reset_layout_runtime();
-    let first =
-        TextStyle::new(13.0, Color::BLACK).with_font_family(renderer_core::FontFamily::Monospace);
+    let first = TextStyle::new(13.0, Color::BLACK)
+        .with_font_family(renderer_core::FontFamily::Named(DEEP_DESCENT.into()));
     let second = TextStyle::new(13.0, Color::BLACK)
         .with_font_family(renderer_core::FontFamily::Named("Telar Centred".into()));
     let fresh = line_in_box("Setup", 200.0, BOX, second.clone()).y;
@@ -259,28 +277,36 @@ fn text_lands_on_a_whole_pixel_row() {
     }
 }
 
-/// Nothing a text draws leaves its leaf: its whole line box is drawn from inside the top and its descenders stay above the bottom, even where the box is exactly one line tall and centring the cap band would push the line out through its top.
+/// Nothing a text draws leaves its leaf: its whole line box is drawn from inside the top and its descenders stay above the bottom, even where the box is exactly one line tall and centring the cap band would push the line out through its top, and whatever ascent and descent its face declares.
 #[test]
 fn nothing_is_drawn_outside_the_leaf() {
     const TALL: &str = "Agjpy";
+    add_bundled_faces();
     reset_layout_runtime();
-    for size in [11.0_f32, 13.0, 15.0, 24.0] {
-        let style = TextStyle::new(size, Color::BLACK);
-        let (_, one_line) = crate::text_metrics::measure_text(TALL, None, 200.0, &style);
-        let (ink_top, ink_height) = crate::text_metrics::measure_ink_bounds(TALL, 200.0, &style);
-        assert!(ink_height > 0.0, "{TALL} inks at {size}px");
-        for extra in [0.0_f32, 1.0, 2.0, 3.0, 7.0] {
-            let (line, leaf) = laid_in_box(TALL, 200.0, one_line + extra, style.clone());
-            assert!(
-                line.y >= 0.0 && line.height == one_line,
-                "at {size}px a {leaf}px leaf draws its whole line from its top down: {line:?}"
-            );
-            assert!(
-                line.y + ink_top >= 0.0 && line.y + ink_top + ink_height <= leaf + 0.01,
-                "at {size}px a {leaf}px leaf inks from {} to {}",
-                line.y + ink_top,
-                line.y + ink_top + ink_height
-            );
+    for family in [
+        renderer_core::FontFamily::SansSerif,
+        renderer_core::FontFamily::Named(HIGH_ASCENT.into()),
+        renderer_core::FontFamily::Named(DEEP_DESCENT.into()),
+    ] {
+        for size in [11.0_f32, 13.0, 15.0, 24.0] {
+            let style = TextStyle::new(size, Color::BLACK).with_font_family(family.clone());
+            let (_, one_line) = crate::text_metrics::measure_text(TALL, None, 200.0, &style);
+            let (ink_top, ink_height) =
+                crate::text_metrics::measure_ink_bounds(TALL, 200.0, &style);
+            assert!(ink_height > 0.0, "{TALL} inks at {size}px in {family:?}");
+            for extra in [0.0_f32, 1.0, 2.0, 3.0, 7.0] {
+                let (line, leaf) = laid_in_box(TALL, 200.0, one_line + extra, style.clone());
+                assert!(
+                    line.y >= 0.0 && line.height == one_line,
+                    "at {size}px in {family:?} a {leaf}px leaf draws its whole line from its top down: {line:?}"
+                );
+                assert!(
+                    line.y + ink_top >= 0.0 && line.y + ink_top + ink_height <= leaf + 0.01,
+                    "at {size}px in {family:?} a {leaf}px leaf inks from {} to {}",
+                    line.y + ink_top,
+                    line.y + ink_top + ink_height
+                );
+            }
         }
     }
 }
