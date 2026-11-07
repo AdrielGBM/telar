@@ -248,3 +248,21 @@ fn a_signature_reads_as_its_shape() {
         .rest(Pattern::Exact(Type::Number));
     assert_eq!(max.to_string(), "(number, …number) -> number");
 }
+
+#[test]
+fn a_source_longer_than_the_limit_is_refused_before_it_is_read() {
+    let longest = format!("{}1", " ".repeat(MAX_SOURCE_BYTES - 1));
+    assert_eq!(ty(&longest), Type::Number);
+    let error = compile(&format!("{longest} "), &environment, &Registry::standard())
+        .unwrap_err()
+        .into_first();
+    assert_eq!(
+        (error.kind, error.code),
+        (
+            ErrorKind::Syntax,
+            ErrorCode::SourceTooLong {
+                limit: MAX_SOURCE_BYTES
+            }
+        )
+    );
+}

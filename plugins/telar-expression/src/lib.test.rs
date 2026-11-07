@@ -157,3 +157,14 @@ fn the_error_says_where() {
     assert_eq!(error.kind, ErrorKind::Syntax);
     assert_eq!(error.span, Span::new(6, 13));
 }
+
+#[test]
+fn a_sum_longer_than_any_source_may_be_is_refused() {
+    let sum = vec!["1"; MAX_SOURCE_BYTES].join("+");
+    assert_eq!(
+        calculate(&sum).unwrap_err().code,
+        ErrorCode::SourceTooLong {
+            limit: MAX_SOURCE_BYTES
+        }
+    );
+}

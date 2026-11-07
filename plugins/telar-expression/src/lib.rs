@@ -1,6 +1,6 @@
 //! A small typed expression language: the formulas a user writes against an application's live readings — `fmt("{}%", round($battery.level))`, `if($media.playing, $theme.accent, #888)` — checked before they ever run, and bound to signals so each recomputes only when something it read moves.
 //!
-//! **Pure and total.** An expression reads values and computes one. It cannot run a command, touch a file or look at a clock, so an expression arriving in a shared bundle is safe to evaluate. Nor can it crash its host: every failure — a syntax error, a type mismatch, a division by zero at run time, a nesting deeper than [`MAX_DEPTH`] — is an [`Error`] carrying the [`Span`] it is about, which [`render`] draws with a caret under it.
+//! **Pure and total.** An expression reads values and computes one. It cannot run a command, touch a file or look at a clock, so an expression arriving in a shared bundle is safe to evaluate. Nor can it crash its host: every failure — a syntax error, a type mismatch, a division by zero at run time, a source longer than [`MAX_SOURCE_BYTES`], a nesting deeper than [`MAX_DEPTH`], an evaluation building more than [`MEMORY_BUDGET`] of texts and lists — is an [`Error`] carrying the [`Span`] it is about, which [`render`] draws with a caret under it.
 //!
 //! **The language.** Literals: numbers (`1_000`, `2.5e-3`), percentages (`10%`), texts (`"…"` or `'…'`, with `\n`, `\t`, `\\` and quote escapes), `true` and `false`, colours (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`) and lists (`{1, 2, 3}`). References: `$name` and `$name.path.to.field`, whatever the host declares. Operators from loosest to tightest: `||`; `&&`; `==` `!=`; `<` `<=` `>` `>=`; `+` `-`; `*` `/`; a leading `-`, `+` or `!`; `^`, right-associative and tighter than a leading minus, so `-2^2` is `-4`; and the postfix `%`. `+` also joins two texts. `(…)` and `[…]` both group. The conditional is `if(condition, then, else)`, which evaluates only the branch it takes, and `&&` and `||` short-circuit. Function, constant and keyword names ignore ASCII case.
 //!
@@ -27,6 +27,7 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 mod bind;
+mod budget;
 mod code;
 mod compile;
 mod error;
@@ -41,8 +42,9 @@ mod types;
 mod value;
 
 pub use bind::{Held, bind, bind_held};
+pub use budget::{Budget, MEMORY_BUDGET, TextWriter};
 pub use code::{Closing, Context, ErrorCode, Found, HostError, ValueKind};
-pub use compile::{Compiled, compile};
+pub use compile::{Compiled, MAX_SOURCE_BYTES, compile};
 pub use error::{Error, ErrorKind, Errors, render};
 pub use lexer::{is_identifier, references_in};
 pub use reference::{Closed, Environment, Reference, Resolver};
@@ -50,7 +52,7 @@ pub use registry::{Arguments, CallError, Constant, Function, Implementation, Reg
 pub use span::Span;
 pub use syntax::MAX_DEPTH;
 pub use types::{Pattern, Signature, Type};
-pub use value::{MAX_TEXT_BYTES, Value, format_number};
+pub use value::{Value, format_number};
 
 /// Evaluates `source` as a closed numeric expression — no references, the standard functions and constants — and answers the number, or the first thing wrong with it.
 ///

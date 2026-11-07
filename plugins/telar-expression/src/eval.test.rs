@@ -1,8 +1,8 @@
 use telar::Color;
 
 use crate::{
-    Closed, ErrorCode, ErrorKind, HostError, Pattern, Reference, Registry, Signature, Span, Type,
-    Value, compile,
+    Closed, ErrorCode, ErrorKind, HostError, MAX_SOURCE_BYTES, MEMORY_BUDGET, Pattern, Reference,
+    Registry, Signature, Span, Type, Value, compile,
 };
 
 fn run(source: &str) -> Result<Value, crate::Error> {
@@ -119,26 +119,96 @@ fn fmt_fills_placeholders_in_order_or_by_position() {
     assert!(run("fmt(\"{99999999999999999999999}\", 1)").is_err());
 }
 
-#[test]
-fn a_text_cannot_grow_without_bound() {
+const OVER_BUDGET: ErrorCode = ErrorCode::TooMuchMemory {
+    budget: MEMORY_BUDGET,
+};
+
+/// `"aaaaaaaa"` with eight more `a`s put between every character and at both ends, `times` over: each pass multiplies the text about ninefold.
+fn amplified(times: usize) -> String {
     let mut source = "\"aaaaaaaa\"".to_string();
-    for _ in 0..12 {
+    for _ in 0..times {
         source = format!("replace({source}, \"\", \"aaaaaaaa\")");
     }
+    source
+}
+
+#[test]
+fn nested_replace_cannot_amplify_a_text_past_the_budget() {
+    assert_eq!(failure(&amplified(12)).1, OVER_BUDGET);
     assert_eq!(
-        failure(&source).1,
-        ErrorCode::TextTooLong {
-            limit: crate::MAX_TEXT_BYTES
-        }
+        value(&format!("len({})", amplified(5))),
+        Value::Number(531_440.0),
+        "a large text that fits the budget still evaluates"
     );
-    let mut source = "\"x\"".to_string();
-    for _ in 0..25 {
-        source = format!("fmt(\"{{}}{{}}{{}}{{}}\", {source}, {source}, {source}, {source})");
-        if source.len() > 4096 {
-            break;
-        }
+}
+
+#[test]
+fn the_budget_is_shared_by_every_text_and_list_one_evaluation_builds() {
+    let half = amplified(5);
+    for source in [
+        format!("len({{{half}, {half}}})"),
+        format!("len({half} + {half})"),
+        format!("len(fmt(\"{{}}{{}}\", {half}, {half}))"),
+        format!("len(upper({half}) + lower({half}))"),
+        format!("len(substring({half}, 0) + trim({half}))"),
+    ] {
+        assert_eq!(failure(&source).1, OVER_BUDGET, "{source:.40}");
     }
-    let _ = run(&source);
+}
+
+#[test]
+fn a_list_as_long_as_the_source_allows_still_evaluates() {
+    let count = MAX_SOURCE_BYTES / "{1}, ".len() - 1;
+    let source = format!("len({{{}}})", vec!["{1}"; count].join(", "));
+    assert_eq!(value(&source), Value::Number(count as f64));
+}
+
+#[test]
+fn rendering_a_list_stops_where_it_crosses_the_budget() {
+    let item = "x".repeat(1024);
+    let reading =
+        Value::list((0..2 * MEMORY_BUDGET / item.len()).map(|_| Value::text(item.as_str())));
+    let environment = |_: &Reference| Ok(Type::list(Type::Text));
+    let registry = Registry::standard();
+    for source in ["fmt(\"{}\", $items)", "join($items, \"\")"] {
+        let error = compile(source, &environment, &registry)
+            .unwrap()
+            .evaluate(&|_: &Reference| Ok(reading.clone()))
+            .unwrap_err();
+        assert_eq!(error.code, OVER_BUDGET, "{source}");
+    }
+}
+
+#[test]
+fn a_host_function_draws_on_the_same_budget() {
+    let registry = Registry::standard().with(|registry| {
+        registry.function(
+            "repeat",
+            Signature::new(
+                [Pattern::Exact(Type::Text), Pattern::Exact(Type::Number)],
+                Type::Text,
+            ),
+            "The text written the given number of times",
+            |a| {
+                let text = a.text(0)?;
+                let mut out = a.budget().writer();
+                for _ in 0..a.number(1)? as usize {
+                    out.push_str(text)?;
+                }
+                Ok(out.finish())
+            },
+        );
+    });
+    let evaluate = |source: &str| {
+        compile(source, &Closed, &registry)
+            .unwrap()
+            .evaluate(&Closed)
+    };
+    assert_eq!(evaluate("repeat(\"ab\", 3)"), Ok(Value::text("ababab")));
+    assert_eq!(
+        evaluate("repeat(\"ab\", 1e12)").unwrap_err().code,
+        OVER_BUDGET
+    );
 }
 
 #[test]

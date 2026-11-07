@@ -7,8 +7,8 @@ use crate::registry::{Function, Implementation};
 use crate::syntax::{BinaryOp, Expr, ExprKind, UnaryOp, parse};
 use crate::types::Mismatch;
 use crate::{
-    Context, Environment, Error, ErrorCode, Errors, Pattern, Reference, Registry, Resolver, Span,
-    Type, Value, eval,
+    Budget, Context, Environment, Error, ErrorCode, Errors, Pattern, Reference, Registry, Resolver,
+    Span, Type, Value, eval,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,9 +105,9 @@ impl Compiled {
         &self.0.references
     }
 
-    /// Evaluates the expression against the current values `resolver` reads. Never panics: everything that can go wrong is an [`Error`] of kind [`crate::ErrorKind::Evaluation`].
+    /// Evaluates the expression against the current values `resolver` reads, within a fresh [`Budget`]. Never panics: everything that can go wrong is an [`Error`] of kind [`crate::ErrorKind::Evaluation`].
     pub fn evaluate(&self, resolver: &dyn Resolver) -> Result<Value, Error> {
-        eval::evaluate(&self.0.root, resolver)
+        eval::evaluate(&self.0.root, resolver, &Budget::new())
     }
 
     /// This expression, if its type can stand where `expected` is wanted — a property that takes a colour, a condition that must be a bool. The error covers the whole expression.
@@ -134,6 +134,9 @@ impl fmt::Debug for Compiled {
     }
 }
 
+/// The longest source [`compile`] accepts, in bytes. The tree it builds, and the literals and list items the evaluator copies out of it, grow with the source, so bounding it keeps both small beside [`crate::MEMORY_BUDGET`].
+pub const MAX_SOURCE_BYTES: usize = 1 << 14;
+
 /// Parses and type-checks `source`: references against `environment`, calls and constants against `registry`.
 ///
 /// A syntax error stops at the first one, since what follows it cannot be read reliably. Type errors are all reported, each at its own span, and a part that failed is not blamed again by what contains it.
@@ -142,6 +145,15 @@ pub fn compile(
     environment: &dyn Environment,
     registry: &Registry,
 ) -> Result<Compiled, Errors> {
+    if source.len() > MAX_SOURCE_BYTES {
+        return Err(Error::syntax(
+            Span::new(0, source.len()),
+            ErrorCode::SourceTooLong {
+                limit: MAX_SOURCE_BYTES,
+            },
+        )
+        .into());
+    }
     let expr = parse(source)?;
     let mut checker = Checker {
         environment,

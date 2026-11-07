@@ -163,6 +163,8 @@ pub enum ErrorCode {
     UnexpectedCharacter { found: char },
     /// A source with nothing in it.
     EmptyExpression,
+    /// A source longer than [`crate::MAX_SOURCE_BYTES`]; `limit` is that bound.
+    SourceTooLong { limit: usize },
     /// A complete expression followed by more.
     TrailingToken { found: Found },
     /// A closing symbol was needed; `expected` is the symbol.
@@ -252,8 +254,8 @@ pub enum ErrorCode {
     NoRealResult,
     /// An arithmetic result beyond what a number can hold.
     ResultTooLarge,
-    /// A text longer than [`crate::MAX_TEXT_BYTES`] would result; `limit` is that bound.
-    TextTooLong { limit: usize },
+    /// The evaluation would build more than [`crate::MEMORY_BUDGET`] bytes of texts and lists; `budget` is that bound.
+    TooMuchMemory { budget: usize },
     /// A value of another type reached an operation the checker had approved: a host's reading or function contradicting its declaration.
     MistypedValue,
     /// A function's argument that is not there.
@@ -287,6 +289,7 @@ impl ErrorCode {
             ErrorCode::LoneOperator { .. } => "lone_operator",
             ErrorCode::UnexpectedCharacter { .. } => "unexpected_character",
             ErrorCode::EmptyExpression => "empty_expression",
+            ErrorCode::SourceTooLong { .. } => "source_too_long",
             ErrorCode::TrailingToken { .. } => "trailing_token",
             ErrorCode::ExpectedClosing { .. } => "expected_closing",
             ErrorCode::ExpectedValue { .. } => "expected_value",
@@ -313,7 +316,7 @@ impl ErrorCode {
             ErrorCode::DivisionByZero => "division_by_zero",
             ErrorCode::NoRealResult => "no_real_result",
             ErrorCode::ResultTooLarge => "result_too_large",
-            ErrorCode::TextTooLong { .. } => "text_too_long",
+            ErrorCode::TooMuchMemory { .. } => "too_much_memory",
             ErrorCode::MistypedValue => "mistyped_value",
             ErrorCode::MissingArgument { .. } => "missing_argument",
             ErrorCode::ExpectedArgument { .. } => "expected_argument",
@@ -323,12 +326,6 @@ impl ErrorCode {
             ErrorCode::PositionNotWhole => "position_not_whole",
             ErrorCode::PositionOutside { .. } => "position_outside",
             ErrorCode::Host(_) => "host",
-        }
-    }
-
-    pub(crate) fn text_too_long() -> Self {
-        ErrorCode::TextTooLong {
-            limit: crate::MAX_TEXT_BYTES,
         }
     }
 }
@@ -361,6 +358,9 @@ impl fmt::Display for ErrorCode {
             }
             ErrorCode::UnexpectedCharacter { found } => write!(f, "`{found}` has no meaning here"),
             ErrorCode::EmptyExpression => f.write_str("the expression is empty"),
+            ErrorCode::SourceTooLong { limit } => {
+                write!(f, "the expression is longer than {limit} bytes")
+            }
             ErrorCode::TrailingToken { found } => {
                 write!(f, "{found} cannot follow a complete expression")
             }
@@ -471,8 +471,8 @@ impl fmt::Display for ErrorCode {
             ErrorCode::DivisionByZero => f.write_str("division by zero"),
             ErrorCode::NoRealResult => f.write_str("this has no real-number result"),
             ErrorCode::ResultTooLarge => f.write_str("the result is too large"),
-            ErrorCode::TextTooLong { limit } => {
-                write!(f, "the text would be longer than {limit} bytes")
+            ErrorCode::TooMuchMemory { budget } => {
+                write!(f, "the expression would build more than {budget} bytes")
             }
             ErrorCode::MistypedValue => {
                 f.write_str("a value of the wrong type reached this point")
