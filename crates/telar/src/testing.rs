@@ -21,7 +21,7 @@ use crate::{
 
 #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
 pub use renderer_dom::{CanvasTextMetrics, DomRenderer};
-pub use ui_core::reset_keyboard;
+pub use ui_core::{live_node_count, reset_keyboard};
 pub use ui_tree::set_element_capture;
 
 /// Where a surface is repainted going from the frame `old` to the frame `new`, in window space: the regions the renderers' shared diff damages, a scroll's whole clip where the change inside it only scrolled, and nothing where nothing visible changed. `None` where the change reaches the whole surface.

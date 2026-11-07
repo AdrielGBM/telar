@@ -4,7 +4,7 @@ use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use super::page::page;
 use crate::{NavHost, NavTransition, Navigator};
 
-#[derive(Clone, Copy, PartialEq, Eq, telar::PreviewArg)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, telar::PreviewArg)]
 pub(super) enum Screen {
     Inbox,
     Message,

@@ -1,6 +1,7 @@
 //! [`NavHost`]: the widget that renders whichever page a [`Navigator`](crate::Navigator) names, and keeps the pages behind it alive.
 
 use std::cell::RefCell;
+use std::fmt::Debug;
 use std::rc::Rc;
 
 use telar::motion::Animated;
@@ -20,7 +21,7 @@ type PageFactory<R> = dyn Fn(&R) -> Result<Box<dyn NavPage>, LayoutError>;
 /// What a built page is filed under — the runtime form of [`PagePolicy`].
 ///
 /// A stack only ever mutates at its top (`push`/`pop`/`replace`/`reset` truncate or touch the last entry), so an entry never changes position while it lives: its index is a stable identity, with no per-entry id to mint or to carry through a hot-reload snapshot. The route is part of the key so `replace`, which reuses the top index for a different destination, still rebuilds.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum PageKey<R> {
     /// [`PagePolicy::KeepAlive`]: one page per route, shared by every stack position naming it.
     Route(R),
@@ -76,12 +77,14 @@ struct Seen<R> {
     /// Stack depth at the last applied navigation, to tell a forward push from a back pop.
     prev_depth: usize,
     entrance: Option<Entrance<R>>,
+    /// The key whose page failed to build, so the reconcile that follows every event does not rebuild it until the navigator names another page.
+    failed_key: Option<PageKey<R>>,
 }
 
 /// A container that renders the top of a [`Navigator`]'s stack as a page.
 ///
 /// Pages are built lazily from a factory on first visit; what happens to one afterwards is the destination's [`PagePolicy`], set with [`set_policy_for`](Self::set_policy_for). A persistent destination is filed under its route and reused forever (a rail item, a tab); a stack destination is filed under its stack entry, so pushing builds and popping releases, and the same route pushed twice is two screens. All built pages live in one layout container; only the active one is [`set_display`]ed, so the rest take no space. A navigation change is reconciled against the navigator whenever the host is asked for either half of itself — an event or a view — and drives the optional [`NavTransition`] on the incoming page. See `Seen` for why one of those was not enough.
-pub struct NavHost<R: Clone + Eq + 'static> {
+pub struct NavHost<R: Clone + Debug + Eq + 'static> {
     nav: Navigator<R>,
     factory: Box<PageFactory<R>>,
     content_area: NodeId,
@@ -98,7 +101,7 @@ pub struct NavHost<R: Clone + Eq + 'static> {
     owner: Option<OwnerId>,
 }
 
-impl<R: Clone + Eq + 'static> NavHost<R> {
+impl<R: Clone + Debug + Eq + 'static> NavHost<R> {
     /// Starts a host over `nav`, building the page for its current route at once, so a factory error surfaces here rather than on the first navigation.
     pub fn new(
         nav: Navigator<R>,
@@ -123,6 +126,7 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
                 current_key: PageKey::Route(root.clone()),
                 prev_depth,
                 entrance: None,
+                failed_key: None,
             }),
             transition: NavTransition::None,
             policy: Box::new(|_| PagePolicy::default()),
@@ -136,7 +140,10 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
         };
         let key = host.key_for(&root);
         host.seen.borrow_mut().current_key = key.clone();
-        host.ensure_built(key)?;
+        if let Err(error) = host.ensure_built(key) {
+            remove_node(host.content_area);
+            return Err(error);
+        }
         host.refresh_display();
         Ok(host)
     }
@@ -205,7 +212,13 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
             drop(scope);
             (owner, page)
         });
-        let page = page?;
+        let page = match page {
+            Ok(page) => page,
+            Err(error) => {
+                dispose_owner(owner);
+                return Err(error);
+            }
+        };
         let node = page.layout_node();
         let mut seen = self.seen.borrow_mut();
         seen.pages.push(BuiltPage {
@@ -228,14 +241,19 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
     }
 
     /// Makes `route` the displayed page: build it if needed, toggle visibility, mark the container dirty (the runner's `relayout_if_dirty` re-lays the host-owned root — never `compute_layout` here), start the entrance animation, and run the page's enter/relayout hooks.
-    fn apply(&self, route: R) {
+    ///
+    /// Reports whether the page was built and shown. A build error is logged once and remembered, and leaves the previous page on screen.
+    fn apply(&self, route: R) -> bool {
         let new_depth = self.nav.depth();
         let key = self.key_for(&route);
-        if self.ensure_built(key.clone()).is_err() {
-            return;
+        if let Err(error) = self.ensure_built(key.clone()) {
+            tracing::error!(route = ?route, "the page could not be built, so the previous page stays: {error}");
+            self.seen.borrow_mut().failed_key = Some(key);
+            return false;
         }
         let forward = {
             let mut seen = self.seen.borrow_mut();
+            seen.failed_key = None;
             let forward = new_depth >= seen.prev_depth;
             seen.prev_depth = new_depth;
             seen.current = route.clone();
@@ -260,6 +278,7 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
         }
 
         self.prune();
+        true
     }
 
     /// Releases every entry-keyed page whose stack entry is gone — popped past, replaced, or reset away. Route-keyed pages ([`PagePolicy::KeepAlive`]) belong to the host and are never pruned.
@@ -298,11 +317,17 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
     fn settle(&self) -> bool {
         let top = self.nav.current();
         // Compared by key, not by route: pushing the route already on screen is still a new stack entry, and under [`PagePolicy::Transient`] that entry gets its own page.
-        if self.key_for(&top) == self.seen.borrow().current_key {
+        let key = self.key_for(&top);
+        let mut seen = self.seen.borrow_mut();
+        if key == seen.current_key {
+            seen.failed_key = None;
             return false;
         }
-        self.apply(top);
-        true
+        if seen.failed_key.as_ref() == Some(&key) {
+            return false;
+        }
+        drop(seen);
+        self.apply(top)
     }
 
     fn current_page(&self) -> Option<Rc<RefCell<Box<dyn NavPage>>>> {
@@ -343,7 +368,7 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
     }
 }
 
-impl<R: Clone + Eq + 'static> Component for NavHost<R> {
+impl<R: Clone + Debug + Eq + 'static> Component for NavHost<R> {
     fn view(&self) -> RenderNode {
         // Reconciled here as well as in `on_event`, and this is the half that catches everything else. Subscribing to the navigator makes this run again on every navigation, and settling first is what makes the page it renders the one the navigator names.
         self.settle();
@@ -376,13 +401,13 @@ impl<R: Clone + Eq + 'static> Component for NavHost<R> {
     }
 }
 
-impl<R: Clone + Eq + 'static> LayoutItem for NavHost<R> {
+impl<R: Clone + Debug + Eq + 'static> LayoutItem for NavHost<R> {
     fn layout_node(&self) -> NodeId {
         self.content_area
     }
 }
 
-impl<R: Clone + Eq + 'static> Drop for NavHost<R> {
+impl<R: Clone + Debug + Eq + 'static> Drop for NavHost<R> {
     /// Releases the owner [`new`](Self::new) minted, and every page owner under it. A host built outside any scope is a root with no ancestor to be uprooted by, so nothing else would ever free it.
     fn drop(&mut self) {
         if let Some(owner) = self.owner {

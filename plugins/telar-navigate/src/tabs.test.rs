@@ -328,3 +328,59 @@ fn tabs_are_reported_in_declaration_order() {
         "an active tab already in the set is left alone"
     );
 }
+
+/// Tab 1's pages cannot be built; every other tab builds normally.
+type BrokenTabs = (TabHost<u8, u8>, TabStacks<u8, u8>, Rc<RefCell<usize>>);
+
+fn build_with_a_broken_tab() -> BrokenTabs {
+    reset_layout_runtime();
+    let attempts = Rc::new(RefCell::new(0usize));
+    let stacks = TabStacks::new(signal(0u8), &[0, 1, 2], |tab| Navigator::new(*tab));
+    let factory = {
+        let attempts = attempts.clone();
+        move |tab: &u8, _route: &u8| {
+            if *tab == 1 {
+                *attempts.borrow_mut() += 1;
+                return Err(LayoutError::Engine("the tab cannot be built".into()));
+            }
+            let (node, _rect) = new_leaf(LayoutStyle::new())?;
+            Ok(Box::new(TestPage {
+                id: (*tab, 0),
+                node,
+                dropped: Rc::new(RefCell::new(Vec::new())),
+            }) as Box<dyn NavPage>)
+        }
+    };
+    let host = TabHost::new(stacks.clone(), factory).unwrap();
+    (host, stacks, attempts)
+}
+
+#[test]
+fn a_tab_that_fails_to_build_is_reported_as_not_moved_and_the_previous_tab_stays() {
+    let (mut host, stacks, _attempts) = build_with_a_broken_tab();
+
+    stacks.select(1);
+    assert!(!host.sync());
+    assert_eq!(host.current_tab(), 0);
+}
+
+#[test]
+fn a_tab_that_fails_to_build_is_not_retried_on_every_event_and_leaks_nothing() {
+    let (mut host, stacks, attempts) = build_with_a_broken_tab();
+    let before = telar::testing::live_node_count();
+
+    stacks.select(1);
+    for _ in 0..3 {
+        tick(&mut host);
+    }
+    assert_eq!(*attempts.borrow(), 1);
+    assert_eq!(telar::testing::live_node_count(), before);
+
+    stacks.select(2);
+    assert!(host.sync(), "another tab still opens");
+    stacks.select(0);
+    host.sync();
+    stacks.select(1);
+    host.sync();
+    assert_eq!(*attempts.borrow(), 2, "selecting it again is a new attempt");
+}

@@ -565,3 +565,99 @@ fn transition_wraps_the_incoming_page_while_animating() {
         "and a fade wraps it in a layer"
     );
 }
+
+struct BrokenBuild {
+    builds: Rc<RefCell<usize>>,
+    effect_runs: Rc<RefCell<usize>>,
+    source: telar::RwSignal<i32>,
+}
+
+/// A factory that builds route 0 normally and fails route 1 after the half-built page already registered an effect.
+fn failing_factory(
+    broken: &BrokenBuild,
+) -> impl Fn(&u8) -> Result<Box<dyn NavPage>, LayoutError> + use<> {
+    let (builds, runs, source) = (
+        broken.builds.clone(),
+        broken.effect_runs.clone(),
+        broken.source,
+    );
+    move |route: &u8| {
+        if *route == 0 {
+            let (node, _rect) = new_leaf(LayoutStyle::new())?;
+            return Ok(Box::new(EffectPage { node, _held: None }) as Box<dyn NavPage>);
+        }
+        *builds.borrow_mut() += 1;
+        let runs = runs.clone();
+        let _half_built = effect(move || {
+            source.get();
+            *runs.borrow_mut() += 1;
+        });
+        Err(LayoutError::Engine("the page cannot be built".into()))
+    }
+}
+
+fn broken_build() -> BrokenBuild {
+    reset_layout_runtime();
+    BrokenBuild {
+        builds: Rc::new(RefCell::new(0)),
+        effect_runs: Rc::new(RefCell::new(0)),
+        source: signal(0),
+    }
+}
+
+#[test]
+fn a_page_that_fails_to_build_is_reported_as_not_moved_and_the_previous_page_stays() {
+    let broken = broken_build();
+    let nav = Navigator::new(0u8);
+    let mut host = NavHost::new(nav, failing_factory(&broken)).unwrap();
+
+    nav.push(1);
+    assert!(!host.sync(), "a failed build did not move the user");
+    assert_eq!(host.current(), 0);
+}
+
+#[test]
+fn a_page_that_fails_to_build_is_not_rebuilt_on_every_event() {
+    let broken = broken_build();
+    let nav = Navigator::new(0u8);
+    let mut host = NavHost::new(nav, failing_factory(&broken)).unwrap();
+
+    nav.push(1);
+    for _ in 0..3 {
+        tick(&mut host);
+    }
+    assert_eq!(*broken.builds.borrow(), 1);
+
+    nav.pop();
+    tick(&mut host);
+    nav.push(1);
+    tick(&mut host);
+    assert_eq!(
+        *broken.builds.borrow(),
+        2,
+        "navigating there again is a new attempt"
+    );
+}
+
+#[test]
+fn a_page_that_fails_to_build_leaves_no_effect_running() {
+    let broken = broken_build();
+    let nav = Navigator::new(0u8);
+    let mut host = NavHost::new(nav, failing_factory(&broken)).unwrap();
+
+    nav.push(1);
+    tick(&mut host);
+    let after_failure = *broken.effect_runs.borrow();
+    broken.source.set(1);
+    assert_eq!(*broken.effect_runs.borrow(), after_failure);
+}
+
+#[test]
+fn a_host_whose_first_page_fails_to_build_frees_its_container() {
+    let broken = broken_build();
+    let before = telar::testing::live_node_count();
+    let nav = Navigator::new(1u8);
+
+    assert!(NavHost::new(nav, failing_factory(&broken)).is_err());
+    assert_eq!(telar::testing::live_node_count(), before);
+}
