@@ -164,37 +164,22 @@ fn the_pages_of_a_site_whose_addresses_carry_a_locale_fall_back_to_its_base_loca
 }
 
 #[test]
-fn the_binary_is_the_one_cargo_built_for_this_package() {
-    let manifest = std::env::temp_dir().join(format!(
-        "telar-prerender-binary-{}/Cargo.toml",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
-    std::fs::write(&manifest, "[package]\nname = \"site\"\n").unwrap();
-    let artifact = |manifest: &Path, name: &str, executable: Option<&str>| {
-        serde_json::json!({
-            "reason": "compiler-artifact",
-            "manifest_path": manifest,
-            "target": { "name": name, "kind": ["bin"] },
-            "executable": executable,
-        })
-        .to_string()
-    };
-    let messages = [
-        artifact(
-            Path::new("/elsewhere/Cargo.toml"),
-            "other",
-            Some("/t/other"),
-        ),
-        artifact(&manifest, "site", None),
-        artifact(&manifest, "tool", Some("/t/tool")),
-        artifact(&manifest, "site", Some("/t/site")),
-        "not json".to_string(),
-    ]
-    .join("\n");
+fn the_prerender_host_build_forwards_the_cargo_arguments_verbatim() {
+    let passthrough: Vec<String> = ["--package=site", "-r", "--features=analytics"]
+        .map(str::to_string)
+        .to_vec();
     assert_eq!(
-        executable_in(&messages, &manifest),
-        Some(PathBuf::from("/t/site"))
+        host_binary_args(&passthrough, &["--no-default-features".to_string()]),
+        [
+            "build",
+            "--bins",
+            "--package=site",
+            "-r",
+            "--features=analytics",
+            "--no-default-features",
+            "--features",
+            "telar/prerender",
+            "--message-format=json",
+        ]
     );
-    let _ = std::fs::remove_dir_all(manifest.parent().unwrap());
 }

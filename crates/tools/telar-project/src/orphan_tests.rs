@@ -117,17 +117,14 @@ fn attribute_paths(tokens: &[Token]) -> Vec<&str> {
 
 /// The `path` of every `[[test]]`, `[[bench]]`, `[[example]]` and `[[bin]]` target of the package's `Cargo.toml`, which cargo compiles as crate roots of their own.
 fn cargo_target_paths(package_dir: &Path) -> Vec<PathBuf> {
-    let Ok(text) = std::fs::read_to_string(package_dir.join("Cargo.toml")) else {
+    let Some(manifest) = crate::CargoManifest::read(package_dir) else {
         return Vec::new();
     };
-    let Ok(manifest) = text.parse::<toml::Table>() else {
-        return Vec::new();
-    };
-    ["test", "bench", "example", "bin"]
-        .iter()
-        .filter_map(|kind| manifest.get(*kind)?.as_array())
-        .flatten()
-        .filter_map(|target| target.get("path")?.as_str())
+    manifest
+        .declared_target_paths()
+        .into_iter()
+        .filter(|(kind, _)| *kind != crate::TargetKind::Lib)
+        .map(|(_, path)| path)
         .map(|path| normalized(&package_dir.join(path)))
         .collect()
 }

@@ -44,6 +44,7 @@ pub use build::{
     generated_dir, read_build_failure, read_build_index, relative_source, write_build_failure,
     write_build_index,
 };
+pub use cargo_manifest::{CargoManifest, TargetKind};
 pub use catalog::{
     CATALOG_ARTIFACT_FORMAT, CATALOG_INDEX_FILENAME, CATALOG_SOURCE_FILENAME, CatalogContext,
     CatalogEntry, CatalogIndex, CatalogSourceFile, I18N_CATALOG_PATH, I18N_MODULE,

@@ -1,10 +1,11 @@
 //! `cargo telar dev`: the watch loop, the rebuild, and the hot-reload channel to the running app.
 
 use std::collections::VecDeque;
+use std::env::consts::DLL_EXTENSION;
 use std::io::{BufRead, BufReader};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -18,65 +19,24 @@ use telar_project::{
 };
 
 use super::android::{android_install_and_launch, make_android_cmd};
+use super::artifacts::{self, build_with_diagnostics, with_json_messages};
 use super::config::{
     ResolvedPackage, TelarSection, WindowSection, backend_as_str, missing_devtools_note,
     resolve_package, split_android_flag, warn_if_tooling_unlocked,
 };
-use super::diagnostics;
-use super::package::{package_bin_path, package_lib_path, profile_of};
 use super::workshop_channel::WorkshopChannel;
 
 fn inject_feature(args: &mut Vec<String>, feature: &str) {
-    if let Some(pos) = args.iter().position(|a| a == "--features" || a == "-F")
-        && pos + 1 < args.len()
-    {
-        args[pos + 1] = format!("{},{feature}", args[pos + 1]);
-        return;
-    }
     args.push("--features".to_string());
     args.push(feature.to_string());
 }
 
-/// Runs a cargo build and re-points whatever it says about generated Rust back onto the `.rsx` it came from.
-///
-/// stdout carries the JSON diagnostic stream and is consumed here; stderr is cargo's own progress and is left on the terminal, so a build still looks like a build. Every build goes through this, not only the failing ones — warnings used to be captured into a `String` that was read on the failure path alone, which made them invisible for a whole development session.
-fn build_with_diagnostics(cmd: &mut Command) -> (bool, diagnostics::Report) {
-    cmd.arg("--color=always")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
-    let mut child = cmd.spawn().expect("[cargo-telar] failed to invoke cargo");
-    // Drained before `wait`, or a report larger than the pipe buffer deadlocks the build it is reading.
-    let report = match child.stdout.take() {
-        Some(stdout) => diagnostics::collect(BufReader::new(stdout)),
-        None => diagnostics::Report::default(),
-    };
-    let succeeded = child.wait().map(|status| status.success()).unwrap_or(false);
-    (succeeded, report)
-}
-
-/// Adds `--message-format=json` unless the caller already chose a format, which cargo would reject as two of them rather than honour the later one.
-fn with_json_messages(args: &mut Vec<String>) {
-    if !args.iter().any(|a| a.starts_with("--message-format")) {
-        args.push("--message-format=json".to_string());
-    }
-}
-
 /// The dylib build, from the binary's own invocation.
 ///
-/// Every flag that decides a feature has to come along: the two halves are swapped into one process, and a dylib built from another feature set is an application the host cannot drive. It used to copy `-p` and `--release` alone, so `--target tui` or a `-F` on the command line reached the binary and not the library beside it.
+/// Every argument comes along verbatim: the two halves are swapped into one process, and a dylib built from another feature set is an application the host cannot drive. It used to copy the flags it recognised, so `--target tui`, a `-F` on the command line or anything after `--` reached the binary and not the library beside it.
 fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
     let mut lib_build_args = vec!["build".to_string(), "--lib".to_string()];
-    for pair in args.windows(2) {
-        if ["-p", "--package", "--features", "-F"].contains(&pair[0].as_str()) {
-            lib_build_args.push(pair[0].clone());
-            lib_build_args.push(pair[1].clone());
-        }
-    }
-    for flag in ["--release", "--no-default-features"] {
-        if args.iter().any(|arg| arg == flag) {
-            lib_build_args.push(flag.to_string());
-        }
-    }
+    lib_build_args.extend(args.iter().cloned());
     for feature in features {
         inject_feature(&mut lib_build_args, feature);
     }
@@ -682,6 +642,7 @@ pub(crate) fn idle() -> ! {
 
 /// The app the hot-reload loop runs: the binary and what it is started with.
 struct HotLaunch {
+    package_dir: PathBuf,
     bin_path: PathBuf,
     lib_path: PathBuf,
     args: Vec<String>,
@@ -696,6 +657,7 @@ fn watch_and_hot_reload(
     changes: ChangeFeed<WatchSet>,
 ) -> ! {
     let HotLaunch {
+        package_dir,
         bin_path,
         lib_path,
         args,
@@ -757,15 +719,21 @@ fn watch_and_hot_reload(
             cmd.args(&build_args)
                 .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
             let (succeeded, report) = build_with_diagnostics(&mut cmd);
-            if !report.is_empty() {
-                eprintln!();
-                eprint!("{}", report.render(true));
-            }
-            if succeeded {
-                channel.notify_hot_reload(lib_path.to_str().unwrap_or_default());
-            } else {
-                eprintln!("[cargo-telar] Build failed, waiting for changes...");
-                channel.notify_build_error(&report.render(false));
+            match (
+                succeeded,
+                artifacts::cdylib(report.artifacts(), &package_dir, DLL_EXTENSION),
+            ) {
+                (true, Some(rebuilt)) => {
+                    channel.notify_hot_reload(rebuilt.to_str().unwrap_or_default());
+                }
+                (true, None) => eprintln!(
+                    "[cargo-telar] The rebuild succeeded but cargo reported no dynamic library for the package in {}, so nothing was reloaded.",
+                    package_dir.display()
+                ),
+                (false, _) => {
+                    eprintln!("[cargo-telar] Build failed, waiting for changes...");
+                    channel.notify_build_error(&report.render(false));
+                }
             }
         }
 
@@ -1003,7 +971,6 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     }
 
     let workspace_root = resolved.workspace_root.clone();
-    let profile = profile_of(&rest);
 
     // Gated on the manifest rather than the built artifact: the dylib build differs in both RUSTFLAGS and generated sources, so running it for a package that can never produce one compiles the crate graph twice per `cargo telar dev` and leaves each half stale.
     let hot_reload = !no_hot_reload && resolved.produces_cdylib;
@@ -1041,10 +1008,6 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
 
     if hot_reload {
         let hot_features = with_tooling(mode.hot_features(), &tooling);
-        let package_name = resolved.name();
-        let lib_path = package_lib_path(&workspace_root, &package_name, profile);
-        let bin_path = package_bin_path(&workspace_root, &package_name, profile);
-
         let mut build_args = vec!["build".to_string()];
         build_args.extend(rest.clone());
         for feature in &hot_features {
@@ -1058,27 +1021,32 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
                 // `telar`'s backend is resolved with `option_env!` and so is a tracked build input: omitting it would compile a different backend than the hot rebuilds.
                 .env("TELAR_RENDERER_BACKEND", backend_value);
             let (succeeded, report) = build_with_diagnostics(&mut build_cmd);
-            if !report.is_empty() {
-                eprintln!();
-                eprint!("{}", report.render(true));
-            }
-            succeeded
+            succeeded.then_some(report)
         };
         eprintln!("[cargo-telar] Building...");
-        if !build_app() {
-            eprintln!("[cargo-telar] Initial build failed. Watching for changes...");
-            rebuild_until_built(&changes, || {
-                super::bake::bake_workspace();
-                super::transpile::transpile_workspace();
-                build_app()
-            });
-        }
+        let report = match build_app() {
+            Some(report) => report,
+            None => {
+                eprintln!("[cargo-telar] Initial build failed. Watching for changes...");
+                rebuild_until_built(&changes, || {
+                    super::bake::bake_workspace();
+                    super::transpile::transpile_workspace();
+                    build_app()
+                })
+            }
+        };
 
-        if bin_path.exists() && lib_path.exists() {
-            let lib_build_args = make_lib_build_args(&rest, &hot_features);
-            watch_and_hot_reload(
-                lib_build_args,
+        let built = report.artifacts();
+        let package_dir = resolved.package_dir.clone();
+        let lib_path = artifacts::cdylib(built, &package_dir, DLL_EXTENSION);
+        match (
+            artifacts::binary(built, &package_dir, resolved.default_run.as_deref()),
+            lib_path,
+        ) {
+            (Ok(bin_path), Some(lib_path)) => watch_and_hot_reload(
+                make_lib_build_args(&rest, &hot_features),
                 HotLaunch {
+                    package_dir,
                     bin_path,
                     lib_path,
                     args: app_args,
@@ -1087,13 +1055,15 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
                 HotChannel::bind(),
                 workshop,
                 changes,
-            );
+            ),
+            (Err(e), _) => eprintln!(
+                "[cargo-telar] Hot reload off: the build succeeded, but {e} Restarting the process on change instead."
+            ),
+            (Ok(_), None) => eprintln!(
+                "[cargo-telar] Hot reload off: the build succeeded, but cargo reported no dynamic library for the package in {}. Restarting the process on change instead.",
+                package_dir.display()
+            ),
         }
-        eprintln!(
-            "[cargo-telar] Hot reload off: the build succeeded but left no {} or no {} to load. Restarting the process on change instead.",
-            bin_path.display(),
-            lib_path.display()
-        );
     }
 
     // An app restarted on every change has no channel to hand a request on, so a later invocation is left to open a workshop of its own.
@@ -1102,13 +1072,16 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
 }
 
 /// Rebuilds on every change until `rebuild` succeeds, so a session whose first build failed starts the app with hot reload once the error is fixed, instead of falling back to restarts for good.
-fn rebuild_until_built(changes: &ChangeFeed<impl WatchScope>, mut rebuild: impl FnMut() -> bool) {
+fn rebuild_until_built<T>(
+    changes: &ChangeFeed<impl WatchScope>,
+    mut rebuild: impl FnMut() -> Option<T>,
+) -> T {
     loop {
         changes.wait();
         changes.settle(DEBOUNCE);
         eprintln!("[cargo-telar] Change detected, rebuilding...");
-        if rebuild() {
-            return;
+        if let Some(built) = rebuild() {
+            return built;
         }
         eprintln!("[cargo-telar] Build failed, waiting for changes...");
     }

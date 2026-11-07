@@ -113,7 +113,7 @@ fn a_warning_is_not_silently_swallowed() {
     let report = collect(message_line(&root, "warning", "unused variable: `unused`", 2).as_bytes());
 
     assert!(
-        !report.is_empty(),
+        report.has_diagnostics(),
         "a warning must reach the report, not be swallowed"
     );
     assert!(!report.has_errors(), "a warning does not fail the build");
@@ -153,6 +153,7 @@ fn a_missing_source_file_still_reports_the_diagnostic() {
             notes: vec![],
         }],
         passthrough: vec![],
+        artifacts: vec![],
     };
     let text = report.render(false);
     assert!(text.contains("error: mismatched types"), "{text}");

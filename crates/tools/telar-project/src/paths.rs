@@ -94,24 +94,16 @@ pub fn find_workspace_root(start: &Path) -> Option<PathBuf> {
 
 /// The package directories of the workspace rooted at `workspace_root`: the root itself when its manifest is a package too, then every `members` entry that holds a `Cargo.toml`. A lone package with no `[workspace]` is its own only member.
 pub fn workspace_member_dirs(workspace_root: &Path) -> Vec<PathBuf> {
-    let manifest = std::fs::read_to_string(workspace_root.join("Cargo.toml"))
-        .ok()
-        .and_then(|content| content.parse::<toml::Table>().ok());
+    let manifest = crate::CargoManifest::read(workspace_root);
     let mut dirs = Vec::new();
     let mut has_workspace = false;
     if let Some(manifest) = manifest {
-        if manifest.contains_key("package") {
+        if manifest.package_name().is_some() {
             dirs.push(workspace_root.to_path_buf());
         }
-        if let Some(workspace) = manifest.get("workspace") {
+        if manifest.is_workspace() {
             has_workspace = true;
-            let patterns = workspace
-                .get("members")
-                .and_then(toml::Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(toml::Value::as_str);
-            for pattern in patterns {
+            for pattern in manifest.workspace_members() {
                 dirs.extend(
                     expand_member(workspace_root, pattern)
                         .into_iter()
@@ -147,13 +139,7 @@ fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
 }
 
 fn is_workspace_root_dir(dir: &Path) -> bool {
-    let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
-        return false;
-    };
-    content
-        .parse::<toml::Table>()
-        .map(|table| table.contains_key("workspace"))
-        .unwrap_or(false)
+    crate::CargoManifest::read(dir).is_some_and(|manifest| manifest.is_workspace())
 }
 
 /// Writes `content` to `path`, but only when it differs, and via a same-directory temp file plus rename. Both artifacts under `.telar/` need both guarantees: an unchanged write would retrigger rustc and the editor's file watcher for nothing, and a half-written file is something a concurrent reader can observe — the analyzer and the CLI legitimately race to bake the same package.

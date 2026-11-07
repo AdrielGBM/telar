@@ -6,6 +6,7 @@ use std::process::Command;
 use telar_project::{FontDeclaration, PageLocation, WebHost, WebSection};
 
 use super::{dist_dir, tool_missing};
+use crate::runner::artifacts::{self, build_with_diagnostics, with_json_messages};
 use crate::runner::cli::{Target, WebRenderer};
 use crate::runner::config::{
     TelarSection, WEB_PROFILE_TOML, find_package_dir, has_web_profile, resolve_package,
@@ -130,46 +131,25 @@ pub(crate) fn build_web_site(
         ));
     }
 
-    let mut build_args = vec![
-        "build".to_string(),
-        "--target".to_string(),
-        WASM_TARGET.to_string(),
-        // The browser loads a module, not an executable: the `[lib]` target is what carries the app.
-        "--lib".to_string(),
-    ];
-    build_args.extend(rest.iter().filter(|a| *a != "--release").cloned());
-    if release {
-        // Not `--release`: a module travels a network before it runs, and `[profile.web]` is release tuned for that rather than for a machine that already has the code.
-        build_args.push("--profile".to_string());
-        build_args.push(WEB_PROFILE.to_string());
-    }
     // The renderers a window needs are not target-gated, so a default left on brings wgpu and a glyph shaper into a page that calls neither.
     let mut frontend = Vec::new();
     resolved
         .frontend_feature(Target::Web.feature(renderer))
         .push_to(&mut frontend);
-    build_args.extend(frontend.iter().cloned());
+    let build_args = wasm_build_args(&rest, release, &frontend);
 
     eprintln!("[cargo-telar] Building the wasm module...");
-    let status = Command::new("cargo")
-        .args(&build_args)
-        .status()
-        .map_err(|e| format!("failed to invoke cargo: {e}"))?;
-    if !status.success() {
+    let (succeeded, report) = build_with_diagnostics(Command::new("cargo").args(&build_args));
+    if !succeeded {
         return Err("the wasm build failed".to_string());
     }
 
-    let profile = if release { WEB_PROFILE } else { "debug" };
-    let module = telar_project::find_target_dir(&resolved.workspace_root)
-        .join(WASM_TARGET)
-        .join(profile)
-        .join(format!("{}.wasm", resolved.name().replace('-', "_")));
-    if !module.exists() {
-        return Err(format!(
-            "the build produced no wasm module at {}. Does this package have a `[lib]` target?",
-            module.display()
-        ));
-    }
+    let module = artifacts::cdylib(report.artifacts(), &resolved.package_dir, "wasm").ok_or_else(|| {
+        format!(
+            "cargo reported no wasm module for the package in {}. Does it have a `[lib]` target with `crate-type = [\"cdylib\"]`?",
+            resolved.package_dir.display()
+        )
+    })?;
 
     recreate_dir(&staging)?;
 
@@ -194,8 +174,7 @@ pub(crate) fn build_web_site(
     let pages = match &build.pages {
         SitePlan::Root => SitePages::root_only(),
         SitePlan::Prerendered => {
-            let binary =
-                prerender::build_host_binary(&rest, &frontend, &package_root.join("Cargo.toml"))?;
+            let binary = prerender::build_host_binary(&rest, &frontend, &resolved)?;
             let pages = prerender::write_pages(
                 &staging,
                 &page,
@@ -242,6 +221,26 @@ pub(crate) fn build_web_site(
     }
     publish(&staging, &out)?;
     Ok(out)
+}
+
+/// The arguments of the cargo build that makes the module: `cargo_args` as given, then the target, the profile and the `frontend`.
+fn wasm_build_args(cargo_args: &[String], release: bool, frontend: &[String]) -> Vec<String> {
+    let mut args = vec![
+        "build".to_string(),
+        "--target".to_string(),
+        WASM_TARGET.to_string(),
+        // The browser loads a module, not an executable: the `[lib]` target is what carries the app.
+        "--lib".to_string(),
+    ];
+    args.extend(cargo_args.iter().cloned());
+    if release {
+        // Not `--release`: a module travels a network before it runs, and `[profile.web]` is release tuned for that rather than for a machine that already has the code.
+        args.push("--profile".to_string());
+        args.push(WEB_PROFILE.to_string());
+    }
+    args.extend(frontend.iter().cloned());
+    with_json_messages(&mut args);
+    args
 }
 
 /// The paths a build writes itself, which a public file of the same name would collide with.

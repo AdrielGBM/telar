@@ -25,13 +25,13 @@ telar-transpiler = { workspace = true, features = ["transpile"] }
 
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-toml = { workspace = true }
 
 [dev-dependencies]
 # Only to ask which formats it decodes, for the test that holds `ASSET_KINDS` to it. `default-features = false`
 # because the answer must be whatever `renderer-assets` turned on, which cargo unifies into this same build —
 # naming the formats again here would be a second list to keep in step, which is the bug the test exists to catch.
 image = { workspace = true }
+toml = { workspace = true }
 
 [[test]]
 name = "formats"

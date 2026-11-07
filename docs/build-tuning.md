@@ -133,7 +133,7 @@ a line of source.
 
 ```sh
 cargo run -q -p cargo-telar -- transpile
-cargo run -q -p cargo-telar -- build --target web --renderer dom -p landing -- --release
+cargo run -q -p cargo-telar -- build --target web --renderer dom -p landing
 ls -la target/telar-dist/web/$(jq -r '."app_bg.wasm"' target/telar-dist/web/asset-manifest.json)*
 ```
 

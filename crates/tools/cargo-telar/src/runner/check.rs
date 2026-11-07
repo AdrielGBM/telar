@@ -74,7 +74,7 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
     report.add_all_prelude_problems();
     report.add_all_previews_include_problems();
 
-    if !report.is_empty() {
+    if report.has_diagnostics() {
         eprintln!();
         eprint!("{}", report.render(true));
     }

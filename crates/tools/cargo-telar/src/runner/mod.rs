@@ -10,7 +10,9 @@ use telar_project::protocol::{
 };
 
 mod android;
+mod artifacts;
 mod bake;
+mod cargo_args;
 mod check;
 mod cli;
 mod config;
@@ -152,7 +154,9 @@ impl BuildPlan {
             renderer,
             cargo_args: extra,
         } = common;
-        let mut cargo_args = build_cargo_args(&package, release, &features);
+        // A browser build spells release as `--profile web` itself, which cargo refuses beside `--release`.
+        let cargo_release = release && target != Some(Target::Web);
+        let mut cargo_args = build_cargo_args(&package, cargo_release, &features);
         cargo_args.extend(extra);
         if matches!(target, Some(Target::Android)) {
             cargo_args.push("--android".to_string());

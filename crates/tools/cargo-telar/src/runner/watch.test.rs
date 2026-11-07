@@ -157,32 +157,37 @@ fn the_dev_loop_names_no_frontend_of_its_own() {
     );
 }
 
-/// The two halves are swapped into one process, so a dylib built from another feature set is an application the host cannot drive. Only `-p` and `--release` used to come across.
+/// The two halves are swapped into one process, so a dylib built from another feature set or profile is an application the host cannot drive. Only the flags it recognised used to come across, so `-- --all-features` or `-- -r` reached the binary alone.
 #[test]
-fn the_dylib_is_built_with_the_binarys_features() {
+fn the_dylib_is_built_with_every_argument_the_binary_was() {
     let args = [
-        "-p",
-        "sandbox",
+        "--package=sandbox",
         "--no-default-features",
-        "--features",
-        "sandbox/tui",
+        "--features=sandbox/tui",
+        "--all-features",
+        "--profile",
+        "dist",
     ]
     .map(str::to_string);
 
     let lib_args = make_lib_build_args(&args, &["telar/dev"]);
 
-    assert!(
-        lib_args.contains(&"--no-default-features".to_string()),
-        "{lib_args:?}"
+    assert_eq!(
+        lib_args,
+        [
+            "build",
+            "--lib",
+            "--package=sandbox",
+            "--no-default-features",
+            "--features=sandbox/tui",
+            "--all-features",
+            "--profile",
+            "dist",
+            "--features",
+            "telar/dev",
+            "--message-format=json",
+        ]
     );
-    let features = lib_args
-        .iter()
-        .position(|arg| arg == "--features")
-        .and_then(|pos| lib_args.get(pos + 1))
-        .cloned()
-        .unwrap_or_default();
-    assert!(features.contains("sandbox/tui"), "{lib_args:?}");
-    assert!(features.contains("telar/dev"), "{lib_args:?}");
 }
 
 #[test]
@@ -283,7 +288,9 @@ fn a_web_preview_builds_the_preview_host_and_the_workshop_alone() {
             "-p",
             "catalogue",
             "--features",
-            "telar/preview,catalogue/telar-workshop"
+            "telar/preview",
+            "--features",
+            "catalogue/telar-workshop"
         ]
     );
     let dev = ["-p", "catalogue"].map(str::to_string).to_vec();
@@ -489,9 +496,9 @@ fn a_failed_first_build_is_retried_on_each_change_until_one_succeeds() {
         attempts += 1;
         if attempts == 1 {
             tx.send(Ok(modified(Path::new("/p/src/lib.rs")))).unwrap();
-            return false;
+            return None;
         }
-        true
+        Some(())
     });
     assert_eq!(attempts, 2);
 }

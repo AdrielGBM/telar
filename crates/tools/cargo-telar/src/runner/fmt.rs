@@ -118,10 +118,11 @@ fn source_roots(package: &Path) -> Vec<PathBuf> {
     if build_script.is_file() {
         roots.push(build_script);
     }
-    let manifest = std::fs::read_to_string(package.join("Cargo.toml"))
-        .ok()
-        .and_then(|text| text.parse::<toml::Table>().ok());
-    for declared in manifest.iter().flat_map(declared_paths) {
+    let manifest = telar_project::CargoManifest::read(package);
+    let declared = manifest
+        .iter()
+        .flat_map(telar_project::CargoManifest::declared_target_paths);
+    for (_, declared) in declared {
         let path = package.join(declared);
         if roots.iter().any(|root| path.starts_with(root)) {
             continue;
@@ -131,22 +132,6 @@ fn source_roots(package: &Path) -> Vec<PathBuf> {
         }
     }
     roots
-}
-
-fn declared_paths(manifest: &toml::Table) -> Vec<String> {
-    let path_of = |table: &toml::Value| {
-        table
-            .get("path")
-            .and_then(toml::Value::as_str)
-            .map(str::to_string)
-    };
-    let mut paths: Vec<String> = manifest.get("lib").and_then(path_of).into_iter().collect();
-    for kind in ["bin", "test", "example", "bench"] {
-        if let Some(targets) = manifest.get(kind).and_then(toml::Value::as_array) {
-            paths.extend(targets.iter().filter_map(path_of));
-        }
-    }
-    paths
 }
 
 /// Formats one file, reporting whether it changed. `check` reads and compares without writing.

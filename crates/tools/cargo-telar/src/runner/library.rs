@@ -366,8 +366,10 @@ pub(super) fn missing_from_package(library: &Member, listed: &BTreeSet<String>) 
         library.name,
         listing(&missing)
     );
-    match declared_include(&manifest) {
-        Some(_) => message.push_str(&format!(
+    let declares_include = telar_project::CargoManifest::read(&library.dir)
+        .is_some_and(|manifest| manifest.include().is_some());
+    match declares_include {
+        true => message.push_str(&format!(
             "\nAdd to `include` under `[package]` in {}:\n{}",
             manifest.display(),
             entries
@@ -376,7 +378,7 @@ pub(super) fn missing_from_package(library: &Member, listed: &BTreeSet<String>) 
                 .collect::<Vec<_>>()
                 .join("\n")
         )),
-        None => message.push_str(&format!(
+        false => message.push_str(&format!(
             "\n{} declares no `include`, and without one cargo leaves every dot-directory out of a package, `.telar/` among them. Add under `[package]`, keeping any other file the package needs, such as a build script, in the list:\n{}",
             manifest.display(),
             include_block()
@@ -392,17 +394,6 @@ pub(super) fn include_block() -> String {
         .map(|entry| format!("    \"{entry}\","))
         .collect();
     format!("include = [\n{}\n]", entries.join("\n"))
-}
-
-fn declared_include(manifest: &Path) -> Option<Vec<String>> {
-    let table: toml::Table = std::fs::read_to_string(manifest).ok()?.parse().ok()?;
-    let include = table.get("package")?.get("include")?.as_array()?;
-    Some(
-        include
-            .iter()
-            .filter_map(|entry| entry.as_str().map(str::to_string))
-            .collect(),
-    )
 }
 
 fn listing(files: &[String]) -> String {

@@ -112,19 +112,7 @@ pub fn module_name_diagnostics(rsx_path: &Path) -> Vec<telar_diagnostics::Diagno
 
 /// The name `CARGO_CRATE_NAME` gives the library of the package at `package_root`, which is what the generated preview ids start with: its `[lib] name` or else its package name, with `-` spelled `_`.
 pub fn crate_name(package_root: &Path) -> Option<String> {
-    let manifest: toml::Table = std::fs::read_to_string(package_root.join("Cargo.toml"))
-        .ok()?
-        .parse()
-        .ok()?;
-    let named = |table: &str| {
-        manifest
-            .get(table)
-            .and_then(|table| table.get("name"))
-            .and_then(toml::Value::as_str)
-    };
-    named("lib")
-        .or_else(|| named("package"))
-        .map(|name| name.replace('-', "_"))
+    telar_project::CargoManifest::read(package_root)?.lib_name()
 }
 
 fn scan_project_theme_fields(root: &Path, type_name: &str) -> HashSet<String> {

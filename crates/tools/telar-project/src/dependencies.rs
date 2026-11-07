@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use crate::cargo_manifest::{dependency_tables, read_manifest};
+use crate::CargoManifest;
 
 /// The devtools overlay `cargo telar dev` turns on, as the application's `Cargo.toml` names it and as the feature of the same name.
 pub const DEVTOOLS_PACKAGE: &str = "telar-devtools";
@@ -17,7 +17,7 @@ pub const WORKSHOP_PACKAGE: &str = "telar-workshop";
 ///
 /// The feature has to be one that turns the dependency on, or code gated on it would name a crate the build never compiled. Before the 2024 edition, Cargo gives an optional dependency an implicit feature of its own name unless some feature activates it as `dep:<name>`; from 2024 on, only an explicit feature exists, which is what `cargo add --optional` writes.
 pub fn declares_optional_dependency(package_dir: &Path, dependency: &str) -> bool {
-    let Some(manifest) = read_manifest(package_dir) else {
+    let Some(manifest) = CargoManifest::read(package_dir) else {
         return false;
     };
     let implicit_features = edition(&manifest, package_dir).is_some_and(|edition| edition < 2024);
@@ -25,14 +25,15 @@ pub fn declares_optional_dependency(package_dir: &Path, dependency: &str) -> boo
 }
 
 /// The package's edition, through `edition.workspace = true` when it inherits one, and 2015 when it names none. `None` when an inherited edition cannot be found.
-fn edition(manifest: &toml::Table, package_dir: &Path) -> Option<u32> {
-    let declared = manifest.get("package")?.get("edition");
+fn edition(manifest: &CargoManifest, package_dir: &Path) -> Option<u32> {
+    let declared = manifest.table().get("package")?.get("edition");
     let spelled = match declared {
         None => return Some(2015),
         Some(toml::Value::String(edition)) => edition.clone(),
         Some(_) => {
             let root = crate::find_workspace_root(package_dir)?;
-            read_manifest(&root)?
+            CargoManifest::read(&root)?
+                .table()
                 .get("workspace")?
                 .get("package")?
                 .get("edition")?
@@ -43,11 +44,12 @@ fn edition(manifest: &toml::Table, package_dir: &Path) -> Option<u32> {
     spelled.parse().ok()
 }
 
-fn declares(manifest: &toml::Table, implicit_features: bool, dependency: &str) -> bool {
+fn declares(manifest: &CargoManifest, implicit_features: bool, dependency: &str) -> bool {
     if !is_optional_dependency(manifest, dependency) {
         return false;
     }
     let features = manifest
+        .table()
         .get("features")
         .and_then(toml::Value::as_table)
         .cloned()
@@ -63,8 +65,9 @@ fn declares(manifest: &toml::Table, implicit_features: bool, dependency: &str) -
     enabled_by(&features, dependency).contains(&activation)
 }
 
-fn is_optional_dependency(manifest: &toml::Table, dependency: &str) -> bool {
-    dependency_tables(manifest, "dependencies")
+fn is_optional_dependency(manifest: &CargoManifest, dependency: &str) -> bool {
+    manifest
+        .dependency_tables("dependencies")
         .filter_map(|table| table.get(dependency))
         .any(|declared| {
             declared

@@ -515,16 +515,10 @@ pub fn preview_hosts(
 fn hosts_a_workshop(
     package_dir: &Path,
 ) -> Result<Option<crate::TelarSection>, crate::ManifestError> {
-    let Some(manifest) = crate::cargo_manifest::read_manifest(package_dir) else {
+    let Some(manifest) = crate::CargoManifest::read(package_dir) else {
         return Ok(None);
     };
-    let has_binary = package_dir.join("src/main.rs").is_file()
-        || package_dir.join("src/bin").is_dir()
-        || manifest
-            .get("bin")
-            .and_then(toml::Value::as_array)
-            .is_some_and(|bins| !bins.is_empty());
-    if !has_binary {
+    if manifest.bin_names().is_empty() {
         return Ok(None);
     }
     let telar = crate::TelarManifest::load(package_dir)?.telar;

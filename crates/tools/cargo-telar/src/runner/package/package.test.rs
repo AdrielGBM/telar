@@ -113,3 +113,28 @@ fn an_apks_notice_is_named_for_its_package_beside_it() {
         Some(NOTICE)
     );
 }
+
+#[test]
+fn the_release_build_forwards_the_cargo_arguments_verbatim() {
+    let args: Vec<String> = [
+        "-p",
+        "sandbox",
+        "--release",
+        "--all-features",
+        "--package=other",
+    ]
+    .map(str::to_string)
+    .to_vec();
+    assert_eq!(
+        release_build_args(&args),
+        [
+            "build",
+            "-p",
+            "sandbox",
+            "--release",
+            "--all-features",
+            "--package=other",
+            "--message-format=json",
+        ]
+    );
+}

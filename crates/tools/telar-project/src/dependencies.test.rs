@@ -1,11 +1,15 @@
 use super::*;
 
+fn parsed(manifest: &str) -> CargoManifest {
+    CargoManifest::parse(Path::new("/nonexistent/package"), manifest).unwrap()
+}
+
 fn declares_with_implicit(manifest: &str, dependency: &str) -> bool {
-    declares(&manifest.parse().unwrap(), true, dependency)
+    declares(&parsed(manifest), true, dependency)
 }
 
 fn declares_explicit_only(manifest: &str, dependency: &str) -> bool {
-    declares(&manifest.parse().unwrap(), false, dependency)
+    declares(&parsed(manifest), false, dependency)
 }
 
 const IMPLICIT: &str = r#"

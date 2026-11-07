@@ -359,3 +359,56 @@ fn the_page_lang_is_the_default_locale_in_bcp_47_form() {
     assert_eq!(page_locale(Some("es".to_string())), "es");
     assert_eq!(page_locale(None), "en");
 }
+
+fn strings(args: &[&str]) -> Vec<String> {
+    args.iter().map(|arg| arg.to_string()).collect()
+}
+
+/// Whatever came after `--` is cargo's to read, so it reaches the wasm build as written; only the profile is the build's own word.
+#[test]
+fn the_wasm_build_forwards_the_cargo_arguments_verbatim() {
+    let passthrough = strings(&[
+        "-p",
+        "landing",
+        "--features=analytics",
+        "--all-features",
+        "--locked",
+    ]);
+    let frontend = strings(&["--features", "telar/web-dom"]);
+    assert_eq!(
+        wasm_build_args(&passthrough, true, &frontend),
+        [
+            "build",
+            "--target",
+            WASM_TARGET,
+            "--lib",
+            "-p",
+            "landing",
+            "--features=analytics",
+            "--all-features",
+            "--locked",
+            "--profile",
+            "web",
+            "--features",
+            "telar/web-dom",
+            "--message-format=json",
+        ]
+    );
+}
+
+#[test]
+fn a_debug_wasm_build_names_no_profile_of_its_own() {
+    let passthrough = strings(&["--profile", "dev-fast"]);
+    assert_eq!(
+        wasm_build_args(&passthrough, false, &[]),
+        [
+            "build",
+            "--target",
+            WASM_TARGET,
+            "--lib",
+            "--profile",
+            "dev-fast",
+            "--message-format=json",
+        ]
+    );
+}

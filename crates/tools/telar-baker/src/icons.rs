@@ -385,16 +385,8 @@ fn notice_sets(icons: &CrateIcons) -> Vec<NoticeSet> {
 }
 
 fn package_name(package_dir: &Path) -> String {
-    std::fs::read_to_string(package_dir.join("Cargo.toml"))
-        .ok()
-        .and_then(|text| text.parse::<toml::Table>().ok())
-        .and_then(|manifest| {
-            manifest
-                .get("package")?
-                .get("name")?
-                .as_str()
-                .map(str::to_string)
-        })
+    telar_project::CargoManifest::read(package_dir)
+        .and_then(|manifest| manifest.package_name().map(str::to_string))
         .or_else(|| {
             package_dir
                 .file_name()

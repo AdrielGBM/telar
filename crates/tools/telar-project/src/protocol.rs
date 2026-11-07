@@ -216,8 +216,8 @@ pub struct WorkshopFiles {
 
 /// The files the workshops of the package at `package_dir` are reached through. `None` when its manifest names no package.
 pub fn package_workshop_files(package_dir: &Path) -> Option<WorkshopFiles> {
-    let manifest = crate::cargo_manifest::read_manifest(package_dir)?;
-    let package = manifest.get("package")?.get("name")?.as_str()?;
+    let manifest = crate::CargoManifest::read(package_dir)?;
+    let package = manifest.package_name()?;
     let workspace_root =
         crate::find_workspace_root(package_dir).unwrap_or_else(|| package_dir.to_path_buf());
     Some(WorkshopFiles {

@@ -47,12 +47,11 @@ fn find_target_dir_falls_back_when_cargo_is_unavailable() {
 fn every_internal_dependency_asks_for_the_version_this_workspace_publishes() {
     let root = find_workspace_root(Path::new(env!("CARGO_MANIFEST_DIR")))
         .expect("these crates are workspace members and the root holds the version they share");
-    let manifest: toml::Table = std::fs::read_to_string(root.join("Cargo.toml"))
-        .expect("the workspace root has a manifest")
-        .parse()
-        .expect("the workspace manifest is valid TOML");
+    let manifest = crate::CargoManifest::load(&root)
+        .expect("the workspace manifest is valid TOML")
+        .expect("the workspace root has a manifest");
 
-    let workspace = manifest["workspace"]
+    let workspace = manifest.table()["workspace"]
         .as_table()
         .expect("[workspace] is a table");
     let published = workspace["package"]["version"]

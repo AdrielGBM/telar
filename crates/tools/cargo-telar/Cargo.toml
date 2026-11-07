@@ -53,3 +53,7 @@ path = "src/library_previews.test.rs"
 [[test]]
 name = "bake"
 path = "src/bake.test.rs"
+
+[[test]]
+name = "artifact_paths"
+path = "src/artifact_paths.test.rs"
