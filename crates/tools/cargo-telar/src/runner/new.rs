@@ -436,11 +436,8 @@ pub struct Root;
 impl App for Root {
     fn root(&self) -> Box<dyn telar::Component> {
         reset_layout_runtime();
-        let content = crate::home::home(
-            crate::home::HomeProps::props().build(),
-            telar::Children::default(),
-        )
-        .expect("home layout failed");
+        let content = crate::home::home(crate::home::HomeProps::props().build())
+            .expect("home layout failed");
         Box::new(ScrollPage::new(content).expect("page layout failed"))
     }
 
