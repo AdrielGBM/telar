@@ -256,3 +256,15 @@ fn a_style_amendment_reshapes_every_swatch() {
             .all(|(_, style)| style.radius == telar::BorderRadius::all(0.0))
     );
 }
+
+#[test]
+fn every_swatch_keeps_the_arrows_the_edges_and_its_activation_keys() {
+    let keys = crate::test_support::declared_keys(Role::Radio, || {
+        let (item, _) = build(signal(None::<u32>), &Rc::new(RefCell::new(Vec::new())));
+        ComponentList::new(item)
+    });
+    assert_eq!(
+        keys,
+        vec![ConsumedKeys::ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ACTIVATION; 4],
+    );
+}

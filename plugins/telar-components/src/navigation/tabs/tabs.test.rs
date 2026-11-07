@@ -591,3 +591,18 @@ fn a_tab_built_again_keeps_its_place_among_the_arrows() {
         .map(|exposed| exposed.id);
     assert_eq!(focus_ids.borrow().first().copied(), rebuilt_id);
 }
+
+#[test]
+fn every_tab_keeps_the_arrows_the_edges_and_its_activation_keys() {
+    let keys = crate::test_support::declared_keys(Role::Tab, || {
+        mounted(
+            TabsProps::props()
+                .items(vec!["One", "Two", "Three"])
+                .build(),
+        )
+    });
+    assert_eq!(
+        keys,
+        vec![ConsumedKeys::HORIZONTAL_ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ACTIVATION; 3],
+    );
+}

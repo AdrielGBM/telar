@@ -5,11 +5,11 @@ use std::rc::Rc;
 
 use telar::focus::{self, FocusId};
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Color, Container, IconName, JustifyContent,
-    Key, KeyNav, KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Props,
-    Reactive, Rect, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text,
-    TextStyle, amend_surface, box_item, current_direction, effect, focus::Role, key_nav_apply,
-    signal, track_layout,
+    Accessible, AlignItems, BorderRadius, Children, Color, ConsumedKeys, Container, IconName,
+    JustifyContent, Key, KeyNav, KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea,
+    LayoutStyle, NodeId, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    SurfaceAmendment, Text, TextStyle, amend_surface, box_item, current_direction, effect,
+    focus::Role, key_nav_apply, signal, track_layout,
 };
 
 use crate::workbench::icon_button::icon_button::picture;
@@ -63,6 +63,10 @@ fn icon_tab_box(size: ControlSize) -> LayoutStyle {
 fn bar(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row().gap(shared::gap_sm(size))
 }
+
+const TAB_KEYS: ConsumedKeys = ConsumedKeys::HORIZONTAL_ARROWS
+    .with(ConsumedKeys::EDGES)
+    .with(ConsumedKeys::ACTIVATION);
 
 /// A horizontal tab bar: one button per label, driving a `selected` index. Renders only the row of tab buttons — the matching content panel is the caller's responsibility (typically the DSL's reactive `if selected == i`, mirroring the sandbox's own nav-button/section-switch split). Modelled on `select.rs`'s items/selected handling, but rendered inline (a row) rather than as an anchored overlay. High-level sugar over the primitives; lives in `telar-components`, not the kernel.
 #[derive(Props)]
@@ -454,6 +458,7 @@ where
         .hover_style(move |_r| hover.surface(selected.get() == value, State::Hovered))
         .active_style(move |_r| press.surface(selected.get() == value, State::Pressed))
         .control(Role::Tab)
+        .consumes_keys(|| TAB_KEYS)
         .toggled(move || selected.get() == value)
         .on_press(move || selected.set(value))
         .a11y_label(move || name.get());

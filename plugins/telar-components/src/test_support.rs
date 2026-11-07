@@ -18,6 +18,31 @@ pub(crate) fn drawn(role: telar::focus::Role) -> Vec<telar::Rect> {
         .collect()
 }
 
+/// The keys each element of `role` declares it keeps, in the order it is drawn; `build` makes the tree with element capture already on.
+pub(crate) fn declared_keys(
+    role: telar::focus::Role,
+    build: impl FnOnce() -> telar::ComponentList,
+) -> Vec<telar::ConsumedKeys> {
+    let was = telar::testing::set_element_capture(true);
+    let tree = build();
+    let keys = tree
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            telar::DrawCommand::PushElement { element } if element.semantics.role == role => {
+                element
+                    .semantics
+                    .focusable
+                    .as_ref()
+                    .map(|focusable| focusable.consumes)
+            }
+            _ => None,
+        })
+        .collect();
+    telar::testing::set_element_capture(was);
+    keys
+}
+
 /// A theme whose control and item corners are `role`, supplying `tokens` as a component's own when there are any: what every `XTokens` test is written against.
 #[derive(Clone)]
 pub(crate) struct TokensTheme<K> {

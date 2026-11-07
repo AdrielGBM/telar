@@ -3,13 +3,17 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, Color, Container, Cursor, JustifyContent, Key, LayoutError,
-    LayoutItem, LayoutStyle, NamedKey, Props, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
+    Accessible, AlignItems, Border, Color, ConsumedKeys, Container, Cursor, JustifyContent, Key,
+    LayoutError, LayoutItem, LayoutStyle, NamedKey, Props, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
 use telar::ControlSize;
+
+const SWATCH_KEYS: ConsumedKeys = ConsumedKeys::ARROWS
+    .with(ConsumedKeys::EDGES)
+    .with(ConsumedKeys::ACTIVATION);
 
 /// A swatch row's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -139,6 +143,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
                 .styled_by(move || cell(diameter()))
                 .a11y_label(move || name.clone())
                 .control(Role::Radio)
+                .consumes_keys(|| SWATCH_KEYS)
                 .toggled(move || announced.get() == Some(idx))
                 .cursor(Cursor::Pointer)
                 .on_press(move || choose(press_selected, idx, press_cb.as_deref()))
