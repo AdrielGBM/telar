@@ -218,7 +218,7 @@ fn a_long_value_stays_on_one_line_and_scrolls_to_keep_the_caret_in_the_box() {
         (text.x + scrolled).abs() < 0.01,
         "the text is drawn where it scrolled to: {text:?} for {scrolled}"
     );
-    assert!((caret.x - (advance(LONG) - scrolled)).abs() < 0.01);
+    assert!(agrees(caret.x + scrolled, advance(LONG)), "{caret:?} for {scrolled}");
 }
 
 #[test]
