@@ -177,3 +177,31 @@ fn a_telar_toml_that_does_not_load_is_an_error_rather_than_the_default_catalog()
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_catalog_that_does_not_parse_is_an_error_naming_it_and_keeps_the_previous_artifact() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_unparsed_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
+    let baked = bake_catalog(&root, "test", "0.0.0").unwrap().unwrap();
+    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
+    let artifact =
+        std::fs::read_to_string(root.join(".telar").join(CATALOG_SOURCE_FILENAME)).unwrap();
+
+    std::fs::write(root.join("locales/es.toml"), "title = \"Ajustes\n").unwrap();
+    let report = bake_catalog(&root, "test", "0.0.0").unwrap().unwrap();
+
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert!(
+        report.errors[0].contains(&root.join("locales/es.toml").display().to_string()),
+        "{:?}",
+        report.errors
+    );
+    assert!(!report.changed);
+    assert_eq!(
+        std::fs::read_to_string(root.join(".telar").join(CATALOG_SOURCE_FILENAME)).unwrap(),
+        artifact
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

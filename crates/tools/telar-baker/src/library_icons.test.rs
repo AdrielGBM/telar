@@ -141,7 +141,7 @@ fn the_application_notice_lists_its_own_icons_then_each_librarys() {
     assert!(from_library.contains("CC BY 4.0"), "{text}");
     assert!(from_library.contains("Icons: dot\n"), "{text}");
 
-    let record = read_icon_record(&app).unwrap();
+    let record = read_icon_record(&app).unwrap().unwrap();
     assert_eq!(record.icons.keys().collect::<Vec<_>>(), vec!["demo:home"]);
     assert_eq!(
         record.dependencies["icon-lib"]

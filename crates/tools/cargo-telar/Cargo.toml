@@ -49,3 +49,7 @@ path = "src/workshop_audit.test.rs"
 [[test]]
 name = "library_previews"
 path = "src/library_previews.test.rs"
+
+[[test]]
+name = "bake"
+path = "src/bake.test.rs"

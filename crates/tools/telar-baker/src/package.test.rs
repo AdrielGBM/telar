@@ -135,3 +135,32 @@ fn a_package_with_no_rsx_is_left_untouched() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn an_asset_that_does_not_decode_is_an_error_naming_it_while_the_rest_still_bake() {
+    let root = temp_dir("bake_undecodable");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::create_dir_all(root.join("assets")).unwrap();
+    std::fs::write(root.join("assets/badge.svg"), ICON_SVG).unwrap();
+    std::fs::write(root.join("assets/broken.png"), b"not a png").unwrap();
+    std::fs::write(
+        root.join("src/view.rsx"),
+        "[view]\ncol\n    svg src:\"badge.svg\"\n    img src:\"broken.png\"\n",
+    )
+    .unwrap();
+
+    let report = bake_package(&root, "p", "1.0.0").expect("the package has .rsx");
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert!(
+        report.errors[0].contains("`broken.png`"),
+        "{:?}",
+        report.errors
+    );
+    let index = telar_project::read_index(&root.join(".telar"))
+        .unwrap()
+        .expect("the assets that decode are still baked");
+    let paths: Vec<_> = index.entries.iter().map(|e| e.path.as_str()).collect();
+    assert_eq!(paths, vec!["badge.svg"]);
+
+    let _ = std::fs::remove_dir_all(&root);
+}

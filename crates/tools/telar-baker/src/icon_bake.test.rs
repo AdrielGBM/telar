@@ -80,7 +80,7 @@ fn only_the_icons_the_view_names_are_baked() {
     );
     assert!(source.contains(": Arc<SvgData> = Arc::new("), "{source}");
 
-    let record = read_icon_record(&root).unwrap();
+    let record = read_icon_record(&root).unwrap().unwrap();
     assert_eq!(
         record.icons.keys().collect::<Vec<_>>(),
         vec!["demo:home", "demo:house"]
@@ -163,7 +163,7 @@ fn runtime_mode_bakes_nothing_and_ships_no_notice() {
     let report = bake_package(&root, "test", VERSION).unwrap();
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     assert!(baked_icons(&root).is_empty());
-    assert!(read_icon_record(&root).is_none());
+    assert_eq!(read_icon_record(&root), Ok(None));
     assert!(!root.join(".telar").join(ICONS_NOTICE_FILENAME).exists());
 }
 

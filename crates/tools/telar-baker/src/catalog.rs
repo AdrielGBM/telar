@@ -20,6 +20,8 @@ pub struct CatalogReport {
     pub keys: usize,
     pub changed: bool,
     pub warnings: Vec<String>,
+    /// What a build must not go on from: a catalog file that does not parse, or an artifact that cannot be written. Either leaves the previous catalog in place, which would otherwise ship as if it were this one.
+    pub errors: Vec<String>,
 }
 
 /// Bakes `package_dir`'s translation catalog, writing `<package_dir>/.telar/i18n.{json,rs}`. `None` when the package has neither `.rsx` files nor locale files, so a crate with no stake in either never grows a `.telar/`.
@@ -42,7 +44,7 @@ pub fn bake_catalog(
     let model = match parse_sources(&sources, config.default.as_deref()) {
         Ok(model) => model,
         Err(e) => {
-            report.warnings.push(format!("catalog: {e}"));
+            report.errors.push(format!("catalog: {e}"));
             return Ok(Some(report));
         }
     };
@@ -97,16 +99,16 @@ pub fn bake_catalog(
     report.keys = index.entries.len();
 
     if let Err(e) = std::fs::create_dir_all(&telar_dir)
+        .and_then(|()| write_if_changed_atomic(&telar_dir.join(CATALOG_SOURCE_FILENAME), &source))
         .and_then(|()| {
             write_if_changed_atomic(
                 &telar_dir.join(CATALOG_INDEX_FILENAME),
                 &format!("{}\n", index.to_json()),
             )
         })
-        .and_then(|()| write_if_changed_atomic(&telar_dir.join(CATALOG_SOURCE_FILENAME), &source))
     {
         report
-            .warnings
+            .errors
             .push(format!("could not write {}: {e}", telar_dir.display()));
         report.changed = false;
     }

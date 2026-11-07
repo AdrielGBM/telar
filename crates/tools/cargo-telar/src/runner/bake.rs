@@ -73,6 +73,10 @@ pub(crate) fn bake_workspace() -> bool {
                         report.keys
                     );
                 }
+                for error in &report.errors {
+                    eprintln!("[cargo-telar] error: {name}: {error}");
+                }
+                clean &= report.errors.is_empty();
             }
             Ok(None) => {}
             Err(e) => {

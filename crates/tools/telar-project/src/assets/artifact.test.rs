@@ -361,3 +361,37 @@ fn write_generated_skips_disk_io_when_content_is_unchanged() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_source_that_cannot_be_replaced_leaves_no_index_claiming_its_hashes() {
+    let dir = std::env::temp_dir().join(format!(
+        "rsx_assets_artifact_interrupted_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let telar_dir = dir.join(".telar");
+    let old = generate_assets(&[svg_asset("badge.svg", b"<svg/>")], "p", "0.1.8").unwrap();
+    write_generated(&telar_dir, &old).unwrap();
+
+    let source_path = telar_dir.join(ASSETS_SOURCE_FILENAME);
+    std::fs::remove_file(&source_path).unwrap();
+    std::fs::create_dir_all(source_path.join("blocker")).unwrap();
+    let mut new_asset = svg_asset("badge.svg", b"<svg width=\"2\"/>");
+    new_asset.init_expr = "SvgData::from_baked_vector(&[1])".to_string();
+    let new = generate_assets(&[new_asset], "p", "0.1.8").unwrap();
+
+    write_generated(&telar_dir, &new)
+        .expect_err("assets.rs is a directory, so it cannot be replaced");
+    assert_eq!(
+        read_index(&telar_dir).unwrap(),
+        None,
+        "an index left beside a source that was not written would hand its hashes to the next bake"
+    );
+
+    std::fs::remove_dir_all(&source_path).unwrap();
+    write_generated(&telar_dir, &new).unwrap();
+    assert_eq!(read_index(&telar_dir).unwrap(), Some(new.index));
+    assert_eq!(std::fs::read_to_string(&source_path).unwrap(), new.source);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

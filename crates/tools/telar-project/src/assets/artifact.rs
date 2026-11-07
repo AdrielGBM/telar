@@ -301,17 +301,23 @@ pub fn check_artifact(
     Ok(ArtifactHandshake::UpToDate(index))
 }
 
-/// Writes `<telar_dir>/assets.json` and `<telar_dir>/assets.rs`, atomically and only when their content
+/// Writes `<telar_dir>/assets.rs` and then `<telar_dir>/assets.json`, atomically and only when their content
 /// changed — same convention as the analyzer's `write_if_changed` (`telar-analyzer/src/build_sync.rs`), so
 /// a bake that changes nothing doesn't retrigger rustc or rust-analyzer's file watcher.
+///
+/// The index is the commit: while `assets.rs` is replaced there is no index at all, so a write that stops half-way, or a bake that reads in between, finds nothing to reuse and bakes afresh rather than pairing a hash with an expression baked from other bytes.
 pub fn write_generated(telar_dir: &Path, generated: &GeneratedAssets) -> std::io::Result<()> {
     std::fs::create_dir_all(telar_dir)?;
-    crate::write_if_changed_atomic(
-        &telar_dir.join(ASSETS_INDEX_FILENAME),
-        &format!("{}\n", generated.index.to_json()),
-    )?;
-    crate::write_if_changed_atomic(&telar_dir.join(ASSETS_SOURCE_FILENAME), &generated.source)?;
-    Ok(())
+    let index_path = telar_dir.join(ASSETS_INDEX_FILENAME);
+    let source_path = telar_dir.join(ASSETS_SOURCE_FILENAME);
+    if std::fs::read_to_string(&source_path).ok().as_deref() != Some(generated.source.as_str()) {
+        match std::fs::remove_file(&index_path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
+        crate::write_if_changed_atomic(&source_path, &generated.source)?;
+    }
+    crate::write_if_changed_atomic(&index_path, &format!("{}\n", generated.index.to_json()))
 }
 
 #[cfg(test)]

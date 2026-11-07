@@ -68,7 +68,9 @@ fn own_svgs_and_iconify_sets_resolve_and_are_recorded() {
     assert!(resolved.warnings.is_empty(), "{:?}", resolved.warnings);
     assert_eq!(baked_ids(&resolved), vec!["app:logo", "demo:home"]);
 
-    let record = read_icon_record(&root).expect("a record is written");
+    let record = read_icon_record(&root)
+        .expect("the record reads")
+        .expect("a record is written");
     assert!(record.sets["app"].own);
     assert_eq!(
         record.sets["demo"]
@@ -160,6 +162,7 @@ fn a_bare_name_resolves_in_the_default_set_and_is_baked_under_its_full_id() {
     assert_eq!(
         read_icon_record(&root)
             .unwrap()
+            .unwrap()
             .icons
             .keys()
             .collect::<Vec<_>>(),
@@ -211,7 +214,7 @@ fn the_sets_palette_decides_whether_an_icon_is_tinted() {
         monochrome(&resolved, "app:logo"),
         "an own SVG in currentColor is tinted"
     );
-    let record = read_icon_record(&root).unwrap();
+    let record = read_icon_record(&root).unwrap().unwrap();
     assert_eq!(
         record.sets["brand"].info.as_ref().unwrap().palette,
         Some(true)
@@ -251,7 +254,7 @@ fn a_refused_set_is_an_error_and_is_not_baked() {
         "{:?}",
         resolved.errors
     );
-    let record = read_icon_record(&root).unwrap();
+    let record = read_icon_record(&root).unwrap().unwrap();
     assert!(!record.sets.contains_key("attrib"));
 }
 
@@ -327,7 +330,53 @@ fn nothing_to_bake_clears_the_record_the_notice_and_the_cache() {
     std::fs::create_dir_all(root.join(".telar/icons/remote")).unwrap();
     std::fs::write(root.join(".telar/icons/remote/bell.svg"), OWN_SVG).unwrap();
     resolve(&root, &section(), &[]);
-    assert!(read_icon_record(&root).is_none());
+    assert_eq!(read_icon_record(&root), Ok(None));
     assert!(!root.join(".telar").join(ICONS_NOTICE_FILENAME).exists());
     assert!(!root.join(".telar/icons").exists());
+}
+
+#[test]
+fn a_record_that_cannot_be_read_or_is_in_another_format_is_an_error_not_an_absence() {
+    let root = package("record_garbled");
+    std::fs::create_dir_all(root.join(".telar")).unwrap();
+    let record_path = root.join(".telar").join(ICONS_RECORD_FILENAME);
+
+    std::fs::write(&record_path, "{ not json").unwrap();
+    let error = read_icon_record(&root).expect_err("garbled JSON is not a missing record");
+    assert!(error.contains(ICONS_RECORD_FILENAME), "{error}");
+
+    let future = IconRecord {
+        format: RECORD_FORMAT + 1,
+        ..IconRecord::default()
+    };
+    std::fs::write(&record_path, serde_json::to_string(&future).unwrap()).unwrap();
+    let error = read_icon_record(&root).expect_err("a format this bake does not read");
+    assert!(
+        error.contains(&format!("format {}", RECORD_FORMAT + 1)),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_bake_over_a_garbled_record_warns_and_replaces_it() {
+    let root = package("record_replaced");
+    std::fs::create_dir_all(root.join(".telar")).unwrap();
+    std::fs::write(
+        root.join(".telar").join(ICONS_RECORD_FILENAME),
+        "{ not json",
+    )
+    .unwrap();
+
+    let resolved = resolve(&root, &section(), &[literal("app:logo", 1)]);
+
+    assert_eq!(resolved.warnings.len(), 1, "{:?}", resolved.warnings);
+    assert!(
+        resolved.warnings[0].contains(ICONS_RECORD_FILENAME),
+        "{:?}",
+        resolved.warnings
+    );
+    let record = read_icon_record(&root)
+        .expect("the bake rewrote the record")
+        .expect("a record is written");
+    assert_eq!(record.icons.keys().collect::<Vec<_>>(), vec!["app:logo"]);
 }

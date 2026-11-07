@@ -253,3 +253,36 @@ fn a_bake_that_does_not_know_the_dependencies_keeps_and_rejudges_the_recorded_on
     assert_eq!(kept, previous.dependencies);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
 }
+
+#[test]
+fn a_local_crate_whose_record_cannot_be_read_is_a_warning_naming_it() {
+    let root = temp_dir("garbled");
+    let dir = crate_dir(&root, "cards", false);
+    std::fs::create_dir_all(dir.join(".telar")).unwrap();
+    std::fs::write(dir.join(".telar/icons.json"), "{ not json").unwrap();
+    let dependencies = [IconDependency {
+        name: "cards".to_string(),
+        dir,
+        library: false,
+    }];
+
+    let (mut warnings, mut errors) = (Vec::new(), Vec::new());
+    let icons = dependency_icons(
+        None,
+        Some(&dependencies),
+        &LicensePolicy::default(),
+        &mut warnings,
+        &mut errors,
+    );
+
+    assert!(icons.is_empty());
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(
+        warnings[0].contains("`cards`") && warnings[0].contains("icons.json"),
+        "{}",
+        warnings[0]
+    );
+    assert!(!warnings[0].contains("library"), "{}", warnings[0]);
+    let _ = std::fs::remove_dir_all(&root);
+}
