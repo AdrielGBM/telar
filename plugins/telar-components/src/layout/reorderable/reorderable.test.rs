@@ -1,15 +1,18 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use telar::preview::{Play, PreviewCtx, PreviewEntry, by_role};
 use telar::testing::{lay_out_row, moved, press, release, route};
 use telar::{
-    Component, LayoutItem, LayoutStyle, RectStyle, RwSignal, StyledContainer, box_item, signal,
+    Component, Key, LayoutItem, LayoutStyle, NamedKey, RectStyle, RwSignal, StyledContainer, Text,
+    box_item, focus::Role, signal,
 };
 
 use super::*;
 use crate::test_support::fresh_layout_runtime;
 
 const ITEM: f32 = 100.0;
+const NAMES: [&str; 4] = ["Inbox", "Drafts", "Sent", "Archive"];
 
 type Strip = (
     Box<dyn LayoutItem>,
@@ -48,6 +51,233 @@ fn strip() -> Strip {
     )
     .unwrap();
     (widget, items, moves)
+}
+
+/// A row of four named, fixed-width items over storage of the caller's, logging each move as `on_move`.
+fn named_strip(
+    ctx: &PreviewCtx,
+    drop_preview: DropPreview,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let items = signal(NAMES.to_vec());
+    let actions = ctx.actions();
+    reorderable(
+        ReorderableProps::props()
+            .count(Reactive::of(move || items.get().len()))
+            .item(Rc::new(move |index| {
+                let label = Text::declaring(
+                    move || items.get()[index].to_string(),
+                    LayoutStyle::new(),
+                    |text| text,
+                )?;
+                Ok(box_item(StyledContainer::new(
+                    LayoutStyle::new().width(ITEM).height(40.0),
+                    |_| RectStyle::default(),
+                    vec![box_item(label)],
+                )?))
+            }))
+            .on_move(Rc::new(move |from, to| {
+                actions.log("on_move", vec![from.to_string(), to.to_string()]);
+                items.update(|items| {
+                    telar::apply_move(items, from, to);
+                });
+            }))
+            .row(true)
+            .drop_preview(drop_preview)
+            .build(),
+    )
+}
+
+fn gap_strip(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    named_strip(ctx, DropPreview::Gap)
+}
+
+fn line_strip(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    named_strip(ctx, DropPreview::Line)
+}
+
+fn played(build: fn(&PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError>) -> Play {
+    fresh_layout_runtime();
+    telar::focus::clear();
+    let entry = PreviewEntry::new(
+        "test--reorderable--behaviour",
+        "reorderable",
+        "behaviour",
+        build,
+    )
+    .locale("en");
+    Play::mount(&entry).unwrap_or_else(|error| panic!("the strip mounts: {error}"))
+}
+
+fn item(name: &str) -> telar::preview::Query {
+    by_role(Role::ListItem).named(name)
+}
+
+fn key(play: &mut Play, key: NamedKey) {
+    play.press(Key::Named(key)).unwrap();
+}
+
+/// The items' names in the order a reader meets them.
+fn read_order(play: &Play) -> Vec<String> {
+    play.find_all(&by_role(Role::ListItem))
+        .into_iter()
+        .map(|node| node.name)
+        .collect()
+}
+
+/// The items' names in the order they are drawn along the row, which mid-stroke is not the order they are stored in.
+fn drawn_order(play: &Play) -> Vec<String> {
+    let mut items = play.find_all(&by_role(Role::ListItem));
+    items.sort_by(|a, b| a.rect.x.total_cmp(&b.rect.x));
+    items.into_iter().map(|node| node.name).collect()
+}
+
+fn moves(play: &Play) -> Vec<Vec<String>> {
+    play.actions()
+        .calls()
+        .into_iter()
+        .filter(|call| call.name == "on_move")
+        .map(|call| call.args)
+        .collect()
+}
+
+/// Whether the insertion rule is drawn: a filled bar as thin as a focus ring.
+fn draws_an_insertion_line(play: &Play) -> bool {
+    play.frame().commands.iter().any(|command| {
+        matches!(command, telar::DrawCommand::Rect { rect, style, .. }
+            if rect.width == crate::shared::focus_ring_width() && style.fill.is_some())
+    })
+}
+
+#[test]
+fn the_list_and_its_items_are_announced_as_such() {
+    let play = played(gap_strip);
+    assert_eq!(play.find_all(&by_role(Role::List)).len(), 1);
+    assert_eq!(read_order(&play), NAMES);
+}
+
+#[test]
+fn the_keyboard_picks_an_item_up_moves_it_and_drops_it() {
+    let mut play = played(gap_strip);
+    play.click(item("Inbox")).unwrap();
+    play.expect_focused(item("Inbox")).unwrap();
+
+    key(&mut play, NamedKey::Space);
+    key(&mut play, NamedKey::ArrowRight);
+    key(&mut play, NamedKey::Space);
+
+    assert_eq!(
+        moves(&play),
+        [["0", "2"]],
+        "past `Drafts`, skipping the slot it already fills"
+    );
+    assert_eq!(read_order(&play), ["Drafts", "Inbox", "Sent", "Archive"]);
+}
+
+#[test]
+fn escape_puts_a_keyboard_pickup_back() {
+    let mut play = played(gap_strip);
+    play.click(item("Drafts")).unwrap();
+
+    key(&mut play, NamedKey::Enter);
+    key(&mut play, NamedKey::ArrowRight);
+    key(&mut play, NamedKey::ArrowRight);
+    key(&mut play, NamedKey::Escape);
+
+    assert!(moves(&play).is_empty());
+    assert_eq!(read_order(&play), NAMES);
+    assert_eq!(
+        drawn_order(&play),
+        NAMES,
+        "nothing is left drawn out of place"
+    );
+
+    key(&mut play, NamedKey::Enter);
+    key(&mut play, NamedKey::ArrowLeft);
+    key(&mut play, NamedKey::Enter);
+    assert_eq!(moves(&play), [["1", "0"]], "the next pickup starts afresh");
+}
+
+#[test]
+fn the_keyboard_stops_at_the_ends_of_the_list() {
+    let mut play = played(gap_strip);
+    play.click(item("Inbox")).unwrap();
+
+    key(&mut play, NamedKey::Space);
+    key(&mut play, NamedKey::ArrowLeft);
+    key(&mut play, NamedKey::Space);
+    assert!(
+        moves(&play).is_empty(),
+        "before the first slot is still the first slot"
+    );
+
+    key(&mut play, NamedKey::Space);
+    for _ in 0..8 {
+        key(&mut play, NamedKey::ArrowDown);
+    }
+    key(&mut play, NamedKey::Space);
+    assert_eq!(moves(&play), [["0", "4"]]);
+    assert_eq!(read_order(&play), ["Drafts", "Sent", "Archive", "Inbox"]);
+}
+
+#[test]
+fn a_pointer_drag_reports_where_the_item_came_from_and_where_it_lands() {
+    let mut play = played(gap_strip);
+    play.drag(item("Inbox"), 2.5 * ITEM, 0.0).unwrap();
+    assert_eq!(moves(&play), [["0", "3"]]);
+    assert_eq!(read_order(&play), ["Drafts", "Sent", "Inbox", "Archive"]);
+}
+
+#[test]
+fn escape_mid_drag_puts_the_item_back() {
+    fresh_layout_runtime();
+    let (widget, items, moves) = strip();
+    let node = widget.layout_node();
+    let mut tree = telar::ComponentList::new(widget);
+    lay_out_row(node, 400.0, 40.0);
+
+    route(&mut tree, &press(10.0, 20.0));
+    route(&mut tree, &moved(260.0, 20.0));
+    route(&mut tree, &telar::testing::named(NamedKey::Escape));
+    route(&mut tree, &release(260.0, 20.0));
+
+    assert!(moves.borrow().is_empty(), "{:?}", moves.borrow());
+    assert_eq!(items.peek(), vec!['a', 'b', 'c', 'd']);
+}
+
+#[test]
+fn with_a_gap_the_list_shows_the_order_the_drop_would_leave() {
+    let mut play = played(gap_strip);
+    play.click(item("Inbox")).unwrap();
+    key(&mut play, NamedKey::Space);
+    key(&mut play, NamedKey::ArrowRight);
+    key(&mut play, NamedKey::ArrowRight);
+
+    assert_eq!(drawn_order(&play), ["Drafts", "Sent", "Inbox", "Archive"]);
+    assert!(moves(&play).is_empty(), "nothing is moved until the drop");
+    assert!(!draws_an_insertion_line(&play));
+}
+
+#[test]
+fn with_a_line_nothing_moves_until_the_drop() {
+    let mut play = played(line_strip);
+    play.click(item("Inbox")).unwrap();
+    assert!(
+        !draws_an_insertion_line(&play),
+        "no line with nothing in hand"
+    );
+    key(&mut play, NamedKey::Space);
+    key(&mut play, NamedKey::ArrowRight);
+    key(&mut play, NamedKey::ArrowRight);
+
+    assert_eq!(drawn_order(&play), NAMES);
+    assert!(draws_an_insertion_line(&play));
+
+    key(&mut play, NamedKey::Space);
+    assert_eq!(moves(&play), [["0", "3"]]);
+    assert!(
+        !draws_an_insertion_line(&play),
+        "the line goes with the stroke"
+    );
 }
 
 /// Dragging the first pill past the centre of the third must land it there, and must report the slot in the frame of reference `apply_move` reads — which is what makes the two halves agree.
@@ -96,14 +326,14 @@ fn the_pill_being_dragged_travels_with_the_pointer() {
     assert_eq!(
         carried[0] - resting[0],
         150.0,
-        "la pastilla no siguió al puntero: {resting:?} → {carried:?}"
+        "the pill did not follow the pointer: {resting:?} → {carried:?}"
     );
 
     route(&mut tree, &release(160.0, 20.0));
     let landed = drawn_at(&tree);
     assert!(
         landed.iter().all(|x| resting.contains(x)),
-        "quedó una pastilla fuera de su hueco: {landed:?}"
+        "a pill was left outside its slot: {landed:?}"
     );
 }
 
@@ -125,7 +355,7 @@ fn the_slot_the_pill_came_out_of_closes_behind_it() {
     assert_eq!(
         carried[2] - resting[2],
         -ITEM,
-        "el hueco de origen no se cerró: {resting:?} → {carried:?}"
+        "the slot it came out of did not close: {resting:?} → {carried:?}"
     );
 }
 
@@ -147,7 +377,7 @@ fn the_strip_is_the_width_it_was_wherever_the_drop_is_heading() {
         assert_eq!(
             strip_rect.get().width,
             resting,
-            "la tira creció un hueco de más con el puntero en {at}"
+            "the strip grew an extra hole with the pointer at {at}"
         );
     }
 }
@@ -170,7 +400,7 @@ fn a_pill_dragged_leftwards_follows_the_pointer_and_not_the_gap() {
     assert_eq!(
         carried[4] - resting[4],
         -210.0,
-        "la pastilla no siguió al puntero hacia la izquierda: {resting:?} → {carried:?}"
+        "the pill did not follow the pointer leftwards: {resting:?} → {carried:?}"
     );
 }
 
@@ -194,12 +424,12 @@ fn a_pill_held_against_the_edge_stays_where_it_is_put() {
         assert_eq!(
             drawn_at(&tree),
             against,
-            "la tira se mueve sola con el puntero quieto en el borde"
+            "the strip moves on its own with the pointer still at the edge"
         );
     }
 
     route(&mut tree, &release(4000.0, 20.0));
-    assert_eq!(moves.borrow().len(), 1, "un arrastre, un movimiento");
+    assert_eq!(*moves.borrow(), vec![(0, 4)], "one drag, one move");
 }
 
 /// A strip is reordered along itself: what the other axis says about the pointer says nothing about where the item lands, and carrying it only lets the one in hand leave the line the strip lives on.
@@ -224,7 +454,7 @@ fn a_pill_does_not_leave_the_line_the_strip_is_on() {
     });
     assert!(
         down.iter().all(|y| y.abs() < 1.0),
-        "una pastilla se fue hacia abajo: {down:?}"
+        "a pill left the line: {down:?}"
     );
 }
 
@@ -243,10 +473,7 @@ fn a_pill_is_not_carried_past_the_strip() {
 
     let carried = drawn_at(&tree);
     let travelled = carried[0] - resting[0];
-    assert!(
-        travelled <= 400.0,
-        "la pastilla se fue de la tira: {travelled}"
-    );
+    assert!(travelled <= 400.0, "the pill left the strip: {travelled}");
 }
 
 /// A press that never left the pill is a click on it, not a reorder — the case that makes a strip of buttons still usable as buttons.

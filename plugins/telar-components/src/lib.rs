@@ -81,9 +81,9 @@ pub use layout::list::list::{
     GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator,
 };
 pub use layout::reorder_zones::reorder_zones::{
-    ReorderGroup, ReorderZoneProps, Slot, apply_zone_move,
+    DropPreview, ItemBuilder, Reach, ReorderGroup, ReorderZoneProps, Slot, apply_zone_move,
 };
-pub use layout::reorderable::reorderable::{ItemBuilder, ReorderableProps, reorderable};
+pub use layout::reorderable::reorderable::{ReorderableProps, reorderable};
 pub use layout::section::section::{SectionProps, section};
 pub use layout::virtual_list::virtual_list::{
     ListRow, RowBuilder, RowHandler, VirtualListProps, virtual_list,

@@ -4,7 +4,9 @@ use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive, Role, signal};
 
 use super::sample;
-use crate::layout::reorder_zones::reorder_zones::{ReorderGroup, ReorderZoneProps, apply_zone_move};
+use crate::layout::reorder_zones::reorder_zones::{
+    DropPreview, ReorderGroup, ReorderZoneProps, apply_zone_move,
+};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
@@ -13,11 +15,13 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 vec!["Design", "Review"],
                 vec!["Build", "Test", "Ship"],
             ]);
-            let group = ReorderGroup::new().on_move(move |from, to| {
-                zones.update(|zones| {
-                    apply_zone_move(zones, from, to);
+            let group = ReorderGroup::new()
+                .drop_preview(p.arg("drop_preview", DropPreview::Line))
+                .on_move(move |from, to| {
+                    zones.update(|zones| {
+                        apply_zone_move(zones, from, to);
+                    });
                 });
-            });
             let gap = p.arg("gap", 8.0f32);
             let columns = (0..2)
                 .map(|zone| {

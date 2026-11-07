@@ -288,3 +288,17 @@ fn apply_zone_move_moves_between_and_within_containers() {
         Slot::new(1, 1)
     ));
 }
+
+#[test]
+fn the_keyboard_stops_before_the_first_slot_instead_of_detaching() {
+    let mut board = board(true, 4.0);
+    board.event(press(10.0, 20.0));
+    board.event(release(10.0, 20.0));
+    board.event(named(NamedKey::Space));
+    board.event(named(NamedKey::ArrowLeft));
+    assert_eq!(board.group.target(), Some(Slot::new(0, 0)));
+    board.event(named(NamedKey::Space));
+    assert!(board.moves.borrow().is_empty());
+    assert!(board.detached.borrow().is_empty());
+    assert_eq!(board.items.peek()[0], vec!['a', 'b', 'c']);
+}
