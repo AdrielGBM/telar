@@ -19,6 +19,8 @@ use renderer_core::{
 #[cfg(feature = "bake")]
 use super::VectorCommand;
 #[cfg(any(feature = "bake", test))]
+use super::options::usvg_options;
+#[cfg(any(feature = "bake", test))]
 use super::raster::raster_px;
 #[cfg(any(feature = "bake", test))]
 use super::vector::convert_group;
@@ -28,8 +30,8 @@ use super::{BakedSvg, SvgError, Unsupported};
 /// Parses `content` and converts it to a `BakedSvg`: a vector display list when every feature has a primitive, otherwise the whole document rasterized. Shared by `bake_to_source` and the equivalence tests.
 #[cfg(any(feature = "bake", test))]
 pub(crate) fn bake(content: &str) -> Result<((f32, f32), BakedSvg), SvgError> {
-    let opt = usvg::Options::default();
-    let tree = usvg::Tree::from_str(content, &opt).map_err(|e| SvgError(e.to_string()))?;
+    let tree =
+        usvg::Tree::from_str(content, usvg_options()).map_err(|e| SvgError(e.to_string()))?;
     let size = tree.size();
     let intrinsic = (size.width(), size.height());
 
