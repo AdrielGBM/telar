@@ -234,7 +234,7 @@ fn only_the_backends_the_host_has_are_in_its_table() {
     assert!(table.clipboard_text.is_none() && table.set_clipboard_text.is_none());
     assert!(table.open_uri.is_none() && table.open_beside.is_none());
     assert!(table.upper.open_file.is_none() && table.upper.pick_folder.is_none());
-    assert!(table.wake_loop.is_none() && table.upper.font_sources.is_none());
+    assert!(table.wake_loop.is_none() && table.upper.install_fonts.is_none());
     assert!(
         table.stored_preference.is_some(),
         "the host always has a store, one in memory at least"
@@ -312,10 +312,6 @@ impl Database {
 }
 
 impl FontHost for Database {
-    fn sources(&self) -> Option<FontSources> {
-        self.calls.lock().unwrap().push("sources".to_owned());
-        None
-    }
     fn install(&self, config: FontConfig) -> Option<FontSources> {
         self.calls
             .lock()
@@ -353,11 +349,6 @@ fn the_guest_shaper_defers_to_the_host_database_through_bytes() {
         ..nothing_served()
     });
     let fonts = HostFonts(host(&served));
-    assert_eq!(
-        fonts.sources(),
-        None,
-        "a host with no faces yet answers none"
-    );
     let installed = fonts
         .install(FontConfig {
             faces: vec![FontAsset::embedded(FACE).named("Telar Test")],
@@ -381,7 +372,7 @@ fn the_guest_shaper_defers_to_the_host_database_through_bytes() {
     );
     assert_eq!(
         *database.calls.lock().unwrap(),
-        ["sources", "install 1", "add 1", "only 1 Telar Test"]
+        ["install 1", "add 1", "only 1 Telar Test"]
     );
 }
 
@@ -506,12 +497,7 @@ const BRIDGED: &[(&str, &str, &[&str])] = &[
     (
         "crates/renderer/renderer-text/src/fonts.rs",
         "INSTALLED",
-        &[
-            "font_sources",
-            "install_fonts",
-            "add_font_faces",
-            "install_only_fonts",
-        ],
+        &["install_fonts", "add_font_faces", "install_only_fonts"],
     ),
     (
         "crates/reactive/reactive-local/src/threads.rs",

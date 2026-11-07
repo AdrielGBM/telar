@@ -63,18 +63,20 @@ pub unsafe fn create(
     })
 }
 
-/// Fills this copy's stores from the host's table, and has its shaper defer to the host's font database. The table is the host's, kept until it has unloaded this copy.
+/// Fills this copy's stores from the host's table, has its shaper defer to the host's font database, and installs the shaper's measurer as the runner of the app this library swaps in does on resume. The table is the host's, kept until it has unloaded this copy.
 pub(super) unsafe extern "C" fn install_services(
     services: HostServices<UpperTable>,
 ) -> CallOutcome {
     guest_entry(move || {
         let fonts = unsafe { services_core::guest::install_host_services(services) };
-        #[cfg(feature = "shaper")]
+        #[cfg(any(feature = "shaper", feature = "font-faces"))]
         if let Some(fonts) = fonts {
             renderer_text::fonts::defer_to(fonts);
         }
-        #[cfg(not(feature = "shaper"))]
+        #[cfg(not(any(feature = "shaper", feature = "font-faces")))]
         drop(fonts);
+        #[cfg(feature = "shaper")]
+        crate::install_default_text_metrics();
     })
 }
 

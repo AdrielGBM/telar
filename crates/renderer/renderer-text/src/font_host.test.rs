@@ -61,14 +61,6 @@ fn nothing() -> FontSources {
 }
 
 impl FontHost for Host {
-    fn sources(&self) -> Option<FontSources> {
-        self.ask("sources");
-        self.held
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-    }
-
     fn install(&self, config: FontConfig) -> Option<FontSources> {
         self.ask("install");
         self.load(config.faces)
@@ -101,11 +93,12 @@ fn listed(family: &str) -> bool {
 fn every_face_the_guest_adds_reaches_the_host_before_the_guest_loads_it() {
     let host = Arc::new(Host::default());
 
-    assert!(
-        fonts::defer_to(host.clone()).is_none(),
-        "a host that has loaded nothing hands nothing over"
+    fonts::defer_to(host.clone());
+    assert_eq!(
+        host.asked(),
+        Vec::<&str>::new(),
+        "deferring asks the host nothing until text needs faces"
     );
-    assert_eq!(host.asked(), ["sources"]);
 
     fonts::installed();
     assert_eq!(

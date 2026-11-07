@@ -429,13 +429,12 @@ pub unsafe fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std
     Ok(HotApp::start(entries, Some(library)))
 }
 
-/// The host's font database, for a library's copy of the shaper to defer to: two copies of the shaper cannot share one database, so the library loads what the host's was loaded from, and a face the app adds while it runs is added to the host's, which draws its text, before the library loads it as well.
-#[cfg(feature = "shaper")]
+#[cfg(any(feature = "shaper", feature = "font-faces"))]
 fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
-    Some(std::sync::Arc::new(renderer_text::fonts::Served))
+    Some(renderer_text::fonts::served())
 }
 
-#[cfg(not(feature = "shaper"))]
+#[cfg(not(any(feature = "shaper", feature = "font-faces")))]
 fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
     None
 }

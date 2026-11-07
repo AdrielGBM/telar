@@ -304,6 +304,31 @@ fn an_embedded_guests_surface_is_read_acted_on_and_typed_into_where_the_host_dra
     );
 }
 
+/// A guest built as `telar-embed`'s README declares one, with that crate's default features, sets its text in the faces its host serves rather than in a scan of its own.
+#[test]
+#[ignore = "builds two cdylibs against this checkout: run it with `cargo test -p telar --features dev,shaper --test guest_contract -- --ignored`"]
+fn an_embedded_guest_with_default_features_sets_text_in_the_faces_its_host_serves() {
+    const SERVED_FAMILY: &str = "Served To The Guest";
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build("embed-guest");
+    renderer_text::fonts::add_faces(vec![
+        telar::FontAsset::embedded(renderer_text::fonts::TEST_FACE).named(SERVED_FAMILY),
+    ]);
+    let embed = load_embed(&library, &[]).expect("the guest loads");
+    embed.relayout(AT.width, AT.height);
+    let host = HostRow::new();
+    focus::request(embed.focus_stop(host.node, || Transform::IDENTITY));
+    assert!(embed.on_event(&key('f')));
+    let families = match embed.drain_window_commands().as_slice() {
+        [WindowCommand::SetTitle(families)] => families.clone(),
+        other => panic!("the guest lists its font families: {other:?}"),
+    };
+    assert!(
+        families.lines().any(|family| family == SERVED_FAMILY),
+        "the guest lists the face only its host loaded: {families}"
+    );
+}
+
 #[test]
 #[ignore = "builds two cdylibs against this checkout: run it with `cargo test -p telar --features dev,shaper --test guest_contract -- --ignored`"]
 fn an_embedded_guest_is_refused_as_a_hot_reload_library() {

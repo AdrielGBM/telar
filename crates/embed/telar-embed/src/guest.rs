@@ -72,13 +72,9 @@ pub(crate) unsafe extern "C" fn install_services(
     services: HostServices<UpperTable>,
 ) -> CallOutcome {
     guest_entry(move || {
-        let fonts = unsafe { services_core::guest::install_host_services(services) };
-        #[cfg(feature = "shaper")]
-        if let Some(fonts) = fonts {
+        if let Some(fonts) = unsafe { services_core::guest::install_host_services(services) } {
             renderer_text::fonts::defer_to(fonts);
         }
-        #[cfg(not(feature = "shaper"))]
-        drop(fonts);
     })
 }
 

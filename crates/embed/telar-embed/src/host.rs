@@ -64,7 +64,7 @@ impl LoadedEmbed {
         let library = GuestLibrary::start(
             entries,
             library.map(|library| Box::new(library) as Box<dyn std::any::Any>),
-            served_fonts(),
+            Some(renderer_text::fonts::served()),
         );
         let args = encode(&args.to_vec());
         let instance = library.answer(Handle::NULL, |entries, instance| unsafe {
@@ -388,16 +388,6 @@ impl TimerMirror {
                 .map(|(due, wait)| (due, reactive_core::run_after(wait, || {})));
         }
     }
-}
-
-#[cfg(feature = "shaper")]
-fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
-    Some(std::sync::Arc::new(renderer_text::fonts::Served))
-}
-
-#[cfg(not(feature = "shaper"))]
-fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
-    None
 }
 
 impl Drop for LoadedEmbed {

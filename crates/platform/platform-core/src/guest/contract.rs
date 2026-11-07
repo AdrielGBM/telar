@@ -348,7 +348,7 @@ impl std::error::Error for ContractMismatch {}
 ///         kind: Embed,
 ///         symbol: "telar_embed_entries",
 ///         guest: guest,
-///         settings: ["shaper" => cfg!(feature = "shaper")],
+///         settings: [],
 ///         services: services_core::guest::UpperTable,
 ///         create: fn(LentBytes<Vec<String>>, *mut Handle<GuestInstance>) as CreateInstance;
 ///         report: GuestInstance;

@@ -1,4 +1,4 @@
-//! An embedded guest the `guest_contract` test in `telar` loads into a host with its own copy of std and an allocator marked apart from this one's: it draws text and an image, takes moves and keys, has a text field and a button a screen reader, the keyboard and the input method reach through its host, queues window commands, waits on a timer, wakes its host, and panics on a press, so every entry of the embed contract runs.
+//! An embedded guest the `guest_contract` test in `telar` loads into a host with its own copy of std and an allocator marked apart from this one's: it draws text and an image, takes moves and keys, has a text field and a button a screen reader, the keyboard and the input method reach through its host, queues window commands, lists the font families it sets text in, waits on a timer, wakes its host, and panics on a press, so every entry of the embed contract runs.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -110,6 +110,13 @@ impl EmbeddedApp for Fixture {
                     self.title,
                     self.moves.peek()
                 )));
+                EventResult::Handled
+            }
+            Event::KeyPressed {
+                key: Key::Char('f'),
+                ..
+            } => {
+                push_window_command(WindowCommand::SetTitle(telar::font_families().join("\n")));
                 EventResult::Handled
             }
             Event::PointerPressed {

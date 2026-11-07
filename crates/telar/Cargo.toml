@@ -359,7 +359,7 @@ tiny-skia = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 telar = { path = ".", features = ["preview-snapshots"] }
-telar-embed = { workspace = true, features = ["host", "shaper"] }
+telar-embed = { workspace = true, features = ["host"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 js-sys = { workspace = true }

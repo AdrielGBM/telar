@@ -172,9 +172,6 @@ impl FontAxis {
 ///
 /// Two copies of the shaper cannot share one database, so the library keeps a copy of the host's, loaded from what it was loaded from. Every face it adds goes through here rather than into its copy alone, where the host, which draws the frames, would never see it: the host loads it, and the library loads what the host then holds. Each method answers with what the host holds after it, or `None` when the host could not answer, which leaves both as they were.
 pub trait FontHost: Send + Sync {
-    /// What the host's faces were loaded from, or `None` while it has loaded none.
-    fn sources(&self) -> Option<FontSources>;
-
     /// Adds the faces `config` names, as installing a shaper configured with it does.
     fn install(&self, config: FontConfig) -> Option<FontSources>;
 

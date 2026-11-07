@@ -87,12 +87,8 @@ extern "C" fn stuck() -> CallOutcome {
 struct Fonts(AtomicUsize);
 
 impl FontHost for Fonts {
-    fn sources(&self) -> Option<FontSources> {
-        self.0.fetch_add(1, Ordering::Relaxed);
-        None
-    }
-
     fn install(&self, _config: FontConfig) -> Option<FontSources> {
+        self.0.fetch_add(1, Ordering::Relaxed);
         None
     }
 
@@ -165,7 +161,7 @@ fn a_guest_whose_threads_could_not_be_joined_keeps_its_services_with_its_library
         "its library stays mapped"
     );
     assert_eq!(Arc::strong_count(&fonts), 2, "and its services kept");
-    let answered = unsafe { table.ask(table.upper.font_sources, &()) };
+    let answered = unsafe { table.ask(table.upper.install_fonts, &FontConfig::default()) };
     assert_eq!(answered, Some(None), "a service still answers");
     assert_eq!(fonts.0.load(Ordering::Relaxed), 1);
 }

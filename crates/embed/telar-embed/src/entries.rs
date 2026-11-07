@@ -18,7 +18,7 @@ platform_core::entry_table! {
         kind: Embed,
         symbol: "telar_embed_entries",
         guest: guest,
-        settings: ["shaper" => cfg!(feature = "shaper")],
+        settings: [],
         services: services_core::guest::UpperTable,
         create: fn(LentBytes<Vec<String>>, *mut Handle<GuestInstance>) as CreateInstance;
         report: GuestInstance;
@@ -48,7 +48,7 @@ platform_core::entry_table! {
     }
 }
 
-/// The stamp of the embedding boundary, which a guest exports and its host refuses it without. Besides the layouts it hashes `shaper`: a guest without it would leave the font database the host serves unused and measure its text in faces other than the ones the host draws it in.
+/// The stamp of the embedding boundary, which a guest exports and its host refuses it without. It hashes the layouts alone: whether the guest sets text in the host's faces is settled when it runs, since the host always serves its font database and a guest's shaper defers to it once it first needs a face.
 pub const EMBED_CONTRACT: ContractStamp = <EmbedEntries as Entries>::CONTRACT;
 
 #[cfg(test)]

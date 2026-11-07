@@ -52,7 +52,7 @@ struct Backends {
 }
 
 impl ServedServices {
-    /// What this side has installed, served as it is now. `fonts` is this side's font database for a guest's shaper to defer to, `renderer_text::fonts::Served` in a build that shapes its own text; `None` where there is none, and for a guest that is this process's own, whose text already sets in the one database.
+    /// What this side has installed, served as it is now. `fonts` is this side's font database for a guest's shaper to defer to, `renderer_text::fonts::served()` in a build that links the shaper; `None` where there is none, and for a guest that is this process's own, whose text already sets in the one database.
     pub fn installed(fonts: Option<Arc<dyn FontHost>>) -> Self {
         Self {
             backends: Box::new(Backends {
@@ -96,7 +96,6 @@ impl ServedServices {
                 save_file: some(backends.file_dialogs.is_some(), save_file),
                 pick_folder: some(backends.file_dialogs.is_some(), pick_folder),
                 app_paths: Some(app_dirs),
-                font_sources: some(backends.fonts.is_some(), font_sources),
                 install_fonts: some(backends.fonts.is_some(), install_fonts),
                 add_font_faces: some(backends.fonts.is_some(), add_font_faces),
                 install_only_fonts: some(backends.fonts.is_some(), install_only_fonts),
@@ -121,7 +120,6 @@ pub struct UpperTable {
     pub(crate) save_file: Service<FileDialog, Option<PathBuf>>,
     pub(crate) pick_folder: Service<FileDialog, Option<PathBuf>>,
     pub(crate) app_paths: Service<(), Option<AppDirs>>,
-    pub(crate) font_sources: Service<(), Option<FontSources>>,
     pub(crate) install_fonts: Service<FontConfig, Option<FontSources>>,
     pub(crate) add_font_faces: Service<Vec<FontAsset>, Option<FontSources>>,
     pub(crate) install_only_fonts: Service<(Vec<FontAsset>, Vec<String>), OnlyFonts>,
@@ -134,7 +132,6 @@ impl UpperServices for UpperTable {
         save_file: None,
         pick_folder: None,
         app_paths: None,
-        font_sources: None,
         install_fonts: None,
         add_font_faces: None,
         install_only_fonts: None,
@@ -145,7 +142,6 @@ impl UpperServices for UpperTable {
         save_file,
         pick_folder,
         app_paths,
-        font_sources,
         install_fonts,
         add_font_faces,
         install_only_fonts,
@@ -380,18 +376,6 @@ unsafe extern "C" fn wake_loop(data: *const c_void, request: LentBytes<()>, repl
             if let Some(wake) = &host.loop_waker {
                 wake();
             }
-        })
-    }
-}
-
-unsafe extern "C" fn font_sources(
-    data: *const c_void,
-    request: LentBytes<()>,
-    reply: Reply<Option<FontSources>>,
-) {
-    unsafe {
-        serve(data, request, reply, |host: &Backends, ()| {
-            host.fonts.as_ref().and_then(|fonts| fonts.sources())
         })
     }
 }
@@ -653,10 +637,6 @@ impl PreferenceStore for HostPreferenceStore {
 struct HostFonts(Arc<Host>);
 
 impl FontHost for HostFonts {
-    fn sources(&self) -> Option<FontSources> {
-        self.0.ask(|table| table.upper.font_sources, &()).flatten()
-    }
-
     fn install(&self, config: FontConfig) -> Option<FontSources> {
         self.0
             .ask(|table| table.upper.install_fonts, &config)
@@ -734,7 +714,7 @@ pub unsafe fn install_host_services(table: HostServices<UpperTable>) -> Option<A
     }
     table
         .upper
-        .font_sources
+        .install_fonts
         .is_some()
         .then(|| Arc::new(HostFonts(host)) as Arc<dyn FontHost>)
 }
