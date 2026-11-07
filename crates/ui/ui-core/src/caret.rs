@@ -1,13 +1,10 @@
-//! The caret's blink, and where it sits in a box wider than its text.
+//! The caret's blink.
 //!
-//! Both are shared because both widgets that draw a caret — [`Input`](crate::Input) and [`TextArea`](crate::TextArea) — had their own copy of the same 1.5px rectangle and neither of them moved.
+//! Shared because both widgets that draw a caret — [`Input`](crate::Input) and [`TextArea`](crate::TextArea) — had their own copy of the same 1.5px rectangle and neither of them moved.
 
 use std::time::Duration;
 
-use i18n_core::Direction;
-use layout_reactive::current_direction;
 use motion_core::{Easing, Keyframes, Repeat};
-use renderer_core::TextAlign;
 
 /// How long the caret is lit, and how long it is out. The two together are one period, which lands on the second every desktop toolkit settles on.
 const HALF_PERIOD: Duration = Duration::from_millis(530);
@@ -51,22 +48,5 @@ impl Blink {
             true => self.0.restart(),
             false => self.0.stop(),
         }
-    }
-}
-
-/// Where the first glyph of a line sits in a box wider than it.
-///
-/// The shaper answers this for the *text*; the caret and the selection are drawn beside the text rather than by it, so they have to ask the same question or they land somewhere the letters are not. A field that inherits `text_align: center` from the region around it — which is what a centred column of chrome hands down — drew its letters in the middle and its caret hard against the left edge.
-pub(crate) fn align_origin(align: TextAlign, box_width: f32, text_width: f32) -> f32 {
-    let slack = (box_width - text_width).max(0.0);
-    let (start, end) = match current_direction() {
-        Direction::Ltr => (0.0, slack),
-        Direction::Rtl => (slack, 0.0),
-    };
-    match align {
-        // Justify leaves the last line alone, and a field is one line, which is the last one.
-        TextAlign::Start | TextAlign::Justify => start,
-        TextAlign::Center => slack / 2.0,
-        TextAlign::End => end,
     }
 }

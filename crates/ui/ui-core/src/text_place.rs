@@ -1,14 +1,15 @@
 //! Where an editor draws its text: the rows it is broken into, and the x of every offset along them, which is where the caret, the selection, the underlines and a press all meet the letters.
+//!
+//! Every x is read off the lines the installed measurer lays the text out in, cluster by cluster, so a right-to-left run is placed where it is drawn rather than where its bytes fall.
 
-use std::cell::{Cell, OnceCell, RefCell};
+use std::cell::{OnceCell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 
 use geometry_core::Rect;
-use i18n_core::Direction;
-use renderer_core::{TextAlign, TextStyle, TextWrap};
+use renderer_core::{TextCluster, TextLine, TextStyle, TextWrap};
+use unicode_segmentation::UnicodeSegmentation;
 
-use crate::text_edit::next_boundary;
 use crate::visual_lines::{Affinity, VisualLines};
 
 /// Width of the caret, in logical px.
@@ -16,6 +17,9 @@ pub(crate) const CARET_WIDTH: f32 = 1.5;
 
 /// How wide a row is measured as when nothing should stop it.
 const UNBOUNDED: f32 = 1.0e6;
+
+/// The lines of a text as drawn at one width, cut into clusters.
+type Drawn = Rc<RefCell<Option<(f32, Rc<[TextLine]>)>>>;
 
 /// The rows of one text at one width, kept until the text, the width, the style or the fonts move.
 struct Laid {
@@ -26,6 +30,7 @@ struct Laid {
     generation: u64,
     lines: Rc<VisualLines>,
     widest: Rc<OnceCell<f32>>,
+    drawn: Drawn,
 }
 
 /// The last text an editor broke into rows, so a frame that only moved the caret measures nothing again.
@@ -39,7 +44,7 @@ impl RowCache {
         style: &TextStyle,
         width: Option<f32>,
         mask: Option<char>,
-    ) -> (Rc<VisualLines>, Rc<OnceCell<f32>>) {
+    ) -> (Rc<VisualLines>, Rc<OnceCell<f32>>, Drawn) {
         let generation = renderer_core::text_metrics_generation();
         if let Some(laid) = self.0.borrow().as_ref()
             && laid.text == text
@@ -48,10 +53,15 @@ impl RowCache {
             && laid.generation == generation
             && laid.style.same_extent(style)
         {
-            return (Rc::clone(&laid.lines), Rc::clone(&laid.widest));
+            return (
+                Rc::clone(&laid.lines),
+                Rc::clone(&laid.widest),
+                Rc::clone(&laid.drawn),
+            );
         }
         let lines = Rc::new(VisualLines::of(text, style, width));
         let widest = Rc::new(OnceCell::new());
+        let drawn = Drawn::default();
         *self.0.borrow_mut() = Some(Laid {
             text: text.to_string(),
             width,
@@ -60,8 +70,9 @@ impl RowCache {
             generation,
             lines: Rc::clone(&lines),
             widest: Rc::clone(&widest),
+            drawn: Rc::clone(&drawn),
         });
-        (lines, widest)
+        (lines, widest, drawn)
     }
 
     pub(crate) fn lines(
@@ -72,6 +83,11 @@ impl RowCache {
     ) -> Rc<VisualLines> {
         self.laid(text, style, width, None).0
     }
+}
+
+/// `text` as a masked editor draws it: one `bullet` for every grapheme cluster, so a hidden flag or accented letter is one bullet, as it is one press of Backspace.
+pub(crate) fn masked(text: &str, bullet: char) -> String {
+    text.graphemes(true).map(|_| bullet).collect()
 }
 
 /// How an editor's box frames its text.
@@ -95,7 +111,7 @@ pub(crate) struct Hit {
     pub at: usize,
     /// The row that caret stands on, where the end of a wrapped row is also the start of the next.
     pub affinity: Affinity,
-    /// The start of the character under the press, which is what a double-click selects the word of.
+    /// The start of the cluster under the press, which is what a double-click selects the word of.
     pub under: usize,
 }
 
@@ -103,17 +119,16 @@ pub(crate) struct Hit {
 pub(crate) struct Placed<'a> {
     pub text: &'a str,
     pub lines: Rc<VisualLines>,
+    style: TextStyle,
     flat: TextStyle,
     mask: Option<char>,
-    align: TextAlign,
     pub frame: Frame,
     widest: Rc<OnceCell<f32>>,
-    row_origins: RefCell<Vec<Option<f32>>>,
-    starts_flush: Cell<Option<bool>>,
+    drawn: Drawn,
 }
 
 impl<'a> Placed<'a> {
-    /// `text` in the rows `rows` breaks it into at `frame`, drawn in `style` with each character shown as `mask` where there is one.
+    /// `text` in the rows `rows` breaks it into at `frame`, drawn in `style` with each grapheme cluster shown as `mask` where there is one.
     pub(crate) fn new(
         rows: &RowCache,
         text: &'a str,
@@ -121,23 +136,20 @@ impl<'a> Placed<'a> {
         mask: Option<char>,
         frame: Frame,
     ) -> Self {
-        let (lines, widest) = rows.laid(text, style, frame.wrap, mask);
-        let flat = style.clone().with_text_wrap(TextWrap::NoWrap);
-        let count = lines.len();
+        let (lines, widest, drawn) = rows.laid(text, style, frame.wrap, mask);
         Self {
             text,
             lines,
-            flat,
+            style: style.clone(),
+            flat: style.clone().with_text_wrap(TextWrap::NoWrap),
             mask,
-            align: style.text_align,
             frame,
             widest,
-            row_origins: RefCell::new(vec![None; count]),
-            starts_flush: Cell::new(None),
+            drawn,
         }
     }
 
-    /// How wide `text[range]` is drawn: the letters, or a mask character for each of them.
+    /// How wide `text[range]` is drawn: the letters, or a mask character for each cluster of them.
     pub(crate) fn advance(&self, range: Range<usize>) -> f32 {
         let run = &self.text[range];
         if run.is_empty() {
@@ -146,7 +158,7 @@ impl<'a> Placed<'a> {
         let measure =
             |run: &str| crate::text_metrics::measure_text(run, None, UNBOUNDED, &self.flat).0;
         match self.mask {
-            Some(bullet) => measure(&run.chars().map(|_| bullet).collect::<String>()),
+            Some(bullet) => measure(&masked(run, bullet)),
             None => measure(run),
         }
     }
@@ -186,35 +198,51 @@ impl<'a> Placed<'a> {
         self.advance(range.start..end)
     }
 
-    fn flush_start(&self) -> bool {
-        if let Some(known) = self.starts_flush.get() {
-            return known;
+    /// The lines the text is drawn in, as wide as [`text_width`](Self::text_width), laid out once per text and width.
+    fn drawn(&self) -> Rc<[TextLine]> {
+        let width = self.text_width();
+        if let Some((at, lines)) = self.drawn.borrow().as_ref()
+            && *at == width
+        {
+            return Rc::clone(lines);
         }
-        let flush = matches!(self.align, TextAlign::Start | TextAlign::Justify)
-            && layout_reactive::current_direction() == Direction::Ltr;
-        self.starts_flush.set(Some(flush));
-        flush
+        let lines: Rc<[TextLine]> = self.lay_out(width).into();
+        *self.drawn.borrow_mut() = Some((width, Rc::clone(&lines)));
+        lines
     }
 
-    /// Where the first glyph of `row` sits, before any scroll: where the text's alignment puts a row that wide in the rect the text is drawn in.
-    fn origin(&self, row: usize) -> f32 {
-        if self.flush_start() {
-            return 0.0;
-        }
-        let row = row.min(self.lines.len() - 1);
-        if let Some(known) = self.row_origins.borrow()[row] {
-            return known;
-        }
-        let origin = crate::caret::align_origin(self.align, self.text_width(), self.row_width(row));
-        self.row_origins.borrow_mut()[row] = Some(origin);
-        origin
+    fn lay_out(&self, width: f32) -> Vec<TextLine> {
+        let Some(bullet) = self.mask else {
+            return crate::text_metrics::laid_lines(self.text, width, &self.style);
+        };
+        let bounds: Vec<usize> = self
+            .text
+            .grapheme_indices(true)
+            .map(|(at, _)| at)
+            .chain(std::iter::once(self.text.len()))
+            .collect();
+        let step = bullet.len_utf8();
+        let written = |shown: usize| bounds[(shown / step).min(bounds.len() - 1)];
+        crate::text_metrics::laid_lines(&masked(self.text, bullet), width, &self.style)
+            .into_iter()
+            .map(|mut line| {
+                line.range = written(line.range.start)..written(line.range.end);
+                for cluster in &mut line.clusters {
+                    cluster.bytes = written(cluster.bytes.start)..written(cluster.bytes.end);
+                }
+                line
+            })
+            .collect()
     }
 
     /// The x of byte `at` on `row` before any scroll, held inside the box a wrapped row is drawn in, which the space a row broke on hangs past.
     pub(crate) fn content_x(&self, row: usize, at: usize) -> f32 {
-        let range = self.lines.row(row);
-        let at = at.clamp(range.start, self.text.len());
-        let x = self.origin(row) + self.advance(range.start..at);
+        let drawn = self.drawn();
+        let x = line_of(&drawn, &self.lines, row).map_or(0.0, |line| caret_on(line, at));
+        self.held_in(x)
+    }
+
+    fn held_in(&self, x: f32) -> f32 {
         match self.frame.wrap {
             Some(width) => x.min((width - CARET_WIDTH).max(0.0)),
             None => x,
@@ -256,54 +284,143 @@ impl<'a> Placed<'a> {
         self.hit_row(self.row_at(y), x)
     }
 
-    /// Where a press at `x` on `row` lands. The caret's x only grows along a row, so it is searched for rather than walked to.
+    /// Where a press at `x` on `row` lands: on the side of the cluster nearest it that the press is on, which in a right-to-left cluster is the side its bytes end on.
     pub(crate) fn hit_row(&self, row: usize, x: f32) -> Hit {
         let range = self.lines.row(row);
-        let mut stops = vec![range.start];
-        let mut at = range.start;
-        while at < range.end {
-            at = next_boundary(self.text, at);
-            stops.push(at);
-        }
-        let after = stops.partition_point(|stop| self.x_at(row, *stop) <= x);
-        let before = after.saturating_sub(1);
-        let nearest = match stops.get(after) {
-            Some(next) if self.x_at(row, *next) - x < x - self.x_at(row, stops[before]) => *next,
-            _ => stops[before],
+        let x = x + self.frame.scroll_x;
+        let drawn = self.drawn();
+        let clusters: Vec<&TextCluster> = line_of(&drawn, &self.lines, row)
+            .map(|line| {
+                line.clusters
+                    .iter()
+                    .filter(|cluster| {
+                        cluster.bytes.start >= range.start && cluster.bytes.end <= range.end
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let nearest = clusters
+            .iter()
+            .min_by(|a, b| distance(a, x).total_cmp(&distance(b, x)));
+        let (at, under) = match nearest {
+            Some(cluster) => {
+                let on_left = x < cluster.x + cluster.width / 2.0;
+                let at = match on_left != cluster.is_rtl() {
+                    true => cluster.bytes.start,
+                    false => cluster.bytes.end,
+                };
+                (at, cluster.bytes.start)
+            }
+            None => (range.start, range.start),
         };
-        let under = stops[before.min(stops.len().saturating_sub(2))];
-        let affinity = match nearest == range.end && self.lines.wraps_after(row) {
+        // The space a wrapped row broke on is not drawn, so a press past the last letter drawn lands after it, at the row's end.
+        let drawn_end = clusters.iter().map(|cluster| cluster.bytes.end).max();
+        let at = match drawn_end == Some(at) && self.text[at..range.end].trim().is_empty() {
+            true => range.end,
+            false => at,
+        };
+        let affinity = match at == range.end && self.lines.wraps_after(row) {
             true => Affinity::Upstream,
             false => Affinity::Downstream,
         };
         Hit {
-            at: nearest,
+            at,
             affinity,
             under,
         }
     }
 
-    /// The stretch of each row `span` covers, as `(row, x0, x1)` in the box. A row of no characters the span still crosses is given a sliver, so a selection reads as continuous through it.
+    /// The stretches of each row `span` covers, as `(row, x0, x1)` in the box, left to right: a row where the span meets text running the other way is covered in several. A row of no characters the span still crosses is given a sliver at the end its paragraph reads to, so a selection reads as continuous through it.
     pub(crate) fn bands(&self, span: Range<usize>, sliver: bool) -> Vec<(usize, f32, f32)> {
         let first = self.row_of(span.start, Affinity::Downstream);
         let last = self.row_of(span.end, Affinity::Upstream).max(first);
-        (first..=last)
-            .filter_map(|row| {
-                let range = self.lines.row(row);
-                let (from, to) = (span.start.max(range.start), span.end.min(range.end));
-                if from > to {
-                    return None;
+        let drawn = self.drawn();
+        let mut bands = Vec::new();
+        for row in first..=last {
+            let range = self.lines.row(row);
+            let (from, to) = (span.start.max(range.start), span.end.min(range.end));
+            if from > to {
+                continue;
+            }
+            let line = line_of(&drawn, &self.lines, row);
+            let mut stretches: Vec<(f32, f32)> = line
+                .map_or_else(Vec::new, |line| covered(line, from..to))
+                .into_iter()
+                .map(|(x0, x1)| (self.held_in(x0), self.held_in(x1)))
+                .collect();
+            if stretches.is_empty() {
+                let x = self.content_x(row, from);
+                stretches.push((x, x));
+            }
+            let runs_on = row < last && !self.lines.wraps_after(row);
+            if sliver && runs_on {
+                let wide = self.frame.line_h * 0.35;
+                match line.is_some_and(|line| line.rtl) {
+                    true => {
+                        let (x0, x1) = &mut stretches[0];
+                        *x0 = x0.min(*x1 - wide);
+                    }
+                    false => {
+                        let (x0, x1) = stretches.last_mut().expect("one stretch at least");
+                        *x1 = x1.max(*x0 + wide);
+                    }
                 }
-                let x0 = self.x_at(row, from);
-                let mut x1 = self.x_at(row, to);
-                let runs_on = row < last && !self.lines.wraps_after(row);
-                if sliver && runs_on {
-                    x1 = x1.max(x0 + self.frame.line_h * 0.35);
-                }
-                Some((row, x0, x1))
-            })
-            .collect()
+            }
+            let scroll = self.frame.scroll_x;
+            bands.extend(
+                stretches
+                    .into_iter()
+                    .map(|(x0, x1)| (row, x0 - scroll, x1 - scroll)),
+            );
+        }
+        bands
     }
+}
+
+/// The drawn line `row` of `rows` is: the one that starts where it does.
+fn line_of<'l>(drawn: &'l [TextLine], rows: &VisualLines, row: usize) -> Option<&'l TextLine> {
+    let start = rows.row(row).start;
+    let index = drawn
+        .partition_point(|line| line.range.start <= start)
+        .checked_sub(1)?;
+    drawn.get(index)
+}
+
+/// Where a caret at byte `at` stands on `line`: before the cluster that starts there, after the one that ends there at the end of a run, and where the line begins on a line holding nothing.
+fn caret_on(line: &TextLine, at: usize) -> f32 {
+    if let Some(next) = line.clusters.iter().find(|c| c.bytes.contains(&at)) {
+        return next.leading_x();
+    }
+    if let Some(before) = line.clusters.iter().find(|c| c.bytes.end == at) {
+        return before.trailing_x();
+    }
+    match line.clusters.iter().max_by_key(|c| c.bytes.end) {
+        Some(last) if at > line.range.start => last.trailing_x(),
+        _ => line.start_x,
+    }
+}
+
+/// How far `x` is from `cluster`, nothing inside it.
+fn distance(cluster: &TextCluster, x: f32) -> f32 {
+    (cluster.x - x)
+        .max(x - (cluster.x + cluster.width))
+        .max(0.0)
+}
+
+/// The stretches of `line` its clusters within `span` cover, left to right: one per run of them no cluster outside the span interrupts.
+fn covered(line: &TextLine, span: Range<usize>) -> Vec<(f32, f32)> {
+    let mut stretches: Vec<(f32, f32)> = Vec::new();
+    let mut open = false;
+    for cluster in &line.clusters {
+        let inside = cluster.bytes.start >= span.start && cluster.bytes.end <= span.end;
+        match (inside, open, stretches.last_mut()) {
+            (true, true, Some(stretch)) => stretch.1 = cluster.x + cluster.width,
+            (true, _, _) => stretches.push((cluster.x, cluster.x + cluster.width)),
+            (false, _, _) => {}
+        }
+        open = inside;
+    }
+    stretches
 }
 
 #[cfg(test)]

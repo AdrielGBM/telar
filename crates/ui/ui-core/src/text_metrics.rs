@@ -3,7 +3,7 @@
 //! The indirection exists for the test-time install below: `renderer-text` is a dev-dependency now, so without it every test that lays out a label would have to name a shaper itself.
 
 use layout_core::AvailableSpace;
-use renderer_core::{Color, Span, TextStyle};
+use renderer_core::{Color, Span, TextLine, TextStyle};
 
 // Idempotent and yielding, so a test that installed its own stub keeps it.
 #[cfg(test)]
@@ -47,6 +47,12 @@ pub(crate) fn line_starts(text: &str, max_width: f32, style: &TextStyle) -> Vec<
     #[cfg(test)]
     ensure_installed();
     renderer_core::text_line_starts(text, None, max_width, style)
+}
+
+pub(crate) fn laid_lines(text: &str, max_width: f32, style: &TextStyle) -> Vec<TextLine> {
+    #[cfg(test)]
+    ensure_installed();
+    renderer_core::text_laid_lines(text, None, max_width, style)
 }
 
 pub(crate) fn measure_ink_bounds(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {

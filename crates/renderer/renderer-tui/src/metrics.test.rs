@@ -108,3 +108,42 @@ fn line_starts_ignore_the_clamp() {
         vec![0, 10]
     );
 }
+
+#[test]
+fn a_laid_line_steps_by_cluster_in_written_order_and_a_wide_one_takes_two_cells() {
+    let text = "a\u{65e5}e\u{301}\u{1f1ea}\u{1f1f8}";
+    let lines = metrics().laid_lines(text, None, 1.0e6, &style());
+    assert_eq!(lines.len(), 1);
+    let clusters = &lines[0].clusters;
+    let written: Vec<&str> = clusters.iter().map(|c| &text[c.bytes.clone()]).collect();
+    assert_eq!(
+        written,
+        vec!["a", "\u{65e5}", "e\u{301}", "\u{1f1ea}\u{1f1f8}"]
+    );
+    assert_eq!(
+        clusters[1].width,
+        2.0 * 8.0,
+        "an ideograph is two cells wide"
+    );
+    assert_eq!(clusters[2].x, 3.0 * 8.0);
+    assert!(clusters.iter().all(|c| !c.is_rtl()));
+}
+
+#[test]
+fn a_terminal_draws_hebrew_in_the_order_it_is_written() {
+    let text = "\u{5d0}\u{5d1}";
+    let line = metrics().laid_lines(text, None, 1.0e6, &style()).remove(0);
+    assert!(!line.rtl);
+    assert_eq!(line.clusters[0].bytes, 0..2);
+    assert!(line.clusters[0].x < line.clusters[1].x);
+}
+
+#[test]
+fn laid_lines_are_placed_as_the_painter_aligns_them_and_a_final_break_opens_a_line() {
+    let centred = style().with_text_align(TextAlign::Center);
+    let lines = metrics().laid_lines("ab\n", None, 10.0 * 8.0, &centred);
+    let ranges: Vec<_> = lines.iter().map(|line| line.range.clone()).collect();
+    assert_eq!(ranges, vec![0..2, 3..3]);
+    assert_eq!(lines[0].start_x, 4.0 * 8.0);
+    assert!(lines[1].clusters.is_empty());
+}

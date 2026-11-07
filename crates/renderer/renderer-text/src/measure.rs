@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use renderer_core::{Span, TextStyle};
+use renderer_core::{Span, TextLine, TextStyle};
 
 use crate::TextShaper;
 use crate::fonts::{self, Fonts};
@@ -62,6 +62,16 @@ impl renderer_core::TextMetrics for ShaperMetrics {
 
     fn line_height(&self, font_size: f32) -> f32 {
         font_size * crate::LINE_HEIGHT_FACTOR
+    }
+
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        with_shaper(|shaper| shaper.laid_lines(text, spans, max_width, style))
     }
 
     fn index_at(

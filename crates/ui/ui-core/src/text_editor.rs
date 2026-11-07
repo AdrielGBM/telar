@@ -27,7 +27,7 @@ use crate::surface_context::HomeSurface;
 use crate::text_edit::{
     Clicks, Granularity, floor_boundary, line_at, next_boundary, prev_boundary, word_at,
 };
-use crate::text_place::{CARET_WIDTH, Frame, Hit, Placed, RowCache};
+use crate::text_place::{CARET_WIDTH, Frame, Hit, Placed, RowCache, masked};
 use crate::visual_lines::{Affinity, VisualLines};
 
 /// How much of the field's ink a hint keeps: enough that it still reads at 4.5:1 on a field's surface, which WCAG asks of placeholder text as of any other.
@@ -333,10 +333,10 @@ impl Editor {
         }
     }
 
-    /// What is drawn for `text`: the text itself, or one mask character per character of it.
+    /// What is drawn for `text`: the text itself, or one mask character per grapheme cluster of it.
     pub(crate) fn shown(&self, text: &str) -> String {
         match self.mask() {
-            Some(bullet) => text.chars().map(|_| bullet).collect(),
+            Some(bullet) => masked(text, bullet),
             None => text.to_string(),
         }
     }

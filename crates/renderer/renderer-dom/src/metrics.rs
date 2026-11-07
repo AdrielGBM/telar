@@ -2,7 +2,7 @@
 //!
 //! Taffy still runs on this target — its rects are what hit-testing, scrolling and anchored overlays read, and what a parity test compares the browser's own layout against. For those numbers to mean anything, the measurer has to agree with whatever will actually render the text, so it asks a 2D canvas rather than shaping glyphs from a font file the page would then not use.
 
-use renderer_core::{Span, TextMetrics, TextStyle, TextWrap, case_text};
+use renderer_core::{Span, TextLine, TextMetrics, TextStyle, TextWrap, case_text};
 use wasm_bindgen::JsCast;
 
 // Here rather than in the measurer, so the measurer stays a unit struct and satisfies the `Send + Sync` its runtime slot is declared with — which on a single-threaded target means nothing, but has to be true for it to be installed at all.
@@ -310,6 +310,72 @@ impl TextMetrics for CanvasTextMetrics {
             .collect();
         starts.dedup();
         starts
+    }
+
+    /// The browser's wrap and `text-align` inside the box, each cluster measured as the prefix of its line it ends, so kerning across it counts. Placed in the order written: the measurer has no bidi of its own, so right-to-left runs the browser reorders are not reordered here.
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        let cased = case_text(text, spans, style);
+        let shown: &str = &cased.text;
+        let mut starts = Vec::new();
+        crate::wrap::each_line(
+            shown,
+            column(max_width, style),
+            |run| width_of(run, style),
+            |line| starts.push(line.as_ptr() as usize - shown.as_ptr() as usize),
+        );
+        if starts.is_empty() || shown.ends_with('\n') {
+            starts.push(shown.len());
+        }
+        // A line runs on to where the next begins or its paragraph ends, so the spaces the wrap trimmed off it are still clusters a caret can stand after.
+        let ranges: Vec<_> = starts
+            .iter()
+            .enumerate()
+            .map(|(index, &start)| {
+                let paragraph_end = shown[start..]
+                    .find('\n')
+                    .map_or(shown.len(), |at| start + at);
+                let next = starts.get(index + 1).copied().unwrap_or(shown.len());
+                start..paragraph_end.min(next)
+            })
+            .collect();
+        let wraps = column(max_width, style).is_finite();
+        let slack_in = |line: &str| {
+            let room = if max_width.is_finite() && max_width < 1.0e5 {
+                max_width
+            } else {
+                0.0
+            };
+            let width = match wraps {
+                true => width_of(line.trim_end(), style),
+                false => width_of(line, style),
+            };
+            (room - width).max(0.0)
+        };
+        ranges
+            .into_iter()
+            .map(|range| {
+                let line = &shown[range.clone()];
+                let start_x = match style.text_align {
+                    renderer_core::TextAlign::Center => slack_in(line) / 2.0,
+                    renderer_core::TextAlign::End => slack_in(line),
+                    renderer_core::TextAlign::Start | renderer_core::TextAlign::Justify => 0.0,
+                };
+                let (mut end, mut before) = (0, 0.0);
+                TextLine::left_to_right(&cased, text, range, start_x, |part| {
+                    end += part.len();
+                    let after = width_of(&line[..end], style);
+                    let advance = after - before;
+                    before = after;
+                    advance
+                })
+            })
+            .collect()
     }
 
     /// Asked with a size and nothing else, which is the default face at that size.

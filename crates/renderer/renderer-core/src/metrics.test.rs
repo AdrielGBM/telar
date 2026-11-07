@@ -18,6 +18,17 @@ impl TextMetrics for Fixed {
     fn ink_bounds(&self, _text: &str, _max_width: f32, _style: &TextStyle) -> (f32, f32) {
         (0.0, self.0)
     }
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        _max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        unwrapped(text, spans, style, |part| {
+            self.measure(part, None, 1.0e6, style).0
+        })
+    }
     fn line_height(&self, _font_size: f32) -> f32 {
         self.0
     }
@@ -78,9 +89,40 @@ impl TextMetrics for Proportional {
     fn ink_bounds(&self, _text: &str, _max_width: f32, style: &TextStyle) -> (f32, f32) {
         (0.0, style.font_size)
     }
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        _max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        unwrapped(text, spans, style, |part| {
+            self.measure(part, None, 1.0e6, style).0
+        })
+    }
     fn line_height(&self, font_size: f32) -> f32 {
         1.2 * font_size
     }
+}
+
+/// `text` broken only at its `\n`s, each line drawn from the left in the order it is written.
+fn unwrapped(
+    text: &str,
+    spans: Option<&[Span]>,
+    style: &TextStyle,
+    advance: impl Fn(&str) -> f32,
+) -> Vec<TextLine> {
+    let cased = crate::case_text(text, spans, style);
+    let mut start = 0;
+    cased
+        .text
+        .split('\n')
+        .map(|line| {
+            let range = start..start + line.len();
+            start = range.end + 1;
+            TextLine::left_to_right(&cased, text, range, 0.0, &advance)
+        })
+        .collect()
 }
 
 fn close(a: f32, b: f32) -> bool {
@@ -147,4 +189,18 @@ fn a_measurer_that_never_wraps_starts_a_line_only_after_a_newline() {
         vec![0, 6, 7]
     );
     assert_eq!(Fixed(10.0).line_starts("", None, 1.0, &style), vec![0]);
+}
+
+#[test]
+fn the_installed_measurer_answers_where_each_cluster_is_drawn() {
+    let style = TextStyle::new(14.0, crate::Color::BLACK);
+    let lines = Fixed(10.0).laid_lines("ab\nxe\u{301}", None, 1.0e6, &style);
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[1].range, 3..7);
+    let bytes: Vec<_> = lines[1].clusters.iter().map(|c| c.bytes.clone()).collect();
+    assert_eq!(
+        bytes,
+        vec![3..4, 4..7],
+        "a letter and its mark are one cluster"
+    );
 }

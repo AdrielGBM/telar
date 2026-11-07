@@ -62,3 +62,44 @@ fn presses_far_apart_in_time_are_single_clicks() {
     std::thread::sleep(DOUBLE_CLICK + Duration::from_millis(30));
     assert_eq!(clicks.press(0.0, 0.0), 1);
 }
+
+const FLAG: &str = "\u{1f1ea}\u{1f1f8}";
+const CODER: &str = "\u{1f469}\u{200d}\u{1f4bb}";
+const ACUTE_E: &str = "e\u{301}";
+
+#[test]
+fn boundaries_step_over_whole_grapheme_clusters() {
+    for cluster in [FLAG, CODER, ACUTE_E] {
+        let text = format!("a{cluster}b");
+        let after = 1 + cluster.len();
+        assert_eq!(next_boundary(&text, 1), after, "{cluster:?} is one step");
+        assert_eq!(
+            prev_boundary(&text, after),
+            1,
+            "{cluster:?} is one step back"
+        );
+        assert_eq!(
+            floor_boundary(&text, 2),
+            1,
+            "a caret inside {cluster:?} stands before it"
+        );
+    }
+}
+
+#[test]
+fn two_flags_in_a_row_are_two_steps() {
+    let text = format!("{FLAG}{FLAG}");
+    assert_eq!(next_boundary(&text, 0), FLAG.len());
+    assert_eq!(prev_boundary(&text, text.len()), FLAG.len());
+}
+
+#[test]
+fn a_letter_with_its_mark_is_part_of_the_word() {
+    let text = "un cafe\u{301} solo";
+    let at = text.find('c').unwrap();
+    assert_eq!(&text[word_at(text, at)], "cafe\u{301}");
+    assert_eq!(
+        &text[word_at(text, text.find('\u{301}').unwrap())],
+        "cafe\u{301}"
+    );
+}

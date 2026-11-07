@@ -1039,11 +1039,11 @@ fn a_masked_field_masks_its_composition() {
     assert_eq!(drawn_text(&input), "•••");
 }
 
-/// The caret an input method is told about is the caret that is drawn, whichever way the surface writes.
+/// The caret an input method is told about is the caret that is drawn, whichever way the surface and the text write.
 #[test]
 fn the_reported_caret_is_the_drawn_one_in_a_right_to_left_surface() {
     crate::context::set_direction(i18n_core::Direction::Rtl);
-    let input = aligned_input("hola", TextAlign::Start);
+    let input = aligned_input("\u{5e9}\u{5dc}\u{5d5}\u{5dd}", TextAlign::Start);
     let drawn = caret_of(&input).0;
     let reported = crate::text_input().expect("the field holds the keyboard");
     crate::context::set_direction(i18n_core::Direction::Ltr);

@@ -2,7 +2,7 @@
 
 use cosmic_text::{
     Align, Attrs, Buffer, CacheKey, CacheKeyFlags, Color as CosmicColor, Family, FontSystem,
-    LayoutGlyph, Metrics, PhysicalGlyph, Shaping, Style, SwashCache, Weight, fontdb,
+    LayoutGlyph, Metrics, PhysicalGlyph, Shaping, Style, SwashCache, Weight, Wrap, fontdb,
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
@@ -15,6 +15,9 @@ mod cache;
 mod colr;
 mod decoration;
 mod layout;
+#[cfg(test)]
+#[path = "shaper.lines.test.rs"]
+mod lines_tests;
 mod metrics;
 mod raster;
 #[cfg(test)]
@@ -233,9 +236,14 @@ fn shape_buffer(
     let font_size = style.font_size;
     let metrics = Metrics::new(font_size, effective_line_height(style));
     let mut buffer = Buffer::new(font_system, metrics);
-    // `None` width is cosmic-text for "do not wrap": the line grows past the box instead of breaking, which is what a label that is really a token wants.
-    let wrap_width = (!(style.text_wrap == TextWrap::NoWrap)).then_some(rect.width);
-    buffer.set_size(wrap_width, Some(rect.height));
+    // A line that must not break still keeps the box's width, so it is aligned in the box it is drawn in, as a document aligns `white-space: nowrap` text; with no width cosmic-text aligns a line in its own width, which is no alignment at all.
+    if style.text_wrap == TextWrap::NoWrap {
+        buffer.set_wrap(Wrap::None);
+    }
+    buffer.set_size(
+        Some(rect.width).filter(|width| width.is_finite()),
+        Some(rect.height),
+    );
     let attrs = text_attrs(style, font_system, family_availability);
     // `set_text` rather than a one-span `set_rich_text`: the same call underneath, but this is the one the byte-exact software golden was recorded against.
     match spans.filter(|s| !s.is_empty()) {

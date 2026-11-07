@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::{Span, TextStyle};
+use crate::{Span, TextLine, TextStyle};
 
 /// How much room a string takes — all a widget tree needs to know about text before anything is drawn.
 ///
@@ -26,6 +26,15 @@ pub trait TextMetrics: Send + Sync + 'static {
 
     /// The height of one line at `font_size`. A question rather than a constant because a terminal's line height is a cell, not a multiple of a font size.
     fn line_height(&self, font_size: f32) -> f32;
+
+    /// The lines of `text` laid out at `max_width` as they are drawn, with the same breaks, alignment and reordering, each cut into the grapheme clusters a caret steps over, in bytes of `text` as written. What an editor places its caret, its selection and a press by, so a surface that reorders right-to-left runs answers with them reordered, and one that does not answers in the order the text is written.
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine>;
 
     /// The byte offset of the character under `(x, y)` in `text` laid out at `max_width` the way [`measure`](Self::measure) lays it out, from the top-left of the text. `None` off the text, and on a surface that cannot tell: a document answers a press on a run itself.
     fn index_at(
@@ -144,6 +153,16 @@ pub fn text_index_at(
     at: (f32, f32),
 ) -> Option<usize> {
     metrics().index_at(text, spans, max_width, style, at)
+}
+
+/// The lines of `text` laid out at `max_width` as they are drawn, cut into grapheme clusters. See [`TextMetrics::laid_lines`].
+pub fn text_laid_lines(
+    text: &str,
+    spans: Option<&[Span]>,
+    max_width: f32,
+    style: &TextStyle,
+) -> Vec<TextLine> {
+    metrics().laid_lines(text, spans, max_width, style)
 }
 
 /// Where each line of `text` laid out at `max_width` begins. See [`TextMetrics::line_starts`].

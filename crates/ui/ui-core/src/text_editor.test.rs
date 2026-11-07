@@ -25,6 +25,11 @@ fn advance(text: &str) -> f32 {
     crate::text_metrics::measure_text(text, None, 1.0e6, &flat).0
 }
 
+/// Whether a mark at `x` stands at `measured`, a width rounded up to the 64th of a pixel layout measures in, which a glyph's own position is not.
+fn agrees(x: f32, measured: f32) -> bool {
+    (x - measured).abs() <= 1.0 / 64.0
+}
+
 fn key(k: Key) -> Event {
     Event::KeyPressed {
         key: k,
@@ -484,9 +489,9 @@ fn a_composition_after_accented_rows_is_marked_under_its_letters_on_its_own_row(
     let underline = rects(&view, 1.0);
     assert_eq!(underline.len(), 1, "{underline:?}");
     let (x0, x1) = (advance("naïve "), advance(&format!("naïve {preedit}")));
-    assert!((underline[0].x - x0).abs() < 0.01, "{underline:?} for {x0}");
+    assert!(agrees(underline[0].x, x0), "{underline:?} for {x0}");
     assert!(
-        (underline[0].x + underline[0].width - x1).abs() < 0.01,
+        agrees(underline[0].x + underline[0].width, x1),
         "{underline:?} for {x1}"
     );
     assert_eq!(
@@ -495,7 +500,7 @@ fn a_composition_after_accented_rows_is_marked_under_its_letters_on_its_own_row(
         "on the foot of the third row"
     );
     let caret = caret_of(&area.editor);
-    assert!((caret.x - x1).abs() < 0.01, "{caret:?}");
+    assert!(agrees(caret.x, x1), "{caret:?}");
     assert_eq!(caret.y, 2.0 * line_h());
     let reported = crate::text_input().expect("the area holds the keyboard");
     let at = area.editor.leaf.rect.get();
@@ -518,7 +523,7 @@ fn the_part_being_converted_is_marked_on_every_row_it_falls_on() {
     let heavy = rects(&area.view(), 2.0);
     assert_eq!(heavy.len(), 1, "{heavy:?}");
     let x = advance(&format!("áéíóú {}", &preedit[..from]));
-    assert!((heavy[0].x - x).abs() < 0.01, "{heavy:?} for {x}");
+    assert!(agrees(heavy[0].x, x), "{heavy:?} for {x}");
 }
 
 /// In a field: kana composed after accented letters and a space are marked from the end of the space.
@@ -532,16 +537,13 @@ fn a_field_marks_a_composition_from_the_end_of_the_space_before_it() {
         Some((preedit.len(), preedit.len())),
     )));
     let underline = rects(&input.view(), 1.0);
-    assert!(
-        (underline[0].x - advance(text)).abs() < 0.01,
-        "{underline:?}"
-    );
+    assert!(agrees(underline[0].x, advance(text)), "{underline:?}");
     assert!(
         advance(text) > advance(text.trim_end()),
         "the space takes its room"
     );
     let caret = caret_of(&input.editor);
-    assert!((caret.x - advance(&format!("{text}{preedit}"))).abs() < 0.01);
+    assert!(agrees(caret.x, advance(&format!("{text}{preedit}"))));
 }
 
 /// **The text is drawn on the rows the marks are placed on.** Its line height is said outright, so a renderer that would grow a row for a character from another face cannot move the rows under the caret.
@@ -630,4 +632,95 @@ fn rows_typed_past_the_bottom_of_the_view_scroll_it_with_them() {
 /// Long enough after the last press that the next is a click of its own.
 fn wait_past_a_double_click() {
     std::thread::sleep(DOUBLE_CLICK + std::time::Duration::from_millis(20));
+}
+
+const CLUSTERS: [&str; 3] = [
+    "\u{1f1ea}\u{1f1f8}",
+    "\u{1f469}\u{200d}\u{1f4bb}",
+    "e\u{301}",
+];
+
+fn named(editor: &mut Editor, k: NamedKey) {
+    editor.on_event(&key(Key::Named(k)));
+}
+
+/// **A flag, an emoji joined from several and a letter with its accent are one character to whoever types them**, so one press of Backspace or Delete takes the whole of one, never the half that leaves a different symbol or a stray mark behind.
+#[test]
+fn backspace_and_delete_take_a_whole_cluster() {
+    for cluster in CLUSTERS {
+        let text = format!("a{cluster}b");
+        let (mut input, value) = field(&text, 200.0);
+        input.editor.caret.set(1 + cluster.len());
+        named(&mut input.editor, NamedKey::Backspace);
+        assert_eq!(value.get(), "ab", "Backspace after {cluster:?}");
+        assert_eq!(input.editor.caret.get(), 1);
+
+        let (mut input, value) = field(&text, 200.0);
+        input.editor.caret.set(1);
+        named(&mut input.editor, NamedKey::Delete);
+        assert_eq!(value.get(), "ab", "Delete before {cluster:?}");
+        assert_eq!(input.editor.caret.get(), 1);
+    }
+}
+
+#[test]
+fn the_arrows_step_over_a_whole_cluster() {
+    for cluster in CLUSTERS {
+        let text = format!("a{cluster}b");
+        let (mut input, _) = field(&text, 200.0);
+        input.editor.caret.set(1);
+        named(&mut input.editor, NamedKey::ArrowRight);
+        assert_eq!(input.editor.caret.get(), 1 + cluster.len(), "{cluster:?}");
+        named(&mut input.editor, NamedKey::ArrowLeft);
+        assert_eq!(input.editor.caret.get(), 1, "{cluster:?}");
+    }
+}
+
+/// **A caret in Hebrew stands where the letters are drawn**: the text reads from the right, so a press at its right end puts the caret before the first letter written, and the caret after the last letter is drawn at the left.
+#[test]
+fn a_press_on_hebrew_text_lands_where_the_letters_are_drawn() {
+    let text = "\u{5e9}\u{5dc}\u{5d5}\u{5dd}";
+    let (mut input, value) = field(text, 200.0);
+    let at_end = caret_of(&input.editor).x;
+    click(&mut input.editor, 199.0, 12.0);
+    assert_eq!(input.editor.caret.get(), 0);
+    assert!(
+        caret_of(&input.editor).x > at_end,
+        "the start of a right-to-left line is drawn right of its end"
+    );
+    input.editor.caret.set(text.len());
+    named(&mut input.editor, NamedKey::Backspace);
+    assert_eq!(
+        value.get(),
+        "\u{5e9}\u{5dc}\u{5d5}",
+        "Backspace takes the last letter written"
+    );
+}
+
+/// A selection that runs from Latin into Hebrew covers letters on both sides of one it leaves out, so it is painted as two bands.
+#[test]
+fn a_selection_into_hebrew_is_painted_where_its_letters_are() {
+    let text = "ab \u{5d0}\u{5d1} cd";
+    let (mut input, _) = field(text, 200.0);
+    input.editor.caret.set(1);
+    shift(true);
+    for _ in 0..3 {
+        input.editor.on_event(&Event::KeyPressed {
+            key: Key::Named(NamedKey::ArrowRight),
+            modifiers: ModifiersState {
+                is_shift: true,
+                ..ModifiersState::default()
+            },
+            unmodified: None,
+        });
+    }
+    shift(false);
+    assert_eq!(selected(&input.editor).as_deref(), Some("b \u{5d0}"));
+    let mut bands: Vec<Rect> = rects(&input.view(), line_h())
+        .into_iter()
+        .filter(|band| band.width != CARET_WIDTH)
+        .collect();
+    bands.sort_by(|a, b| a.x.total_cmp(&b.x));
+    assert_eq!(bands.len(), 2, "{bands:?}");
+    assert!(bands[0].x + bands[0].width <= bands[1].x, "{bands:?}");
 }

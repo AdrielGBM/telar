@@ -1,9 +1,18 @@
 //! What a string is worth to layout when a "pixel" is a fraction of a character cell.
 
-use renderer_core::{Span, TextAlign, TextMetrics, TextStyle, TextWrap, case_text};
+use renderer_core::{Span, TextAlign, TextLine, TextMetrics, TextStyle, TextWrap, case_text};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::wrap::{WrapConfig, WrappedLine, grapheme_cols, line_cols, wrap};
+
+/// The column a line `width` columns wide starts at in a box `cols` wide, as `align` places it.
+pub(crate) fn align_cols(align: TextAlign, cols: u16, width: u16) -> u16 {
+    match align {
+        TextAlign::Center => cols.saturating_sub(width) / 2,
+        TextAlign::End => cols.saturating_sub(width),
+        TextAlign::Start | TextAlign::Justify => 0,
+    }
+}
 
 /// How many logical pixels one terminal cell stands for.
 ///
@@ -119,6 +128,42 @@ impl TextMetrics for CellMetrics {
         self.cell.height
     }
 
+    /// The painter's own wrap and alignment, without the clamp: a terminal draws the cells in the order they are written, each grapheme cluster as many columns wide as it takes.
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        let cased = case_text(text, spans, style);
+        let config = WrapConfig {
+            max_lines: None,
+            ..self.config(max_width, style)
+        };
+        let mut lines = Vec::new();
+        wrap(&cased.text, &config, &mut lines);
+        if cased.text.ends_with('\n') {
+            let end = cased.text.len();
+            lines.push(WrappedLine {
+                range: end..end,
+                cols: 0,
+                ellipsized: false,
+            });
+        }
+        let cols = self.cell.cols_in(max_width);
+        let cell = self.cell.width;
+        lines
+            .into_iter()
+            .map(|line| {
+                let start = align_cols(style.text_align, cols, line.cols);
+                TextLine::left_to_right(&cased, text, line.range, f32::from(start) * cell, |part| {
+                    f32::from(grapheme_cols(part)) * cell
+                })
+            })
+            .collect()
+    }
+
     /// The cell under the point, found the way the painter lays the paragraph out: the same wrap, the same alignment inside the columns it was given.
     fn index_at(
         &self,
@@ -136,12 +181,7 @@ impl TextMetrics for CellMetrics {
         let mut lines = Vec::new();
         self.lines(text, max_width, style, &mut lines);
         let line = lines.get((y / self.cell.height) as usize)?;
-        let cols = self.cell.cols_in(max_width);
-        let start = match style.text_align {
-            TextAlign::Center => cols.saturating_sub(line.cols) / 2,
-            TextAlign::End => cols.saturating_sub(line.cols),
-            TextAlign::Start | TextAlign::Justify => 0,
-        };
+        let start = align_cols(style.text_align, self.cell.cols_in(max_width), line.cols);
         let target = (x / self.cell.width) as u16;
         let mut col = start;
         for (offset, grapheme) in text[line.range.clone()].grapheme_indices(true) {

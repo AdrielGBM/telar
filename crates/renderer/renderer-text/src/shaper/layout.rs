@@ -5,12 +5,13 @@ use super::cache::{
     ShapingCacheKey, hash_text, line_snapped_height, text_style_bits, visible_lines,
 };
 use super::{
-    effective_line_height, from_cosmic_color, glyph_index_at, in_layout_units, make_buffer,
-    make_cased_buffer, physical_glyph, resolve_coverage, shape_buffer, visual_line_starts,
+    effective_line_height, from_cosmic_color, glyph_index_at, in_layout_units, line_offsets,
+    make_buffer, make_cased_buffer, physical_glyph, resolve_coverage, shape_buffer,
+    visual_line_starts,
 };
 use cosmic_text::{CacheKey, SwashContent, Wrap};
 use geometry_core::{Color, Rect};
-use renderer_core::{Raster, Span, TextStyle, TextWrap};
+use renderer_core::{PlacedGlyph, Raster, Span, TextAlign, TextLine, TextStyle, TextWrap};
 
 use super::atlas::GlyphInfo;
 
@@ -424,6 +425,71 @@ impl TextShaper {
         starts
     }
 
+    /// The visual lines of `text` laid out at `max_width` as [`layout_glyphs`](Self::layout_glyphs) draws them, before any clamp, cut into grapheme clusters in the bytes it was written in. See [`renderer_core::TextMetrics::laid_lines`].
+    pub fn laid_lines(
+        &mut self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        self.sync_fonts();
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: max_width,
+            height: 100000.0,
+        };
+        let cased = renderer_core::case_text(text, spans, style);
+        let buffer = shape_buffer(
+            &mut self.font_system,
+            &mut self.family_availability,
+            &cased.text,
+            cased.spans.as_deref(),
+            rect,
+            style,
+        );
+        let offsets = line_offsets(&buffer);
+        let mut lines: Vec<TextLine> = buffer
+            .layout_runs()
+            .map(|run| {
+                let offset = offsets[run.line_i];
+                let glyphs: Vec<PlacedGlyph> = run
+                    .glyphs
+                    .iter()
+                    .map(|glyph| PlacedGlyph {
+                        bytes: offset + glyph.start..offset + glyph.end,
+                        x: glyph.x,
+                        width: glyph.w,
+                        level: glyph.level.number(),
+                    })
+                    .collect();
+                let shown = match (
+                    glyphs.iter().map(|g| g.bytes.start).min(),
+                    glyphs.iter().map(|g| g.bytes.end).max(),
+                ) {
+                    (Some(start), Some(end)) => start..end,
+                    _ => offset..offset,
+                };
+                let start_x = match run.rtl {
+                    true => glyphs.iter().map(|g| g.x + g.width).reduce(f32::max),
+                    false => glyphs.iter().map(|g| g.x).reduce(f32::min),
+                }
+                .unwrap_or_else(|| empty_line_x(style.text_align, run.rtl, max_width));
+                TextLine::from_glyphs(&cased, text, shown, run.rtl, start_x, glyphs)
+            })
+            .collect();
+        if lines.is_empty() {
+            lines.push(TextLine {
+                range: 0..0,
+                rtl: false,
+                start_x: empty_line_x(style.text_align, false, max_width),
+                clusters: Vec::new(),
+            });
+        }
+        lines
+    }
+
     pub fn measure_min_content(
         &mut self,
         text: &str,
@@ -510,5 +576,19 @@ impl TextShaper {
             return (0.0, 0.0);
         }
         (min_top, max_bottom - min_top)
+    }
+}
+
+/// Where a line holding no glyphs starts in a box `width` wide: cosmic-text lays such a line out without placing it, so the alignment it would have is worked out here.
+fn empty_line_x(align: TextAlign, rtl: bool, width: f32) -> f32 {
+    let width = if width.is_finite() {
+        width.max(0.0)
+    } else {
+        0.0
+    };
+    match (align, rtl) {
+        (TextAlign::Center, _) => width / 2.0,
+        (TextAlign::End, false) | (TextAlign::Start | TextAlign::Justify, true) => width,
+        (TextAlign::End, true) | (TextAlign::Start | TextAlign::Justify, false) => 0.0,
     }
 }

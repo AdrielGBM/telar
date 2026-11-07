@@ -30,7 +30,7 @@ element group
         matrix 1,0,0,1,140,104
           clip 0,0 520x32
             text 0,8 520x16.8 "zoom" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
-            rect 36.59,8 1.5x16.8 fill=#171a2eff
+            rect 36.58,8 1.5x16.8 fill=#171a2eff
           end
         end
       end

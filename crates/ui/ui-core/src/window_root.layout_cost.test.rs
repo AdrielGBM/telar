@@ -7,7 +7,7 @@ use layout_core::{AlignItems, AvailableSpace, LayoutStyle, SizeDimension, Templa
 use layout_reactive::layout_passes;
 use platform_core::Event;
 use reactive_core::{RwSignal, signal};
-use renderer_core::{Color, RectStyle, Span, TextMetrics, TextStyle};
+use renderer_core::{Color, RectStyle, Span, TextLine, TextMetrics, TextStyle};
 use ui_tree::ComponentList;
 
 use super::WindowRoot;
@@ -44,6 +44,16 @@ impl TextMetrics for CountingMetrics {
 
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
         renderer_text::ShaperMetrics.ink_bounds(text, max_width, style)
+    }
+
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        renderer_text::ShaperMetrics.laid_lines(text, spans, max_width, style)
     }
 
     fn line_height(&self, font_size: f32) -> f32 {
