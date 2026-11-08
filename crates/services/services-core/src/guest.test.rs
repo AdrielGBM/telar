@@ -1,3 +1,4 @@
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -748,28 +749,498 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "TASKS",
         "the app's own tasks, which its host drains through the boundary's exports",
     ),
+    (
+        "crates/embed/telar-embed/src/guest.rs",
+        "TELAR_EMBED_ENTRIES",
+        "the export a guest declares for its host to read, which the guest never reads back",
+    ),
+    (
+        "crates/layout/layout-reactive/src/direction.rs",
+        "direction",
+        "the app's own surface-scoped writing direction",
+    ),
+    (
+        "crates/layout/layout-reactive/src/context.rs",
+        "PARENTS",
+        "the app's own per-surface layout tree",
+    ),
+    (
+        "crates/layout/layout-reactive/src/context.rs",
+        "SCROLL_HOSTS",
+        "the app's own per-surface layout tree",
+    ),
+    (
+        "crates/layout/layout-reactive/src/context.rs",
+        "LAYOUT_RUNTIME",
+        "the app's own per-surface layout tree",
+    ),
+    (
+        "crates/layout/layout-reactive/src/context.rs",
+        "NEXT_GENERATION",
+        "the app's own layout generations",
+    ),
+    (
+        "crates/layout/layout-reactive/src/context.rs",
+        "RECORDINGS",
+        "the app's own layout pass bookkeeping",
+    ),
+    (
+        "crates/layout/layout-reactive/src/context.rs",
+        "AFTER_LAYOUT",
+        "the app's own layout pass bookkeeping",
+    ),
+    (
+        "crates/layout/layout-reactive/src/context.rs",
+        "MEASURE_AGAIN",
+        "the app's own layout pass bookkeeping",
+    ),
+    (
+        "crates/layout/layout-reactive/src/surface_size.rs",
+        "SIDES",
+        "the app's own per-surface size",
+    ),
+    (
+        "crates/motion/motion-core/src/ticker.rs",
+        "REGISTRY",
+        "the app's own animation tickers",
+    ),
+    (
+        "crates/platform/platform-core/src/window_command.rs",
+        "WINDOW_COMMANDS",
+        "the app's own per-surface window-command queue",
+    ),
+    (
+        "crates/preferences/preferences-core/src/lib.rs",
+        "COLOR_SCHEME",
+        "the app's own reactive preference state",
+    ),
+    (
+        "crates/preferences/preferences-core/src/lib.rs",
+        "REDUCED_MOTION",
+        "the app's own reactive preference state",
+    ),
+    (
+        "crates/preferences/preferences-core/src/lib.rs",
+        "HIGH_CONTRAST",
+        "the app's own reactive preference state",
+    ),
+    (
+        "crates/preferences/preferences-core/src/lib.rs",
+        "LOCALES",
+        "the app's own reactive preference state",
+    ),
+    (
+        "crates/preferences/preferences-core/src/lib.rs",
+        "REDUCED_MOTION_OVERRIDE",
+        "the app's own reactive preference state",
+    ),
+    (
+        "crates/preferences/preferences-core/src/lib.rs",
+        "contrast",
+        "the app's own reactive preference state",
+    ),
+    (
+        "crates/reactive/reactive-core/src/surface_scoped.rs",
+        "OVERRIDE",
+        "the app's own per-surface override behind each surface-scoped value",
+    ),
+    (
+        "crates/renderer/renderer-assets/src/svg/options.rs",
+        "OPTIONS",
+        "the app's own SVG parse options, built once from constants",
+    ),
+    (
+        "crates/renderer/renderer-cache/src/registry.rs",
+        "PUBLISHED",
+        "this copy's own cache statistics, published under its own origin",
+    ),
+    (
+        "crates/renderer/renderer-cache/src/registry.rs",
+        "LAST_PUBLISH",
+        "the throttle of this copy's own cache statistics",
+    ),
+    (
+        "crates/telar/src/preview/matrix.rs",
+        "INSTALLED",
+        "this copy's own preview matrix, installed as it loads",
+    ),
+    (
+        "crates/telar/src/preview/arg.rs",
+        "LEAKED",
+        "the app's own interned preview strings",
+    ),
+    (
+        "crates/telar/src/direction.rs",
+        "FOLLOW",
+        "the binding this copy's own setup makes, replaced when the setup re-runs",
+    ),
+    (
+        "crates/telar/src/runner/web.rs",
+        "FOLLOW_LANGUAGE",
+        "the binding this copy's own setup makes, replaced when the setup re-runs",
+    ),
+    (
+        "crates/telar/src/location_locale.rs",
+        "FOLLOW",
+        "the binding this copy's own setup makes, replaced when the setup re-runs",
+    ),
+    (
+        "crates/telar/src/surface.rs",
+        "SURFACE_HOSTS",
+        "the app's own surface hosts by placement type",
+    ),
+    (
+        "crates/telar/src/raster.rs",
+        "RASTERIZER",
+        "this copy's own rasterizer, freed through thread exit",
+    ),
+    (
+        "crates/telar/src/hot/guest.rs",
+        "TELAR_HOT_ENTRIES",
+        "the export a guest declares for its host to read, which the guest never reads back",
+    ),
+    (
+        "crates/telar/src/hot/guest.rs",
+        "HOST_BATCHES",
+        "the batches this copy's hot boundary has open",
+    ),
+    (
+        "crates/telar/src/licenses.rs",
+        "ICON_LICENSES",
+        "the app's own declared icon licenses",
+    ),
+    (
+        "crates/telar/src/macros.rs",
+        "V",
+        "the app's own interned literal behind a macro",
+    ),
+    (
+        "crates/telar/src/user_preferences.rs",
+        "FOLLOWING",
+        "this copy's own binding of the preference store",
+    ),
+    (
+        "crates/telar/src/user_preferences.rs",
+        "INSTALLED",
+        "this copy's own once-per-process install of the preference store",
+    ),
+    (
+        "crates/telar/src/system_locale.rs",
+        "FOLLOW",
+        "the binding this copy's own setup makes, replaced when the setup re-runs",
+    ),
+    (
+        "crates/telar/src/hot_state.rs",
+        "REGISTRY",
+        "the app's own hot state",
+    ),
+    (
+        "crates/telar/src/hot_state.rs",
+        "PENDING",
+        "the app's own hot state",
+    ),
+    (
+        "crates/telar/src/hot_state.rs",
+        "WARNED",
+        "the app's own hot state",
+    ),
+    (
+        "crates/ui/theme-core/src/mode.rs",
+        "mode",
+        "the app's own surface-scoped theme mode",
+    ),
+    (
+        "crates/ui/theme-core/src/mode.rs",
+        "MODES",
+        "the app's own registered theme modes",
+    ),
+    (
+        "crates/ui/theme-core/src/mode.rs",
+        "MODE_THEMES",
+        "the app's own registered theme modes",
+    ),
+    (
+        "crates/ui/theme-core/src/mode.rs",
+        "MODE_SCHEMES",
+        "the app's own registered theme modes",
+    ),
+    (
+        "crates/ui/theme-core/src/mode.rs",
+        "SCHEME_PAIR",
+        "the app's own registered theme modes",
+    ),
+    (
+        "crates/ui/theme-core/src/mode.rs",
+        "PREFERENCE",
+        "the app's own scheme preference",
+    ),
+    (
+        "crates/ui/theme-core/src/mode.rs",
+        "FOLLOW",
+        "the binding this copy's own setup makes, replaced when the setup re-runs",
+    ),
+    (
+        "crates/ui/theme-core/src/context.rs",
+        "THEME",
+        "the app's own installed theme",
+    ),
+    (
+        "crates/ui/theme-core/src/context.rs",
+        "DEFAULT_TOKENS",
+        "the app's own default theme tokens",
+    ),
+    (
+        "crates/ui/ui-core/src/inherit.rs",
+        "CASCADE",
+        "the app's own per-surface style cascade",
+    ),
+    (
+        "crates/ui/ui-core/src/drag.rs",
+        "ACTIVE",
+        "the app's own drag state",
+    ),
+    (
+        "crates/ui/ui-core/src/drag.rs",
+        "CLAIMED",
+        "the app's own drag state",
+    ),
+    (
+        "crates/ui/ui-core/src/drag.rs",
+        "LIVE",
+        "the app's own drag state",
+    ),
+    (
+        "crates/ui/ui-core/src/drag.rs",
+        "NEXT_LIVE",
+        "the app's own drag state",
+    ),
+    (
+        "crates/ui/ui-core/src/text_metrics.rs",
+        "GENERATION",
+        "the app's own text-measure generation",
+    ),
+    (
+        "crates/ui/ui-core/src/keyboard.rs",
+        "KEYBOARD",
+        "the app's own keyboard state",
+    ),
+    (
+        "crates/ui/ui-core/src/cursor.rs",
+        "CURSORS",
+        "the app's own pointer-shape claims",
+    ),
+    (
+        "crates/ui/ui-core/src/cursor.rs",
+        "DEPTH",
+        "the app's own pointer-shape claims",
+    ),
+    (
+        "crates/ui/ui-core/src/cursor.rs",
+        "NEXT_CLAIM",
+        "the app's own pointer-shape claims",
+    ),
+    (
+        "crates/ui/ui-core/src/focus.rs",
+        "FOCUS",
+        "the app's own per-surface focus state",
+    ),
+    (
+        "crates/ui/ui-core/src/foreign_surface.rs",
+        "REGISTRY",
+        "the app's own foreign surfaces",
+    ),
+    (
+        "crates/ui/ui-core/src/scroll_viewports.rs",
+        "VIEWPORTS",
+        "the app's own per-surface scroll viewports",
+    ),
+    (
+        "crates/ui/ui-core/src/dismiss.rs",
+        "STACK",
+        "the app's own per-surface dismiss stack",
+    ),
+    (
+        "crates/ui/ui-core/src/dismiss.rs",
+        "NEXT_ID",
+        "the app's own per-surface dismiss stack",
+    ),
+    (
+        "crates/ui/ui-core/src/disposal.rs",
+        "DEPTH",
+        "the app's own deferred disposal queue",
+    ),
+    (
+        "crates/ui/ui-core/src/disposal.rs",
+        "RETIRED",
+        "the app's own deferred disposal queue",
+    ),
+    (
+        "crates/ui/ui-core/src/disposal.rs",
+        "LIVE_BUILDS",
+        "the app's own deferred disposal queue",
+    ),
+    (
+        "crates/ui/ui-core/src/presence.rs",
+        "EXITS",
+        "the app's own exiting presences, which its host waits on before unmapping",
+    ),
+    (
+        "crates/ui/ui-core/src/annotation.rs",
+        "ANNOTATIONS",
+        "the app's own per-surface annotations",
+    ),
+    (
+        "crates/ui/ui-core/src/link.rs",
+        "ANCHORS",
+        "the app's own links and their reveal state",
+    ),
+    (
+        "crates/ui/ui-core/src/link.rs",
+        "LINKS",
+        "the app's own links and their reveal state",
+    ),
+    (
+        "crates/ui/ui-core/src/link.rs",
+        "RUNS",
+        "the app's own links and their reveal state",
+    ),
+    (
+        "crates/ui/ui-core/src/link.rs",
+        "PENDING",
+        "the app's own links and their reveal state",
+    ),
+    (
+        "crates/ui/ui-core/src/link.rs",
+        "REVEALER_INSTALLED",
+        "the app's own links and their reveal state",
+    ),
+    (
+        "crates/ui/ui-core/src/link.rs",
+        "NEXT_TOKEN",
+        "the app's own links and their reveal state",
+    ),
+    (
+        "crates/ui/ui-core/src/surface_context.rs",
+        "SURFACES",
+        "the app's own surfaces",
+    ),
+    (
+        "crates/ui/ui-core/src/surface_context.rs",
+        "NEXT_HANDLE",
+        "the app's own surfaces",
+    ),
+    (
+        "crates/ui/ui-core/src/surface_context.rs",
+        "HOOK_INSTALLED",
+        "the app's own surfaces",
+    ),
+    (
+        "crates/ui/ui-core/src/named_overlay.rs",
+        "NAMED",
+        "the app's own per-surface named overlays",
+    ),
+    (
+        "crates/ui/ui-core/src/input_region.rs",
+        "INPUT",
+        "the app's own per-surface input regions",
+    ),
+    (
+        "crates/ui/ui-core/src/input_region.rs",
+        "NEXT_TOKEN",
+        "the app's own per-surface input regions",
+    ),
+    (
+        "crates/ui/ui-core/src/surface_font.rs",
+        "DEFAULT_FAMILY",
+        "the app's own per-surface default font family",
+    ),
+    (
+        "crates/ui/ui-core/src/surface_title.rs",
+        "TITLE",
+        "the app's own per-surface title",
+    ),
+    (
+        "crates/ui/ui-core/src/anchor_line.rs",
+        "PLACES",
+        "the app's own per-surface anchor places",
+    ),
+    (
+        "crates/ui/ui-core/src/pointer.rs",
+        "OCCLUDED",
+        "the app's own pointer state during dispatch",
+    ),
+    (
+        "crates/ui/ui-core/src/pointer.rs",
+        "BUTTONS",
+        "the app's own pointer state during dispatch",
+    ),
+    (
+        "crates/ui/ui-core/src/pointer.rs",
+        "POSITION",
+        "the app's own pointer state during dispatch",
+    ),
+    (
+        "crates/ui/ui-tree/src/render_node.rs",
+        "NODE_VEC_POOL",
+        "the app's own pool of render-node vectors",
+    ),
+    (
+        "crates/ui/ui-tree/src/overlay_dispatch.rs",
+        "OVERLAYS",
+        "the app's own per-surface overlay registry",
+    ),
+    (
+        "crates/ui/ui-tree/src/element.rs",
+        "CAPTURE",
+        "the app's own pointer-capture flag",
+    ),
+    (
+        "crates/ui/ui-tree/src/wheel.rs",
+        "SMOOTH",
+        "the app's own wheel smoothing choice",
+    ),
+    (
+        "plugins/telar-components/src/overlays/toast/toast.rs",
+        "NEXT_ID",
+        "the app's own toast ids",
+    ),
+    (
+        "plugins/telar-components/src/overlays/toast/toast.rs",
+        "SHARED",
+        "the app's own shared toasts",
+    ),
+    (
+        "plugins/telar-components/src/strings.rs",
+        "CATALOG",
+        "the component strings compiled into this copy",
+    ),
+    (
+        "plugins/telar-icons/src/runtime.rs",
+        "WARNED",
+        "the icon names this copy has already warned about",
+    ),
+    (
+        "plugins/telar-icons/src/runtime.rs",
+        "INSTALLED",
+        "the icon loader this copy installed, which owns the signals it handed out",
+    ),
+    (
+        "plugins/telar-icons/src/icon.rs",
+        "EMPTY",
+        "the app's own placeholder for an icon with nothing to draw yet",
+    ),
 ];
 
-/// The crates that keep the stores a guest's copy of the runtime reaches for.
-const SCANNED: &[&str] = &[
-    "crates/reactive/reactive-local/src",
-    "crates/reactive/reactive-core/src",
-    "crates/services/services-core/src",
-    "crates/platform/platform-core/src",
-    "crates/renderer/renderer-core/src",
-    "crates/renderer/renderer-text/src",
-    "crates/i18n/i18n-core/src",
-    "crates/semantics/semantics-core/src",
-    "crates/geometry/geometry-core/src",
-];
+/// The crates a guest is built from, each its own workspace root.
+const GUEST_ROOTS: &[&str] = &["fixtures/embed-guest", "fixtures/hot-panic-guest"];
 
 /// Every process-global store in the runtime is either served to a guest through the table or listed as the guest's own with a reason, so a store added without a bridge fails here rather than in a hot-reloaded app that finds it empty.
 #[test]
 fn every_global_store_a_guest_reaches_for_is_served_or_its_own() {
     let root = workspace_root();
     let mut found = Vec::new();
-    for dir in SCANNED {
-        collect_sources(&root, &root.join(dir), &mut found);
+    for dir in guest_source_dirs(&root) {
+        collect_sources(&root, &dir, &mut found);
     }
     let mut unbridged = Vec::new();
     let mut seen = Vec::new();
@@ -835,12 +1306,12 @@ fn every_entry_of_the_table_serves_a_store_and_every_store_names_an_entry() {
 
 #[test]
 fn a_store_is_found_however_it_is_declared() {
-    let source = "static A: u8 = 0;\npub static B: u8 = 0;\npub(crate) static C: u8 = 0;\n    static D: Cell<u8> = const { Cell::new(0) };\n// static E: u8 = 0;\n/// static F: u8 = 0;\n    scoped locale: String as Option<String> = None;\nlet statics: u8 = 0;\nstatic mut G: u8 = 0;\n";
+    let source = "static A: u8 = 0;\npub static B: u8 = 0;\npub(crate) static C: u8 = 0;\n    static D: Cell<u8> = const { Cell::new(0) };\n// static E: u8 = 0;\n/// static F: u8 = 0;\n    scoped locale: String as Option<String> = None;\n    slot CASCADE: Cascade = Cascade::default();\nlet statics: u8 = 0;\nstatic mut G: u8 = 0;\n";
     let stores: Vec<_> = stores(source).into_iter().map(|(_, store)| store).collect();
-    assert_eq!(stores, ["A", "B", "C", "D", "locale", "G"]);
+    assert_eq!(stores, ["A", "B", "C", "D", "locale", "CASCADE", "G"]);
 }
 
-/// Every `static` item `source` declares, thread-locals included, and every slot a `surface_scoped!` declares, by the line it is on.
+/// Every `static` item `source` declares, thread-locals included, and every slot a `surface_scoped!` or `surface_local!` declares, by the line it is on.
 fn stores(source: &str) -> Vec<(usize, String)> {
     let mut stores = Vec::new();
     for (index, line) in source.lines().enumerate() {
@@ -855,7 +1326,8 @@ fn stores(source: &str) -> Vec<(usize, String)> {
         let declared = item
             .strip_prefix("static mut ")
             .or_else(|| item.strip_prefix("static "))
-            .or_else(|| item.strip_prefix("scoped "));
+            .or_else(|| item.strip_prefix("scoped "))
+            .or_else(|| item.strip_prefix("slot "));
         let Some((name, _)) = declared.and_then(|rest| rest.split_once(':')) else {
             continue;
         };
@@ -865,6 +1337,223 @@ fn stores(source: &str) -> Vec<(usize, String)> {
         }
     }
     stores
+}
+
+struct GuestClosure<'a> {
+    packages: HashMap<&'a str, &'a serde_json::Value>,
+    features: HashMap<&'a str, HashSet<String>>,
+    active: HashSet<&'a str>,
+}
+
+impl<'a> GuestClosure<'a> {
+    fn activate(&mut self, name: &str, features: &[String], default: bool) {
+        let Some((&name, &package)) = self.packages.get_key_value(name) else {
+            return;
+        };
+        let newly_active = self.active.insert(name);
+        if newly_active {
+            for dependency in package["dependencies"].as_array().expect("dependencies") {
+                if dependency["kind"].is_null()
+                    && !dependency["optional"].as_bool().expect("optional")
+                {
+                    self.activate_dependency(dependency);
+                }
+            }
+        }
+        if default {
+            self.enable(name, "default");
+        }
+        for feature in features {
+            self.enable(name, feature);
+        }
+        if newly_active {
+            let enabled: Vec<String> = self
+                .features
+                .get(name)
+                .into_iter()
+                .flatten()
+                .cloned()
+                .collect();
+            for feature in enabled {
+                self.enable(name, &feature);
+            }
+        }
+    }
+
+    fn activate_dependency(&mut self, dependency: &serde_json::Value) {
+        let features: Vec<String> = dependency["features"]
+            .as_array()
+            .expect("dependency features")
+            .iter()
+            .map(|feature| feature.as_str().expect("a feature").to_owned())
+            .collect();
+        let default = dependency["uses_default_features"]
+            .as_bool()
+            .expect("default flag");
+        self.activate(
+            dependency["name"].as_str().expect("a name"),
+            &features,
+            default,
+        );
+    }
+
+    fn enable(&mut self, name: &'a str, feature: &str) {
+        if !self
+            .features
+            .entry(name)
+            .or_default()
+            .insert(feature.to_owned())
+        {
+            return;
+        }
+        if !self.active.contains(name) {
+            return;
+        }
+        let package = self.packages[name];
+        let implied: Vec<String> = package["features"][feature]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|item| item.as_str().expect("a feature item").to_owned())
+            .collect();
+        for item in implied {
+            if let Some(optional) = item.strip_prefix("dep:") {
+                self.activate_optional(package, optional);
+            } else if let Some((target, feature)) = item.split_once('/') {
+                let weak = target.ends_with('?');
+                let target = target.trim_end_matches('?');
+                if !weak {
+                    self.activate_optional(package, target);
+                }
+                if let Some(dependency) = Self::dependency_named(package, target) {
+                    let dependency_name = dependency["name"].as_str().expect("a name");
+                    if let Some((&dependency_name, _)) =
+                        self.packages.get_key_value(dependency_name)
+                    {
+                        self.enable(dependency_name, feature);
+                    }
+                }
+            } else {
+                self.enable(name, &item);
+            }
+        }
+    }
+
+    fn activate_optional(&mut self, package: &'a serde_json::Value, target: &str) {
+        if let Some(dependency) = Self::dependency_named(package, target) {
+            self.activate_dependency(dependency);
+        }
+    }
+
+    fn dependency_named(
+        package: &'a serde_json::Value,
+        target: &str,
+    ) -> Option<&'a serde_json::Value> {
+        package["dependencies"]
+            .as_array()
+            .expect("dependencies")
+            .iter()
+            .find(|dependency| {
+                dependency["kind"].is_null()
+                    && dependency["rename"]
+                        .as_str()
+                        .unwrap_or(dependency["name"].as_str().unwrap_or_default())
+                        == target
+            })
+    }
+}
+
+fn guest_source_dirs(root: &Path) -> Vec<PathBuf> {
+    let output = std::process::Command::new(env!("CARGO"))
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--offline",
+            "--no-deps",
+            "--manifest-path",
+        ])
+        .arg(root.join("Cargo.toml"))
+        .output()
+        .expect("run `cargo metadata`");
+    assert!(
+        output.status.success(),
+        "`cargo metadata` failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("the metadata is JSON");
+    let packages: HashMap<&str, &serde_json::Value> = metadata["packages"]
+        .as_array()
+        .expect("packages")
+        .iter()
+        .map(|package| (package["name"].as_str().expect("a package name"), package))
+        .collect();
+    let mut closure = GuestClosure {
+        packages: packages.clone(),
+        features: HashMap::new(),
+        active: HashSet::new(),
+    };
+    for guest in GUEST_ROOTS {
+        let manifest: toml::Table = std::fs::read_to_string(root.join(guest).join("Cargo.toml"))
+            .expect("read a guest manifest")
+            .parse()
+            .expect("a guest manifest is TOML");
+        let dependencies = manifest["dependencies"]
+            .as_table()
+            .expect("a guest declares dependencies");
+        for (key, dependency) in dependencies {
+            let table = dependency
+                .as_table()
+                .unwrap_or_else(|| panic!("{guest} declares `{key}` as a table with a path"));
+            assert!(
+                table.contains_key("path"),
+                "{guest} depends on `{key}` by path, in this workspace"
+            );
+            let name = table
+                .get("package")
+                .and_then(toml::Value::as_str)
+                .unwrap_or(key);
+            let features: Vec<String> = table
+                .get("features")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|feature| feature.as_str().expect("a feature").to_owned())
+                .collect();
+            let default = table
+                .get("default-features")
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(true);
+            assert!(
+                packages.contains_key(name),
+                "`{name}` of {guest} is not a workspace member"
+            );
+            closure.activate(name, &features, default);
+        }
+    }
+    closure
+        .active
+        .into_iter()
+        .map(|name| packages[name])
+        .filter(|package| {
+            !package["targets"]
+                .as_array()
+                .expect("targets")
+                .iter()
+                .any(|target| {
+                    target["kind"]
+                        .as_array()
+                        .is_some_and(|kinds| kinds.iter().any(|kind| kind == "proc-macro"))
+                })
+        })
+        .map(|package| {
+            let manifest = Path::new(package["manifest_path"].as_str().expect("a manifest"));
+            manifest.parent().expect("a manifest folder").join("src")
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 fn collect_sources(root: &Path, dir: &Path, found: &mut Vec<String>) {
