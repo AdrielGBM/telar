@@ -33,6 +33,40 @@ fn a_varint_past_64_bits_is_refused() {
 }
 
 #[test]
+fn zero_and_u64_max_have_one_spelling_each() {
+    let mut w = Writer::default();
+    w.varint(0);
+    assert_eq!(w.as_slice(), [0]);
+    w.clear();
+    w.varint(u64::MAX);
+    assert_eq!(w.as_slice(), [[0xff; 9].as_slice(), &[0x01]].concat());
+    assert_eq!(Reader::new(w.as_slice()).varint(), Ok(u64::MAX));
+}
+
+#[test]
+fn a_tenth_varint_byte_above_one_is_refused_rather_than_truncated() {
+    let mut bytes = [0xff; 10];
+    bytes[9] = 0x02;
+    assert_eq!(
+        Reader::new(&bytes).varint(),
+        Err(WireError::Invalid("varint longer than 64 bits"))
+    );
+}
+
+#[test]
+fn a_zero_byte_that_pads_a_varint_is_refused() {
+    assert_eq!(
+        Reader::new(&[0x80, 0x00]).varint(),
+        Err(WireError::Invalid("varint padded with a zero byte"))
+    );
+    assert_eq!(
+        Reader::new(&[0x81, 0x80, 0x00]).varint(),
+        Err(WireError::Invalid("varint padded with a zero byte"))
+    );
+    assert_eq!(Reader::new(&[0x00]).varint(), Ok(0));
+}
+
+#[test]
 fn a_count_beyond_the_bytes_left_is_refused_before_anything_is_reserved() {
     let mut w = Writer::default();
     w.len(1 << 40);

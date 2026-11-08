@@ -152,8 +152,14 @@ impl<'a> Reader<'a> {
         let mut value = 0u64;
         for shift in (0..64).step_by(7) {
             let byte = self.u8()?;
+            if shift == 63 && byte > 1 {
+                return Err(WireError::Invalid("varint longer than 64 bits"));
+            }
             value |= u64::from(byte & 0x7f) << shift;
             if byte & 0x80 == 0 {
+                if byte == 0 && shift > 0 {
+                    return Err(WireError::Invalid("varint padded with a zero byte"));
+                }
                 return Ok(value);
             }
         }
