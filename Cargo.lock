@@ -6192,6 +6192,7 @@ version = "0.2.3"
 dependencies = [
  "raw-window-handle",
  "telar-platform-core",
+ "tracing",
 ]
 
 [[package]]

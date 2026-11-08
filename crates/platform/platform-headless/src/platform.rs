@@ -282,7 +282,7 @@ impl MultiSurfacePlatform for HeadlessPlatform {
             let _ =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler.about_to_wait()));
             if resumed.is_err() {
-                eprintln!("surface {} panicked during build; unmounting it", id.0);
+                tracing::error!(?id, "the surface panicked during build; unmounting it");
             }
             matches!(resumed, Ok(true))
         });
@@ -317,7 +317,7 @@ impl MultiSurfacePlatform for HeadlessPlatform {
                     handler.about_to_wait()
                 }));
                 if drawn.is_err() {
-                    eprintln!("surface {} panicked during redraw; unmounting it", id.0);
+                    tracing::error!(?id, "the surface panicked during redraw; unmounting it");
                 }
                 drawn.is_ok()
             });
