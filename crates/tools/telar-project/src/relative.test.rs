@@ -30,13 +30,30 @@ fn keeps_a_backslash_in_a_unix_file_name() {
 }
 
 #[cfg(unix)]
+fn non_utf8_name() -> std::ffi::OsString {
+    use std::os::unix::ffi::OsStrExt;
+    std::ffi::OsStr::from_bytes(b"caf\xe9.rsx").to_owned()
+}
+
+#[cfg(windows)]
+fn non_utf8_name() -> std::ffi::OsString {
+    use std::os::windows::ffi::OsStringExt;
+    let lone_surrogate = 0xd800;
+    let name: Vec<u16> = "caf"
+        .encode_utf16()
+        .chain([lone_surrogate])
+        .chain(".rsx".encode_utf16())
+        .collect();
+    std::ffi::OsString::from_wide(&name)
+}
+
 #[test]
 fn refuses_a_component_that_is_not_utf8() {
-    use std::ffi::OsStr;
-    use std::os::unix::ffi::OsStrExt;
-
     let base = Path::new("/pkg/src");
-    let name = Path::new(OsStr::from_bytes(b"caf\xe9.rsx"));
-    assert_eq!(relative_slashed(&base.join(name), base), None);
-    assert_eq!(relative_slashed(&base.join(name).join("x.rsx"), base), None);
+    let name = non_utf8_name();
+    assert_eq!(relative_slashed(&base.join(&name), base), None);
+    assert_eq!(
+        relative_slashed(&base.join(&name).join("x.rsx"), base),
+        None
+    );
 }

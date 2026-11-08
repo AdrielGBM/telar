@@ -206,19 +206,34 @@ fn a_catalog_that_does_not_parse_is_an_error_naming_it_and_keeps_the_previous_ar
     let _ = std::fs::remove_dir_all(&root);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_vendor = "apple")))]
+fn non_utf8_file_name() -> std::ffi::OsString {
+    use std::os::unix::ffi::OsStrExt;
+    std::ffi::OsStr::from_bytes(b"caf\xe9.toml").to_owned()
+}
+
+#[cfg(windows)]
+fn non_utf8_file_name() -> std::ffi::OsString {
+    use std::os::windows::ffi::OsStringExt;
+    let lone_surrogate = 0xd800;
+    let name: Vec<u16> = "caf"
+        .encode_utf16()
+        .chain([lone_surrogate])
+        .chain(".toml".encode_utf16())
+        .collect();
+    std::ffi::OsString::from_wide(&name)
+}
+
+// Apple's file systems refuse a file name that is not valid UTF-8, so there the file this test needs cannot exist.
+#[cfg(not(target_vendor = "apple"))]
 #[test]
 fn a_catalog_file_named_in_non_utf8_leaves_the_others_tracked_and_is_reported() {
-    use std::ffi::OsStr;
-    use std::os::unix::ffi::OsStrExt;
-
     let root = std::env::temp_dir().join(format!("rsx_i18n_non_utf8_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("locales/es")).unwrap();
     std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
     std::fs::write(
-        root.join("locales/es")
-            .join(OsStr::from_bytes(b"caf\xe9.toml")),
+        root.join("locales/es").join(non_utf8_file_name()),
         "title = \"Ajustes\"\n",
     )
     .unwrap();
