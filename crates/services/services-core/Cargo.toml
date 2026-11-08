@@ -35,4 +35,5 @@ thiserror = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+tracing-subscriber = { workspace = true }
 wire-core = { workspace = true, features = ["golden"] }
