@@ -3,13 +3,16 @@ use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutStyle};
-use platform_core::{AccessNode, Ime, Key, ModifiersState, NamedKey, PointerSource};
+use platform_core::{
+    AccessNode, DragActions, DragData, DragOffer, DragOutcome, DropAction, DropAnswer, DroppedData,
+    Ime, Key, MimeType, ModifiersState, NamedKey, OutgoingDrag, PointerSource,
+};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{DrawCommand, RectStyle, TextStyle};
 use ui_core::accessibility::{AccessTarget, perform_action, snapshot};
 use ui_core::focus::{self, FocusId, FocusKind, Role};
 use ui_core::{
-    Container, EventResult, Input, LayoutItem, StyledContainer, compute_layout,
+    Container, DropTarget, EventResult, Input, LayoutItem, StyledContainer, compute_layout,
     reset_layout_runtime,
 };
 use ui_tree::{Component, ComponentList, RenderNode};
@@ -485,5 +488,226 @@ fn a_box_event_for_a_surface_the_guest_no_longer_draws_reaches_nothing() {
     assert!(
         !host.embed.foreign_surface().holds_focus(),
         "its own reaches it"
+    );
+}
+
+fn token() -> MimeType {
+    MimeType::from_static("application/x-telar-test-token")
+}
+
+/// A guest with a box a drag starts from on its left half and a box that takes drops of [`token`] from its middle on, reaching past the area it is laid out to, which says through a window command of its own what it heard of a drag.
+#[derive(Default)]
+struct Pads {
+    content: Option<Box<dyn LayoutItem>>,
+}
+
+impl EmbeddedApp for Pads {
+    fn build(&mut self) {
+        let source = StyledContainer::new(
+            LayoutStyle::new().width(AT.width / 2.0).height(AT.height),
+            |_| RectStyle::default(),
+            vec![],
+        )
+        .expect("the source builds")
+        .drag_source(
+            || {
+                Some(OutgoingDrag::new(
+                    DragData::new().with(token(), b"pad".as_slice()),
+                    DragActions::Copy,
+                ))
+            },
+            |outcome| tell(format!("ended {outcome:?}")),
+        );
+        let target = StyledContainer::new(
+            LayoutStyle::new().width(AT.width).height(AT.height),
+            |_| RectStyle::default(),
+            vec![],
+        )
+        .expect("the target builds")
+        .drop_target(
+            DropTarget::new([token()]),
+            |at| {
+                if at.is_none() {
+                    tell("left".to_owned());
+                }
+            },
+            |data, _, _| tell(format!("got {}", String::from_utf8_lossy(&data.bytes))),
+        );
+        let row = Container::new(
+            LayoutStyle::new().flex_row(),
+            vec![Box::new(source), Box::new(target)],
+        )
+        .expect("the row builds");
+        self.content = Some(Box::new(row));
+    }
+
+    fn layout_root(&self) -> NodeId {
+        self.content.as_ref().expect("built").layout_node()
+    }
+
+    fn view(&self) -> RenderNode {
+        self.content.as_ref().expect("built").view()
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        if let Event::DragLeft = event {
+            tell("heard the drag leave".to_owned());
+        }
+        self.content.as_mut().expect("built").on_event(event)
+    }
+
+    fn title(&self) -> String {
+        String::new()
+    }
+
+    fn id(&self) -> String {
+        "pads".into()
+    }
+}
+
+fn tell(what: String) {
+    platform_core::push_window_command(WindowCommand::SetTitle(what));
+}
+
+unsafe extern "C" fn create_pads(
+    args: LentBytes<Vec<String>>,
+    instance: *mut Handle<GuestInstance>,
+) -> platform_core::guest::CallOutcome {
+    unsafe { crate::guest::create(args, instance, |_| Box::new(Pads::default())) }
+}
+
+fn pads() -> LoadedEmbed {
+    reset_layout_runtime();
+    platform_core::take_window_commands();
+    let embed =
+        LoadedEmbed::start(EmbedEntries::serving(create_pads), &[], None).expect("the guest loads");
+    embed.relayout(AT.width, AT.height);
+    embed.paint();
+    embed
+}
+
+/// What the guest said of the drags it heard, through the commands the host is left to apply.
+fn told(embed: &LoadedEmbed) -> Vec<String> {
+    embed
+        .drain_window_commands()
+        .into_iter()
+        .map(|command| match command {
+            WindowCommand::SetTitle(what) => what,
+            other => panic!("the guest only tells: {other:?}"),
+        })
+        .collect()
+}
+
+fn moved_to(x: f64, y: f64) -> Event {
+    Event::PointerMoved {
+        x,
+        y,
+        source: PointerSource::Mouse,
+    }
+}
+
+fn over(x: f64, y: f64) -> Event {
+    Event::DragOver {
+        x,
+        y,
+        offer: DragOffer::of(
+            &DragData::new().with(token(), b"from afar".as_slice()),
+            DragActions::Copy,
+        ),
+    }
+}
+
+fn dropped(x: f64, y: f64) -> Event {
+    Event::Dropped {
+        x,
+        y,
+        data: DroppedData {
+            mime: token(),
+            bytes: b"from afar".as_slice().into(),
+            action: DropAction::Copy,
+        },
+    }
+}
+
+fn ended(outcome: DragOutcome) -> Event {
+    Event::DragEnded { outcome }
+}
+
+const ON_SOURCE: (f64, f64) = (20.0, 50.0);
+const ON_TARGET: (f64, f64) = (150.0, 50.0);
+const BESIDE: (f64, f64) = (260.0, 50.0);
+
+#[test]
+fn a_drag_the_guest_starts_is_started_by_the_hosts_surface() {
+    let embed = pads();
+    embed.on_event(&press_at(ON_SOURCE.0, ON_SOURCE.1));
+    embed.on_event(&moved_to(ON_SOURCE.0 + 40.0, ON_SOURCE.1));
+    let started = platform_core::take_window_commands();
+    assert!(
+        matches!(
+            started.as_slice(),
+            [WindowCommand::StartDrag(drag)] if drag.data.bytes(&token()).is_some_and(|bytes| &bytes[..] == b"pad")
+        ),
+        "{started:?}"
+    );
+    assert_eq!(
+        told(&embed),
+        Vec::<String>::new(),
+        "nothing else is the host's to apply"
+    );
+}
+
+#[test]
+fn only_the_guest_that_started_a_drag_hears_it_end_and_only_once() {
+    let embed = pads();
+    assert!(
+        !embed.on_event(&ended(DragOutcome::Cancelled)),
+        "a drag it never started"
+    );
+    embed.on_event(&press_at(ON_SOURCE.0, ON_SOURCE.1));
+    embed.on_event(&moved_to(ON_SOURCE.0 + 40.0, ON_SOURCE.1));
+    embed.on_event(&ended(DragOutcome::Dropped(DropAction::Copy)));
+    embed.on_event(&ended(DragOutcome::Cancelled));
+    assert_eq!(
+        told(&embed),
+        [format!(
+            "ended {:?}",
+            DragOutcome::Dropped(DropAction::Copy)
+        )]
+    );
+}
+
+#[test]
+fn a_drop_the_guest_takes_is_accepted_by_the_hosts_surface_and_delivered_to_it() {
+    let embed = pads();
+    embed.on_event(&over(ON_TARGET.0, ON_TARGET.1));
+    assert_eq!(
+        platform_core::take_window_commands(),
+        [WindowCommand::AcceptDrop(DropAnswer {
+            mime: token(),
+            action: DropAction::Copy,
+        })]
+    );
+    embed.on_event(&dropped(ON_TARGET.0, ON_TARGET.1));
+    assert_eq!(told(&embed), ["left", "got from afar"]);
+}
+
+#[test]
+fn a_drag_beside_the_guest_has_left_it_and_a_drop_there_never_reaches_it() {
+    let embed = pads();
+    embed.on_event(&over(ON_TARGET.0, ON_TARGET.1));
+    platform_core::take_window_commands();
+    embed.on_event(&over(BESIDE.0, BESIDE.1));
+    assert_eq!(
+        platform_core::take_window_commands(),
+        [],
+        "nothing beside it is accepted on its behalf"
+    );
+    embed.on_event(&Event::DragLeft);
+    embed.on_event(&dropped(BESIDE.0, BESIDE.1));
+    assert_eq!(
+        told(&embed),
+        ["heard the drag leave", "left"],
+        "it heard the drag leave once, and no drop"
     );
 }

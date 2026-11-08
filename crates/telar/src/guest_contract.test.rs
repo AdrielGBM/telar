@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use platform_core::AccessNode;
+use platform_headless::{HeadlessPlatform, HeadlessSeat, PointerStep};
 use telar::focus::FocusId;
 use telar::hot::{HotApp, load_hot_app};
 use telar::{
@@ -517,4 +518,284 @@ fn named(key: NamedKey) -> Event {
         modifiers: ModifiersState::default(),
         unmodified: None,
     }
+}
+
+/// The type the embed fixture's pad drags carry and takes drops of.
+fn token() -> telar::MimeType {
+    telar::MimeType::from_static("application/x-telar-embed-guest")
+}
+
+type Told = Arc<Mutex<Vec<String>>>;
+
+/// The surface the host of two guests answers to on the seat, and the one another program's window does.
+const HOST: telar::SurfaceId = telar::SurfaceId(1);
+const ELSEWHERE: telar::SurfaceId = telar::SurfaceId(2);
+
+/// Each guest is laid out to this size, the one named `left` drawn at the host's left edge and `right` beside it.
+const GUEST: Size = Size {
+    width: 200.0,
+    height: 100.0,
+};
+
+/// A point on the embed fixture's drag pad, in the coordinates of the guest drawn at `origin_x` in the host.
+fn on_pad(origin_x: f64) -> (f64, f64) {
+    (origin_x + 170.0, 30.0)
+}
+
+/// A host that draws two embed fixtures side by side, as a host of tabs or panes does: it hands each the events of its window in that guest's coordinates, overlays first, and a press only to the guest it lands on, and writes down what the guests leave it to apply.
+struct TwoGuests {
+    library: PathBuf,
+    told: Told,
+}
+
+impl telar::App for TwoGuests {
+    fn root(&self) -> Box<dyn Component> {
+        telar::reset_layout_runtime();
+        let guests = ["left", "right"]
+            .into_iter()
+            .enumerate()
+            .map(|(column, name)| {
+                let embed = load_embed(&self.library, &[name.to_owned()]).expect("the guest loads");
+                embed.relayout(GUEST.width, GUEST.height);
+                let at = Rect::new(column as f32 * GUEST.width, 0.0, GUEST.width, GUEST.height);
+                (at, embed)
+            })
+            .collect();
+        let node = telar::new_container(
+            LayoutStyle::new()
+                .width(telar::SizeDimension::Percent(1.0))
+                .height(telar::SizeDimension::Percent(1.0)),
+            &[],
+        )
+        .expect("the host's box builds");
+        Box::new(telar::WindowRoot::new(Box::new(Guests {
+            node,
+            guests,
+            told: self.told.clone(),
+        })))
+    }
+}
+
+struct Guests {
+    node: NodeId,
+    guests: Vec<(Rect, LoadedEmbed)>,
+    told: Told,
+}
+
+impl LayoutItem for Guests {
+    fn layout_node(&self) -> NodeId {
+        self.node
+    }
+}
+
+impl Component for Guests {
+    fn view(&self) -> RenderNode {
+        RenderNode::group(
+            self.guests
+                .iter()
+                .map(|(at, embed)| telar_embed::composite(*at, embed.boundary(), embed.paint())),
+        )
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        let mut taken = false;
+        for (at, embed) in &self.guests {
+            if let Event::PointerPressed { x, y, .. } = event
+                && !at.contains(*x as f32, *y as f32)
+            {
+                continue;
+            }
+            let placed = Transform::translate(at.x, at.y).to_array();
+            let local = telar::transform_pointer(event, placed).unwrap_or_else(|| event.clone());
+            taken |= embed.dispatch_overlays(&local) || embed.on_event(&local);
+            for command in embed.drain_window_commands() {
+                if let WindowCommand::SetTitle(said) = command {
+                    self.told.lock().unwrap().push(said);
+                }
+            }
+        }
+        if taken {
+            EventResult::Handled
+        } else {
+            EventResult::Ignored
+        }
+    }
+}
+
+/// Another program's window, which takes drops of the fixture's type and writes down what it took.
+struct Elsewhere {
+    told: Told,
+}
+
+impl telar::App for Elsewhere {
+    fn root(&self) -> Box<dyn Component> {
+        telar::reset_layout_runtime();
+        let told = self.told.clone();
+        let pane = telar::StyledContainer::new(
+            LayoutStyle::new()
+                .width(telar::SizeDimension::Percent(1.0))
+                .height(telar::SizeDimension::Percent(1.0)),
+            |_| telar::RectStyle::default(),
+            vec![],
+        )
+        .expect("the pane builds")
+        .drop_target(
+            telar::DropTarget::new([token()]),
+            |_| {},
+            move |data, _, _| {
+                told.lock().unwrap().push(format!(
+                    "elsewhere took {}",
+                    String::from_utf8_lossy(&data.bytes)
+                ))
+            },
+        );
+        Box::new(telar::WindowRoot::new(Box::new(pane)))
+    }
+}
+
+/// A seat's window `width` wide and as tall as a guest, answering to `surface` on `seat`.
+fn headless(width: f32, surface: telar::SurfaceId, seat: &HeadlessSeat) -> HeadlessPlatform {
+    HeadlessPlatform::new(width as u32, GUEST.height as u32)
+        .with_seat(seat.clone())
+        .with_surface_id(surface)
+}
+
+fn window(width: f32) -> telar::AppConfig {
+    telar::AppConfig::from(telar::WindowConfig {
+        width: width as u32,
+        height: GUEST.height as u32,
+        ..telar::WindowConfig::default()
+    })
+}
+
+/// Runs the host of two guests on `seat` until the seat has nothing left for it.
+fn run_two_guests(library: &Path, seat: &HeadlessSeat, told: &Told) {
+    telar::run_with_platform::<_, _, ()>(
+        headless(2.0 * GUEST.width, HOST, seat),
+        window(2.0 * GUEST.width),
+        Arc::new(telar::NoPaths),
+        TwoGuests {
+            library: library.to_owned(),
+            told: told.clone(),
+        },
+        "telar-two-guests",
+    )
+    .expect("the host's run settles");
+}
+
+/// Presses on the left guest's pad and drags past a tap's slop without leaving it.
+fn drag_from_the_left_pad(seat: &HeadlessSeat) {
+    let (x, y) = on_pad(0.0);
+    seat.script([
+        PointerStep::Press {
+            surface: HOST,
+            x,
+            y,
+        },
+        PointerStep::Move {
+            surface: HOST,
+            x: x + 15.0,
+            y: y + 15.0,
+        },
+    ]);
+}
+
+fn sorted(told: &Told) -> Vec<String> {
+    let mut said = told.lock().unwrap().clone();
+    said.sort();
+    said
+}
+
+#[test]
+#[ignore = "builds two cdylibs against this checkout: run it with `cargo test -p telar --features dev,shaper --test guest_contract -- --ignored`"]
+fn a_drag_one_guest_starts_is_dropped_on_another_guest_of_the_same_host() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build("embed-guest");
+    telar::font_families();
+    let seat = HeadlessSeat::new();
+    let told = Told::default();
+    let (x, y) = on_pad(GUEST.width as f64);
+    drag_from_the_left_pad(&seat);
+    seat.script([
+        PointerStep::Move {
+            surface: HOST,
+            x,
+            y,
+        },
+        PointerStep::Release,
+    ]);
+    run_two_guests(&library, &seat, &told);
+    assert_eq!(
+        sorted(&told),
+        [
+            format!(
+                "left ended {:?}",
+                telar::DragOutcome::Dropped(telar::DropAction::Copy)
+            ),
+            "right took left".to_owned(),
+        ]
+    );
+}
+
+#[test]
+#[ignore = "builds two cdylibs against this checkout: run it with `cargo test -p telar --features dev,shaper --test guest_contract -- --ignored`"]
+fn a_drag_a_guest_starts_is_dropped_in_another_program() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build("embed-guest");
+    telar::font_families();
+    let seat = HeadlessSeat::new();
+    let told = Told::default();
+    drag_from_the_left_pad(&seat);
+    seat.script([
+        PointerStep::Move {
+            surface: ELSEWHERE,
+            x: 50.0,
+            y: 50.0,
+        },
+        PointerStep::Release,
+    ]);
+    let elsewhere = {
+        let (seat, told) = (seat.clone(), told.clone());
+        std::thread::spawn(move || {
+            telar::run_with_platform::<_, _, ()>(
+                headless(GUEST.width, ELSEWHERE, &seat),
+                window(GUEST.width),
+                Arc::new(telar::NoPaths),
+                Elsewhere { told },
+                "telar-elsewhere",
+            )
+        })
+    };
+    run_two_guests(&library, &seat, &told);
+    elsewhere
+        .join()
+        .unwrap()
+        .expect("the other program's run settles");
+    assert_eq!(
+        sorted(&told),
+        [
+            "elsewhere took left".to_owned(),
+            format!(
+                "left ended {:?}",
+                telar::DragOutcome::Dropped(telar::DropAction::Copy)
+            ),
+        ]
+    );
+}
+
+#[test]
+#[ignore = "builds two cdylibs against this checkout: run it with `cargo test -p telar --features dev,shaper --test guest_contract -- --ignored`"]
+fn a_drag_a_guest_starts_that_leaves_for_where_nothing_takes_it_ends_cancelled() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build("embed-guest");
+    telar::font_families();
+    let seat = HeadlessSeat::new();
+    let told = Told::default();
+    drag_from_the_left_pad(&seat);
+    seat.script([PointerStep::Leave, PointerStep::Release]);
+    run_two_guests(&library, &seat, &told);
+    assert_eq!(
+        sorted(&told),
+        [format!("left ended {:?}", telar::DragOutcome::Cancelled)]
+    );
 }

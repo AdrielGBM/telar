@@ -1,13 +1,13 @@
-//! An embedded guest the `guest_contract` test in `telar` loads into a host with its own copy of std and an allocator marked apart from this one's: it draws text and an image, takes moves and keys, has a text field and a button a screen reader, the keyboard and the input method reach through its host, queues window commands, lists the font families it sets text in, waits on a timer, wakes its host, and panics on a press, so every entry of the embed contract runs.
+//! An embedded guest the `guest_contract` test in `telar` loads into a host with its own copy of std and an allocator marked apart from this one's: it draws text and an image, takes moves and keys, has a text field and a button a screen reader, the keyboard and the input method reach through its host, queues window commands, lists the font families it sets text in, waits on a timer, wakes its host, starts drags from a pad that takes them too, and panics on a press nothing in it takes, so every entry of the embed contract runs.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use telar::{
-    AppCtx, Color, Container, DrawCommand, Event, EventResult, ImageData, Input, Key, LayoutItem,
-    LayoutStyle, NodeId, PointerButton, Rect, RectStyle, RenderNode, RwSignal, StyledContainer,
-    Text, TextStyle, Timer, WindowCommand, box_item, focus, push_window_command, run_after,
-    signal,
+    AppCtx, Color, Container, DragActions, DragData, DrawCommand, DropTarget, Event, EventResult,
+    ImageData, Input, Key, LayoutItem, LayoutStyle, MimeType, NodeId, OutgoingDrag, PointerButton,
+    Rect, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle, Timer, WindowCommand,
+    box_item, focus, push_window_command, run_after, signal,
 };
 use telar_embed::EmbeddedApp;
 
@@ -20,6 +20,47 @@ static ALLOCATOR: tagged_alloc::Tagged = tagged_alloc::Tagged(0x656d_6265_6467_7
 
 /// How long after it is built the guest's timer comes due.
 const TIMER_DUE_IN: Duration = Duration::from_secs(60);
+
+/// How wide the column of the label, the field and the button is; the drag pad sits right of it, from the top.
+const FORM_WIDTH: f32 = 140.0;
+const PAD_SIZE: f32 = 60.0;
+
+/// The type the pad's drags carry and the pad takes drops of.
+const TOKEN: MimeType = MimeType::from_static("application/x-telar-embed-guest");
+
+/// A box a drag carrying the guest's title starts from, and that takes such a drag, saying through a window command what it took and how the drag it started ended.
+fn drag_pad(title: &str) -> StyledContainer {
+    let (dragged, ended, took) = (title.to_owned(), title.to_owned(), title.to_owned());
+    StyledContainer::new(
+        LayoutStyle::new().width(PAD_SIZE).height(PAD_SIZE),
+        |_| RectStyle::default(),
+        vec![],
+    )
+    .expect("the pad builds")
+    .drag_source(
+        move || {
+            Some(OutgoingDrag::new(
+                DragData::new().with(TOKEN, dragged.as_bytes()),
+                DragActions::Copy,
+            ))
+        },
+        move |outcome| {
+            push_window_command(WindowCommand::SetTitle(format!(
+                "{ended} ended {outcome:?}"
+            )))
+        },
+    )
+    .drop_target(
+        DropTarget::new([TOKEN]),
+        |_| {},
+        move |data, _, _| {
+            push_window_command(WindowCommand::SetTitle(format!(
+                "{took} took {}",
+                String::from_utf8_lossy(&data.bytes)
+            )))
+        },
+    )
+}
 
 struct Fixture {
     title: String,
@@ -73,11 +114,16 @@ impl EmbeddedApp for Fixture {
             )));
         });
         let form = Container::new(
-            LayoutStyle::new().flex_column(),
+            LayoutStyle::new().flex_column().width(FORM_WIDTH),
             vec![box_item(label), box_item(field), box_item(button)],
         )
         .expect("the form builds");
-        self.content = Some(box_item(form));
+        let row = Container::new(
+            LayoutStyle::new().flex_row(),
+            vec![box_item(form), box_item(drag_pad(&self.title))],
+        )
+        .expect("the row builds");
+        self.content = Some(box_item(row));
         self._timer = Some(run_after(TIMER_DUE_IN, || {}));
     }
 
@@ -99,6 +145,7 @@ impl EmbeddedApp for Fixture {
         match event {
             Event::PointerMoved { .. } => {
                 self.moves.update(|moves| *moves += 1);
+                self.content.as_mut().expect("built").on_event(event);
                 EventResult::Handled
             }
             Event::KeyPressed {
@@ -122,7 +169,10 @@ impl EmbeddedApp for Fixture {
             Event::PointerPressed {
                 button: PointerButton::Primary,
                 ..
-            } => panic!("RUNTIME is already borrowed by the press handler"),
+            } => match self.content.as_mut().expect("built").on_event(event) {
+                EventResult::Handled => EventResult::Handled,
+                EventResult::Ignored => panic!("RUNTIME is already borrowed by the press handler"),
+            },
             _ => self.content.as_mut().expect("built").on_event(event),
         }
     }
