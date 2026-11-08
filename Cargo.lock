@@ -6416,6 +6416,7 @@ dependencies = [
  "rustc-hash 2.1.3",
  "skera",
  "skrifa 0.44.0",
+ "sys-locale",
  "telar-geometry-core",
  "telar-reactive-local",
  "telar-renderer-cache",

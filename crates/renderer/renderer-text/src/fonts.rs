@@ -593,14 +593,15 @@ impl FaceSources {
     }
 
     fn load(&self) -> (String, fontdb::Database) {
-        if self.system_scan && self.dirs.is_empty() && self.faces.is_empty() {
+        let db = if self.system_scan && self.dirs.is_empty() && self.faces.is_empty() {
             // cosmic-text's own default database, taken from a `FontSystem` rather than rebuilt here: a hand-rolled copy of its system scan and generic-family choices would drift from every other consumer's.
-            return FontSystem::new().into_locale_and_db();
-        }
-        let mut db = fontdb::Database::new();
-        self.load_into(&mut db);
-        let locale = std::env::var("LANG").unwrap_or_else(|_| "en-US".to_string());
-        (locale, db)
+            FontSystem::new().into_locale_and_db().1
+        } else {
+            let mut db = fontdb::Database::new();
+            self.load_into(&mut db);
+            db
+        };
+        (database_locale(), db)
     }
 
     fn load_into(&self, db: &mut fontdb::Database) {
@@ -614,6 +615,10 @@ impl FaceSources {
             load_asset(db, face);
         }
     }
+}
+
+fn database_locale() -> String {
+    sys_locale::get_locale().unwrap_or_else(|| "en-US".to_string())
 }
 
 fn load_asset(db: &mut fontdb::Database, asset: &FontAsset) -> Vec<fontdb::ID> {

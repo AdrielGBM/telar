@@ -21,6 +21,7 @@ etagere = "0.3.0"
 lru = { workspace = true }
 rustc-hash = { workspace = true }
 skrifa = "0.44"
+sys-locale = "0.3.2"
 tiny-skia = { workspace = true }
 tracing = { workspace = true }
 

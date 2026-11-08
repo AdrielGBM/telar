@@ -283,3 +283,15 @@ fn a_face_the_host_holds_already_is_handed_back_as_the_host_holds_it() {
         "a face an earlier build handed over is read from the copy the host kept of it"
     );
 }
+
+#[test]
+fn a_bundled_database_and_a_system_one_are_shaped_in_the_same_locale() {
+    let bundled = FaceSources {
+        system_scan: false,
+        dirs: Vec::new(),
+        faces: vec![FontAsset::embedded(TEST_FACE)],
+    };
+    let (bundled_locale, _) = bundled.load();
+    let (system_locale, _) = FaceSources::platform().load();
+    assert_eq!(bundled_locale, system_locale);
+}
