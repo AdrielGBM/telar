@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use super::super::config::{TelarSection, resolve_package};
+use super::super::config::{Maintainer, MaintainerSource, TelarSection, resolve_package};
 use super::{
     create_dir_or_exit, desktop_entry_file, dist_dir, doc_dir, run_bundler_tool, run_release_build,
     stage_binary, stage_icon_notice, write_or_exit,
@@ -53,13 +53,28 @@ fn validate_description(description: &str) -> Result<(), String> {
     if synopsis.trim().is_empty() {
         return Err("the package `description` is empty; Debian needs a synopsis line.".into());
     }
-    if description
-        .chars()
-        .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
-    {
+    if unexpected_control_char(description, &['\n', '\r', '\t']).is_some() {
         return Err("the package `description` contains control characters, which a Debian control file cannot carry.".into());
     }
     Ok(())
+}
+
+fn unexpected_control_char(text: &str, allowed: &[char]) -> Option<char> {
+    text.chars()
+        .find(|c| c.is_control() && !allowed.contains(c))
+}
+
+fn validate_maintainer(maintainer: &Maintainer) -> Result<(), String> {
+    let source = match maintainer.source {
+        MaintainerSource::CargoAuthors => "`authors` in Cargo.toml",
+        MaintainerSource::DebEnv => "`DEBFULLNAME`/`DEBEMAIL`",
+    };
+    match unexpected_control_char(&maintainer.value, &[]) {
+        Some(c) => Err(format!(
+            "the maintainer from {source} contains the control character {c:?}, which a Debian control file cannot carry."
+        )),
+        None => Ok(()),
+    }
 }
 
 fn deb_control_file(
@@ -112,11 +127,13 @@ pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
         std::process::exit(1);
     };
     let manifest_description = manifest.description();
-    let checked = validate_package_name(&manifest.name()).and(
-        manifest_description
-            .as_deref()
-            .map_or(Ok(()), validate_description),
-    );
+    let checked = validate_package_name(&manifest.name())
+        .and(
+            manifest_description
+                .as_deref()
+                .map_or(Ok(()), validate_description),
+        )
+        .and(validate_maintainer(&maintainer));
     if let Err(message) = checked {
         eprintln!("[cargo-telar] --format deb: {message}");
         std::process::exit(1);
@@ -136,7 +153,13 @@ pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
         &bin_path,
         &resolved.package_dir,
         &package_name,
-        &deb_control_file(&package_name, &version, arch, &maintainer, &description),
+        &deb_control_file(
+            &package_name,
+            &version,
+            arch,
+            &maintainer.value,
+            &description,
+        ),
     );
 
     let deb_path = dist_dir.join(format!("{package_name}_{version}_{arch}.deb"));

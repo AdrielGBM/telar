@@ -190,7 +190,7 @@ impl ResolvedPackage {
     }
 
     // Debian's `Maintainer` and Cargo's `authors` share the `Name <email>` shape, so the manifest is the one source. There is no honest default: a placeholder address ships inside the package.
-    pub(crate) fn maintainer(&self) -> Option<String> {
+    pub(crate) fn maintainer(&self) -> Option<Maintainer> {
         self.package
             .as_ref()
             .and_then(|p| {
@@ -198,6 +198,10 @@ impl ResolvedPackage {
                     .resolve(|| Some(self.workspace_package.as_ref()?.authors.clone()))
             })
             .and_then(|authors| authors.first().cloned())
+            .map(|value| Maintainer {
+                value,
+                source: MaintainerSource::CargoAuthors,
+            })
             .or_else(maintainer_from_env)
     }
 
@@ -574,23 +578,39 @@ pub(crate) fn warn_if_features_moved(args: &[String]) {
 }
 
 // dpkg reads the maintainer from `DEBFULLNAME`/`DEBEMAIL`, so honour the same pair: cargo stopped emitting `authors` years ago, and refusing every manifest without it would rule out most projects.
-fn maintainer_from_env() -> Option<String> {
+fn maintainer_from_env() -> Option<Maintainer> {
     maintainer_from(
         std::env::var("DEBFULLNAME").ok(),
         std::env::var("DEBEMAIL").ok(),
     )
 }
 
-fn maintainer_from(name: Option<String>, email: Option<String>) -> Option<String> {
-    let email = email?;
-    let email = email.trim();
+// Only spaces are trimmed: a newline or tab in the environment must reach the control-character check rather than vanish here.
+pub(crate) fn maintainer_from(name: Option<String>, email: Option<String>) -> Option<Maintainer> {
+    let email = email?.trim_matches(' ').to_string();
     if email.is_empty() {
         return None;
     }
-    match name {
-        Some(name) if !name.trim().is_empty() => Some(format!("{} <{email}>", name.trim())),
-        _ => Some(email.to_string()),
-    }
+    let value = match name.map(|name| name.trim_matches(' ').to_string()) {
+        Some(name) if !name.is_empty() => format!("{name} <{email}>"),
+        _ => email,
+    };
+    Some(Maintainer {
+        value,
+        source: MaintainerSource::DebEnv,
+    })
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum MaintainerSource {
+    CargoAuthors,
+    DebEnv,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct Maintainer {
+    pub(crate) value: String,
+    pub(crate) source: MaintainerSource,
 }
 
 // Resolved in a single pass, so the packaging paths stop re-deriving them at each call site.
