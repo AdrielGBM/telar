@@ -7,7 +7,6 @@ use std::sync::Arc;
 use platform_headless::HeadlessWindow;
 
 use super::*;
-use crate::prefs::UserPrefs;
 use crate::runner::host::SurfaceRenderer;
 
 const CHILD: &str = "TELAR_UNLOAD_TEST_CHILD";
@@ -47,7 +46,6 @@ fn run_a_session(library: &Path) {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "unload-test".to_string(),
         SurfaceRenderer::builtin(),
     );

@@ -13,6 +13,7 @@ use crate::app_runtime::LocalApp;
 use crate::user_preferences::SCHEME_KEY;
 
 const ROOT: &str = "TELAR_BOOT_TEST_ROOT";
+const STAGE: &str = "TELAR_BOOT_TEST_STAGE";
 const APP: &str = "boot-probe";
 
 struct Probe;
@@ -45,8 +46,17 @@ impl AppPathsProvider for Rooted {
 
 /// Runs `check` in a process of its own, handed a config root in which `APP` keeps a dark scheme: the app's directories and preference store belong to the process, and the first boot in it keeps them.
 fn in_own_process(test: &str, check: fn(&Path)) {
+    in_own_processes(test, &[check]);
+}
+
+/// Runs each of `stages` in a process of its own, one after another over the same config root: what one boot kept is what the next finds.
+fn in_own_processes(test: &str, stages: &[fn(&Path)]) {
     if let Some(root) = std::env::var_os(ROOT) {
-        check(Path::new(&root));
+        let stage: usize = std::env::var(STAGE)
+            .expect("the stage")
+            .parse()
+            .expect("a stage number");
+        stages[stage](Path::new(&root));
         return;
     }
     let root = std::env::temp_dir().join(format!("telar-boot-{}-{test}", std::process::id()));
@@ -59,18 +69,21 @@ fn in_own_process(test: &str, check: fn(&Path)) {
     let module = module_path!()
         .split_once("::")
         .map_or(module_path!(), |(_, path)| path);
-    let output = Command::new(std::env::current_exe().expect("the test binary"))
-        .args([&format!("{module}::{test}"), "--exact", "--nocapture"])
-        .env(ROOT, &root)
-        .output()
-        .expect("start the test's own process");
+    for stage in 0..stages.len() {
+        let output = Command::new(std::env::current_exe().expect("the test binary"))
+            .args([&format!("{module}::{test}"), "--exact", "--nocapture"])
+            .env(ROOT, &root)
+            .env(STAGE, stage.to_string())
+            .output()
+            .expect("start the test's own process");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
     let _ = std::fs::remove_dir_all(&root);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        output.status.success() && stdout.contains("1 passed"),
-        "{stdout}\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
 }
 
 fn assert_booted_as_the_app(root: &Path) {
@@ -216,5 +229,46 @@ fn surfaces_on_one_thread_follow_the_stored_choices_once_and_each_thread_follows
             .join()
             .expect("the other thread's surface boots");
         },
+    );
+}
+
+fn boot_under(root: &Path) -> SurfaceBoot {
+    SurfaceBoot::new(
+        APP,
+        Arc::new(Rooted(root.to_owned())),
+        FontSetup::default(),
+        StoredChoices::Now,
+    )
+}
+
+#[test]
+fn the_backend_and_the_history_kept_by_one_boot_are_found_by_the_next_and_no_prefs_file_is_written()
+{
+    in_own_processes(
+        "the_backend_and_the_history_kept_by_one_boot_are_found_by_the_next_and_no_prefs_file_is_written",
+        &[
+            |root| {
+                let boot = boot_under(root);
+                assert_eq!(boot.backend, config::compile_time_backend());
+                crate::user_preferences::store_backend(RendererBackend::Software);
+                crate::user_preferences::store_history(&[
+                    "/".to_owned(),
+                    "/es/projects".to_owned(),
+                ]);
+            },
+            |root| {
+                let boot = boot_under(root);
+                assert_eq!(boot.backend, RendererBackend::Software);
+                assert_eq!(
+                    crate::user_preferences::stored_history(),
+                    ["/", "/es/projects"]
+                );
+                let names: Vec<_> = std::fs::read_dir(root.join(APP))
+                    .expect("the app's config directory")
+                    .map(|entry| entry.expect("an entry").file_name())
+                    .collect();
+                assert_eq!(names, ["preferences"], "the store's file is the only one");
+            },
+        ],
     );
 }

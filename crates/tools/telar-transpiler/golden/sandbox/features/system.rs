@@ -221,7 +221,7 @@ pub fn system(props: SystemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 __children.push(box_item(__row_0));
                                 let __text_8 = {
                                     Text::declaring(
-                                        || "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file beside prefs.toml, or localStorage on the web.".to_string(),
+                                        || "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file in the app's config directory, or localStorage on the web.".to_string(),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?

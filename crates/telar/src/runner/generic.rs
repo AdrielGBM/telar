@@ -15,7 +15,7 @@ use super::location::LocationBinding;
 
 /// Drive a full rsx app on an arbitrary [`Platform`] backend. This is the backend-agnostic entry point: an out-of-tree backend (e.g. a Wayland layer-shell `Platform`) constructs its own platform and paths provider and calls this, with no winit dependency. [`crate::run_app_with_name`] is the winit-defaulting convenience wrapper over it.
 ///
-/// The whole event → reactive → layout → render → present bridge (`AppHandler`) is already generic over the window type, so this simply loads prefs, resolves the renderer backend, applies the app's optional [`App::window_config`] override, and hands a fresh handler to `platform.run`.
+/// The whole event → reactive → layout → render → present bridge (`AppHandler`) is already generic over the window type, so this simply reads the stored backend, resolves the renderer backend, applies the app's optional [`App::window_config`] override, and hands a fresh handler to `platform.run`.
 ///
 /// The window has to be a [`SurfaceWindow`]: this entry point draws with the renderers Telar ships, and both need a real surface behind it. A backend whose window is not one uses [`run_with_platform_and_renderer`].
 pub fn run_with_platform<P, A, D>(

@@ -51,7 +51,7 @@ pub(super) struct SurfaceRenderer<W> {
 }
 
 impl<W: SurfaceWindow> SurfaceRenderer<W> {
-    /// The renderers Telar ships, picked by [`RendererBackend`] and the user's prefs.
+    /// The renderers Telar ships, picked by [`RendererBackend`] and the one the user switched to.
     pub(super) fn builtin() -> Self {
         Self {
             host: Box::new(BuiltinHost::new()),

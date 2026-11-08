@@ -1,6 +1,7 @@
 use platform_core::{ArgumentLocation, FixedLocation, HistoryStep};
 
 use super::*;
+use crate::user_preferences::{store_history, stored_history};
 
 fn at(path: &str) -> Location {
     LocationFormat::root().parse(path).unwrap()
@@ -13,58 +14,58 @@ fn push_to(history: &[&str]) -> HistoryUpdate {
     }
 }
 
+static HISTORY: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn exclusive_history() -> std::sync::MutexGuard<'static, ()> {
+    let guard = HISTORY.lock().unwrap_or_else(|e| e.into_inner());
+    store_history(&[]);
+    guard
+}
+
 #[test]
-fn a_remembered_history_is_saved_as_the_app_moves_and_reopened_without_a_location() {
-    let mut prefs = UserPrefs::default();
+fn a_remembered_history_is_stored_as_the_app_moves_and_reopened_without_a_location() {
+    let _history = exclusive_history();
     let mut first = LocationBinding::remembered(Box::new(ArgumentLocation::default()));
-    assert!(first.open(&prefs).is_empty());
-    assert!(first.apply(&push_to(&["/", "/es/projects"]), &mut prefs));
-    assert_eq!(prefs.history, ["/", "/es/projects"]);
-    assert!(
-        !first.apply(&push_to(&["/", "/es/projects"]), &mut prefs),
-        "an unchanged history is not written again"
-    );
+    assert!(first.open().is_empty());
+    first.apply(&push_to(&["/", "/es/projects"]));
+    assert_eq!(stored_history(), ["/", "/es/projects"]);
 
     let mut next_run = LocationBinding::remembered(Box::new(ArgumentLocation::default()));
-    assert_eq!(next_run.open(&prefs), [at("/"), at("/es/projects")]);
+    assert_eq!(next_run.open(), [at("/"), at("/es/projects")]);
 }
 
 #[test]
 fn a_location_on_the_command_line_wins_over_the_remembered_one() {
-    let prefs = UserPrefs {
-        history: vec!["/old".into()],
-        ..UserPrefs::default()
-    };
+    let _history = exclusive_history();
+    store_history(&["/old".to_owned()]);
     let mut binding =
         LocationBinding::remembered(Box::new(ArgumentLocation::from_args(["--location", "/es"])));
-    assert_eq!(binding.open(&prefs), [at("/es")]);
+    assert_eq!(binding.open(), [at("/es")]);
 }
 
 #[test]
-fn a_history_the_platform_keeps_is_never_written_to_prefs() {
-    let mut prefs = UserPrefs {
-        history: vec!["/old".into()],
-        ..UserPrefs::default()
-    };
+fn a_history_the_platform_keeps_is_never_written_to_the_store() {
+    let _history = exclusive_history();
+    store_history(&["/old".to_owned()]);
     let mut binding = LocationBinding::new(Box::new(FixedLocation::default()));
     assert!(
-        binding.open(&prefs).is_empty(),
-        "only a remembering binding reopens prefs"
+        binding.open().is_empty(),
+        "only a remembering binding reopens the store"
     );
-    assert!(!binding.apply(&push_to(&["/", "/a"]), &mut prefs));
-    assert!(!binding.follow(vec![at("/")], &mut prefs));
-    assert_eq!(prefs.history, ["/old"]);
-    assert_eq!(binding.open(&prefs), [at("/")]);
+    binding.apply(&push_to(&["/", "/a"]));
+    binding.follow(vec![at("/")]);
+    assert_eq!(stored_history(), ["/old"]);
+    assert_eq!(binding.open(), [at("/")]);
 }
 
 #[test]
 fn the_opening_history_is_asked_for_once() {
+    let _history = exclusive_history();
     let mut binding = LocationBinding::new(Box::new(FixedLocation::new([at("/start")])));
-    let prefs = UserPrefs::default();
-    assert_eq!(binding.open(&prefs), [at("/start")]);
-    binding.follow(vec![at("/start"), at("/later")], &mut UserPrefs::default());
+    assert_eq!(binding.open(), [at("/start")]);
+    binding.follow(vec![at("/start"), at("/later")]);
     assert_eq!(
-        binding.open(&prefs),
+        binding.open(),
         [at("/start"), at("/later")],
         "a rebuild reopens where the app is, not where it started"
     );
@@ -72,9 +73,9 @@ fn the_opening_history_is_asked_for_once() {
 
 #[test]
 fn a_link_opens_on_top_of_where_the_app_is() {
-    let prefs = UserPrefs::default();
+    let _history = exclusive_history();
     let mut binding = LocationBinding::new(Box::new(FixedLocation::new([at("/preview/a")])));
-    binding.open(&prefs);
+    binding.open();
     assert_eq!(
         binding.linking(at("/preview/b?args=n:2")),
         [at("/preview/a"), at("/preview/b?args=n:2")]

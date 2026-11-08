@@ -51,7 +51,6 @@ mod location;
 #[cfg(feature = "runtime")]
 mod location_locale;
 #[cfg(feature = "runtime")]
-pub mod prefs;
 #[cfg(feature = "headless")]
 mod raster;
 #[cfg(feature = "runtime")]
@@ -154,7 +153,6 @@ pub use layout_core::{
     SizeDimension, TemplateTrack,
 };
 #[cfg(feature = "runtime")]
-pub use prefs::UserPrefs;
 pub use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 // The faces a surface loads and the family it shapes in — what an `AppConfig` carries, as one value, for the seams that take it directly.
 #[cfg(feature = "runtime")]

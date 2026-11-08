@@ -55,7 +55,7 @@ pub fn run_android_app_with_devtools<A: App, D: DevOverlay>(
 
 /// Builds the Android platform and paths provider, then hands over to the one shared boot sequence.
 ///
-/// The sequence itself — load prefs, resolve the backend, resolve the window, build the handler, run — used to be written out again here, `run_with_platform` being gated off this target for no reason: it is generic over `Platform`, `AndroidPlatform` implements it, and it imports nothing desktop-only.
+/// The sequence itself — read the stored backend, resolve the backend, resolve the window, build the handler, run — used to be written out again here, `run_with_platform` being gated off this target for no reason: it is generic over `Platform`, `AndroidPlatform` implements it, and it imports nothing desktop-only.
 #[cfg(feature = "runtime")]
 fn run_android_with_overlay<A: App, D: DevOverlay>(
     config: AppConfig,

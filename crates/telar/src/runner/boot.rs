@@ -9,7 +9,6 @@ use ui_tree::DevOverlay;
 use crate::app_config::AppConfig;
 use crate::app_runtime::AppRuntime;
 use crate::config::{self, RendererBackend};
-use crate::prefs::UserPrefs;
 
 use super::font_config::FontSetup;
 use super::handler::{AppHandler, build_app_handler};
@@ -53,17 +52,16 @@ pub(super) fn split_config(config: AppConfig) -> (WindowConfig, FontSetup) {
     )
 }
 
-/// An app installed for a surface, with the preferences it reopens with: what every entry point builds its handler from.
+/// An app installed for a surface, with the renderer backend it reopens with: what every entry point builds its handler from.
 pub(super) struct SurfaceBoot {
     app_name: String,
     paths: Arc<dyn AppPathsProvider>,
-    prefs: UserPrefs,
     backend: RendererBackend,
     fonts: FontSetup,
 }
 
 impl SurfaceBoot {
-    /// Installs the app (see [`install_app`]) and loads the preferences kept under its name.
+    /// Installs the app (see [`install_app`]) and reads the renderer backend kept in its preference store.
     pub(super) fn new(
         app_name: &str,
         paths: Arc<dyn AppPathsProvider>,
@@ -71,12 +69,11 @@ impl SurfaceBoot {
         choices: StoredChoices,
     ) -> Self {
         install_app(app_name, paths.clone(), choices);
-        let prefs = UserPrefs::load(app_name, paths.as_ref());
-        let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
+        let backend =
+            crate::user_preferences::stored_backend().unwrap_or_else(config::compile_time_backend);
         Self {
             app_name: app_name.to_owned(),
             paths,
-            prefs,
             backend,
             fonts,
         }
@@ -98,7 +95,6 @@ impl SurfaceBoot {
             self.paths,
             self.fonts,
             self.backend,
-            self.prefs,
             self.app_name,
             renderer,
         );

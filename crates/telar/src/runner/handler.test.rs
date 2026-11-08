@@ -29,7 +29,6 @@ fn handler() -> AppHandler<HeadlessWindow, ()> {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "generation-test".to_string(),
         SurfaceRenderer::builtin(),
     )
@@ -104,7 +103,6 @@ fn new_commands_never_go_out_under_the_previous_generation() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "generation-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -647,7 +645,6 @@ fn stateful_handler(app: Stateful, log: RendererLog) -> AppHandler<HeadlessWindo
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "presentation-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -807,7 +804,6 @@ fn the_window_shows_the_cursor_the_box_under_the_pointer_asks_for() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "cursor-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -882,7 +878,6 @@ fn a_box_hovered_under_an_overlay_hears_the_pointer_move_onto_it() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "covered-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -961,7 +956,6 @@ fn a_dropped_handler_drops_its_tree_inside_its_surface() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "drop-order-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -1106,7 +1100,6 @@ fn a_runtime_swapped_in_by_a_reload_is_handed_the_loop_wake() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "reload-waker-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -1163,7 +1156,6 @@ fn a_surface_opens_in_its_configured_family_and_follows_a_new_one() {
             family: Some("Telar Configured Face".to_string()),
         },
         RendererBackend::Software,
-        UserPrefs::default(),
         "font-family-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -1242,7 +1234,6 @@ fn overlaid<D: DevOverlay>(app: Box<dyn AppRuntime>) -> AppHandler<HeadlessWindo
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "overlay-test".to_string(),
         SurfaceRenderer::builtin(),
     )
@@ -1595,7 +1586,6 @@ fn title_bar_handler() -> AppHandler<HeadlessWindow, ()> {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "title-bar-test".to_string(),
         SurfaceRenderer::builtin(),
     )
@@ -2045,7 +2035,6 @@ fn the_window_is_told_where_the_focused_field_has_its_caret() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "text-input-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -2070,7 +2059,6 @@ fn a_tree_that_goes_takes_the_input_method_from_its_field() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "text-input-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -2199,7 +2187,6 @@ fn unloading_handler(window: &HeadlessWindow) -> AppHandler<HeadlessWindow, Forg
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
-        UserPrefs::default(),
         "unload-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -2318,12 +2305,27 @@ fn lose_the_thread(
     run_a_pass(handler, window);
 }
 
-fn handler_on(backend: RendererBackend) -> AppHandler<HeadlessWindow, ()> {
+static STORED_BACKEND: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct StoredBackend {
+    _exclusive: std::sync::MutexGuard<'static, ()>,
+}
+
+impl Drop for StoredBackend {
+    fn drop(&mut self) {
+        crate::user_preferences::forget_backend();
+    }
+}
+
+fn handler_on(backend: RendererBackend) -> (StoredBackend, AppHandler<HeadlessWindow, ()>) {
+    let store = StoredBackend {
+        _exclusive: STORED_BACKEND.lock().unwrap_or_else(|e| e.into_inner()),
+    };
     let mut handler = handler();
     handler.backend = backend;
-    handler.env.prefs.backend = Some(backend);
+    crate::user_preferences::store_backend(backend);
     handler.tree = Some(handler.app.mount());
-    handler
+    (store, handler)
 }
 
 #[test]
@@ -2331,7 +2333,7 @@ fn a_thread_that_keeps_dying_is_replaced_by_software_and_then_given_up_on() {
     let window = HeadlessWindow::new(120, 80);
     let started = Rc::new(Cell::new(0));
     let retired = Rc::new(Cell::new(0));
-    let mut handler = handler_on(RendererBackend::Hardware);
+    let (_store, mut handler) = handler_on(RendererBackend::Hardware);
 
     for _ in 0..3 {
         lose_the_thread(&mut handler, &window, &started, &retired);
@@ -2374,7 +2376,7 @@ fn software_that_dies_from_the_start_is_given_up_on_without_a_switch() {
     let window = HeadlessWindow::new(120, 80);
     let started = Rc::new(Cell::new(0));
     let retired = Rc::new(Cell::new(0));
-    let mut handler = handler_on(RendererBackend::Software);
+    let (_store, mut handler) = handler_on(RendererBackend::Software);
 
     for _ in 0..4 {
         lose_the_thread(&mut handler, &window, &started, &retired);
@@ -2388,7 +2390,7 @@ fn a_thread_that_survives_two_frames_resets_the_count() {
     let window = HeadlessWindow::new(120, 80);
     let started = Rc::new(Cell::new(0));
     let retired = Rc::new(Cell::new(0));
-    let mut handler = handler_on(RendererBackend::Hardware);
+    let (_store, mut handler) = handler_on(RendererBackend::Hardware);
 
     for _ in 0..3 {
         lose_the_thread(&mut handler, &window, &started, &retired);
@@ -2411,7 +2413,7 @@ fn one_accepted_frame_before_the_thread_dies_again_does_not_reset_the_count() {
     let window = HeadlessWindow::new(120, 80);
     let started = Rc::new(Cell::new(0));
     let retired = Rc::new(Cell::new(0));
-    let mut handler = handler_on(RendererBackend::Hardware);
+    let (_store, mut handler) = handler_on(RendererBackend::Hardware);
 
     for _ in 0..3 {
         lose_the_thread(&mut handler, &window, &started, &retired);
@@ -2426,7 +2428,7 @@ fn choosing_a_backend_by_hand_gives_it_a_fresh_set_of_restarts() {
     let window = HeadlessWindow::new(120, 80);
     let started = Rc::new(Cell::new(0));
     let retired = Rc::new(Cell::new(0));
-    let mut handler = handler_on(RendererBackend::Hardware);
+    let (_store, mut handler) = handler_on(RendererBackend::Hardware);
 
     for _ in 0..4 {
         lose_the_thread(&mut handler, &window, &started, &retired);
@@ -2438,7 +2440,7 @@ fn choosing_a_backend_by_hand_gives_it_a_fresh_set_of_restarts() {
     assert!(handler.recovery.abandoned());
 
     handler.renderer_host = dead_host(&started, &retired);
-    handler.env.prefs.backend = Some(RendererBackend::Software);
+    crate::user_preferences::store_backend(RendererBackend::Software);
     handler.apply_dev_action(DevAction::ToggleBackend, &window);
 
     assert!(!handler.recovery.abandoned());

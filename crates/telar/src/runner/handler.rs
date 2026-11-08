@@ -10,7 +10,7 @@ use ui_tree::{DevAction, DevOverlay};
 
 use crate::app_runtime::AppRuntime;
 use crate::config::{self, RendererBackend};
-use crate::prefs::UserPrefs;
+use crate::user_preferences;
 
 use super::COMMAND_BUF_POOL_CAP;
 use super::frame_thread::{FrameMsg, Recovery, RenderMsg, RenderRecovery, frame_step_succeeded};
@@ -116,7 +116,6 @@ pub(super) fn build_app_handler<W, D>(
     paths: Arc<dyn AppPathsProvider>,
     fonts: super::font_config::FontSetup,
     backend: crate::config::RendererBackend,
-    prefs: UserPrefs,
     app_name: String,
     renderer: SurfaceRenderer<W>,
 ) -> AppHandler<W, D>
@@ -146,11 +145,7 @@ where
         redraw_waker: None,
         scale_scratch: renderer_core::ScaleScratch::new(),
         dev: D::default(),
-        env: AppEnv {
-            app_name,
-            paths,
-            prefs,
-        },
+        env: AppEnv { app_name, paths },
         fonts,
         _window: std::marker::PhantomData,
         command_buf_pool: Vec::new(),
@@ -264,10 +259,8 @@ where
                 WindowCommand::SetCursor(cursor) => window.set_cursor(cursor),
                 WindowCommand::Close => self.exit_requested = true,
                 WindowCommand::Navigate(update) => {
-                    if let Some(location) = &mut self.location
-                        && location.apply(&update, &mut self.env.prefs)
-                    {
-                        self.env.save_prefs();
+                    if let Some(location) = &mut self.location {
+                        location.apply(&update);
                     }
                 }
                 WindowCommand::StartDrag(drag) => {
@@ -336,7 +329,7 @@ where
     /// Gives the app's runtime the history this surface's platform stands on, before a tree is built from it. A surface with no address of its own leaves the app's alone.
     fn hand_over_location(&mut self) {
         if let Some(location) = &mut self.location {
-            let history = location.open(&self.env.prefs).to_vec();
+            let history = location.open().to_vec();
             self.app.set_location_history(&history);
         }
     }
@@ -346,9 +339,7 @@ where
         let Some(location) = &mut self.location else {
             return;
         };
-        if location.follow(history.clone(), &mut self.env.prefs) {
-            self.env.save_prefs();
-        }
+        location.follow(history.clone());
         let app = &self.app;
         app.event_batch(|| app.set_location_history(&history));
         self.apply_window_commands(window);
@@ -740,12 +731,12 @@ where
         match action {
             DevAction::Redraw => window.request_redraw(),
             DevAction::ToggleBackend => {
-                let next = match self.env.prefs.backend.unwrap_or(RendererBackend::Auto) {
+                let next = match user_preferences::stored_backend().unwrap_or(RendererBackend::Auto)
+                {
                     RendererBackend::Hardware => RendererBackend::Software,
                     _ => RendererBackend::Hardware,
                 };
-                self.env.prefs.backend = Some(next);
-                self.env.save_prefs();
+                user_preferences::store_backend(next);
                 self.recovery = RenderRecovery::default();
                 match next {
                     RendererBackend::Software => self.pending_restart = true,
@@ -769,10 +760,7 @@ where
         self.backend = if self.recovery.software_forced() {
             RendererBackend::Software
         } else {
-            self.env
-                .prefs
-                .backend
-                .unwrap_or_else(config::compile_time_backend)
+            user_preferences::stored_backend().unwrap_or_else(config::compile_time_backend)
         };
         // Before creating the new one, to avoid peak memory overlap. A restart exists to change what a renderer is baked with, so nothing is kept warm.
         drop(self.renderer.take());

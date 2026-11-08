@@ -61,5 +61,5 @@ col gap:20
                 button label:"System" variant:ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::System))
                 button label:"Light" variant:ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::Light))
                 button label:"Dark" variant:ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::Dark))
-            text "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file beside prefs.toml, or localStorage on the web." font_size:12 color:$theme.muted
+            text "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file in the app's config directory, or localStorage on the web." font_size:12 color:$theme.muted
         code_line code:"set_scheme_preference(SchemePreference::Dark)   ·   $scheme   ·   store_preference(key, value)"

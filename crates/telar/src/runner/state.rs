@@ -6,8 +6,6 @@ use std::sync::Arc;
 
 use services_core::AppPathsProvider;
 
-use crate::prefs::UserPrefs;
-
 use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL};
 /// The clocks and flags that decide whether a frame is due, and whether the GPU should be held awake between them.
 ///
@@ -46,22 +44,10 @@ impl Default for FramePacer {
     }
 }
 
-/// Which application this is and where it keeps things: the name it is known by, the directories the platform gave it, and the preferences it remembers between runs.
-///
-/// One value because [`UserPrefs::save`] takes all three, and because a renderer request names two of them together — a handler holding them apart had the save site reach for `self` three times to say one thing.
+/// Which application this is and where it keeps things: the name it is known by, and the directories the platform gave it.
 pub(super) struct AppEnv {
     pub(super) app_name: String,
     pub(super) paths: Arc<dyn AppPathsProvider>,
-    pub(super) prefs: UserPrefs,
-}
-
-impl AppEnv {
-    /// Writes the preferences back, reporting a failure rather than losing it: a renderer the user switched to and that did not survive the restart is a setting that silently did nothing.
-    pub(super) fn save_prefs(&self) {
-        if let Err(e) = self.prefs.save(&self.app_name, self.paths.as_ref()) {
-            tracing::warn!("failed to save prefs: {e}");
-        }
-    }
 }
 
 /// The window's title as the handler knows it: the one it was configured with, which is the app's part of every title it derives, and the one the platform shows now.

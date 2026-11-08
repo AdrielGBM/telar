@@ -5,6 +5,8 @@ use std::sync::Once;
 
 use theme_core::SchemePreference;
 
+use crate::config::RendererBackend;
+
 /// The key the colour scheme a person chose is kept under.
 pub const SCHEME_KEY: &str = "telar.scheme";
 
@@ -13,6 +15,12 @@ pub const LOCALE_KEY: &str = "telar.locale";
 
 /// The key the app's reduced-motion override is kept under (see [`set_reduced_motion_override`](crate::set_reduced_motion_override)): `true` or `false`, and absent while the app follows the system.
 pub const REDUCED_MOTION_KEY: &str = "telar.reduced_motion";
+
+/// The key the renderer backend a person switched to is kept under, as `RendererBackend::as_str` writes it.
+pub const BACKEND_KEY: &str = "telar.backend";
+
+/// The key a command-line or terminal app's history is kept under when it last moved: one entry per line, root-first, each as `LocationFormat::root` writes it, which never leaves a raw line break in one.
+pub const HISTORY_KEY: &str = "telar.history";
 
 reactive_core::dropless_thread_local! {
     static FOLLOWING: Cell<bool> = const { Cell::new(false) };
@@ -35,6 +43,30 @@ pub(crate) fn install_store(app_name: &str) {
         #[cfg(not(all(feature = "web-dom", target_arch = "wasm32")))]
         let _ = app_name;
     });
+}
+
+pub(crate) fn stored_backend() -> Option<RendererBackend> {
+    services_core::stored_preference(BACKEND_KEY).and_then(|word| RendererBackend::parse(&word))
+}
+
+pub(crate) fn store_backend(backend: RendererBackend) {
+    services_core::store_preference(BACKEND_KEY, Some(backend.as_str()));
+}
+
+#[cfg(test)]
+pub(crate) fn forget_backend() {
+    services_core::store_preference(BACKEND_KEY, None);
+}
+
+pub(crate) fn stored_history() -> Vec<String> {
+    services_core::stored_preference(HISTORY_KEY)
+        .map(|text| text.lines().map(str::to_owned).collect())
+        .unwrap_or_default()
+}
+
+pub(crate) fn store_history(history: &[String]) {
+    let text = history.join("\n");
+    services_core::store_preference(HISTORY_KEY, (!history.is_empty()).then_some(text.as_str()));
 }
 
 /// Restores every choice Telar keeps in the installed store, then keeps each as it changes, once per thread: the choices live in the thread's reactive runtime, and a second follower there would write every change again.
