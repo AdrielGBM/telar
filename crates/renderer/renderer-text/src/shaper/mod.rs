@@ -195,31 +195,17 @@ fn text_attrs<'a>(
     attrs
 }
 
-/// The paragraph cut into runs of one style each: every span in order, with the paragraph's own style filling the gaps between them. Spans are expected sorted and non-overlapping; anything reaching backwards or past the end is clamped rather than trusted, since they are byte offsets that outlived the text they indexed.
+/// The paragraph cut into runs of one style each: every span in order, with the paragraph's own style filling the gaps between them.
 fn styled_runs<'a>(text: &'a str, spans: &[Span], style: &TextStyle) -> Vec<(&'a str, TextStyle)> {
-    let mut runs = Vec::with_capacity(spans.len() * 2 + 1);
-    let mut at = 0usize;
-    for span in spans {
-        let start = (span.range.start as usize).clamp(at, text.len());
-        let end = (span.range.end as usize).clamp(start, text.len());
-        if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
-            continue;
-        }
-        if start > at {
-            runs.push((&text[at..start], style.clone()));
-        }
-        if end > start {
-            runs.push((
-                &text[start..end],
-                span.over.over(style, geometry_core::Size::ZERO),
-            ));
-        }
-        at = end;
-    }
-    if at < text.len() {
-        runs.push((&text[at..], style.clone()));
-    }
-    runs
+    renderer_core::span_segments(text, spans)
+        .map(|segment| {
+            let run_style = match segment.span {
+                Some((_, span)) => span.over.over(style, geometry_core::Size::ZERO),
+                None => style.clone(),
+            };
+            (&text[segment.range], run_style)
+        })
+        .collect()
 }
 
 fn shape_buffer(

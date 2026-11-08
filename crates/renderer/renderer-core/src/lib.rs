@@ -65,9 +65,9 @@ pub use style::{
     Border, CasedText, Clamp, Dash, Declared, DecorationLength, DecorationLine, DecorationMetric,
     FillRule, FitWidth, FontFamily, FontFeatures, FontFit, FontStyle, FontTag, FontVariations,
     Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineHeight, LineJoin, Paint,
-    PathStyle, Raster, RectStyle, Scale, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextCase,
-    TextDecoration, TextLength, TextShadow, TextStyle, TextWrap, border_inner_shape, case_text,
-    link_at,
+    PathStyle, Raster, RectStyle, Scale, Segment, Shadow, ShapeStyle, Span, Stroke, TextAlign,
+    TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap, border_inner_shape,
+    case_text, link_at, span_segments,
 };
 pub use style_pool::{hash_declared, hash_path_style};
 pub use text_lines::{PlacedGlyph, TextCluster, TextLine};

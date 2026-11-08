@@ -12,6 +12,7 @@ mod gradient;
 mod paint;
 mod scale;
 mod shape;
+mod span_segments;
 mod text_case;
 mod text_length;
 
@@ -23,6 +24,7 @@ pub use font_settings::{FontFeatures, FontTag, FontVariations};
 pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};
 pub use shape::{Border, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
+pub use span_segments::{Segment, span_segments};
 pub use text_case::{CasedText, TextCase, case_text};
 pub use text_length::TextLength;
 
