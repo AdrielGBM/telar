@@ -11,6 +11,7 @@ use renderer_core::{
 };
 
 use crate::box_key::BoxKey;
+use crate::markup::{attribute, escape_html};
 use crate::paint::{color, round};
 
 /// A group open in the markup.
@@ -123,20 +124,20 @@ impl Drawing {
         let mut attrs = String::new();
         if let Some(fill) = &style.fill {
             let value = self.paint(fill);
-            attr(&mut attrs, "fill", &value);
+            attribute(&mut attrs, "fill", &value);
         } else {
-            attr(&mut attrs, "fill", "none");
+            attribute(&mut attrs, "fill", "none");
         }
         if let Some(filter) = filter {
-            attr(&mut attrs, "filter", &format!("url(#{filter})"));
+            attribute(&mut attrs, "filter", &format!("url(#{filter})"));
         }
         // A border sits inside the box, where a stroke straddles the edge it is given, so the shape it is drawn on is the box already pulled in by half the stroke.
         let inset = match &style.border {
             Some(border) if border.is_visible() => {
                 let width = border.widths[0];
                 let value = self.paint(&border.paint);
-                attr(&mut attrs, "stroke", &value);
-                attr(&mut attrs, "stroke-width", &round(width));
+                attribute(&mut attrs, "stroke", &value);
+                attribute(&mut attrs, "stroke-width", &round(width));
                 width / 2.0
             }
             _ => 0.0,
@@ -186,8 +187,8 @@ impl Drawing {
             round(rect.y),
             round(rect.width.max(0.0)),
             round(rect.height.max(0.0)),
-            escape(&css),
-            escape(text),
+            escape_html(&css),
+            escape_html(text),
         ));
     }
 
@@ -201,18 +202,18 @@ impl Drawing {
         match &style.fill {
             Some(fill) => {
                 let value = self.paint(fill);
-                attr(&mut attrs, "fill", &value);
+                attribute(&mut attrs, "fill", &value);
             }
-            None => attr(&mut attrs, "fill", "none"),
+            None => attribute(&mut attrs, "fill", "none"),
         }
         if style.fill_rule == renderer_core::FillRule::EvenOdd {
-            attr(&mut attrs, "fill-rule", "evenodd");
+            attribute(&mut attrs, "fill-rule", "evenodd");
         }
         if let Some(stroke) = &style.stroke {
             self.stroke(&mut attrs, stroke);
         }
         if let Some(filter) = filter {
-            attr(&mut attrs, "filter", &format!("url(#{filter})"));
+            attribute(&mut attrs, "filter", &format!("url(#{filter})"));
         }
         self.body.push_str(&format!("<path d=\"{d}\"{attrs}/>"));
     }
@@ -380,8 +381,8 @@ impl Drawing {
             "<text x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\" fill=\"{fill}\" style=\"{}\">{}</text>",
             round(x),
             round(rect.y + baseline),
-            escape(&css),
-            escape(text.lines().next().unwrap_or_default()),
+            escape_html(&css),
+            escape_html(text.lines().next().unwrap_or_default()),
         ));
     }
 
@@ -421,23 +422,23 @@ impl Drawing {
 
     fn stroke(&mut self, attrs: &mut String, stroke: &Stroke) {
         let value = self.paint(&stroke.paint);
-        attr(attrs, "stroke", &value);
-        attr(attrs, "stroke-width", &round(stroke.width));
+        attribute(attrs, "stroke", &value);
+        attribute(attrs, "stroke-width", &round(stroke.width));
         match stroke.cap {
             renderer_core::LineCap::Butt => {}
-            renderer_core::LineCap::Round => attr(attrs, "stroke-linecap", "round"),
-            renderer_core::LineCap::Square => attr(attrs, "stroke-linecap", "square"),
+            renderer_core::LineCap::Round => attribute(attrs, "stroke-linecap", "round"),
+            renderer_core::LineCap::Square => attribute(attrs, "stroke-linecap", "square"),
         }
         match stroke.join {
             renderer_core::LineJoin::Miter => {}
-            renderer_core::LineJoin::Round => attr(attrs, "stroke-linejoin", "round"),
-            renderer_core::LineJoin::Bevel => attr(attrs, "stroke-linejoin", "bevel"),
+            renderer_core::LineJoin::Round => attribute(attrs, "stroke-linejoin", "round"),
+            renderer_core::LineJoin::Bevel => attribute(attrs, "stroke-linejoin", "bevel"),
         }
         if let Some(dash) = &stroke.dash {
             let lengths: Vec<String> = dash.lengths().iter().map(|length| round(*length)).collect();
-            attr(attrs, "stroke-dasharray", &lengths.join(" "));
+            attribute(attrs, "stroke-dasharray", &lengths.join(" "));
             if dash.offset() != 0.0 {
-                attr(attrs, "stroke-dashoffset", &round(dash.offset()));
+                attribute(attrs, "stroke-dashoffset", &round(dash.offset()));
             }
         }
     }
@@ -625,15 +626,6 @@ fn uniform(r: BorderRadius) -> Option<f32> {
         .then_some(r.top_left)
 }
 
-fn attr(out: &mut String, name: &str, value: &str) {
-    out.push(' ');
-    out.push_str(name);
-    out.push_str("=\"");
-    out.push_str(&escape(value));
-    out.push('"');
-}
-
-/// Markup-safe text. Every string that reaches this file is one the application chose — a label, a font family, a path a picture was loaded from — so none of it can be assumed to be markup already.
 fn image_tag(href: Option<&str>, rect: Rect, raster: Raster) -> String {
     let rendering = match raster {
         Raster::Pixel => " style=\"image-rendering:pixelated\"",
@@ -645,27 +637,9 @@ fn image_tag(href: Option<&str>, rect: Rect, raster: Raster) -> String {
         round(rect.y),
         round(rect.width.max(0.0)),
         round(rect.height.max(0.0)),
-        href.map(|href| format!(" href=\"{}\"", escape(href)))
+        href.map(|href| format!(" href=\"{}\"", escape_html(href)))
             .unwrap_or_default(),
     )
-}
-
-fn escape(value: &str) -> String {
-    if !value.contains(['&', '<', '>', '"', '\'']) {
-        return value.to_string();
-    }
-    let mut out = String::with_capacity(value.len() + 8);
-    for c in value.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#39;"),
-            _ => out.push(c),
-        }
-    }
-    out
 }
 
 #[cfg(test)]

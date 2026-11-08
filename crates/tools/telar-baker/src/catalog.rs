@@ -239,26 +239,17 @@ fn parse_sources(
 pub fn to_source(model: &CatalogModel) -> String {
     let mut s = String::new();
     s.push_str("pub static CATALOG: Catalog = Catalog {\n");
+    let locales: Vec<String> = model.locales.iter().map(|tag| format!("{tag:?}")).collect();
+    s.push_str(&format!("    locales: &[{}],\n", locales.join(", ")));
     s.push_str(&format!(
-        "    locales: &[{}],\n",
-        ser_str_list(&model.locales)
-    ));
-    s.push_str(&format!(
-        "    default_locale: {},\n",
-        ser_str(&model.default_locale)
+        "    default_locale: {:?},\n",
+        model.default_locale
     ));
     s.push_str("    entries: &[\n");
     for (key, per_locale) in &model.entries {
-        s.push_str(&format!(
-            "        Entry {{ key: {}, messages: &[",
-            ser_str(key)
-        ));
+        s.push_str(&format!("        Entry {{ key: {key:?}, messages: &["));
         for (locale, message) in per_locale {
-            s.push_str(&format!(
-                "({}, {}), ",
-                ser_str(locale),
-                ser_message(message)
-            ));
+            s.push_str(&format!("({locale:?}, {}), ", ser_message(message)));
         }
         s.push_str("] },\n");
     }
@@ -276,13 +267,13 @@ pub fn to_source(model: &CatalogModel) -> String {
 
 fn ser_message(message: &MessageModel) -> String {
     match message {
-        MessageModel::Plain(text) => format!("Message::Plain({})", ser_str(text)),
+        MessageModel::Plain(text) => format!("Message::Plain({text:?})"),
         MessageModel::Format(parts) => {
             let inner: Vec<String> = parts
                 .iter()
                 .map(|p| match p {
-                    PartModel::Lit(s) => format!("Part::Lit({})", ser_str(s)),
-                    PartModel::Arg(s) => format!("Part::Arg({})", ser_str(s)),
+                    PartModel::Lit(s) => format!("Part::Lit({s:?})"),
+                    PartModel::Arg(s) => format!("Part::Arg({s:?})"),
                 })
                 .collect();
             format!("Message::Format(&[{}])", inner.join(", "))
@@ -315,30 +306,6 @@ fn ser_category(name: &str) -> &'static str {
     }
 }
 
-fn ser_str(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
-            '\r' => out.push_str("\\r"),
-            _ => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-fn ser_str_list(items: &[String]) -> String {
-    items
-        .iter()
-        .map(|s| ser_str(s))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
 #[cfg(test)]
 #[path = "catalog.test.rs"]
 mod tests;

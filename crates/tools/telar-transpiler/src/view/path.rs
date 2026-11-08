@@ -6,7 +6,6 @@ use telar_parser::Element;
 
 use crate::style::format_f32;
 
-use super::signals::rust_str;
 use super::{ChildEmit, ViewGen};
 
 impl ViewGen<'_> {
@@ -59,7 +58,7 @@ impl ViewGen<'_> {
         let style_closure = self.owning(&raw_colors, &format!("move || {path_style}"));
 
         let err_line = match parse_err {
-            Some(e) => format!("{pad}    compile_error!({});\n", rust_str(&e)),
+            Some(e) => format!("{pad}    compile_error!({e:?});\n"),
             None => String::new(),
         };
 

@@ -32,5 +32,11 @@ fn a_variable_face_writes_its_ranges() {
 
 #[test]
 fn a_family_cannot_close_the_style_element_or_the_string() {
-    assert_eq!(css_string("a\"b\\c</style>"), "\"a\\\"b\\\\c\\3c /style>\"");
+    let font =
+        declared("[[telar.fonts]]\nfamily = \"a\\\"b\\\\c</style>\\n}\"\nsrc = \"m.woff2\"\n");
+    let rule = font_face(&font, "./fonts/m-0.woff2");
+    assert!(
+        rule.contains("  font-family: \"a\\\"b\\\\c\\3c /style>\\a }\";\n"),
+        "{rule}"
+    );
 }

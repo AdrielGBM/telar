@@ -24,7 +24,7 @@ use crate::lexer::contains_ident;
 use crate::registry::ValueKind;
 use crate::theme_access::ThemeAccess;
 pub(crate) use component::props_type;
-pub(crate) use signals::{is_paint_key, rust_str, substitute_reads, view_let_names};
+pub(crate) use signals::{is_paint_key, substitute_reads, view_let_names};
 use telar_project::{AssetContext, asset_kind_for_tag};
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
@@ -703,7 +703,7 @@ impl<'a> ViewGen<'a> {
                     crate::registry::FORMER_LANG_ATTR => crate::registry::former_lang_error(&el.tag),
                     key => format!("`{key}` is not an attribute of `{}`", el.tag),
                 };
-                format!("{pad}compile_error!({});\n", signals::rust_str(&message))
+                format!("{pad}compile_error!({message:?});\n")
             })
             .collect()
     }
@@ -726,7 +726,7 @@ impl<'a> ViewGen<'a> {
                     value_error(&el.tag, &attr.key, attr.value.text(), self.theme_access)
                 })
             })
-            .map(|message| format!("{pad}compile_error!({});\n", rust_str(&message)))
+            .map(|message| format!("{pad}compile_error!({message:?});\n"))
             .collect()
     }
 }
@@ -798,12 +798,10 @@ impl ViewGen<'_> {
             .chain(component::part_class_names(el))
             .filter(|name| !self.classes.iter().any(|class| &class.name == name))
             .map(|name| {
-                format!(
-                    "{pad}compile_error!({});\n",
-                    rust_str(&format!(
-                        "no class `@{name}` here: declare it in `[style]`, or `use` it there from the module that makes it `pub`"
-                    ))
-                )
+                let message = format!(
+                    "no class `@{name}` here: declare it in `[style]`, or `use` it there from the module that makes it `pub`"
+                );
+                format!("{pad}compile_error!({message:?});\n")
             })
             .collect()
     }
@@ -815,7 +813,7 @@ impl ViewGen<'_> {
             .chain(component::state_key_errors(el))
             .chain(component::former_lang_key_error(el))
             .chain(self.paintless_part_errors(el))
-            .map(|message| format!("{pad}compile_error!({});\n", rust_str(&message)))
+            .map(|message| format!("{pad}compile_error!({message:?});\n"))
             .collect()
     }
 

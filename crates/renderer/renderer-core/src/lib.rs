@@ -67,7 +67,7 @@ pub use style::{
     Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineHeight, LineJoin, Paint,
     PathStyle, Raster, RectStyle, Scale, Segment, Shadow, ShapeStyle, Span, Stroke, TextAlign,
     TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap, border_inner_shape,
-    case_text, link_at, span_segments,
+    case_text, css_string, link_at, span_segments,
 };
 pub use style_pool::{hash_declared, hash_path_style};
 pub use text_lines::{PlacedGlyph, TextCluster, TextLine};

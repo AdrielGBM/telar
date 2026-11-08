@@ -243,7 +243,7 @@ fn page_for(
         location,
         pages,
     });
-    filled.host = page.host_attributes.clone();
+    filled.host = page.host_attributes_html.clone();
     filled.head.push(page.head.clone());
     filled.prerendered = page.markup.clone();
     filled.state = serde_json::to_value(&page.state).ok();

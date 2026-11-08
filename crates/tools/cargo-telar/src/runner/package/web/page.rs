@@ -5,6 +5,7 @@
 use std::fmt;
 
 use i18n_core::Direction;
+use renderer_dom::escape_html;
 use telar_project::{
     ASSETS_META_NAME, FONT_FAMILY_ATTRIBUTE, FontDeclaration, PageRenderer, STATE_ELEMENT_ID,
 };
@@ -178,9 +179,9 @@ impl HeadTag {
         let mut html = format!("<{}", self.element);
         for (name, value) in &self.attributes {
             html.push(' ');
-            html.push_str(&escape(name));
+            html.push_str(&escape_html(name));
             if !value.is_empty() {
-                html.push_str(&format!("=\"{}\"", escape(value)));
+                html.push_str(&format!("=\"{}\"", escape_html(value)));
             }
         }
         html.push_str(" />");
@@ -218,8 +219,8 @@ pub(crate) struct Page {
     pub(crate) head: Vec<String>,
     /// `%telar.fonts%`, each URL written against this page's base.
     pub(crate) fonts: Vec<PageFont>,
-    /// `%telar.host%`: the attributes a prerendered page's host element carries, already escaped.
-    pub(crate) host: Vec<(String, String)>,
+    /// `%telar.host%`: the attributes a prerendered page's host element carries, as the app wrote them inside its start tag.
+    pub(crate) host: String,
     /// `%telar.bootstrap%`.
     pub(crate) bootstrap: Bootstrap,
     /// `%telar.renderer%`, what the host element's renderer setting says; `None` writes [`PageRenderer::Auto`].
@@ -241,7 +242,7 @@ impl Page {
             meta: Vec::new(),
             head: Vec::new(),
             fonts: Vec::new(),
-            host: Vec::new(),
+            host: String::new(),
             bootstrap,
             renderer: None,
             prerendered: String::new(),
@@ -320,20 +321,16 @@ impl Page {
 
     fn expand(&self, marker: Marker) -> String {
         match marker {
-            Marker::Lang => escape(&self.lang),
+            Marker::Lang => escape_html(&self.lang).into_owned(),
             Marker::Dir => direction_str(self.dir).to_string(),
-            Marker::Title => escape(&self.title),
+            Marker::Title => escape_html(&self.title).into_owned(),
             Marker::Renderer => self
                 .renderer
                 .map(PageRenderer::from)
                 .unwrap_or_default()
                 .as_str()
                 .to_string(),
-            Marker::Host => self
-                .host
-                .iter()
-                .map(|(name, value)| format!(" {name}=\"{value}\""))
-                .collect(),
+            Marker::Host => self.host.clone(),
             Marker::Meta => {
                 let mut parts = vec![lines(&self.meta)];
                 parts.extend(self.head.iter().cloned());
@@ -432,21 +429,6 @@ fn lines(tags: &[HeadTag]) -> String {
 /// JSON that is safe inside a `<script>`: `<` only ever occurs inside a JSON string, where `<` means the same thing and cannot close the element.
 pub(super) fn script_json(value: &serde_json::Value) -> String {
     value.to_string().replace('<', "\\u003c")
-}
-
-pub(super) fn escape(text: &str) -> String {
-    let mut escaped = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '&' => escaped.push_str("&amp;"),
-            '<' => escaped.push_str("&lt;"),
-            '>' => escaped.push_str("&gt;"),
-            '"' => escaped.push_str("&quot;"),
-            '\'' => escaped.push_str("&#39;"),
-            c => escaped.push(c),
-        }
-    }
-    escaped
 }
 
 #[cfg(test)]

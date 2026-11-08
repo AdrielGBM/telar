@@ -213,7 +213,7 @@ pub fn font_family_list(family: &renderer_core::FontFamily) -> Option<String> {
         FontFamily::SansSerif => return None,
         // A bare name with no author-written fallback still degrades to the platform's sans-serif, as it always has.
         FontFamily::Named(name) => {
-            pieces.push(css_family_name(name));
+            pieces.push(renderer_core::css_string(name));
             pieces.push("sans-serif".to_string());
         }
         other => push_family_piece(other, &mut pieces),
@@ -231,28 +231,13 @@ fn push_family_piece(family: &renderer_core::FontFamily, out: &mut Vec<String>) 
         FontFamily::SystemUi => out.push("system-ui".to_string()),
         FontFamily::Cursive => out.push("cursive".to_string()),
         FontFamily::Fantasy => out.push("fantasy".to_string()),
-        FontFamily::Named(name) => out.push(css_family_name(name)),
+        FontFamily::Named(name) => out.push(renderer_core::css_string(name)),
         FontFamily::Stack(families) => {
             for member in families.iter() {
                 push_family_piece(member, out);
             }
         }
     }
-}
-
-/// A family name as a CSS string: quoted, because a name with a space in it is otherwise several identifiers, and escaped, because an unescaped `"` in the name would close the string early.
-fn css_family_name(name: &str) -> String {
-    let mut out = String::with_capacity(name.len() + 2);
-    out.push('"');
-    for c in name.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            _ => out.push(c),
-        }
-    }
-    out.push('"');
-    out
 }
 
 /// What a `Text` command contributes to the element that holds it.

@@ -70,10 +70,9 @@ impl<'a> TokensRead<'a> {
                 let parens = if *called { "" } else { "()" };
                 format!("{TOKENS_FN}.{mark}{name}{parens}")
             }
-            Self::Unknown { name } => format!(
-                "compile_error!({})",
-                crate::view::rust_str(&unknown_token_message(name))
-            ),
+            Self::Unknown { name } => {
+                format!("compile_error!({:?})", unknown_token_message(name))
+            }
         }
     }
 }

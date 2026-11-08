@@ -4,7 +4,6 @@ use std::fmt::Write;
 
 use telar_parser::{Element, ViewNode};
 
-use super::signals::rust_str;
 use super::{ChildEmit, ChildMode, ViewGen};
 
 impl ViewGen<'_> {
@@ -19,7 +18,7 @@ impl ViewGen<'_> {
             .collect();
         let refused = |why: &str| ChildEmit::Simple {
             name: var.clone(),
-            code: format!("{pad}::core::compile_error!({});", rust_str(why)),
+            code: format!("{pad}::core::compile_error!({why:?});"),
         };
         let [source, content] = children.as_slice() else {
             return refused(

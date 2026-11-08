@@ -401,20 +401,19 @@ impl TreeWalk<'_> {
         let mod_rs = dir.join("mod.rs");
         if mod_rs.is_file() {
             if file_places_its_own(&mod_rs) {
-                let _ = writeln!(
-                    body,
-                    "compile_error!(\"{} has a `mod.rsx`, so telar places this directory: remove the `telar::rsx_modules!()` from its `mod.rs`\");",
+                let message = format!(
+                    "{} has a `mod.rsx`, so telar places this directory: remove the `telar::rsx_modules!()` from its `mod.rs`",
                     self.shown(dir)
                 );
+                let _ = writeln!(body, "compile_error!({message:?});");
             }
             match leading_inner_attribute(&mod_rs) {
                 Some(attr) => {
-                    let _ = writeln!(
-                        body,
-                        "compile_error!(\"{} starts with `{}`, and an included file cannot carry an inner attribute: move it to the `[logic]` of this directory's `mod.rsx`\");",
-                        self.shown(&mod_rs),
-                        attr.escape_debug()
+                    let message = format!(
+                        "{} starts with `{attr}`, and an included file cannot carry an inner attribute: move it to the `[logic]` of this directory's `mod.rsx`",
+                        self.shown(&mod_rs)
                     );
+                    let _ = writeln!(body, "compile_error!({message:?});");
                 }
                 // `include!` rather than a `#[path] mod`, because the two files are one module: the `mod.rsx` holds what only a module's own file can hold, and this holds the Rust the author kept in `mod.rs`.
                 None => {

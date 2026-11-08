@@ -250,3 +250,49 @@ fn a_malformed_catalog_has_no_keys_and_a_missing_one_neither() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+fn string_literals(stream: proc_macro2::TokenStream, found: &mut Vec<String>) {
+    for tree in stream {
+        match tree {
+            proc_macro2::TokenTree::Group(group) => string_literals(group.stream(), found),
+            proc_macro2::TokenTree::Literal(literal) => found.push(literal.to_string()),
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn text_direction_controls_in_a_catalog_bake_to_rust_that_compiles_and_reads_back_the_same() {
+    let reversed = "Order \u{202E}lanif\u{202C} placed";
+    let isolated = "\u{2066}{name}\u{2069} and \u{2067}\u{2068}x\u{2069}";
+    let english = format!("plain = \"{reversed}\"\nformatted = \"{isolated}\"\n");
+    let model = CatalogModel::from_sources(&[("en", &english, "en.toml")], Some("en")).unwrap();
+
+    let source = to_source(&model);
+    syn::parse_file(&source).unwrap();
+    let mut literals = Vec::new();
+    string_literals(source.parse().unwrap(), &mut literals);
+    let values: Vec<String> = literals
+        .iter()
+        .filter_map(|token| syn::parse_str::<syn::LitStr>(token).ok())
+        .map(|literal| literal.value())
+        .collect();
+
+    let direction_controls = ['\u{202A}'..='\u{202E}', '\u{2066}'..='\u{2069}'];
+    for token in &literals {
+        assert!(
+            !token
+                .chars()
+                .any(|c| direction_controls.iter().any(|range| range.contains(&c))),
+            "a literal carries a text direction control unescaped, which rustc refuses: {token}"
+        );
+    }
+    assert!(values.iter().any(|value| value == reversed), "{values:?}");
+    assert!(values.iter().any(|value| value == "\u{2066}"), "{values:?}");
+    assert!(
+        values
+            .iter()
+            .any(|value| value == "\u{2069} and \u{2067}\u{2068}x\u{2069}"),
+        "{values:?}"
+    );
+}

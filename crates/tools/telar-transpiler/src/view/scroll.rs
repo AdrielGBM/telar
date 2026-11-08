@@ -6,7 +6,6 @@ use telar_parser::{Attr, Element};
 
 use crate::theme_access::ThemeAccess;
 
-use super::signals::rust_str;
 use super::{ChildEmit, ChildMode, ViewGen, wrap_as_single_content};
 
 impl ViewGen<'_> {
@@ -19,7 +18,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|attr| attr.key == "keep")
-            .map(|attr| rust_str(attr.value.text()));
+            .map(|attr| format!("{:?}", attr.value.text()));
         // Only the closure forms hand over a live viewport, so the constructor's shape follows what the subtree asked for and every other scroll keeps the cheaper form.
         let viewport = wants_viewport(&el.children).then(|| "__viewport".to_string());
         let arrival = arrival_margin(&el.attributes, self.theme_access)

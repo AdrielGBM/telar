@@ -855,6 +855,8 @@ dependencies = [
  "telar-i18n-core",
  "telar-parser",
  "telar-project",
+ "telar-renderer-core",
+ "telar-renderer-dom",
  "telar-test-process",
  "telar-transpiler",
  "tempfile",
@@ -5924,8 +5926,10 @@ name = "telar-baker"
 version = "0.2.3"
 dependencies = [
  "image",
+ "proc-macro2",
  "serde",
  "serde_json",
+ "syn 3.0.5",
  "telar-i18n-core",
  "telar-icons-core",
  "telar-parser",

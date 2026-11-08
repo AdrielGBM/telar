@@ -9,7 +9,7 @@ use crate::registry;
 use crate::style::{PropCall, layout_prop_call, number_or};
 use crate::theme_access::ThemeAccess;
 
-use super::signals::{emit_transition_prelude, rust_str};
+use super::signals::emit_transition_prelude;
 use super::{ChildEmit, ChildMode, ViewGen};
 
 /// The size a `font_size:` value falls back to when it cannot be resolved. A `text` naming no size takes the inherited one instead, so this only ever stands in for a value already reported as an error.
@@ -31,7 +31,7 @@ impl ViewGen<'_> {
                     (format!("move || {format}"), clones)
                 }
                 literal => (
-                    literal.closure(|text| format!("{}.to_string()", rust_str(text))),
+                    literal.closure(|text| format!("{text:?}.to_string()")),
                     Vec::new(),
                 ),
             }
@@ -177,7 +177,7 @@ impl ViewGen<'_> {
             true => format!("move || {}", self.i18n_lookup(content)),
             false => self
                 .interpolation(content, start, true)
-                .closure(|text| format!("{}.to_string()", rust_str(text))),
+                .closure(|text| format!("{text:?}.to_string()")),
         }
     }
 
@@ -535,21 +535,21 @@ pub(super) fn font_settings_expr(attr: &Attr, kind: FontSetting, theme: ThemeAcc
         let tag = tag.trim_matches(|c| c == '"' || c == '\'');
         let value = value.trim();
         if tag.len() != 4 || !tag.bytes().all(|b| b.is_ascii_graphic()) {
-            return format!(
-                "::core::compile_error!(\"`{}:` names `{tag}`, which is not a four-letter tag\")",
+            let message = format!(
+                "`{}:` names `{tag}`, which is not a four-letter tag",
                 attr.key
             );
+            return format!("::core::compile_error!({message:?})");
         }
         let value = match (value.is_empty(), kind) {
             (true, FontSetting::Features) => "1".to_string(),
             (true, FontSetting::Variations) => {
-                return format!(
-                    "::core::compile_error!(\"`font_variation:` gives the axis `{tag}` no value\")"
-                );
+                let message = format!("`font_variation:` gives the axis `{tag}` no value");
+                return format!("::core::compile_error!({message:?})");
             }
             (false, _) => super::signals::substitute_reads(value, theme),
         };
-        let _ = write!(expr, ".with(\"{tag}\", ({value}) as {cast})");
+        let _ = write!(expr, ".with({tag:?}, ({value}) as {cast})");
     }
     expr
 }
@@ -578,14 +578,12 @@ fn quoted_font_family_expr(text: &str) -> String {
         .collect();
     match names.as_slice() {
         [] => format!(
-            "::core::compile_error!({})",
-            rust_str(
-                "`font_family:\"\"` names no family: write a generic, a face, or a comma list of them"
-            )
+            "::core::compile_error!({:?})",
+            "`font_family:\"\"` names no family: write a generic, a face, or a comma list of them"
         ),
         [one] => registry::keyword(registry::FONT_FAMILY_VALUES, one)
             .map(str::to_string)
-            .unwrap_or_else(|| rust_str(one)),
+            .unwrap_or_else(|| format!("{one:?}")),
         many => {
             let pieces: Vec<String> = many
                 .iter()
@@ -600,7 +598,7 @@ fn quoted_font_family_expr(text: &str) -> String {
 fn font_family_stack_piece(name: &str) -> String {
     match registry::keyword(registry::FONT_FAMILY_VALUES, name) {
         Some(variant) => variant.to_string(),
-        None => format!("{}.into()", rust_str(name)),
+        None => format!("{name:?}.into()"),
     }
 }
 

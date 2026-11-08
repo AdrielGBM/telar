@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::Element;
 
-use super::signals::{rust_str, scoped_snippets, substitute_reads};
+use super::signals::{scoped_snippets, substitute_reads};
 use super::{ChildEmit, ChildMode, ViewGen, forces_child_vec};
 
 impl ViewGen<'_> {
@@ -41,10 +41,8 @@ impl ViewGen<'_> {
             }
             // Without a condition there is nothing to defer until, which is a mistake rather than a request to build now.
             None => format!(
-                "move || compile_error!({})",
-                rust_str(
-                    "lazy: needs a `when:` condition — the subtree is built the first time it holds"
-                )
+                "move || compile_error!({:?})",
+                "lazy: needs a `when:` condition — the subtree is built the first time it holds"
             ),
         };
 

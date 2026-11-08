@@ -43,6 +43,12 @@ fn settings_are_written_the_way_css_reads_them() {
 }
 
 #[test]
+fn a_tag_with_a_quote_or_a_backslash_keeps_all_four_characters() {
+    let features = FontFeatures::new().with("a\"b\\", 1);
+    assert_eq!(features.to_css(), r#""a\"b\\" 1"#);
+}
+
+#[test]
 fn axes_travel_one_by_one_and_an_unmatched_one_holds() {
     let from = FontVariations::new().with("wght", 400.0);
     let to = FontVariations::new().with("wght", 800.0).with("wdth", 75.0);

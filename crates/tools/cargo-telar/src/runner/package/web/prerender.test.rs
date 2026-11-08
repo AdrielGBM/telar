@@ -16,10 +16,7 @@ fn written(pages: Vec<PageLocation>, locales: &[&str]) -> PrerenderedPage {
     PrerenderedPage {
         lang: Some("es".to_string()),
         title: "Proyectos — Portafolio".to_string(),
-        host_attributes: vec![
-            ("data-telar".to_string(), String::new()),
-            ("style".to_string(), "position:relative;".to_string()),
-        ],
+        host_attributes_html: " data-telar=\"\" style=\"position:relative;\"".to_string(),
         head: "<style id=\"telar-reset\"></style>".to_string(),
         markup: "<main data-telar-id=\"4\">Hola</main>".to_string(),
         state: PrerenderState {

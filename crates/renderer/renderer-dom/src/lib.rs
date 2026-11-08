@@ -13,6 +13,7 @@
 mod box_key;
 mod document;
 mod html;
+mod markup;
 mod paint;
 mod runs;
 mod vector;
@@ -39,6 +40,7 @@ mod renderer;
 
 pub use document::ID_ATTRIBUTE;
 pub use html::{Prerendered, prerender, reset_stylesheet};
+pub use markup::escape_html;
 #[cfg(target_arch = "wasm32")]
 pub use metrics::{CanvasTextMetrics, remeasure_on_font_load};
 #[cfg(target_arch = "wasm32")]

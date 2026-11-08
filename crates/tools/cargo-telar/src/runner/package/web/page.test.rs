@@ -251,10 +251,7 @@ fn a_marker_left_out_is_an_error_only_when_the_build_has_content_for_it() {
 #[test]
 fn a_prerendered_page_marks_its_host_and_styles_its_content() {
     let mut page = page();
-    page.host = vec![
-        ("data-telar".to_string(), String::new()),
-        ("style".to_string(), "position:relative;".to_string()),
-    ];
+    page.host = " data-telar=\"\" style=\"position:relative;\"".to_string();
     page.head
         .push("<style id=\"telar-reset\">[data-telar]{}</style>".to_string());
     page.prerendered = "<main data-telar-id=\"1\"></main>".to_string();
@@ -269,9 +266,33 @@ fn a_prerendered_page_marks_its_host_and_styles_its_content() {
 }
 
 #[test]
+fn the_host_attributes_a_prerender_writes_reach_the_page_escaped() {
+    let written = renderer_dom::Prerendered {
+        host_attributes: vec![
+            ("data-telar".to_string(), String::new()),
+            (
+                "aria-label".to_string(),
+                "Tom & \"Jerry\" <3\nagain".to_string(),
+            ),
+        ],
+        markup: String::new(),
+        head: String::new(),
+    };
+    let mut page = page();
+    page.host = written.host_attributes_html();
+    let html = page.render(DEFAULT_TEMPLATE).unwrap();
+    assert!(
+        html.contains(
+            "<div id=\"telar-root\" data-telar-renderer=\"auto\" data-telar=\"\" aria-label=\"Tom &amp; &quot;Jerry&quot; &lt;3\nagain\"></div>"
+        ),
+        "{html}"
+    );
+}
+
+#[test]
 fn a_template_with_no_host_marker_cannot_carry_a_prerendered_host() {
     let mut page = page();
-    page.host = vec![("data-telar".to_string(), String::new())];
+    page.host = " data-telar=\"\"".to_string();
     assert_eq!(
         page.render(&minimal("")),
         Err(TemplateError::Missing(Marker::Host))

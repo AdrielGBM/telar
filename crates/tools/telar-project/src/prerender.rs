@@ -139,8 +139,8 @@ pub struct PrerenderedPage {
     pub lang: Option<String>,
     /// The surface's title as the platform would show it: the app's, or the page's within it.
     pub title: String,
-    /// The attributes the element the app fills carries.
-    pub host_attributes: Vec<(String, String)>,
+    /// The attributes the element the app fills carries, escaped and each with a leading space, as they are written inside its start tag.
+    pub host_attributes_html: String,
     /// What the page's `<head>` needs for the content to look as it will once the app runs.
     pub head: String,
     /// The content of the element the app fills.

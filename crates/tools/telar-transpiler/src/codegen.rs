@@ -1174,10 +1174,7 @@ fn is_style_module(doc: &RsxDocument, has_props: bool) -> bool {
 fn push_import_errors(code: &mut Code, imports: &ResolvedImports) {
     for error in &imports.errors {
         code.push(
-            &format!(
-                "compile_error!({});\n",
-                crate::view::rust_str(&error.message)
-            ),
+            &format!("compile_error!({:?});\n", error.message),
             Some(error.line.saturating_sub(1) as u32),
         );
     }

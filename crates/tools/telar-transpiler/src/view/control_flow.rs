@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::{ForBlock, IfBlock, MatchBlock, ViewNode, VirtualClause};
 
-use super::signals::{ScopedSnippet, pattern_idents, rust_str, scoped_snippets, substitute_reads};
+use super::signals::{ScopedSnippet, pattern_idents, scoped_snippets, substitute_reads};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
@@ -264,13 +264,10 @@ impl ViewGen<'_> {
         let iterable = block.iterable.trim();
         // A plain `for` reading a signal builds its rows once and never hears the next value, and carries none of the clauses below that would catch it.
         if let Some(signal) = self.signal_named_in(iterable) {
-            let _ = writeln!(
-                code,
-                "{pad}compile_error!({});",
-                rust_str(&format!(
-                    "`for … in {iterable}` reads `{signal}`, which is reactive, but the loop is not: without a `$` on the iterable it builds its items once and never rebuilds them. Write `$` before the iterable to reconcile the list as it changes — or, if reading it once is what you meant, bind the value in `[logic]` and iterate that."
-                ))
+            let message = format!(
+                "`for … in {iterable}` reads `{signal}`, which is reactive, but the loop is not: without a `$` on the iterable it builds its items once and never rebuilds them. Write `$` before the iterable to reconcile the list as it changes — or, if reading it once is what you meant, bind the value in `[logic]` and iterate that."
             );
+            let _ = writeln!(code, "{pad}compile_error!({message:?});");
         }
         // Both clauses parse on any `for` and neither means anything to a construction loop. Dropping them in silence read as "my key is being honoured" right up until a row went wrong.
         for (clause, why) in [
@@ -288,11 +285,8 @@ impl ViewGen<'_> {
             ),
         ] {
             if let Some(name) = clause {
-                let _ = writeln!(
-                    code,
-                    "{pad}compile_error!({});",
-                    rust_str(&format!("`for … {name}` has no effect here: {why}"))
-                );
+                let message = format!("`for … {name}` has no effect here: {why}");
+                let _ = writeln!(code, "{pad}compile_error!({message:?});");
             }
         }
         let iterated = self
@@ -409,10 +403,8 @@ impl ViewGen<'_> {
         let Some(viewport) = self.scroll_viewport.clone() else {
             return ChildEmit::Dynamic {
                 code: format!(
-                    "{pad}compile_error!({});",
-                    rust_str(
-                        "a `virtual` loop needs an enclosing `scroll`: it builds only the rows that viewport shows, and outside one there is no viewport to ask"
-                    )
+                    "{pad}compile_error!({:?});",
+                    "a `virtual` loop needs an enclosing `scroll`: it builds only the rows that viewport shows, and outside one there is no viewport to ask"
                 ),
             };
         };
@@ -475,8 +467,8 @@ impl ViewGen<'_> {
             (None, None) => {
                 return ChildEmit::Dynamic {
                     code: format!(
-                        "{pad}compile_error!({});",
-                        rust_str("a `virtual` loop needs `row_height:` or `estimated_height:`")
+                        "{pad}compile_error!({:?});",
+                        "a `virtual` loop needs `row_height:` or `estimated_height:`"
                     ),
                 };
             }
@@ -567,12 +559,12 @@ fn row_key<'a>(block: &'a ForBlock, pad: &str) -> Result<Option<&'a str>, ChildE
         return Ok(key_expr);
     }
     Err(ChildEmit::Dynamic {
-        code: format!(
-            "{pad}compile_error!({});",
-            rust_str(&format!(
+        code: {
+            let message = format!(
                 "`for {pattern} in {}` has no `key`, so each row is bound to a signal of the item at its index, and a signal cannot be destructured: bind one name and read its parts through it (`$item.0`), or add a `key` to build each row from its item by value",
                 block.iterable.trim()
-            ))
-        ),
+            );
+            format!("{pad}compile_error!({message:?});")
+        },
     })
 }

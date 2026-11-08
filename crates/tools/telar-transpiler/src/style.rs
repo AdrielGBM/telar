@@ -15,8 +15,7 @@ pub fn number_or(value: &str, fallback: &str, theme: ThemeAccess) -> String {
 
 /// A number in a position with no attribute of its own to carry a diagnostic — a nested `hover_style(…)` property — where the error has to travel inside the expression or not at all.
 pub fn number_or_error(value: &str, theme: ThemeAccess) -> String {
-    format_number(value, theme)
-        .unwrap_or_else(|message| format!("compile_error!({})", crate::view::rust_str(&message)))
+    format_number(value, theme).unwrap_or_else(|message| format!("compile_error!({message:?})"))
 }
 
 /// A corner radius: `full`, the roundest corner its box allows, or a number as [`format_number`] reads one.
@@ -84,11 +83,8 @@ pub fn class_errors(class: &StyleClass, theme: ThemeAccess) -> String {
             PropCall::Call(_) => None,
         };
         if let Some(message) = message {
-            let _ = writeln!(
-                out,
-                "compile_error!({});",
-                crate::view::rust_str(&format!("in `@{}`: {message}", class.name))
-            );
+            let message = format!("in `@{}`: {message}", class.name);
+            let _ = writeln!(out, "compile_error!({message:?});");
         }
     }
     out

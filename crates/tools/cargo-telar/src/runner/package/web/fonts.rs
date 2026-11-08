@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use renderer_core::css_string;
 use telar_project::FontDeclaration;
 
 use super::assets::Assets;
@@ -86,23 +87,6 @@ pub(crate) fn font_face(font: &FontDeclaration, url: &str) -> String {
 
 fn round_percent(factor: f32) -> f32 {
     (factor * 10_000.0).round() / 100.0
-}
-
-/// A CSS string literal. `<` is escaped too: the rules sit inside a `<style>`, which a `</style>` in a family name would close.
-fn css_string(text: &str) -> String {
-    let mut quoted = String::with_capacity(text.len() + 2);
-    quoted.push('"');
-    for c in text.chars() {
-        match c {
-            '"' => quoted.push_str("\\\""),
-            '\\' => quoted.push_str("\\\\"),
-            '<' => quoted.push_str("\\3c "),
-            '\n' => quoted.push_str("\\a "),
-            c => quoted.push(c),
-        }
-    }
-    quoted.push('"');
-    quoted
 }
 
 #[cfg(test)]

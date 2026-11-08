@@ -2608,3 +2608,39 @@ fn a_box_in_a_loop_keeps_its_own_text() {
         "{code}"
     );
 }
+
+#[test]
+fn text_direction_controls_in_quoted_text_are_escaped_in_the_generated_literals() {
+    let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    text \"Order \u{202E}lanif\u{202C}\"\n    text \"\u{2066}{$n}\u{2069} items\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        !out.rust_code.contains([
+            '\u{202A}', '\u{202B}', '\u{202C}', '\u{202D}', '\u{202E}', '\u{2066}', '\u{2067}',
+            '\u{2068}', '\u{2069}'
+        ]),
+        "rustc refuses a literal carrying a text direction control unescaped:\n{}",
+        out.rust_code
+    );
+    assert!(
+        out.rust_code.contains(r#""Order \u{202e}lanif\u{202c}""#),
+        "{}",
+        out.rust_code
+    );
+    assert!(
+        out.rust_code.contains(r#""\u{2066}{}\u{2069} items""#),
+        "{}",
+        out.rust_code
+    );
+}
+
+#[test]
+fn a_font_tag_with_a_quote_or_a_backslash_is_still_one_rust_literal() {
+    let src = "[view]\ncol font_features:\"a\\\"b\\\\ 1\"\n    text \"Hola\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(r#"FontFeatures::new().with("a\"b\\", (1) as u32)"#),
+        "{code}"
+    );
+}

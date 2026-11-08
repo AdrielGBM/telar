@@ -192,11 +192,10 @@ fn a_page_carries_what_it_was_built_from() {
     );
     assert!(page.head.starts_with("<style id=\"telar-reset\">"));
     assert!(
-        page.host_attributes
-            .iter()
-            .any(|(name, value)| name == "style" && value.contains("background-color:#ffffff")),
-        "{:?}",
-        page.host_attributes
+        page.host_attributes_html
+            .contains(" style=\"position:relative;background-color:#ffffff;"),
+        "{}",
+        page.host_attributes_html
     );
 }
 

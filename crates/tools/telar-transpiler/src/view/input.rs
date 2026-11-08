@@ -4,7 +4,7 @@ use telar_parser::{Element, Value};
 
 use crate::style::{PropCall, layout_prop_call};
 
-use super::signals::{normalize_closure, rust_str, substitute_handles};
+use super::signals::{normalize_closure, substitute_handles};
 use super::{ChildEmit, ViewGen};
 
 impl ViewGen<'_> {
@@ -94,7 +94,7 @@ impl ViewGen<'_> {
             .iter()
             .find(|a| a.key == "placeholder")
             .map(|a| match &a.value {
-                Value::Quoted(text) => format!("{}.to_string()", rust_str(text)),
+                Value::Quoted(text) => format!("{text:?}.to_string()"),
                 value => value.text().trim().to_string(),
             });
 

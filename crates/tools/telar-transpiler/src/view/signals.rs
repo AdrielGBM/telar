@@ -85,24 +85,6 @@ pub(super) fn pattern_idents(pattern: &str) -> Vec<String> {
         .collect()
 }
 
-/// Renders a Rust string literal, escaping quotes, backslashes, and control chars. Newlines/tabs are escaped (not emitted raw) so a decoded newline in `.rsx` content stays a single line in the generated source — [`crate::view::resolve_source_map`] splits the body on `\n`, so a raw newline would desync it.
-pub(crate) fn rust_str(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
-            '\r' => out.push_str("\\r"),
-            _ => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
 /// An [`expr_marker`] for a verbatim closure attribute value (one beginning with `|`), or an empty string otherwise. The value is emitted byte-for-byte after `move `, so the span maps directly.
 pub(super) fn closure_marker(attr: Option<&Attr>) -> String {
     let Some(attr) = attr else {
@@ -734,7 +716,7 @@ pub(super) fn emit_transition_prelude(
     hoists: &[String],
 ) {
     for e in errors {
-        let _ = writeln!(code, "{inner_pad}compile_error!({});", rust_str(e));
+        let _ = writeln!(code, "{inner_pad}compile_error!({e:?});");
     }
     for h in hoists {
         let _ = writeln!(code, "{inner_pad}{h}");

@@ -3,6 +3,7 @@
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
+mod css_string;
 mod dash;
 mod declared;
 mod decoration;
@@ -16,6 +17,7 @@ mod span_segments;
 mod text_case;
 mod text_length;
 
+pub use css_string::css_string;
 pub use dash::Dash;
 pub use declared::{Declared, Span, link_at};
 pub use decoration::{DecorationLength, DecorationLine, DecorationMetric, TextDecoration};

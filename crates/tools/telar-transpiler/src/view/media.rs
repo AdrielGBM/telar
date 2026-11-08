@@ -5,7 +5,7 @@ use telar_parser::{Attr, Element, Value};
 use crate::registry;
 use telar_project::{AssetContext, AssetKind, asset_kind_for_tag};
 
-use super::signals::{rust_str, substitute_reads};
+use super::signals::substitute_reads;
 use super::{ChildEmit, ViewGen, expr_marker};
 
 /// The shared `fit:` attribute (CSS `object-fit`) for `img`/`svg`, as a reactive `ObjectFit` closure. An absent `fit:` preserves the aspect ratio and letterboxes, matching the widget default.
@@ -188,7 +188,7 @@ impl ViewGen<'_> {
         };
         match resolved {
             Ok(path) => format!("move || {path}.get()"),
-            Err(msg) => format!("move || compile_error!({})", rust_str(&msg)),
+            Err(msg) => format!("move || compile_error!({msg:?})"),
         }
     }
 }

@@ -29,7 +29,6 @@ use crate::style::{format_f32, hex_to_color_expr};
 use crate::theme_access::ThemeAccess;
 use crate::view::{
     ViewGen, expr_marker, is_component_tag, on_source_line, props_type, resolve_source_map,
-    rust_str,
 };
 
 /// What the previews of one `.rsx` are emitted against.
@@ -274,13 +273,13 @@ fn emit_build_fn(
             on_source_line(
                 preview.line,
                 &format!(
-                    "    let {} = ::telar::{}!(__preview, {}, {});",
+                    "    let {} = ::telar::{}!(__preview, {:?}, {});",
                     arg.name,
                     match arg.kind {
                         ArgKind::Signal => "__preview_signal",
                         ArgKind::Value => "__preview_arg",
                     },
-                    rust_str(&arg.name),
+                    arg.name,
                     arg_default_expr(arg)
                 ),
             ) + "\n"
@@ -414,7 +413,7 @@ impl Entry<'_> {
     /// The args the preview declares ahead of being built, so each has its control before the first build: the `args(…)` ones live, the `values(…)` and implicit ones read at build. A default is declared only where its text form is certain from the literal.
     fn arg_specs(&self) -> Vec<String> {
         let explicit = self.preview.args.iter().map(|arg| {
-            let spec = format!("::telar::preview::ArgSpec::new({})", rust_str(&arg.name));
+            let spec = format!("::telar::preview::ArgSpec::new({:?})", arg.name);
             let spec = match arg.kind {
                 ArgKind::Signal => {
                     format!("{spec}.binding(::telar::preview::ArgBinding::Live)")
@@ -424,7 +423,7 @@ impl Entry<'_> {
             with_default(spec, arg_value_text(&arg.default, Numbers::AsWritten))
         });
         let implicit = self.implicit.iter().map(|attr| {
-            let spec = format!("::telar::preview::ArgSpec::new({})", rust_str(&attr.key));
+            let spec = format!("::telar::preview::ArgSpec::new({:?})", attr.key);
             let default =
                 arg_value_text(&attr.value, Numbers::AsFloat).or_else(|| word_text(&attr.value));
             with_default(spec, default)
@@ -441,7 +440,7 @@ fn word_text(value: &Value) -> Option<String> {
 
 fn with_default(spec: String, default: Option<String>) -> String {
     match default {
-        Some(text) => format!("{spec}.default({})", rust_str(&text)),
+        Some(text) => format!("{spec}.default({text:?})"),
         None => spec,
     }
 }
@@ -469,7 +468,7 @@ fn line_offset(source: &str, line: usize) -> usize {
 /// The Rust a declared arg starts from: a quoted default is a string, a hex colour a `Color`, and anything else the expression as written, mapped back to where it was written.
 fn arg_default_expr(arg: &ArgDecl) -> String {
     match &arg.default {
-        Value::Quoted(text) => rust_str(text),
+        Value::Quoted(text) => format!("{text:?}"),
         Value::Flag => "true".to_string(),
         Value::Expr(text) | Value::Directive(text) => {
             let text = text.trim();

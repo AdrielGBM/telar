@@ -12,6 +12,8 @@ repository = { workspace = true }
 
 [dependencies]
 i18n-core = { workspace = true, features = ["runtime-catalog"] }
+renderer-core = { workspace = true }
+renderer-dom = { workspace = true }
 telar-baker = { workspace = true }
 telar-diagnostics = { workspace = true }
 telar-parser = { workspace = true }
@@ -32,9 +34,9 @@ toml = { workspace = true }
 
 [dev-dependencies]
 geometry-core = { workspace = true }
-ureq = { workspace = true }
-
 test-process = { workspace = true }
+
+ureq = { workspace = true }
 
 [[test]]
 name = "rsx_library"

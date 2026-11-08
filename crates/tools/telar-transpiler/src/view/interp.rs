@@ -5,9 +5,7 @@ use telar_project::naming::is_ident;
 
 use super::ViewGen;
 use super::expr_marker;
-use super::signals::{
-    Segment, parse_interpolation, rust_str, substitute_reads, substitute_reads_spanned,
-};
+use super::signals::{Segment, parse_interpolation, substitute_reads, substitute_reads_spanned};
 
 /// A quoted string read as text: `{…}` holes formatted into it, and `{{`/`}}` its braces.
 pub(super) enum Interpolated {
@@ -87,7 +85,7 @@ impl ViewGen<'_> {
             );
         }
         Interpolated::Formatted {
-            format: format!("format!({}, {})", rust_str(&fmt), args.join(", ")),
+            format: format!("format!({fmt:?}, {})", args.join(", ")),
             clones,
             reactive,
         }
@@ -158,9 +156,8 @@ impl ViewGen<'_> {
     /// The runtime catalog-lookup expression for an i18n key written in markup (`t"key"`). Reads the active locale reactively, so wrapping it in a `move ||` content/label closure makes the widget live-switch on a language change. Markup keys take no arguments (parameterized strings use the Rust `t!` macro).
     pub(super) fn i18n_lookup(&self, key: &str) -> String {
         format!(
-            "telar::i18n::translate(&{}, {}, &[])",
+            "telar::i18n::translate(&{}, {key:?}, &[])",
             telar_project::I18N_CATALOG_PATH,
-            rust_str(key)
         )
     }
 
@@ -257,7 +254,8 @@ fn closes_into_read(call: &str) -> bool {
 
 impl ViewGen<'_> {
     pub(super) fn text_closure(&self, text: &str, start: usize) -> String {
-        self.interpolation(text, start, true).closure(rust_str)
+        self.interpolation(text, start, true)
+            .closure(|text| format!("{text:?}"))
     }
 }
 

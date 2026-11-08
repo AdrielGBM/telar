@@ -9,7 +9,7 @@ use crate::style::{format_f32, hex_to_color_expr};
 use telar_project::naming::to_pascal_case;
 use telar_project::{AssetContext, IdBaking};
 
-use super::signals::{rust_str, substitute_reads};
+use super::signals::substitute_reads;
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
@@ -39,7 +39,7 @@ impl ViewGen<'_> {
         self.indent += 1;
         let inner_pad = self.indent_str();
         for (line, message) in &routed.errors {
-            let error = format!("{inner_pad}compile_error!({});", rust_str(message));
+            let error = format!("{inner_pad}compile_error!({message:?});");
             let _ = writeln!(code, "{}", super::on_source_line(*line, &error));
         }
         let mut setters = String::new();
@@ -129,8 +129,8 @@ impl ViewGen<'_> {
                     .unwrap_or_else(|| self.component_attr_expr(attr));
                 let value = match args.iter().any(|arg| std::ptr::eq(*arg, *attr)) {
                     true => format!(
-                        "::telar::__preview_arg!(__preview, {}, {value})",
-                        rust_str(&attr.key)
+                        "::telar::__preview_arg!(__preview, {:?}, {value})",
+                        attr.key
                     ),
                     false => value,
                 };
@@ -173,7 +173,7 @@ impl ViewGen<'_> {
                 _ => return None,
             },
         };
-        Some(resolved.unwrap_or_else(|message| format!("compile_error!({})", rust_str(&message))))
+        Some(resolved.unwrap_or_else(|message| format!("compile_error!({message:?})")))
     }
 
     /// Every class a component call hands the callee's surfaces, one setter per surface: `sidebar @flat` amends the **principal surface** through `.style(…)`, and `sidebar header_style:@flat` the header **part** through `.header_style(…)`. Several classes stack the same way in both places, the later winning — `sidebar @flat @dense`, `header_style:(@flat @dense)` — the parens being the value's delimiters, as any value holding a space takes them.
@@ -249,12 +249,12 @@ impl ViewGen<'_> {
         if let Some(stroke) = find("stroke") {
             let width = match find("stroke_width") {
                 None => "1.0".to_string(),
-                Some(w) if crate::edges::tokens(w).len() > 1 => format!(
-                    "compile_error!({})",
-                    rust_str(&format!(
+                Some(w) if crate::edges::tokens(w).len() > 1 => {
+                    let message = format!(
                         "`stroke_width:{w}` names one width per side, and a class on a component strokes its surface with one"
-                    ))
-                ),
+                    );
+                    format!("compile_error!({message:?})")
+                }
                 Some(w) => crate::style::number_or_error(w, self.theme_access),
             };
             let _ = write!(
@@ -268,7 +268,7 @@ impl ViewGen<'_> {
                 chain,
                 ".with_radius(BorderRadius::all({}))",
                 crate::style::format_radius(radius, self.theme_access)
-                    .unwrap_or_else(|message| format!("compile_error!({})", rust_str(&message)))
+                    .unwrap_or_else(|message| format!("compile_error!({message:?})"))
             );
         }
         if chain.is_empty() {
@@ -288,7 +288,7 @@ impl ViewGen<'_> {
             Ok(recipe) => self.marked_handles(&recipe.key, recipe.value_start),
             Err(message) => {
                 return ChildEmit::Dynamic {
-                    code: format!("{pad}compile_error!({});", rust_str(&message)),
+                    code: format!("{pad}compile_error!({message:?});"),
                 };
             }
         };
@@ -393,7 +393,7 @@ impl ViewGen<'_> {
         // A read has to be re-evaluated or it freezes at construction. A lone `$sig` took the arm above and stays a handle, which is what a two-way binding needs.
         let evaluated_now = match self.evaluated_now(v) {
             Ok(evaluated_now) => evaluated_now,
-            Err(message) => return format!("compile_error!({})", rust_str(&message)),
+            Err(message) => return format!("compile_error!({message:?})"),
         };
         if evaluated_now.contains('$') {
             return reads_state(&self.owning(
@@ -473,7 +473,7 @@ impl ViewGen<'_> {
     /// A quoted prop, read as text: a string literal while it has no `{…}` hole, the string formatted once while its holes read nothing that moves, and re-formatted as it moves while one does.
     fn quoted_prop(&self, text: &str, start: usize) -> String {
         match self.interpolation(text, start, false) {
-            super::interp::Interpolated::Literal(text) => rust_str(&text),
+            super::interp::Interpolated::Literal(text) => format!("{text:?}"),
             super::interp::Interpolated::Formatted { reactive: true, .. } => {
                 reads_state(&self.text_closure(text, start))
             }
@@ -504,7 +504,7 @@ impl ViewGen<'_> {
         let Some(paint) = el.attributes.iter().find(|a| a.key == "paint") else {
             let msg = "`canvas` needs a `paint:` closure — `canvas paint:(|rect| …)`";
             return ChildEmit::Simple {
-                name: format!("compile_error!({})", rust_str(msg)),
+                name: format!("compile_error!({msg:?})"),
                 code: String::new(),
             };
         };
