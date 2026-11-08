@@ -427,9 +427,10 @@ where
     }
 
     fn logical_size(&self, window: &W) -> (u32, u32) {
+        let scale_factor = window.scale_factor();
         (
-            (window.width() as f32 / self.scale_factor) as u32,
-            (window.height() as f32 / self.scale_factor) as u32,
+            platform_core::logical_extent(window.width(), scale_factor),
+            platform_core::logical_extent(window.height(), scale_factor),
         )
     }
 

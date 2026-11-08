@@ -24,6 +24,7 @@ pub mod history;
 pub mod key_pairing;
 pub mod location_format;
 pub mod location_source;
+mod logical_extent;
 pub mod loop_waker;
 pub mod primary_scroll;
 pub mod route;
@@ -72,6 +73,7 @@ pub use location_format::{
 pub use location_source::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, LocationSource,
 };
+pub use logical_extent::logical_extent;
 pub use loop_waker::{loop_waker, set_loop_waker};
 pub use primary_scroll::{
     PrimaryScroll, PrimaryScrollClaim, claim_primary_scroll, primary_scroll_offset,

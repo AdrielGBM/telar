@@ -195,8 +195,8 @@ pub fn map_window_event(
     match event {
         WindowEvent::CloseRequested => SurfaceIntent::Close(Event::WindowCloseRequested),
         WindowEvent::Resized(size) => SurfaceIntent::Resized(Event::WindowResized {
-            width: (size.width as f64 / *scale_factor).round() as u32,
-            height: (size.height as f64 / *scale_factor).round() as u32,
+            width: platform_core::logical_extent(size.width, *scale_factor),
+            height: platform_core::logical_extent(size.height, *scale_factor),
         }),
         WindowEvent::RedrawRequested => SurfaceIntent::Redraw,
         WindowEvent::CursorMoved { position, .. } => {

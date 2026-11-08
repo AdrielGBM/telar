@@ -199,8 +199,8 @@ impl Platform for HeadlessPlatform {
                 let scale = window.scale_factor();
                 handler.on_event(
                     Event::WindowResized {
-                        width: (width as f64 / scale).round() as u32,
-                        height: (height as f64 / scale).round() as u32,
+                        width: platform_core::logical_extent(width, scale),
+                        height: platform_core::logical_extent(height, scale),
                     },
                     &window,
                 );
