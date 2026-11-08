@@ -5911,6 +5911,7 @@ dependencies = [
  "telar-parser",
  "telar-project",
  "telar-transpiler",
+ "thiserror 2.0.20",
  "tokio",
  "toml",
  "url",

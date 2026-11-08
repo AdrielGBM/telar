@@ -183,3 +183,95 @@ async fn a_component_rename_edits_the_rust_references_rust_analyzer_lists() {
     );
     assert!(shown_messages(&mut editor).is_empty());
 }
+
+fn renamed_files(edit: &WorkspaceEdit) -> Vec<(Uri, Uri)> {
+    let Some(DocumentChanges::Operations(ops)) = &edit.document_changes else {
+        return Vec::new();
+    };
+    ops.iter()
+        .filter_map(|op| match op {
+            DocumentChangeOperation::Op(ResourceOp::Rename(rename)) => {
+                Some((rename.old_uri.clone(), rename.new_uri.clone()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn listing_only_the_generated_definition() -> AnalyzerState {
+    session_answering(|request| {
+        let generated = request.params["textDocument"]["uri"].clone();
+        let span = json!({ "start": { "line": 0, "character": 17 }, "end": { "line": 0, "character": 29 } });
+        Response::new_ok(request.id, json!([{ "uri": generated, "range": span }]))
+    })
+}
+
+#[tokio::test]
+async fn a_component_rename_moves_the_defining_file_and_its_preview_file() {
+    let project = Project::create("files-move");
+    std::fs::write(
+        project.0.join("src/feature_card.preview.rsx"),
+        "[view]\nfeature_card\n",
+    )
+    .unwrap();
+    let (backend, _editor) = backend_with(listing_only_the_generated_definition());
+
+    let edit = backend
+        .rename_component(
+            "feature_card",
+            "hero_card",
+            &project.uri("src/home.rsx"),
+            None,
+        )
+        .await
+        .expect("rust-analyzer listed every reference")
+        .expect("the component was found");
+
+    let mut moves = renamed_files(&edit);
+    moves.sort_by_key(|(old, _)| old.as_str().to_owned());
+    assert_eq!(
+        moves,
+        vec![
+            (
+                project.uri("src/feature_card.preview.rsx"),
+                project.uri("src/hero_card.preview.rsx")
+            ),
+            (
+                project.uri("src/feature_card.rsx"),
+                project.uri("src/hero_card.rsx")
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_component_rename_to_something_that_is_not_an_identifier_is_declined() {
+    let project = Project::create("bad-name");
+    let (backend, mut editor) = backend_with(listing_only_the_generated_definition());
+
+    for new_name in ["", "9lives", "hero-card", "hero card", "héroe"] {
+        let renamed = backend
+            .rename_component("feature_card", new_name, &project.uri("src/home.rsx"), None)
+            .await;
+        assert!(matches!(renamed, Ok(None)), "{new_name:?}");
+    }
+    assert!(shown_messages(&mut editor).is_empty());
+}
+
+#[tokio::test]
+async fn a_component_nobody_defines_is_declined_without_asking_rust_analyzer() {
+    let project = Project::create("unknown");
+    let (backend, mut editor) = backend_with(AnalyzerState::Failed);
+
+    let renamed = backend
+        .rename_component(
+            "missing_card",
+            "hero_card",
+            &project.uri("src/home.rsx"),
+            None,
+        )
+        .await;
+
+    assert!(matches!(renamed, Ok(None)));
+    assert!(shown_messages(&mut editor).is_empty());
+}

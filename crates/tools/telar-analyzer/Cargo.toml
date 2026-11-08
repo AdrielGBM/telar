@@ -30,6 +30,7 @@ lsp-types = { workspace = true }
 rust-analyzer = { git = "https://github.com/rust-lang/rust-analyzer", rev = "0c4d74686b21f2b3bd8872b6d3cf36ad2e740d49", version = "0.0.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 tokio = { version = "1", features = [
     "rt",
     "macros",

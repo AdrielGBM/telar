@@ -5,6 +5,7 @@
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use lsp_types::MessageType;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -13,7 +14,7 @@ use tokio::sync::mpsc;
 
 use crate::analysis::preview_target::{PREVIEW_AT, WORKSHOPS};
 use crate::backend::Backend;
-use crate::rpc::{OutgoingSender, read_message, request_failed, write_message};
+use crate::rpc::{FrameError, OutgoingSender, read_message, request_failed, write_message};
 
 pub async fn run() {
     let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
@@ -35,7 +36,14 @@ pub async fn run() {
     loop {
         let message = match read_message(&mut stdin).await {
             Ok(message) => message,
-            Err(_) => break,
+            Err(FrameError::Closed) => break,
+            Err(error) => {
+                backend.outgoing().log_message(
+                    MessageType::ERROR,
+                    format!("telar-analyzer ended the session: {error}"),
+                );
+                break;
+            }
         };
 
         let Some(method) = message.get("method").and_then(Value::as_str) else {
@@ -96,7 +104,7 @@ pub async fn run() {
 
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum Route {
     Ours,
     Passthrough,
@@ -274,3 +282,7 @@ fn method_not_found(method: &str) -> Value {
 fn invalid_params(message: &str) -> Value {
     json!({ "code": -32602, "message": message })
 }
+
+#[cfg(test)]
+#[path = "server.test.rs"]
+mod tests;
