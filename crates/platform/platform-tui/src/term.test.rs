@@ -2,58 +2,86 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 
-#[derive(Clone, Default)]
-struct SharedBuffer(Arc<Mutex<Vec<u8>>>);
-
-impl SharedBuffer {
-    fn take(&self) -> Vec<u8> {
-        std::mem::take(&mut self.0.lock().unwrap())
-    }
-}
-
-impl Write for SharedBuffer {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-struct RefusingWriter;
-
-impl Write for RefusingWriter {
-    fn write(&mut self, _: &[u8]) -> io::Result<usize> {
-        Err(io::Error::other("closed"))
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Err(io::Error::other("closed"))
-    }
+#[derive(Clone, Copy, Default)]
+enum Refusal {
+    #[default]
+    Nothing,
+    Everything,
+    Sequence(&'static str),
 }
 
 #[derive(Clone, Default)]
-struct FakeRawMode {
+struct RecordingTerminal {
+    written: Arc<Mutex<String>>,
     raw: Arc<AtomicBool>,
+    keyboard_enhancement: bool,
+    refusal: Refusal,
 }
 
-impl FakeRawMode {
+impl RecordingTerminal {
+    fn with_keyboard_enhancement() -> Self {
+        Self {
+            keyboard_enhancement: true,
+            ..Self::default()
+        }
+    }
+
+    fn refusing(refusal: Refusal) -> Self {
+        Self {
+            refusal,
+            ..Self::default()
+        }
+    }
+
+    fn take(&self) -> String {
+        std::mem::take(&mut self.written.lock().unwrap())
+    }
+
     fn is_raw(&self) -> bool {
         self.raw.load(Ordering::SeqCst)
     }
+
+    fn refuses(&self, sequence: &str) -> bool {
+        match self.refusal {
+            Refusal::Nothing => false,
+            Refusal::Everything => true,
+            Refusal::Sequence(refused) => sequence == refused,
+        }
+    }
 }
 
-impl RawMode for FakeRawMode {
-    fn enable(&mut self) -> io::Result<()> {
+impl Terminal for RecordingTerminal {
+    fn enable_raw_mode(&mut self) -> io::Result<()> {
         self.raw.store(true, Ordering::SeqCst);
         Ok(())
     }
 
-    fn disable(&mut self) -> io::Result<()> {
+    fn disable_raw_mode(&mut self) -> io::Result<()> {
         self.raw.store(false, Ordering::SeqCst);
         Ok(())
+    }
+
+    fn supports_keyboard_enhancement(&mut self) -> bool {
+        self.keyboard_enhancement
+    }
+
+    fn queue(&mut self, command: impl Command) -> io::Result<()> {
+        let mut sequence = String::new();
+        command
+            .write_ansi(&mut sequence)
+            .map_err(io::Error::other)?;
+        if self.refuses(&sequence) {
+            return Err(io::Error::other("refused"));
+        }
+        self.written.lock().unwrap().push_str(&sequence);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self.refusal {
+            Refusal::Everything => Err(io::Error::other("refused")),
+            Refusal::Nothing | Refusal::Sequence(_) => Ok(()),
+        }
     }
 }
 
@@ -62,50 +90,74 @@ const UNDO_REST: &str = "\x1b[?1004l\x1b[?2004l\x1b[?25h\x1b[?1049l\x1b[23;0t";
 
 #[test]
 fn leaving_writes_the_exact_restore_sequences_and_ends_raw_mode() {
-    let active = AtomicBool::new(false);
-    let raw = FakeRawMode::default();
-    let out = SharedBuffer::default();
-    let session = Session::enter_with(&active, raw.clone(), out.clone(), true, || false).unwrap();
-    assert!(raw.is_raw());
-    out.take();
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::default();
+    let session = Session::enter_with(&entered, terminal.clone(), true).unwrap();
+    assert!(terminal.is_raw());
+    terminal.take();
 
     drop(session);
 
-    assert_eq!(
-        String::from_utf8(out.take()).unwrap(),
-        format!("{UNDO_MOUSE}{UNDO_REST}")
-    );
-    assert!(!raw.is_raw());
-    assert!(!active.load(Ordering::SeqCst));
+    assert_eq!(terminal.take(), format!("{UNDO_MOUSE}{UNDO_REST}"));
+    assert!(!terminal.is_raw());
 }
 
 #[test]
 fn leaving_pops_keyboard_enhancement_first_when_it_was_pushed() {
-    let active = AtomicBool::new(false);
-    let out = SharedBuffer::default();
-    let session =
-        Session::enter_with(&active, FakeRawMode::default(), out.clone(), false, || true).unwrap();
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::with_keyboard_enhancement();
+    let session = Session::enter_with(&entered, terminal.clone(), true).unwrap();
     assert!(session.reports_key_releases());
-    out.take();
+    terminal.take();
 
     drop(session);
 
-    assert_eq!(
-        String::from_utf8(out.take()).unwrap(),
-        format!("\x1b[<1u\x1b[?1006l\x1b[?1015l\x1b[?1003l\x1b[?1002l\x1b[?1000l{UNDO_REST}")
-    );
+    assert_eq!(terminal.take(), format!("\x1b[<1u{UNDO_MOUSE}{UNDO_REST}"));
+}
+
+#[test]
+fn a_terminal_without_keyboard_enhancement_is_never_asked_for_it() {
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::default();
+
+    let session = Session::enter_with(&entered, terminal.clone(), false).unwrap();
+    drop(session);
+
+    assert!(!terminal.take().contains("\x1b[>"));
+}
+
+#[test]
+fn leaving_releases_only_the_mouse_it_captured() {
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::default();
+    let session = Session::enter_with(&entered, terminal.clone(), false).unwrap();
+    terminal.take();
+
+    drop(session);
+
+    assert_eq!(terminal.take(), UNDO_REST);
+}
+
+#[test]
+fn a_restore_step_that_fails_does_not_skip_the_ones_after_it() {
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::refusing(Refusal::Sequence(UNDO_MOUSE));
+    let session = Session::enter_with(&entered, terminal.clone(), true).unwrap();
+    terminal.take();
+
+    drop(session);
+
+    assert_eq!(terminal.take(), UNDO_REST);
+    assert!(!terminal.is_raw());
 }
 
 #[test]
 fn entering_writes_the_application_mode_sequences() {
-    let active = AtomicBool::new(false);
-    let out = SharedBuffer::default();
-    let session = Session::enter_with(&active, FakeRawMode::default(), out.clone(), false, || {
-        false
-    })
-    .unwrap();
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::default();
+    let session = Session::enter_with(&entered, terminal.clone(), false).unwrap();
     assert_eq!(
-        String::from_utf8(out.take()).unwrap(),
+        terminal.take(),
         "\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[?1004h\x1b[22;0t"
     );
     drop(session);
@@ -113,27 +165,36 @@ fn entering_writes_the_application_mode_sequences() {
 
 #[test]
 fn a_failure_after_raw_mode_still_restores_the_terminal() {
-    let active = AtomicBool::new(false);
-    let raw = FakeRawMode::default();
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::refusing(Refusal::Everything);
 
-    let entered = Session::enter_with(&active, raw.clone(), RefusingWriter, true, || false);
+    let session = Session::enter_with(&entered, terminal.clone(), true);
 
-    assert!(entered.is_err());
-    assert!(!raw.is_raw());
-    assert!(!active.load(Ordering::SeqCst));
+    assert!(session.is_err());
+    assert!(!terminal.is_raw());
 }
 
 #[test]
-fn leaving_twice_writes_nothing_the_second_time() {
-    let active = AtomicBool::new(true);
-    let raw = FakeRawMode::default();
-    let out = SharedBuffer::default();
-    let mut writer = out.clone();
-    let mut switch = raw.clone();
+fn the_panic_hooks_restore_undoes_what_the_session_entered_and_leaves_its_drop_nothing() {
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::with_keyboard_enhancement();
+    let session = Session::enter_with(&entered, terminal.clone(), true).unwrap();
+    terminal.take();
 
-    leave(&active, &mut switch, &mut writer, false);
-    out.take();
-    leave(&active, &mut switch, &mut writer, false);
+    leave(&entered, &mut terminal.clone());
+    let restored = terminal.take();
+    drop(session);
 
-    assert!(out.take().is_empty());
+    assert_eq!(restored, format!("\x1b[<1u{UNDO_MOUSE}{UNDO_REST}"));
+    assert!(terminal.take().is_empty());
+    assert!(!terminal.is_raw());
+}
+
+#[test]
+fn leaving_having_entered_nothing_writes_nothing() {
+    let terminal = RecordingTerminal::default();
+
+    leave(&Entered::new(), &mut terminal.clone());
+
+    assert!(terminal.take().is_empty());
 }
