@@ -15,5 +15,3 @@ pub use budget::SoftwareRendererConfig;
 pub use caches::sweep_idle;
 pub use png::save_premultiplied_rgba8_png;
 pub use renderer::SoftwareRenderer;
-pub use renderer_cache::CacheStat;
-pub use renderer_cache::registry::snapshot as cache_stats;

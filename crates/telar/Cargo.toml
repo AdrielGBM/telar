@@ -267,7 +267,7 @@ shaper = ["runtime", "dep:renderer-text"]
 
 ## The wgpu renderer. `platform-headless` rides along because `TextureUi` names `HeadlessWindow` as its
 ## offscreen marker.
-hardware = ["runtime", "shaper", "dep:renderer-hardware", "dep:platform-headless"]
+hardware = ["runtime", "shaper", "dep:renderer-cache", "dep:renderer-hardware", "dep:platform-headless"]
 
 ## The CPU rasterizer, on `tiny-skia`.
 software = ["runtime", "dep:renderer-software", "dep:renderer-cache", "shaper"]

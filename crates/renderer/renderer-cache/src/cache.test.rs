@@ -209,3 +209,67 @@ fn get_or_build_passes_a_failed_build_through() {
     assert!(cache.get_or_build(1, || None).is_none());
     assert!(cache.is_empty());
 }
+
+#[test]
+fn grow_to_raises_the_budget_and_never_lowers_it() {
+    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(100), Vec::len);
+
+    cache.grow_to(400);
+    assert_eq!(cache.capacity(), 400);
+
+    cache.grow_to(50);
+    assert_eq!(cache.capacity(), 400, "a smaller request leaves it alone");
+}
+
+#[test]
+fn a_grown_budget_holds_what_the_old_one_would_refuse() {
+    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(100), Vec::len);
+
+    assert!(!cache.insert(1, vec![0; 300]), "over budget is refused");
+    cache.grow_to(600);
+    assert!(cache.insert(1, vec![0; 300]));
+    assert!(cache.get(&1).is_some());
+}
+
+#[test]
+fn clear_drops_every_entry() {
+    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(1024), Vec::len);
+    cache.insert(1, vec![0; 10]);
+    cache.insert(2, vec![0; 10]);
+
+    cache.clear();
+
+    assert!(cache.is_empty());
+    assert_eq!(cache.weight(), 0);
+}
+
+#[test]
+fn clear_makes_admission_forget_a_key_it_had_seen_once() {
+    let mut cache: Cache<&str, Vec<u8>> =
+        Cache::new(Policy::new(1024).admit_on_second_use(), Vec::len);
+    assert!(!cache.insert("k", vec![0; 8]));
+
+    cache.clear();
+
+    assert!(
+        !cache.insert("k", vec![0; 8]),
+        "the sighting before the clear no longer counts"
+    );
+}
+
+#[test]
+fn stat_reports_what_the_cache_holds_under_its_label() {
+    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(500), Vec::len);
+    cache.insert(1, vec![0; 40]);
+    cache.insert(2, vec![0; 60]);
+
+    assert_eq!(
+        cache.stat("images"),
+        CacheStat {
+            name: "images",
+            bytes: 100,
+            entries: 2,
+            capacity: 500,
+        }
+    );
+}

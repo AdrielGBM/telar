@@ -1,8 +1,6 @@
-//! The knobs a caller overrides to size the hardware backend for its own workload.
+//! The knobs a caller overrides for the hardware backend.
 
-/// Cache bounds and pool sizes for the hardware renderer. Pass to `HardwareRenderer::new()` to override the compiled-in defaults without editing internal constants.
-///
-/// The cache bounds are [`Policy`](renderer_cache::Policy) values in the same units the software backend uses. They used to be frame counts with no size ceiling at all, which made a GPU cache's bound depend on refresh rate and left "how much VRAM may this hold" unanswerable.
+/// What a caller may set on the hardware renderer. Pass to `HardwareRenderer::new()`. Its caches take their bounds from [`renderer_cache::limits`].
 #[derive(Clone, Copy, Default)]
 pub struct HardwareRendererConfig {
     /// The app wants a transparent surface: pick a premultiplied-alpha composite mode so the compositor blends it, instead of forcing Opaque.

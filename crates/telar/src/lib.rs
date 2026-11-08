@@ -285,14 +285,17 @@ pub use renderer_text::fonts::install_face as install_font_face;
 
 #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
 pub use platform_web::{PageHidden, WebStorage};
-#[cfg(any(feature = "software", feature = "async-assets"))]
+#[cfg(any(feature = "software", feature = "hardware", feature = "async-assets"))]
 pub use renderer_cache::CacheStat;
+/// What the renderer's caches are holding, summed over every rendering thread and the GPU's shared set. Exposed so an app can answer "is the memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
+#[cfg(any(feature = "software", feature = "hardware"))]
+pub use renderer_cache::registry::snapshot as cache_stats;
 /// The weight-budgeted LRU every renderer cache is an instance of, and what bounds it, for an [`AssetCache`] that keeps bytes in memory.
 #[cfg(feature = "async-assets")]
 pub use renderer_cache::{Cache as LruCache, Policy as CachePolicy};
-/// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
+/// Makes the CPU renderer's caches on the calling thread let go of what nothing has asked for lately.
 #[cfg(feature = "software")]
-pub use renderer_software::{cache_stats, sweep_idle as sweep_renderer_caches};
+pub use renderer_software::sweep_idle as sweep_renderer_caches;
 pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};

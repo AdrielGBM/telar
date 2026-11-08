@@ -410,7 +410,7 @@ impl SharedCaches {
             path_tess: PathTessCache::new(renderer_cache::limits::GPU_PATH_TESS),
             shadow_resolved: Cache::new(renderer_cache::limits::GPU_SHADOW, resolved_shadow_bytes),
             atlas: SharedAtlas::new(device),
-            images: SharedImages::new(device, renderer_cache::limits::gpu_texture(0, 0)),
+            images: SharedImages::new(device, renderer_cache::limits::GPU_TEXTURE),
         }
     }
 

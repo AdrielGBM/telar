@@ -86,6 +86,7 @@ fn caches_or_build(
 
 fn release() {
     CACHES.with(|slot| slot.borrow_mut().take());
+    renderer_cache::registry::unpublish();
 }
 
 /// Builds this thread's caches if no renderer has yet, using `config`'s budgets and fonts.

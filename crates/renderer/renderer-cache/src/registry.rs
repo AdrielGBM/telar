@@ -52,6 +52,13 @@ pub fn publish(stats: Vec<CacheStat>) {
     }
 }
 
+/// Takes this thread's census back out, for a thread whose caches are gone, so the snapshot stops counting what no longer exists.
+pub fn unpublish() {
+    if let Ok(mut published) = published().lock() {
+        published.remove(&Origin::Thread(std::thread::current().id()));
+    }
+}
+
 /// Publishes a census of caches shared process-wide under `name`, so every thread reporting them lands on the same entry and the figures are counted once rather than once per reporter.
 pub fn publish_shared(name: &'static str, stats: Vec<CacheStat>) {
     if let Ok(mut published) = published().lock() {
@@ -83,3 +90,7 @@ pub fn snapshot() -> Vec<CacheStat> {
     totals.sort_by_key(|stat| stat.name);
     totals
 }
+
+#[cfg(test)]
+#[path = "registry.test.rs"]
+mod tests;
