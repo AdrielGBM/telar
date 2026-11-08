@@ -13,7 +13,8 @@ use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMod
 use telar_project::protocol::{
     BUILD_ERROR_PREFIX, DEVTOOLS_VAR, HOT_LIB_VAR, HOT_PORT_VAR, HOT_RELOAD_PREFIX,
     HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotOutcome, HotReply, PREVIEW_VAR, RENDERER_BACKEND_VAR,
-    TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR, dev_window_env, encode_flag, escape_lines,
+    TARGET_VAR, TERMINAL_TARGET, TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR, dev_window_env,
+    encode_flag, escape_lines,
 };
 use telar_project::{
     ASSET_KINDS, DEVTOOLS_PACKAGE, ManifestError, TelarManifest, WORKSHOP_PACKAGE,
@@ -846,6 +847,10 @@ pub(crate) struct HotLoopOpts {
     pub(crate) app_args: Vec<String>,
     pub(crate) config: TelarSection,
     pub(crate) no_hot_reload: bool,
+    /// Whether the app runs in the terminal this command was launched from.
+    pub(crate) terminal: bool,
+    /// Launch environment on top of what the loop derives itself, handed to every build and run of the app.
+    pub(crate) envs: Vec<(String, String)>,
     /// The channel the session's workshop takes requests on, opened before anything was built. Handed requests on once the workshop runs under hot reload, and closed in a session that does not.
     pub(crate) workshop: Option<WorkshopChannel>,
 }
@@ -862,12 +867,54 @@ fn with_app_args(mut cargo_args: Vec<String>, app_args: &[String]) -> Vec<String
     cargo_args
 }
 
+/// What every build and run of the app is launched with.
+fn launch_envs(
+    config: &TelarSection,
+    workspace_root: &Path,
+    is_preview: bool,
+    terminal: bool,
+    extra: Vec<(String, String)>,
+) -> Vec<(String, String)> {
+    let backend = config.backend.unwrap_or_default().as_str();
+    let mut envs = vec![(RENDERER_BACKEND_VAR.to_string(), backend.to_string())];
+    if is_preview {
+        envs.push((PREVIEW_VAR.to_string(), encode_flag(true).to_string()));
+        envs.push((
+            WORKSPACE_DIR_VAR.to_string(),
+            workspace_root.display().to_string(),
+        ));
+        envs.push((
+            TEST_TARGET_DIR_VAR.to_string(),
+            telar_project::find_target_dir(workspace_root)
+                .display()
+                .to_string(),
+        ));
+    }
+    if terminal {
+        envs.push((TARGET_VAR.to_string(), TERMINAL_TARGET.to_string()));
+    }
+    if config.dev.devtools == Some(false) {
+        envs.push((DEVTOOLS_VAR.to_string(), encode_flag(false).to_string()));
+    }
+    if let Some(window) = &config.dev.window {
+        envs.extend(
+            dev_window_env(window)
+                .into_iter()
+                .map(|(var, value)| (var.to_string(), value)),
+        );
+    }
+    envs.extend(extra);
+    envs
+}
+
 pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     let HotLoopOpts {
         args,
         app_args,
         config,
         no_hot_reload,
+        terminal,
+        envs,
         workshop,
     } = opts;
 
@@ -902,30 +949,13 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         std::process::exit(0);
     }
 
-    let mut launch_envs = vec![(RENDERER_BACKEND_VAR.to_string(), backend_value.to_string())];
-    if is_preview {
-        launch_envs.push((PREVIEW_VAR.to_string(), encode_flag(true).to_string()));
-        launch_envs.push((
-            WORKSPACE_DIR_VAR.to_string(),
-            resolved.workspace_root.display().to_string(),
-        ));
-        launch_envs.push((
-            TEST_TARGET_DIR_VAR.to_string(),
-            telar_project::find_target_dir(&resolved.workspace_root)
-                .display()
-                .to_string(),
-        ));
-    }
-    if config.dev.devtools == Some(false) {
-        launch_envs.push((DEVTOOLS_VAR.to_string(), encode_flag(false).to_string()));
-    }
-    if let Some(window) = &config.dev.window {
-        launch_envs.extend(
-            dev_window_env(window)
-                .into_iter()
-                .map(|(var, value)| (var.to_string(), value)),
-        );
-    }
+    let launch_envs = launch_envs(
+        &config,
+        &resolved.workspace_root,
+        is_preview,
+        terminal,
+        envs,
+    );
 
     let mut cargo_args = vec!["run".to_string()];
     cargo_args.extend(rest.clone());

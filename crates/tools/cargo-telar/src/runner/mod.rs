@@ -5,8 +5,8 @@ use std::process::Command;
 
 use clap::Parser;
 use telar_project::protocol::{
-    PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, PREVIEW_LIST_VAR, PREVIEW_PNG_VAR, TARGET_VAR,
-    TERMINAL_TARGET, workshop_channel_file, workshop_server_file,
+    PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, PREVIEW_LIST_VAR, PREVIEW_PNG_VAR,
+    workshop_channel_file, workshop_server_file,
 };
 
 mod android;
@@ -208,6 +208,8 @@ fn run_dev_cmd(args: DevArgs) {
             config: plan.config,
             // The hot-reload host opens a window of its own, so an app running in the terminal restarts on a change instead. Reloading in place is the only thing lost: the rebuild is the same one.
             no_hot_reload: no_hot_reload || terminal,
+            terminal,
+            envs: Vec::new(),
             workshop: None,
         },
     );
@@ -263,16 +265,14 @@ fn run_preview_cmd(args: PreviewArgs, workshop: HeldWorkshop) {
             workshop.page,
         );
     }
-    // The preview host process inherits our env, and reads both of these as it starts.
-    if let Some(component) = &component {
-        // SAFETY: single-threaded at this point (set before any threads/spawns are created).
-        unsafe { std::env::set_var(PREVIEW_COMPONENT_VAR, component) };
+    let mut envs = Vec::new();
+    if let Some(component) = component {
+        envs.push((PREVIEW_COMPONENT_VAR.to_string(), component));
     }
     let mut app_args = Vec::new();
     match preview {
         Some(id) if workshop_channel::is_preview_id(&id) => {
-            // SAFETY: as above.
-            unsafe { std::env::set_var(PREVIEW_ID_VAR, id) };
+            envs.push((PREVIEW_ID_VAR.to_string(), id));
         }
         // A link carries args and a view as well as a preview, which only the workshop reads, from the location the app is started at.
         Some(link) => app_args = vec!["--location".to_string(), link],
@@ -286,6 +286,8 @@ fn run_preview_cmd(args: PreviewArgs, workshop: HeldWorkshop) {
             app_args,
             config: plan.config,
             no_hot_reload,
+            terminal: plan.terminal,
+            envs,
             workshop: workshop.window,
         },
     );
@@ -526,11 +528,11 @@ fn frontend_args(
     args
 }
 
-/// Turns on the frontend a `--target` named and tells the app to start on it, returning whether the app will run in this terminal.
+/// Turns on the frontend a `--target` named returning whether the app will run in this terminal.
 ///
 /// No target is a project left to say it in its manifest, which is where it says everything else about the build: nothing is named here, and the terminal is still answered for, because a package whose `default` is the terminal and no window runs in one whether or not anybody passed a flag.
 ///
-/// The environment variable is what picks between the frontends a build ends up with, which is only still a question in the case where the package declared no feature for the target: there it kept a windowed default and the terminal rides along beside it.
+/// The hot loop hands a terminal run `TELAR_TARGET` in its launch environment, which picks between the frontends a build ends up with. That is only still a question in the case where the package declared no feature for the target: there it kept a windowed default and the terminal rides along beside it.
 fn select_frontend(
     target: Option<Target>,
     renderer: Option<WebRenderer>,
@@ -541,15 +543,10 @@ fn select_frontend(
         let selected = frontend_args(target, renderer, cargo_args);
         cargo_args.extend(selected);
     }
-    let terminal = match target {
+    match target {
         Some(target) => target == Target::Tui,
         None => resolve_package(cargo_args).defaults_to_terminal(),
-    };
-    if terminal {
-        // SAFETY: single-threaded at this point — set before any child is spawned or any thread started.
-        unsafe { std::env::set_var(TARGET_VAR, TERMINAL_TARGET) };
     }
-    terminal
 }
 
 #[cfg(test)]

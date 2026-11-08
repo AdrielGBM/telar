@@ -1,3 +1,5 @@
+use telar_project::protocol::PREVIEW_ID_VAR;
+
 use super::*;
 
 /// The linker a Nix or direnv shell configures for the host target used to be dropped on the floor: `RUSTFLAGS` was set here to carry a `--cfg`, and Cargo reads rustflags from exactly one tier — so the one loop a developer tunes their linker *for* was the one loop that ignored it. The flavour is a feature now and this loop sets no rustflags at all, which is what keeps the choice already made.
@@ -823,4 +825,27 @@ fn the_app_s_answer_to_a_reload_comes_back_over_the_authenticated_channel() {
     );
     assert!(channel.reloads.app_answers);
     assert!(channel.reloads.pending.is_empty(), "the reload is settled");
+}
+
+fn env_of<'a>(envs: &'a [(String, String)], name: &str) -> Option<&'a str> {
+    envs.iter()
+        .find(|(var, _)| var == name)
+        .map(|(_, value)| value.as_str())
+}
+
+#[test]
+fn a_terminal_run_launches_the_app_on_the_terminal_frontend() {
+    let config = TelarSection::default();
+    let envs = launch_envs(&config, Path::new("."), false, true, Vec::new());
+    assert_eq!(env_of(&envs, TARGET_VAR), Some(TERMINAL_TARGET));
+    let envs = launch_envs(&config, Path::new("."), false, false, Vec::new());
+    assert_eq!(env_of(&envs, TARGET_VAR), None);
+}
+
+#[test]
+fn the_launch_environment_carries_what_the_command_asked_for() {
+    let extra = vec![(PREVIEW_ID_VAR.to_string(), "button".to_string())];
+    let envs = launch_envs(&TelarSection::default(), Path::new("."), true, false, extra);
+    assert_eq!(env_of(&envs, PREVIEW_ID_VAR), Some("button"));
+    assert_eq!(env_of(&envs, PREVIEW_VAR), Some(encode_flag(true)));
 }
