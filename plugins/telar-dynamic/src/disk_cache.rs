@@ -51,8 +51,15 @@ fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let mut file = tempfile::NamedTempFile::new_in(dir)?;
     file.write_all(bytes)?;
-    file.persist(path)?;
-    Ok(())
+    rename_over(file.into_temp_path(), path)
+}
+
+// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
+fn rename_over(temp: tempfile::TempPath, path: &Path) -> std::io::Result<()> {
+    let temp = temp.keep()?;
+    std::fs::rename(&temp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
 }
 
 /// The hash over the original name keeps case-distinct ids apart on case-insensitive file systems, keeps every segment off Windows device names, and stops a crafted id from landing on another id's file.

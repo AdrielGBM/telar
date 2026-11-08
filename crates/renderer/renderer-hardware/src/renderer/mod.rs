@@ -320,8 +320,15 @@ fn keep_pipeline_cache(path: &std::path::Path, data: &[u8]) -> std::io::Result<(
     std::fs::create_dir_all(dir)?;
     let mut file = tempfile::NamedTempFile::new_in(dir)?;
     file.write_all(data)?;
-    file.persist(path)?;
-    Ok(())
+    rename_over(file.into_temp_path(), path)
+}
+
+// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
+fn rename_over(temp: tempfile::TempPath, path: &std::path::Path) -> std::io::Result<()> {
+    let temp = temp.keep()?;
+    std::fs::rename(&temp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
 }
 
 // Seeds the offscreen with the previous frame, the pixels inside a scrolled clip moved by its delta, so a scrolling frame redraws only the exposed band and what else changed. `TELAR_HW_SCROLL_BLIT=0` repaints the scrolled content in place instead.

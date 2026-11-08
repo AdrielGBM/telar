@@ -112,3 +112,17 @@ fn a_written_file_is_as_readable_as_one_written_in_place() {
     let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode();
     assert_eq!(mode(&replaced), mode(&in_place));
 }
+
+#[test]
+fn a_file_a_reader_holds_open_is_still_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("preferences");
+    write_file_atomically(&path, b"before").unwrap();
+    let reader = std::fs::File::open(&path).unwrap();
+
+    write_file_atomically(&path, b"after").unwrap();
+
+    drop(reader);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "after");
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+}

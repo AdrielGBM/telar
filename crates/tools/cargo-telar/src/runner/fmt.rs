@@ -164,8 +164,15 @@ fn replace_contents(path: &Path, contents: &str) -> std::io::Result<()> {
     let mut file = tempfile::NamedTempFile::new_in(dir)?;
     file.write_all(contents.as_bytes())?;
     file.as_file().set_permissions(permissions)?;
-    file.persist(&target)?;
-    Ok(())
+    rename_over(file.into_temp_path(), &target)
+}
+
+// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
+fn rename_over(temp: tempfile::TempPath, path: &Path) -> std::io::Result<()> {
+    let temp = temp.keep()?;
+    std::fs::rename(&temp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
 }
 
 fn display(path: &Path) -> String {

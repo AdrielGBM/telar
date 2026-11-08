@@ -67,8 +67,15 @@ pub fn write_file_atomically(path: &Path, contents: &[u8]) -> std::io::Result<()
     std::fs::create_dir_all(dir)?;
     let mut file = file_beside(dir)?;
     file.write_all(contents)?;
-    file.persist(path)?;
-    Ok(())
+    rename_over(file.into_temp_path(), path)
+}
+
+// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
+fn rename_over(temp: tempfile::TempPath, path: &Path) -> std::io::Result<()> {
+    let temp = temp.keep()?;
+    std::fs::rename(&temp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
 }
 
 fn file_beside(dir: &Path) -> std::io::Result<tempfile::NamedTempFile> {
