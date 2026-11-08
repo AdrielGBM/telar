@@ -242,7 +242,7 @@ impl SvgData {
                 }
             }
             SvgSource::Baked(baked) => match baked {
-                // Baking converts under an identity transform, so re-fitting each point by `(p.x*sx+dx, p.y*sy+dy)` reproduces the dynamic `fit_ts.pre_concat(abs)` mapping exactly (the determinant argument makes stroke widths and gradient radii agree too).
+                // Baking converts under an identity transform, so re-fitting each point by `(p.x*sx+dx, p.y*sy+dy)` reproduces the dynamic `fit_ts.pre_concat(abs)` mapping exactly (the determinant argument makes stroke widths agree too).
                 BakedSvg::Vector(cmds) => {
                     refit::refit_vector(cmds, sx, sy, offset_x, offset_y, tint)
                 }

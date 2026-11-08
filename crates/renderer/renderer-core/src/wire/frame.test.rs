@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::sync::Arc;
 
-use geometry_core::{Point, Rect};
+use geometry_core::{Point, Rect, Transform};
 use semantics_core::{
     ConsumedKeys, Destination, HasPopup, Location, Modal, NumericValue, Orientation, SetPosition,
     SortDirection, Uri,
@@ -218,7 +218,17 @@ fn every_command() -> Vec<DrawCommand> {
         )
         .close();
     let path_style = PathStyle {
-        fill: Some(RED.into()),
+        fill: Some(Paint::Gradient(Gradient::elliptical(
+            Transform {
+                a: 6.0,
+                b: 1.0,
+                c: -0.5,
+                d: 3.0,
+                e: 5.0,
+                f: 2.0,
+            },
+            &[(0.0, BLUE), (1.0, RED)],
+        ))),
         stroke: Some(Stroke::new(RED, 1.0).with_cap(LineCap::Round)),
         shadow: Some(Shadow::new(1.0, 1.0, 2.0, RED)),
         fill_rule: FillRule::EvenOdd,

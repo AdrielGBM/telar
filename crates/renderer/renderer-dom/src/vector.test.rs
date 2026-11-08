@@ -463,3 +463,30 @@ fn paint_placed_on_the_surface_lands_in_the_innermost_box() {
         "{out}"
     );
 }
+
+#[test]
+fn an_elliptical_radial_gradient_is_the_unit_circle_under_its_transform() {
+    let mut d = drawing();
+    d.path(
+        &PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(80.0, 40.0)),
+        &PathStyle::default().with_fill(Paint::Gradient(Gradient::elliptical(
+            Transform {
+                a: 40.0,
+                b: 0.0,
+                c: 0.0,
+                d: 20.0,
+                e: 40.0,
+                f: 20.0,
+            },
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        ))),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("<radialGradient id=\"t7-1\" gradientUnits=\"userSpaceOnUse\" cx=\"0\" cy=\"0\" r=\"1\" gradientTransform=\"matrix(40 0 0 20 40 20)\">"),
+        "{out}"
+    );
+    assert!(out.contains("fill=\"url(#t7-1)\""), "{out}");
+}

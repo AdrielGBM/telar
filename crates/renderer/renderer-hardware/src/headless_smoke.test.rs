@@ -4,7 +4,7 @@ use telar_renderer_hardware::testing::skip_without_gpu;
 
 use std::sync::Arc;
 
-use geometry_core::{Point, Rect};
+use geometry_core::{Point, Rect, Transform};
 use platform_headless::HeadlessWindow;
 use renderer_core::{
     BlendMode, Color, DrawCommand, Gradient, Paint, PathData, PathStyle, RectStyle, RenderBackend,
@@ -1226,4 +1226,74 @@ fn a_layer_in_a_clip_beside_the_damage_composites_nothing() {
         "the frame diverged from a full repaint over {:.3}% of the surface",
         frac * 100.0
     );
+}
+
+/// A radial gradient twice as wide as it is tall, filling the 80×40 box it is centred in.
+fn wide_radial() -> Paint {
+    Paint::Gradient(Gradient::elliptical(
+        Transform {
+            a: 40.0,
+            b: 0.0,
+            c: 0.0,
+            d: 20.0,
+            e: 40.0,
+            f: 20.0,
+        },
+        &[
+            (0.0, Color::rgb(1.0, 0.0, 0.0)),
+            (1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ],
+    ))
+}
+
+/// The rect and the path pipelines each sample the gradient in their own shader, so both are drawn.
+fn wide_radial_scenes() -> [(&'static str, DrawCommand); 2] {
+    let outline = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(80.0, 0.0))
+        .line_to(Point::new(80.0, 40.0))
+        .line_to(Point::new(0.0, 40.0))
+        .close();
+    [
+        (
+            "rect",
+            DrawCommand::Rect {
+                rect: Rect::new(0.0, 0.0, 80.0, 40.0),
+                style: Arc::new(RectStyle::default().with_fill(wide_radial())),
+            },
+        ),
+        (
+            "path",
+            DrawCommand::Path {
+                data: Arc::new(outline),
+                style: Arc::new(PathStyle::default().with_fill(wide_radial())),
+            },
+        ),
+    ]
+}
+
+// A circle would paint the two samples 15px from the centre alike; the ellipse paints 30px across like 15px down.
+#[test]
+fn an_elliptical_radial_gradient_ramps_half_as_fast_across_as_down_on_the_gpu() {
+    for (what, command) in wide_radial_scenes() {
+        let Some(mut renderer) = headless(80, 40) else {
+            return;
+        };
+        renderer.begin_frame(80, 40, 1.0, 1).expect("begin_frame");
+        renderer
+            .render_frame(&[command], Some(Color::BLACK))
+            .expect("render_frame");
+        let pixels = renderer.read_rgba().expect("read_rgba");
+        let red_at = |x: u32, y: u32| i32::from(pixels[((y * 80 + x) * 4) as usize]);
+
+        let (across, down, near_across) = (red_at(70, 20), red_at(40, 35), red_at(55, 20));
+        assert!(
+            (across - down).abs() <= 10,
+            "{what}: 30px across ({across}) and 15px down ({down}) should sit on the same ring"
+        );
+        assert!(
+            near_across > down + 60,
+            "{what}: 15px across ({near_across}) should still be far redder than 15px down ({down})"
+        );
+    }
 }

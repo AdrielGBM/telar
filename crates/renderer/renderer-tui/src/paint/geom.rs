@@ -75,13 +75,10 @@ fn sample_gradient(g: &Gradient, x: f32, y: f32) -> Color {
                 ((x - start.x) * dx + (y - start.y) * dy) / len2
             }
         }
-        GradientKind::Radial { center, radius } => {
-            if radius <= f32::EPSILON {
-                1.0
-            } else {
-                ((x - center.x).hypot(y - center.y)) / radius
-            }
-        }
+        GradientKind::Radial { transform } => transform.invert().map_or(1.0, |inverse| {
+            let unit = inverse.apply(Point::new(x, y));
+            unit.x.hypot(unit.y)
+        }),
     };
     stop_at(g, t.clamp(0.0, 1.0))
 }
@@ -118,25 +115,11 @@ fn lerp(a: Color, b: Color, t: f32) -> Color {
 }
 
 /// The same paint with its geometry mapped through `matrix`, so it can be sampled in window space.
-pub fn mapped(paint: &Paint, matrix: [f32; 6], scale: f32) -> Paint {
-    let Paint::Gradient(g) = paint else {
-        return *paint;
-    };
-    let t = Transform::from_array(matrix);
-    let kind = match g.kind {
-        GradientKind::Linear { start, end } => GradientKind::Linear {
-            start: t.apply(start),
-            end: t.apply(end),
-        },
-        GradientKind::Radial { center, radius } => GradientKind::Radial {
-            center: t.apply(center),
-            radius: radius * scale,
-        },
-    };
-    Paint::Gradient(Gradient {
-        kind,
-        stops: g.stops,
-    })
+pub fn mapped(paint: &Paint, matrix: [f32; 6]) -> Paint {
+    match paint {
+        Paint::Gradient(g) => Paint::Gradient(g.transformed(Transform::from_array(matrix))),
+        solid => *solid,
+    }
 }
 
 /// The centre of a cell, in logical units — where a paint is sampled for it.

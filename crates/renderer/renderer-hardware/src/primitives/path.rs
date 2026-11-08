@@ -21,28 +21,25 @@ pub(crate) struct PathFillData {
     pub fill_type: u32,
     pub _pad: [u32; 3],
     pub fill_color: [f32; 4],
-    pub grad_p0: [f32; 2],
-    pub grad_p1: [f32; 2],
-    pub grad_radius: f32,
+    pub grad_origin: [f32; 2],
     pub grad_stop_count: u32,
-    pub _pad2: [f32; 2],
+    pub _pad2: u32,
+    pub grad_map: [f32; 4],
     pub grad_positions: [f32; 8],
     pub grad_colors: [[f32; 4]; 8],
 }
 
 impl PathFillData {
-    pub(crate) fn from_fill_style(fill: renderer_core::Paint) -> Self {
-        let enc =
-            super::encode_fill_style::<8>(&fill, geometry_core::Transform::IDENTITY.to_array());
+    pub(crate) fn from_fill_style(fill: renderer_core::Paint, matrix: [f32; 6]) -> Self {
+        let enc = super::encode_fill_style::<8>(&fill, matrix);
         Self {
             fill_type: enc.fill_type,
             _pad: [0; 3],
             fill_color: enc.fill_color,
-            grad_p0: enc.grad_p0,
-            grad_p1: enc.grad_p1,
-            grad_radius: enc.grad_radius,
+            grad_origin: enc.grad_origin,
             grad_stop_count: enc.grad_stop_count,
-            _pad2: [0.0; 2],
+            _pad2: 0,
+            grad_map: enc.grad_map,
             grad_positions: enc.grad_positions,
             grad_colors: enc.grad_colors,
         }
@@ -241,6 +238,7 @@ pub(crate) fn prepare_path(
     style: &PathStyle,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,
+    matrix: [f32; 6],
     out_fill_data: &mut Vec<PathFillData>,
 ) {
     let id = data.id();
@@ -253,7 +251,7 @@ pub(crate) fn prepare_path(
             even_odd: style.fill_rule == FillRule::EvenOdd,
         };
 
-        let fill_data_entry = PathFillData::from_fill_style(fill_style);
+        let fill_data_entry = PathFillData::from_fill_style(fill_style, matrix);
         out_fill_data.push(fill_data_entry);
         let fill_index = (out_fill_data.len() - 1) as u32;
 
@@ -337,7 +335,7 @@ pub(crate) fn prepare_path(
         if let Some(geom) = geom {
             let stroke_fill_index = out_fill_data.len() as u32;
             // The stroke gets its own fill-data entry, so it resolves paint the same way the fill does. Flattening it to `solid_color()` painted a gradient stroke in its first stop.
-            out_fill_data.push(PathFillData::from_fill_style(s.paint));
+            out_fill_data.push(PathFillData::from_fill_style(s.paint, matrix));
             emit_cached_geom(&geom, stroke_fill_index, out_vertices, out_indices);
         }
     }

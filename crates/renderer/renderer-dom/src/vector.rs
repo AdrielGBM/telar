@@ -4,7 +4,7 @@
 //!
 //! Built as one string and handed over whole. The alternative — reconciling shape elements one by one, as the boxes are — would be paying for identity that nothing here has: a canvas rebuilds its artwork from scratch every time it is asked, so there is no shape to move, only a picture to replace.
 
-use geometry_core::{Point, Rect};
+use geometry_core::{Point, Rect, Transform};
 use renderer_core::{
     BlendMode, BorderRadius, Gradient, GradientKind, ImageFill, LayerMask, Paint, PathData,
     PathStyle, PathVerb, Raster, RectStyle, Stroke, TextStyle,
@@ -505,17 +505,7 @@ fn moved_paint(paint: Paint, dx: f32, dy: f32) -> Paint {
 }
 
 fn moved(g: Gradient, dx: f32, dy: f32) -> Gradient {
-    let kind = match g.kind {
-        GradientKind::Linear { start, end } => GradientKind::Linear {
-            start: Point::new(start.x + dx, start.y + dy),
-            end: Point::new(end.x + dx, end.y + dy),
-        },
-        GradientKind::Radial { center, radius } => GradientKind::Radial {
-            center: Point::new(center.x + dx, center.y + dy),
-            radius,
-        },
-    };
-    Gradient { kind, ..g }
+    g.transformed(Transform::translate(dx, dy))
 }
 
 fn gradient_def(id: &str, g: &Gradient) -> String {
@@ -540,11 +530,9 @@ fn gradient_def(id: &str, g: &Gradient) -> String {
             round(end.x),
             round(end.y)
         ),
-        GradientKind::Radial { center, radius } => format!(
-            "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" cx=\"{}\" cy=\"{}\" r=\"{}\">{stops}</radialGradient>",
-            round(center.x),
-            round(center.y),
-            round(radius)
+        GradientKind::Radial { transform } => format!(
+            "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" cx=\"0\" cy=\"0\" r=\"1\" gradientTransform=\"matrix({})\">{stops}</radialGradient>",
+            transform.to_array().map(round).join(" ")
         ),
     }
 }

@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
-use geometry_core::{Point, Rect};
+use geometry_core::{Point, Rect, Transform};
 use platform_headless::HeadlessWindow;
 use renderer_core::perf::{self, Phase};
 use renderer_core::{
-    BlendMode, Border, BorderRadius, Color, DrawCommand, PathData, PathStyle, RectStyle,
-    RenderBackend, Shadow, ShapeStyle, Stroke, TextStyle,
+    BlendMode, Border, BorderRadius, Color, DrawCommand, Gradient, Paint, PathData, PathStyle,
+    RectStyle, RenderBackend, Shadow, ShapeStyle, Stroke, TextStyle,
 };
 use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
@@ -583,5 +583,57 @@ fn a_cased_text_rasterizes_as_the_string_it_shows() {
             style.clone().with_text_case(renderer_core::TextCase::Upper)
         ),
         render_text("MENU", style)
+    );
+}
+
+/// A radial gradient twice as wide as it is tall, filling the 80×40 box it is centred in.
+fn wide_radial() -> Paint {
+    Paint::Gradient(Gradient::elliptical(
+        Transform {
+            a: 40.0,
+            b: 0.0,
+            c: 0.0,
+            d: 20.0,
+            e: 40.0,
+            f: 20.0,
+        },
+        &[
+            (0.0, Color::rgb(1.0, 0.0, 0.0)),
+            (1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ],
+    ))
+}
+
+// A circle would paint the two samples 15px from the centre alike; the ellipse paints 30px across like 15px down.
+#[test]
+fn an_elliptical_radial_gradient_ramps_half_as_fast_across_as_down() {
+    let outline = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(80.0, 0.0))
+        .line_to(Point::new(80.0, 40.0))
+        .line_to(Point::new(0.0, 40.0))
+        .close();
+    let cmds = [DrawCommand::Path {
+        data: Arc::new(outline),
+        style: Arc::new(PathStyle::default().with_fill(wide_radial())),
+    }];
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        80,
+        40,
+        SoftwareRendererConfig::default(),
+    );
+    renderer.begin_frame(80, 40, 1.0, 0).unwrap();
+    renderer.render_frame(&cmds, Some(Color::BLACK)).unwrap();
+    let rgba = renderer.read_rgba().unwrap();
+    let red_at = |x: u32, y: u32| i32::from(rgba[((y * 80 + x) * 4) as usize]);
+
+    let (across, down, near_across) = (red_at(70, 20), red_at(40, 35), red_at(55, 20));
+    assert!(
+        (across - down).abs() <= 8,
+        "30px across ({across}) and 15px down ({down}) should sit on the same ring"
+    );
+    assert!(
+        near_across > down + 60,
+        "15px across ({near_across}) should still be far redder than 15px down ({down})"
     );
 }

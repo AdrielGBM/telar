@@ -31,3 +31,45 @@ fn gradient_radial_stores_stops() {
     assert_eq!(g.stops.active().len(), 2);
     assert_eq!(g.stops.active()[0].color, Color::RED);
 }
+
+#[test]
+fn a_radial_gradient_carried_through_a_stretch_becomes_an_ellipse() {
+    let g = Gradient::radial(
+        Point::new(5.0, 5.0),
+        5.0,
+        &[(0.0, Color::RED), (1.0, Color::TRANSPARENT)],
+    )
+    .transformed(Transform::scale_around(4.0, 2.0, 0.0, 0.0));
+    let GradientKind::Radial { transform } = g.kind else {
+        panic!("expected a radial gradient, got {:?}", g.kind);
+    };
+    assert_eq!(
+        transform.apply(Point::new(0.0, 0.0)),
+        Point::new(20.0, 10.0)
+    );
+    assert_eq!(
+        transform.apply(Point::new(1.0, 0.0)),
+        Point::new(40.0, 10.0)
+    );
+    assert_eq!(
+        transform.apply(Point::new(0.0, 1.0)),
+        Point::new(20.0, 20.0)
+    );
+}
+
+#[test]
+fn a_linear_gradient_carried_through_a_transform_moves_both_ends() {
+    let g = Gradient::linear(
+        Point::new(0.0, 0.0),
+        Point::new(10.0, 0.0),
+        &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+    )
+    .transformed(Transform::translate(3.0, 4.0));
+    assert_eq!(
+        g.kind,
+        GradientKind::Linear {
+            start: Point::new(3.0, 4.0),
+            end: Point::new(13.0, 4.0),
+        }
+    );
+}

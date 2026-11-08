@@ -2,13 +2,10 @@
 
 use std::sync::Arc;
 
-use geometry_core::{Point, Rect};
+use geometry_core::{Rect, Transform};
 
 use crate::image::apply_tint_premultiplied;
-use renderer_core::{
-    Color, DrawCommand, Gradient, GradientKind, ImageData, ImageFill, Paint, PathStyle, Raster,
-    Stroke,
-};
+use renderer_core::{Color, DrawCommand, ImageData, ImageFill, Paint, PathStyle, Raster, Stroke};
 
 /// Re-applies the runtime fit (`p' = (p.x * sx + dx, p.y * sy + dy)`) to a baked vector display list.
 ///
@@ -27,7 +24,7 @@ pub(super) fn refit_vector(
         .collect()
 }
 
-// A stroke width or gradient radius is a scalar with no anisotropic form, so under a non-uniform scale it takes the geometric-mean scale. That equals `sqrt(det)` of the fit, which is what the dynamic path computes, so baked and dynamic stay bit-exact even for `fill`.
+// A stroke width is a scalar with no anisotropic form, so under a non-uniform scale it takes the geometric-mean scale. That equals `sqrt(det)` of the fit, which is what the dynamic path computes, so baked and dynamic stay bit-exact even for `fill`.
 fn mean_scale(sx: f32, sy: f32) -> f32 {
     (sx * sy).abs().sqrt()
 }
@@ -92,26 +89,14 @@ fn refit_paint(paint: Paint, sx: f32, sy: f32, dx: f32, dy: f32, tint: Option<Co
     }
     match paint {
         Paint::Solid(c) => Paint::Solid(c),
-        Paint::Gradient(g) => Paint::Gradient(refit_gradient(g, sx, sy, dx, dy)),
-    }
-}
-
-fn refit_gradient(g: Gradient, sx: f32, sy: f32, dx: f32, dy: f32) -> Gradient {
-    let map = |p: Point| Point::new(p.x * sx + dx, p.y * sy + dy);
-    let kind = match g.kind {
-        GradientKind::Linear { start, end } => GradientKind::Linear {
-            start: map(start),
-            end: map(end),
-        },
-        // A radial gradient stays circular only under uniform scale; the dynamic path rejects a non-uniform (fill) fit to raster, so this radius scale only runs for uniform fits where `mean_scale == s`.
-        GradientKind::Radial { center, radius } => GradientKind::Radial {
-            center: map(center),
-            radius: radius * mean_scale(sx, sy),
-        },
-    };
-    Gradient {
-        kind,
-        stops: g.stops,
+        Paint::Gradient(g) => Paint::Gradient(g.transformed(Transform {
+            a: sx,
+            b: 0.0,
+            c: 0.0,
+            d: sy,
+            e: dx,
+            f: dy,
+        })),
     }
 }
 

@@ -50,6 +50,16 @@ fn quad_uv(vertex_index: u32) -> vec2<f32> {
     return offsets[vertex_index];
 }
 
+// `map` holds the rows of the matrix carrying an offset from `origin` into gradient space, where a linear ramp (kind 1) runs along x and a radial one (kind 2) outward from the centre.
+fn gradient_t(kind: u32, origin: vec2<f32>, map: vec4<f32>, p: vec2<f32>) -> f32 {
+    let d = p - origin;
+    let q = vec2<f32>(dot(map.xy, d), dot(map.zw, d));
+    if kind == 2u {
+        return length(q);
+    }
+    return q.x;
+}
+
 fn sample_gradient(
     t: f32,
     positions: vec4<f32>,

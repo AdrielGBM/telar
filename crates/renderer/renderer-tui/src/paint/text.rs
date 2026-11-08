@@ -89,7 +89,7 @@ impl Painter<'_> {
         if !self.clipped_in(col, row) {
             return width;
         }
-        let mapped = mapped(paint, self.matrix(), self.scale());
+        let mapped = mapped(paint, self.matrix());
         let p = cell_center(col, row, self.cell);
         let color = sample(&mapped, p.x, p.y);
         self.put_glyph(col, row, Grapheme::new(grapheme), color, attrs)

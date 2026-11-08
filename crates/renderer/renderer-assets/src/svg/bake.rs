@@ -210,10 +210,9 @@ fn ser_gradient(g: &Gradient) -> String {
             ser_point(&end),
             stops,
         ),
-        GradientKind::Radial { center, radius } => format!(
-            "Gradient::radial({}, {}, {})",
-            ser_point(&center),
-            fmt_f32(radius),
+        GradientKind::Radial { transform } => format!(
+            "Gradient::elliptical(Transform::from_array([{}]), {})",
+            transform.to_array().map(fmt_f32).join(", "),
             stops,
         ),
     }

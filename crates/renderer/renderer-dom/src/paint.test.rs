@@ -1,5 +1,5 @@
 use super::*;
-use geometry_core::Point;
+use geometry_core::{Point, Transform};
 use renderer_core::{Border, ShapeStyle};
 
 fn css_of(style: &RectStyle) -> String {
@@ -149,5 +149,26 @@ fn a_picture_is_escaped_where_a_url_cannot_carry_it() {
     assert_eq!(
         uri,
         "url(\"data:image/svg+xml,%3Csvg fill=%22%23abc%22/%3E\")"
+    );
+}
+
+#[test]
+fn an_elliptical_radial_fill_keeps_both_radii() {
+    let css = css_of(
+        &RectStyle::default().with_fill(Paint::Gradient(Gradient::elliptical(
+            Transform {
+                a: 40.0,
+                b: 0.0,
+                c: 0.0,
+                d: 20.0,
+                e: 40.0,
+                f: 20.0,
+            },
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        ))),
+    );
+    assert!(
+        css.contains("radial-gradient(40px 20px at center,#000000 0%,#ffffff 100%)"),
+        "{css}"
     );
 }

@@ -435,10 +435,9 @@ fn gradient(gradient: &Gradient) -> String {
                 stops.join(";")
             )
         }
-        GradientKind::Radial { center, radius } => format!(
-            "radial({}r{};{})",
-            point(center),
-            num(radius),
+        GradientKind::Radial { transform } => format!(
+            "radial({};{})",
+            list(&transform.to_array()),
             stops.join(";")
         ),
     }

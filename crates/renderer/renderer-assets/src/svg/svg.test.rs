@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use geometry_core::{ObjectFit, Point};
 
-use renderer_core::{Color, DrawCommand, GradientKind, Paint, PathData, PathStyle, PathVerb};
+use renderer_core::{
+    Color, DrawCommand, GradientKind, GradientStops, Paint, PathData, PathStyle, PathVerb,
+};
 
 use super::SvgData;
 
@@ -18,6 +20,20 @@ fn only_path(cmds: &[DrawCommand]) -> (&PathData, &PathStyle) {
         Some(DrawCommand::Path { data, style }) => (data, style),
         _ => panic!("expected a Path command, got {cmds:?}"),
     }
+}
+
+const RADIAL: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><radialGradient id="g" gradientUnits="userSpaceOnUse" cx="5" cy="5" r="5"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></radialGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>"##;
+const STROKE_GRADIENT: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="20" y2="0"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient></defs><rect x="2" y="2" width="16" height="16" fill="none" stroke="url(#g)" stroke-width="2"/></svg>"##;
+
+fn assert_rasterized(svg: &str) {
+    let cmds =
+        SvgData::from_str(svg)
+            .unwrap()
+            .commands_for(10.0, 10.0, None, None, ObjectFit::Contain);
+    assert!(
+        matches!(cmds.as_slice(), [DrawCommand::Image { .. }]),
+        "expected the whole SVG as one image: {cmds:?}"
+    );
 }
 
 #[test]
@@ -137,6 +153,93 @@ fn filter_falls_back_to_raster_image() {
 }
 
 #[test]
+fn a_radial_gradient_stretches_into_an_ellipse_under_a_wide_fill() {
+    let data = SvgData::from_str(RADIAL).unwrap();
+    let cmds = data.commands_for(40.0, 20.0, None, None, ObjectFit::Fill);
+    let (_, style) = only_path(&cmds);
+    let Some(Paint::Gradient(gradient)) = style.fill else {
+        panic!("expected a gradient fill, got {:?}", style.fill);
+    };
+    let GradientKind::Radial { transform } = gradient.kind else {
+        panic!("expected a radial gradient, got {:?}", gradient.kind);
+    };
+    assert_eq!(
+        transform.apply(Point::new(0.0, 0.0)),
+        Point::new(20.0, 10.0)
+    );
+    assert_eq!(
+        transform.apply(Point::new(1.0, 0.0)),
+        Point::new(40.0, 10.0)
+    );
+    assert_eq!(
+        transform.apply(Point::new(0.0, 1.0)),
+        Point::new(20.0, 20.0)
+    );
+}
+
+#[test]
+fn a_gradient_stroke_stays_vector() {
+    let data = SvgData::from_str(STROKE_GRADIENT).unwrap();
+    let cmds = data.commands_for(20.0, 20.0, None, None, ObjectFit::Contain);
+    let (_, style) = only_path(&cmds);
+    let stroke = style.stroke.as_ref().expect("stroked path");
+    assert!(
+        matches!(stroke.paint, Paint::Gradient(_)),
+        "expected a gradient stroke, got {:?}",
+        stroke.paint
+    );
+}
+
+#[test]
+fn a_focal_radial_gradient_falls_back_to_raster() {
+    assert_rasterized(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><radialGradient id="g" gradientUnits="userSpaceOnUse" cx="5" cy="5" r="5" fx="3" fy="5"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></radialGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>"##,
+    );
+}
+
+#[test]
+fn a_pattern_fill_falls_back_to_raster() {
+    assert_rasterized(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><pattern id="p" patternUnits="userSpaceOnUse" width="2" height="2"><rect width="1" height="1" fill="#ff0000"/></pattern></defs><rect width="10" height="10" fill="url(#p)"/></svg>"##,
+    );
+}
+
+#[test]
+fn a_gradient_with_more_stops_than_a_gradient_holds_falls_back_to_raster() {
+    let stops: String = (0..=GradientStops::CAPACITY)
+        .map(|i| {
+            let offset = i as f32 / GradientStops::CAPACITY as f32;
+            let shade = if i % 2 == 0 { "000000" } else { "ffffff" };
+            format!(r##"<stop offset="{offset}" stop-color="#{shade}"/>"##)
+        })
+        .collect();
+    assert_rasterized(&format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="10" y2="0">{stops}</linearGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>"##
+    ));
+}
+
+#[test]
+fn a_clip_path_falls_back_to_raster() {
+    assert_rasterized(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><clipPath id="c"><circle cx="5" cy="5" r="4"/></clipPath></defs><g clip-path="url(#c)"><rect width="10" height="10" fill="#ff0000"/></g></svg>"##,
+    );
+}
+
+#[test]
+fn a_mask_falls_back_to_raster() {
+    assert_rasterized(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><mask id="m"><circle cx="5" cy="5" r="4" fill="#ffffff"/></mask></defs><g mask="url(#m)"><rect width="10" height="10" fill="#ff0000"/></g></svg>"##,
+    );
+}
+
+#[test]
+fn a_blend_mode_falls_back_to_raster() {
+    assert_rasterized(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#0000ff"/><g style="mix-blend-mode:multiply"><rect width="10" height="10" fill="#ff0000"/></g></svg>"##,
+    );
+}
+
+#[test]
 fn tint_replaces_vector_paint() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#ff0000"/></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
@@ -228,6 +331,18 @@ fn a_baked_vector_list_round_trips_through_every_walk() {
     );
 }
 
+#[cfg(feature = "bake")]
+#[test]
+fn a_baked_radial_gradient_is_spelled_as_the_transform_of_its_unit_circle() {
+    let source = super::bake_to_source(RADIAL).unwrap();
+    assert!(
+        source.contains(
+            "Gradient::elliptical(Transform::from_array([5.0f32, 0.0f32, 0.0f32, 5.0f32, 5.0f32, 5.0f32]),"
+        ),
+        "{source}"
+    );
+}
+
 #[test]
 fn id_is_stable_across_instances() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10"/></svg>"##;
@@ -243,7 +358,7 @@ mod equivalence {
     use std::sync::Arc;
 
     use super::super::bake::bake;
-    use super::{ObjectFit, SvgData};
+    use super::{ObjectFit, RADIAL, STROKE_GRADIENT, SvgData};
     use renderer_core::{Color, DrawCommand};
 
     // Scales chosen so `sqrt(sx*sy) == s` exactly: the dynamic stroke width uses `sqrt(det)` while the re-fit multiplies by the geometric-mean scale, and they agree bit-for-bit only when that root is exact. The non-square aspect ratios force a non-zero offset under contain and cover, and a stretch under fill.
@@ -391,6 +506,16 @@ mod equivalence {
     #[test]
     fn linear_gradient_equivalent() {
         assert_vector_equivalent(GRADIENT);
+    }
+
+    #[test]
+    fn radial_gradient_equivalent() {
+        assert_vector_equivalent(RADIAL);
+    }
+
+    #[test]
+    fn gradient_stroke_equivalent() {
+        assert_vector_equivalent(STROKE_GRADIENT);
     }
 
     #[test]

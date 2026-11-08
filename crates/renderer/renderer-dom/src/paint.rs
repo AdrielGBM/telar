@@ -74,9 +74,12 @@ fn gradient(g: &Gradient) -> String {
             let degrees = dx.atan2(-dy).to_degrees().rem_euclid(360.0);
             format!("linear-gradient({}deg,{stops})", round(degrees))
         }
-        GradientKind::Radial { radius, .. } => {
-            format!("radial-gradient(circle {} at center,{stops})", px(radius))
-        }
+        // CSS cannot turn a radial gradient, so a tilted ellipse becomes the upright one that fills the same bounding box.
+        GradientKind::Radial { transform: t } => format!(
+            "radial-gradient({} {} at center,{stops})",
+            px(t.a.hypot(t.c)),
+            px(t.b.hypot(t.d))
+        ),
     }
 }
 

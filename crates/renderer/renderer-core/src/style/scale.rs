@@ -1,8 +1,7 @@
 //! [`Scale`]: turning a logical-pixel style into physical pixels, for backends that do not fold the scale factor into a shader.
 
-use geometry_core::{Point, Rect};
+use geometry_core::{Point, Rect, Transform};
 
-use super::gradient::{Gradient, GradientKind};
 use super::paint::{Paint, Shadow, Stroke};
 use super::shape::{Border, PathStyle, RectStyle};
 use super::{
@@ -28,19 +27,9 @@ impl Scale for Paint {
     fn scale(self, sf: f32) -> Self {
         match self {
             Paint::Solid(_) => self,
-            Paint::Gradient(g) => Paint::Gradient(Gradient {
-                kind: match g.kind {
-                    GradientKind::Linear { start, end } => GradientKind::Linear {
-                        start: start.scale(sf),
-                        end: end.scale(sf),
-                    },
-                    GradientKind::Radial { center, radius } => GradientKind::Radial {
-                        center: center.scale(sf),
-                        radius: radius * sf,
-                    },
-                },
-                stops: g.stops,
-            }),
+            Paint::Gradient(g) => {
+                Paint::Gradient(g.transformed(Transform::scale_around(sf, sf, 0.0, 0.0)))
+            }
         }
     }
 }

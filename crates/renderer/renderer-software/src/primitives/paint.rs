@@ -69,15 +69,23 @@ pub(crate) fn fill_to_paint(fill: renderer_core::Paint) -> tiny_skia::Paint<'sta
                         paint.shader = shader;
                     }
                 }
-                renderer_core::GradientKind::Radial { center, radius } => {
+                renderer_core::GradientKind::Radial { transform } => {
+                    let origin = tiny_skia::Point::zero();
                     if let Some(shader) = tiny_skia::RadialGradient::new(
-                        tiny_skia::Point::from_xy(center.x, center.y),
+                        origin,
                         0.0,
-                        tiny_skia::Point::from_xy(center.x, center.y),
-                        radius,
+                        origin,
+                        1.0,
                         skia_stops,
                         tiny_skia::SpreadMode::Pad,
-                        tiny_skia::Transform::identity(),
+                        tiny_skia::Transform::from_row(
+                            transform.a,
+                            transform.b,
+                            transform.c,
+                            transform.d,
+                            transform.e,
+                            transform.f,
+                        ),
                     ) {
                         paint.shader = shader;
                     }

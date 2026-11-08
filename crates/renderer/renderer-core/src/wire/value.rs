@@ -224,7 +224,7 @@ wire_struct!(ImageSlice { insets, scale });
 
 wire_enum!(GradientKind {
     Linear { start, end } = 0,
-    Radial { center, radius } = 1,
+    Radial { transform } = 1,
 });
 
 impl Shaped for GradientStops {
@@ -241,7 +241,7 @@ impl Wire for GradientStops {
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         let len = r.len()?;
-        if len > 8 {
+        if len > GradientStops::CAPACITY {
             return Err(WireError::Invalid("more than 8 gradient stops"));
         }
         let stops: Vec<(f32, Color)> = (0..len)

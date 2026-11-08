@@ -1,5 +1,4 @@
 use super::*;
-use renderer_core::GradientStops;
 
 #[test]
 fn neighbouring_boxes_share_a_column() {
@@ -62,19 +61,26 @@ fn mapping_moves_a_gradient_with_its_shape() {
         Point::new(10.0, 0.0),
         &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
     );
-    let moved = mapped(&Paint::Gradient(g), [1.0, 0.0, 0.0, 1.0, 100.0, 0.0], 1.0);
+    let moved = mapped(&Paint::Gradient(g), [1.0, 0.0, 0.0, 1.0, 100.0, 0.0]);
     assert_eq!(sample(&moved, 100.0, 0.0), Color::BLACK);
     assert_eq!(sample(&moved, 110.0, 0.0), Color::WHITE);
 }
 
 #[test]
 fn a_single_stop_is_a_solid_colour() {
-    let g = Gradient {
-        kind: GradientKind::Radial {
-            center: Point::new(0.0, 0.0),
-            radius: 10.0,
-        },
-        stops: GradientStops::new(&[(0.5, Color::RED)]),
-    };
+    let g = Gradient::radial(Point::new(0.0, 0.0), 10.0, &[(0.5, Color::RED)]);
     assert_eq!(sample(&Paint::Gradient(g), 3.0, 4.0), Color::RED);
+}
+
+#[test]
+fn a_radial_stretched_wide_reaches_its_last_stop_further_across_than_down() {
+    let g = Gradient::radial(
+        Point::new(0.0, 0.0),
+        10.0,
+        &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+    );
+    let stretched = mapped(&Paint::Gradient(g), [2.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+    assert_ne!(sample(&stretched, 15.0, 0.0), Color::WHITE);
+    assert_eq!(sample(&stretched, 0.0, 15.0), Color::WHITE);
+    assert_eq!(sample(&stretched, 25.0, 0.0), Color::WHITE);
 }

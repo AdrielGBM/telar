@@ -22,7 +22,7 @@ pub use golden::check_golden;
 pub use shape::{FieldShapes, Recursive, fold, fold_shape, shape_at, shape_named, shapes_at};
 
 /// Bumped whenever the rules of the spelling itself change, which no type's [`Shaped::SHAPE`] shows: how a value, a tag or a draw list's interned payloads are laid into bytes. What a type spells is its shape's to say, which the contract stamp folds in.
-pub const WIRE_VERSION: u16 = 4;
+pub const WIRE_VERSION: u16 = 5;
 
 /// Bytes that are not the spelling of the value they were read as.
 #[derive(Debug, Clone, PartialEq, Eq)]

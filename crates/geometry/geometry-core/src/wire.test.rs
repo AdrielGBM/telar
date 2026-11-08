@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use wire_core::{Wire, decode, encode};
 
-use crate::{BorderRadius, Color, Insets, Point, Rect, Size};
+use crate::{BorderRadius, Color, Insets, Point, Rect, Size, Transform};
 
 fn round_trip<T: Wire + PartialEq + Debug>(value: T) {
     assert_eq!(decode::<T>(&encode(&value)), Ok(value));
@@ -21,6 +21,7 @@ fn every_geometry_value_round_trips() {
         bottom_left: 4.0,
     });
     round_trip(Insets::new(1.0, 2.0, 3.0, 4.0));
+    round_trip(Transform::rotate_around(30.0, 4.0, -2.0));
 }
 
 #[test]
@@ -36,5 +37,6 @@ fn the_bytes_of_every_geometry_value_are_pinned_to_the_wire_version() {
         bottom_left: 4.0,
     }));
     bytes.extend(encode(&Insets::new(1.0, 2.0, 3.0, 4.0)));
+    bytes.extend(encode(&Transform::scale_around(2.0, 0.5, 4.0, -2.0)));
     wire_core::assert_golden!("src/wire_golden/geometry.hex", &bytes);
 }
