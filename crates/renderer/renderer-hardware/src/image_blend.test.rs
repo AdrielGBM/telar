@@ -1,7 +1,6 @@
 //! Tiled and nine-sliced pictures and blended layers on the GPU, asserted on geometry and known pixels rather than goldens, and every blend mode checked against the software backend drawing the same frame. Skips when no GPU adapter is available, unless `TELAR_REQUIRE_GPU` says one was expected.
 
-#[path = "test_common.rs"]
-mod common;
+use telar_renderer_hardware::testing::skip_without_gpu;
 
 use std::sync::Arc;
 
@@ -52,7 +51,7 @@ fn gpu(width: u32, height: u32, commands: &[DrawCommand], what: &str) -> Option<
     )) {
         Ok(renderer) => renderer,
         Err(e) => {
-            common::skip_without_gpu(what, e);
+            skip_without_gpu(what, e);
             return None;
         }
     };

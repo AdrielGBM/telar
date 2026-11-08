@@ -79,10 +79,3 @@ pub fn assert_center_rgb(pixels: &[u8], w: u32, h: u32, expected: [u8; 3], label
         "{label}: fill did not paint over clear"
     );
 }
-
-/// Reports that a GPU test is skipping for want of an adapter — and fails instead when `TELAR_REQUIRE_GPU` is set.
-///
-/// CI sets it on the leg that installs lavapipe, so a suite that quietly stopped covering the GPU reads as red there rather than as passing tests that never ran. Everywhere else the absence is a real answer and the test skips.
-pub fn skip_without_gpu(what: &str) {
-    telar::testing::require_gpu(what, "no adapter");
-}

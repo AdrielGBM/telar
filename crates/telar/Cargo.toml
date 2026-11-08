@@ -233,7 +233,7 @@ preview-snapshots = ["previews", "headless", "dep:renderer-record", "dep:tiny-sk
 
 ## Test helpers an out-of-tree application needs to assert on what its tree drew, plus the GPU gate that
 ## keeps a pixel test from passing having asserted nothing.
-testing = ["runtime"]
+testing = ["runtime", "renderer-hardware?/testing"]
 
 ## Renders this feature list into the crate documentation. docs.rs only; never enable it yourself.
 document-features = ["dep:document-features"]
@@ -484,6 +484,7 @@ path = "src/text_style_baseline.test.rs"
 [[test]]
 name = "texture_ui"
 path = "src/texture_ui.test.rs"
+required-features = ["hardware"]
 
 [[test]]
 name = "theme_repaints"

@@ -4,8 +4,7 @@
 //!
 //! Its own test binary because the shared device is a process-wide `OnceLock`, and this one wants to be the renderer that populates it.
 
-#[path = "test_common.rs"]
-mod common;
+use telar_renderer_hardware::testing::skip_without_gpu;
 
 use std::sync::Arc;
 
@@ -30,7 +29,7 @@ fn telar_composes_a_texture_the_application_filled() {
     )) {
         Ok(r) => r,
         Err(e) => {
-            common::skip_without_gpu("app-owned texture test", e);
+            skip_without_gpu("app-owned texture test", e);
             return;
         }
     };

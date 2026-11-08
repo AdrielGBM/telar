@@ -6359,6 +6359,7 @@ dependencies = [
  "telar-reactive-local",
  "telar-renderer-cache",
  "telar-renderer-core",
+ "telar-renderer-hardware",
  "telar-renderer-software",
  "telar-renderer-text",
  "tracing",

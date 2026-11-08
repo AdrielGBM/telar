@@ -2,13 +2,11 @@
 //!
 //! The mirror of `renderer-hardware/src/app_owned_texture.test.rs`, which proves the other direction. Its own test binary because the shared device is a process-wide `OnceLock` and this one wants to open it.
 
-#[path = "test_common.rs"]
-mod common;
-
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::gpu::wgpu;
+use telar::testing::skip_without_gpu;
 use telar::{
     Color, Component, Event, EventResult, Key, LayoutItem, LayoutStyle, ModifiersState, NamedKey,
     NodeId, PointerButton, PointerSource, Rect, RectStyle, RenderNode, ShapeStyle, Size, TextureUi,
@@ -123,9 +121,12 @@ fn read_back(gpu: &telar::gpu::SharedGpu, texture: &wgpu::Texture) -> Vec<u8> {
 
 #[test]
 fn telar_draws_into_the_application_picture_and_takes_the_pointer_with_it() {
-    let Ok(gpu) = telar::gpu::open() else {
-        common::skip_without_gpu("the app-owned texture seam");
-        return;
+    let gpu = match telar::gpu::open() {
+        Ok(gpu) => gpu,
+        Err(error) => {
+            skip_without_gpu("the app-owned texture seam", error);
+            return;
+        }
     };
 
     // 320×180 — a resolution the window is not, which is the point of the target being the app's.
@@ -199,9 +200,12 @@ fn telar_draws_into_the_application_picture_and_takes_the_pointer_with_it() {
 // Two trees at two resolutions on one thread, each laying out against its own target and blind to the other's layout world, which is what the per-UI `Surface` buys.
 #[test]
 fn two_texture_uis_lay_out_against_their_own_targets() {
-    let Ok(gpu) = telar::gpu::open() else {
-        common::skip_without_gpu("the app-owned texture seam");
-        return;
+    let gpu = match telar::gpu::open() {
+        Ok(gpu) => gpu,
+        Err(error) => {
+            skip_without_gpu("the app-owned texture seam", error);
+            return;
+        }
     };
 
     let sizes = Rc::new(RefCell::new(Vec::new()));
@@ -279,9 +283,12 @@ impl LayoutItem for Label {
 // The glyph grid end to end: shaped, packed into the GPU atlas, sampled and composed. Every pixel is either the background or the text colour, which no stage between here and the shaper may reintroduce.
 #[test]
 fn pixel_raster_reaches_the_application_texture_without_a_blended_edge() {
-    let Ok(gpu) = telar::gpu::open() else {
-        common::skip_without_gpu("the app-owned texture seam");
-        return;
+    let gpu = match telar::gpu::open() {
+        Ok(gpu) => gpu,
+        Err(error) => {
+            skip_without_gpu("the app-owned texture seam", error);
+            return;
+        }
     };
 
     let render_with = |raster| {
@@ -350,9 +357,12 @@ fn press_at(x: f64, y: f64) -> Event {
 // A window's two focus rules hold in a texture too, or the keyboard could never get into the UI and a field clicked away from would keep it.
 #[test]
 fn tab_brings_focus_into_a_texture_ui_and_a_press_on_nothing_lets_it_go() {
-    let Ok(gpu) = telar::gpu::open() else {
-        common::skip_without_gpu("the app-owned texture seam");
-        return;
+    let gpu = match telar::gpu::open() {
+        Ok(gpu) => gpu,
+        Err(error) => {
+            skip_without_gpu("the app-owned texture seam", error);
+            return;
+        }
     };
 
     let focused = [telar::signal(false), telar::signal(false)];

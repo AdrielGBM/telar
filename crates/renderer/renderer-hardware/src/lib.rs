@@ -17,6 +17,8 @@ pub mod limits;
 mod pass;
 mod primitives;
 pub(crate) mod renderer;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 pub use config::HardwareRendererConfig;
 pub use renderer::HardwareRenderer;

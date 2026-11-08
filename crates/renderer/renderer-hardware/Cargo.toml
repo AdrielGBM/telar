@@ -10,6 +10,10 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+## The GPU test guard, `testing::skip_without_gpu`: test code a normal build has no use for.
+testing = []
+
 [dependencies]
 geometry-core = { workspace = true }
 reactive-local = { workspace = true }
@@ -48,6 +52,7 @@ wgpu = { version = "30", features = ["fragile-send-sync-non-atomic-wasm"] }
 platform-headless = { workspace = true }
 renderer-core = { workspace = true, features = ["test-support"] }
 renderer-software = { workspace = true }
+telar-renderer-hardware = { path = ".", features = ["testing"] }
 
 criterion = { workspace = true }
 

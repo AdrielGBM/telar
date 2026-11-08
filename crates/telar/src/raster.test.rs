@@ -309,10 +309,13 @@ fn a_zero_size_gpu_redraw_check_is_an_error_even_without_an_adapter() {
 #[cfg(feature = "hardware")]
 #[test]
 fn a_gpu_redraw_check_passes_or_skips_when_there_is_no_adapter() {
+    use crate::testing::skip_without_gpu;
     let frames = vec![red_square(10.0), red_square(20.0), red_square(14.0)];
     match check_partial_redraw_on_gpu(&frames, 32, 32, 1.0, Some(Color::rgba(1.0, 1.0, 1.0, 1.0))) {
         Ok(GpuRedrawCheck::Passed) => {}
-        Ok(GpuRedrawCheck::NoAdapter) => eprintln!("skipped: no GPU adapter on this machine"),
+        Ok(GpuRedrawCheck::NoAdapter) => {
+            skip_without_gpu("the GPU redraw check", RendererError::NoAdapter)
+        }
         other => panic!("the GPU redraw check must pass or skip, got {other:?}"),
     }
 }
