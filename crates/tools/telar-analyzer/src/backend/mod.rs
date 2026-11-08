@@ -115,6 +115,7 @@ impl RenameRefused {
 pub struct Backend {
     outgoing: OutgoingSender,
     store: Arc<RwLock<Store>>,
+    bakes: Arc<crate::build_sync::Bakes>,
     analyzer: Arc<AnalyzerHandle>,
     // Backs `workspace/symbol` and cross-file component references. Built lazily on the first query and refreshed per file on edits; `None` until then.
     index: Arc<Mutex<Option<WorkspaceIndex>>>,
@@ -141,6 +142,7 @@ impl Backend {
             }),
             outgoing,
             store: Arc::new(RwLock::new(Store::new())),
+            bakes: Arc::new(crate::build_sync::Bakes::editor()),
             index: Arc::new(Mutex::new(None)),
             completion_cache: Arc::new(Mutex::new(CompletionCache::default())),
             prelude_cache: Arc::default(),

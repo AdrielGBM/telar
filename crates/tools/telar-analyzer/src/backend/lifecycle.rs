@@ -110,13 +110,33 @@ impl Backend {
     pub(crate) async fn reparse_and_diagnose(&self, uri: Uri, text: String) -> Vec<Diagnostic> {
         let revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
         let file_path = crate::uri::to_path(&uri);
-        // Held only for the parse and native diagnostics, then released before the slower rust-analyzer query, so concurrent completion reads are not blocked.
-        let (semantic, source, theme) = {
+        let parsed_buffer = {
             let mut store = self.store.write().await;
             let parse_diagnostics = store.reparse(uri.clone(), text);
             if !parse_diagnostics.is_empty() {
                 return parse_diagnostics.into_iter().map(Into::into).collect();
             }
+            store
+                .get(&uri)
+                .map(|parsed| (parsed.source.clone(), parsed.document.clone()))
+        };
+        let Some((buffer_source, buffer_document)) = parsed_buffer else {
+            return Vec::new();
+        };
+        let bake_diagnostics = match file_path.clone() {
+            Some(rsx_path) => {
+                let bakes = self.bakes.clone();
+                tokio::task::spawn_blocking(move || {
+                    bakes.bake_if_unanswered(&rsx_path, &buffer_source, &buffer_document)
+                })
+                .await
+                .unwrap_or_default()
+            }
+            None => Vec::new(),
+        };
+        // Held only for the native diagnostics, then released before the slower rust-analyzer query, so concurrent completion reads are not blocked. The bake ran before it for the same reason: it reads the whole package.
+        let (semantic, source, theme) = {
+            let mut store = self.store.write().await;
             let Some(parsed) = store.get(&uri) else {
                 return Vec::new();
             };
@@ -137,6 +157,7 @@ impl Backend {
                 .collect();
             let mut semantic =
                 semantic_diagnostics(&parsed.document, catalog_view.as_ref(), &names);
+            semantic.extend(bake_diagnostics);
             semantic.extend(manifest_error.as_ref().map(manifest_diagnostic));
             if let Some(rsx_path) = file_path.as_deref() {
                 semantic.extend(module_name_diagnostics(rsx_path));
@@ -145,12 +166,8 @@ impl Backend {
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             let mut live_map = None;
             if let Some(rsx_path) = file_path.as_deref() {
-                live_map = crate::build_sync::sync_build_file(
-                    rsx_path,
-                    &parsed.source,
-                    &parsed.document,
-                    theme.as_deref(),
-                );
+                live_map =
+                    crate::build_sync::sync_build_file(rsx_path, &parsed.source, theme.as_deref());
             }
             let source = parsed.source.clone();
             if let Some((build_path, map)) = live_map {

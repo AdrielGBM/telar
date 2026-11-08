@@ -1,5 +1,10 @@
 use super::*;
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use telar_diagnostics::Severity;
+
 const ICON_SVG: &[u8] = include_bytes!("../../telar-baker/fixtures/icon.svg");
 
 /// A crate laid out the way an editor finds one, with an asset referenced but never baked.
@@ -22,7 +27,7 @@ fn a_never_baked_asset_is_baked_rather_than_mirrored_as_an_error() {
     std::fs::write(&rsx, source).unwrap();
     let document = telar_parser::parse(source).unwrap();
 
-    sync_build_file(&rsx, source, &document, None);
+    Bakes::editor().bake_if_unanswered(&rsx, source, &document);
 
     assert!(
         root.join(".telar/assets.json").is_file(),
@@ -50,7 +55,7 @@ fn a_src_naming_no_file_bakes_nothing() {
     std::fs::write(&rsx, source).unwrap();
     let document = telar_parser::parse(source).unwrap();
 
-    sync_build_file(&rsx, source, &document, None);
+    Bakes::editor().bake_if_unanswered(&rsx, source, &document);
 
     assert!(
         !root.join(".telar/assets.json").exists(),
@@ -70,14 +75,14 @@ fn an_asset_created_after_a_failed_sync_is_picked_up() {
     let rsx = root.join("src/view.rsx");
     std::fs::write(&rsx, source).unwrap();
     let document = telar_parser::parse(source).unwrap();
-    sync_build_file(&rsx, source, &document, None);
+    Bakes::editor().bake_if_unanswered(&rsx, source, &document);
     assert!(
         !root.join(".telar/assets.json").exists(),
         "the failed sync must leave no index behind"
     );
 
     std::fs::write(root.join("assets/later.svg"), ICON_SVG).unwrap();
-    sync_build_file(&rsx, source, &document, None);
+    Bakes::editor().bake_if_unanswered(&rsx, source, &document);
 
     let mirrored = generated_target(&rsx, source, None).unwrap().code;
     assert!(
@@ -96,11 +101,11 @@ fn an_asset_edited_since_the_bake_is_rebaked() {
     let rsx = root.join("src/view.rsx");
     std::fs::write(&rsx, source).unwrap();
     let document = telar_parser::parse(source).unwrap();
-    sync_build_file(&rsx, source, &document, None);
+    Bakes::editor().bake_if_unanswered(&rsx, source, &document);
     let first = std::fs::read_to_string(root.join(".telar/assets.json")).unwrap();
 
     std::fs::write(root.join("assets/badge.svg"), b"<svg viewBox=\"0 0 9 9\"/>").unwrap();
-    sync_build_file(&rsx, source, &document, None);
+    Bakes::editor().bake_if_unanswered(&rsx, source, &document);
 
     let second = std::fs::read_to_string(root.join(".telar/assets.json")).unwrap();
     assert_ne!(first, second, "the hash should have been rewritten");
@@ -117,13 +122,12 @@ fn an_open_buffers_map_is_returned_and_never_written_to_disk() {
     let rsx = root.join("src/view.rsx");
     let built = "[view]\ntext \"what a build produced\"\n";
     std::fs::write(&rsx, built).unwrap();
-    sync_build_file(&rsx, built, &telar_parser::parse(built).unwrap(), None);
+    sync_build_file(&rsx, built, None);
     let transpilers = root.join(".telar/build/view.rs.map");
     std::fs::write(&transpilers, "what the transpiler wrote").unwrap();
 
     let unsaved = "[view]\ntext \"what the editor is showing\"\n\ntext \"more\"\n";
-    let (build_path, live) =
-        sync_build_file(&rsx, unsaved, &telar_parser::parse(unsaved).unwrap(), None).unwrap();
+    let (build_path, live) = sync_build_file(&rsx, unsaved, None).unwrap();
 
     assert_eq!(build_path, root.join(".telar/build/view.rs"));
     assert_eq!(
@@ -170,9 +174,8 @@ fn a_telar_toml_that_does_not_load_is_not_mirrored_against_the_defaults() {
     let source = "[view]\ncol\n    svg src:\"badge.svg\"\n";
     let rsx = root.join("src/view.rsx");
     std::fs::write(&rsx, source).unwrap();
-    let document = telar_parser::parse(source).unwrap();
 
-    let synced = sync_build_file(&rsx, source, &document, None);
+    let synced = sync_build_file(&rsx, source, None);
     let mirrored = generated_target(&rsx, source, None);
 
     assert!(synced.is_none());
@@ -201,5 +204,90 @@ fn a_buffer_the_transpiler_refuses_is_told_apart_from_one_with_nothing_to_mirror
         Err(NoTarget::Unavailable)
     ));
 
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+const BROKEN_SVG: &[u8] = b"this is not an svg";
+
+fn counting_bakes() -> (Bakes, Arc<AtomicUsize>) {
+    let count = Arc::new(AtomicUsize::new(0));
+    let seen = count.clone();
+    let bakes = Bakes::new(move |package_dir, version| {
+        seen.fetch_add(1, Ordering::SeqCst);
+        telar_baker::bake_package(package_dir, "test", version)
+    });
+    (bakes, count)
+}
+
+#[test]
+fn an_undecodable_asset_is_reported_on_the_line_that_references_it() {
+    let root = unbaked_crate("undecodable");
+    std::fs::write(root.join("assets/badge.svg"), BROKEN_SVG).unwrap();
+    let source = "[view]\ncol\n    text \"hi\"\n    svg src:\"badge.svg\"\n";
+    let rsx = root.join("src/view.rsx");
+    std::fs::write(&rsx, source).unwrap();
+    let document = telar_parser::parse(source).unwrap();
+
+    let diagnostics = Bakes::editor().bake_if_unanswered(&rsx, source, &document);
+
+    let [diagnostic] = diagnostics.as_slice() else {
+        panic!("one problem expected: {diagnostics:?}");
+    };
+    assert_eq!(diagnostic.span.line, 4);
+    assert!(matches!(diagnostic.severity, Severity::Error));
+    assert!(
+        diagnostic.message.contains("cannot bake") && diagnostic.message.contains("badge.svg"),
+        "{}",
+        diagnostic.message
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_failed_bake_is_not_repeated_while_the_bytes_stay_the_same() {
+    let root = unbaked_crate("failed_once");
+    std::fs::write(root.join("assets/badge.svg"), BROKEN_SVG).unwrap();
+    let source = "[view]\ncol\n    svg src:\"badge.svg\"\n";
+    let rsx = root.join("src/view.rsx");
+    std::fs::write(&rsx, source).unwrap();
+    let document = telar_parser::parse(source).unwrap();
+    let (bakes, count) = counting_bakes();
+
+    let first = bakes.bake_if_unanswered(&rsx, source, &document);
+    let second = bakes.bake_if_unanswered(&rsx, source, &document);
+
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    assert!(!first.is_empty());
+    assert_eq!(
+        first
+            .iter()
+            .map(|d| (&d.message, d.span.line))
+            .collect::<Vec<_>>(),
+        second
+            .iter()
+            .map(|d| (&d.message, d.span.line))
+            .collect::<Vec<_>>(),
+        "the remembered failure is reported again"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn changed_bytes_are_baked_again_and_a_fixed_asset_reports_nothing() {
+    let root = unbaked_crate("failed_then_fixed");
+    std::fs::write(root.join("assets/badge.svg"), BROKEN_SVG).unwrap();
+    let source = "[view]\ncol\n    svg src:\"badge.svg\"\n";
+    let rsx = root.join("src/view.rsx");
+    std::fs::write(&rsx, source).unwrap();
+    let document = telar_parser::parse(source).unwrap();
+    let (bakes, count) = counting_bakes();
+    bakes.bake_if_unanswered(&rsx, source, &document);
+
+    std::fs::write(root.join("assets/badge.svg"), b"<svg viewBox=\"0 0 9 9\"/>").unwrap();
+    let diagnostics = bakes.bake_if_unanswered(&rsx, source, &document);
+
+    assert_eq!(count.load(Ordering::SeqCst), 2);
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert!(root.join(".telar/assets.json").is_file());
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -46,3 +46,28 @@ async fn an_ended_session_hands_the_editors_rust_requests_back_to_the_fallback()
         "the user is told once, not on every request"
     );
 }
+
+#[tokio::test]
+async fn an_edit_publishes_what_the_bake_reported_on_the_referencing_line() {
+    let root = std::env::temp_dir().join(format!("telar-lifecycle-bake-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::create_dir_all(root.join("assets")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"probe\"\n").unwrap();
+    std::fs::write(root.join("assets/badge.svg"), b"this is not an svg").unwrap();
+    let source = "[view]\ncol\n    svg src:\"badge.svg\"\n";
+    let rsx = root.join("src/view.rsx");
+    std::fs::write(&rsx, source).unwrap();
+    let (tx, _editor) = tokio::sync::mpsc::unbounded_channel();
+    let backend = Backend::new(OutgoingSender::new(tx));
+    let uri = crate::uri::from_path(&rsx).unwrap();
+
+    let diagnostics = backend.reparse_and_diagnose(uri, source.to_string()).await;
+
+    let baked = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.message.contains("cannot bake"))
+        .unwrap_or_else(|| panic!("the bake's error is published: {diagnostics:?}"));
+    assert_eq!(baked.range.start.line, 2);
+    let _ = std::fs::remove_dir_all(&root);
+}
