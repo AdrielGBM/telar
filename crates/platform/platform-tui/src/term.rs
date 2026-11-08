@@ -1,6 +1,6 @@
 //! Putting the terminal into the state an application draws on, and — whatever happens — putting it back.
 
-use std::io::Write;
+use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossterm::event::{
@@ -21,16 +21,69 @@ const RESTORE_TITLE: &[u8] = b"\x1b[23;0t";
 /// Whether a terminal is currently in application mode. Read by the panic hook, which has no other way to know whether there is anything to undo — and undoing nothing must be harmless, because the hook runs on every panic in the process.
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 
+/// The terminal's raw-mode switch, apart from the escape sequences, so entering and leaving run against a buffer and a fake switch exactly as they run against the real terminal.
+pub trait RawMode {
+    fn enable(&mut self) -> io::Result<()>;
+    fn disable(&mut self) -> io::Result<()>;
+}
+
+pub struct CrosstermRawMode;
+
+impl RawMode for CrosstermRawMode {
+    fn enable(&mut self) -> io::Result<()> {
+        enable_raw_mode()
+    }
+
+    fn disable(&mut self) -> io::Result<()> {
+        disable_raw_mode()
+    }
+}
+
 /// Owns the terminal's application mode. Restoring is done by `Drop` **and** by a panic hook, because a panic that unwinds past the drop — or one in a thread that aborts the process — would otherwise leave the user with a terminal in raw mode, no cursor, and no echo: a shell they cannot type into.
-pub struct TerminalMode {
+pub struct Session<'a, R: RawMode, W: Write> {
+    active: &'a AtomicBool,
+    raw: R,
+    out: W,
     keyboard_enhanced: bool,
 }
 
+pub type TerminalMode = Session<'static, CrosstermRawMode, io::Stdout>;
+
 impl TerminalMode {
-    pub fn enter(mouse: bool) -> std::io::Result<Self> {
+    pub fn enter(mouse: bool) -> io::Result<Self> {
         install_panic_hook();
-        enable_raw_mode()?;
-        let mut out = std::io::stdout();
+        Session::enter_with(&ACTIVE, CrosstermRawMode, io::stdout(), mouse, || {
+            supports_keyboard_enhancement().unwrap_or(false)
+        })
+    }
+}
+
+impl<'a, R: RawMode, W: Write> Session<'a, R, W> {
+    pub fn enter_with(
+        active: &'a AtomicBool,
+        mut raw: R,
+        out: W,
+        mouse: bool,
+        supports_keyboard_enhancement: impl FnOnce() -> bool,
+    ) -> io::Result<Self> {
+        raw.enable()?;
+        active.store(true, Ordering::SeqCst);
+        let mut session = Self {
+            active,
+            raw,
+            out,
+            keyboard_enhanced: false,
+        };
+        session.begin(mouse, supports_keyboard_enhancement)?;
+        Ok(session)
+    }
+
+    fn begin(
+        &mut self,
+        mouse: bool,
+        supports_keyboard_enhancement: impl FnOnce() -> bool,
+    ) -> io::Result<()> {
+        let out = &mut self.out;
         execute!(
             out,
             EnterAlternateScreen,
@@ -43,8 +96,7 @@ impl TerminalMode {
             execute!(out, EnableMouseCapture)?;
         }
         // Key *release* and unambiguous modifier reporting only exist under the kitty keyboard protocol. Without it a terminal reports presses alone, which is why the event mapping cannot assume releases.
-        let keyboard_enhanced = supports_keyboard_enhancement().unwrap_or(false);
-        if keyboard_enhanced {
+        if supports_keyboard_enhancement() {
             execute!(
                 out,
                 PushKeyboardEnhancementFlags(
@@ -52,10 +104,9 @@ impl TerminalMode {
                         | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 )
             )?;
+            self.keyboard_enhanced = true;
         }
-        out.flush()?;
-        ACTIVE.store(true, Ordering::SeqCst);
-        Ok(Self { keyboard_enhanced })
+        out.flush()
     }
 
     /// Whether the terminal reports key releases. A backend that assumes it does on a terminal that does not leaves every key stuck down.
@@ -64,21 +115,34 @@ impl TerminalMode {
     }
 }
 
-impl Drop for TerminalMode {
+impl<R: RawMode, W: Write> Drop for Session<'_, R, W> {
     fn drop(&mut self) {
-        if self.keyboard_enhanced {
-            let _ = execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
-        }
-        restore();
+        leave(
+            self.active,
+            &mut self.raw,
+            &mut self.out,
+            self.keyboard_enhanced,
+        );
     }
 }
 
 /// Undoes everything `TerminalMode::enter` did. Idempotent, and safe to call having entered nothing.
 pub fn restore() {
-    if !ACTIVE.swap(false, Ordering::SeqCst) {
+    leave(&ACTIVE, &mut CrosstermRawMode, &mut io::stdout(), false);
+}
+
+fn leave<R: RawMode, W: Write>(
+    active: &AtomicBool,
+    raw: &mut R,
+    out: &mut W,
+    keyboard_enhanced: bool,
+) {
+    if !active.swap(false, Ordering::SeqCst) {
         return;
     }
-    let mut out = std::io::stdout();
+    if keyboard_enhanced {
+        let _ = execute!(out, PopKeyboardEnhancementFlags);
+    }
     let _ = execute!(
         out,
         DisableMouseCapture,
@@ -88,7 +152,7 @@ pub fn restore() {
         LeaveAlternateScreen
     );
     let _ = out.write_all(RESTORE_TITLE);
-    let _ = disable_raw_mode();
+    let _ = raw.disable();
     let _ = out.flush();
 }
 
@@ -110,3 +174,7 @@ pub fn size() -> (u16, u16) {
         .map(|(cols, rows)| (cols.max(1), rows.max(1)))
         .unwrap_or((80, 24))
 }
+
+#[cfg(test)]
+#[path = "term.test.rs"]
+mod tests;
