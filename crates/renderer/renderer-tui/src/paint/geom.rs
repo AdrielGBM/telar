@@ -1,10 +1,7 @@
 //! Logical rects to cell rects, and what colour a paint is at a point.
 
-use geometry_core::Transform;
-use geometry_core::{Point, Rect};
+use geometry_core::{CellSize, Point, Rect, Transform};
 use renderer_core::{Color, Gradient, GradientKind, Paint};
-
-use crate::metrics::CellSize;
 
 /// A half-open rectangle of cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

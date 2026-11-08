@@ -2,8 +2,9 @@
 
 use std::sync::Arc;
 
+use geometry_core::CellSize;
 use platform_tui::{OscClipboard, TuiPlatform, TuiPlatformConfig};
-use renderer_tui::{CellMetrics, CellSize, ColorDepth, TuiConfig, TuiRendererFactory};
+use renderer_tui::{CellMetrics, ColorDepth, TuiConfig, TuiRendererFactory};
 use services_core::{AppPathsProvider, SystemPaths};
 
 use crate::app::App;
@@ -57,8 +58,7 @@ pub fn run_tui_app_with_name<A: App>(
 
     let paths: Arc<dyn AppPathsProvider> = Arc::new(SystemPaths);
     let platform = TuiPlatform::new(TuiPlatformConfig {
-        cell_width: options.cell.width,
-        cell_height: options.cell.height,
+        cell: options.cell,
         mouse: options.mouse,
         quit_on_ctrl_c: options.quit_on_ctrl_c,
         ..TuiPlatformConfig::default()

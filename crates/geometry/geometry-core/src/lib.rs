@@ -6,6 +6,7 @@
 
 mod border_radius;
 mod box_model;
+mod cell_size;
 mod color;
 mod grid;
 mod insets;
@@ -18,6 +19,7 @@ mod wire;
 
 pub use border_radius::BorderRadius;
 pub use box_model::BoxModel;
+pub use cell_size::CellSize;
 pub use color::{BODY_TEXT_CONTRAST, Color, LARGE_TEXT_CONTRAST, NON_TEXT_CONTRAST};
 pub use grid::{LayoutGrid, layout_grid, set_layout_grid};
 pub use insets::Insets;

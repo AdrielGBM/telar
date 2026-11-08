@@ -5,7 +5,7 @@ mod image;
 mod shape;
 mod text;
 
-use geometry_core::Rect;
+use geometry_core::{CellSize, Rect};
 use renderer_core::{Color, Destination, DrawCommand, DrawState};
 
 pub use geom::CellRect;
@@ -13,7 +13,7 @@ pub use geom::CellRect;
 use crate::buffer::CellBuffer;
 use crate::cell::Attrs;
 use crate::color::Rgb;
-use crate::metrics::{CellMetrics, CellSize};
+use crate::metrics::CellMetrics;
 use crate::wrap::WrappedLine;
 
 /// Paints a command list into a cell grid, in whatever a terminal can express of it.

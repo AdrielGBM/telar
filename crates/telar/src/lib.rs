@@ -145,7 +145,8 @@ pub use platform_core::{
 pub use app_runtime::{AppRuntime, LocalApp};
 #[cfg(feature = "runtime")]
 pub use geometry_core::{
-    BODY_TEXT_CONTRAST, Insets, NON_TEXT_CONTRAST, ObjectFit, Point, Rect, Size, Transform,
+    BODY_TEXT_CONTRAST, CellSize, Insets, NON_TEXT_CONTRAST, ObjectFit, Point, Rect, Size,
+    Transform,
 };
 #[cfg(feature = "runtime")]
 pub use layout_core::{

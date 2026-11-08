@@ -2,7 +2,8 @@
 //!
 //! The mechanism is a grid that defaults to [`LayoutGrid::UNIT`], where every snap is the identity — but a default is only a promise until something checks it. These are the two halves of that promise for the one value that could not be settled by snapping alone: what a single line of text reserves.
 
-use renderer_tui::{CellMetrics, CellSize};
+use renderer_tui::CellMetrics;
+use telar::CellSize;
 
 /// Both halves install the same two process globals before reading them back, so running in parallel in one binary makes each observe the other's setup. Poison is stepped over rather than propagated, or a failing half would mask the other's real assertion.
 static GLOBALS: std::sync::Mutex<()> = std::sync::Mutex::new(());

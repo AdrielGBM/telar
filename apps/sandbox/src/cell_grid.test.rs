@@ -4,8 +4,8 @@
 //!
 //! Snapping what layout is *told* removes the dependency rather than papering over it: with `h` a whole number of steps the expression collapses to `h / step` for every `y`. This asserts that on the real tree — every box a whole number of cells, at a position that is one too, so its size is the same at every scroll offset.
 
-use renderer_tui::{CellMetrics, CellSize};
-use telar::{App, DrawCommand, Event};
+use renderer_tui::CellMetrics;
+use telar::{App, CellSize, DrawCommand, Event};
 
 /// A surface the terminal could really report: `platform_tui::TuiWindow` sizes itself as `cols x cell_width` by `rows x cell_height`, so a whole number of cells is a precondition the frontend guarantees rather than something layout has to defend against. 150x56 cells.
 const SURFACE: (u32, u32) = (150 * 8, 56 * 16);

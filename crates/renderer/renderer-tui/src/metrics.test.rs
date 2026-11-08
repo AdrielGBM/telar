@@ -1,4 +1,5 @@
 use super::*;
+use geometry_core::CellSize;
 use renderer_core::{Clamp, Color};
 
 fn style() -> TextStyle {
@@ -40,14 +41,6 @@ fn a_clamp_caps_the_height() {
 #[test]
 fn line_height_ignores_font_size() {
     assert_eq!(metrics().line_height(48.0), 16.0);
-}
-
-#[test]
-fn edges_round_so_neighbours_touch() {
-    let cell = CellSize::default();
-    let first = (cell.col_at(0.0), cell.col_at(37.5));
-    let second = (cell.col_at(37.5), cell.col_at(75.0));
-    assert_eq!(first.1, second.0, "a shared edge must land on one column");
 }
 
 #[test]
@@ -146,4 +139,9 @@ fn laid_lines_are_placed_as_the_painter_aligns_them_and_a_final_break_opens_a_li
     assert_eq!(ranges, vec![0..2, 3..3]);
     assert_eq!(lines[0].start_x, 4.0 * 8.0);
     assert!(lines[1].clusters.is_empty());
+}
+
+#[test]
+fn the_default_config_uses_the_shared_default_cell() {
+    assert_eq!(crate::TuiConfig::default().cell, CellSize::default());
 }

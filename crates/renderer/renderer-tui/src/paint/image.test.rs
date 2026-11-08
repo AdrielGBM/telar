@@ -5,7 +5,7 @@ use renderer_core::{BlendMode, DrawCommand, ImageFill, TextStyle};
 use super::*;
 use crate::buffer::CellBuffer;
 use crate::color::Rgb;
-use crate::metrics::CellSize;
+use geometry_core::CellSize;
 
 const CELL: CellSize = CellSize {
     width: 8.0,

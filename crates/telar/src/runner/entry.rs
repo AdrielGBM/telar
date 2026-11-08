@@ -100,7 +100,7 @@ fn run_default_frontend<A: App, D: crate::DevOverlay>(config: AppConfig, app: A,
 pub(crate) fn install_preview_text_metrics(config: &AppConfig) {
     #[cfg(feature = "tui")]
     if tui_selected() {
-        super::tui::install_cell_measure(renderer_tui::CellSize::default());
+        super::tui::install_cell_measure(geometry_core::CellSize::default());
         return;
     }
     super::font_config::install_shaper_fonts(config.clone());

@@ -106,3 +106,8 @@ fn no_path_reads_nothing() {
     }
     Reading::new(None).follow(&Untouchable);
 }
+
+#[test]
+fn the_default_cell_is_the_shared_default() {
+    assert_eq!(TuiPlatformConfig::default().cell, CellSize::default());
+}

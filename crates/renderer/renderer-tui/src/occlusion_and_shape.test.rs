@@ -2,9 +2,10 @@
 
 use std::sync::Arc;
 
+use geometry_core::CellSize;
 use geometry_core::Rect;
 use renderer_core::{BorderRadius, Color, DrawCommand, RectStyle, ShapeStyle, TextStyle};
-use telar_renderer_tui::{CellBuffer, CellSize, Painter, Rgb};
+use telar_renderer_tui::{CellBuffer, Painter, Rgb};
 
 const FILL: Color = Color {
     r: 60.0 / 255.0,
