@@ -18,14 +18,14 @@ use crate::icons::{Recording, read_icon_record, resolve_with};
 use crate::ids::{IdRef, collect_id_refs};
 use crate::macro_ids::{collect_macro_ids, rust_files};
 
-/// What baking one package turned up. Warnings and errors are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer. A warning is not fatal: a package with one unreadable asset still bakes the rest.
+/// What baking one package turned up. Warnings and errors are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer. A warning is not fatal: a package with one warning still bakes the rest.
 #[derive(Debug, Clone, Default)]
 pub struct BakeReport {
     pub baked: usize,
     /// Whether the index differs from what was already on disk. `false` means nothing was rewritten, which is what keeps a bake from retriggering rustc or the editor's file watcher.
     pub changed: bool,
     pub warnings: Vec<String>,
-    /// What a build must not go on from: a `telar.toml` that does not parse, an id that has to be baked and is not a literal, one no source has, a set the licence policy refuses. Everything else is still baked, so an editor keeps answering for the rest.
+    /// What a build must not go on from: a `telar.toml` that does not parse, an id that has to be baked and is not a literal, one no source has, a set the licence policy refuses, a referenced asset that is missing or whose bytes do not decode, an artifact that cannot be written. Everything else is still baked, so an editor keeps answering for the rest.
     pub errors: Vec<String>,
 }
 
@@ -81,7 +81,7 @@ pub fn bake_package_with(
     let previous_index = telar_project::read_index(&telar_dir).ok().flatten();
     if rsx_files.is_empty() && id_refs.is_empty() && previous_index.is_none() {
         if dependencies.is_none_or(<[IconDependency]>::is_empty)
-            && read_icon_record(package_dir).is_none()
+            && matches!(read_icon_record(package_dir), Ok(None))
         {
             return None;
         }
@@ -93,7 +93,7 @@ pub fn bake_package_with(
         );
         if icons.warnings.is_empty()
             && icons.errors.is_empty()
-            && read_icon_record(package_dir).is_none()
+            && matches!(read_icon_record(package_dir), Ok(None))
         {
             return None;
         }
@@ -138,7 +138,7 @@ pub fn bake_package_with(
         let bytes = match std::fs::read(&file_path) {
             Ok(bytes) => bytes,
             Err(e) => {
-                report.warnings.push(format!(
+                report.errors.push(format!(
                     "cannot bake {} asset `{path}`: not found at {} ({e})",
                     kind.label,
                     file_path.display()
@@ -146,7 +146,14 @@ pub fn bake_package_with(
                 continue;
             }
         };
-        baked.extend(bake_one(kind, path, bytes, false, &previous, &mut report));
+        match bake_one(kind, path.clone(), bytes, false, &previous) {
+            Ok(asset) => baked.push(asset),
+            Err(e) => report.errors.push(format!(
+                "cannot bake {} asset `{path}` from {}: {e}",
+                kind.label,
+                file_path.display()
+            )),
+        }
     }
 
     for (kind, baking) in &id_kinds {
@@ -188,20 +195,17 @@ pub fn bake_package_with(
     let icon_kind =
         telar_project::asset_kind_for_id("icon").expect("icon is a registered asset kind");
     for icon in icons.icons {
-        baked.extend(bake_one(
-            icon_kind,
-            icon.id.to_string(),
-            icon.svg,
-            icon.monochrome,
-            &previous,
-            &mut report,
-        ));
+        let id = icon.id.to_string();
+        match bake_one(icon_kind, id.clone(), icon.svg, icon.monochrome, &previous) {
+            Ok(asset) => baked.push(asset),
+            Err(e) => report.errors.push(format!("cannot bake icon `{id}`: {e}")),
+        }
     }
 
     let generated = match telar_project::generate_assets(&baked, producer, telar_version) {
         Ok(generated) => generated,
         Err(e) => {
-            report.warnings.push(format!(
+            report.errors.push(format!(
                 "could not bake assets for {}: {e}",
                 package_dir.display()
             ));
@@ -213,7 +217,7 @@ pub fn bake_package_with(
     report.baked = generated.index.entries.len();
     if let Err(e) = telar_project::write_generated(&telar_dir, &generated) {
         report
-            .warnings
+            .errors
             .push(format!("could not write {}: {e}", telar_dir.display()));
         report.changed = false;
     }
@@ -238,15 +242,14 @@ struct Previous<'a> {
     source: Option<String>,
 }
 
-/// One asset as the artifact will hold it: the expression a previous bake wrote for these exact bytes, or a fresh bake of them. `None`, with a warning, when the bytes do not bake.
+/// One asset as the artifact will hold it: the expression a previous bake wrote for these exact bytes, or a fresh bake of them. `Err` says why the bytes do not bake.
 fn bake_one(
     kind: &'static AssetKind,
     path: String,
     bytes: Vec<u8>,
     monochrome: bool,
     previous: &Previous<'_>,
-    report: &mut BakeReport,
-) -> Option<BakedAsset> {
+) -> Result<BakedAsset, String> {
     let hash = telar_project::content_hash(&bytes);
     let cached_expr = previous
         .index
@@ -261,26 +264,12 @@ fn bake_one(
 
     let init_expr = match cached_expr {
         Some(expr) => expr,
-        None => {
-            let Some(baker) = super::baker_for_id(kind.id) else {
-                report
-                    .warnings
-                    .push(format!("no baker registered for asset kind `{}`", kind.id));
-                return None;
-            };
-            match baker.bake(&bytes) {
-                Ok(expr) => expr,
-                Err(e) => {
-                    report
-                        .warnings
-                        .push(format!("cannot bake {} asset `{path}`: {e}", kind.label));
-                    return None;
-                }
-            }
-        }
+        None => super::baker_for_id(kind.id)
+            .ok_or_else(|| format!("no baker registered for asset kind `{}`", kind.id))?
+            .bake(&bytes)?,
     };
 
-    Some(BakedAsset {
+    Ok(BakedAsset {
         kind: kind.id.to_string(),
         path,
         content: bytes,
@@ -331,5 +320,5 @@ fn collect_nodes(nodes: &[ViewNode], out: &mut Vec<(&'static AssetKind, String)>
 }
 
 #[cfg(test)]
-#[path = "package_test.rs"]
+#[path = "package.test.rs"]
 mod tests;

@@ -2,18 +2,27 @@
 
 use crate::compile::{Arithmetic, Comparison, Node, NodeKind};
 use crate::registry::Arguments;
-use crate::{Error, ErrorCode, MAX_TEXT_BYTES, Resolver, Span, Value};
+use crate::{Budget, CallError, Error, ErrorCode, Resolver, Span, Value};
 
-pub(crate) fn evaluate(node: &Node, resolver: &dyn Resolver) -> Result<Value, Error> {
+pub(crate) fn evaluate(
+    node: &Node,
+    resolver: &dyn Resolver,
+    budget: &Budget,
+) -> Result<Value, Error> {
     let span = node.span;
     Ok(match &node.kind {
         NodeKind::Literal(value) => value.clone(),
-        NodeKind::List(items) => Value::List(
-            items
-                .iter()
-                .map(|item| evaluate(item, resolver))
-                .collect::<Result<_, _>>()?,
-        ),
+        NodeKind::List(items) => {
+            budget
+                .charge(items.len().saturating_mul(size_of::<Value>()))
+                .map_err(|error| refused(span, error))?;
+            Value::List(
+                items
+                    .iter()
+                    .map(|item| evaluate(item, resolver, budget))
+                    .collect::<Result<_, _>>()?,
+            )
+        }
         NodeKind::Reference(reference, ty) => {
             let value = resolver
                 .read(reference)
@@ -34,13 +43,13 @@ pub(crate) fn evaluate(node: &Node, resolver: &dyn Resolver) -> Result<Value, Er
             }
             value
         }
-        NodeKind::Negate(inner) => Value::Number(-number(inner, resolver)?),
-        NodeKind::Not(inner) => Value::Bool(!boolean(inner, resolver)?),
-        NodeKind::Hundredth(inner) => Value::Number(number(inner, resolver)? / 100.0),
+        NodeKind::Negate(inner) => Value::Number(-number(inner, resolver, budget)?),
+        NodeKind::Not(inner) => Value::Bool(!boolean(inner, resolver, budget)?),
+        NodeKind::Hundredth(inner) => Value::Number(number(inner, resolver, budget)? / 100.0),
         NodeKind::Arithmetic(op, left, right) => {
-            let left = number(left, resolver)?;
+            let left = number(left, resolver, budget)?;
             let divisor_span = right.span;
-            let right = number(right, resolver)?;
+            let right = number(right, resolver, budget)?;
             let result = match op {
                 Arithmetic::Add => left + right,
                 Arithmetic::Subtract => left - right,
@@ -58,8 +67,8 @@ pub(crate) fn evaluate(node: &Node, resolver: &dyn Resolver) -> Result<Value, Er
             base,
             percent,
         } => {
-            let base = number(base, resolver)?;
-            let change = base * number(percent, resolver)?;
+            let base = number(base, resolver, budget)?;
+            let change = base * number(percent, resolver, budget)?;
             let result = if *subtract {
                 base - change
             } else {
@@ -68,19 +77,19 @@ pub(crate) fn evaluate(node: &Node, resolver: &dyn Resolver) -> Result<Value, Er
             Value::Number(finite(result, span)?)
         }
         NodeKind::Concat(left, right) => {
-            let left = evaluate(left, resolver)?;
-            let right = evaluate(right, resolver)?;
+            let left = evaluate(left, resolver, budget)?;
+            let right = evaluate(right, resolver, budget)?;
             let (Some(left), Some(right)) = (left.as_text(), right.as_text()) else {
                 return Err(mistyped(span));
             };
-            if left.len() + right.len() > MAX_TEXT_BYTES {
-                return Err(Error::evaluation(span, ErrorCode::text_too_long()));
-            }
+            budget
+                .charge(left.len().saturating_add(right.len()))
+                .map_err(|error| refused(span, error))?;
             Value::text(format!("{left}{right}"))
         }
         NodeKind::Compare(comparison, left, right) => {
-            let left = evaluate(left, resolver)?;
-            let right = evaluate(right, resolver)?;
+            let left = evaluate(left, resolver, budget)?;
+            let right = evaluate(right, resolver, budget)?;
             let ordering = match (&left, &right) {
                 (Value::Number(a), Value::Number(b)) => a.partial_cmp(b),
                 (Value::Text(a), Value::Text(b)) => Some(a.cmp(b)),
@@ -99,24 +108,24 @@ pub(crate) fn evaluate(node: &Node, resolver: &dyn Resolver) -> Result<Value, Er
             left,
             right,
         } => {
-            let equal = evaluate(left, resolver)? == evaluate(right, resolver)?;
+            let equal = evaluate(left, resolver, budget)? == evaluate(right, resolver, budget)?;
             Value::Bool(equal != *negate)
         }
         NodeKind::And(left, right) => {
-            Value::Bool(boolean(left, resolver)? && boolean(right, resolver)?)
+            Value::Bool(boolean(left, resolver, budget)? && boolean(right, resolver, budget)?)
         }
         NodeKind::Or(left, right) => {
-            Value::Bool(boolean(left, resolver)? || boolean(right, resolver)?)
+            Value::Bool(boolean(left, resolver, budget)? || boolean(right, resolver, budget)?)
         }
         NodeKind::If {
             condition,
             then,
             otherwise,
         } => {
-            if boolean(condition, resolver)? {
-                evaluate(then, resolver)?
+            if boolean(condition, resolver, budget)? {
+                evaluate(then, resolver, budget)?
             } else {
-                evaluate(otherwise, resolver)?
+                evaluate(otherwise, resolver, budget)?
             }
         }
         NodeKind::Call {
@@ -127,9 +136,9 @@ pub(crate) fn evaluate(node: &Node, resolver: &dyn Resolver) -> Result<Value, Er
         } => {
             let values = arguments
                 .iter()
-                .map(|argument| evaluate(argument, resolver))
+                .map(|argument| evaluate(argument, resolver, budget))
                 .collect::<Result<Vec<_>, _>>()?;
-            let value = implementation(Arguments(&values)).map_err(|error| {
+            let value = implementation(Arguments::new(&values, budget)).map_err(|error| {
                 let at = error
                     .argument
                     .and_then(|index| arguments.get(index))
@@ -153,14 +162,14 @@ pub(crate) fn evaluate(node: &Node, resolver: &dyn Resolver) -> Result<Value, Er
     })
 }
 
-fn number(node: &Node, resolver: &dyn Resolver) -> Result<f64, Error> {
-    evaluate(node, resolver)?
+fn number(node: &Node, resolver: &dyn Resolver, budget: &Budget) -> Result<f64, Error> {
+    evaluate(node, resolver, budget)?
         .as_number()
         .ok_or_else(|| mistyped(node.span))
 }
 
-fn boolean(node: &Node, resolver: &dyn Resolver) -> Result<bool, Error> {
-    evaluate(node, resolver)?
+fn boolean(node: &Node, resolver: &dyn Resolver, budget: &Budget) -> Result<bool, Error> {
+    evaluate(node, resolver, budget)?
         .as_bool()
         .ok_or_else(|| mistyped(node.span))
 }
@@ -175,10 +184,14 @@ fn finite(result: f64, span: Span) -> Result<f64, Error> {
     }
 }
 
+fn refused(span: Span, error: CallError) -> Error {
+    Error::evaluation(span, error.code)
+}
+
 fn mistyped(span: Span) -> Error {
     Error::evaluation(span, ErrorCode::MistypedValue)
 }
 
 #[cfg(test)]
-#[path = "eval_test.rs"]
+#[path = "eval.test.rs"]
 mod tests;

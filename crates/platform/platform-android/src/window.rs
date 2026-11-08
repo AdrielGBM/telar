@@ -21,7 +21,7 @@ pub struct AndroidWindow {
 impl AndroidWindow {
     pub fn new(window: Arc<winit::window::Window>, app: AndroidApp) -> Self {
         Self {
-            surface: WinitWindow(window),
+            surface: WinitWindow::new(window, platform_winit::DragSeat::none()),
             app,
         }
     }

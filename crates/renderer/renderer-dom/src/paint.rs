@@ -74,9 +74,12 @@ fn gradient(g: &Gradient) -> String {
             let degrees = dx.atan2(-dy).to_degrees().rem_euclid(360.0);
             format!("linear-gradient({}deg,{stops})", round(degrees))
         }
-        GradientKind::Radial { radius, .. } => {
-            format!("radial-gradient(circle {} at center,{stops})", px(radius))
-        }
+        // CSS cannot turn a radial gradient, so a tilted ellipse becomes the upright one that fills the same bounding box.
+        GradientKind::Radial { transform: t } => format!(
+            "radial-gradient({} {} at center,{stops})",
+            px(t.a.hypot(t.c)),
+            px(t.b.hypot(t.d))
+        ),
     }
 }
 
@@ -210,7 +213,7 @@ pub fn font_family_list(family: &renderer_core::FontFamily) -> Option<String> {
         FontFamily::SansSerif => return None,
         // A bare name with no author-written fallback still degrades to the platform's sans-serif, as it always has.
         FontFamily::Named(name) => {
-            pieces.push(css_family_name(name));
+            pieces.push(renderer_core::css_string(name));
             pieces.push("sans-serif".to_string());
         }
         other => push_family_piece(other, &mut pieces),
@@ -228,28 +231,13 @@ fn push_family_piece(family: &renderer_core::FontFamily, out: &mut Vec<String>) 
         FontFamily::SystemUi => out.push("system-ui".to_string()),
         FontFamily::Cursive => out.push("cursive".to_string()),
         FontFamily::Fantasy => out.push("fantasy".to_string()),
-        FontFamily::Named(name) => out.push(css_family_name(name)),
+        FontFamily::Named(name) => out.push(renderer_core::css_string(name)),
         FontFamily::Stack(families) => {
             for member in families.iter() {
                 push_family_piece(member, out);
             }
         }
     }
-}
-
-/// A family name as a CSS string: quoted, because a name with a space in it is otherwise several identifiers, and escaped, because an unescaped `"` in the name would close the string early.
-fn css_family_name(name: &str) -> String {
-    let mut out = String::with_capacity(name.len() + 2);
-    out.push('"');
-    for c in name.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            _ => out.push(c),
-        }
-    }
-    out.push('"');
-    out
 }
 
 /// What a `Text` command contributes to the element that holds it.
@@ -426,11 +414,11 @@ fn decoration_style(decoration: &renderer_core::TextDecoration, ink: &Paint, out
 }
 
 #[cfg(test)]
-#[path = "paint_test.rs"]
+#[path = "paint.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "paint_text_test.rs"]
+#[path = "paint.text.test.rs"]
 mod text_tests;
 
 /// An absolute-space matrix as the CSS transform of a box whose own top-left is at `(x, y)`.
@@ -455,5 +443,5 @@ pub fn spelled(m: [f32; 6]) -> String {
 }
 
 #[cfg(test)]
-#[path = "paint_matrix_test.rs"]
+#[path = "paint.matrix.test.rs"]
 mod matrix_tests;

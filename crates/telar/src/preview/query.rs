@@ -101,5 +101,5 @@ impl fmt::Display for Query {
 }
 
 #[cfg(test)]
-#[path = "query_test.rs"]
+#[path = "query.test.rs"]
 mod tests;

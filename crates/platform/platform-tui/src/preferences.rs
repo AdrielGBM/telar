@@ -26,5 +26,5 @@ pub fn colorfgbg_scheme(value: &str) -> Option<ColorScheme> {
 }
 
 #[cfg(test)]
-#[path = "preferences_test.rs"]
+#[path = "preferences.test.rs"]
 mod tests;

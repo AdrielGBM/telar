@@ -2,9 +2,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use telar::preview::{PreviewEnv, ViewportPreset};
-use telar::{
-    Color, ColorScheme, ControlSize, Direction, Insets, Size, registered_modes, scheme_mode,
-};
+use telar::{Color, ColorScheme, Direction, Insets, Size, registered_modes, scheme_mode};
 
 use crate::strings::{
     self, DEVICE_COMPACT_PHONE, DEVICE_PHONE, DEVICE_TABLET, MODE_DARK, MODE_LIGHT, MODE_SYSTEM,
@@ -24,6 +22,8 @@ pub(crate) const GRID_STEP: f32 = 8.0;
 /// Everything the canvas toolbar sets, for every preview alike. One value, so it is kept, restored and stored whole.
 ///
 /// A field at its default leaves the decision to the preview's own [`PreviewEnv`], and where that names nothing, to the application: for the mode, to the application's mode for the system's scheme first ([`ModeChoice::System`]).
+///
+/// A key it no longer has, as the `control_size` earlier workshops kept before each preview's own `size` arg took its place, is skipped as it loads, so what they kept still restores.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct CanvasSettings {
@@ -33,8 +33,6 @@ pub(crate) struct CanvasSettings {
     /// Set only by choosing one; otherwise the canvas reads in the direction of its locale.
     #[serde(with = "direction_text")]
     pub(crate) direction: Option<Direction>,
-    #[serde(with = "control_size_text")]
-    pub(crate) control_size: Option<ControlSize>,
     pub(crate) background: Background,
     pub(crate) size: CanvasSize,
     /// Swaps the width and height of whatever fixed size the canvas has, and turns a device's safe area with it.
@@ -373,7 +371,6 @@ impl CanvasSettings {
             mode: self.mode.mode(env.mode, scheme),
             locale,
             direction,
-            control_size: self.control_size,
             high_contrast: self.high_contrast.or(env.high_contrast),
             background: self.background.color(env.background),
             viewport: self.fixed_size(env.viewport, project).filter(|_| framed),
@@ -388,7 +385,6 @@ pub(crate) struct CanvasEnv {
     pub(crate) mode: Option<String>,
     pub(crate) locale: Option<String>,
     pub(crate) direction: Option<Direction>,
-    pub(crate) control_size: Option<ControlSize>,
     pub(crate) high_contrast: Option<bool>,
     pub(crate) background: Option<Color>,
     pub(crate) viewport: Option<Size>,
@@ -414,39 +410,26 @@ fn rotate_insets(insets: Insets) -> Insets {
     Insets::new(insets.right, insets.bottom, insets.left, insets.top)
 }
 
-macro_rules! word_text {
-    ($module:ident, $type:ty, $word:ident, $parse:ident) => {
-        mod $module {
-            use serde::{Deserialize, Deserializer, Serialize, Serializer};
-            use telar::preview::{$parse, $word};
+mod direction_text {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use telar::Direction;
+    use telar::preview::{direction_word, parse_direction};
 
-            use super::*;
+    pub(super) fn serialize<S: Serializer>(
+        value: &Option<Direction>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        value.map(direction_word).serialize(serializer)
+    }
 
-            pub(super) fn serialize<S: Serializer>(
-                value: &Option<$type>,
-                serializer: S,
-            ) -> Result<S::Ok, S::Error> {
-                value.map($word).serialize(serializer)
-            }
-
-            pub(super) fn deserialize<'de, D: Deserializer<'de>>(
-                deserializer: D,
-            ) -> Result<Option<$type>, D::Error> {
-                let word = Option::<String>::deserialize(deserializer)?;
-                Ok(word.as_deref().and_then($parse))
-            }
-        }
-    };
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Direction>, D::Error> {
+        let word = Option::<String>::deserialize(deserializer)?;
+        Ok(word.as_deref().and_then(parse_direction))
+    }
 }
 
-word_text!(direction_text, Direction, direction_word, parse_direction);
-word_text!(
-    control_size_text,
-    ControlSize,
-    control_size_word,
-    parse_control_size
-);
-
 #[cfg(test)]
-#[path = "settings_test.rs"]
+#[path = "settings.test.rs"]
 mod tests;

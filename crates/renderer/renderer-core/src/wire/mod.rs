@@ -7,7 +7,7 @@ mod frame;
 mod intern;
 mod value;
 
-pub use frame::{FrameDecoder, FrameEncoder};
+pub use frame::{DrawList, FrameDecoder, FrameEncoder, Pixels};
 pub use wire_core::{WIRE_VERSION, WireError};
 
 /// Why a lent frame could not be decoded.

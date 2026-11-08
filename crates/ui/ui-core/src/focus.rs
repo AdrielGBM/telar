@@ -1395,11 +1395,11 @@ pub(crate) fn arrived_by(id: FocusId) -> Option<Travel> {
 }
 
 #[cfg(test)]
-#[path = "focus_test.rs"]
+#[path = "focus.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "focus_order_test.rs"]
+#[path = "focus.order.test.rs"]
 mod order_tests;
 
 /// The checked state `id` declared, read now.

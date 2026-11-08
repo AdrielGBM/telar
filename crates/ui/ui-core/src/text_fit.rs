@@ -176,5 +176,5 @@ impl Fitting {
 }
 
 #[cfg(test)]
-#[path = "text_fit_test.rs"]
+#[path = "text_fit.test.rs"]
 mod tests;

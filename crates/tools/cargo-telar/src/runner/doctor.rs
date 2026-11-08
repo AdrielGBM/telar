@@ -2,11 +2,12 @@
 
 use std::process::Command;
 
+use telar_project::protocol::RendererBackend;
+
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
 use super::config::{
-    WEB_PROFILE_TOML, backend_as_str, find_package_dir, has_web_profile, missing_devtools_note,
-    missing_workshop_note, moved_features_hint_for, read_manifest_telar, resolve_package,
-    try_load_config,
+    WEB_PROFILE_TOML, find_package_dir, has_web_profile, missing_devtools_note, missing_workshop,
+    moved_features_hint_for, read_manifest_telar, resolve_package, try_load_config,
 };
 
 struct Doctor {
@@ -166,16 +167,13 @@ pub(crate) fn run_doctor_cmd() -> ! {
     } else if resolved.package.is_some() {
         doc.warn("devtools overlay", &missing_devtools_note(&resolved.name()));
     }
-    if telar_project::declares_optional_dependency(
-        &resolved.package_dir,
-        telar_project::WORKSHOP_PACKAGE,
-    ) {
-        doc.ok(
+    match missing_workshop(&resolved) {
+        None => doc.ok(
             "preview workshop",
             "`telar-workshop` is an optional dependency, which `cargo telar preview` turns on",
-        );
-    } else if resolved.package.is_some() {
-        doc.warn("preview workshop", &missing_workshop_note(&resolved.name()));
+        ),
+        Some(problem) if resolved.package.is_some() => doc.warn("preview workshop", &problem),
+        Some(_) => {}
     }
     match telar_project::previews_include_problems(&package_dir) {
         Ok(problems) if !problems.is_empty() => {
@@ -226,7 +224,7 @@ pub(crate) fn run_doctor_cmd() -> ! {
     doc.section("Desktop");
     let backend = config
         .backend
-        .map(backend_as_str)
+        .map(RendererBackend::as_str)
         .unwrap_or("auto (default)");
     doc.info("configured backend", backend);
     doc.info("software renderer", "always available");

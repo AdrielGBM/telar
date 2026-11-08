@@ -149,5 +149,5 @@ impl Component for Lazy {
 }
 
 #[cfg(test)]
-#[path = "lazy_test.rs"]
+#[path = "lazy.test.rs"]
 mod tests;

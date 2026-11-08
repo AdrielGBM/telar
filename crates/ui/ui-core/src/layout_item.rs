@@ -596,5 +596,5 @@ macro_rules! impl_leaf_widget {
 }
 
 #[cfg(test)]
-#[path = "layout_item_test.rs"]
+#[path = "layout_item.test.rs"]
 mod tests;

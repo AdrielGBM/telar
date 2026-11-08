@@ -15,7 +15,7 @@
 pub struct MenusProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -36,226 +36,176 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
     let on_dark = Reactive::of(move || shade_rsx_mv.get() == 2);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Menus & Selects").desc("select and menu are components (from the components feature, not base tags) built on the overlay anchor: a trigger button opens a panel positioned next to it, and only that panel blocks clicks — taps elsewhere fall through and dismiss it.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Menus & Selects").desc("select and menu are components (from the components feature, not base tags) built on the overlay anchor: a trigger button opens a panel positioned next to it, and only that panel blocks clicks — taps elsewhere fall through and dismiss it.").build())?;
         let __node_1 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let picked = picked.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let picked = picked.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_2 = {
-                            let __deferred = Children::per_slot(
-                                {
+                    let __node_2 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let picked = picked.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_3 = {
+                                    let __recipe_children = Children::new(
+                                        move || {
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __node_4 = item(ItemProps::props().label("Small").build())?;
+                                            __children.push(box_item(__node_4));
+                                            let __node_5 = item(ItemProps::props().label("Medium").build())?;
+                                            __children.push(box_item(__node_5));
+                                            let __node_6 = item(ItemProps::props().label("Large").build())?;
+                                            __children.push(box_item(__node_6));
+                                            Ok(__children)
+                                        }
+                                    );
+                                    select(SelectProps::props().selected(picked.clone()).children(__recipe_children).build())?
+                                };
+                                __children.push(box_item(__node_3));
+                                let __text_0 = {
                                     let picked = picked.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let picked = picked.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __node_3 = {
-                                            let __deferred = Children::per_slot(
-                                                move |__request: SlotRequest<'_>| {
-                                                    let mut __slots = Slots::new();
-                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                    if __request.includes(None) {
-                                                        let __node_4 = item(ItemProps::props().label("Small").build(), Children::default())?;
-                                                        __children.push(box_item(__node_4));
-                                                        let __node_5 = item(ItemProps::props().label("Medium").build(), Children::default())?;
-                                                        __children.push(box_item(__node_5));
-                                                        let __node_6 = item(ItemProps::props().label("Large").build(), Children::default())?;
-                                                        __children.push(box_item(__node_6));
-                                                    }
-                                                    __slots.extend_default(__children);
-                                                    Ok(__slots)
-                                                }
-                                            );
-                                            select(SelectProps::props().selected(picked.clone()).build(), __deferred)?
-                                        };
-                                        __children.push(box_item(__node_3));
-                                        let __text_0 = {
-                                            let picked = picked.clone();
-                                            Text::declaring(
-                                                move || format!("Size · {}", picked.get()),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_2));
-                        let __node_7 = code_line(CodeLineProps::props().code("select selected:$picked / item label:'Small' / item label:'Medium'").build(), Children::default())?;
-                        __children.push(box_item(__node_7));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                    Text::declaring(
+                                        move || format!("Size · {}", picked.get()),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_0));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_7 = code_line(CodeLineProps::props().code("select selected:$picked / item label:'Small' / item label:'Medium'").build())?;
+                    __children.push(box_item(__node_7));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("select — a dropdown bound to a signal").build(), __deferred)?
+            example(ExampleProps::props().title("select — a dropdown bound to a signal").children(__recipe_children).build())?
         };
         let __node_8 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let action = action.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let action = action.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_9 = {
-                            let __deferred = Children::per_slot(
-                                {
+                    let __node_9 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let action = action.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_10 = {
+                                    let __recipe_children = Children::new(
+                                        move || {
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __node_11 = item(ItemProps::props().label("Rename").build())?;
+                                            __children.push(box_item(__node_11));
+                                            let __node_12 = item(ItemProps::props().label("Duplicate").build())?;
+                                            __children.push(box_item(__node_12));
+                                            Ok(__children)
+                                        }
+                                    );
+                                    menu(MenuProps::props().label("Actions").on_select(std::rc::Rc::new({ let action = action.clone(); move |i| action.set(i) })).children(__recipe_children).build())?
+                                };
+                                __children.push(box_item(__node_10));
+                                let __text_1 = {
                                     let action = action.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let action = action.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __node_10 = {
-                                            let __deferred = Children::per_slot(
-                                                move |__request: SlotRequest<'_>| {
-                                                    let mut __slots = Slots::new();
-                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                    if __request.includes(None) {
-                                                        let __node_11 = item(ItemProps::props().label("Rename").build(), Children::default())?;
-                                                        __children.push(box_item(__node_11));
-                                                        let __node_12 = item(ItemProps::props().label("Duplicate").build(), Children::default())?;
-                                                        __children.push(box_item(__node_12));
-                                                    }
-                                                    __slots.extend_default(__children);
-                                                    Ok(__slots)
-                                                }
-                                            );
-                                            menu(MenuProps::props().label("Actions").on_select(std::rc::Rc::new({ let action = action.clone(); move |i| action.set(i) })).build(), __deferred)?
-                                        };
-                                        __children.push(box_item(__node_10));
-                                        let __text_1 = {
-                                            let action = action.clone();
-                                            Text::declaring(
-                                                move || format!("Last action index · {}", action.get()),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_1));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_9));
-                        let __node_13 = code_line(CodeLineProps::props().code("menu label:'Actions'   >   item label:'Rename'").build(), Children::default())?;
-                        __children.push(box_item(__node_13));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                    Text::declaring(
+                                        move || format!("Last action index · {}", action.get()),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_1));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_9));
+                    let __node_13 = code_line(CodeLineProps::props().code("menu label:'Actions'   >   item label:'Rename'").build())?;
+                    __children.push(box_item(__node_13));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("menu — a click-triggered list of one-shot actions").build(), __deferred)?
+            example(ExampleProps::props().title("menu — a click-triggered list of one-shot actions").children(__recipe_children).build())?
         };
         let __node_14 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let cant_redo = cant_redo.clone();
                     let ruler = ruler.clone();
-                move |__request: SlotRequest<'_>| {
-                    let cant_redo = cant_redo.clone();
-                    let ruler = ruler.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_15 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let cant_redo = cant_redo.clone();
-                                    let ruler = ruler.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let cant_redo = cant_redo.clone();
-                                    let ruler = ruler.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __node_16 = {
-                                            let __deferred = Children::per_slot(
-                                                {
-                                                    let cant_redo = cant_redo.clone();
-                                                    let ruler = ruler.clone();
-                                                move |__request: SlotRequest<'_>| {
-                                                    let cant_redo = cant_redo.clone();
-                                                    let ruler = ruler.clone();
-                                                    let mut __slots = Slots::new();
-                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                    if __request.includes(None) {
-                                                        let __node_17 = item(ItemProps::props().label("Undo").shortcut("Mod+Z").build(), Children::default())?;
-                                                        __children.push(box_item(__node_17));
-                                                        let __node_18 = item(ItemProps::props().label("Redo").shortcut("Mod+Shift+Z").disabled(cant_redo.clone()).build(), Children::default())?;
-                                                        __children.push(box_item(__node_18));
-                                                        let __node_19 = separator(SeparatorProps::props().build(), Children::default())?;
-                                                        __children.push(box_item(__node_19));
-                                                        let __node_20 = group(GroupProps::props().label("Clipboard").build(), Children::default())?;
-                                                        __children.push(box_item(__node_20));
-                                                        let __node_21 = item(ItemProps::props().label("Cut").shortcut("Mod+X").build(), Children::default())?;
-                                                        __children.push(box_item(__node_21));
-                                                        let __node_22 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build(), Children::default())?;
-                                                        __children.push(box_item(__node_22));
-                                                    }
-                                                    __slots.extend_default(__children);
-                                                    Ok(__slots)
-                                                }
-                                                }
-                                            );
-                                            menu(MenuProps::props().label("Edit").bordered(true).build(), __deferred)?
-                                        };
-                                        __children.push(box_item(__node_16));
-                                        let __row_0 = {
-                                            let __node_23 = toggle(ToggleProps::props().checked(cant_redo.clone()).label("Disable Redo").build(), Children::default())?;
-                                            let __node_24 = toggle(ToggleProps::props().checked(ruler.clone()).label("Ruler").build(), Children::default())?;
-                                            Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__node_23, __node_24])?
-                                        };
-                                        __children.push(box_item(__row_0));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_15));
-                        let __node_25 = code_line(CodeLineProps::props().code("item label:'Redo' shortcut:'Mod+Shift+Z' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on").build(), Children::default())?;
-                        __children.push(box_item(__node_25));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                    let __node_15 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let cant_redo = cant_redo.clone();
+                                let ruler = ruler.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_16 = {
+                                    let __recipe_children = Children::new(
+                                        {
+                                            let cant_redo = cant_redo.clone();
+                                            let ruler = ruler.clone();
+                                        move || {
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __node_17 = item(ItemProps::props().label("Undo").shortcut("Mod+Z").build())?;
+                                            __children.push(box_item(__node_17));
+                                            let __node_18 = item(ItemProps::props().label("Redo").shortcut("Mod+Shift+Z").disabled(cant_redo.clone()).build())?;
+                                            __children.push(box_item(__node_18));
+                                            let __node_19 = separator(SeparatorProps::props().build())?;
+                                            __children.push(box_item(__node_19));
+                                            let __node_20 = group(GroupProps::props().label("Clipboard").build())?;
+                                            __children.push(box_item(__node_20));
+                                            let __node_21 = item(ItemProps::props().label("Cut").shortcut("Mod+X").build())?;
+                                            __children.push(box_item(__node_21));
+                                            let __node_22 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build())?;
+                                            __children.push(box_item(__node_22));
+                                            Ok(__children)
+                                        }
+                                        }
+                                    );
+                                    menu(MenuProps::props().label("Edit").bordered(true).children(__recipe_children).build())?
+                                };
+                                __children.push(box_item(__node_16));
+                                let __row_0 = {
+                                    let __node_23 = toggle(ToggleProps::props().checked(cant_redo.clone()).label("Disable Redo").build())?;
+                                    let __node_24 = toggle(ToggleProps::props().checked(ruler.clone()).label("Ruler").build())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__node_23, __node_24])?
+                                };
+                                __children.push(box_item(__row_0));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_15));
+                    let __node_25 = code_line(CodeLineProps::props().code("item label:'Redo' shortcut:'Mod+Shift+Z' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on").build())?;
+                    __children.push(box_item(__node_25));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("A menu is a compound component — its rows are markup, not a list of strings").build(), __deferred)?
+            example(ExampleProps::props().title("A menu is a compound component — its rows are markup, not a list of strings").children(__recipe_children).build())?
         };
         let __node_26 = {
-            let __deferred = Children::per_slot(
+            let __recipe_children = Children::new(
                 {
                     let shade_name = shade_name.clone();
                     let on_system = on_system.clone();
@@ -264,125 +214,85 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                     let on_dark = on_dark.clone();
                     let ruler = ruler.clone();
                     let theme = theme.clone();
-                move |__request: SlotRequest<'_>| {
-                    let shade_name = shade_name.clone();
-                    let on_system = on_system.clone();
-                    let shade = shade.clone();
-                    let on_light = on_light.clone();
-                    let on_dark = on_dark.clone();
-                    let ruler = ruler.clone();
-                    let theme = theme.clone();
-                    let mut __slots = Slots::new();
+                move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __node_27 = {
-                            let __deferred = Children::per_slot(
-                                {
-                                    let shade_name = shade_name.clone();
-                                    let on_system = on_system.clone();
-                                    let shade = shade.clone();
-                                    let on_light = on_light.clone();
-                                    let on_dark = on_dark.clone();
-                                    let ruler = ruler.clone();
-                                    let theme = theme.clone();
-                                move |__request: SlotRequest<'_>| {
-                                    let shade_name = shade_name.clone();
-                                    let on_system = on_system.clone();
-                                    let shade = shade.clone();
-                                    let on_light = on_light.clone();
-                                    let on_dark = on_dark.clone();
-                                    let ruler = ruler.clone();
-                                    let theme = theme.clone();
-                                    let mut __slots = Slots::new();
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    if __request.includes(None) {
-                                        let __node_28 = {
-                                            let __deferred = Children::per_slot(
-                                                {
-                                                    let shade_name = shade_name.clone();
-                                                    let on_system = on_system.clone();
-                                                    let shade = shade.clone();
-                                                    let on_light = on_light.clone();
-                                                    let on_dark = on_dark.clone();
-                                                    let ruler = ruler.clone();
-                                                move |__request: SlotRequest<'_>| {
-                                                    let shade_name = shade_name.clone();
-                                                    let on_system = on_system.clone();
-                                                    let shade = shade.clone();
-                                                    let on_light = on_light.clone();
-                                                    let on_dark = on_dark.clone();
-                                                    let ruler = ruler.clone();
-                                                    let mut __slots = Slots::new();
-                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                    if __request.includes(None) {
-                                                        let __node_29 = {
-                                                            let __deferred = Children::per_slot(
-                                                                {
-                                                                    let on_system = on_system.clone();
-                                                                    let shade = shade.clone();
-                                                                    let on_light = on_light.clone();
-                                                                    let on_dark = on_dark.clone();
-                                                                move |__request: SlotRequest<'_>| {
-                                                                    let on_system = on_system.clone();
-                                                                    let shade = shade.clone();
-                                                                    let on_light = on_light.clone();
-                                                                    let on_dark = on_dark.clone();
-                                                                    let mut __slots = Slots::new();
-                                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                                    if __request.includes(None) {
-                                                                        let __node_30 = item(ItemProps::props().label("System").checked(on_system.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(0) })).build(), Children::default())?;
-                                                                        __children.push(box_item(__node_30));
-                                                                        let __node_31 = item(ItemProps::props().label("Light").checked(on_light.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(1) })).build(), Children::default())?;
-                                                                        __children.push(box_item(__node_31));
-                                                                        let __node_32 = item(ItemProps::props().label("Dark").checked(on_dark.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(2) })).build(), Children::default())?;
-                                                                        __children.push(box_item(__node_32));
-                                                                    }
-                                                                    __slots.extend_default(__children);
-                                                                    Ok(__slots)
-                                                                }
-                                                                }
-                                                            );
-                                                            submenu(SubmenuProps::props().label("Theme").hint(shade_name.clone()).build(), __deferred)?
-                                                        };
-                                                        __children.push(box_item(__node_29));
-                                                        let __node_33 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build(), Children::default())?;
-                                                        __children.push(box_item(__node_33));
-                                                    }
-                                                    __slots.extend_default(__children);
-                                                    Ok(__slots)
-                                                }
-                                                }
-                                            );
-                                            menu(MenuProps::props().label("View").build(), __deferred)?
-                                        };
-                                        __children.push(box_item(__node_28));
-                                        let __text_2 = {
+                    let __node_27 = {
+                        let __recipe_children = Children::new(
+                            {
+                                let shade_name = shade_name.clone();
+                                let on_system = on_system.clone();
+                                let shade = shade.clone();
+                                let on_light = on_light.clone();
+                                let on_dark = on_dark.clone();
+                                let ruler = ruler.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_28 = {
+                                    let __recipe_children = Children::new(
+                                        {
                                             let shade_name = shade_name.clone();
-                                            Text::declaring(
-                                                move || format!("Theme · {}", shade_name.get()),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        __children.push(box_item(__text_2));
-                                    }
-                                    __slots.extend_default(__children);
-                                    Ok(__slots)
-                                }
-                                }
-                            );
-                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
-                        };
-                        __children.push(box_item(__node_27));
-                        let __node_34 = code_line(CodeLineProps::props().code("submenu label:'Theme' hint:$name   >   item label:'Dark' checked:$on radio").build(), Children::default())?;
-                        __children.push(box_item(__node_34));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
+                                            let on_system = on_system.clone();
+                                            let shade = shade.clone();
+                                            let on_light = on_light.clone();
+                                            let on_dark = on_dark.clone();
+                                            let ruler = ruler.clone();
+                                        move || {
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __node_29 = {
+                                                let __recipe_children = Children::new(
+                                                    {
+                                                        let on_system = on_system.clone();
+                                                        let shade = shade.clone();
+                                                        let on_light = on_light.clone();
+                                                        let on_dark = on_dark.clone();
+                                                    move || {
+                                                        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                        let __node_30 = item(ItemProps::props().label("System").checked(on_system.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(0) })).build())?;
+                                                        __children.push(box_item(__node_30));
+                                                        let __node_31 = item(ItemProps::props().label("Light").checked(on_light.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(1) })).build())?;
+                                                        __children.push(box_item(__node_31));
+                                                        let __node_32 = item(ItemProps::props().label("Dark").checked(on_dark.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(2) })).build())?;
+                                                        __children.push(box_item(__node_32));
+                                                        Ok(__children)
+                                                    }
+                                                    }
+                                                );
+                                                submenu(SubmenuProps::props().label("Theme").hint(shade_name.clone()).children(__recipe_children).build())?
+                                            };
+                                            __children.push(box_item(__node_29));
+                                            let __node_33 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build())?;
+                                            __children.push(box_item(__node_33));
+                                            Ok(__children)
+                                        }
+                                        }
+                                    );
+                                    menu(MenuProps::props().label("View").children(__recipe_children).build())?
+                                };
+                                __children.push(box_item(__node_28));
+                                let __text_2 = {
+                                    let shade_name = shade_name.clone();
+                                    Text::declaring(
+                                        move || format!("Theme · {}", shade_name.get()),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_2));
+                                Ok(__children)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
+                    };
+                    __children.push(box_item(__node_27));
+                    let __node_34 = code_line(CodeLineProps::props().code("submenu label:'Theme' hint:$name   >   item label:'Dark' checked:$on radio").build())?;
+                    __children.push(box_item(__node_34));
+                    Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("A row can open a submenu — its rows are its children").build(), __deferred)?
+            example(ExampleProps::props().title("A row can open a submenu — its rows are its children").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_14, __node_26])?
     };

@@ -6,16 +6,16 @@ use std::sync::Arc;
 use platform_core::guest::{
     CallOutcome, Entries, Epoch, Guest, HostServices, LentBytes, host_epoch,
 };
-use renderer_core::wire::{FrameDecoder, FrameError};
+use renderer_core::wire::{DrawList, FrameDecoder, FrameError, Pixels};
 use renderer_core::{DrawCommand, FontHost};
 use wire_core::{Wire, encode};
 
-use super::ServedServices;
+use super::{ServedServices, UpperTable};
 
 /// One guest a host loaded: the entries copied out of its library, the [`Guest`] every call goes through, the epoch the timestamps it is sent count from, and what it was loaded with, kept until it is unloaded.
 ///
 /// Dropping it unloads the guest through its [`Lifecycle`](platform_core::guest::Lifecycle), once whatever holds its instances has released them: `unloading` unless it panicked, then `quiesce`, then its library is unmapped and the backends its services call into are freed. A `quiesce` that panics leaves a thread that may still run the guest's code and call those services, so the library and the services are kept together, for the rest of the process.
-pub struct GuestLibrary<E: Entries> {
+pub struct GuestLibrary<E: Entries<Upper = UpperTable>> {
     guest: Guest,
     entries: E,
     epoch: Epoch,
@@ -28,7 +28,7 @@ struct Loaded {
     services: ServedServices,
 }
 
-impl<E: Entries> GuestLibrary<E> {
+impl<E: Entries<Upper = UpperTable>> GuestLibrary<E> {
     /// Starts the guest `entries` were copied from, handing it the host's epoch and services before anything else of it runs. A panic in any of them is recorded in its [`Guest`] rather than returned.
     ///
     /// `library` is what unmaps the guest when dropped, as [`open_guest`](platform_core::guest::open_guest) hands it back: the guest is told it will be unloaded, adopts an epoch read now and is served this side's stores, with `fonts` the database its shaper defers to, as [`ServedServices::installed`] takes it. `None` for entries this process serves itself, which share its epoch and its stores already: they count from [`host_epoch`], are served nothing and are never unloaded.
@@ -95,24 +95,22 @@ impl<E: Entries> GuestLibrary<E> {
         self.answer(false, entry).unwrap_or(false)
     }
 
-    /// Calls an entry that answers with bytes it lends, and reads them into a `T` of this side's own before anything else of the guest runs.
+    /// Calls an entry that answers with bytes it lends, and reads them into a `T` of this side's own before anything else of the guest runs. Bytes this side cannot read stop the guest: it would answer them on every call.
     pub fn read<T: Wire>(
         &self,
-        entry: impl FnOnce(&E, *mut LentBytes) -> CallOutcome,
+        entry: impl FnOnce(&E, *mut LentBytes<T>) -> CallOutcome,
     ) -> Option<T> {
         let lent = self.answer(LentBytes::EMPTY, entry)?;
         unsafe { lent.decode() }
-            .inspect_err(
-                |error| tracing::warn!(%error, "the guest answered with bytes this host cannot read"),
-            )
+            .inspect_err(|error| self.guest.refuse_answer(error))
             .ok()
     }
 
     /// Lends `value`, spelled as bytes, to one entry for the call.
-    pub fn send(
+    pub fn send<T: Wire>(
         &self,
-        value: &impl Wire,
-        entry: impl FnOnce(&E, LentBytes) -> CallOutcome,
+        value: &T,
+        entry: impl FnOnce(&E, LentBytes<T>) -> CallOutcome,
     ) -> Option<()> {
         let bytes = encode(value);
         self.call(|entries| entry(entries, LentBytes::lend(&bytes)))
@@ -120,12 +118,12 @@ impl<E: Entries> GuestLibrary<E> {
 
     /// The frame an instance lends through `paint`, decoded by `frames` into commands of this side's own, the pixels of an image it has not met copied through `pixels`; no commands once the guest has panicked.
     ///
-    /// A frame that cannot be read leaves the guest's encoder a step ahead of the decoder, so `reset` has the guest make the next one stand alone, and that one is read in its place.
+    /// A frame that cannot be read leaves the guest's encoder a step ahead of the decoder, so `reset` has the guest make the next one stand alone, and that one is read in its place. One standing alone that cannot be read either stops the guest.
     pub fn read_frame(
         &self,
         frames: &mut FrameDecoder,
-        paint: impl Fn(&E, *mut LentBytes) -> CallOutcome,
-        pixels: impl Fn(&E, u64, *mut LentBytes, *mut bool) -> CallOutcome,
+        paint: impl Fn(&E, *mut LentBytes<DrawList>) -> CallOutcome,
+        pixels: impl Fn(&E, u64, *mut LentBytes<Pixels>, *mut bool) -> CallOutcome,
         reset: impl FnOnce(&E) -> CallOutcome,
     ) -> Vec<DrawCommand> {
         let mut commands = Vec::new();
@@ -133,7 +131,7 @@ impl<E: Entries> GuestLibrary<E> {
             tracing::warn!(%error, "a frame the guest drew could not be read, so it draws the next one on its own");
             self.call(reset);
             if let Some(Err(error)) = self.decode_frame(frames, &mut commands, &paint, &pixels) {
-                tracing::error!(%error, "a frame the guest drew on its own could not be read either");
+                self.guest.refuse_answer(error);
             }
         }
         commands
@@ -143,8 +141,8 @@ impl<E: Entries> GuestLibrary<E> {
         &self,
         frames: &mut FrameDecoder,
         commands: &mut Vec<DrawCommand>,
-        paint: &impl Fn(&E, *mut LentBytes) -> CallOutcome,
-        pixels: &impl Fn(&E, u64, *mut LentBytes, *mut bool) -> CallOutcome,
+        paint: &impl Fn(&E, *mut LentBytes<DrawList>) -> CallOutcome,
+        pixels: &impl Fn(&E, u64, *mut LentBytes<Pixels>, *mut bool) -> CallOutcome,
     ) -> Option<Result<(), FrameError>> {
         let frame = self.answer(LentBytes::EMPTY, paint)?;
         // The pixels entry is the one call that leaves the frame it reads from lent.
@@ -159,7 +157,7 @@ impl<E: Entries> GuestLibrary<E> {
     }
 }
 
-impl<E: Entries> Drop for GuestLibrary<E> {
+impl<E: Entries<Upper = UpperTable>> Drop for GuestLibrary<E> {
     fn drop(&mut self) {
         let Some(loaded) = self.loaded.take() else {
             return;
@@ -174,5 +172,5 @@ impl<E: Entries> Drop for GuestLibrary<E> {
 }
 
 #[cfg(test)]
-#[path = "library_test.rs"]
+#[path = "library.test.rs"]
 mod tests;

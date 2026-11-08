@@ -95,7 +95,7 @@ What a frame says the document is — which elements, in which order, with which
 worked out once, in `telar-renderer-dom`'s `document.rs`. The browser's reconcile brings the live document in
 line with it; the prerender writes it out as markup (`html.rs`). Both read the same description, built by the
 same functions, so a page written ahead of time and the page the app then draws are the same elements with
-the same attributes. `src/prerender_parity_test.rs` checks it in a real browser: one frame, reconciled into one
+the same attributes. `src/prerender_parity.test.rs` checks it in a real browser: one frame, reconciled into one
 host and written as markup into another, read back as the same document.
 
 ## The determinism contract
@@ -118,7 +118,7 @@ the same inputs carries the same ids — on the host that wrote the page and in 
 **The order** is the runner's. Before the tree is built: the assumed preferences are reported, the surface
 size, the location, and the surface title the window was opened with. Then the app's `root()` is mounted and
 told the surface's size. A client that does the same, from the same inputs, builds the same nodes.
-`crates/telar/src/prerender_flow_test.rs` holds the two to it: the runner on a headless platform and the
+`crates/telar/src/prerender_flow.test.rs` holds the two to it: the runner on a headless platform and the
 prerender, given the same inputs, open the same element ids in the same order, and two prerenders of one page
 are identical.
 
@@ -195,10 +195,10 @@ What the reader did before the module loaded stays theirs:
 When the primary scroll stops being the document's, the host is given back without the overrides the page was
 served with (`height`, `touch-action`, `overflow-x`), as if the app had set them itself.
 
-`crates/renderer/renderer-dom/src/hydration_test.rs` checks the first frame in a real browser: the same nodes
+`crates/renderer/renderer-dom/src/hydration.test.rs` checks the first frame in a real browser: the same nodes
 before and after, no structural mutation on a clean take-over (`MutationObserver`), attributes and text patched
 where they stand, a subtree rebuilt alone, `to:` and the keyboard on adopted elements, and scroll and focus
-kept. `crates/telar/src/runner/hydration_test.rs` checks the order: a tree whose shape depends on the scheme is
+kept. `crates/telar/src/runner/hydration.test.rs` checks the order: a tree whose shape depends on the scheme is
 built under the page's and opens the page's ids, then shows this browser's scheme, the page's keyed signal and
 its entrance at its end in the first frame.
 

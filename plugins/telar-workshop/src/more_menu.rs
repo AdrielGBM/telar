@@ -3,73 +3,36 @@
 use std::rc::Rc;
 
 use telar::{
-    Children, Container, LayoutError, LayoutItem, LayoutStyle, NodeId, Reactive, ReactiveList,
-    Rect, RwSignal, absolute_rect, box_item, signal,
+    Children, Container, LayoutError, LayoutItem, LayoutStyle, NodeId, Reactive, absolute_rect,
+    box_item, signal,
 };
-use telar_components::{ContextMenuProps, IconButtonProps, context_menu, icon_button};
+use telar_components::{IconButtonProps, MenuPlace, icon_button, menu_layer};
 use telar_icons::icon;
 
 use crate::strings;
 
-/// The rows a menu shows, built each time it opens, so a row that comes and goes is current.
-pub(crate) type Rows = Rc<dyn Fn() -> Children>;
-
-/// Where a menu was asked for: under a button, or at the pointer.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Asked {
-    pub(crate) at: (f32, f32),
-    pub(crate) around: Option<Rect>,
-}
-
 /// A ⋯ button named by the string `label` names, and the menu of `rows` it opens under itself.
 pub(crate) fn more_button(
     label: &'static str,
-    rows: Rows,
+    rows: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let open = signal(None::<Asked>);
+    let open = signal(None::<MenuPlace>);
     let anchor = signal(None::<NodeId>);
     let button = icon_button(
         IconButtonProps::props()
             .icon(icon!("lucide:ellipsis"))
             .label(Reactive::of(move || strings::text(label)))
             .on_press(Rc::new(move || {
-                open.set(anchor.peek().and_then(absolute_rect).map(|around| Asked {
-                    at: (around.x, around.y + around.height),
-                    around: Some(around),
-                }));
+                open.set(anchor.peek().and_then(absolute_rect).map(MenuPlace::Under));
             }))
             .build(),
-        Children::default(),
     )?;
     anchor.set(Some(button.layout_node()));
     Ok(box_item(Container::new(
         LayoutStyle::row().flex_shrink(0.0),
-        vec![button, menu_layer(open, rows)?],
+        vec![
+            button,
+            menu_layer(open, |place| *place, move |_| rows.clone())?,
+        ],
     )?))
-}
-
-/// The menu of `rows` while `open` says where it was asked for, closing it back to `None`.
-pub(crate) fn menu_layer(
-    open: RwSignal<Option<Asked>>,
-    rows: Rows,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let menu = ReactiveList::new(
-        move || vec![open.with(Option::is_some)],
-        |shown: &bool| *shown,
-        move |shown| {
-            let Some(asked) = open.peek().filter(|_| shown) else {
-                return Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?));
-            };
-            let props = ContextMenuProps::props()
-                .on_close(Rc::new(move || open.set(None)))
-                .at(asked.at);
-            let props = match asked.around {
-                Some(around) => props.around(around),
-                None => props,
-            };
-            context_menu(props.build(), rows())
-        },
-        0.0,
-    )?;
-    Ok(box_item(menu))
 }

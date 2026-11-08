@@ -1,6 +1,7 @@
 //! The run itself: each preview and each cell of its matrix built and laid out on a canvas of its own, played, checked for accessibility and compared against its snapshots, on a host that lays text out the way the application's window does.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppConfig;
 use crate::preview::a11y::Severity;
@@ -11,8 +12,8 @@ use crate::preview::{Matrices, MatrixCell, Play, PlayError, PlayStep, PreviewEnt
 use super::snapshots::{self, SnapshotRun};
 use super::{
     A11yCheck, A11yFinding, A11yLevel, BuildCheck, CellReport, CheckStatus, PlayCheck,
-    PlayStepReport, PreviewFilter, PreviewReport, SnapshotCheck, SnapshotSetting, TestOptions,
-    TestRun, TestSummary, shown,
+    PlayStepReport, PreviewFilter, PreviewReport, SnapshotCheck, SnapshotSetting, TeardownCheck,
+    TestOptions, TestRun, TestSummary, shown,
 };
 
 /// Tests `entries` as `options` asks, printing a line for each preview and cell as it goes, and writes `report.json` when the options name a target directory.
@@ -101,9 +102,16 @@ pub fn run_previews(
     run
 }
 
-/// Runs [`run_previews`] with the options `cargo telar test` set, and fails the test calling it when a preview fails: what `rsx_modules!` emits as a library's `#[test] fn telar_previews()`, since a library has no binary to run.
+static LIBRARY_RUN_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Runs [`run_previews`] with the options `cargo telar test` set, and fails the test calling it when a preview fails: what `rsx_modules!` emits as a library's `#[test] fn __telar_library_previews()`, since a library has no binary to run.
+///
+/// A crate invokes `rsx_modules!` once per module that places its own `.rsx`, and every invocation lists the whole crate's previews, so the first test to get here runs them and writes the one `report.json`; the others have nothing left to run.
 #[doc(hidden)]
 pub fn __test_library(entries: Vec<PreviewEntry>, config: AppConfig) {
+    if LIBRARY_RUN_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
     let options = TestOptions::from_env().unwrap_or_else(|error| panic!("{error}"));
     if config.fonts.is_empty() && !crate::runner::previews_measure_in_cells() {
         // Under `cargo test` this shares a process with the library's own tests, so it sets text in their test face rather than loading the platform's over it; a process that already loaded the platform's keeps them.
@@ -246,8 +254,21 @@ fn check(
             detail: Some(error),
         });
     }
-    let _ = guarded(move || drop(play));
+    report.teardown = tear_down(play);
     report.settle()
+}
+
+fn tear_down(play: Play) -> TeardownCheck {
+    match guarded(move || drop(play)) {
+        Ok(()) => TeardownCheck {
+            status: CheckStatus::Passed,
+            error: None,
+        },
+        Err(error) => TeardownCheck {
+            status: CheckStatus::Failed,
+            error: Some(error),
+        },
+    }
 }
 
 fn mount(entry: &PreviewEntry, cell: Option<&MatrixCell>) -> Result<Play, String> {
@@ -388,5 +409,5 @@ fn print_summary(summary: &TestSummary) {
 }
 
 #[cfg(test)]
-#[path = "run_test.rs"]
+#[path = "run.test.rs"]
 mod tests;

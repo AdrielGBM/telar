@@ -116,11 +116,11 @@ fn keyword_color(value: &str) -> Option<Color> {
     Some(rgba(r, g, b, a))
 }
 
-/// The swatch for a `#`-prefixed value, at any length [`telar_parser::parse_hex`] accepts. The `#` is required here: a bare `ff0000` in a `.rsx` is a word, not a colour.
+/// The swatch for a `#`-prefixed value, at any length [`geometry_core::parse_hex`] accepts. The `#` is required here: a bare `ff0000` in a `.rsx` is a word, not a colour.
 pub(crate) fn parse_hex(hex: &str) -> Option<Color> {
     let [r, g, b, a] = hex
         .starts_with('#')
-        .then(|| telar_parser::parse_hex(hex))??;
+        .then(|| geometry_core::parse_hex(hex))??;
     Some(rgba(r, g, b, a))
 }
 
@@ -178,5 +178,5 @@ fn line_start_byte(source: &str, line0: usize) -> Option<usize> {
 }
 
 #[cfg(test)]
-#[path = "color_test.rs"]
+#[path = "color.test.rs"]
 mod tests;

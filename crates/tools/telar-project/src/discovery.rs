@@ -4,6 +4,9 @@ use std::collections::HashSet;
 use std::fmt::Write;
 use std::path::{Component, Path, PathBuf};
 
+use crate::prelude::{is_keyword, is_plain_identifier};
+use crate::rust_source::{self, Token};
+
 /// Recursively collects files with any of `extensions` under `root`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
 ///
 /// A `root` that names a file is that file, if it matches — so a caller taking paths from a command line does not need a second walk for the case where the user pointed at one thing.
@@ -76,6 +79,24 @@ pub fn assets_root(package_root: &Path) -> Result<PathBuf, crate::ManifestError>
 /// The directory under a flavour's generated directory holding one file per discovered subdirectory of `src/`.
 pub const MODULE_TREE_DIR: &str = "__modules";
 
+/// How far a discovered module reaches, the same for every module of one package's tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleVisibility {
+    /// `pub mod`: an application's benches and integration tests reach its modules by path.
+    Public,
+    /// `pub(crate) mod`: a library's API is what its root re-exports, so where a file sits in `src/` never becomes a path its dependents can name.
+    Crate,
+}
+
+impl ModuleVisibility {
+    fn keyword(self) -> &'static str {
+        match self {
+            Self::Public => "pub",
+            Self::Crate => "pub(crate)",
+        }
+    }
+}
+
 /// One file of a package's module tree: a site's declarations, a directory's children, or the children a `mod.rsx` includes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ModuleTreeFile {
@@ -93,13 +114,18 @@ pub struct ModuleTree {
 }
 
 impl ModuleTree {
-    /// The tree every placement site under `src_dir` wires, declaring the `.rsx` output under `generated_dir`, with each site's declarations in `<site>/.telar/<site_file_name>`.
-    pub fn discover(src_dir: &Path, generated_dir: &Path, site_file_name: &str) -> Self {
+    /// The tree every placement site under `src_dir` wires, declaring the `.rsx` output under `generated_dir`, with each site's declarations in `<site>/.telar/<site_file_name>` and every module at `visibility`.
+    pub fn discover(
+        src_dir: &Path,
+        generated_dir: &Path,
+        site_file_name: &str,
+        visibility: ModuleVisibility,
+    ) -> Self {
         let mut files = Vec::new();
         let mut problems = Vec::new();
         for site in placement_sites(src_dir) {
             let holder = site.join(SITE_DIR);
-            let walk = discover_rust_modules(src_dir, &site, generated_dir);
+            let walk = discover_rust_modules(src_dir, &site, generated_dir, visibility);
             files.extend(walk.files);
             problems.extend(walk.problems);
             files.push(ModuleTreeFile {
@@ -137,15 +163,16 @@ impl ModuleTree {
     }
 }
 
-/// Declares `pub mod` for every `.rsx` and every hand-written `.rs` module mirroring the `src_dir` tree, so a package needs no `mod` statements of its own. Returns the declarations for the site at `from_dir` and, for each discovered subdirectory, a generated file under the flavour's [`MODULE_TREE_DIR`] holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`), directories with no `.rs` under them (asset- or markup-only dirs), and any name the site declares itself. A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery. A directory beside a `foo.rs` or `foo.rsx` is that file's module and is not declared either; nothing can place a `.rsx` in it, so each one is reported rather than left out.
+/// Declares a module at `visibility` for every `.rsx` and every hand-written `.rs` module mirroring the `src_dir` tree, so a package needs no `mod` statements of its own. Returns the declarations for the site at `from_dir` and, for each discovered subdirectory, a generated file under the flavour's [`MODULE_TREE_DIR`] holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`), directories with no `.rs` under them (asset- or markup-only dirs), and any name the site declares itself. A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery. A directory beside a `foo.rs` or `foo.rsx` is that file's module and is not declared either; nothing can place a `.rsx` in it, so each one is reported rather than left out.
 ///
-/// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based* `#[path] pub mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline block produced by a proc macro, string-joining the inline module's name onto the child's path and failing to find it (E0583), while rustc joins those pieces with real path semantics. Routing every directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside that file) keeps the analyzer and the compiler in step.
+/// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based* `#[path] mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline block produced by a proc macro, string-joining the inline module's name onto the child's path and failing to find it (E0583), while rustc joins those pieces with real path semantics. Routing every directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside that file) keeps the analyzer and the compiler in step.
 ///
 /// **`from_dir` is where the macro was invoked, which is not always `src_dir`.** A module declares its own children, so `rsx_modules!()` in `app/editor/mod.rs` places the `.rsx` files of `app/editor` — declaring `pub mod app;` there instead would name an ancestor of the file doing the declaring, which is a cycle. The generated `.rs` a `.rsx` compiles to still mirrors the whole `src` tree, so the walk carries the prefix from `src_dir` even when it starts below it.
 pub(crate) fn discover_rust_modules(
     src_dir: &Path,
     from_dir: &Path,
     generated_dir: &Path,
+    visibility: ModuleVisibility,
 ) -> SiteWalk {
     let prefix = from_dir
         .strip_prefix(src_dir)
@@ -163,6 +190,7 @@ pub(crate) fn discover_rust_modules(
         package_dir: src_dir.parent().unwrap_or(src_dir),
         modtree_dir: generated_dir.join(MODULE_TREE_DIR),
         generated_dir,
+        visibility,
         files: Vec::new(),
         problems: Vec::new(),
     };
@@ -194,13 +222,14 @@ struct TreeWalk<'a> {
     package_dir: &'a Path,
     modtree_dir: PathBuf,
     generated_dir: &'a Path,
+    visibility: ModuleVisibility,
     files: Vec<ModuleTreeFile>,
     problems: Vec<String>,
 }
 
 /// The module names the site's own file already declares, which the discovered tree leaves alone. Redeclaring one is `E0428`, and `mod menu;` written by hand next to a `pub mod menu;` written here would also be a visibility the author did not ask for.
 ///
-/// Only the site's own file is read, and only the names at its top level: everything below is written into generated files, where nothing of the author's can collide. Reached by stripping line comments and taking the identifier after each `mod`, which also catches an inline `mod tests { … }`.
+/// Only the site's own file is read, and only the names at its top level: everything below is written into generated files, where nothing of the author's can collide. An inline `mod tests { … }` reserves its own name, not the names declared inside it, while a `mod` written in the braces of a macro invocation is an item of the module itself.
 fn hand_written_modules(site_dir: &Path) -> HashSet<String> {
     ["lib.rs", "main.rs", "mod.rs"]
         .iter()
@@ -210,26 +239,30 @@ fn hand_written_modules(site_dir: &Path) -> HashSet<String> {
 }
 
 fn declared_module_names(source: &str) -> Vec<String> {
+    let tokens = rust_source::tokens(source);
     let mut names = Vec::new();
-    for line in source.lines() {
-        let code = line.split("//").next().unwrap_or("");
-        let mut words = code.split_whitespace();
-        while let Some(word) = words.next() {
-            if word != "mod" {
-                continue;
-            }
-            let Some(next) = words.next() else { continue };
-            let name = next.trim_end_matches([';', '{']);
-            if crate::naming::is_ident(name) {
-                names.push(name.to_owned());
-            }
+    let mut macro_depth = 0;
+    for (at, token) in tokens.iter().enumerate() {
+        if token.is_punct('{')
+            && token.depth == macro_depth
+            && at > 0
+            && tokens[at - 1].is_punct('!')
+        {
+            macro_depth += 1;
+        } else if token.is_punct('}') && token.depth < macro_depth {
+            macro_depth = token.depth;
+        } else if token.is_word("mod")
+            && token.depth == macro_depth
+            && let Some(name) = tokens.get(at + 1).and_then(Token::ident)
+        {
+            names.push(name.to_owned());
         }
     }
     names
 }
 
 impl TreeWalk<'_> {
-    /// Appends the `#[path] pub mod` declarations for the direct children of `dir` to `out`, the content of a file in `holder`. A subdirectory's own children go into a generated file under the module tree directory (named by the flattened module path, e.g. `core__widgets.rs`, so sibling directories never collide) that the emitted `pub mod` then points at.
+    /// Appends the `#[path] mod` declarations for the direct children of `dir` to `out`, the content of a file in `holder`. A subdirectory's own children go into a generated file under the module tree directory (named by the flattened module path, e.g. `core__widgets.rs`, so sibling directories never collide) that the emitted module then points at.
     fn emit_children(
         &mut self,
         dir: &Path,
@@ -250,9 +283,15 @@ impl TreeWalk<'_> {
             if file_name.starts_with('.') {
                 continue;
             }
+            if !hand_written.contains(&file_stem(&path))
+                && let Some(message) = unusable_module_name(self.package_dir, &path, file_name)
+            {
+                self.report(message, out);
+                continue;
+            }
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
             let module = module_name(&path);
-            let name = match is_previews_file(&path) {
+            let name = match is_preview_file(&path) {
                 true => module.as_str(),
                 false => stem,
             };
@@ -267,6 +306,10 @@ impl TreeWalk<'_> {
                     true => name.to_string(),
                     false => format!("{flat_prefix}__{name}"),
                 };
+                if let Some(message) = doubled_directory_message(self.package_dir, &path, name) {
+                    self.report(message, out);
+                    continue;
+                }
                 if path.join(MODULE_ROOT_FILENAME).is_file() {
                     if declared_here {
                         self.module_root(&path, &flat, holder, out);
@@ -281,10 +324,10 @@ impl TreeWalk<'_> {
                         self.report(message, out);
                     }
                     if declared_here {
-                        out.push_str(&mod_decl(name, &mod_rs, holder));
+                        out.push_str(&self.mod_decl(name, &mod_rs, holder, dir));
                     }
                 } else if let Some(owner) = module_file_beside(&path) {
-                    // The directory is the module of the file beside it, which declares what is in it; declaring it here as well would be a second `pub mod` of one name.
+                    // The directory is the module of the file beside it, which declares what is in it; declaring it here as well would be a second module of one name.
                     let unplaced = unplaced_rsx(&path);
                     if !unplaced.is_empty() {
                         let message = self.orphans_message(&unplaced, &path, &owner);
@@ -308,7 +351,7 @@ impl TreeWalk<'_> {
                     let gen_holder = self.modtree_dir.clone();
                     let mut body = String::new();
                     self.emit_children(&path, &flat, &gen_holder, &HashSet::new(), &mut body);
-                    out.push_str(&mod_decl(name, &gen_file, holder));
+                    out.push_str(&self.mod_decl(name, &gen_file, holder, dir));
                     self.files.push(ModuleTreeFile {
                         path: gen_file,
                         content: body,
@@ -316,16 +359,19 @@ impl TreeWalk<'_> {
                 }
             } else if is_rust_module_file(&path) {
                 if declared_here {
-                    out.push_str(&mod_decl(name, &path, holder));
+                    out.push_str(&self.mod_decl(name, &path, holder, dir));
                 }
             } else if is_module_root(&path) {
                 // Its own directory's module, declared by the parent and generated with the children included; as a sibling here it would be `pub mod mod;`.
+            } else if let Some(message) = doubled_file_message(self.package_dir, &path, name) {
+                self.report(message, out);
             } else if declared_here && path.extension().and_then(|e| e.to_str()) == Some("rsx") {
                 // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
-                out.push_str(&mod_decl(
+                out.push_str(&self.mod_decl(
                     name,
                     &rsx_output(self.generated_dir, flat_prefix, stem),
                     holder,
+                    dir,
                 ));
             }
         }
@@ -355,20 +401,19 @@ impl TreeWalk<'_> {
         let mod_rs = dir.join("mod.rs");
         if mod_rs.is_file() {
             if file_places_its_own(&mod_rs) {
-                let _ = writeln!(
-                    body,
-                    "compile_error!(\"{} has a `mod.rsx`, so telar places this directory: remove the `telar::rsx_modules!()` from its `mod.rs`\");",
+                let message = format!(
+                    "{} has a `mod.rsx`, so telar places this directory: remove the `telar::rsx_modules!()` from its `mod.rs`",
                     self.shown(dir)
                 );
+                let _ = writeln!(body, "compile_error!({message:?});");
             }
             match leading_inner_attribute(&mod_rs) {
                 Some(attr) => {
-                    let _ = writeln!(
-                        body,
-                        "compile_error!(\"{} starts with `{}`, and an included file cannot carry an inner attribute: move it to the `[logic]` of this directory's `mod.rsx`\");",
-                        self.shown(&mod_rs),
-                        attr.escape_debug()
+                    let message = format!(
+                        "{} starts with `{attr}`, and an included file cannot carry an inner attribute: move it to the `[logic]` of this directory's `mod.rsx`",
+                        self.shown(&mod_rs)
                     );
+                    let _ = writeln!(body, "compile_error!({message:?});");
                 }
                 // `include!` rather than a `#[path] mod`, because the two files are one module: the `mod.rsx` holds what only a module's own file can hold, and this holds the Rust the author kept in `mod.rs`.
                 None => {
@@ -384,7 +429,22 @@ impl TreeWalk<'_> {
             path: children_file,
             content: body,
         });
-        out.push_str(&mod_decl(name, &module_file, holder));
+        out.push_str(&self.mod_decl(name, &module_file, holder, dir.parent().unwrap_or(dir)));
+    }
+
+    /// A module declaration of `dir`'s module pinned to `file` by a `#[path]` relative to `holder`, the directory of the file the declaration is written into. `{:?}` renders the path as an escaped Rust string literal.
+    ///
+    /// A file named as its directory, `kbd/kbd.rsx`, is how a component keeps a directory of its own, since the component takes its file's name: the module named as the one holding it is the layout, not the slip clippy's `module_inception` looks for.
+    fn mod_decl(&self, name: &str, file: &Path, holder: &Path, dir: &Path) -> String {
+        let inception = match dir.file_name().and_then(|n| n.to_str()) == Some(name) {
+            true => "#[allow(clippy::module_inception)] ",
+            false => "",
+        };
+        format!(
+            "{inception}#[path = {:?}] {} mod {name};\n",
+            relative_path(holder, file),
+            self.visibility.keyword()
+        )
     }
 
     /// Writes `message` where the build reads it, as a `compile_error!` in the file being produced, and keeps it for the CLI to report before any build does.
@@ -416,10 +476,134 @@ impl TreeWalk<'_> {
 
     /// `path` as a diagnostic names it: from the package root, `/`-separated, so the same tree is generated on every machine.
     fn shown(&self, path: &Path) -> String {
-        path.strip_prefix(self.package_dir)
-            .map(slash_separated)
-            .unwrap_or_else(|_| path.to_string_lossy().into_owned())
+        shown_from(self.package_dir, path)
     }
+}
+
+fn shown_from(package_dir: &Path, path: &Path) -> String {
+    crate::relative_slashed(path, package_dir).unwrap_or_else(|| path.display().to_string())
+}
+
+/// Why the entry cannot be a module, when its name is no plain identifier: left out it would vanish without a word, and declared, rustc would only suggest `r#type`. `None` for what discovery skips by design: a `.rs` or a directory of them named with no identifier, which only a `#[path]` reaches, and a directory holding no module at all.
+fn unusable_module_name(package_dir: &Path, path: &Path, file_name: &str) -> Option<String> {
+    let (base, subject) = if path.is_dir() {
+        if dir_has_rsx(path) {
+            (
+                file_name.to_owned(),
+                "holds `.rsx` files, which are Rust modules placed inside it",
+            )
+        } else if is_keyword_in_every_edition(file_name) && dir_has_rust_file(path) {
+            (file_name.to_owned(), "holds Rust modules placed inside it")
+        } else {
+            return None;
+        }
+    } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") && !is_module_root(path) {
+        (component_name(path), "is a `.rsx`, which is a Rust module")
+    } else if is_rust_module_file(path) && is_keyword_in_every_edition(&file_stem(path)) {
+        (file_stem(path), "is a Rust module")
+    } else {
+        return None;
+    };
+    if is_plain_identifier(&base) {
+        return None;
+    }
+    let reason = match is_keyword(&base) {
+        true => format!("`{base}` is a Rust keyword"),
+        false => format!(
+            "`{base}` is not an identifier: only ASCII letters, digits and `_` are allowed, and not first a digit"
+        ),
+    };
+    let renamed = format!("{}{}", valid_name_for(&base), &file_name[base.len()..]);
+    let shown = shown_from(package_dir, path);
+    let target = match shown.rsplit_once('/') {
+        Some((parent, _)) => format!("{parent}/{renamed}"),
+        None => renamed,
+    };
+    Some(format!(
+        "{shown} {subject}, so its name has to be an identifier: {reason}. Rename it to {target}"
+    ))
+}
+
+/// `gen` is left out because a hand-written `gen.rs` is a legal module in a package on an edition before it was reserved.
+fn is_keyword_in_every_edition(name: &str) -> bool {
+    is_keyword(name) && name != "gen"
+}
+
+/// A `foo.rs` and a `foo.rsx` side by side are two modules named `foo`.
+fn doubled_file_message(package_dir: &Path, path: &Path, name: &str) -> Option<String> {
+    let is_markup = path.extension().is_some_and(|e| e == "rsx") && !is_preview_file(path);
+    let rust = path.with_extension("rs");
+    (is_markup && rust.is_file() && is_rust_module_file(&rust)).then(|| {
+        format!(
+            "{} and {} are both the module `{name}`: rename one of them",
+            shown_from(package_dir, &rust),
+            shown_from(package_dir, path)
+        )
+    })
+}
+
+/// A directory with its own `mod.rs` or `mod.rsx` beside a `foo.rs` or `foo.rsx` is the module `foo` twice.
+fn doubled_directory_message(package_dir: &Path, path: &Path, name: &str) -> Option<String> {
+    let owner = module_file_beside(path)?;
+    let root = [MODULE_ROOT_FILENAME, "mod.rs"]
+        .iter()
+        .map(|file| path.join(file))
+        .find(|file| file.is_file())?;
+    let (owner, root) = (
+        shown_from(package_dir, &owner),
+        shown_from(package_dir, &root),
+    );
+    Some(format!(
+        "{owner} and {root} are both the module `{name}`: keep one, or move {owner} to {root}"
+    ))
+}
+
+/// What the build reports about the name of the `.rsx` at `rsx_path` and of the directories holding it, for an editor to show on that file without walking the package. Empty for a file outside `src/` or under a dot-directory, which discovery does not reach.
+pub fn rsx_module_name_problems(rsx_path: &Path, package_dir: &Path) -> Vec<String> {
+    let Ok(relative) = rsx_path.strip_prefix(package_dir.join("src")) else {
+        return Vec::new();
+    };
+    let names: Vec<&str> = relative.iter().filter_map(|part| part.to_str()).collect();
+    if names.iter().any(|name| name.starts_with('.')) {
+        return Vec::new();
+    }
+    let mut problems = Vec::new();
+    let mut dir = package_dir.join("src");
+    for name in &names[..names.len().saturating_sub(1)] {
+        dir.push(name);
+        problems.extend(unusable_module_name(package_dir, &dir, name));
+        problems.extend(doubled_directory_message(package_dir, &dir, name));
+    }
+    let Some(file_name) = names.last() else {
+        return problems;
+    };
+    if let Some(problem) = unusable_module_name(package_dir, rsx_path, file_name) {
+        problems.push(problem);
+        return problems;
+    }
+    let module = module_name(rsx_path);
+    problems.extend(doubled_file_message(package_dir, rsx_path, &module));
+    problems.extend(doubled_directory_message(
+        package_dir,
+        &rsx_path.with_extension(""),
+        &module,
+    ));
+    problems
+}
+
+/// `name` with every character an identifier cannot hold replaced by `_`, a leading digit prefixed with `_`, and a keyword suffixed with `_`.
+fn valid_name_for(name: &str) -> String {
+    let mut valid: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    if valid.is_empty() || valid.starts_with(|c: char| c.is_ascii_digit()) {
+        valid.insert(0, '_');
+    }
+    if valid == "_" || is_keyword(&valid) {
+        valid.push('_');
+    }
+    valid
 }
 
 /// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or deleted `.rsx`, a directory that lost its last hand-written `.rs`, or a dropped i18n catalog. Also deletes any `.rs.map` sidecar whose `.rs` is not in the written set. Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not followed), so every path it can act on is provably inside the generated tree; it never removes a directory or a non-`.rs`/`.rs.map` file. Best-effort: a removal failure just leaves that orphan for next time.
@@ -460,14 +644,6 @@ pub fn prune_stale_generated(output_dir: &Path, written: &HashSet<PathBuf>) {
     }
 }
 
-/// A `pub mod` declaration pinned to `file` by a `#[path]` relative to `holder`, the directory of the file the declaration is written into. `{:?}` renders the path as an escaped Rust string literal.
-fn mod_decl(name: &str, file: &Path, holder: &Path) -> String {
-    format!(
-        "#[path = {:?}] pub mod {name};\n",
-        relative_path(holder, file)
-    )
-}
-
 /// `to` relative to `from_dir`, `/`-separated whatever the platform, as rustc reads a `#[path]` or an `include!` in a file in `from_dir`. Absolute only when the two share no root at all, which is two drives on Windows.
 pub(crate) fn relative_path(from_dir: &Path, to: &Path) -> String {
     let from: Vec<Component> = from_dir.components().collect();
@@ -486,16 +662,9 @@ pub(crate) fn relative_path(from_dir: &Path, to: &Path) -> String {
         .join("/")
 }
 
-fn slash_separated(path: &Path) -> String {
-    path.components()
-        .map(|part| part.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
-/// A `.rs` file that is a declarable module: not a crate root, not a `mod.rs` (the latter is the module root of its own directory, not a sibling child), and not a `*_test.rs`.
+/// A `.rs` file that is a declarable module: not a crate root, not a `mod.rs` (the latter is the module root of its own directory, not a sibling child), and named by an identifier.
 ///
-/// A `*_test.rs` holds the `#[cfg(test)]` body of the module it sits beside, which declares it itself with `#[path]`. Declaring it here too would make it a *sibling* of that module rather than a child, so its `use super::*` would reach the parent directory and every private item it tests would read as inaccessible.
+/// A name that is no identifier, `badge.test.rs` or `badge.preview.rs`, is never one. A `*.test.rs` holds the `#[cfg(test)]` body of the module it sits beside, which declares it itself with `#[path]`. Declaring it here too would make it a *sibling* of that module rather than a child, so its `use super::*` would reach the parent directory and every private item it tests would read as inaccessible.
 fn is_rust_module_file(path: &Path) -> bool {
     if path.extension().and_then(|e| e.to_str()) != Some("rs") {
         return false;
@@ -503,7 +672,8 @@ fn is_rust_module_file(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
         return false;
     };
-    !matches!(name, "lib.rs" | "main.rs" | "mod.rs") && !name.ends_with("_test.rs")
+    let stem = name.trim_end_matches(".rs");
+    !matches!(stem, "lib" | "main" | "mod") && crate::naming::is_ident(stem)
 }
 
 /// Whether a directory earns a module node: it holds a declarable `.rs`, a `mod.rs`, or a `.rsx` — a directory of nothing but markup is still a module once its `.rsx` files live where they sit.
@@ -573,12 +743,13 @@ fn file_places_its_own(file: &Path) -> bool {
     std::fs::read_to_string(file).is_ok_and(|src| places_its_own_rsx(&src))
 }
 
-/// Whether `source` invokes the placement macro, rather than naming it in prose. The call has to open its delimiter and survive having line comments stripped: a bare substring was harmless while it only decided whether to suppress a diagnostic, and stopped being so once the same answer decides which directories are placement sites — telar's own sandbox has two files whose comments mention `app!`.
+/// Whether `source` invokes the placement macro, rather than naming it in prose or a string. It decides which directories are placement sites, and telar's own sandbox has files whose comments mention `app!`.
 fn places_its_own_rsx(source: &str) -> bool {
-    source
-        .lines()
-        .filter_map(|line| line.split("//").next())
-        .any(|code| code.contains("rsx_modules!(") || code.contains("app!("))
+    rust_source::tokens(source).windows(3).any(|call| {
+        (call[0].is_word("rsx_modules") || call[0].is_word("app"))
+            && call[1].is_punct('!')
+            && ['(', '[', '{'].iter().any(|open| call[2].is_punct(*open))
+    })
 }
 
 /// Whether any `.rsx` sits under `dir`, which is what makes a directory with no `mod.rs` worth declaring even when hand-written modules are the crate's own business.
@@ -595,24 +766,24 @@ fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
     out.join(format!("{name}.rs"))
 }
 
-/// The name the component in `path` is generated under: its file stem. A previews file names the component it previews, so `checkbox.previews.rsx` is `checkbox`, and its previews get the ids and the entry table a `[preview]` in `checkbox.rsx` would.
+/// The name the component in `path` is generated under: its file stem. A preview file names the component it previews, so `checkbox.preview.rsx` is `checkbox`, and its previews get the ids and the entry table a `[preview]` in `checkbox.rsx` would.
 ///
 /// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules, which is what a path-flattened name existed to work around. One function rather than each caller taking the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and they silently drifted apart when the flattening went.
 pub fn component_name(path: &Path) -> String {
     let stem = file_stem(path);
-    match is_previews_file(path) {
+    match is_preview_file(path) {
         true => stem
-            .strip_suffix(PREVIEWS_STEM_SUFFIX)
+            .strip_suffix(PREVIEW_STEM_SUFFIX)
             .unwrap_or(&stem)
             .to_string(),
         false => stem,
     }
 }
 
-/// The module the `.rsx` at `path` is declared as, where its file sits: its stem, or for a previews file, whose stem is no identifier, the component's name and `_previews`, so `checkbox.previews.rsx` is `checkbox_previews` beside `checkbox`.
+/// The module the `.rsx` at `path` is declared as, where its file sits: its stem, or for a preview file, whose stem is no identifier, the component's name and `_preview`, so `checkbox.preview.rsx` is `checkbox_preview` beside `checkbox`.
 pub fn module_name(path: &Path) -> String {
-    match is_previews_file(path) {
-        true => format!("{}_previews", component_name(path)),
+    match is_preview_file(path) {
+        true => format!("{}_preview", component_name(path)),
         false => file_stem(path),
     }
 }
@@ -759,7 +930,7 @@ pub fn prune_stale_sites(src_dir: &Path, sites: &HashSet<PathBuf>) {
     }
 }
 #[cfg(test)]
-#[path = "discovery_test.rs"]
+#[path = "discovery.test.rs"]
 mod tests;
 
 /// The `.rsx` that is a directory's module rather than a component in it.
@@ -774,17 +945,17 @@ pub fn is_module_root(path: &Path) -> bool {
         .is_some_and(|name| name == MODULE_ROOT_FILENAME)
 }
 
-/// The suffix of a `.rsx` that holds only previews of a component written elsewhere: `checkbox.previews.rsx`.
-const PREVIEWS_FILE_SUFFIX: &str = ".previews.rsx";
+/// The suffix of a `.rsx` that holds only previews of a component written elsewhere: `checkbox.preview.rsx`.
+const PREVIEW_FILE_SUFFIX: &str = ".preview.rsx";
 
-const PREVIEWS_STEM_SUFFIX: &str = ".previews";
+const PREVIEW_STEM_SUFFIX: &str = ".preview";
 
 /// Whether `path` holds only previews: `[previews]` and `[preview]` sections, and no `[view]` of its own. Its stem is no identifier, so the module tree declares it under [`module_name`].
-pub fn is_previews_file(path: &Path) -> bool {
+pub fn is_preview_file(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| {
-            name.len() > PREVIEWS_FILE_SUFFIX.len() && name.ends_with(PREVIEWS_FILE_SUFFIX)
+            name.len() > PREVIEW_FILE_SUFFIX.len() && name.ends_with(PREVIEW_FILE_SUFFIX)
         })
 }
 

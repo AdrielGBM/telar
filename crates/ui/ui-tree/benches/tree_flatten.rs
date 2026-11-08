@@ -1,4 +1,4 @@
-//! Sprint 0 / T-1.1 baseline (F010): cost of a SINGLE signal change re-running the WHOLE tree's `view()` + `flatten_view`. Today the app is one `ComponentSlot`/effect, so any tracked signal re-walks the entire tree. This captures that baseline; the fine-grained-effects refactor (T-1.1) should turn it into O(affected component). Keep this bench to compare before/after.
+//! Baseline: cost of a SINGLE signal change re-running the WHOLE tree's `view()` + `flatten_view`. Today the app is one `ComponentSlot`/effect, so any tracked signal re-walks the entire tree. Fine-grained effects should make that O(affected component). Keep this bench to compare before/after.
 
 use std::hint::black_box;
 use std::rc::Rc;
@@ -138,7 +138,7 @@ fn bench_single_signal_reflatten(c: &mut Criterion) {
     group.finish();
 }
 
-/// T-2.1 baseline (F014): scrollable content wrapped in Clip → Transform(offset) → items.
+/// Scrollable content wrapped in Clip → Transform(offset) → items.
 struct ScrollContent {
     offset: RwSignal<f32>,
     items: usize,

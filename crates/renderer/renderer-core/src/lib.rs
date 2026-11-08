@@ -27,6 +27,7 @@ mod renderer;
 mod shadow;
 mod style;
 mod style_pool;
+mod text_lines;
 pub mod wire;
 
 /// The control-point ratio that approximates a quarter circle with a cubic Bézier.
@@ -54,7 +55,7 @@ pub use image_fill::{ImageFill, ImageSlice, SlicePiece};
 pub use metrics::{
     TextMetrics, fitted_font_size, invalidate_text_metrics, line_height, measure_ink_bounds,
     measure_min_content, measure_text, set_default_text_metrics, set_text_metrics, text_index_at,
-    text_line_starts, text_metrics_generation,
+    text_laid_lines, text_metrics_generation,
 };
 pub use path::{PathData, PathVerb};
 pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers};
@@ -64,8 +65,9 @@ pub use style::{
     Border, CasedText, Clamp, Dash, Declared, DecorationLength, DecorationLine, DecorationMetric,
     FillRule, FitWidth, FontFamily, FontFeatures, FontFit, FontStyle, FontTag, FontVariations,
     Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineHeight, LineJoin, Paint,
-    PathStyle, Raster, RectStyle, Scale, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextCase,
-    TextDecoration, TextLength, TextShadow, TextStyle, TextWrap, border_inner_shape, case_text,
-    link_at,
+    PathStyle, Raster, RectStyle, Scale, Segment, Shadow, ShapeStyle, Span, Stroke, TextAlign,
+    TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap, border_inner_shape,
+    case_text, css_string, link_at, span_segments,
 };
 pub use style_pool::{hash_declared, hash_path_style};
+pub use text_lines::{PlacedGlyph, TextCluster, TextLine};

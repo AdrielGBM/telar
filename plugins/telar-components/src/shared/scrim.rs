@@ -1,0 +1,168 @@
+//! Shared portal-once toggleable-scrim scaffold (latch, body recipe, toggleable overlay, dismiss) behind `modal`, `drawer` and `command_palette`.
+
+use std::cell::Cell;
+use std::rc::Rc;
+
+use telar::{
+    Component, Container, DismissRegistration, Effect, Event, EventResult, LayoutError, LayoutItem,
+    LayoutStyle, NodeId, Overlay, ReactiveList, Rect, RenderNode, RwSignal, Size, box_item,
+    children, effect, signal,
+};
+
+/// The dismiss handler the helper hands to each widget's scrim (and, for `modal`, its Close): shared so both affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.
+pub(crate) type DismissFn = Rc<dyn Fn()>;
+
+/// How much of the window a dialog's card may take, read from the backdrop the card stands on so it follows the window as it is resized and is right from the first layout of the backdrop, however the dialog came to be built.
+#[derive(Clone, Copy)]
+pub(crate) struct Room(RwSignal<Option<RwSignal<Rect>>>);
+
+impl Room {
+    pub(crate) fn new() -> Self {
+        Self(signal(None))
+    }
+
+    pub(crate) fn follow(self, backdrop: NodeId) {
+        self.0.set(telar::track_layout(backdrop));
+    }
+
+    /// What is left of the backdrop after `inset` on each side, subscribing the caller to it; unbounded until the backdrop has been laid out.
+    pub(crate) fn inside(self, inset: f32) -> Size {
+        let laid_out = self
+            .0
+            .get()
+            .map(|rect| rect.get())
+            .filter(|rect| rect.width > 0.0 && rect.height > 0.0);
+        match laid_out {
+            Some(rect) => Size::new(
+                (rect.width - inset * 2.0).max(0.0),
+                (rect.height - inset * 2.0).max(0.0),
+            ),
+            None => Size::new(f32::MAX, f32::MAX),
+        }
+    }
+}
+
+/// Carries the overlay subtree's effects alongside it, so the dismiss-stack registration and the focus handover live exactly as long as the overlay is mounted and are released with it.
+struct Dismissible {
+    inner: Box<dyn LayoutItem>,
+    _registration: Effect,
+    _focus: Effect,
+}
+
+impl Component for Dismissible {
+    fn view(&self) -> RenderNode {
+        self.inner.view()
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        self.inner.on_event(event)
+    }
+}
+
+impl LayoutItem for Dismissible {
+    fn layout_node(&self) -> NodeId {
+        self.inner.layout_node()
+    }
+}
+
+/// Keeps the dismiss stack in step with `open`: on the transition into open the overlay becomes the stack's top, and on the way out it withdraws — including when it was closed by its own Close button rather than by a dismissal, which is why the entry is tracked by id instead of assumed to still be on top.
+fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: DismissFn) -> Effect {
+    let registered: Cell<Option<DismissRegistration>> = Cell::new(None);
+    effect(move || {
+        if open.get() {
+            let held = registered
+                .take()
+                .unwrap_or_else(|| DismissRegistration::within(within, dismiss.clone()));
+            registered.set(Some(held));
+        } else {
+            drop(registered.take());
+        }
+    })
+}
+
+/// Hands the keyboard to the dialog on open and gives it back on close.
+///
+/// Both halves matter and only together: now that a modal traps focus, opening one without moving the keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on a widget the user can no longer see. Given back only from inside the dialog or from nowhere, so a dialog whose action moved the keyboard elsewhere leaves it there, and only to a widget that survived the dialog.
+fn track_focus_handover(open: RwSignal<bool>, content: telar::NodeId) -> Effect {
+    let previous: Cell<Option<telar::focus::Remembered>> = Cell::new(None);
+    let was_open = Cell::new(false);
+    effect(move || {
+        let is_open = open.get();
+        if is_open == was_open.get() {
+            return;
+        }
+        was_open.set(is_open);
+        if is_open {
+            previous.set(telar::focus::remember());
+            telar::focus::focus_first_in(content);
+        } else if let Some(back) = previous.take()
+            && telar::focus::left_within(content)
+        {
+            back.restore();
+        }
+    })
+}
+
+/// A 0-size collapsed node: the unbound/never-opened placeholder that registers no overlay and blocks nothing.
+fn collapsed() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    Ok(box_item(Container::new(
+        LayoutStyle::new().width(0.0).height(0.0),
+        vec![],
+    )?))
+}
+
+/// The portal-once toggleable-scrim scaffold shared by `modal`, `drawer` and `command_palette`. Owns the unbound guard, the build latch and the toggleable `Overlay`; `build_inner` gets the shared dismiss handler and returns its own scrim container (with the card/panel inside), which is kept mounted and shown/hidden via `open`.
+///
+/// `open` `None` (unbound) can never open, so it renders nothing and drops the captured body. Otherwise the scrim is built ONCE — lazily on the first open, so the layout host exists and the portal attaches to the viewport — then kept mounted and shown/hidden via `open` (see `Overlay::toggleable`), preserving the body across close/reopen. The `ReactiveList` is keyed on a latch that flips true on the first open and stays true, so the built scrim is never disposed.
+pub(crate) fn scrim_overlay(
+    open: Option<RwSignal<bool>>,
+    on_close: Option<Rc<dyn Fn()>>,
+    build_inner: impl Fn(DismissFn) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let Some(open) = open else {
+        return collapsed();
+    };
+
+    let dismiss: DismissFn = Rc::new(move || {
+        open.set(false);
+        if let Some(cb) = &on_close {
+            cb();
+        }
+    });
+
+    let built = Rc::new(Cell::new(false));
+    let key = {
+        let built = built.clone();
+        move || {
+            // Latch on first open; reading `open` subscribes the list so it re-runs to build the scrim then.
+            if open.get() {
+                built.set(true);
+            }
+            vec![built.get()]
+        }
+    };
+    let list = ReactiveList::new(
+        key,
+        |b: &bool| *b,
+        move |is_built| -> Result<Box<dyn LayoutItem>, LayoutError> {
+            if !is_built {
+                // Never opened: an empty placeholder (no overlay registered, nothing blocks the page).
+                return collapsed();
+            }
+            let inner = build_inner(dismiss.clone())?;
+            // Kept mounted; shown only while `open`. So the body survives a close/reopen (not rebuilt).
+            let open = open;
+            let overlay =
+                Overlay::toggleable(LayoutStyle::column(), children![inner], move || open.get())?;
+            let registration = track_dismissible(open, overlay.layout_node(), dismiss.clone());
+            let focus_handover = track_focus_handover(open, overlay.content_node());
+            Ok(box_item(Dismissible {
+                inner: box_item(overlay),
+                _registration: registration,
+                _focus: focus_handover,
+            }))
+        },
+        0.0,
+    )?;
+    Ok(box_item(list))
+}

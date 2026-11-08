@@ -6,14 +6,23 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 
-use wire_core::{Wire, WireError, Writer};
+use wire_core::{Shaped, Wire, WireError, Writer, shape_named};
 
 /// Bytes one side lends the other for as long as the contract's rule for them holds: what the host passes into an entry, for that call; what a guest hands back, until the host next calls into that library. The side reading them copies what it keeps and never frees them.
+///
+/// `T` is what the bytes spell, named in each entry that lends them, so a host and a guest that would read them as different things differ in the stamp before either reads a byte, and the side reading them can only read them as that.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct LentBytes {
+pub struct LentBytes<T> {
     pub(super) ptr: *const u8,
     pub(super) len: usize,
+    _spells: PhantomData<fn() -> T>,
+}
+
+/// Text lent as its bare UTF-8 bytes, with no length of its own: a panic's report, a thread's name.
+pub enum Utf8 {}
+
+impl Shaped for Utf8 {
+    const SHAPE: u64 = shape_named("utf-8");
 }
 
 reactive_local::dropless_thread_local! {
@@ -21,27 +30,20 @@ reactive_local::dropless_thread_local! {
     pub(super) static ANSWER: ManuallyDrop<RefCell<Writer>> = const { ManuallyDrop::new(RefCell::new(Writer::new())) };
 }
 
-impl LentBytes {
+impl<T> LentBytes<T> {
     pub const EMPTY: Self = Self {
         ptr: std::ptr::null(),
         len: 0,
+        _spells: PhantomData,
     };
 
+    /// Lends `bytes`, which have to spell a `T`.
     pub fn lend(bytes: &[u8]) -> Self {
         Self {
             ptr: bytes.as_ptr(),
             len: bytes.len(),
+            _spells: PhantomData,
         }
-    }
-
-    /// Spells `value` in place of what the last answer on this thread lent, and lends it until the host next calls into this library: what a guest's entry hands back in bytes, once per call.
-    pub fn answer<T: Wire>(value: &T) -> Self {
-        ANSWER.with(|answer| {
-            let mut out = answer.borrow_mut();
-            out.clear();
-            value.put(&mut out);
-            Self::lend(out.as_slice())
-        })
     }
 
     pub fn len(&self) -> usize {
@@ -62,13 +64,25 @@ impl LentBytes {
             unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
         }
     }
+}
+
+impl<T: Wire> LentBytes<T> {
+    /// Spells `value` in place of what the last answer on this thread lent, and lends it until the host next calls into this library: what a guest's entry hands back in bytes, once per call.
+    pub fn answer(value: &T) -> Self {
+        ANSWER.with(|answer| {
+            let mut out = answer.borrow_mut();
+            out.clear();
+            value.put(&mut out);
+            Self::lend(out.as_slice())
+        })
+    }
 
     /// The value the bytes spell, read into this side's own allocations.
     ///
     /// # Safety
     ///
     /// As [`as_slice`](Self::as_slice).
-    pub unsafe fn decode<T: Wire>(self) -> Result<T, WireError> {
+    pub unsafe fn decode(self) -> Result<T, WireError> {
         wire_core::decode(unsafe { self.as_slice() })
     }
 
@@ -77,7 +91,7 @@ impl LentBytes {
     /// # Safety
     ///
     /// As [`as_slice`](Self::as_slice).
-    pub unsafe fn read<T: Wire>(self) -> T {
+    pub unsafe fn read(self) -> T {
         unsafe { self.decode() }.unwrap_or_else(|error| {
             panic!(
                 "the host lent bytes this guest cannot read as {}: {error}",
@@ -87,9 +101,26 @@ impl LentBytes {
     }
 }
 
-impl Default for LentBytes {
+impl<T> Default for LentBytes<T> {
     fn default() -> Self {
         Self::EMPTY
+    }
+}
+
+impl<T> Clone for LentBytes<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for LentBytes<T> {}
+
+impl<T> fmt::Debug for LentBytes<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LentBytes")
+            .field("ptr", &self.ptr)
+            .field("len", &self.len)
+            .finish()
     }
 }
 
@@ -171,5 +202,5 @@ impl<T> fmt::Debug for Handle<T> {
 }
 
 #[cfg(test)]
-#[path = "lent_test.rs"]
+#[path = "lent.test.rs"]
 mod tests;

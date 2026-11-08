@@ -1,0 +1,309 @@
+use super::*;
+
+#[test]
+fn snapshot_and_restore_roundtrip() {
+    let a = hot_signal("t::a", 1i32);
+    let b = hot_signal("t::b", String::from("hi"));
+    a.set(41);
+    b.set("hola".to_string());
+    let blob = hot_snapshot_json();
+
+    hot_restore_json(&blob);
+    let a2 = hot_signal("t::a", 0i32);
+    let b2 = hot_signal("t::b", String::new());
+    assert_eq!(a2.peek(), 41);
+    assert_eq!(b2.peek(), "hola");
+}
+
+#[test]
+fn missing_or_corrupt_values_fall_back_to_init() {
+    hot_restore_json("{\"t2::x\": \"not-an-int\"}");
+    let x = hot_signal("t2::x", 7i32);
+    assert_eq!(x.peek(), 7);
+    let y = hot_signal("t2::y", 3i32);
+    assert_eq!(y.peek(), 3);
+}
+
+#[test]
+fn theme_mode_survives_snapshot_restore() {
+    theme_core::register_mode("midnight", || {});
+    theme_core::set_mode("midnight");
+    let blob = hot_snapshot_json();
+
+    theme_core::register_mode("modern", || {});
+    theme_core::set_mode("modern");
+    hot_restore_json(&blob);
+    assert_eq!(theme_core::active_mode().as_deref(), Some("midnight"));
+}
+
+#[test]
+fn auto_macro_falls_back_for_non_serde_types() {
+    struct NotSerde(i32);
+    let plain = crate::hot_signal_auto!("t3::plain", NotSerde(5));
+    plain.update(|v| v.0 += 1);
+    assert_eq!(plain.with(|v| v.0), 6);
+
+    let kept = crate::hot_signal_auto!("t3::kept", 9i32);
+    assert_eq!(kept.peek(), 9);
+    assert!(
+        hot_snapshot_json().contains("t3::kept"),
+        "a non-serde type still reaches the snapshot: {}",
+        hot_snapshot_json()
+    );
+}
+
+#[test]
+fn a_chosen_scheme_survives_snapshot_restore() {
+    theme_core::set_scheme_preference(theme_core::SchemePreference::Dark);
+    let blob = hot_snapshot_json();
+    theme_core::set_scheme_preference(theme_core::SchemePreference::System);
+    hot_restore_json(&blob);
+    assert_eq!(
+        theme_core::scheme_preference(),
+        theme_core::SchemePreference::Dark
+    );
+}
+
+#[test]
+fn a_reduced_motion_override_survives_snapshot_restore() {
+    preferences_core::set_reduced_motion_override(Some(true));
+    let blob = hot_snapshot_json();
+    preferences_core::set_reduced_motion_override(None);
+    hot_restore_json(&blob);
+    assert_eq!(preferences_core::reduced_motion_override(), Some(true));
+}
+
+#[test]
+fn a_high_contrast_override_survives_snapshot_restore() {
+    preferences_core::set_high_contrast_override(Some(false));
+    let blob = hot_snapshot_json();
+    preferences_core::set_high_contrast_override(None);
+    hot_restore_json(&blob);
+    assert_eq!(preferences_core::high_contrast_override(), Some(false));
+    preferences_core::set_high_contrast_override(None);
+}
+
+#[test]
+fn following_the_system_adds_nothing_to_the_snapshot() {
+    preferences_core::set_reduced_motion_override(None);
+    assert!(!hot_snapshot_json().contains(REDUCED_MOTION_OVERRIDE_KEY));
+    preferences_core::set_high_contrast_override(None);
+    assert!(!hot_snapshot_json().contains(HIGH_CONTRAST_OVERRIDE_KEY));
+}
+
+/// The transpiler swaps `signal(` for this macro and keeps the author's arguments as written, so a formatter's trailing comma has to be as welcome here as in the call it replaced.
+#[test]
+fn a_trailing_comma_is_accepted_like_the_call_it_replaces() {
+    let s = crate::hot_signal_auto!("t4::trailing", 1i32 + 1,);
+    assert_eq!(s.peek(), 2);
+}
+
+/// `None` alone is an `Option<_>`, and the probe settles on serde before the annotation can say what fills it; written in, the type picks the plain signal a non-serde value needs.
+#[test]
+fn a_named_signal_type_decides_serde_before_the_value_is_probed() {
+    #[derive(Clone, Copy, PartialEq, Debug)]
+    enum NotSerde {
+        A,
+    }
+    let open: RwSignal<Option<NotSerde>> =
+        crate::hot_signal_auto!("t5::open", type RwSignal<Option<NotSerde>>, None);
+    open.set(Some(NotSerde::A));
+    assert_eq!(open.peek(), Some(NotSerde::A));
+
+    let nested = crate::hot_signal_auto!(
+        "t5::nested",
+        type reactive_core::RwSignal<Vec<(u8, Option<String>)>>,
+        Vec::new(),
+    );
+    assert!(nested.peek().is_empty());
+    assert!(hot_snapshot_json().contains("t5::nested"));
+
+    let inferred: RwSignal<u8> = crate::hot_signal_auto!("t5::inferred", type RwSignal<_>, 3);
+    assert_eq!(inferred.peek(), 3);
+}
+
+/// A plugin's tokens are not carried in the snapshot: they belong to the theme the restored mode re-installs, so they come back with it from the incoming library's own `setup`.
+#[test]
+fn a_theme_extension_follows_the_restored_mode() {
+    #[derive(Clone, Default)]
+    struct ChipTokens(f32);
+
+    #[derive(Clone)]
+    struct Chipped(f32);
+    impl theme_core::ThemeTokens for Chipped {
+        fn register_extensions(&self, extensions: &mut theme_core::ThemeExtensions) {
+            extensions.insert(ChipTokens(self.0));
+        }
+    }
+
+    fn setup() {
+        theme_core::register_mode("midnight", || theme_core::set_theme(Chipped(12.0)));
+        theme_core::register_mode("modern", || theme_core::set_theme(Chipped(4.0)));
+        theme_core::set_mode("modern");
+    }
+
+    setup();
+    theme_core::set_mode("midnight");
+    let blob = hot_snapshot_json();
+
+    setup();
+    assert_eq!(theme_core::use_theme_extension::<ChipTokens>().0, 4.0);
+    hot_restore_json(&blob);
+    assert_eq!(theme_core::use_theme_extension::<ChipTokens>().0, 12.0);
+}
+
+#[cfg(any(feature = "dev", feature = "prerender"))]
+mod owned {
+    use super::*;
+
+    #[test]
+    fn rows_are_freed_with_their_owner() {
+        let baseline = reactive_core::live_signal_count();
+        let rows: Vec<_> = (0..5)
+            .map(|i| {
+                let scope = reactive_core::owner_scope();
+                let id = scope.id();
+                let sig = hot_signal("own::row", i);
+                (scope, id, sig)
+            })
+            .collect();
+        assert_eq!(reactive_core::live_signal_count(), baseline + 5);
+        for (scope, id, sig) in rows {
+            drop(scope);
+            reactive_core::dispose_owner(id);
+            assert!(!sig.is_alive());
+        }
+        assert_eq!(reactive_core::live_signal_count(), baseline);
+    }
+
+    #[test]
+    fn a_disposed_value_survives_a_reload() {
+        let scope = reactive_core::owner_scope();
+        let id = scope.id();
+        let sig = hot_signal("own::kept", 1i32);
+        sig.set(42);
+        drop(scope);
+        reactive_core::dispose_owner(id);
+        assert!(!sig.is_alive());
+
+        let blob = hot_snapshot_json();
+        hot_restore_json(&blob);
+        assert_eq!(hot_signal("own::kept", 0i32).peek(), 42);
+    }
+
+    #[test]
+    fn the_last_mounted_instance_wins_when_an_older_one_is_freed_later() {
+        let older = reactive_core::owner_scope();
+        let older_id = older.id();
+        let a = hot_signal("own::shared", 0i32);
+        drop(older);
+        let newer = reactive_core::owner_scope();
+        let newer_id = newer.id();
+        let b = hot_signal("own::shared", 0i32);
+        drop(newer);
+        a.set(1);
+        b.set(2);
+        reactive_core::dispose_owner(newer_id);
+        reactive_core::dispose_owner(older_id);
+
+        hot_restore_json(&hot_snapshot_json());
+        assert_eq!(hot_signal("own::shared", 0i32).peek(), 2);
+    }
+}
+
+#[derive(Clone, Default)]
+struct WarningCount(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl WarningCount {
+    fn capture<R>(&self, run: impl FnOnce() -> R) -> R {
+        tracing::subscriber::with_default(self.clone(), run)
+    }
+
+    fn messages(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl tracing::Subscriber for WarningCount {
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+    fn event(&self, event: &tracing::Event<'_>) {
+        struct Message(String);
+        impl tracing::field::Visit for Message {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    self.0 = format!("{value:?}");
+                }
+            }
+        }
+        let mut message = Message(String::new());
+        event.record(&mut message);
+        if *event.metadata().level() == tracing::Level::WARN {
+            self.0.lock().unwrap().push(message.0);
+        }
+    }
+
+    fn enter(&self, _: &tracing::span::Id) {}
+
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+#[test]
+fn an_unserializable_value_warns_once_and_leaves_the_other_keys() {
+    let warnings = WarningCount::default();
+    let blob = warnings.capture(|| {
+        let ok = hot_signal("t4::ok", 5i32);
+        ok.set(6);
+        hot_signal(
+            "t4::grid",
+            HashMap::from([((1i32, 2i32), String::from("v"))]),
+        );
+        hot_snapshot_json();
+        hot_snapshot_json()
+    });
+    let map: HashMap<String, String> = serde_json::from_str(&blob).unwrap();
+    assert_eq!(map.get("t4::ok").map(String::as_str), Some("6"));
+    assert!(!map.contains_key("t4::grid"));
+    let messages = warnings.messages();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(messages[0].contains("t4::grid"), "{messages:?}");
+    assert!(messages[0].contains("key must be a string"), "{messages:?}");
+}
+
+#[test]
+fn an_undeserializable_value_warns_once_and_leaves_the_other_keys() {
+    let warnings = WarningCount::default();
+    let (bad, bad_again, good) = warnings.capture(|| {
+        hot_restore_json("{\"t5::bad\": \"null\", \"t5::good\": \"8\"}");
+        let bad = hot_signal("t5::bad", 1.5f64);
+        let good = hot_signal("t5::good", 0i32);
+        hot_restore_json("{\"t5::bad\": \"null\"}");
+        let bad_again = hot_signal("t5::bad", 2.5f64);
+        (bad, bad_again, good)
+    });
+    assert_eq!(bad.peek(), 1.5);
+    assert_eq!(bad_again.peek(), 2.5);
+    assert_eq!(good.peek(), 8);
+    let messages = warnings.messages();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(messages[0].contains("t5::bad"), "{messages:?}");
+}
+
+#[test]
+fn the_locale_survives_snapshot_restore() {
+    i18n_core::set_locale("es");
+    let blob = hot_snapshot_json();
+    i18n_core::set_locale("en");
+    hot_restore_json(&blob);
+    assert_eq!(i18n_core::current_locale().as_deref(), Some("es"));
+}

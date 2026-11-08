@@ -46,5 +46,5 @@ pub fn kept<T: Clone + 'static>(key: &'static str, init: impl FnOnce() -> T) -> 
 }
 
 #[cfg(test)]
-#[path = "kept_test.rs"]
+#[path = "kept.test.rs"]
 mod tests;

@@ -197,5 +197,5 @@ impl LocationSource for FixedLocation {
 }
 
 #[cfg(test)]
-#[path = "location_source_test.rs"]
+#[path = "location_source.test.rs"]
 mod tests;

@@ -6,6 +6,8 @@
 
 use std::sync::RwLock;
 
+use crate::locale_tag::LocaleTag;
+
 /// The CLDR plural categories. A catalog entry never has to define all six — only the ones its language uses, plus `Other`, which CLDR requires as the fallback for every language.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PluralCategory {
@@ -126,11 +128,7 @@ impl PluralRules for BuiltinPluralRules {
         if !operands.is_integer() {
             return PluralCategory::Other;
         }
-        let lang = locale
-            .split(['-', '_'])
-            .next()
-            .unwrap_or(locale)
-            .to_ascii_lowercase();
+        let lang = LocaleTag::parse(locale).language.to_ascii_lowercase();
         let n = operands.integer;
         match lang.as_str() {
             "ja" | "zh" | "ko" | "vi" | "th" | "id" | "ms" | "my" | "lo" | "km" => {
@@ -219,5 +217,5 @@ fn arabic(n: u64) -> PluralCategory {
 }
 
 #[cfg(test)]
-#[path = "plural_test.rs"]
+#[path = "plural.test.rs"]
 mod tests;

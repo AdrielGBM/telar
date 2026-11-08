@@ -11,7 +11,7 @@ use std::rc::{Rc, Weak};
 pub use entries::{CreateApp, HOT_CONTRACT, HotEntries};
 #[doc(hidden)]
 pub use platform_core::export_contract_stamp;
-pub use platform_core::guest::GuestPanic;
+use platform_core::guest::GuestStop;
 use platform_core::guest::{CWaker, FrameCtx, LentBytes};
 #[doc(hidden)]
 pub use platform_core::guest::{CallOutcome, Handle, HostServices};
@@ -20,7 +20,8 @@ use services_core::guest::GuestLibrary;
 use ui_core::{ForeignBoundary, ForeignSurface, GuestSurface};
 use wire_core::encode;
 
-use crate::tree::{Frame, HotTree, UiTree};
+use crate::tree::hot::HotTree;
+use crate::tree::{Frame, UiTree};
 use guest::GuestApp;
 
 /// One loaded guest and the surface of the tree whose frame was read last, the window's. Shared by the [`HotApp`] and every tree it mounted, and the library with the surface of each, so the guest is unloaded only once the last of them lets go, whichever that is.
@@ -29,7 +30,7 @@ struct HotImage {
     painted: RefCell<Weak<GuestSurface<HotEntries>>>,
 }
 
-/// An application loaded from a dylib, driven through the entries it exports. Every call goes through its [`GuestLibrary`], so once the dylib has panicked none reaches it again; the panic is reported through [`AppRuntime::take_panic`](crate::AppRuntime::take_panic) and the host waits for a rebuild.
+/// An application loaded from a dylib, driven through the entries it exports. Every call goes through its [`GuestLibrary`], so once the dylib has stopped, by panicking or by answering in bytes the host cannot read, none reaches it again; why is reported through [`AppRuntime::take_stop`](crate::AppRuntime::take_stop).
 pub struct HotApp {
     /// `None` once a panic has left the dylib without one to give.
     app: Option<Handle<GuestApp>>,
@@ -253,11 +254,8 @@ impl crate::app_runtime::AppRuntime for HotApp {
         });
     }
 
-    fn take_panic(&self) -> Option<String> {
-        self.library()
-            .guest()
-            .take_panic()
-            .map(|panic| panic.to_string())
+    fn take_stop(&self) -> Option<GuestStop> {
+        self.library().guest().take_stop()
     }
 
     fn hot_snapshot(&self) -> Option<String> {
@@ -432,13 +430,12 @@ pub unsafe fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std
     Ok(HotApp::start(entries, Some(library)))
 }
 
-/// The host's font database, for a library's copy of the shaper to defer to: two copies of the shaper cannot share one database, so the library loads what the host's was loaded from, and a face the app adds while it runs is added to the host's, which draws its text, before the library loads it as well.
-#[cfg(feature = "shaper")]
+#[cfg(any(feature = "shaper", feature = "font-faces"))]
 fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
-    Some(std::sync::Arc::new(renderer_text::fonts::Served))
+    Some(renderer_text::fonts::served())
 }
 
-#[cfg(not(feature = "shaper"))]
+#[cfg(not(any(feature = "shaper", feature = "font-faces")))]
 fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
     None
 }
@@ -500,7 +497,7 @@ impl HotReplies {
     }
 }
 
-/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via `TELAR_HOT_PORT`, and its secret via [`HOT_TOKEN_VAR`]), forwards line-delimited hot events and writes back what is sent through [`HotLink::replies`]. TCP instead of a unix socket so the same code path works on non-Unix hosts.
+/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via [`HOT_PORT_VAR`](telar_project::protocol::HOT_PORT_VAR), and its secret via [`HOT_TOKEN_VAR`]), forwards line-delimited hot events and writes back what is sent through [`HotLink::replies`]. TCP instead of a unix socket so the same code path works on non-Unix hosts.
 #[cfg(feature = "desktop-bare")]
 pub(crate) fn listen_hot_reload(port: u16) -> HotLink {
     use std::io::BufRead;
@@ -588,5 +585,5 @@ fn connect_hot_channel(port: u16, token: &str) -> std::io::Result<std::net::TcpS
 }
 
 #[cfg(test)]
-#[path = "hot_test.rs"]
+#[path = "hot.test.rs"]
 mod tests;

@@ -186,5 +186,5 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
 }
 
 #[cfg(test)]
-#[path = "theme_tokens_test.rs"]
+#[path = "theme_tokens.test.rs"]
 mod tests;

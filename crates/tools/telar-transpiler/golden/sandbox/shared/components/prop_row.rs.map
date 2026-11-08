@@ -57,12 +57,12 @@
 56	.
 57	.
 58	.
-59	20
-60	.
+59	.
+60	20
 61	.
 62	.
 63	.
-64	19
+64	.
 65	19
 66	19
 67	19
@@ -71,10 +71,11 @@
 70	19
 71	19
 72	19
-73	.
+73	19
 74	.
+75	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-272..282	1087	`props.name`
-336..348	1406	`props.values`
-406..417	1731	`props.about`
+272..282	1067	`props.name`
+336..348	1386	`props.values`
+406..417	1711	`props.about`

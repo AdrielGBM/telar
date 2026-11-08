@@ -16,7 +16,7 @@ internals.
 
 ## Running the browser test
 
-`src/layout_parity_test.rs` lays one tree out twice — once through Taffy, once as the CSS this crate writes —
+`src/layout_parity.test.rs` lays one tree out twice — once through Taffy, once as the CSS this crate writes —
 and compares every box against `getBoundingClientRect`. A box can be a drawing, which the document makes an
 `<svg>`: a browser sizes that as a replaced element, so a canvas pinned by its insets is held to the size Taffy
 gave it too. It needs a real browser, so it runs on the wasm target through `wasm-bindgen-test-runner`:
@@ -28,7 +28,7 @@ cargo test -p telar-renderer-dom --target wasm32-unknown-unknown
 The dev shell provides the runner, a headless Chromium and the `CHROMEDRIVER` that drives it; the flags the
 browser is started with are in `webdriver.json` beside this file. Set `NO_HEADLESS=1` to watch it happen.
 
-`src/keyboard_test.rs` checks the keyboard this crate shares with the page, together with
+`src/keyboard.test.rs` checks the keyboard this crate shares with the page, together with
 `telar-platform-web`. It covers which keys are prevented on which focused box, which boxes are Tab stops,
 and that a focus move the browser made is reported as `Event::BoxFocused`. Each focusable box carries
 `data-telar-keys` (the keys it keeps), `data-telar-focus` (its identity) and a `tabindex`. See
@@ -37,60 +37,60 @@ It also checks that focus landing on a link inside a paragraph clears the box Te
 what Telar draws no ring for keeps the browser's `:focus-visible` outline.
 
 The [axe-core](https://github.com/dequelabs/axe-core) audit of the document real widgets render to through this
-backend lives with the catalogue, in `plugins/telar-components/src/audit_test.rs`: any WCAG 2.2 A/AA or
+backend lives with the catalogue, in `plugins/telar-components/src/audit.test.rs`: any WCAG 2.2 A/AA or
 best-practice violation fails it. The script comes from the dev shell, which names it in `TELAR_AXE_CORE` (a
 pinned npm tarball fetched by the flake), so run it inside `nix develop`. See
 [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#audits).
 
-`src/controls_test.rs` checks a box made a control by its role, with an on/off state: a switch carries
+`src/controls.test.rs` checks a box made a control by its role, with an on/off state: a switch carries
 `role="switch"` and `aria-checked`, a toggle button is a `<button>` with `aria-pressed`, and Space or Enter sent to
 the focused element is kept from the page and presses the box, which the next frame writes back. See
 [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#controls-and-their-state).
 
-`src/document_scroll_test.rs` checks the surface's primary scroll as the document's own scroll: the host
+`src/document_scroll.test.rs` checks the surface's primary scroll as the document's own scroll: the host
 grows with the content, a `window` scroll is reported as the page's `Event::BoxScrolled`, a request to move
 the page scrolls the document, a scroll made before the app loaded is kept, and the surface is still measured
 against the viewport. See
 [docs/primary-scroll.md](https://github.com/AdrielGBM/telar/blob/main/docs/primary-scroll.md).
 
-`src/fixed_layer_test.rs` mounts a page the document scrolls with a layer fixed over it and a sticky stage
+`src/fixed_layer.test.rs` mounts a page the document scrolls with a layer fixed over it and a sticky stage
 after it: the layer's element stays inside the page where it was declared, so Tab walks its controls in that
 order; it stays at the top over the stuck stage; and the browser hands it the pointer only over its own
 boxes. See
 [docs/fixed-layer.md](https://github.com/AdrielGBM/telar/blob/main/docs/fixed-layer.md).
 
-`src/current_test.rs` mounts a bar fixed over a page the document scrolls, with a link to each of three sections
+`src/current.test.rs` mounts a bar fixed over a page the document scrolls, with a link to each of three sections
 marked `current:` while `use_anchor_at` answers with its section: scrolling the document moves the page's offset
 through `Event::BoxScrolled`, and the link to the section under the bar is the one with
 `aria-current="location"`. See
 [docs/links.md](https://github.com/AdrielGBM/telar/blob/main/docs/links.md#the-current-link).
 
-`src/arrival_margin_test.rs` mounts a page the document scrolls under a 48px bar fixed over it: the document
+`src/arrival_margin.test.rs` mounts a page the document scrolls under a 48px bar fixed over it: the document
 scroller takes the bar as its `scroll-padding`, so an anchor Telar follows, a fragment the browser follows and a
 control the browser scrolls to on focus all land clear of the bar, and a page down leaves the bar out of its
 step. See
 [docs/primary-scroll.md](https://github.com/AdrielGBM/telar/blob/main/docs/primary-scroll.md#arrival-margin).
 
-`src/transform_origin_test.rs` checks that a box scaled about the pivot `transform_origin` names lands where
+`src/transform_origin.test.rs` checks that a box scaled about the pivot `transform_origin` names lands where
 it says, as an element and drawn inside a drawing, and that a canvas's own transform stays in its canvas.
-`src/drawn_box_test.rs` mounts real widgets on a page the document scrolls: a box scaled from its start inside
+`src/drawn_box.test.rs` mounts real widgets on a page the document scrolls: a box scaled from its start inside
 a mask, on a sticky stage below the top of the page, lands on the same box laid out as an element, at rest
 and stuck, a canvas inside the mask keeps its own transform, and the mask and a canvas beside it, both `<svg>`s
 pinned to fill the stage, cover it. A box inside a drawing sends its frame,
 transform and clip where layout put it on the surface; the drawing rebases them into the box's own
 coordinates, where a leaf's artwork already is (see [`document.rs`](src/document.rs)'s `draw`).
 
-`src/surface_test.rs` mounts a surface nested in the frame, as a `SurfaceFrame` draws its canvas, beside a
+`src/surface.test.rs` mounts a surface nested in the frame, as a `SurfaceFrame` draws its canvas, beside a
 window box of the same id. Each surface numbers its boxes from its own counter, so the surface's boxes are
 elements of their own, named `<surface>-<id>`; its layout roots are placed inside the box it is drawn in; and
 focus, a followed link and a scroll on one of its boxes reach the app inside `Event::InSurface`. Paint the
 surface carries at its own level, such as a modal's scrim, keeps its place among the surface's roots, live and
 in a served page, rather than becoming the background of the box the surface is drawn in.
-`src/frame_tab_test.rs` mounts real widgets, a control before a `SurfaceFrame`, two inside it and one after
+`src/frame_tab.test.rs` mounts real widgets, a control before a `SurfaceFrame`, two inside it and one after
 it, and takes the browser's Tab one step at a time: the walk runs through the frame's controls with no stop
 for the frame itself, as Telar's own Tab does on a desktop, and the app's focus follows each step into the
 frame and out of it again.
-`src/text_placement_test.rs` mounts a bar's title cut at its ends and a button's label, both stretched across
+`src/text_placement.test.rs` mounts a bar's title cut at its ends and a button's label, both stretched across
 a row that centres what it holds: the browser lays each line out where the frame drew it, in the middle of
 its box, rather than at the top of the element. That takes the canvas measurer answering `ink_bounds` with
 where the glyphs are on their baseline, and a box whose own text is drawn inside it taking that rect as its
@@ -105,7 +105,7 @@ nix shell nixpkgs#firefox nixpkgs#geckodriver --command bash -c \
 
 ## Blend modes (`StyledContainer::with_blend`)
 
-`src/blend_test.rs` checks how a box's `blend` composites into the document: `mix-blend-mode` on the box
+`src/blend.test.rs` checks how a box's `blend` composites into the document: `mix-blend-mode` on the box
 itself, and `isolation: isolate` on its parent (or the host, when the blended box is itself a layout root).
 Without the isolation, `mix-blend-mode` reaches past the parent to whatever stacking context is nearest —
 for an otherwise plain tree, the page itself — so a texture meant to multiply against its neighbor would
@@ -116,11 +116,11 @@ has no notion of a backdrop to blend against and ignores the attribute.
 
 ## Text case, underline and backdrop blur
 
-`src/text_paint_test.rs` checks the CSS these come to and how a cased text is measured: `text-transform` with
+`src/text_paint.test.rs` checks the CSS these come to and how a cased text is measured: `text-transform` with
 the written text kept as the element's content, the `text-decoration` longhands (`text-underline-offset`,
 `text-decoration-thickness`, `text-decoration-color`, and `text-decoration-skip-ink: none`), and
 `backdrop-filter: blur()` at half the radius Telar takes. It also holds the canvas measurer's width for a cased
-string, Turkish included, against what the page lays out under the same `lang`. `layout_parity_test.rs` lays
+string, Turkish included, against what the page lays out under the same `lang`. `layout_parity.test.rs` lays
 cased labels and a cased paragraph out through both engines. See
 [docs/text-case-and-underline.md](https://github.com/AdrielGBM/telar/blob/main/docs/text-case-and-underline.md)
 and [docs/backdrop-blur.md](https://github.com/AdrielGBM/telar/blob/main/docs/backdrop-blur.md).
@@ -133,13 +133,13 @@ reconcile brings the live document in line with it; on a host, [`prerender`](src
 markup, which is how `cargo telar build --target web --prerender` writes pages ahead of time. Every element a
 box becomes names that box in `data-telar-id`.
 
-`src/prerender_parity_test.rs` holds the two writers to one document: a frame reconciled into one host and
+`src/prerender_parity.test.rs` holds the two writers to one document: a frame reconciled into one host and
 written as markup into another reads back as the same elements with the same attributes.
 
 A host served with a prerendered page is taken over in place ([`adopt.rs`](src/adopt.rs)): the first frame
 keeps every served element whose `data-telar-id`, tag and parent still match, patches the attributes, text and
 shapes that differ where they stand, rebuilds only the subtree under a box that no longer fits, and sweeps what
-it did not claim once the frame is done. `src/hydration_test.rs` checks it in a real browser: the same nodes
+it did not claim once the frame is done. `src/hydration.test.rs` checks it in a real browser: the same nodes
 before and after, no structural mutation on a clean take-over, patches in place, a rebuilt subtree, links and
 keys on the adopted elements, and the reader's scroll and focus kept. See
 [docs/prerender.md](https://github.com/AdrielGBM/telar/blob/main/docs/prerender.md).

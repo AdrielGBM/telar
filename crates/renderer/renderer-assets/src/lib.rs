@@ -4,6 +4,7 @@
 //!
 //! Decoding a bitmap at runtime is not here: it is `telar-dynamic`'s `ImageDecoder`, which calls `image` directly and carries the per-format knobs, so the only thing in this crate that reaches for a bitmap decoder is the baker.
 
+#![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod image;

@@ -26,5 +26,5 @@ pub fn is_detached() -> bool {
 }
 
 #[cfg(test)]
-#[path = "detached_test.rs"]
+#[path = "detached.test.rs"]
 mod tests;

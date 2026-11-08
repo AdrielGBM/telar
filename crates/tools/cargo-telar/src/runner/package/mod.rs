@@ -3,9 +3,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::config::{
-    ResolvedPackage, TelarSection, backend_as_str, resolve_package, split_android_flag,
-};
+use telar_project::protocol::RENDERER_BACKEND_VAR;
+
+use super::artifacts::{self, build_with_diagnostics, with_json_messages};
+use super::config::{ResolvedPackage, TelarSection, resolve_package, split_android_flag};
 
 mod appimage;
 mod deb;
@@ -22,46 +23,9 @@ pub(crate) use web::{
     compressible, media_type,
 };
 
-pub(crate) fn package_lib_path(
-    workspace_root: &Path,
-    package_name: &str,
-    profile: &str,
-) -> PathBuf {
-    let lib_name = package_name.replace('-', "_");
-    #[cfg(target_os = "macos")]
-    let file = format!("lib{lib_name}.dylib");
-    #[cfg(target_os = "windows")]
-    let file = format!("{lib_name}.dll");
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    let file = format!("lib{lib_name}.so");
-    telar_project::find_target_dir(workspace_root)
-        .join(profile)
-        .join(file)
-}
-
-pub(crate) fn package_bin_path(
-    workspace_root: &Path,
-    package_name: &str,
-    profile: &str,
-) -> PathBuf {
-    // EXE_SUFFIX so `dir` packaging and the hot-reload spawn find `<name>.exe` on Windows.
-    telar_project::find_target_dir(workspace_root)
-        .join(profile)
-        .join(format!("{package_name}{}", std::env::consts::EXE_SUFFIX))
-}
-
 // Under the resolved target dir, next to the binary they package, so they inherit its gitignore and are never confused with the generated `.rsx/` source.
 pub(crate) fn dist_dir(workspace_root: &Path) -> PathBuf {
     telar_project::find_target_dir(workspace_root).join("telar-dist")
-}
-
-// The release/debug profile cargo emits into, mirroring build_cargo_args's `--release` handling.
-pub(crate) fn profile_of(args: &[String]) -> &'static str {
-    if args.contains(&"--release".to_string()) {
-        "release"
-    } else {
-        "debug"
-    }
 }
 
 // Reports success, forwards the tool's exit code, or exits 1 with an install hint when the binary is missing. Diverges, since every bundler ends here.
@@ -99,33 +63,36 @@ fn run_bundler_tool(
 // Returns the built binary path alongside the resolved package: workspace root plus the manifest fields the bundlers read.
 fn run_release_build(cargo_args: Vec<String>, config: TelarSection) -> (PathBuf, ResolvedPackage) {
     let (_android, rest) = split_android_flag(cargo_args);
-    let backend_value = backend_as_str(config.backend.unwrap_or_default());
 
-    let mut build_args = vec!["build".to_string()];
-    build_args.extend(rest.clone());
-    if !build_args.contains(&"--release".to_string()) {
-        build_args.push("--release".to_string());
-    }
+    let build_args = release_build_args(&rest);
     eprintln!("[cargo-telar] Building release binary...");
-    let status = Command::new("cargo")
-        .args(&build_args)
-        .env("TELAR_RENDERER_BACKEND", backend_value)
-        .status()
-        .expect("[cargo-telar] failed to invoke cargo");
-    if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+    let (succeeded, report) = build_with_diagnostics(Command::new("cargo").args(&build_args).env(
+        RENDERER_BACKEND_VAR,
+        config.backend.unwrap_or_default().as_str(),
+    ));
+    if !succeeded {
+        std::process::exit(1);
     }
 
     let resolved = resolve_package(&rest);
-    let bin_path = package_bin_path(&resolved.workspace_root, &resolved.name(), "release");
-    if !bin_path.exists() {
-        eprintln!(
-            "[cargo-telar] Build succeeded but no binary was found at {}. Does this package produce a `[[bin]]`?",
-            bin_path.display()
-        );
-        std::process::exit(1);
+    match artifacts::binary(
+        report.artifacts(),
+        &resolved.package_dir,
+        resolved.default_run.as_deref(),
+    ) {
+        Ok(bin_path) => (bin_path, resolved),
+        Err(e) => {
+            eprintln!("[cargo-telar] Build succeeded, but {e}");
+            std::process::exit(1);
+        }
     }
-    (bin_path, resolved)
+}
+
+fn release_build_args(cargo_args: &[String]) -> Vec<String> {
+    let mut args = vec!["build".to_string()];
+    args.extend(cargo_args.iter().cloned());
+    with_json_messages(&mut args);
+    args
 }
 
 pub(crate) fn build_desktop_dir(cargo_args: Vec<String>, config: TelarSection) -> ! {
@@ -242,7 +209,7 @@ fn stage_binary(bin_path: &Path, dest: &Path) {
 }
 
 #[cfg(test)]
-#[path = "package_test.rs"]
+#[path = "package.test.rs"]
 mod tests;
 
 /// The message for a tool the build needs and cannot find.

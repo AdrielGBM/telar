@@ -145,5 +145,5 @@ impl Component for Image {
 impl_leaf_widget!(Image);
 
 #[cfg(test)]
-#[path = "image_test.rs"]
+#[path = "image.test.rs"]
 mod tests;

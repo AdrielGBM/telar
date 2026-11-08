@@ -1,5 +1,6 @@
 //! The wgpu backend: instanced pipelines per primitive, layers rendered into pooled textures, and a per-frame damage path that repaints only what changed.
 
+#![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
 #[cfg(all(target_arch = "wasm32", target_feature = "atomics"))]
@@ -16,6 +17,8 @@ pub mod limits;
 mod pass;
 mod primitives;
 pub(crate) mod renderer;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 pub use config::HardwareRendererConfig;
 pub use renderer::HardwareRenderer;

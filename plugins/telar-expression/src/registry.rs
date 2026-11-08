@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use telar::Color;
 
-use crate::{ErrorCode, Signature, Value, ValueKind, families, is_identifier};
+use crate::{Budget, ErrorCode, Signature, Value, ValueKind, families, is_identifier};
 
 /// What a function's implementation hands back when it has no answer for the arguments it was given.
 ///
@@ -35,23 +35,35 @@ impl CallError {
     }
 }
 
-/// The evaluated arguments of a call, with typed accessors.
+/// The evaluated arguments of a call, with typed accessors, and the [`Budget`] of the evaluation making it.
 ///
 /// The checker has already matched them against the [`Signature`], so a wrong type here would be a host's function lying about its own signature; the accessors still answer it with a [`CallError`] rather than a panic.
 #[derive(Debug, Clone, Copy)]
-pub struct Arguments<'a>(pub &'a [Value]);
+pub struct Arguments<'a> {
+    values: &'a [Value],
+    budget: &'a Budget,
+}
 
 impl<'a> Arguments<'a> {
+    pub fn new(values: &'a [Value], budget: &'a Budget) -> Self {
+        Self { values, budget }
+    }
+
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.values.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.values.is_empty()
+    }
+
+    /// What the evaluation may still build. A function that makes a text or a list charges it here before allocating it, so no expression can grow one past [`crate::MEMORY_BUDGET`] through that function.
+    pub fn budget(&self) -> &'a Budget {
+        self.budget
     }
 
     pub fn value(&self, index: usize) -> Result<&'a Value, CallError> {
-        self.0
+        self.values
             .get(index)
             .ok_or_else(|| CallError::new(ErrorCode::MissingArgument { index }))
     }
@@ -88,7 +100,7 @@ impl<'a> Arguments<'a> {
 
     /// The arguments from `index` on: a variadic function's tail.
     pub fn rest(&self, index: usize) -> &'a [Value] {
-        self.0.get(index..).unwrap_or_default()
+        self.values.get(index..).unwrap_or_default()
     }
 }
 

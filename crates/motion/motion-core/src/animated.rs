@@ -49,7 +49,7 @@ impl<T: Lerp + 'static> AnimInner<T> {
         if self.settled {
             return None;
         }
-        // scale <= 0 means reduced-motion "instant": jump to the target and settle (D5).
+        // scale <= 0 means reduced-motion "instant": jump to the target and settle.
         if scale <= 0.0 {
             return Some(self.snap_to_target());
         }
@@ -283,5 +283,5 @@ impl<T: Lerp + 'static> Animated<T> {
 }
 
 #[cfg(test)]
-#[path = "animated_test.rs"]
+#[path = "animated.test.rs"]
 mod tests;

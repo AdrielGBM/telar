@@ -233,5 +233,5 @@ pub(crate) fn surface_follows_links() -> bool {
 }
 
 #[cfg(test)]
-#[path = "link_test.rs"]
+#[path = "link.test.rs"]
 mod tests;

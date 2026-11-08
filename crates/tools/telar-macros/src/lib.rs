@@ -19,6 +19,7 @@ mod props_schema;
 mod t_macro;
 mod text;
 mod theme_tokens;
+mod vocabulary;
 use app_input::{AppInput, preview_const_ident};
 
 /// Reads a function of named arguments as a tag: the arguments are the props, and the body is what the component builds.
@@ -32,7 +33,7 @@ use app_input::{AppInput, preview_const_ident};
 ///
 /// **For the widget a `[view]` cannot build itself** — one that owns a canvas, a register, a document — which reaches the markup as a component with named props, the shape the child position took when the `widget` escape went. Written out by hand that is a struct, a `derive`, a destructuring `let` and a signature nobody reads; the arguments already say all four, and saying them twice is how the two drift apart.
 ///
-/// Each argument carries the same `#[props(…)]` attributes a field of the struct would, and its doc comment. An argument named `children` is bound to the children the call site nested instead of becoming a prop.
+/// Each argument carries the same `#[props(…)]` attributes a field of the struct would, and its doc comment. A prop of type `Children` takes content: `children` is what the call site nested inside the tag, and any other name, such as `header`, a named place the call site fills with a setter of that name. A component without a `children` prop takes no nested content.
 #[proc_macro_attribute]
 pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match component::expand(item.into()) {
@@ -58,7 +59,7 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `#[props(doc = "…")]` — the prop's doc in the workshop, in place of its doc comment.
 /// - `#[props(control = …)]` — `range(min, max)` turns a number field into a slider, `step(step)` sets its increment, `multiline` grows a text field, and those three chain (`range(0, 1).step(0.1)`); they reach through an `Option` to the control it wraps and leave a control they do not fit as it was. `read_only` shows the value without a control.
 ///
-/// A props struct takes no generic parameters.
+/// A props struct takes no generic parameters, and no field named after a key a component call keeps for itself (`a11y_label`, `lang`, `a11y`, `role`, `slot`, `hover_style` and the other state keys), since a call never hands one to a prop.
 ///
 /// Forgetting a required prop is caught where it was forgotten:
 ///
@@ -109,11 +110,21 @@ pub fn derive_preview_arg(input: TokenStream) -> TokenStream {
     }
 }
 
-/// An id of a component-named asset kind baked into the calling crate, as the value its component accepts: `__baked_id!(icon, "mdi:home", ::telar)` expands to `("mdi:home", Arc<SvgData>, monochrome)` with the data inlined from `.telar/assets.rs`, or to a `compile_error!` on the literal when the artifact does not hold it. Reached through a plugin's own macro, such as `telar_icons::icon!`, which passes the path its crate reaches `telar` by.
+/// An id of a component-named asset kind baked into the calling crate, as the value its component accepts: `__baked_id!(icon, "mdi:home", ::telar)` expands to `("mdi:home", Arc<SvgData>, monochrome)` with the data inlined from `.telar/assets.rs`, or to a `compile_error!` on the literal when the artifact does not hold it. Reached through a naming macro, such as `telar::icon!`, which passes the path its crate reaches `telar` by.
 #[doc(hidden)]
 #[proc_macro]
 pub fn __baked_id(input: TokenStream) -> TokenStream {
     match syn::parse::<baked_id::BakedIdInput>(input).and_then(baked_id::expand) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// The items of `telar::kw`, the shared vocabulary's words, expanded from the list in `telar-project` so the facade, the transpiler and the editor read one list: `size => ControlSize, …` names the type of each axis, and braces the variants of it no word names. Invoked once, inside the facade.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __vocabulary(input: TokenStream) -> TokenStream {
+    match syn::parse::<vocabulary::Axes>(input).and_then(vocabulary::expand) {
         Ok(tokens) => tokens.into(),
         Err(e) => e.to_compile_error().into(),
     }
@@ -219,20 +230,33 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     let preview_table = previews_table(&preview_const_idents);
     let app_previews = app_previews_fn(&previews_include);
-    let shell = preview_shell(tooling_crate(telar_project::WORKSHOP_PACKAGE).as_ref());
+    let package = std::env::var("CARGO_PKG_NAME").unwrap_or_default();
+    let shell = preview_shell(
+        &package,
+        tooling_crate(telar_project::WORKSHOP_PACKAGE).as_ref(),
+    );
 
-    // The env-var dispatch lives in `telar::dev_entry` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
+    // The env-var dispatch lives in `telar::dev_entry` and `show_previews` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
     //
-    // Absent from a build that carries no previews, and that is the whole of what keeps the dev loop out of a shipped application: `dev_entry` reads four environment variables on every start and can be told to run the preview harness and exit, so a release binary that still called it answered `TELAR_TEST=1` from anyone who set it.
+    // Absent from a build that carries no previews, and that is the whole of what keeps the dev loop out of a shipped application: the two read four environment variables on every start and can be told to run the preview harness and exit, so a release binary that still called them answered `TELAR_TEST=1` from anyone who set it.
     let dev_entry_call = quote! {
         ::telar::__previews! {
             if ::telar::dev_entry(
                 __telar_app_previews,
                 ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
                 || #setup,
-                #shell,
             ) {
                 return;
+            }
+            ::telar::__preview_host! {
+                if ::telar::preview::host::show_previews(
+                    __telar_app_previews,
+                    ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
+                    || #setup,
+                    __telar_preview_shell,
+                ) {
+                    return;
+                }
             }
         }
     };
@@ -263,10 +287,12 @@ pub fn app(input: TokenStream) -> TokenStream {
                 )
             }
         });
+        let hot_lib_var = telar_project::protocol::HOT_LIB_VAR;
+        let hot_port_var = telar_project::protocol::HOT_PORT_VAR;
         quote! {
             if let (::std::result::Result::Ok(lib_path), ::std::result::Result::Ok(hot_port)) = (
-                ::std::env::var("TELAR_HOT_LIB"),
-                ::std::env::var("TELAR_HOT_PORT"),
+                ::std::env::var(#hot_lib_var),
+                ::std::env::var(#hot_port_var),
             ) {
                 #setup
                 #run_host
@@ -296,8 +322,13 @@ pub fn app(input: TokenStream) -> TokenStream {
     let hot_exports = if is_hot_reload {
         let body = quote! {
             ::telar::__previews! {
-                ::telar::preview::host::speak_the_app_language();
-                return ::std::boxed::Box::new((#shell)(__telar_app_previews()));
+                ::telar::__preview_host! {
+                    ::telar::preview::host::speak_the_app_language();
+                    return ::std::boxed::Box::new(__telar_preview_shell(__telar_app_previews()));
+                }
+                ::telar::__without_preview_host! {
+                    return ::std::boxed::Box::new(#app_expr);
+                }
             }
             ::telar::__without_previews! {
                 return ::std::boxed::Box::new(#app_expr);
@@ -337,6 +368,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         #include_stmts
         #preview_table
         #app_previews
+        #shell
         #desktop_run
         #android_run
         #hot_exports
@@ -813,6 +845,7 @@ fn wire_package(
                 &src_dir,
                 &generated_dir,
                 flavour.site_file_name(),
+                manifest.telar.module_visibility(),
             ),
         )?;
         let include_path = telar_project::site_include_path(flavour);
@@ -912,7 +945,9 @@ fn wire_package(
 ///
 /// In an application crate it also installs the catalog the crate baked as the binary loads, unless one is installed already, so the one `app!` installs wins over it; a `[telar] library` never installs its own.
 ///
-/// In a `[telar] library` built with its previews, it also emits `#[test] fn telar_previews()`, which tests every preview the way an application binary does under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary.
+/// In a `[telar] library` built with its previews, it also emits `#[test] fn __telar_library_previews()`, which tests every preview the way an application binary does under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary.
+///
+/// A crate may call it from several modules, each emitting that test; every one lists the whole crate's previews, so only the first to run tests them and writes the report.
 #[proc_macro]
 pub fn rsx_modules(input: TokenStream) -> TokenStream {
     let theme_type_str = if input.is_empty() {
@@ -954,7 +989,7 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;
 
 /// The crate's `telar_all_previews`, listing its `.rsx` previews, inside `::telar::__previews!` so it exists exactly when the previews a crate writes in Rust do.
@@ -1017,20 +1052,44 @@ fn app_previews_fn(includes: &[Ident]) -> TokenStream2 {
     }
 }
 
-/// The constructor of the app `cargo telar preview` shows the previews in: the workshop's while the package's feature for it is on, named after the package as it is compiled, so a browser, with no environment to read the name from, shows it too; and the fallback page otherwise.
-fn preview_shell(workshop: Option<&Ident>) -> TokenStream2 {
-    let fallback = quote! { ::telar::preview::host::PreviewApp::new };
-    let Some(krate) = workshop else {
-        return fallback;
-    };
+/// `__telar_preview_shell`, the app `cargo telar preview` shows the previews in, defined only in a build with the preview host: the workshop's, named after the package as it is compiled, so a browser, with no environment to read the name from, shows it too.
+///
+/// A build with the host but no workshop is refused here, once, saying what adds it, rather than opening the previews in anything else.
+fn preview_shell(package: &str, workshop: Option<&Ident>) -> TokenStream2 {
     let feature = telar_project::WORKSHOP_PACKAGE;
-    quote! {{
-        #[cfg(feature = #feature)]
-        let shell = |entries| ::#krate::WorkshopApp::new(entries).project_name(::core::env!("CARGO_PKG_NAME"));
-        #[cfg(not(feature = #feature))]
-        let shell = #fallback;
-        shell
-    }}
+    let body = match workshop {
+        None => {
+            let message = format!(
+                "`cargo telar preview` shows the previews in `{feature}`, which `{package}` does not declare: add it with `cargo add -p {package} {feature} --optional`"
+            );
+            quote! { ::core::compile_error!(#message) }
+        }
+        Some(krate) => {
+            let message = format!(
+                "this build has telar's preview host without `{package}`'s `{feature}` feature, which shows the previews: build it with `--features {feature}`, as `cargo telar preview` does"
+            );
+            quote! {
+                #[cfg(feature = #feature)]
+                let shell = ::#krate::WorkshopApp::new(entries).project_name(::core::env!("CARGO_PKG_NAME"));
+                #[cfg(not(feature = #feature))]
+                let shell = ::core::compile_error!(#message);
+                shell
+            }
+        }
+    };
+    quote! {
+        ::telar::__previews! {
+            ::telar::__preview_host! {
+                #[cfg(not(target_os = "android"))]
+                #[doc(hidden)]
+                fn __telar_preview_shell(
+                    entries: ::std::vec::Vec<::telar::preview::PreviewEntry>,
+                ) -> impl ::telar::App + 'static {
+                    #body
+                }
+            }
+        }
+    }
 }
 
 /// The faces `[[telar.fonts]]` declares, as the `Vec<FontAsset>` a shaper loads: embedded, so a binary finds its faces wherever it is run from, and `include_bytes!` is also what makes cargo rebuild when a face changes.

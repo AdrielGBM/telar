@@ -6,10 +6,11 @@ telar::rsx_modules!();
 
 use std::rc::Rc;
 
+use telar::ControlSize;
 use telar::{
-    AlignItems, BorderRadius, Children, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Memo, NodeId, Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal,
-    StyledContainer, Text, TextWrap, box_item, children, memo, signal, style_follows, track_layout,
+    AlignItems, BorderRadius, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
+    Memo, NodeId, Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, StyledContainer, Text,
+    TextWrap, box_item, children, memo, signal, style_follows, track_layout,
 };
 use telar_components::metrics::{control_height, control_pad_x, radius_control};
 use telar_components::{
@@ -188,8 +189,8 @@ fn preview_label() -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
-            .height(control_height())
-            .padding_horizontal(control_pad_x()),
+            .height(control_height(ControlSize::Regular))
+            .padding_horizontal(control_pad_x(ControlSize::Regular)),
         children![label],
     )?;
     Ok(box_item(boxed))
@@ -205,7 +206,6 @@ fn sidebar_opener(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutEr
             .shortcut(Action::ToggleSidebar.chords()[0].to_string())
             .on_press(Rc::new(move || drawer.set(true)))
             .build(),
-        Children::default(),
     )
 }
 
@@ -242,7 +242,6 @@ fn middle(
                     .keymap(keymap.clone())
                     .project(Rc::clone(&project))
                     .build(),
-                Children::default(),
             )
         },
     )?;
@@ -305,7 +304,6 @@ fn find_button(
             .shortcut(Action::Find.chords()[0].to_string())
             .on_press(Rc::new(move || keymap.run(Action::Find)))
             .build(),
-        Children::default(),
     )
 }
 
@@ -313,15 +311,14 @@ fn find_button(
 fn window_controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
     telar_components::window_controls(
         WindowControlsProps::props()
-            .min_size(Reactive::of(control_height))
+            .min_size(Reactive::of(|| control_height(ControlSize::Regular)))
             .style(Rc::new(|paint: RectStyle| {
                 paint.with_radius(BorderRadius::all(radius_control()))
             }))
             .build(),
-        Children::default(),
     )
 }
 
 #[cfg(test)]
-#[path = "top_bar_test.rs"]
+#[path = "top_bar.test.rs"]
 mod tests;

@@ -8,10 +8,13 @@
 //! Formatting is whole-document: the parsed AST is re-serialized and the backend returns it as a single replacement edit, so it never has to map edits back through the section line offsets.
 
 mod logic;
+mod rustfmt;
 mod style;
 mod view;
 
 use crate::{Section, header_section, parse};
+
+pub use rustfmt::rustfmt_stdin;
 
 use logic::format_logic_section;
 use style::format_style_section;
@@ -68,5 +71,5 @@ fn present_sections(source: &str) -> Vec<Section> {
 }
 
 #[cfg(test)]
-#[path = "format_test.rs"]
+#[path = "format.test.rs"]
 mod tests;

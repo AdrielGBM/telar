@@ -1,0 +1,446 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element combobox
+            rect 309,284 182x32 fill=#ffffffff border=1 border-color=#4261edff radius=10
+            element group
+              clip 321,-1000000 66x2000000
+                matrix 1,0,0,1,321,284
+                  text 0,8 66x16.8 "Option 40" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                end
+              end
+            end
+            element group
+              matrix 1,0,0,1,467,297
+                path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#171a2eb3
+              end
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end
+element group
+  rect 0,0 800x600
+  element group
+    matrix 1,0,0,1,309,324
+      rect 0,0 182x272 fill=#ffffffff border=1 border-color=#dbdeedff radius=12
+      element listbox
+        clip 4,4 174x264
+          matrix 1,0,0,1,4,-1172
+            element group
+              element option
+                rect 0,0 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,0
+                    text 0,10 158x16.8 "Option 1" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,36 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,36
+                    text 0,10 158x16.8 "Option 2" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,72 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,72
+                    text 0,10 158x16.8 "Option 3" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,108 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,108
+                    text 0,10 158x16.8 "Option 4" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,144 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,144
+                    text 0,10 158x16.8 "Option 5" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,180 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,180
+                    text 0,10 158x16.8 "Option 6" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,216 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,216
+                    text 0,10 158x16.8 "Option 7" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,252 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,252
+                    text 0,10 158x16.8 "Option 8" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,288 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,288
+                    text 0,10 158x16.8 "Option 9" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,324 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,324
+                    text 0,10 158x16.8 "Option 10" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,360 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,360
+                    text 0,10 158x16.8 "Option 11" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,396 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,396
+                    text 0,10 158x16.8 "Option 12" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,432 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,432
+                    text 0,10 158x16.8 "Option 13" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,468 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,468
+                    text 0,10 158x16.8 "Option 14" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,504 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,504
+                    text 0,10 158x16.8 "Option 15" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,540 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,540
+                    text 0,10 158x16.8 "Option 16" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,576 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,576
+                    text 0,10 158x16.8 "Option 17" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,612 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,612
+                    text 0,10 158x16.8 "Option 18" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,648 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,648
+                    text 0,10 158x16.8 "Option 19" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,684 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,684
+                    text 0,10 158x16.8 "Option 20" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,720 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,720
+                    text 0,10 158x16.8 "Option 21" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,756 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,756
+                    text 0,10 158x16.8 "Option 22" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,792 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,792
+                    text 0,10 158x16.8 "Option 23" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,828 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,828
+                    text 0,10 158x16.8 "Option 24" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,864 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,864
+                    text 0,10 158x16.8 "Option 25" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,900 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,900
+                    text 0,10 158x16.8 "Option 26" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,936 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,936
+                    text 0,10 158x16.8 "Option 27" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,972 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,972
+                    text 0,10 158x16.8 "Option 28" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1008 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1008
+                    text 0,10 158x16.8 "Option 29" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1044 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1044
+                    text 0,10 158x16.8 "Option 30" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1080 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1080
+                    text 0,10 158x16.8 "Option 31" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1116 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1116
+                    text 0,10 158x16.8 "Option 32" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1152 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1152
+                    text 0,10 158x16.8 "Option 33" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1188 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1188
+                    text 0,10 158x16.8 "Option 34" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1224 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1224
+                    text 0,10 158x16.8 "Option 35" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1260 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1260
+                    text 0,10 158x16.8 "Option 36" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1296 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1296
+                    text 0,10 158x16.8 "Option 37" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1332 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1332
+                    text 0,10 158x16.8 "Option 38" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1368 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1368
+                    text 0,10 158x16.8 "Option 39" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+              element option
+                rect 0,1404 174x36 fill=#00000014 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,1404
+                    text 0,10 158x16.8 "Option 40" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+              end
+            end
+          end
+        end
+        rect 170,219.6 6x48.4 fill=#a8adc2ff radius=3
+      end
+    end
+  end
+end

@@ -221,7 +221,7 @@ fn inject_reload_poll(dist: &Path) -> Result<(), String> {
     if html.contains(RELOAD_MARKER) {
         return Ok(());
     }
-    std::fs::write(&page, with_reload_poll(&html))
+    telar_project::write_if_changed_atomic(&page, &with_reload_poll(&html))
         .map_err(|e| format!("could not write {}: {e}", page.display()))
 }
 
@@ -531,10 +531,11 @@ fn resolve(root: &Path, base: &str, target: &str) -> Option<PathBuf> {
         return None;
     }
     let relative = under_base.trim_start_matches('/');
-    let escapes = relative
+    let contained = relative
         .split('/')
-        .any(|part| part == ".." || part.contains([':', '\\', '\0']));
-    if escapes {
+        .filter(|part| !part.is_empty())
+        .all(telar_project::is_contained_segment);
+    if !contained {
         return None;
     }
     let file = root.join(relative);
@@ -584,5 +585,5 @@ fn percent_decode(text: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "web_dev_test.rs"]
+#[path = "web_dev.test.rs"]
 mod tests;

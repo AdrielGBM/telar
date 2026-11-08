@@ -38,23 +38,32 @@ pub struct SnapshotSettings {
 pub type MatrixAxes = BTreeMap<String, Vec<MatrixValue>>;
 
 /// The axes a matrix varies the canvas's environment along, rather than an arg, in the order a matrix lists them.
-pub const MATRIX_GLOBAL_AXES: [&str; 5] = ["mode", "locale", "dir", "viewport", "control_size"];
+pub const MATRIX_GLOBAL_AXES: [&str; 4] = ["mode", "locale", "dir", "viewport"];
 
-/// One axis of a named matrix, read and checked.
+/// One axis of a matrix, read and checked: a named one's, or one a preview writes inline.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatrixAxis {
     /// Mode ids.
     Mode(Vec<String>),
+    /// Every mode registered when the matrix expands.
+    RegisteredModes,
     /// BCP 47 language tags.
     Locale(Vec<String>),
+    /// Every locale the application's catalog has.
+    CatalogLocales,
     Dir(Vec<MatrixDirection>),
     /// Each a size like `"390x844"` or a name in `[telar.previews.viewports]`.
     Viewport(Vec<String>),
-    ControlSize(Vec<MatrixControlSize>),
+    /// Every viewport `[telar.previews.viewports]` names.
+    ProjectViewports,
     /// An arg, by name, and each value in the text form a preview's arg values are written in: a bool, a number, `#ff8800`, a choice such as `Primary`, or text in quotes, `'"Save"'`.
     Arg {
         name: String,
         values: Vec<String>,
+    },
+    /// An arg, by name, across every value its control picks among: its prop's variants, or `false` and `true`.
+    ArgValues {
+        name: String,
     },
 }
 
@@ -62,12 +71,11 @@ impl MatrixAxis {
     /// The key the axis is written under.
     pub fn name(&self) -> &str {
         match self {
-            Self::Mode(_) => "mode",
-            Self::Locale(_) => "locale",
+            Self::Mode(_) | Self::RegisteredModes => "mode",
+            Self::Locale(_) | Self::CatalogLocales => "locale",
             Self::Dir(_) => "dir",
-            Self::Viewport(_) => "viewport",
-            Self::ControlSize(_) => "control_size",
-            Self::Arg { name, .. } => name,
+            Self::Viewport(_) | Self::ProjectViewports => "viewport",
+            Self::Arg { name, .. } | Self::ArgValues { name } => name,
         }
     }
 }
@@ -88,32 +96,6 @@ impl MatrixDirection {
             .iter()
             .find(|(held, _)| *held == word)
             .map(|(_, direction)| *direction)
-    }
-}
-
-/// A value of a matrix's `control_size` axis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MatrixControlSize {
-    Mini,
-    Small,
-    Regular,
-    Large,
-}
-
-impl MatrixControlSize {
-    const WORDS: [(&str, Self); 4] = [
-        ("mini", Self::Mini),
-        ("small", Self::Small),
-        ("regular", Self::Regular),
-        ("large", Self::Large),
-    ];
-
-    /// The control size `word` names: `mini`, `small`, `regular` or `large`.
-    pub fn parse(word: &str) -> Option<Self> {
-        Self::WORDS
-            .iter()
-            .find(|(held, _)| *held == word)
-            .map(|(_, size)| *size)
     }
 }
 
@@ -345,9 +327,12 @@ fn parse_axis(
         "viewport" => MatrixAxis::Viewport(read_each(at, values, problems_of, |value| {
             viewport_text(value, viewports)
         })),
-        "control_size" => MatrixAxis::ControlSize(read_each(at, values, problems_of, |value| {
-            word(value, &MatrixControlSize::WORDS)
-        })),
+        "control_size" => {
+            problems.push(format!(
+                "{at} no longer exists: a component takes its own `size` arg rather than inheriting one, so vary that, as `size = [\"Small\", \"Regular\", \"Large\"]`"
+            ));
+            return Err(problems);
+        }
         _ if is_plain_identifier(axis) => MatrixAxis::Arg {
             name: axis.to_string(),
             values: values.iter().map(arg_text).collect(),
@@ -530,16 +515,10 @@ pub fn preview_hosts(
 fn hosts_a_workshop(
     package_dir: &Path,
 ) -> Result<Option<crate::TelarSection>, crate::ManifestError> {
-    let Some(manifest) = crate::cargo_manifest::read_manifest(package_dir) else {
+    let Some(manifest) = crate::CargoManifest::read(package_dir) else {
         return Ok(None);
     };
-    let has_binary = package_dir.join("src/main.rs").is_file()
-        || package_dir.join("src/bin").is_dir()
-        || manifest
-            .get("bin")
-            .and_then(toml::Value::as_array)
-            .is_some_and(|bins| !bins.is_empty());
-    if !has_binary {
+    if manifest.bin_names().is_empty() {
         return Ok(None);
     }
     let telar = crate::TelarManifest::load(package_dir)?.telar;
@@ -547,5 +526,5 @@ fn hosts_a_workshop(
 }
 
 #[cfg(test)]
-#[path = "previews_test.rs"]
+#[path = "previews.test.rs"]
 mod tests;

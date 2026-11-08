@@ -1,10 +1,9 @@
-//! The knobs a caller overrides to size the software backend for its own workload.
+//! The knobs a caller overrides for the software backend.
 
-/// What the software backend's caches may hold, plus font config. Pass to `SoftwareRenderer::new()` to override the defaults in [`renderer_cache::limits`].
-///
-/// A whole [`Policy`](renderer_cache::Policy) per cache rather than a byte count, so an app can also say how long an entry may sit idle and whether one sighting is enough to keep it. A shell and a photo viewer want different answers to all three.
+/// Font config and presentation options for the software backend. Pass to `SoftwareRenderer::new()`. Its caches take their bounds from [`renderer_cache::limits`].
 #[derive(Default)]
 pub struct SoftwareRendererConfig {
+    /// How text is shaped and which fonts it may fall back to.
     pub font: renderer_core::FontConfig,
     /// The app wants a transparent surface. On Wayland this switches presentation from softbuffer (opaque XRGB) to an own `wl_shm` ARGB8888 buffer that preserves alpha; elsewhere it is currently a no-op (softbuffer stays opaque).
     pub transparent: bool,

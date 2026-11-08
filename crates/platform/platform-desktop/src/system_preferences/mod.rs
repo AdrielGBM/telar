@@ -27,7 +27,7 @@ use platform_winit::WinitWindow;
 
 /// Everything the OS answers right now. Blocking on Linux, where it is a D-Bus round trip.
 pub fn read(window: &WinitWindow) -> SystemPreferences {
-    let winit_scheme = window.0.theme().map(|theme| match theme {
+    let winit_scheme = window.winit().theme().map(|theme| match theme {
         winit::window::Theme::Dark => ColorScheme::Dark,
         winit::window::Theme::Light => ColorScheme::Light,
     });
@@ -125,5 +125,5 @@ impl PreferencesTracker {
 }
 
 #[cfg(test)]
-#[path = "tracker_test.rs"]
+#[path = "tracker.test.rs"]
 mod tests;

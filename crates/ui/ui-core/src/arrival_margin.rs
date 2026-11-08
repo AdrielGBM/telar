@@ -49,5 +49,5 @@ pub(crate) fn arrival_within((top, bottom): (f32, f32), surface: Size, viewport:
 }
 
 #[cfg(test)]
-#[path = "arrival_margin_test.rs"]
+#[path = "arrival_margin.test.rs"]
 mod tests;

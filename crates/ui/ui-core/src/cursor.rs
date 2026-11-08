@@ -194,5 +194,5 @@ pub(crate) fn reset() {
 }
 
 #[cfg(test)]
-#[path = "cursor_test.rs"]
+#[path = "cursor.test.rs"]
 mod tests;

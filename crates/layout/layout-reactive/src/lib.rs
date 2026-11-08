@@ -29,6 +29,6 @@ pub use context::{
     track_layout, track_parent, unrounded_height, unrounded_width,
 };
 pub use layout_core::{
-    AlignItems, AvailableSpace, Css, Direction, JustifyContent, LayoutError, LayoutStyle,
-    MeasureFn, MeasureInput, NodeId, SizeDimension, StickyAnchor, TemplateTrack,
+    AlignItems, AvailableSpace, Css, JustifyContent, LayoutError, LayoutStyle, MeasureFn,
+    MeasureInput, NodeId, SizeDimension, StickyAnchor, TemplateTrack,
 };

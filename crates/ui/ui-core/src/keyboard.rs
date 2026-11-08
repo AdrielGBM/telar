@@ -109,5 +109,5 @@ pub fn reset() {
 }
 
 #[cfg(test)]
-#[path = "keyboard_test.rs"]
+#[path = "keyboard.test.rs"]
 mod tests;

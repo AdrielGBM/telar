@@ -1,0 +1,383 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
+use geometry_core::{Insets, Rect, Size, Transform};
+use layout_core::{LayoutStyle, SizeDimension};
+use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource};
+use reactive_core::{RwSignal, detached, dispose_owner, effect, owner_scope, signal, with_owner};
+use renderer_core::{Color, RectStyle, ShapeStyle};
+use ui_tree::{EventResult, RenderNode};
+
+use super::*;
+use crate::{Container, Overlay, StyledContainer, reset_layout_runtime};
+
+fn press(x: f64, y: f64) -> Event {
+    Event::PointerPressed {
+        x,
+        y,
+        button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    }
+}
+
+fn release(x: f64, y: f64) -> Event {
+    Event::PointerReleased {
+        x,
+        y,
+        button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    }
+}
+
+fn fill() -> LayoutStyle {
+    LayoutStyle::new()
+        .width(SizeDimension::Percent(1.0))
+        .height(SizeDimension::Percent(1.0))
+}
+
+fn counting_scrim(hits: Rc<Cell<u32>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let scrim = Container::new(fill(), vec![])?.on_press(move || hits.set(hits.get() + 1));
+    Ok(Box::new(Overlay::new(
+        LayoutStyle::new(),
+        vec![Box::new(scrim)],
+    )?))
+}
+
+/// Overlay ids are minted per surface, so the canvas's first overlay and the page's share an id. Content owned by the scope that built the canvas was torn down when that scope was, with the page's world active, and withdrew the page's overlay in place of its own.
+#[test]
+fn dropping_a_host_withdraws_its_overlays_from_its_own_surface_only() {
+    reset_layout_runtime();
+    let page_hits = Rc::new(Cell::new(0));
+    let page_overlay = counting_scrim(page_hits.clone()).unwrap();
+    crate::compute_layout(
+        page_overlay.layout_node(),
+        layout_core::AvailableSpace::Definite(100.0),
+        layout_core::AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+
+    let component = owner_scope();
+    let canvas = SurfaceCanvas::new(Size::new(100.0, 100.0), || {
+        counting_scrim(Rc::new(Cell::new(0)))
+    })
+    .unwrap();
+    let component_id = component.id();
+    drop(component);
+    drop(canvas);
+    dispose_owner(component_id);
+
+    crate::dispatch_overlays(&press(10.0, 10.0));
+    crate::dispatch_overlays(&release(10.0, 10.0));
+    assert_eq!(page_hits.get(), 1, "the page's overlay is still registered");
+}
+
+#[test]
+fn dispatch_maps_the_pointer_back_through_the_placement() {
+    reset_layout_runtime();
+    let pressed = signal(0u32);
+    let canvas = SurfaceCanvas::new(Size::new(100.0, 100.0), move || {
+        let target = StyledContainer::new(
+            LayoutStyle::new().width(20.0).height(20.0),
+            |_| RectStyle::default().with_fill(Color::BLACK),
+            vec![],
+        )?
+        .on_press(move || pressed.set(pressed.get() + 1));
+        Ok(Box::new(Container::new(fill(), vec![Box::new(target)])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    canvas.resize(Size::new(100.0, 100.0));
+    let _ = canvas.frame_commands();
+    canvas.set_placement(Transform {
+        a: 2.0,
+        d: 2.0,
+        e: 100.0,
+        f: 100.0,
+        ..Transform::IDENTITY
+    });
+
+    canvas.dispatch(&press(30.0, 30.0));
+    canvas.dispatch(&release(30.0, 30.0));
+    assert_eq!(
+        pressed.get(),
+        0,
+        "the outer point (30, 30) is outside the placed surface"
+    );
+
+    canvas.dispatch(&press(130.0, 130.0));
+    canvas.dispatch(&release(130.0, 130.0));
+    assert_eq!(
+        pressed.get(),
+        1,
+        "(130, 130) lands on the surface's (15, 15)"
+    );
+}
+
+#[test]
+fn content_lives_as_long_as_the_host_and_not_the_scope_it_was_built_in() {
+    reset_layout_runtime();
+    let source = signal(0u32);
+    let seen = Rc::new(Cell::new(0u32));
+    let caller = owner_scope();
+    let canvas = {
+        let seen = seen.clone();
+        SurfaceCanvas::new(Size::new(10.0, 10.0), move || {
+            effect(move || seen.set(source.get()));
+            Ok(Box::new(Container::new(fill(), vec![])?) as Box<dyn LayoutItem>)
+        })
+        .unwrap()
+    };
+    let caller_id = caller.id();
+    drop(caller);
+    dispose_owner(caller_id);
+
+    source.set(3);
+    assert_eq!(
+        seen.get(),
+        3,
+        "disposing the caller's scope left the content running"
+    );
+
+    drop(canvas);
+    source.set(4);
+    assert_eq!(seen.get(), 3, "dropping the canvas stopped it");
+}
+
+#[test]
+fn a_composited_surface_is_clipped_to_where_it_lands() {
+    let clip_of = |node: RenderNode| match node {
+        RenderNode::Clip { rect, .. } => rect,
+        _ => panic!("a composited surface is a clip"),
+    };
+    let size = Size::new(100.0, 50.0);
+    let zoomed = Transform {
+        a: 0.5,
+        d: 0.5,
+        e: 10.0,
+        f: 20.0,
+        ..Transform::IDENTITY
+    };
+    assert_eq!(
+        clip_of(composite_surface(zoomed, size, [])),
+        Rect::new(10.0, 20.0, 50.0, 25.0)
+    );
+    let mirrored = Transform {
+        a: -1.0,
+        e: 200.0,
+        ..Transform::IDENTITY
+    };
+    assert_eq!(
+        clip_of(composite_surface(mirrored, size, [])),
+        Rect::new(100.0, 0.0, 100.0, 50.0)
+    );
+}
+
+#[test]
+fn a_host_routes_overlays_before_its_tree() {
+    reset_layout_runtime();
+    let behind = signal(0u32);
+    let modal_hits = Rc::new(Cell::new(0));
+    let canvas = {
+        let modal_hits = modal_hits.clone();
+        SurfaceCanvas::new(Size::new(100.0, 100.0), move || {
+            let page = Container::new(fill(), vec![])?.on_press(move || behind.set(1));
+            let modal = counting_scrim(modal_hits)?;
+            Ok(
+                Box::new(Container::new(fill(), vec![Box::new(page), modal])?)
+                    as Box<dyn LayoutItem>,
+            )
+        })
+        .unwrap()
+    };
+    canvas.resize(Size::new(100.0, 100.0));
+
+    assert_eq!(canvas.dispatch(&press(50.0, 50.0)), EventResult::Handled);
+    canvas.dispatch(&release(50.0, 50.0));
+    assert_eq!(modal_hits.get(), 1);
+    assert_eq!(
+        behind.get(),
+        0,
+        "the modal kept the press from the page behind it"
+    );
+}
+
+#[test]
+fn a_canvas_in_an_environment_is_built_in_it() {
+    reset_layout_runtime();
+    let env = SurfaceEnv {
+        mode: Some(String::from("dusk")),
+        locale: Some(String::from("ar")),
+        direction: Some(Direction::Rtl),
+        high_contrast: Some(true),
+        safe_area: Insets::new(44.0, 0.0, 34.0, 0.0),
+    };
+    let built_in = Rc::new(Cell::new(None));
+    let seen = Rc::clone(&built_in);
+    let canvas = SurfaceCanvas::new_in(Size::new(10.0, 10.0), &env, move || {
+        seen.set(Some(SurfaceEnv {
+            mode: theme_core::use_mode(),
+            locale: i18n_core::current_locale(),
+            direction: Some(crate::current_direction()),
+            high_contrast: preferences_core::high_contrast(),
+            safe_area: crate::use_safe_area_insets(),
+        }));
+        Ok(Box::new(Container::new(fill(), vec![])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    assert_eq!(built_in.take(), Some(env));
+    assert_eq!(canvas.direction(), Some(Direction::Rtl));
+    assert_eq!(canvas.safe_area(), Insets::new(44.0, 0.0, 34.0, 0.0));
+}
+
+/// A process-wide asset cache first reached during one canvas's build hands out signals every later canvas reads.
+#[test]
+fn a_cache_first_reached_in_a_canvas_outlives_it() {
+    reset_layout_runtime();
+    let cached: Rc<Cell<Option<RwSignal<u32>>>> = Rc::new(Cell::new(None));
+    let reached = Rc::clone(&cached);
+    let first = SurfaceCanvas::new(Size::new(10.0, 10.0), move || {
+        let cache = detached(owner_scope).id();
+        reached.set(Some(with_owner(Some(cache), || signal(7u32))));
+        Ok(Box::new(Container::new(fill(), vec![])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    let cached = cached.get().expect("the build reached the cache");
+
+    drop(first);
+
+    let read = Rc::new(Cell::new(0u32));
+    let seen = Rc::clone(&read);
+    let _second = SurfaceCanvas::new(Size::new(10.0, 10.0), move || {
+        seen.set(cached.get());
+        Ok(Box::new(Container::new(fill(), vec![])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    assert_eq!(
+        read.get(),
+        7,
+        "another canvas reads what the first one's build cached"
+    );
+}
+
+fn tab(shift: bool) -> Event {
+    Event::KeyPressed {
+        key: Key::Named(NamedKey::Tab),
+        modifiers: ModifiersState {
+            is_shift: shift,
+            ..ModifiersState::default()
+        },
+        unmodified: None,
+    }
+}
+
+const CANVAS: Size = Size::new(100.0, 100.0);
+
+/// Two 20×20 focusables side by side in the canvas's top-left corner, each telling its signal in `focused` whether it holds focus.
+fn two_focusables(
+    focused: [RwSignal<bool>; 2],
+) -> impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    move || {
+        let boxes = focused
+            .map(|focused| {
+                StyledContainer::new(
+                    LayoutStyle::new().width(20.0).height(20.0),
+                    |_| RectStyle::default().with_fill(Color::BLACK),
+                    vec![],
+                )
+                .map(|swatch| {
+                    Box::new(swatch.on_focus(move |now| focused.set(now))) as Box<dyn LayoutItem>
+                })
+            })
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        Ok(Box::new(Container::new(fill().flex_row(), boxes)?) as Box<dyn LayoutItem>)
+    }
+}
+
+fn shown(canvas: &SurfaceCanvas) {
+    canvas.resize(CANVAS);
+    let _ = canvas.frame_commands();
+}
+
+fn click(canvas: &SurfaceCanvas, x: f64, y: f64) {
+    canvas.dispatch(&press(x, y));
+    canvas.dispatch(&release(x, y));
+}
+
+fn presses_let_the_keyboard_go(canvas: &SurfaceCanvas, first: RwSignal<bool>) {
+    click(canvas, 10.0, 10.0);
+    assert!(first.get(), "a press on a focusable takes focus");
+    click(canvas, 10.0, 10.0);
+    assert!(first.get(), "a press on the focused box keeps it");
+    click(canvas, 80.0, 80.0);
+    assert!(!canvas.holds_focus(), "a press on nothing clears focus");
+}
+
+#[test]
+fn tab_with_nothing_focused_enters_a_canvas_from_either_end() {
+    reset_layout_runtime();
+    let [first, second] = [signal(false), signal(false)];
+    let build = two_focusables([first, second]);
+    let canvas = SurfaceCanvas::new(CANVAS, build).unwrap();
+    shown(&canvas);
+
+    assert_eq!(canvas.dispatch(&tab(false)), EventResult::Handled);
+    assert!(first.get(), "Tab from nothing lands on the first focusable");
+    canvas.dispatch(&tab(false));
+    canvas.dispatch(&tab(false));
+    assert!(
+        first.get(),
+        "Tab past the last focusable wraps round to the first"
+    );
+
+    canvas.blur();
+    canvas.dispatch(&tab(true));
+    assert!(
+        second.get(),
+        "Shift+Tab from nothing lands on the last focusable"
+    );
+}
+
+#[test]
+fn a_press_on_nothing_lets_a_canvas_keyboard_go() {
+    reset_layout_runtime();
+    let [first, second] = [signal(false), signal(false)];
+    let build = two_focusables([first, second]);
+    let canvas = SurfaceCanvas::new(CANVAS, build).unwrap();
+    shown(&canvas);
+    presses_let_the_keyboard_go(&canvas, first);
+}
+
+#[test]
+fn a_press_on_nothing_lets_a_nested_canvas_keyboard_go() {
+    reset_layout_runtime();
+    let [first, second] = [signal(false), signal(false)];
+    let build = two_focusables([first, second]);
+    let canvas = NestedCanvas::new(CANVAS, build).unwrap();
+    shown(&canvas);
+    presses_let_the_keyboard_go(&canvas, first);
+}
+
+#[test]
+fn a_nested_canvas_leaves_tab_from_nothing_to_the_tree_around_and_steps_out_past_its_ends() {
+    reset_layout_runtime();
+    let [first, second] = [signal(false), signal(false)];
+    let build = two_focusables([first, second]);
+    let canvas = NestedCanvas::new(CANVAS, build).unwrap();
+    shown(&canvas);
+
+    assert_eq!(canvas.dispatch(&tab(false)), EventResult::Ignored);
+    assert!(
+        !canvas.holds_focus(),
+        "Tab with nothing focused is the tree around's to move"
+    );
+
+    assert!(
+        canvas.arrive(false),
+        "focus arriving from the stop around lands inside"
+    );
+    assert!(first.get());
+    assert!(!canvas.tab(&tab(false)), "Tab walks the focusables inside");
+    assert!(second.get());
+    assert!(canvas.tab(&tab(false)), "Tab past the last steps out");
+    assert!(!canvas.holds_focus(), "and leaves nothing focused inside");
+}

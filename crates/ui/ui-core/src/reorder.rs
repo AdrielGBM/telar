@@ -6,7 +6,7 @@
 
 use geometry_core::Rect;
 
-/// Which way a strip runs. Not [`layout_core::Direction`], which is text direction (LTR/RTL) and answers a different question.
+/// Which way a strip runs. Not [`i18n_core::Direction`], which is text direction (LTR/RTL) and answers a different question.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Axis {
     Horizontal,
@@ -64,5 +64,5 @@ pub fn apply_move<T>(items: &mut Vec<T>, from: usize, to: usize) -> bool {
 }
 
 #[cfg(test)]
-#[path = "reorder_test.rs"]
+#[path = "reorder.test.rs"]
 mod tests;

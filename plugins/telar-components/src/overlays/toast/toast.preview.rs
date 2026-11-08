@@ -1,0 +1,80 @@
+use std::rc::Rc;
+use std::time::Duration;
+
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Container, LayoutError, LayoutStyle, Role, box_item};
+
+use crate::inputs::button::button::{ButtonProps, button};
+use crate::overlays::toast::toast::{Toast, ToasterProps, Toasts, toaster};
+use telar::{ControlSize, Tone};
+
+fn poster(
+    label: &'static str,
+    queue: Toasts,
+    toast: impl Fn() -> Toast + 'static,
+) -> Result<Box<dyn telar::LayoutItem>, LayoutError> {
+    button(
+        ButtonProps::props()
+            .label(label)
+            .on_press(Rc::new(move || {
+                queue.push(toast());
+            }))
+            .build(),
+    )
+}
+
+pub(crate) fn previews() -> Vec<PreviewEntry> {
+    vec![
+        preview!(toaster: ToasterProps, "Stack", |p| {
+            let queue = Toasts::new();
+            let seconds = p.arg("seconds", 5u64);
+            let lasting = Duration::from_secs(seconds.max(1));
+            queue.push(
+                Toast::new("Your changes are saved.")
+                    .titled("Saved")
+                    .tone(Tone::Success)
+                    .until_dismissed(),
+            );
+            let buttons = vec![
+                poster("Info", queue, move || {
+                    Toast::new("A new version is available.").lasting(lasting)
+                })?,
+                poster("Error", queue, move || {
+                    Toast::new("The file could not be written.")
+                        .titled("Save failed")
+                        .tone(Tone::Danger)
+                        .lasting(lasting)
+                        .with_action("Retry", || {})
+                })?,
+            ];
+            let row = Container::new(LayoutStyle::row().gap(8.0), buttons)?;
+            let stack = toaster(
+                ToasterProps::props()
+                    .toasts(queue)
+                    .max_visible(p.arg("max_visible", 3u32))
+                    .size(p.arg("size", ControlSize::Regular))
+                    .build(),
+            )?;
+            Ok::<_, LayoutError>(Container::column(vec![box_item(row), stack])?)
+        })
+        .title("Overlays/Toast")
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes"))
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Info"))?;
+            canvas.expect_text("A new version is available.")?;
+            canvas.advance(Duration::from_secs(4))?;
+            canvas.expect_text("A new version is available.")?;
+            canvas.advance(Duration::from_secs(1))?;
+            canvas.expect_no_text("A new version is available.")?;
+            canvas.expect_text("Your changes are saved.")?;
+            canvas.click(by_role(Role::Button).named("Dismiss"))?;
+            canvas.expect_no_text("Your changes are saved.")?;
+            canvas.click(by_role(Role::Button).named("Info"))?;
+            canvas.click(by_role(Role::Button).named("Error"))?;
+            canvas.expect_text("A new version is available.")?;
+            canvas.expect_text("The file could not be written.")
+        }),
+    ]
+}

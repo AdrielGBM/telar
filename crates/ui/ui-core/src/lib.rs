@@ -11,8 +11,10 @@ mod async_asset;
 mod border;
 mod breakpoints;
 mod canvas;
+mod cap_band;
 mod caret;
 mod child_host;
+mod children;
 mod composition;
 mod container;
 mod context;
@@ -20,11 +22,13 @@ mod cursor;
 pub mod dismiss;
 mod disposal;
 mod drag;
+mod drag_drop;
 mod element;
 mod error_boundary;
 mod fixed_layer;
 mod fling;
 pub mod focus;
+mod focus_mode;
 mod foreign_surface;
 mod frame_focus;
 mod guest_surface;
@@ -35,6 +39,7 @@ mod input;
 mod input_region;
 mod kept;
 mod keyboard;
+mod keyed_values;
 mod keynav;
 mod layout_item;
 mod layout_leaf;
@@ -59,7 +64,6 @@ mod scroll_page;
 mod scroll_timeline;
 mod scroll_viewports;
 mod serial;
-mod slots;
 mod step;
 mod styled_container;
 mod surface;
@@ -84,7 +88,7 @@ mod text_place;
 mod theme_provider;
 mod transform_origin;
 pub use text_metrics::{
-    SINGLE_LINE_LEADING, line_box, single_line_box, use_text_metrics_generation,
+    BoxText, SINGLE_LINE_LEADING, line_box, single_line_box, use_text_metrics_generation,
 };
 mod virtual_list;
 mod visual_lines;
@@ -99,7 +103,8 @@ pub use async_asset::{
 pub use border::{logical_border_radius, logical_border_widths};
 pub use breakpoints::{Breakpoints, breakpoint};
 pub use canvas::Canvas;
-pub use child_host::{ChildSlot, fragment, fragment_positional};
+pub use child_host::{ChildSlot, fragment, fragment_keyed, fragment_positional};
+pub use children::{Children, use_context};
 pub use container::Container;
 pub use context::{
     NodeId, RelayoutHook, absolute_rect, compute_layout, current_direction, live_node_count,
@@ -116,6 +121,7 @@ pub use dismiss::{
 };
 pub use disposal::OwnedBuild;
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
+pub use drag_drop::DropTarget;
 pub use error_boundary::{BuildFailure, ErrorBoundary};
 pub use fixed_layer::FixedLayer;
 pub use foreign_surface::{ForeignBoundary, ForeignSurface};
@@ -163,13 +169,14 @@ pub use scroll_timeline::{
     use_scroll_viewport,
 };
 pub use scroll_viewports::{enclosing_scroll_viewport, scroll_viewports_of, use_primary_scroll};
-pub use slots::{Children, SlotRequest, Slots, use_context};
 pub use step::{COARSE_STEP, FINE_STEP, step_factor};
 pub use styled_container::{
     KeyAnswer, StyledContainer, box_transform, focus_ring_border, style_follows,
 };
 pub use surface::{Edge, Scrim, SurfaceScaffold, SurfaceTransition};
-pub use surface_canvas::{SurfaceCanvas, SurfaceEnv, composite_surface, follow_box_event};
+pub use surface_canvas::{
+    NestedCanvas, SurfaceCanvas, SurfaceEnv, composite_surface, follow_box_event,
+};
 pub use surface_context::Surface;
 pub use surface_font::{open_surface_font_family, set_font_family, use_font_family};
 pub use surface_frame::SurfaceFrame;
@@ -185,9 +192,7 @@ pub use text_area::TextArea;
 pub use text_edit::DOUBLE_CLICK;
 pub use text_editor::{Caret, Underline};
 pub use text_input::text_input;
-pub use theme_provider::{
-    ScopeProvider, follow_control_size, follow_theme, provide_control_size, provide_theme,
-};
+pub use theme_provider::{ScopeProvider, follow_theme, provide_theme};
 pub use transform_origin::{TransformOrigin, box_transform_about};
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};
 pub use virtual_list::{VirtualItem, VirtualList, VirtualRows, visible_window};

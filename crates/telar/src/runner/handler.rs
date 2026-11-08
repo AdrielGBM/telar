@@ -5,12 +5,13 @@ use reactive_core::{FlushNotifyHandle, set_flush_notify};
 use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
 use std::sync::Arc;
+use telar_project::protocol::RendererBackend;
 use ui_core::EventResult;
 use ui_tree::{DevAction, DevOverlay};
 
 use crate::app_runtime::AppRuntime;
-use crate::config::{self, RendererBackend};
-use crate::prefs::UserPrefs;
+use crate::config;
+use crate::user_preferences;
 
 use super::COMMAND_BUF_POOL_CAP;
 use super::frame_thread::{FrameMsg, Recovery, RenderMsg, RenderRecovery, frame_step_succeeded};
@@ -115,8 +116,7 @@ pub(super) fn build_app_handler<W, D>(
     app: Box<dyn AppRuntime>,
     paths: Arc<dyn AppPathsProvider>,
     fonts: super::font_config::FontSetup,
-    backend: crate::config::RendererBackend,
-    prefs: UserPrefs,
+    backend: RendererBackend,
     app_name: String,
     renderer: SurfaceRenderer<W>,
 ) -> AppHandler<W, D>
@@ -146,11 +146,7 @@ where
         redraw_waker: None,
         scale_scratch: renderer_core::ScaleScratch::new(),
         dev: D::default(),
-        env: AppEnv {
-            app_name,
-            paths,
-            prefs,
-        },
+        env: AppEnv { app_name, paths },
         fonts,
         _window: std::marker::PhantomData,
         command_buf_pool: Vec::new(),
@@ -199,8 +195,9 @@ struct FramePass {
 #[derive(Default)]
 struct AppliedCommands {
     any: bool,
-    /// A move or a resize handed the pointer stroke under way to the window system.
+    /// A move, a resize or a drag handed the pointer stroke under way to the window system.
     took_stroke: bool,
+    drop_answer: Option<platform_core::DropAnswer>,
 }
 
 /// The release the stroke `event` belongs to will now never deliver, as if the pointer had let go where it stood.
@@ -237,6 +234,7 @@ where
     /// Drains and applies the window-management commands a handler enqueued — from a title-bar control during event dispatch, or from `on_frame` (e.g. raising this window on a routed handoff). Routed through the App bridge so the dylib-backed `HotApp` drains the dylib's own queue.
     fn apply_window_commands(&mut self, window: &W) -> AppliedCommands {
         let mut applied = AppliedCommands::default();
+        let mut refused_drags = 0;
         for cmd in self.app.drain_window_commands() {
             applied.any = true;
             match cmd {
@@ -262,13 +260,27 @@ where
                 WindowCommand::SetCursor(cursor) => window.set_cursor(cursor),
                 WindowCommand::Close => self.exit_requested = true,
                 WindowCommand::Navigate(update) => {
-                    if let Some(location) = &mut self.location
-                        && location.apply(&update, &mut self.env.prefs)
-                    {
-                        self.env.save_prefs();
+                    if let Some(location) = &mut self.location {
+                        location.apply(&update);
                     }
                 }
+                WindowCommand::StartDrag(drag) => {
+                    if window.start_drag(drag) {
+                        applied.took_stroke = true;
+                    } else {
+                        refused_drags += 1;
+                    }
+                }
+                WindowCommand::AcceptDrop(answer) => applied.drop_answer = Some(answer),
+                WindowCommand::ShowDragIcon(shown) => window.show_drag_icon(shown),
             }
+        }
+        for _ in 0..refused_drags {
+            self.dispatch_to_app(&Event::DragEnded {
+                outcome: platform_core::DragOutcome::NotStarted,
+            });
+            let after = self.apply_window_commands(window);
+            applied.took_stroke |= after.took_stroke;
         }
         applied
     }
@@ -318,7 +330,7 @@ where
     /// Gives the app's runtime the history this surface's platform stands on, before a tree is built from it. A surface with no address of its own leaves the app's alone.
     fn hand_over_location(&mut self) {
         if let Some(location) = &mut self.location {
-            let history = location.open(&self.env.prefs).to_vec();
+            let history = location.open().to_vec();
             self.app.set_location_history(&history);
         }
     }
@@ -328,9 +340,7 @@ where
         let Some(location) = &mut self.location else {
             return;
         };
-        if location.follow(history.clone(), &mut self.env.prefs) {
-            self.env.save_prefs();
-        }
+        location.follow(history.clone());
         let app = &self.app;
         app.event_batch(|| app.set_location_history(&history));
         self.apply_window_commands(window);
@@ -409,9 +419,10 @@ where
     }
 
     fn logical_size(&self, window: &W) -> (u32, u32) {
+        let scale_factor = window.scale_factor();
         (
-            (window.width() as f32 / self.scale_factor) as u32,
-            (window.height() as f32 / self.scale_factor) as u32,
+            platform_core::logical_extent(window.width(), scale_factor),
+            platform_core::logical_extent(window.height(), scale_factor),
         )
     }
 
@@ -496,8 +507,13 @@ where
         match loaded {
             Ok(new_app) => {
                 self.take_build(new_app, window);
-                let outcome = match self.show_app_panic() {
-                    Some(report) => crate::hot::HotOutcome::Panicked(report),
+                let outcome = match self.show_app_stop() {
+                    Some(platform_core::guest::GuestStop::Panicked(panic)) => {
+                        crate::hot::HotOutcome::Panicked(panic.to_string())
+                    }
+                    Some(platform_core::guest::GuestStop::Unreadable(error)) => {
+                        crate::hot::HotOutcome::Unreadable(error)
+                    }
                     None => {
                         tracing::info!("hot reloaded: {}", library.display());
                         crate::hot::HotOutcome::Loaded
@@ -522,7 +538,7 @@ where
     fn take_build(&mut self, app: Box<dyn AppRuntime>, window: &W) {
         self.swap_app(app, window);
         self.dev.set_build_outcome(ui_tree::BuildOutcome::Loaded);
-        self.dev.set_app_panic(None);
+        self.dev.set_app_stop(None);
         window.request_redraw();
     }
 
@@ -576,15 +592,15 @@ where
         self.mount_tree(window);
     }
 
-    /// Shows a panic the app's runtime stopped at its boundary the way the dev overlay shows a failed build, owes the frame that draws it, and hands back its report.
+    /// Shows why the app's runtime stopped calling it, a panic at its boundary or an answer it could not read, the way the dev overlay shows a failed build, owes the frame that draws it, and hands it back.
     ///
     /// The tree goes with it: it can no longer be asked for anything, and the next one this surface draws has to start past every generation the old one handed out.
-    fn show_app_panic(&mut self) -> Option<String> {
-        let report = self.app.take_panic()?;
+    fn show_app_stop(&mut self) -> Option<platform_core::guest::GuestStop> {
+        let report = self.app.take_stop()?;
         self.entered(|this| {
             this.tree = None;
             this.generation.restart();
-            this.dev.set_app_panic(Some(report.clone()));
+            this.dev.set_app_stop(Some(report.clone()));
             this.pacer.presentation_owed = true;
             this.pacer.frame_owed = true;
         });
@@ -716,12 +732,12 @@ where
         match action {
             DevAction::Redraw => window.request_redraw(),
             DevAction::ToggleBackend => {
-                let next = match self.env.prefs.backend.unwrap_or(RendererBackend::Auto) {
+                let next = match user_preferences::stored_backend().unwrap_or(RendererBackend::Auto)
+                {
                     RendererBackend::Hardware => RendererBackend::Software,
                     _ => RendererBackend::Hardware,
                 };
-                self.env.prefs.backend = Some(next);
-                self.env.save_prefs();
+                user_preferences::store_backend(next);
                 self.recovery = RenderRecovery::default();
                 match next {
                     RendererBackend::Software => self.pending_restart = true,
@@ -745,10 +761,7 @@ where
         self.backend = if self.recovery.software_forced() {
             RendererBackend::Software
         } else {
-            self.env
-                .prefs
-                .backend
-                .unwrap_or_else(config::compile_time_backend)
+            user_preferences::stored_backend().unwrap_or_else(config::compile_time_backend)
         };
         // Before creating the new one, to avoid peak memory overlap. A restart exists to change what a renderer is baked with, so nothing is kept warm.
         drop(self.renderer.take());
@@ -1006,7 +1019,7 @@ where
             Recovery::RestartOnSoftware => {
                 tracing::error!(
                     "the render thread keeps dying on the {} renderer, switching to software",
-                    self.renderer_label()
+                    self.backend.as_str()
                 );
             }
             Recovery::GiveUp => {
@@ -1019,14 +1032,6 @@ where
         self.pending_restart = true;
         self.apply_pending_restart(window);
         window.request_redraw();
-    }
-
-    fn renderer_label(&self) -> &'static str {
-        match self.backend {
-            RendererBackend::Software => "software",
-            RendererBackend::Hardware => "hardware",
-            RendererBackend::Auto => "auto",
-        }
     }
 
     /// Hands the frame to the render thread, or rasterises it inline when this surface has no thread of its own. Returns whether a renderer took it.
@@ -1128,12 +1133,19 @@ where
         if let Some(action) = overlay.action {
             self.apply_dev_action(action, window);
         }
+        let hovering = matches!(event, Event::DragOver { .. });
         if overlay.consumed {
+            if hovering {
+                window.answer_drag(None);
+            }
             return;
         }
         let handled = self.dispatch_to_app(&event);
         // Drag must run inside the pointer-press dispatch it originated from, so this sits right after the walk.
         let applied = self.apply_window_commands(window);
+        if hovering {
+            window.answer_drag(applied.drop_answer.clone());
+        }
         // The window system now owns the stroke and keeps its release, which would leave the gesture that handed it over running into the next time the pointer moves.
         if applied.took_stroke
             && let Some(release) = release_of_taken_stroke(&event)
@@ -1319,7 +1331,7 @@ where
     }
 
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
-        self.show_app_panic();
+        self.show_app_stop();
         self.loop_batch.close();
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
         // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.
@@ -1359,9 +1371,9 @@ where
 }
 
 #[cfg(test)]
-#[path = "handler_test.rs"]
+#[path = "handler.test.rs"]
 mod tests;
 
 #[cfg(all(test, feature = "dev", target_os = "linux"))]
-#[path = "handler_unload_test.rs"]
+#[path = "handler.unload.test.rs"]
 mod unload_tests;

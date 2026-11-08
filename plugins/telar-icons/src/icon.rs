@@ -5,9 +5,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, Children, Color, LayoutError, LayoutItem, LayoutStyle, NodeId, ObjectFit, Props,
-    Reactive, RectStyle, SizeDimension, StyledContainer, Svg, SvgData, box_item,
-    inherited_text_style, use_theme_tokens,
+    Accessible, Color, LayoutError, LayoutItem, LayoutStyle, NodeId, ObjectFit, Props, Reactive,
+    RectStyle, SizeDimension, StyledContainer, Svg, SvgData, box_item, inherited_text_style,
+    use_theme_tokens,
 };
 
 use crate::IconName;
@@ -24,9 +24,6 @@ pub struct IconProps {
     /// The colour the icon is drawn in, as a silhouette. Unset (`Color::TRANSPARENT`), a monochrome icon takes the colour of the text around it, and one of a palette set keeps its own colours.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
-    /// What the icon means, for a screen reader. Unset, the icon is decoration and assistive technology skips it; set, it is a picture by that name. Give it one when the icon is the only thing saying something, such as a button with no text.
-    #[props(into, default)]
-    pub label: Reactive<String>,
 }
 
 /// Artwork ready to draw, and whether it takes the colour around it.
@@ -41,13 +38,10 @@ pub(crate) struct Glyph {
 /// Draws the icon `name` in a `size`-px square, a monochrome one tinted like the text around it.
 ///
 /// An id that was not baked is resolved by the runtime source the application installed (the `runtime` feature); until it arrives, and when nothing can answer for it, the box is drawn empty at its full size, so nothing around it moves when it lands.
-pub fn icon(props: IconProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let IconProps {
-        name,
-        size,
-        color,
-        label,
-    } = props;
+///
+/// It is decoration a screen reader skips until the call names it with `a11y_label`, `.a11y_label(…)` from Rust, which makes it a picture by that name: name the icon that is the only thing saying something, such as a button with no text.
+pub fn icon(props: IconProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let IconProps { name, size, color } = props;
 
     let glyph = glyph(name);
     let node: Rc<Cell<Option<NodeId>>> = Rc::new(Cell::new(None));
@@ -85,12 +79,8 @@ pub fn icon(props: IconProps, _children: Children) -> Result<Box<dyn LayoutItem>
         |_| RectStyle::default(),
         vec![box_item(artwork)],
     )?
-    .styled_by(move || square(side()));
-
-    let frame = match label {
-        Reactive::Const(text) if text.is_empty() => frame.a11y_hidden(),
-        label => frame.a11y_label(move || label.get()),
-    };
+    .styled_by(move || square(side()))
+    .a11y_decorative();
     Ok(box_item(frame))
 }
 
@@ -117,5 +107,9 @@ fn glyph(name: IconName) -> Rc<dyn Fn() -> Option<Glyph>> {
 }
 
 #[cfg(test)]
-#[path = "icon_test.rs"]
+#[path = "icon.test.rs"]
 mod tests;
+
+#[cfg(doctest)]
+#[path = "icon.props.test.rs"]
+mod props_tests;

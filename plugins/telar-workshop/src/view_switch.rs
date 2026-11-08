@@ -1,8 +1,8 @@
 //! The view switch in the top bar: icon tabs choosing what the area beside the sidebar shows, each named by a tooltip with the shortcut that picks it.
 
-use telar::{Color, LayoutError, LayoutItem};
+use telar::ControlSize;
+use telar::{Color, IconName, LayoutError, LayoutItem, icon};
 use telar_components::{Tab, tab_list};
-use telar_icons::{IconName, icon};
 
 use crate::keymap::Action;
 use crate::state::{ViewMode, WorkshopState};
@@ -28,6 +28,7 @@ pub(crate) fn view_switch(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
             .collect(),
         Color::TRANSPARENT.into(),
         Some(strings::reactive(VIEW)),
+        ControlSize::Regular,
     )
 }
 
@@ -56,5 +57,5 @@ fn shown_by(view: ViewMode) -> Action {
 }
 
 #[cfg(test)]
-#[path = "view_switch_test.rs"]
+#[path = "view_switch.test.rs"]
 mod tests;

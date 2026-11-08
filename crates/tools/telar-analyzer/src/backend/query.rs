@@ -9,7 +9,7 @@ use lsp_types::*;
 use telar_transpiler::{SourceMap, nth_line};
 
 use crate::position::{Section, find_section_at};
-use crate::ra::{Analyzer, RefTarget};
+use crate::ra::{Analyzer, RefTarget, ReferencesError};
 use crate::text::byte_offset;
 
 use super::Backend;
@@ -80,14 +80,14 @@ impl Backend {
         result
     }
 
-    /// Runs `run` against rust-analyzer with no position mapping — for queries that target an offset computed directly in the generated file (component rename probes the generated `fn`/`Props` definitions).
+    /// Runs `run` against rust-analyzer with no position mapping — for queries that target an offset computed directly in the generated file (component rename probes the generated `fn`/`Props` definitions). `None` when no session serves `root`.
     pub(crate) async fn run_analyzer<T, F, Fut>(&self, root: PathBuf, run: F) -> Option<T>
     where
         F: FnOnce(Arc<Analyzer>) -> Fut,
-        Fut: Future<Output = Option<T>>,
+        Fut: Future<Output = T>,
     {
         let analyzer = self.analyzer(root).await?;
-        run(analyzer).await
+        Some(run(analyzer).await)
     }
 
     /// Find-all-references for the Rust symbol under a `[logic]`/`[view]` cursor. Returns raw [`RefTarget`]s in generated-file coordinates; the caller reverse-maps them.
@@ -97,15 +97,20 @@ impl Backend {
         source: String,
         theme: Option<String>,
         pos: Position,
-    ) -> Option<Vec<RefTarget>> {
-        self.rust_query(
-            rsx_path,
-            source,
-            theme,
-            pos,
-            |a, path, text, offset| async move { a.references(&path, &text, offset).await },
-        )
-        .await
+    ) -> Result<Vec<RefTarget>, Unresolved> {
+        let refs = self
+            .rust_query(
+                rsx_path,
+                source,
+                theme,
+                pos,
+                |a, path, text, offset| async move {
+                    Some(a.references(&path, &text, offset).await)
+                },
+            )
+            .await
+            .ok_or(Unresolved::NotAsked)??;
+        Ok(refs)
     }
 
     /// Find-all-references for the Rust symbol under the cursor, reverse-mapped to `.rsx` `Location`s: refs in this file's generated module map back through the line / expr-span maps; refs in real source files pass through verbatim; refs in *other* generated modules are dropped (a file-scoped `[logic]` symbol has none, and a component's cross-component Rust calls are renamed via the dedicated component-rename path instead). Returns `(locations, unmapped)`: the reverse-mapped reference `Location`s plus a line of generated Rust for each reference that could not be placed (see [`reverse_map_rust_refs`]). Read-only callers ignore `unmapped`; rename refuses when it is non-empty, and says what those lines were.
@@ -116,16 +121,17 @@ impl Backend {
         source: String,
         theme: Option<String>,
         pos: Position,
-    ) -> Option<(Vec<Location>, Vec<String>)> {
+    ) -> Result<(Vec<Location>, Vec<String>), Unresolved> {
         let mut refs = self
             .rust_references(rsx_path.clone(), source.clone(), theme.clone(), pos)
             .await?;
-        let target = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())?;
+        let target = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())
+            .ok_or(Unresolved::NotAsked)?;
         refs.extend(
             self.shadow_references(&rsx_path, &source, &target, pos)
-                .await,
+                .await?,
         );
-        Some(reverse_map_rust_refs(
+        Ok(reverse_map_rust_refs(
             refs,
             &target.path,
             &target.code,
@@ -144,9 +150,9 @@ impl Backend {
         source: &str,
         target: &crate::build_sync::GeneratedTarget,
         pos: Position,
-    ) -> Vec<RefTarget> {
+    ) -> Result<Vec<RefTarget>, Unresolved> {
         let Some(name) = symbol_at(source, pos) else {
-            return Vec::new();
+            return Ok(Vec::new());
         };
         let offsets: Vec<usize> = target
             .map
@@ -156,27 +162,47 @@ impl Backend {
             .map(|shadow| shadow.gen_decl as usize)
             .collect();
         if offsets.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
-        let Some(root) = crate::build_sync::crate_root(rsx_path) else {
-            return Vec::new();
-        };
+        let root = crate::build_sync::crate_root(rsx_path).ok_or(Unresolved::NotAsked)?;
         let gen_path = target.path.clone();
         let gen_code = target.code.clone();
-        self.run_analyzer(root, move |analyzer| async move {
-            let mut found = Vec::new();
-            for offset in offsets {
-                found.extend(
-                    analyzer
-                        .references(&gen_path, &gen_code, offset)
-                        .await
-                        .unwrap_or_default(),
-                );
-            }
-            Some(found)
-        })
-        .await
-        .unwrap_or_default()
+        let found = self
+            .run_analyzer(root, move |analyzer| async move {
+                let mut found = Vec::new();
+                for offset in offsets {
+                    found.extend(analyzer.references(&gen_path, &gen_code, offset).await?);
+                }
+                Ok::<_, ReferencesError>(found)
+            })
+            .await
+            .ok_or(Unresolved::NotAsked)??;
+        Ok(found)
+    }
+}
+
+/// Why the Rust references of a symbol could not be listed.
+#[derive(Debug)]
+pub(crate) enum Unresolved {
+    /// rust-analyzer was not asked: no session serves the crate, or no generated Rust sits where the symbol is.
+    NotAsked,
+    Failed(ReferencesError),
+}
+
+impl From<ReferencesError> for Unresolved {
+    fn from(error: ReferencesError) -> Self {
+        Self::Failed(error)
+    }
+}
+
+impl std::fmt::Display for Unresolved {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotAsked => f.write_str(
+                "rust-analyzer could not be asked, because it is not running for this crate or there is no generated Rust for the symbol",
+            ),
+            Self::Failed(error) => error.fmt(f),
+        }
     }
 }
 
@@ -239,5 +265,5 @@ pub(crate) fn props_builder_offset(
 }
 
 #[cfg(test)]
-#[path = "query_test.rs"]
+#[path = "query.test.rs"]
 mod tests;

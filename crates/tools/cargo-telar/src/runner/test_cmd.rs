@@ -102,27 +102,47 @@ pub(super) fn run_test_cmd(args: TestArgs) -> ! {
     let status = command
         .status()
         .expect("[cargo-telar] failed to invoke cargo");
+    std::process::exit(exit_code(status.code(), &written, report.as_ref()));
+}
+
+/// How the command exits once cargo ended with `cargo_code`: with cargo's code when it failed, else with a failure when the run left no report at `written` or the copy `report` asks for could not be written, since cargo also succeeds when no preview test ran at all.
+fn exit_code(cargo_code: Option<i32>, written: &Path, report: Option<&ReportRequest>) -> i32 {
+    let mut failed = cargo_code != Some(0);
+    if !failed && !written.is_file() {
+        eprintln!(
+            "[cargo-telar] cargo succeeded, but the run wrote no report at {}: no preview was tested.",
+            written.display()
+        );
+        failed = true;
+    }
     if let Some(report) = report {
-        match report.write_from(&written) {
+        match report.write_from(written) {
             Ok(()) => eprintln!(
                 "[cargo-telar] Wrote the report to {}.",
                 report.path.display()
             ),
-            Err(error) => eprintln!(
-                "[cargo-telar] No report written to {}: {error}",
-                report.path.display()
-            ),
+            Err(error) => {
+                eprintln!(
+                    "[cargo-telar] No report written to {}: {error}",
+                    report.path.display()
+                );
+                failed = true;
+            }
         }
     }
-    std::process::exit(status.code().unwrap_or(1));
+    match cargo_code {
+        Some(code) if code != 0 => code,
+        _ if failed => 1,
+        _ => 0,
+    }
 }
 
-/// The cargo command that tests the package: running its binary, or, for a library, which has none, the one unit test `rsx_modules!` emits for it.
+/// The cargo command that tests the package: running its binary, or, for a library, which has none, the one unit test `rsx_modules!` emits for it, matched by its name alone so the module the macro is called from does not matter.
 fn invocation(library: bool, cargo_args: &[String]) -> Vec<String> {
     let mut args = vec![String::from(if library { "test" } else { "run" })];
     args.extend_from_slice(cargo_args);
     if library {
-        args.extend(["--lib", "--", LIBRARY_TEST_NAME, "--exact", "--nocapture"].map(String::from));
+        args.extend(["--lib", "--", LIBRARY_TEST_NAME, "--nocapture"].map(String::from));
     }
     args
 }
@@ -217,5 +237,5 @@ impl ReportRequest {
 }
 
 #[cfg(test)]
-#[path = "test_cmd_test.rs"]
+#[path = "test_cmd.test.rs"]
 mod tests;

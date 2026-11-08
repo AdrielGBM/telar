@@ -4,11 +4,10 @@ struct PathFillData {
     _pad_1: u32,
     _pad_2: u32,
     fill_color: vec4<f32>,
-    grad_p0: vec2<f32>,
-    grad_p1: vec2<f32>,
-    grad_radius: f32,
+    grad_origin: vec2<f32>,
     grad_stop_count: u32,
-    _pad2: vec2<f32>,
+    _pad2: u32,
+    grad_map: vec4<f32>,
     // 8 stop offsets packed as two vec4s (core gradients carry up to 8 stops).
     grad_positions_0: vec4<f32>,
     grad_positions_1: vec4<f32>,
@@ -93,22 +92,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 
     var color: vec4<f32>;
-    if fd.fill_type == 1u {
-        let dir = fd.grad_p1 - fd.grad_p0;
-        let len_sq = dot(dir, dir);
-        var t = 0.0;
-        if len_sq > 0.0001 {
-            t = dot(in.world_pos - fd.grad_p0, dir) / len_sq;
-        }
-        color = sample_gradient8(t, grad_positions, grad_colors, fd.grad_stop_count);
-    } else if fd.fill_type == 2u {
-        var t = 0.0;
-        if fd.grad_radius > 0.0001 {
-            t = length(in.world_pos - fd.grad_p0) / fd.grad_radius;
-        }
-        color = sample_gradient8(t, grad_positions, grad_colors, fd.grad_stop_count);
-    } else {
+    if fd.fill_type == 0u {
         color = fd.fill_color;
+    } else {
+        let t = gradient_t(fd.fill_type, fd.grad_origin, fd.grad_map, in.world_pos);
+        color = sample_gradient8(t, grad_positions, grad_colors, fd.grad_stop_count);
     }
 
     if color.a < 0.001 {

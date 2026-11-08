@@ -118,5 +118,5 @@ impl ScrollViewport {
 }
 
 #[cfg(test)]
-#[path = "anchor_line_test.rs"]
+#[path = "anchor_line.test.rs"]
 mod tests;

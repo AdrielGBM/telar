@@ -1,0 +1,617 @@
+use std::cell::Cell;
+
+use telar::testing::{key_with, moved, named, press, release};
+use telar::{GuestPanic, Insets, Rect};
+
+use super::*;
+use web_time::Instant;
+
+const WIDTH: f32 = 1000.0;
+const HEIGHT: f32 = 700.0;
+const ERROR: &str = "error[E0425]: cannot find value `count` in this scope\n --> src/app.rs:12:9\n  |\n12 |     count + 1\n  |     ^^^^^ not found in this scope";
+
+fn chord(key: char) -> Event {
+    let modifiers = ModifiersState {
+        is_ctrl: true,
+        is_shift: true,
+        ..ModifiersState::default()
+    };
+    key_with(Key::Char(key), modifiers)
+}
+
+/// Every string the overlay draws over an empty app, with where it lands.
+fn drawn(dev: &mut DevTools) -> Vec<(String, Rect)> {
+    let mut found = Vec::new();
+    let frame = dev.on_frame(&[], WIDTH, HEIGHT, false);
+    telar::for_each_with_matrix(&frame, |command, matrix| {
+        if let DrawCommand::Text { text, rect, .. } = command {
+            found.push((text.to_string(), telar::transform_clip_rect(matrix, *rect)));
+        }
+    });
+    found
+}
+
+fn texts(dev: &mut DevTools) -> Vec<String> {
+    drawn(dev).into_iter().map(|(text, _)| text).collect()
+}
+
+fn shows(dev: &mut DevTools, needle: &str) -> bool {
+    texts(dev).iter().any(|text| text.contains(needle))
+}
+
+/// Whether the overlay draws exactly `text`, as one string.
+fn draws(dev: &mut DevTools, text: &str) -> bool {
+    texts(dev).iter().any(|drawn| drawn == text)
+}
+
+fn centre_of(dev: &mut DevTools, needle: &str) -> (f32, f32) {
+    let (_, rect) = drawn(dev)
+        .into_iter()
+        .find(|(text, _)| text == needle)
+        .unwrap_or_else(|| panic!("{needle:?} is not drawn"));
+    (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0)
+}
+
+fn node(id: u64, name: &'static str, depth: usize, rect: Rect) -> SegmentNodeInfo {
+    SegmentNodeInfo {
+        id,
+        name: name.into(),
+        depth,
+        rect,
+        padding: Insets::new(4.0, 8.0, 4.0, 8.0),
+        margin: Insets::default(),
+        border: Insets::new(1.0, 1.0, 1.0, 1.0),
+        gap: Size::new(6.0, 0.0),
+    }
+}
+
+fn walk() -> Vec<SegmentNodeInfo> {
+    vec![
+        node(0, "AppRoot", 0, Rect::new(0.0, 0.0, WIDTH, HEIGHT)),
+        node(1, "Column", 1, Rect::new(500.0, 100.0, 300.0, 200.0)),
+        node(2, "SaveButton", 2, Rect::new(520.0, 120.0, 120.0, 32.0)),
+        node(3, "Caption", 1, Rect::new(500.0, 320.0, 200.0, 20.0)),
+    ]
+}
+
+#[test]
+fn the_badge_shows_the_frame_rate() {
+    let mut dev = devtools();
+    dev.on_frame(&[], WIDTH, HEIGHT, true);
+    let text = texts(&mut dev);
+    assert!(text.iter().any(|t| t == "DEV"), "{text:?}");
+    assert!(text.iter().any(|t| t == "1 fps"), "{text:?}");
+}
+
+#[test]
+fn the_chords_toggle_the_overlay_and_still_reach_the_app() {
+    let mut dev = devtools();
+    drawn(&mut dev);
+    assert_eq!(
+        dev.on_event(&chord('b')),
+        OverlayResponse {
+            consumed: false,
+            action: Some(DevAction::ToggleBackend),
+        }
+    );
+
+    assert!(!shows(&mut dev, "Telar devtools"));
+    assert_eq!(
+        dev.on_event(&chord('d')),
+        OverlayResponse {
+            consumed: false,
+            action: Some(DevAction::Redraw),
+        }
+    );
+    assert!(
+        shows(&mut dev, "Telar devtools"),
+        "Ctrl+Shift+D opens the panel"
+    );
+
+    assert!(!draws(&mut dev, "0 components"));
+    assert!(!dev.on_event(&chord('I')).consumed);
+    assert!(
+        draws(&mut dev, "0 components"),
+        "Ctrl+Shift+I opens the inspector"
+    );
+
+    dev.on_event(&chord('d'));
+    dev.on_event(&chord('i'));
+    assert!(
+        !shows(&mut dev, "Telar devtools"),
+        "and the chords close them"
+    );
+    assert!(!draws(&mut dev, "0 components"));
+
+    let plain = key_with(Key::Char('i'), ModifiersState::default());
+    assert_eq!(dev.on_event(&plain), OverlayResponse::IGNORED);
+}
+
+#[test]
+fn the_panel_names_the_backend_that_is_drawing_and_follows_a_switch() {
+    let mut dev = devtools();
+    dev.on_event(&chord('d'));
+    assert!(shows(&mut dev, "Starting"));
+    dev.set_renderer_info("software");
+    assert!(shows(&mut dev, "software"));
+    dev.set_renderer_info("hardware (wgpu)");
+    let text = texts(&mut dev);
+    assert!(text.iter().any(|t| t == "hardware (wgpu)"), "{text:?}");
+    assert!(!text.iter().any(|t| t == "software"), "{text:?}");
+}
+
+#[test]
+fn the_banner_shows_the_build_error_until_a_build_lands() {
+    let mut dev = devtools();
+    assert!(!shows(&mut dev, "Build failed"));
+    dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
+    assert!(shows(&mut dev, "Build failed"));
+    assert!(
+        shows(&mut dev, "cannot find value `count` in this scope"),
+        "the compiler's report is shown"
+    );
+    assert!(shows(&mut dev, "src/app.rs:12:9"));
+
+    dev.set_build_outcome(BuildOutcome::Loaded);
+    assert!(!shows(&mut dev, "Build failed"), "a landed build clears it");
+}
+
+/// A build that panicked is not one that keeps running, so it is not said the way a failed build is; and a build that fails after it is said as well, since the panic still stands.
+#[test]
+fn the_banner_says_the_app_panicked_and_where_until_a_build_lands() {
+    let mut dev = devtools();
+    dev.set_app_stop(Some(GuestStop::Panicked(GuestPanic {
+        message: "RUNTIME is already borrowed".to_owned(),
+        location: Some("src/counter.rs:14:9".to_owned()),
+    })));
+    assert!(shows(&mut dev, "App panicked"));
+    assert!(shows(&mut dev, "src/counter.rs:14:9"), "where it panicked");
+    assert!(
+        shows(&mut dev, "RUNTIME is already borrowed"),
+        "what it said"
+    );
+    assert!(!shows(&mut dev, "Build failed"));
+
+    dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
+    assert!(shows(&mut dev, "App panicked"));
+    assert!(shows(&mut dev, "Build failed"));
+
+    dev.set_build_outcome(BuildOutcome::Loaded);
+    dev.set_app_stop(None);
+    assert!(!shows(&mut dev, "App panicked"), "a landed build clears it");
+}
+
+/// A build the app would not load compiled, so it is not said the way a failed build is.
+#[test]
+fn the_banner_says_why_a_build_that_compiled_was_not_loaded_until_one_lands() {
+    let mut dev = devtools();
+    dev.set_build_outcome(BuildOutcome::Refused(
+        "/t/libapp.so: it was built against another telar than this host: restart the session"
+            .to_owned(),
+    ));
+    assert!(shows(&mut dev, "Reload refused"));
+    assert!(shows(&mut dev, "restart the session"), "why it was refused");
+    assert!(!shows(&mut dev, "Build failed"));
+
+    dev.set_build_outcome(BuildOutcome::Loaded);
+    assert!(
+        !shows(&mut dev, "Reload refused"),
+        "a landed build clears it"
+    );
+}
+
+/// Each hint says what the app runs now, so a refusal and a failure shown together would contradict each other.
+#[test]
+fn the_banner_shows_only_what_the_latest_build_came_to() {
+    let mut dev = devtools();
+    dev.set_build_outcome(BuildOutcome::Refused(
+        "/t/libapp.so: restart the session".to_owned(),
+    ));
+    dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
+    assert!(shows(&mut dev, "Build failed"));
+    assert!(!shows(&mut dev, "Reload refused"), "the refusal is over");
+
+    dev.set_build_outcome(BuildOutcome::Refused(
+        "/t/libapp.so: restart the session".to_owned(),
+    ));
+    assert!(shows(&mut dev, "Reload refused"));
+    assert!(!shows(&mut dev, "Build failed"), "the failure is over");
+}
+
+#[test]
+fn the_inspector_lists_the_mounted_components_nested() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    let text = texts(&mut dev);
+    for name in ["AppRoot", "Column", "SaveButton", "Caption", "4 components"] {
+        assert!(text.iter().any(|t| t == name), "{name} is listed: {text:?}");
+    }
+    let (_, column) = centre_of(&mut dev, "Column");
+    let (_, button) = centre_of(&mut dev, "SaveButton");
+    let (_, caption) = centre_of(&mut dev, "Caption");
+    assert!(
+        column < button && button < caption,
+        "in walk order, every branch open"
+    );
+    assert!(
+        shows(&mut dev, "0 · #0"),
+        "with the outermost one chosen, so its details are shown"
+    );
+}
+
+#[test]
+fn choosing_a_component_shows_its_box_and_marks_it_over_the_app() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    let (x, y) = centre_of(&mut dev, "SaveButton");
+    assert!(dev.on_event(&press(x, y)).consumed);
+    dev.on_event(&release(x, y));
+
+    let text = texts(&mut dev);
+    for fact in ["520, 120", "120 × 32", "4 8 4 8", "6 × 0", "2 · #2"] {
+        assert!(text.iter().any(|t| t == fact), "{fact} is shown: {text:?}");
+    }
+    let frame = dev.on_frame(&[], WIDTH, HEIGHT, false);
+    let marked = frame.iter().any(|command| {
+        matches!(command, DrawCommand::Rect { rect, .. } if *rect == Rect::new(520.0, 120.0, 120.0, 32.0))
+    });
+    assert!(marked, "the chosen component is outlined over the app");
+}
+
+#[test]
+fn a_press_on_the_badge_is_the_overlays_and_one_elsewhere_is_the_apps() {
+    let mut dev = devtools();
+    drawn(&mut dev);
+    assert_eq!(
+        dev.on_event(&press(WIDTH / 2.0, HEIGHT / 2.0)),
+        OverlayResponse::IGNORED
+    );
+
+    let (x, y) = centre_of(&mut dev, "DEV");
+    let badge = dev.on_event(&press(x, y));
+    assert!(badge.consumed, "the badge press is the overlay's");
+    assert_eq!(badge.action, Some(DevAction::Redraw));
+    assert!(
+        dev.on_event(&release(x, y)).consumed,
+        "and so is its release"
+    );
+    assert!(shows(&mut dev, "Telar devtools"), "and it opens the panel");
+
+    let (x, y) = centre_of(&mut dev, "Telar devtools");
+    assert!(
+        dev.on_event(&press(x, y)).consumed,
+        "a press on the panel too"
+    );
+    dev.on_event(&release(x, y));
+    assert!(dev.on_event(&moved(x, y)).consumed, "and a move over it");
+    assert!(!dev.on_event(&moved(WIDTH / 2.0, HEIGHT / 2.0)).consumed);
+}
+
+#[test]
+fn the_inspector_takes_presses_on_its_drawer_and_leaves_the_rest_of_the_window() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    let (x, y) = centre_of(&mut dev, "4 components");
+    assert!(dev.on_event(&press(x, y)).consumed, "over the drawer");
+    dev.on_event(&release(x, y));
+    assert!(
+        !dev.on_event(&press(WIDTH * 0.75, HEIGHT / 2.0)).consumed,
+        "beside it the app is pressed"
+    );
+}
+
+#[test]
+fn the_keyboard_reaches_the_overlay_only_while_a_panel_holds_focus() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    let down = named(telar::NamedKey::ArrowDown);
+    assert!(
+        !dev.on_event(&down).consumed,
+        "nothing of the overlay's is focused"
+    );
+
+    let (x, y) = centre_of(&mut dev, "Column");
+    dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    drawn(&mut dev);
+    assert!(dev.on_event(&down).consumed, "the tree walks its rows");
+
+    dev.on_event(&press(WIDTH * 0.75, HEIGHT / 2.0));
+    drawn(&mut dev);
+    assert!(
+        !dev.on_event(&down).consumed,
+        "a press on the app hands the keyboard back"
+    );
+}
+
+#[test]
+fn a_change_to_the_overlay_asks_for_a_frame_of_its_own() {
+    let mut dev = devtools();
+    drawn(&mut dev);
+    assert!(!dev.is_dirty(), "a composed overlay has nothing new");
+    dev.on_event(&chord('d'));
+    assert!(dev.is_dirty(), "an opened panel has to be drawn");
+    drawn(&mut dev);
+    assert!(!dev.is_dirty());
+}
+
+#[test]
+fn the_fps_counter_keeps_frames_coming_while_the_app_is_idle() {
+    assert!(devtools().needs_frame());
+}
+
+#[test]
+fn the_overlay_is_drawn_over_the_app() {
+    let mut dev = devtools();
+    let app = [DrawCommand::PopClip];
+    let frame = dev.on_frame(&app, WIDTH, HEIGHT, true);
+    assert!(matches!(frame[0], DrawCommand::PopClip), "the app first");
+    assert!(frame.len() > app.len(), "then the overlay");
+}
+
+#[test]
+fn the_overlay_is_marked_as_a_surface_of_its_own() {
+    let mut dev = devtools();
+    let app = [DrawCommand::PopClip];
+    let frame = dev.on_frame(&app, WIDTH, HEIGHT, true);
+    assert!(
+        matches!(frame[1], DrawCommand::PushSurface { .. }),
+        "its boxes are numbered in its own world, so read as the app's they would name the app's boxes"
+    );
+    assert!(matches!(frame.last(), Some(DrawCommand::PopSurface)));
+}
+
+thread_local! {
+    static NOW: Cell<Option<Instant>> = const { Cell::new(None) };
+}
+
+fn frozen_now() -> Instant {
+    NOW.with(|now| match now.get() {
+        Some(at) => at,
+        None => {
+            let at = Instant::now();
+            now.set(Some(at));
+            at
+        }
+    })
+}
+
+fn devtools() -> DevTools {
+    telar::testing::install_test_face();
+    DevTools {
+        clock: Clock::reading(frozen_now),
+        ..DevTools::default()
+    }
+}
+
+#[test]
+fn the_banner_and_the_inspector_drawer_share_the_window_without_covering_each_other() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
+    let (alone, _) = centre_of(&mut dev, "Build failed");
+
+    dev.on_event(&chord('i'));
+    let found = drawn(&mut dev);
+    let banner = found
+        .iter()
+        .find(|(text, _)| text == "Build failed")
+        .map(|(_, rect)| *rect)
+        .expect("the banner stays while the inspector is open");
+    let drawer_edge = found
+        .iter()
+        .filter(|(text, _)| ["Inspector", "4 components", "Column"].contains(&text.as_str()))
+        .map(|(_, rect)| rect.x + rect.width)
+        .fold(0.0, f32::max);
+    assert!(drawer_edge > 0.0, "the drawer is drawn");
+    assert!(
+        banner.x >= drawer_edge,
+        "the banner starts right of the drawer's content: {} < {drawer_edge}",
+        banner.x
+    );
+    assert!(banner.x > alone, "and moved over to make the room");
+    assert_eq!(
+        found
+            .iter()
+            .filter(|(text, _)| text == "Build failed")
+            .count(),
+        1,
+        "one banner, not one per place"
+    );
+
+    dev.on_event(&chord('i'));
+    let (back, _) = centre_of(&mut dev, "Build failed");
+    assert_eq!(
+        back, alone,
+        "closing the inspector gives the banner its width back"
+    );
+}
+
+#[test]
+fn the_stats_and_the_inspector_drawer_share_the_window_without_covering_each_other() {
+    const NARROW: f32 = 560.0;
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('d'));
+    dev.on_event(&chord('i'));
+
+    let mut found = Vec::new();
+    let frame = dev.on_frame(&[], NARROW, HEIGHT, false);
+    telar::for_each_with_matrix(&frame, |command, matrix| {
+        if let DrawCommand::Text { text, rect, .. } = command {
+            found.push((text.to_string(), telar::transform_clip_rect(matrix, *rect)));
+        }
+    });
+    let left_of = |name: &str| {
+        found
+            .iter()
+            .find(|(text, _)| text == name)
+            .map(|(_, rect)| rect.x)
+            .unwrap_or_else(|| panic!("{name:?} is not drawn"))
+    };
+    // "Inspector" is left out: the stats panel has a row with that label too.
+    let drawer_edge = found
+        .iter()
+        .filter(|(text, _)| ["4 components", "Close", "Column"].contains(&text.as_str()))
+        .map(|(_, rect)| rect.x + rect.width)
+        .fold(0.0, f32::max);
+    assert!(drawer_edge > 0.0, "the drawer is drawn");
+    for name in ["DEV", "Telar devtools"] {
+        assert!(
+            left_of(name) >= drawer_edge,
+            "{name:?} starts at {} inside the drawer, which ends at {drawer_edge}",
+            left_of(name)
+        );
+    }
+    assert_eq!(
+        found.iter().filter(|(text, _)| text == "DEV").count(),
+        1,
+        "one badge, not one per place"
+    );
+}
+
+#[test]
+fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    drawn(&mut dev);
+    assert!(!dev.wants_access(), "the components tab reads no audit");
+
+    let (x, y) = centre_of(&mut dev, "Accessibility");
+    dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    assert!(
+        shows(&mut dev, "Nothing to show"),
+        "until the runner reports, there is nothing to show"
+    );
+    assert!(
+        dev.wants_access(),
+        "the accessibility tab asks for the audit"
+    );
+
+    dev.on_access(&[telar::AccessNode {
+        id: Some(4),
+        parent: None,
+        role: telar::Role::Button,
+        name: String::new(),
+        rect: Rect::new(520.0, 120.0, 120.0, 32.0),
+        focused: false,
+        enabled: true,
+        toggled: None,
+        value: None,
+        lang: None,
+        url: None,
+        current: None,
+        orientation: None,
+        expanded: None,
+        position: None,
+        active_descendant: None,
+        controls: None,
+        has_popup: None,
+        keyboard_shortcut: None,
+        sort: None,
+        multiselectable: false,
+        modal: false,
+    }]);
+    dev.on_violations(&[telar::AccessViolation::new(
+        telar::AccessRule::UnnamedControl,
+        "a button has no name, so a reader announces only its role",
+        Some(Rect::new(520.0, 120.0, 120.0, 32.0)),
+    )]);
+    let text = texts(&mut dev);
+    for expected in [
+        "1 errors · 0 warnings",
+        "a button has no name, so a reader announces only its role",
+        "No name",
+    ] {
+        assert!(
+            text.iter().any(|t| t == expected),
+            "{expected:?} is shown: {text:?}"
+        );
+    }
+
+    dev.on_event(&chord('i'));
+    drawn(&mut dev);
+    assert!(!dev.wants_access(), "a closed drawer reads nothing");
+}
+
+#[test]
+fn a_secondary_press_on_a_component_offers_to_open_or_shut_the_tree() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    let (x, y) = centre_of(&mut dev, "Column");
+    let button = telar::PointerButton::Secondary;
+    let source = telar::PointerSource::Mouse;
+    let (x, y) = (x as f64, y as f64);
+    dev.on_event(&telar::Event::PointerPressed {
+        x,
+        y,
+        button,
+        source: source.clone(),
+    });
+    dev.on_event(&telar::Event::PointerReleased {
+        x,
+        y,
+        button,
+        source,
+    });
+    let text = texts(&mut dev);
+    for row in ["Expand", "Collapse", "Expand all", "Collapse all"] {
+        assert!(text.iter().any(|t| t == row), "{row} is offered: {text:?}");
+    }
+    let (x, y) = centre_of(&mut dev, "Collapse all");
+    dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    let text = texts(&mut dev);
+    assert!(
+        !text.iter().any(|t| t == "Column"),
+        "the tree is shut down to its root: {text:?}"
+    );
+}
+
+/// A build that answers in a way this host cannot read is not fixed by saving again, so it is not said the way a panic is: it asks for a restart.
+#[test]
+fn the_banner_asks_for_a_restart_when_the_app_cannot_be_read() {
+    let mut dev = devtools();
+    dev.set_app_stop(Some(GuestStop::Unreadable(
+        "unknown Role tag 48".to_owned(),
+    )));
+    assert!(shows(&mut dev, "Out of step with this host"));
+    assert!(
+        shows(&mut dev, "unknown Role tag 48"),
+        "what could not be read"
+    );
+    assert!(!shows(&mut dev, "App panicked"));
+
+    dev.set_app_stop(None);
+    assert!(!shows(&mut dev, "Out of step with this host"));
+}
+
+#[test]
+fn a_press_on_the_drawer_away_from_its_controls_hands_the_keyboard_back() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    let down = named(telar::NamedKey::ArrowDown);
+    let (x, y) = centre_of(&mut dev, "Column");
+    dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    drawn(&mut dev);
+    assert!(dev.on_event(&down).consumed, "the tree holds the keyboard");
+
+    let (x, y) = centre_of(&mut dev, "4 components");
+    let pressed = dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    drawn(&mut dev);
+    assert!(pressed.consumed, "the press is the drawer's");
+    assert!(
+        !dev.on_event(&down).consumed,
+        "a press on nothing focusable in the drawer lets its keyboard go"
+    );
+}

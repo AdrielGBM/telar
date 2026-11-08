@@ -189,23 +189,25 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         let owner = match &piece.named_box {
             Some(NamedBox { wraps: Some(i), .. }) => Some(*i),
             // The control it is drawn inside, or failing that the smallest one whose box contains it, so a button inside a card is named by its own label.
-            _ => piece
-                .control
-                .and_then(|node| {
-                    controls
-                        .iter()
-                        .position(|(control, _)| control.node == node)
-                })
-                .or_else(|| {
-                    controls
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, (_, bounds))| contains(*bounds, piece.rect))
-                        .filter(|(_, (control, _))| !piece.groups(control.node))
-                        .filter(|(_, (control, _))| !piece.lies_under(control.node, &reading))
-                        .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)))
-                        .map(|(i, _)| i)
-                }),
+            _ => match piece.control.and_then(|node| {
+                controls
+                    .iter()
+                    .position(|(control, _)| control.node == node)
+            }) {
+                Some(i) if holds_what_it_draws(controls[i].0.role, named_controls[i]) => None,
+                Some(i) => Some(i),
+                None => controls
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, (control, _))| {
+                        !holds_what_it_draws(control.role, named_controls[*i])
+                    })
+                    .filter(|(_, (_, bounds))| contains(*bounds, piece.rect))
+                    .filter(|(_, (control, _))| !piece.groups(control.node))
+                    .filter(|(_, (control, _))| !piece.lies_under(control.node, &reading))
+                    .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)))
+                    .map(|(i, _)| i),
+            },
         };
         match owner {
             // A control the application named is called that, whatever it draws.
@@ -317,9 +319,14 @@ fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
     }
 }
 
+/// Whether a control holds the text it draws as content read inside it, rather than being named by it: a scroll area that is a stop and was given a name, which says what it scrolls without saying it all.
+fn holds_what_it_draws(role: Role, named: bool) -> bool {
+    named && role == Role::ScrollArea
+}
+
 /// Whether a node read for a box holds the nodes read inside that box. Text, and a picture, are read as what they say; a box named as a group reads as its name, a caption beside what it groups.
 fn holds_what_is_inside(role: Role) -> bool {
-    !matches!(role, Role::Label | Role::Drawing)
+    !matches!(role, Role::Label | Role::KeyboardInput | Role::Drawing)
 }
 
 /// Whether a box given no name is still a node for the nodes inside it, as the element a document makes of it is: a tab list around its tabs, a dialog around what it asks, a landmark around its region. A plain group is scaffolding, a heading is named by its text (see [`is_named_by_content`]), and a section or a form with no name is no landmark.
@@ -369,9 +376,11 @@ struct Found {
 }
 
 impl Found {
+    /// Keyed by the box as it is drawn, not by the area the pointer finds it in: a control that reaches past its edges is still read where it stands among its siblings.
     fn holding(node: AccessNode, at: NodeId, reading: &Reading) -> Self {
+        let drawn = visible_rect(at).unwrap_or(node.rect);
         Self {
-            key: reading.in_flow(node.rect, Some(at)),
+            key: reading.in_flow(drawn, Some(at)),
             within: reading.parent_of(at),
             holds: Some(at),
             node,
@@ -791,6 +800,8 @@ struct Open {
     titled: Option<usize>,
     control: Option<NodeId>,
     node: Option<NodeId>,
+    /// Whether a named box around the element is read in place of what it draws, with no control between them: see [`Role::name_replaces_content`].
+    replaced: bool,
     /// How far the element and the boxes around it are moved from their places in the flow by sticking, on screen.
     shift: (f32, f32),
 }
@@ -851,6 +862,7 @@ impl Reading {
                 titled,
                 control,
                 node: innermost,
+                replaced,
                 shift: outer_shift,
             } = open.last().cloned().unwrap_or_default();
             let in_control = control.is_some();
@@ -876,13 +888,18 @@ impl Reading {
                     }
                     let annotation = crate::annotation::peek(node).unwrap_or_default();
                     let inner = Scope {
-                        hidden: scope.hidden || annotation.hidden,
+                        hidden: scope.hidden || annotation.hides(),
                         lang: annotation.lang.or(scope.lang),
                     };
                     let role = match controls.contains(&node) {
                         true => element.semantics.role,
                         false => element.semantics.role.annotated(annotation.role),
                     };
+                    let inner_replaced = !controls.contains(&node)
+                        && (replaced
+                            || (annotation.label.is_some()
+                                && !inner.hidden
+                                && role.name_replaces_content()));
                     let mut inner_titled = titled;
                     let position = element
                         .semantics
@@ -956,6 +973,7 @@ impl Reading {
                             control
                         },
                         node: Some(node),
+                        replaced: inner_replaced,
                         shift,
                     });
                 }
@@ -990,6 +1008,14 @@ impl Reading {
                     }
                     if !in_control {
                         reading.drew_beside_controls(named);
+                    }
+                    // A link inside the text is a stop a reader reaches like a control, so its paragraph is kept to be read around it.
+                    let links = spans
+                        .iter()
+                        .flat_map(|spans| spans.iter())
+                        .any(|span| span.link.is_some());
+                    if replaced && !links {
+                        return;
                     }
                     if !in_control && clipped_away.last().copied().unwrap_or(false) {
                         return;
@@ -1236,5 +1262,5 @@ pub fn nested_surfaces(commands: &[DrawCommand]) -> Vec<NestedSurface> {
 }
 
 #[cfg(test)]
-#[path = "accessibility_test.rs"]
+#[path = "accessibility.test.rs"]
 mod tests;

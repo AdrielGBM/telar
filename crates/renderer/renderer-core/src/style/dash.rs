@@ -318,5 +318,5 @@ fn push_distinct(points: &mut Vec<Point>, point: Point) {
 }
 
 #[cfg(test)]
-#[path = "dash_test.rs"]
+#[path = "dash.test.rs"]
 mod tests;

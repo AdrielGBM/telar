@@ -1,4 +1,4 @@
-//! Grid track sizing: the `1fr`, `auto` and fixed forms a template column is written in.
+//! Grid track sizing: the `1fr`, `auto`, content-sized and fixed forms a template column is written in.
 
 use geometry_core::Size;
 use taffy::{
@@ -14,6 +14,8 @@ enum Breadth {
     Length(SizeDimension),
     Fr(f32),
     Auto,
+    MinContent,
+    MaxContent,
 }
 
 impl Breadth {
@@ -26,6 +28,8 @@ impl Breadth {
             },
             // CSS has no flexible minimum: a `1fr` track's floor is `auto`.
             Breadth::Fr(_) | Breadth::Auto => MinTrackSizingFunction::auto(),
+            Breadth::MinContent => MinTrackSizingFunction::min_content(),
+            Breadth::MaxContent => MinTrackSizingFunction::max_content(),
         }
     }
 
@@ -38,6 +42,8 @@ impl Breadth {
             },
             Breadth::Fr(flex) => MaxTrackSizingFunction::fr(flex),
             Breadth::Auto => MaxTrackSizingFunction::auto(),
+            Breadth::MinContent => MaxTrackSizingFunction::min_content(),
+            Breadth::MaxContent => MaxTrackSizingFunction::max_content(),
         }
     }
 
@@ -102,6 +108,16 @@ impl TemplateTrack {
 
     pub fn auto() -> Self {
         Self::single(Breadth::Auto)
+    }
+
+    /// As wide as the narrowest its content can be laid out: its longest word, or its widest box that does not wrap.
+    pub fn min_content() -> Self {
+        Self::single(Breadth::MinContent)
+    }
+
+    /// As wide as its content laid out with nothing wrapped.
+    pub fn max_content() -> Self {
+        Self::single(Breadth::MaxContent)
     }
 
     pub fn minmax(min: TemplateTrack, max: TemplateTrack) -> Self {

@@ -27,5 +27,5 @@ impl AssetDecoder for SvgDecoder {
 }
 
 #[cfg(test)]
-#[path = "svg_test.rs"]
+#[path = "svg.test.rs"]
 mod tests;

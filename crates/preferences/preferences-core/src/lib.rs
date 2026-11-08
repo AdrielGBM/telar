@@ -152,5 +152,5 @@ pub fn use_preferred_locales() -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

@@ -4,7 +4,7 @@ use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::thread::JoinHandle;
 
-use super::lent::LentBytes;
+use super::lent::{LentBytes, Utf8};
 use super::services::HostServices;
 use super::shield;
 
@@ -13,7 +13,7 @@ type Body = Box<dyn FnOnce() + Send>;
 /// A body a guest hands its host to run on a thread of the host's: `main(data)`, code of the guest's that owns `data` and frees it, and the thread's name, lent for the call.
 #[repr(C)]
 pub struct ThreadStart {
-    pub(super) name: LentBytes,
+    pub(super) name: LentBytes<Utf8>,
     pub(super) main: unsafe extern "C" fn(data: *mut c_void),
     pub(super) data: *mut c_void,
 }
@@ -37,7 +37,11 @@ impl HostThread {
     /// # Safety
     ///
     /// `services` must be the table the host handed this guest, still kept by the host.
-    pub unsafe fn start(services: &HostServices, name: &str, main: Body) -> Option<Self> {
+    pub unsafe fn start<Upper>(
+        services: &HostServices<Upper>,
+        name: &str,
+        main: Body,
+    ) -> Option<Self> {
         let spawn = services.spawn_thread?;
         let data = Box::into_raw(Box::new(main)).cast::<c_void>();
         let start = ThreadStart {
@@ -59,7 +63,7 @@ impl HostThread {
     /// # Safety
     ///
     /// `services` must be the table [`start`](Self::start) was handed.
-    pub unsafe fn join(self, services: &HostServices) {
+    pub unsafe fn join<Upper>(self, services: &HostServices<Upper>) {
         if let Some(join) = services.join_thread {
             unsafe { join(services.data, self) }
         }
@@ -70,7 +74,7 @@ impl HostThread {
     /// # Safety
     ///
     /// As [`join`](Self::join).
-    pub unsafe fn detach(self, services: &HostServices) {
+    pub unsafe fn detach<Upper>(self, services: &HostServices<Upper>) {
         if let Some(detach) = services.detach_thread {
             unsafe { detach(services.data, self) }
         }
@@ -161,5 +165,5 @@ pub unsafe extern "C" fn detach_thread(_data: *const c_void, thread: HostThread)
 }
 
 #[cfg(test)]
-#[path = "threads_test.rs"]
+#[path = "threads.test.rs"]
 mod tests;

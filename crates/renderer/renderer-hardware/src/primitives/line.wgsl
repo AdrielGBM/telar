@@ -10,11 +10,10 @@ struct LineInstance {
     _pad_pt_0: u32,
     _pad_pt_1: u32,
     _pad_pt_2: u32,
-    grad_p0: vec2<f32>,
-    grad_p1: vec2<f32>,
-    grad_radius: f32,
+    grad_origin: vec2<f32>,
     grad_stop_count: u32,
-    _pad_g: vec2<f32>,
+    _pad_g: u32,
+    grad_map: vec4<f32>,
     grad_positions: vec4<f32>,
     grad_colors_0: vec4<f32>,
     grad_colors_1: vec4<f32>,
@@ -105,16 +104,7 @@ fn line_paint(in: VertexOutput) -> vec4<f32> {
         inst.grad_colors_2,
         inst.grad_colors_3,
     );
-    var t = 0.0;
-    if inst.paint_type == 1u {
-        let dir = inst.grad_p1 - inst.grad_p0;
-        let len_sq = dot(dir, dir);
-        if len_sq > 0.0001 {
-            t = dot(in.screen_pos - inst.grad_p0, dir) / len_sq;
-        }
-    } else if inst.grad_radius > 0.0001 {
-        t = length(in.screen_pos - inst.grad_p0) / inst.grad_radius;
-    }
+    let t = gradient_t(inst.paint_type, inst.grad_origin, inst.grad_map, in.screen_pos);
     return sample_gradient(t, inst.grad_positions, grad_colors, inst.grad_stop_count);
 }
 

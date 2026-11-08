@@ -1,0 +1,497 @@
+use super::*;
+
+#[test]
+fn a_role_reads_back_as_the_name_it_was_written_with() {
+    for name in [
+        "banner",
+        "navigation",
+        "main",
+        "complementary",
+        "contentinfo",
+        "article",
+        "section",
+        "form",
+        "search",
+        "list",
+        "listitem",
+        "button",
+        "checkbox",
+        "radio",
+        "switch",
+        "tablist",
+        "tab",
+        "tabpanel",
+        "menu",
+        "menuitem",
+        "menuitemcheckbox",
+        "menuitemradio",
+        "listbox",
+        "option",
+        "slider",
+        "spinbutton",
+        "combobox",
+        "progressbar",
+        "tree",
+        "treeitem",
+        "grid",
+        "row",
+        "gridcell",
+        "columnheader",
+        "toolbar",
+        "separator",
+        "status",
+        "log",
+        "label",
+        "group",
+    ] {
+        let role = Role::parse(name).unwrap_or_else(|| panic!("`{name}` should parse"));
+        assert_eq!(role.as_str(), name, "`{name}` should round-trip");
+    }
+}
+
+#[test]
+fn the_words_an_author_reaches_for_first_point_at_the_role_they_mean() {
+    assert_eq!(Role::parse("nav"), Some(Role::Navigation));
+    assert_eq!(Role::parse("sidebar"), Some(Role::Complementary));
+    assert_eq!(Role::parse("header"), Some(Role::Banner));
+    assert_eq!(Role::parse("footer"), Some(Role::ContentInfo));
+    assert_eq!(Role::parse("h2"), Some(Role::Heading(2)));
+}
+
+#[test]
+fn a_name_nothing_answers_to_is_not_guessed_at() {
+    assert_eq!(Role::parse("aricle"), None);
+    assert_eq!(Role::parse(""), None);
+}
+
+#[test]
+fn a_region_is_not_a_control_and_neither_is_a_plain_box() {
+    assert!(
+        Role::Navigation.is_region(),
+        "a navigation landmark is a region"
+    );
+    assert!(
+        !Role::Navigation.is_control(),
+        "and a region is not something you operate"
+    );
+    assert!(Role::Slider.is_control(), "a slider is a control");
+    assert!(!Role::Slider.is_region(), "and a control is not a landmark");
+    assert!(
+        !Role::Group.is_region(),
+        "a plain group is neither a region"
+    );
+    assert!(!Role::Group.is_control(), "nor a control");
+}
+
+#[test]
+fn the_role_says_what_its_on_off_state_is() {
+    for role in [
+        Role::CheckBox,
+        Role::Radio,
+        Role::Switch,
+        Role::MenuItemCheckBox,
+        Role::MenuItemRadio,
+    ] {
+        assert_eq!(role.toggle_kind(), Some(ToggleKind::Checked), "{role:?}");
+    }
+    assert_eq!(
+        Role::Button.toggle_kind(),
+        Some(ToggleKind::Pressed),
+        "a button with a state is a toggle button, pressed rather than checked"
+    );
+    assert_eq!(Role::Tab.toggle_kind(), Some(ToggleKind::Selected));
+    assert_eq!(
+        Role::TreeItem.toggle_kind(),
+        Some(ToggleKind::Selected),
+        "a tree row's on/off state is being the chosen one; whether it is open is a state of its own"
+    );
+    assert_eq!(
+        Role::Option.toggle_kind(),
+        Some(ToggleKind::Selected),
+        "an option is the chosen one of its list box or not"
+    );
+    assert_eq!(Role::Disclosure.toggle_kind(), Some(ToggleKind::Expanded));
+    for role in [
+        Role::Link,
+        Role::Slider,
+        Role::Navigation,
+        Role::Group,
+        Role::MenuItem,
+        Role::ListBox,
+    ] {
+        assert_eq!(role.toggle_kind(), None, "{role:?} has no on/off state");
+    }
+}
+
+#[test]
+fn a_box_is_a_group_until_it_says_otherwise() {
+    assert_eq!(Semantics::default().role, Role::Group);
+    assert_eq!(Semantics::of(Role::Main).role, Role::Main);
+    assert!(
+        Semantics::group().label.is_none(),
+        "a group says nothing about itself until labelled"
+    );
+}
+
+#[test]
+fn an_annotation_names_a_box_over_what_the_widget_derived() {
+    let derived = Semantics::drawing();
+    assert!(derived.label.is_none(), "a picture has no name of its own");
+    let annotation = Annotation {
+        label: Some("Company logo".into()),
+        role: None,
+        lang: Some("es".into()),
+        hidden: false,
+        decorative: false,
+        anchor: Some("logo".into()),
+        modal: None,
+    };
+    let said = derived.annotated(&annotation);
+    assert_eq!(said.role, Role::Drawing, "the role is still the widget's");
+    assert_eq!(said.label.as_deref(), Some("Company logo"));
+    assert_eq!(said.lang.as_deref(), Some("es"));
+    assert_eq!(said.anchor.as_deref(), Some("logo"));
+    assert!(!said.hidden);
+}
+
+#[test]
+fn an_empty_annotation_changes_nothing_and_hiding_is_only_ever_added() {
+    let derived = Semantics::of(Role::Button)
+        .with_label("Close")
+        .hidden_from_readers();
+    assert!(Annotation::default().is_empty());
+    assert_eq!(derived.clone().annotated(&Annotation::default()), derived);
+    assert!(
+        derived.annotated(&Annotation::default()).hidden,
+        "an annotation that does not hide cannot unhide what the widget hid"
+    );
+}
+
+#[test]
+fn decoration_is_hidden_until_it_is_named() {
+    let decoration = Annotation {
+        decorative: true,
+        ..Annotation::default()
+    };
+    assert!(!decoration.is_empty());
+    assert!(Semantics::drawing().annotated(&decoration).hidden);
+
+    let named = Annotation {
+        label: Some("Home".into()),
+        ..decoration
+    };
+    let said = Semantics::drawing().annotated(&named);
+    assert!(!said.hidden);
+    assert_eq!(said.label.as_deref(), Some("Home"));
+}
+
+#[test]
+fn a_language_is_an_annotation_even_without_a_name() {
+    let annotation = Annotation {
+        lang: Some("ja".into()),
+        ..Annotation::default()
+    };
+    assert!(!annotation.is_empty());
+    let said = Semantics::group().annotated(&annotation);
+    assert_eq!(said.lang.as_deref(), Some("ja"));
+    assert!(said.label.is_none());
+}
+
+#[test]
+fn only_a_link_with_somewhere_to_go_is_current() {
+    let link = Semantics::group().linking_to(Destination::anchor("web"));
+    assert_eq!(link.current_kind(), None, "not marked");
+    assert_eq!(
+        link.marked_current(true).current_kind(),
+        Some(CurrentKind::Location)
+    );
+    assert_eq!(
+        Semantics::of(Role::Link)
+            .marked_current(true)
+            .current_kind(),
+        None,
+        "a disabled link goes nowhere, so it is the current one of nothing"
+    );
+    assert_eq!(
+        Semantics::of(Role::Button)
+            .marked_current(true)
+            .current_kind(),
+        None
+    );
+}
+
+#[test]
+fn a_tree_row_carries_its_openness_and_its_place_beside_its_selection() {
+    let row = Semantics {
+        toggled: Some(true),
+        expanded: Some(false),
+        position: Some(SetPosition {
+            level: 2,
+            position: 3,
+            size: 7,
+        }),
+        ..Semantics::of(Role::TreeItem)
+    };
+    assert_ne!(
+        row,
+        Semantics {
+            expanded: Some(true),
+            ..row.clone()
+        },
+        "opening a row is a change a target has to act on"
+    );
+    assert_eq!(
+        Semantics::default().expanded,
+        None,
+        "a box says nothing about being open until it can be"
+    );
+    assert_eq!(Semantics::default().position, None);
+}
+
+#[test]
+fn a_reading_is_compared_by_its_numbers() {
+    let reading = |now: f64| NumericValue {
+        now,
+        min: 0.0,
+        max: 10.0,
+    };
+    let with = |now: f64| Semantics {
+        value: Some(reading(now)),
+        orientation: Some(Orientation::Vertical),
+        ..Semantics::of(Role::Splitter)
+    };
+    assert_eq!(with(4.0), with(4.0));
+    assert_ne!(with(4.0), with(5.0));
+    assert_ne!(with(4.0), Semantics::of(Role::Splitter));
+    assert_eq!(Orientation::Vertical.as_str(), "vertical");
+    assert_eq!(Orientation::Horizontal.as_str(), "horizontal");
+}
+
+#[test]
+fn the_box_a_cursor_rests_on_is_part_of_what_a_container_says() {
+    let on = |row: Option<u64>| Semantics {
+        active_descendant: row,
+        ..Semantics::of(Role::Tree)
+    };
+    assert_eq!(Semantics::default().active_descendant, None);
+    assert_ne!(
+        on(Some(4)),
+        on(Some(5)),
+        "a cursor moving to another row is a change a target has to act on"
+    );
+    assert_ne!(on(Some(4)), on(None));
+    assert_eq!(
+        on(Some(4))
+            .annotated(&Annotation {
+                label: Some("Files".into()),
+                ..Annotation::default()
+            })
+            .active_descendant,
+        Some(4),
+        "naming the container keeps where its cursor is"
+    );
+}
+
+#[test]
+fn what_a_control_opens_is_part_of_what_it_says_and_reads_as_the_aria_word() {
+    let opening = |popup: Option<HasPopup>| Semantics {
+        has_popup: popup,
+        ..Semantics::of(Role::Button)
+    };
+    assert_eq!(
+        Semantics::default().has_popup,
+        None,
+        "a box opens nothing until it says it does"
+    );
+    assert_ne!(opening(Some(HasPopup::Menu)), opening(None));
+    assert_ne!(
+        opening(Some(HasPopup::Menu)),
+        opening(Some(HasPopup::ListBox))
+    );
+    assert_eq!(HasPopup::Menu.as_str(), "menu");
+    assert_eq!(HasPopup::ListBox.as_str(), "listbox");
+}
+
+#[test]
+fn only_a_role_less_box_around_exactly_one_control_lends_its_name() {
+    assert!(Role::Group.lends_name_to_control(false, 1));
+    assert!(!Role::Group.lends_name_to_control(true, 1));
+    assert!(!Role::Group.lends_name_to_control(false, 0));
+    assert!(!Role::Group.lends_name_to_control(false, 2));
+    assert!(!Role::TabList.lends_name_to_control(false, 1));
+}
+
+#[test]
+fn the_shortcut_of_a_control_is_part_of_what_it_says() {
+    let bound = |keys: Option<&str>| Semantics {
+        keyboard_shortcut: keys.map(Into::into),
+        ..Semantics::of(Role::MenuItem)
+    };
+    assert_eq!(
+        Semantics::default().keyboard_shortcut,
+        None,
+        "a box has no shortcut until it says it does"
+    );
+    assert_ne!(bound(Some("Control+Z")), bound(None));
+    assert_ne!(bound(Some("Control+Z")), bound(Some("Meta+Z")));
+}
+
+#[test]
+fn a_grid_s_rows_and_cells_are_chosen_and_its_headers_say_the_sort() {
+    assert_eq!(Role::Row.toggle_kind(), Some(ToggleKind::Selected));
+    assert_eq!(Role::GridCell.toggle_kind(), Some(ToggleKind::Selected));
+    assert_eq!(Role::Grid.toggle_kind(), None);
+    assert_eq!(Role::ColumnHeader.toggle_kind(), None);
+    assert_eq!(Role::parse("table"), Some(Role::Grid));
+    assert_eq!(Role::parse("cell"), Some(Role::GridCell));
+    let header = |sort: Option<SortDirection>| Semantics {
+        sort,
+        ..Semantics::of(Role::ColumnHeader)
+    };
+    assert_eq!(Semantics::default().sort, None);
+    assert_ne!(header(Some(SortDirection::Ascending)), header(None));
+    assert_ne!(
+        header(Some(SortDirection::Ascending)),
+        header(Some(SortDirection::Descending))
+    );
+    assert_eq!(SortDirection::Ascending.as_str(), "ascending");
+    assert_eq!(SortDirection::Descending.as_str(), "descending");
+    assert_eq!(
+        SortDirection::Ascending.reversed(),
+        SortDirection::Descending
+    );
+}
+
+#[test]
+fn a_box_lets_several_of_its_items_be_chosen_only_when_it_says_so() {
+    assert!(!Semantics::default().multiselectable);
+    let list = Semantics {
+        multiselectable: true,
+        ..Semantics::of(Role::ListBox)
+    };
+    assert_ne!(list, Semantics::of(Role::ListBox));
+}
+
+#[test]
+fn an_item_says_only_the_numbers_its_role_takes() {
+    assert_eq!(Role::TreeItem.positioning(), Some(Positioning::Nested));
+    assert_eq!(Role::ListItem.positioning(), Some(Positioning::Nested));
+    for role in [
+        Role::Option,
+        Role::MenuItem,
+        Role::MenuItemCheckBox,
+        Role::MenuItemRadio,
+        Role::Radio,
+        Role::Tab,
+    ] {
+        assert_eq!(role.positioning(), Some(Positioning::InSet), "{role:?}");
+    }
+    assert_eq!(Role::Row.positioning(), Some(Positioning::GridRow));
+    for role in [Role::Heading(2), Role::Button, Role::Grid, Role::GridCell] {
+        assert_eq!(role.positioning(), None, "{role:?}");
+    }
+}
+
+#[test]
+fn a_modal_layer_is_said_by_an_annotation_and_is_part_of_what_the_box_is() {
+    let layer = Annotation {
+        modal: Some(Modal {
+            layer: 3,
+            opened_from: Some(7),
+        }),
+        ..Annotation::default()
+    };
+    assert!(!layer.is_empty());
+    let said = Semantics::group().annotated(&layer);
+    assert_eq!(said.modal, layer.modal);
+    assert_ne!(said, Semantics::group());
+    assert_eq!(
+        said.clone().annotated(&Annotation::default()).modal,
+        said.modal,
+        "an annotation that says nothing of it leaves it"
+    );
+}
+
+#[test]
+fn only_the_roles_that_describe_a_box_can_be_said_from_outside_it() {
+    for role in [
+        Role::Group,
+        Role::Banner,
+        Role::Navigation,
+        Role::Main,
+        Role::Complementary,
+        Role::ContentInfo,
+        Role::Article,
+        Role::Section,
+        Role::Form,
+        Role::Search,
+        Role::Heading(2),
+        Role::ListItem,
+        Role::Status,
+        Role::Log,
+    ] {
+        assert!(role.is_annotatable(), "{role:?}");
+    }
+    for role in [
+        Role::Button,
+        Role::Link,
+        Role::Switch,
+        Role::Option,
+        Role::List,
+        Role::Grid,
+        Role::Row,
+        Role::Menu,
+        Role::TabList,
+        Role::TabPanel,
+        Role::Toolbar,
+        Role::Dialog,
+        Role::ScrollArea,
+        Role::Drawing,
+        Role::Label,
+        Role::ProgressBar,
+    ] {
+        assert!(!role.is_annotatable(), "{role:?}");
+    }
+}
+
+#[test]
+fn a_said_role_replaces_only_a_group_or_a_region() {
+    let navigation = Some(Role::Navigation);
+    assert_eq!(Role::Group.annotated(navigation), Role::Navigation);
+    assert_eq!(Role::Section.annotated(navigation), Role::Navigation);
+    assert_eq!(
+        Role::Group.annotated(Some(Role::Heading(3))),
+        Role::Heading(3)
+    );
+    for made in [
+        Role::Button,
+        Role::Heading(1),
+        Role::List,
+        Role::ScrollArea,
+        Role::Drawing,
+    ] {
+        assert_eq!(made.annotated(navigation), made, "{made:?}");
+    }
+    assert_eq!(
+        Role::Group.annotated(Some(Role::Button)),
+        Role::Group,
+        "a role a person operates is never laid over a box from outside"
+    );
+    assert_eq!(Role::Main.annotated(None), Role::Main);
+}
+
+#[test]
+fn a_box_the_keyboard_reaches_keeps_the_role_it_was_made_with() {
+    let said = Annotation {
+        role: Some(Role::Navigation),
+        ..Annotation::default()
+    };
+    assert!(!said.is_empty());
+    assert_eq!(Semantics::group().annotated(&said).role, Role::Navigation);
+    let reached = Semantics::group().focusable(Focusable::default());
+    assert_eq!(reached.annotated(&said).role, Role::Group);
+    assert_eq!(
+        Semantics::of(Role::Button).annotated(&said).role,
+        Role::Button
+    );
+}

@@ -6,11 +6,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use reactive_core::{OwnerId, dispose_owner, owner_scope};
-use ui_core::focus;
 
 use crate::{
     AccessNode, BuildFailure, Color, Event, EventResult, Key, LayoutError, LayoutItem, LayoutStyle,
-    ModifiersState, NamedKey, Size, SurfaceCanvas, Text, TextStyle, motion, testing,
+    ModifiersState, NamedKey, NestedCanvas, Size, Text, TextStyle, motion, testing,
 };
 
 use super::a11y::{self, Severity};
@@ -32,7 +31,7 @@ use super::{ActionLog, Frame, PreviewCtx, PreviewEntry, Query};
 pub struct Play {
     entry: PreviewEntry,
     ctx: PreviewCtx,
-    canvas: Option<Rc<SurfaceCanvas>>,
+    canvas: Option<Rc<NestedCanvas>>,
     failures: CaughtFailures,
     steps: Vec<PlayStep>,
     owner: Option<OwnerId>,
@@ -124,7 +123,7 @@ impl Play {
     pub fn attach(
         entry: &PreviewEntry,
         ctx: PreviewCtx,
-        canvas: Rc<SurfaceCanvas>,
+        canvas: Rc<NestedCanvas>,
         failures: CaughtFailures,
     ) -> Self {
         Self {
@@ -202,7 +201,7 @@ impl Play {
     }
 
     /// The surface the preview is mounted on, for a host that shows or inspects it.
-    pub fn canvas(&self) -> &Rc<SurfaceCanvas> {
+    pub fn canvas(&self) -> &Rc<NestedCanvas> {
         self.canvas
             .as_ref()
             .expect("a play holds its canvas until it drops")
@@ -336,15 +335,25 @@ impl Play {
     }
 
     /// Moves focus forward a stop, as Tab does.
+    ///
+    /// Fails where it steps past the canvas's last focusable: what Tab reaches then is the host's, the workshop's chrome or nothing at all, so a play that went on from there would pass in one host and fail in another.
     pub fn tab(&mut self) -> PlayResult {
-        self.tab_towards(false);
-        self.step(String::from("tab"), Ok(()))
+        let outcome = match self.tab_towards(false) {
+            true => Err(left_the_canvas("tab", "last", "`tab_back`")),
+            false => Ok(()),
+        };
+        self.step(String::from("tab"), outcome)
     }
 
     /// Moves focus back a stop, as Shift+Tab does.
+    ///
+    /// Fails where it steps back past the canvas's first focusable, as [`tab`](Self::tab) does past the last.
     pub fn tab_back(&mut self) -> PlayResult {
-        self.tab_towards(true);
-        self.step(String::from("shift+tab"), Ok(()))
+        let outcome = match self.tab_towards(true) {
+            true => Err(left_the_canvas("shift+tab", "first", "`tab`")),
+            false => Ok(()),
+        };
+        self.step(String::from("shift+tab"), outcome)
     }
 
     /// Runs what the last input left pending — posted tasks, animations, layout — to its end. Every action settles before it returns; this is for what a play changes by other means, such as an arg.
@@ -543,13 +552,10 @@ impl Play {
         self.canvas().dispatch_own(event)
     }
 
-    /// A primary press and release at the centre of `rect`, with the pointer moved there first, and focus let go first where the press lands on nothing that takes it, as a canvas frame does.
+    /// A primary press and release at the centre of `rect`, with the pointer moved there first.
     fn press_at(&self, rect: crate::Rect) {
         let (x, y) = testing::centre(rect);
         self.dispatch(&testing::moved(x, y));
-        self.canvas().with_entered(|| {
-            focus::blur_from_pointer(x as f32, y as f32);
-        });
         self.dispatch(&testing::press(x, y));
         self.dispatch(&testing::release(x, y));
     }
@@ -559,29 +565,20 @@ impl Play {
         self.dispatch(&Event::KeyReleased { key, modifiers });
     }
 
-    /// Tab as a canvas frame answers it: the focused control first, then the canvas's own order when nothing inside holds focus.
-    fn tab_towards(&self, backwards: bool) {
+    /// Tab as a canvas frame answers it: the focused control first, then the canvas's own order. Answers whether it stepped past the last focusable, or the first, which leaves the canvas.
+    fn tab_towards(&self, backwards: bool) -> bool {
         let modifiers = ModifiersState {
             is_shift: backwards,
             ..ModifiersState::default()
         };
         let tab = testing::key_with(Key::Named(NamedKey::Tab), modifiers);
-        if self.dispatch(&tab) != EventResult::Handled {
-            self.canvas().with_entered(|| {
-                if focus::current().is_none() {
-                    if backwards {
-                        focus::focus_prev();
-                    } else {
-                        focus::focus_next();
-                    }
-                }
-            })
-        }
+        let left = self.canvas().tab(&tab);
         self.dispatch(&Event::KeyReleased {
             key: Key::Named(NamedKey::Tab),
             modifiers,
         });
         self.settle_now();
+        left
     }
 
     /// Runs posted tasks and every animation to its end, laying out what they change, the way a runner settles a page before its first frame.
@@ -627,7 +624,7 @@ fn canvas(
     ctx: &PreviewCtx,
     viewport: Size,
     failures: &CaughtFailures,
-) -> Result<Rc<SurfaceCanvas>, PlayError> {
+) -> Result<Rc<NestedCanvas>, PlayError> {
     let (ctx, globals) = (ctx.clone(), ctx.globals());
     let record = failures.clone();
     let canvas = globals
@@ -637,6 +634,12 @@ fn canvas(
         .map_err(|error| PlayError::new(format!("the canvas did not build: {error:?}")))?;
     canvas.resize(globals.viewport().peek().unwrap_or(viewport));
     Ok(canvas)
+}
+
+fn left_the_canvas(key: &str, end: &str, instead: &str) -> PlayError {
+    PlayError::new(format!(
+        "{key} left the canvas past its {end} control: what comes next is the host's, not the preview's; start from a control inside, or use {instead}"
+    ))
 }
 
 fn failed(
@@ -690,5 +693,5 @@ fn key_name(key: &Key) -> String {
 }
 
 #[cfg(test)]
-#[path = "play_test.rs"]
+#[path = "play.test.rs"]
 mod tests;

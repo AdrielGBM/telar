@@ -6,7 +6,7 @@ use crate::{LayoutError, LayoutItem, box_item};
 #[diagnostic::on_unimplemented(
     message = "a preview's body returns `{Self}`, which is not a tree",
     label = "expected `Result<impl LayoutItem, LayoutError>`",
-    note = "a component call returns one: `tag(TagProps::props().build(), Children::default())`"
+    note = "a component call returns one: `tag(TagProps::props().build())`"
 )]
 pub trait IntoPreviewRoot {
     fn into_preview_root(self) -> Result<Box<dyn LayoutItem>, LayoutError>;
@@ -29,9 +29,8 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 ///             button(
 ///                 ButtonProps::props()
 ///                     .label(p.arg("label", "Save"))
-///                     .variant(p.arg("variant", ButtonVariant::Solid))
+///                     .variant(p.arg("variant", Variant::Solid))
 ///                     .build(),
-///                 Children::default(),
 ///             )
 ///         })
 ///         .title("Inputs/Button")
@@ -43,7 +42,6 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 ///                     .label("Press me")
 ///                     .on_press(Rc::new(move || pressed.update(|n| *n += 1)))
 ///                     .build(),
-///                 Children::default(),
 ///             )
 ///         }),
 ///     ]
@@ -54,7 +52,7 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 /// - **`"Primary"`** names the variant. The id is `<crate>--button--primary`, slugged as a `.rsx` preview's is, so a name with no letter or digit is a compile error.
 /// - **`|p| body`** builds the tree. `p` is the canvas's [`PreviewCtx`](crate::preview::PreviewCtx): [`p.arg`](crate::preview::PreviewCtx::arg) reads a value its control can change, building the preview again when it does, and [`p.signal`](crate::preview::PreviewCtx::signal) shares a signal with its control. The body returns `Result<impl LayoutItem, LayoutError>`, as a component call does, and may use `?`; it is compiled as a fn, so it cannot capture anything.
 ///
-/// When `: ButtonProps` is written, every call the body makes to `button` logs its callbacks in the canvas's [`ActionLog`](crate::preview::ActionLog), each under its prop's name: one the body sets is logged as it runs, and one it leaves unset is logged and does nothing else. `button` must then be the component's fn in scope, called by that name. The body sees it as a closure, so a `'static` closure in the body that calls it is written `move`.
+/// When `: ButtonProps` is written, every call the body makes to `button` logs its callbacks in the canvas's [`ActionLog`](crate::preview::ActionLog), each under its prop's name: one the body sets is logged as it runs, a required or defaulted one likewise, and an optional one it leaves unset stays `None`, so the component draws what it draws without it. `button` must then be the component's fn in scope, called by that name. The body sees it as a closure, so a `'static` closure in the body that calls it is written `move`.
 ///
 /// The entry also records the package it is written in, the absolute path of the file it is written in, its line and the body's source text.
 ///
@@ -75,11 +73,8 @@ macro_rules! __preview_entry {
                     let actions = ctx.actions();
                     // Shadows the component for the body alone, so every call it makes logs the callbacks it is handed.
                     #[allow(unused_variables)]
-                    let $tag = move |props: $props, children| {
-                        $tag(
-                            <$props as $crate::preview::PreviewActions>::preview_actions(props, &actions),
-                            children,
-                        )
+                    let $tag = move |props: $props| {
+                        $tag(<$props as $crate::preview::PreviewActions>::preview_actions(props, &actions))
                     };
                 )?
                 let $ctx = ctx;

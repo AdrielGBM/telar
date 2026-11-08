@@ -87,5 +87,5 @@ pub fn use_surface_maximized() -> bool {
 }
 
 #[cfg(test)]
-#[path = "surface_size_test.rs"]
+#[path = "surface_size.test.rs"]
 mod tests;

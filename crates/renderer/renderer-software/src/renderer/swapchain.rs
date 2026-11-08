@@ -379,5 +379,5 @@ impl<W: Wire> AlphaPresenter for ShmPresenter<W> {
 }
 
 #[cfg(test)]
-#[path = "swapchain_test.rs"]
+#[path = "swapchain.test.rs"]
 mod tests;

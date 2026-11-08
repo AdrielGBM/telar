@@ -27,12 +27,6 @@ pub(crate) const COLUMN_DESCRIPTION: &str = "column_description";
 pub(crate) const COLUMN_NAME: &str = "column_name";
 pub(crate) const COLUMN_TYPE: &str = "column_type";
 pub(crate) const COLUMN_VALUE: &str = "column_value";
-pub(crate) const CONTROL_SIZE: &str = "control_size";
-pub(crate) const CONTROL_SIZE_DEFAULT: &str = "control_size_default";
-pub(crate) const CONTROL_SIZE_LARGE: &str = "control_size_large";
-pub(crate) const CONTROL_SIZE_MINI: &str = "control_size_mini";
-pub(crate) const CONTROL_SIZE_REGULAR: &str = "control_size_regular";
-pub(crate) const CONTROL_SIZE_SMALL: &str = "control_size_small";
 pub(crate) const CONTROLS: &str = "controls";
 pub(crate) const COPY_LINK: &str = "copy_link";
 pub(crate) const CYCLE_DIRECTION: &str = "cycle_direction";
@@ -229,12 +223,6 @@ static CATALOG: Catalog = Catalog {
         english!(COLUMN_NAME, "Name"),
         english!(COLUMN_TYPE, "Type"),
         english!(COLUMN_VALUE, "Value"),
-        english!(CONTROL_SIZE, "Control size"),
-        english!(CONTROL_SIZE_DEFAULT, "Default size"),
-        english!(CONTROL_SIZE_LARGE, "Large"),
-        english!(CONTROL_SIZE_MINI, "Mini"),
-        english!(CONTROL_SIZE_REGULAR, "Regular"),
-        english!(CONTROL_SIZE_SMALL, "Small"),
         english!(CONTROLS, "Controls"),
         english!(COPY_LINK, "Copy link"),
         english!(CYCLE_DIRECTION, "Next direction"),
@@ -485,5 +473,5 @@ pub(crate) fn text_with_values(key: &str, values: &[(&str, &str)]) -> String {
 }
 
 #[cfg(test)]
-#[path = "strings_test.rs"]
+#[path = "strings.test.rs"]
 mod tests;

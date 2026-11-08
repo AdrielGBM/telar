@@ -172,5 +172,5 @@ pub(crate) fn underlines(
 }
 
 #[cfg(test)]
-#[path = "composition_test.rs"]
+#[path = "composition.test.rs"]
 mod tests;

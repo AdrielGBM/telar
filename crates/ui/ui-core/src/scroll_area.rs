@@ -13,7 +13,7 @@ use platform_core::{
 };
 use reactive_core::{Effect, ReadSignal, RwSignal, Timer, effect, run_after, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
-use theme_core::{current_control_size, use_theme_tokens};
+use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::track_layout;
@@ -27,7 +27,7 @@ use crate::pointer::{clip_pointer_event, occlude, offset_pointer, pointer_coords
 use crate::styled_container::default_focus_ring;
 use crate::surface_context::HomeSurface;
 
-/// How a scroll area's bars are painted, and how wide they are. The default reads the theme's `scrollbar`, `scrollbar_width`, `scrollbar_inset` and `scrollbar_radius` each time the bars are drawn or grabbed, the width scaled by the control size in force; a style given to the area replaces it.
+/// How a scroll area's bars are painted, and how wide they are. The default reads the theme's `scrollbar`, `scrollbar_width`, `scrollbar_inset` and `scrollbar_radius` each time the bars are drawn or grabbed; a style given to the area replaces it.
 #[derive(Clone, Copy)]
 pub struct ScrollbarStyle {
     pub color: Color,
@@ -39,7 +39,7 @@ pub struct ScrollbarStyle {
 impl Default for ScrollbarStyle {
     fn default() -> Self {
         let tokens = use_theme_tokens();
-        let width = tokens.scrollbar_width() * current_control_size().scale();
+        let width = tokens.scrollbar_width();
         let inset = tokens.scrollbar_inset();
         Self {
             color: tokens.scrollbar(),
@@ -98,13 +98,13 @@ impl Thumb {
         content: f32,
         scroll: f32,
     ) -> Option<Self> {
-        if content <= viewport {
+        let max_scroll = scroll_range(viewport, content);
+        if max_scroll <= 0.0 {
             return None;
         }
         let length = axis
             .snap_size(grid, (viewport / content * viewport).max(MIN_THUMB))
             .min(viewport);
-        let max_scroll = (content - viewport).max(1.0);
         let travel = (viewport - length).max(0.0);
         Some(Self {
             start: axis.snap_pos(grid, origin + (scroll / max_scroll) * travel),
@@ -318,8 +318,7 @@ fn handle_scroll_event(core: &mut ScrollCore, event: &Event, viewport: Rect) -> 
         }
         let (delta_x, delta_y) = delta.pixels();
         let content_rect = content_rect_signal.get();
-        let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
-        let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
+        let (max_scroll_x, max_scroll_y) = scroll_ranges(viewport, content_rect);
         let (delta_x, delta_y) = match wheel_sideways && max_scroll_y <= 0.0 {
             true => (delta_x + delta_y, 0.0),
             false => (delta_x, delta_y),
@@ -348,7 +347,7 @@ fn handle_scroll_event(core: &mut ScrollCore, event: &Event, viewport: Rect) -> 
         pointer_coords(event).is_some_and(|(x, y)| !viewport.contains(x as f32, y as f32));
     let captured = matches!(
         event,
-        Event::PointerMoved { .. } | Event::PointerReleased { .. }
+        Event::PointerMoved { .. } | Event::PointerReleased { .. } | Event::DragOver { .. }
     );
     let event = match captured {
         true => event,
@@ -646,7 +645,7 @@ impl ScrollCore {
         }
         // The offset grows as the content moves up, the opposite sign to the gesture.
         let velocity = -self.motion.velocity.take();
-        let max = (self.content_rect_signal.peek().height - viewport.height).max(0.0);
+        let max = scroll_range(viewport.height, self.content_rect_signal.peek().height);
         self.fling = crate::fling::Fling::start(self.scroll_y, velocity, (0.0, max));
     }
 
@@ -654,8 +653,7 @@ impl ScrollCore {
         // The content resized under it, so the ground it was travelling over is gone.
         self.catch_all();
         let content_rect = self.content_rect_signal.peek();
-        let max_x = (content_rect.width - viewport.width).max(0.0);
-        let max_y = (content_rect.height - viewport.height).max(0.0);
+        let (max_x, max_y) = scroll_ranges(viewport, content_rect);
         let clamped_x = self.scroll_x.peek().clamp(0.0, max_x);
         let clamped_y = self.scroll_y.peek().clamp(0.0, max_y);
         if self.scroll_x.peek() != clamped_x {
@@ -1099,8 +1097,7 @@ impl LayoutScrollArea {
                 if vp.height <= 0.0 || content.height <= 0.0 {
                     return;
                 }
-                let max_x = (content.width - vp.width).max(0.0);
-                let max_y = (content.height - vp.height).max(0.0);
+                let (max_x, max_y) = scroll_ranges(vp, content);
                 // `peek`, not `get`: this effect writes those signals, and reading them would re-run it for its own correction.
                 if scroll_x.peek() > max_x {
                     scroll_x.set(max_x);
@@ -1334,7 +1331,7 @@ impl LayoutScrollArea {
         let (x, y) = (self.core.scroll_x.peek(), self.core.scroll_y.peek());
         let (_, line) = ScrollDelta::Lines { x: 0.0, y: 1.0 }.pixels();
         let page = (viewport.height - line).max(line);
-        let max_y = (content.height - viewport.height).max(0.0);
+        let (max_x, max_y) = scroll_ranges(viewport, content);
         let (to_x, to_y) = match key {
             Key::Named(NamedKey::ArrowDown) => (x, y + line),
             Key::Named(NamedKey::ArrowUp) => (x, y - line),
@@ -1348,7 +1345,6 @@ impl LayoutScrollArea {
             Key::Named(NamedKey::End) => (x, max_y),
             _ => return None,
         };
-        let max_x = (content.width - viewport.width).max(0.0);
         Some((to_x.clamp(0.0, max_x), to_y.clamp(0.0, max_y)))
     }
 
@@ -1462,13 +1458,26 @@ fn overflows(viewport: Rect, content: Rect) -> bool {
 
 /// Along which axes, across and down, content of `content`'s size can scroll in a laid-out `viewport`.
 fn overflow_axes(viewport: Rect, content: Rect) -> (bool, bool) {
-    const SLACK: f32 = 0.5;
     if viewport.width <= 0.0 || viewport.height <= 0.0 {
         return (false, false);
     }
+    let (across, down) = scroll_ranges(viewport, content);
+    (across > 0.0, down > 0.0)
+}
+
+/// How far content `content` long can scroll in a viewport `viewport` long: nowhere within the pixel a laid-out viewport can lose to its content, since both of its edges are snapped to whole pixels and the content's length is not.
+fn scroll_range(viewport: f32, content: f32) -> f32 {
+    const SLACK: f32 = 1.0;
+    match content - viewport {
+        excess if excess > SLACK => excess,
+        _ => 0.0,
+    }
+}
+
+fn scroll_ranges(viewport: Rect, content: Rect) -> (f32, f32) {
     (
-        content.width - viewport.width > SLACK,
-        content.height - viewport.height > SLACK,
+        scroll_range(viewport.width, content.width),
+        scroll_range(viewport.height, content.height),
     )
 }
 
@@ -1500,34 +1509,34 @@ impl ScrollCore {
 }
 
 #[cfg(test)]
-#[path = "scroll_area_test.rs"]
+#[path = "scroll_area.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "scroll_area_scrollbar_test.rs"]
+#[path = "scroll_area.scrollbar.test.rs"]
 mod scrollbar_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_touchpad_test.rs"]
+#[path = "scroll_area.touchpad.test.rs"]
 mod touchpad_tests;
 
 /// The bar on a surface that holds the content itself — a document backend, where the compositor scrolls and this widget is told where the content ended up rather than deciding it.
 #[cfg(test)]
-#[path = "scroll_area_surface_scroll_test.rs"]
+#[path = "scroll_area.surface_scroll.test.rs"]
 mod surface_scroll_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_sticky_test.rs"]
+#[path = "scroll_area.sticky.test.rs"]
 mod sticky_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_intrinsic_test.rs"]
+#[path = "scroll_area.intrinsic.test.rs"]
 mod intrinsic_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_control_test.rs"]
+#[path = "scroll_area.control.test.rs"]
 mod control_tests;
 
 #[cfg(test)]
-#[path = "scroll_area_stop_test.rs"]
+#[path = "scroll_area.stop.test.rs"]
 mod stop_tests;

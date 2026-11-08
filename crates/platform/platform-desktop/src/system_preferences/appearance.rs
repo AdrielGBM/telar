@@ -56,5 +56,5 @@ pub fn from_settings<'a>(settings: impl IntoIterator<Item = (&'a str, u32)>) -> 
 }
 
 #[cfg(test)]
-#[path = "appearance_test.rs"]
+#[path = "appearance.test.rs"]
 mod tests;

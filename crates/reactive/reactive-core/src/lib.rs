@@ -46,9 +46,9 @@ pub use timer::{
 pub use transaction::{Transaction, TransactionError};
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;
 
 #[cfg(doctest)]
-#[path = "thread_bound_test.rs"]
+#[path = "thread_bound.test.rs"]
 mod thread_bound_tests;

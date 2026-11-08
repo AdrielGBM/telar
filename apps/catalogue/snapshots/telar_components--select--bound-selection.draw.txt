@@ -1,0 +1,31 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element combobox
+            rect 309,284 182x32 fill=#ffffffff border=2 border-color=#4261edff radius=10
+            element group
+              clip 321,-1000000 38x2000000
+                matrix 1,0,0,1,321,284
+                  text 0,8 38x16.8 "Large" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                end
+              end
+            end
+            element group
+              matrix 1,0,0,1,467,297
+                path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#171a2eb3
+              end
+            end
+          end
+          element group
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

@@ -135,7 +135,7 @@ pub trait IntoAction: Sized {
     /// A callback that does nothing but record each call to `name` in `log`.
     fn action(log: ActionLog, name: &'static str) -> Self;
 
-    /// This callback, recording each call to `name` in `log` before it runs. An `Option` holding none becomes [`action`](Self::action).
+    /// This callback, recording each call to `name` in `log` before it runs. An `Option` holding none stays `None`: whether a callback is there can be what a component draws, a remove button for an `on_remove`.
     fn logged(self, log: ActionLog, name: &'static str) -> Self;
 }
 
@@ -143,7 +143,7 @@ pub trait IntoAction: Sized {
 ///
 /// [`preview!`](crate::preview::preview!) applies it to the props of every call its body makes to the component under preview, and the props builder's `__preview_actions` does the same to the optional props it holds, for generated code that has a builder in hand.
 pub trait PreviewActions: Sized {
-    /// These props with every callback logged in `log`: one left unset does nothing but log, and one set logs, then runs.
+    /// These props with every callback they hold logged in `log`, each logging and then running; an optional one left unset stays unset.
     fn preview_actions(self, log: &ActionLog) -> Self;
 }
 
@@ -197,10 +197,7 @@ macro_rules! optional_callbacks {
                 }
 
                 fn logged(self, log: ActionLog, name: &'static str) -> Self {
-                    Some(match self {
-                        Some(callback) => callback.logged(log, name),
-                        None => F::action(log, name),
-                    })
+                    self.map(|callback| callback.logged(log, name))
                 }
             }
         )*
@@ -215,5 +212,5 @@ optional_callbacks!(
 );
 
 #[cfg(test)]
-#[path = "actions_test.rs"]
+#[path = "actions.test.rs"]
 mod tests;

@@ -8,7 +8,7 @@ use icu_casemap::{CaseMapper, TitlecaseMapper};
 use icu_locale_core::LanguageIdentifier;
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::{Span, TextStyle};
+use super::{Span, TextStyle, span_segments};
 
 /// The case a run of text is shown in, as CSS `text-transform` does: the string keeps the case it was written in, which is what a reader reads and what a link or a search finds, and only the glyphs change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -132,26 +132,20 @@ pub fn case_text<'a>(text: &'a str, spans: Option<&'a [Span]>, style: &TextStyle
         pieces.push((start..out.len(), written));
         start..out.len()
     };
-    let mut at = 0usize;
-    for span in spans {
-        let start = (span.range.start as usize).clamp(at, text.len());
-        let end = (span.range.end as usize).clamp(start, text.len());
-        if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
-            continue;
+    for segment in span_segments(text, spans) {
+        match segment.span {
+            None => {
+                push(segment.range, style.text_case, &mut out);
+            }
+            Some((_, span)) => {
+                let case = span.over.text_case.unwrap_or(style.text_case);
+                let shown = push(segment.range, case, &mut out);
+                moved.push(Span {
+                    range: shown.start as u32..shown.end as u32,
+                    ..span.clone()
+                });
+            }
         }
-        if start > at {
-            push(at..start, style.text_case, &mut out);
-        }
-        let case = span.over.text_case.unwrap_or(style.text_case);
-        let shown = push(start..end, case, &mut out);
-        moved.push(Span {
-            range: shown.start as u32..shown.end as u32,
-            ..span.clone()
-        });
-        at = end;
-    }
-    if at < text.len() {
-        push(at..text.len(), style.text_case, &mut out);
     }
     if out == text {
         return CasedText {
@@ -168,5 +162,5 @@ pub fn case_text<'a>(text: &'a str, spans: Option<&'a [Span]>, style: &TextStyle
 }
 
 #[cfg(test)]
-#[path = "text_case_test.rs"]
+#[path = "text_case.test.rs"]
 mod tests;

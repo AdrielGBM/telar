@@ -224,24 +224,42 @@ pub(crate) fn clean_effect(id: EffectId) {
 
 /// Runs `id` now whatever its epoch and versions say: for a memo read that finds no value, because the computation that would have left one panicked and nothing has moved since to schedule another.
 pub(crate) fn force_run_effect(id: EffectId) {
-    run(id, true);
+    run(id, Run::Forced);
 }
 
 pub(crate) fn run_effect(id: EffectId) {
-    run(id, false);
+    run(id, Run::Scheduled);
 }
 
-fn run(id: EffectId, forced: bool) {
+/// Recomputes the memo effect `id` now when the flush under way has it queued, so a reader that just began depending on it takes its fresh value instead of computing from the stale one and again after it. The queued entry is left to be skipped when it surfaces.
+pub(crate) fn pull_pending_memo(id: EffectId) {
+    let pending = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        rt.flushing && rt.pending_set.remove(&id)
+    });
+    if pending {
+        run(id, Run::Pulled);
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Run {
+    Scheduled,
+    Pulled,
+    Forced,
+}
+
+fn run(id: EffectId, mode: Run) {
     let prepared = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         let epoch = rt.flush_epoch;
         let entry = rt.effects.get_mut(id)?;
-        if !forced && entry.last_run_epoch == epoch && epoch > 0 {
+        if mode == Run::Scheduled && entry.last_run_epoch == epoch && epoch > 0 {
             return None;
         }
         entry.last_run_epoch = epoch;
         let entry = &rt.effects[id];
-        if !forced && rt.sources_unchanged(entry) {
+        if mode != Run::Forced && rt.sources_unchanged(entry) {
             return None;
         }
         Some((Rc::clone(&entry.callback), entry.surface, entry.owner))

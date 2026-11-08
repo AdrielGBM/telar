@@ -5,7 +5,7 @@
 //! - a `[style]` section of style classes,
 //! - a `[view]` section describing an indentation-based node tree.
 //!
-//! Previews follow: an optional `[previews "Group/Title" …]` meta section with a prose body, then `[preview "Name" args(…) …]` variants, each optionally followed by a `[play]` zone of verbatim Rust. A `*.previews.rsx` file holds only these, with no `[view]`.
+//! Previews follow: an optional `[previews "Group/Title" …]` meta section with a prose body, then `[preview "Name" args(…) …]` variants, each optionally followed by a `[play]` zone of verbatim Rust. A `*.preview.rsx` file holds only these, with no `[view]`.
 //!
 //! [`parse`] turns the source into an [`RsxDocument`] AST consumed by the transpiler.
 //!
@@ -27,13 +27,11 @@
 pub mod format;
 
 mod ast;
-mod color;
 mod error;
 mod lexer;
 mod parser;
 
 pub use ast::*;
-pub use color::parse_hex;
 pub use error::ParseError;
 pub use lexer::{
     Section, find_section_at, header_section, is_preview_header, is_previews_header,
@@ -46,5 +44,5 @@ pub fn parse(source: &str) -> Result<RsxDocument, ParseError> {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

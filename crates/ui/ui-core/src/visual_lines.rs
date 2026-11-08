@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use renderer_core::TextStyle;
+use renderer_core::{TextLine, TextStyle};
 
 /// Which row a caret at a soft wrap stands on: the offset where a wrapped row ends is the one where the next begins, so the offset alone cannot say.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,20 +20,36 @@ pub(crate) struct VisualLines {
 }
 
 impl VisualLines {
-    /// `text` broken at every `\n` and, given a width, wherever the installed measurer wraps each of those lines at it — the breaks the text is drawn with, so the rows are the ones on screen.
+    /// `text` broken at every `\n` and, given a width, wherever the installed measurer wraps it at that width.
     pub(crate) fn of(text: &str, style: &TextStyle, wrap_width: Option<f32>) -> Self {
+        match wrap_width {
+            Some(width) => Self::drawn(text, &crate::text_metrics::laid_lines(text, width, style)),
+            None => Self::unwrapped(text),
+        }
+    }
+
+    /// `text` broken only at its `\n`s.
+    pub(crate) fn unwrapped(text: &str) -> Self {
+        Self::broken(text, std::iter::empty())
+    }
+
+    /// `text` broken at every `\n` and wherever one of `lines`, the lines it is drawn in, begins: the rows are the lines on screen, so a caret placed on a row is placed on the line drawn there.
+    pub(crate) fn drawn(text: &str, lines: &[TextLine]) -> Self {
+        Self::broken(text, lines.iter().map(|line| line.range.start))
+    }
+
+    /// `text` broken at every `\n` and at each of `starts`, which ascend; a start a row already begins at breaks nothing.
+    fn broken(text: &str, starts: impl Iterator<Item = usize>) -> Self {
+        let mut starts = starts.peekable();
         let mut rows = Vec::new();
         let mut start = 0;
         for hard in text.split('\n') {
             let end = start + hard.len();
             let mut from = start;
-            if let Some(width) = wrap_width.filter(|_| !hard.is_empty()) {
-                for at in crate::text_metrics::line_starts(hard, width, style) {
-                    let at = start + at;
-                    if at > from && at < end && text.is_char_boundary(at) {
-                        rows.push(from..at);
-                        from = at;
-                    }
+            while let Some(at) = starts.next_if(|&at| at <= end) {
+                if at > from && at < end {
+                    rows.push(from..at);
+                    from = at;
                 }
             }
             rows.push(from..end);
@@ -75,5 +91,5 @@ impl VisualLines {
 }
 
 #[cfg(test)]
-#[path = "visual_lines_test.rs"]
+#[path = "visual_lines.test.rs"]
 mod tests;

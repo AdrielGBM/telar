@@ -18,7 +18,7 @@ BASELINE_GZIP=$(jq -r '.baseline.gzip_bytes' "$BASELINE_FILE")
 BASELINE_RAW=$(jq -r '.baseline.raw_bytes' "$BASELINE_FILE")
 
 cargo run -q -p cargo-telar -- transpile
-cargo run -q -p cargo-telar -- build --target web --renderer dom -p landing -- --release
+cargo run -q -p cargo-telar -- build --target web --renderer dom -p landing
 
 OUT_DIR="target/telar-dist/web"
 MANIFEST="$OUT_DIR/asset-manifest.json"

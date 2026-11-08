@@ -296,5 +296,5 @@ macro_rules! __preview_control {
 }
 
 #[cfg(test)]
-#[path = "probe_test.rs"]
+#[path = "probe.test.rs"]
 mod tests;

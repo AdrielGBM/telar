@@ -1,7 +1,7 @@
 //! COLR glyphs: the colour-font path swash cannot rasterize, and the flag that skips looking for one.
 
 use super::TextShaper;
-use super::cache::{hash_text, text_style_bits};
+use super::cache::{hash_text, line_snapped_height, text_style_bits, visible_lines};
 use super::make_buffer;
 use cosmic_text::{CacheKey, fontdb};
 use geometry_core::Rect;
@@ -31,28 +31,35 @@ impl TextShaper {
         if text.is_empty() {
             return;
         }
-        // Plain UI text is the overwhelmingly common case, so once a (text, font_size) is known to shape to zero COLR glyphs the whole buffer build and per-glyph probe is skipped. COLR-ness depends only on the font and codepoint, never on rect or wrap, so the flag is layout-independent.
+        // Plain UI text is the overwhelmingly common case, so once a paragraph is known to shape to zero COLR glyphs the whole buffer build and per-glyph probe is skipped. Width and visible lines are keyed because they decide which glyphs the buffer holds.
         let flag_key = (
             hash_text(text),
             style.font_size.to_bits(),
             text_style_bits(style),
+            rect.width.to_bits(),
+            visible_lines(rect.height, style),
         );
         if self.has_colr_cache.get(&flag_key) == Some(&false) {
             return;
         }
         let start_len = out.len();
+        let shift = self.baseline_shift(style) as f32;
+        let shaped_rect = Rect {
+            height: line_snapped_height(visible_lines(rect.height, style), style),
+            ..rect
+        };
         let buffer = make_buffer(
             &mut self.font_system,
             &mut self.family_availability,
             text,
             None,
-            rect,
+            shaped_rect,
             style,
         );
         let color = style.color.solid_color();
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {
-                let physical = glyph.physical((0., run.line_y), 1.0);
+                let physical = glyph.physical((0., run.line_y + shift), 1.0);
                 let swash_empty = match self
                     .swash_cache
                     .get_image(&mut self.font_system, physical.cache_key)
@@ -66,7 +73,7 @@ impl TextShaper {
                         font_id: glyph.font_id,
                         glyph_id: glyph.glyph_id as u32,
                         x: rect.x + glyph.x,
-                        y: rect.y + run.line_y,
+                        y: rect.y + run.line_y + shift,
                         font_size: style.font_size,
                         color,
                     });

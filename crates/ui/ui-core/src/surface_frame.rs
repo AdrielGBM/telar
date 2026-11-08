@@ -1,9 +1,9 @@
-//! [`SurfaceFrame`]: a [`SurfaceCanvas`] placed in another tree, as one of its widgets.
+//! [`SurfaceFrame`]: a [`NestedCanvas`] placed in another tree, as one of its widgets.
 
 use std::cell::Cell;
 use std::rc::{Rc, Weak};
 
-use geometry_core::{Point, Rect, Size, Transform};
+use geometry_core::{Rect, Size, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use layout_reactive::RelayoutHook;
 use platform_core::{ConsumedKeys, Event, PointerButton, TextInput, WindowCommand};
@@ -14,10 +14,10 @@ use crate::focus::{self, FocusId, Keyboard};
 use crate::frame_focus::{FrameFocus, Inside, KeyRoute};
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
-use crate::surface_canvas::{SurfaceCanvas, composite_surface};
+use crate::surface_canvas::{NestedCanvas, SurfaceCanvas, composite_surface};
 use crate::surface_context::{HomeSurface, Surface};
 
-/// A [`SurfaceCanvas`] drawn where the layout puts this widget, at the canvas's [`scale`](SurfaceCanvas::scale).
+/// A [`NestedCanvas`] drawn where the layout puts this widget, at the canvas's [`scale`](SurfaceCanvas::scale).
 ///
 /// The canvas keeps its own world, so whatever opens inside it stays inside it: a dialog covers the frame and is clipped to it, Escape reaches the frame's dismiss stack and not the page's, and its size, safe area and breakpoints are the frame's.
 ///
@@ -25,7 +25,7 @@ use crate::surface_context::{HomeSurface, Surface};
 /// - **Keyboard.** The frame is one stop in the outer tab order and holds the keys while it has focus: a press inside it takes focus, arriving by Tab hands focus to the first focusable inside and arriving by Shift+Tab to the last, and leaving it clears focus inside. Tab moves among the focusables inside and, past the last, on to the stop after the frame, as Shift+Tab past the first does to the stop before it, so the keyboard is never trapped in a canvas; a modal open inside holds Tab within itself until it closes. Whether a field inside has the caret is what the outer tree hears when it asks [`text_entry_focused`](crate::focus::text_entry_focused).
 /// - **Window.** The canvas has no window: only the pointer shapes it asks for reach the real one.
 pub struct SurfaceFrame {
-    canvas: Rc<SurfaceCanvas>,
+    canvas: Rc<NestedCanvas>,
     home: HomeSurface,
     leaf: LayoutLeaf,
     focus: FrameFocus,
@@ -44,21 +44,21 @@ enum Sizing {
 
 impl SurfaceFrame {
     /// A frame whose box `style` decides; the canvas's logical size follows it, as the box divided by the canvas's scale — a responsive canvas.
-    pub fn filling(canvas: Rc<SurfaceCanvas>, style: LayoutStyle) -> Result<Self, LayoutError> {
+    pub fn filling(canvas: Rc<NestedCanvas>, style: LayoutStyle) -> Result<Self, LayoutError> {
         Self::build(canvas, style, Sizing::Filling)
     }
 
     /// A frame whose box is the canvas's logical size times its scale, kept so as either changes — a device of a fixed size, zoomed. `style` places the box; its width and height are the canvas's to decide.
-    pub fn sized(canvas: Rc<SurfaceCanvas>, style: LayoutStyle) -> Result<Self, LayoutError> {
+    pub fn sized(canvas: Rc<NestedCanvas>, style: LayoutStyle) -> Result<Self, LayoutError> {
         Self::build(canvas, style, Sizing::Sized)
     }
 
-    pub fn canvas(&self) -> &Rc<SurfaceCanvas> {
+    pub fn canvas(&self) -> &Rc<NestedCanvas> {
         &self.canvas
     }
 
     fn build(
-        canvas: Rc<SurfaceCanvas>,
+        canvas: Rc<NestedCanvas>,
         style: LayoutStyle,
         sizing: Sizing,
     ) -> Result<Self, LayoutError> {
@@ -68,7 +68,6 @@ impl SurfaceFrame {
         })?;
         let focus = FrameFocus::register(leaf.node, Rc::downgrade(&canvas));
         let id = focus.id();
-        canvas.host_keyboard();
         let surface = Rc::downgrade(canvas.surface());
 
         let relayout = layout_reactive::on_relayout({
@@ -112,15 +111,11 @@ impl SurfaceFrame {
         result
     }
 
-    fn press(&self, event: &Event, x: f32, y: f32, button: PointerButton) -> EventResult {
+    fn press(&self, event: &Event, button: PointerButton) -> EventResult {
         self.captured.set(true);
         self.hovered.set(true);
         if button == PointerButton::Primary {
             focus::request_from_pointer(self.focus.id());
-            let local = to_local(self.placement_now(), x, y);
-            self.canvas.with_entered(|| {
-                focus::blur_from_pointer(local.x, local.y);
-            })
         }
         self.forward(event)
     }
@@ -154,7 +149,7 @@ impl SurfaceFrame {
 }
 
 /// The canvas a frame draws, as its focus stop drives it: gone with the canvas, it holds nothing and takes nothing.
-impl Keyboard for Weak<SurfaceCanvas> {
+impl Keyboard for Weak<NestedCanvas> {
     fn text_entry_focused(&self) -> Option<bool> {
         Some(self.upgrade()?.text_entry_focused())
     }
@@ -164,7 +159,7 @@ impl Keyboard for Weak<SurfaceCanvas> {
     }
 }
 
-impl Inside for Weak<SurfaceCanvas> {
+impl Inside for Weak<NestedCanvas> {
     fn arrive(&self, backwards: bool) {
         if let Some(canvas) = self.upgrade() {
             canvas.arrive(backwards);
@@ -218,7 +213,7 @@ impl Component for SurfaceFrame {
         }
         match event {
             Event::PointerPressed { x, y, button, .. } if inside(*x, *y) => {
-                self.press(event, *x as f32, *y as f32, *button)
+                self.press(event, *button)
             }
             Event::PointerMoved { x, y, .. } => self.moved(event, inside(*x, *y)),
             Event::PointerReleased { .. } => {
@@ -265,13 +260,6 @@ fn placement(rect: Rect, scale: f32) -> Transform {
     zoom(scale).then(Transform::translate(rect.x, rect.y))
 }
 
-fn to_local(placement: Transform, x: f32, y: f32) -> Point {
-    let point = Point::new(x, y);
-    placement
-        .invert()
-        .map_or(point, |inverse| inverse.apply(point))
-}
-
 fn sized_style(style: LayoutStyle, size: Size, scale: f32) -> LayoutStyle {
     style.width(size.width * scale).height(size.height * scale)
 }
@@ -314,7 +302,7 @@ fn follow_inner_focus(id: FocusId, surface: Weak<Surface>) {
     });
 }
 
-fn follow_canvas_size(canvas: &Rc<SurfaceCanvas>, node: NodeId, style: LayoutStyle) {
+fn follow_canvas_size(canvas: &Rc<NestedCanvas>, node: NodeId, style: LayoutStyle) {
     let canvas = Rc::downgrade(canvas);
     effect(move || {
         let Some(canvas) = canvas.upgrade() else {
@@ -326,5 +314,5 @@ fn follow_canvas_size(canvas: &Rc<SurfaceCanvas>, node: NodeId, style: LayoutSty
 }
 
 #[cfg(test)]
-#[path = "surface_frame_test.rs"]
+#[path = "surface_frame.test.rs"]
 mod tests;

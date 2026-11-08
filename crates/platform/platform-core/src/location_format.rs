@@ -265,5 +265,5 @@ fn is_scheme(candidate: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "location_format_test.rs"]
+#[path = "location_format.test.rs"]
 mod tests;

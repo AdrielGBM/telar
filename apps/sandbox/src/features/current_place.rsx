@@ -27,7 +27,7 @@ col gap:20
     doc_header kicker:"NAVIGATION" title:"Current place" desc:"Which place is under a line across the view of a scroll: the anchor whose box spans that distance from the view's top edge, worked out from Telar's layout and the scroll's offset on every target. A bar over the page reads it with its own height to mark the link to the section under it with current:, and to dress itself like that section."
     example title:"anchor_at — the place under a bar, and current: on its link"
         col width:100%
-            row sticky inset_top:0 height:BAR width:100% gap:8 pad_x:12 align:center fill:$theme.surface stroke:$theme.border stroke_bottom:1 role:navigation label:"Places"
+            row sticky inset_top:0 height:BAR width:100% gap:8 pad_x:12 align:center fill:$theme.surface stroke:$theme.border stroke_bottom:1 role:navigation a11y_label:"Places"
                 box to:anchor("place-intro") current:$on_intro pad_x:10 pad_y:4 radius:6 fill:(if $on_intro { $theme.primary } else { $theme.surface_alt })
                     text "Intro" font_size:13 color:(if $on_intro { $theme.on_primary } else { $theme.ink })
                 box to:anchor("place-usage") current:$on_usage pad_x:10 pad_y:4 radius:6 fill:(if $on_usage { $theme.primary } else { $theme.surface_alt })

@@ -198,9 +198,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for Har
 #[derive(Clone)]
 /// The one instance, adapter, device and queue every window in the process draws through.
 pub struct SharedGpu {
+    /// The wgpu instance every surface is created from.
     pub instance: wgpu::Instance,
+    /// The physical GPU the device was opened on.
     pub adapter: wgpu::Adapter,
+    /// The logical device every window allocates and records on.
     pub device: Device,
+    /// The queue every window submits to.
     pub queue: Queue,
 }
 
@@ -310,6 +314,23 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
     Ok(SHARED_GPU.get().expect("shared GPU just set"))
 }
 
+fn keep_pipeline_cache(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let dir = path.parent().unwrap_or(std::path::Path::new(""));
+    std::fs::create_dir_all(dir)?;
+    let mut file = tempfile::NamedTempFile::new_in(dir)?;
+    file.write_all(data)?;
+    rename_over(file.into_temp_path(), path)
+}
+
+// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
+fn rename_over(temp: tempfile::TempPath, path: &std::path::Path) -> std::io::Result<()> {
+    let temp = temp.keep()?;
+    std::fs::rename(&temp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
+}
+
 // Seeds the offscreen with the previous frame, the pixels inside a scrolled clip moved by its delta, so a scrolling frame redraws only the exposed band and what else changed. `TELAR_HW_SCROLL_BLIT=0` repaints the scrolled content in place instead.
 fn hw_scroll_blit_enabled() -> bool {
     use std::sync::OnceLock;
@@ -372,6 +393,7 @@ fn physical_scissor(rect: Rect, width: u32, height: u32, scale: f32) -> (u32, u3
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
+    /// A renderer presenting to `window`, blocking until the process-wide GPU is ready. `cache_path` is where compiled pipelines persist between runs, and `vulkan_only` restricts adapter choice to Vulkan.
     pub fn new(
         window: W,
         cache_path: Option<&std::path::Path>,
@@ -390,6 +412,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         ))
     }
 
+    /// [`new`](Self::new) without blocking, for targets that cannot park a thread while the GPU initialises.
     pub async fn new_async(
         window: W,
         cache_path: Option<&std::path::Path>,
@@ -672,14 +695,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         // So subsequent startups skip shader compilation.
         if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path)
             && let Some(data) = cache.get_data()
+            && let Err(error) = keep_pipeline_cache(&path, &data)
         {
-            if let Some(parent) = path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let tmp = path.with_extension("tmp");
-            if std::fs::write(&tmp, &data).is_ok() {
-                let _ = std::fs::rename(&tmp, &path);
-            }
+            tracing::warn!(path = %path.display(), %error, "could not keep the pipeline cache");
         }
 
         // So the common case of few layers per frame never allocates during rendering.

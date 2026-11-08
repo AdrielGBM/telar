@@ -14,8 +14,8 @@ pub use marks::inspection_marks;
 pub(crate) use accessibility::{READER_ROW, VIOLATIONS_ROW};
 
 use telar::{
-    AlignItems, Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, ReactiveList,
-    RwSignal, Slots, box_item, on_cleanup,
+    AlignItems, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, ReactiveList, RwSignal,
+    box_item, on_cleanup,
 };
 use telar_components::{ToggleProps, toggle};
 
@@ -43,7 +43,6 @@ fn switch(on: RwSignal<bool>, label: &'static str) -> Result<Box<dyn LayoutItem>
             .checked(on)
             .label(Reactive::of(move || strings::text(label)))
             .build(),
-        Children::default(),
     )
 }
 
@@ -68,14 +67,6 @@ pub(crate) fn mounted_while(
     Ok(box_item(layer))
 }
 
-pub(crate) fn panes(items: [Box<dyn LayoutItem>; 2]) -> Children {
-    let mut slots = Slots::new();
-    for item in items {
-        slots.push(None, item);
-    }
-    Children::from(slots)
-}
-
 /// A number as a measurement reads: whole where it is whole, one decimal where it is not.
 pub(crate) fn number(value: f32) -> String {
     if value.fract() == 0.0 {
@@ -86,5 +77,5 @@ pub(crate) fn number(value: f32) -> String {
 }
 
 #[cfg(test)]
-#[path = "panels_test.rs"]
+#[path = "panels.test.rs"]
 mod tests;

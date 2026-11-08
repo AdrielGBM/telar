@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::cargo_manifest::{dependency_tables, read_manifest};
+use crate::CargoManifest;
 
 /// One entry of a `telar.toml` list, and where it is written.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,17 +84,15 @@ pub(crate) fn declarations<T>(
 /// What `package_dir`'s `Cargo.toml` says about the crates it may name, or `None` when it cannot be read.
 pub(crate) struct PackageDependencies {
     pub(crate) package: String,
-    manifest: toml::Table,
+    manifest: CargoManifest,
     normal: HashSet<String>,
 }
 
 impl PackageDependencies {
     pub(crate) fn read(package_dir: &Path) -> Option<Self> {
-        let manifest = read_manifest(package_dir)?;
+        let manifest = CargoManifest::read(package_dir)?;
         let package = manifest
-            .get("package")
-            .and_then(|package| package.get("name"))
-            .and_then(toml::Value::as_str)
+            .package_name()
             .unwrap_or("this package")
             .to_string();
         let normal = dependency_crates(&manifest, "dependencies");
@@ -112,7 +110,9 @@ impl PackageDependencies {
 
     /// The package's own crate name, as Rust spells it.
     pub(crate) fn crate_name(&self) -> String {
-        self.package.replace('-', "_")
+        self.manifest
+            .lib_name()
+            .unwrap_or_else(|| self.package.replace('-', "_"))
     }
 
     /// The help for an entry naming `root`, which the package does not list under `[dependencies]`, where `reader` is what would fail to name it.
@@ -137,8 +137,9 @@ impl PackageDependencies {
 const ALWAYS_LINKED: [&str; 3] = ["std", "core", "alloc"];
 
 /// The crate names Rust sees for one dependency table of `manifest`, its target-specific copies included. A renamed dependency is named by its key, which is what `package = "…"` exists to choose.
-fn dependency_crates(manifest: &toml::Table, table: &str) -> HashSet<String> {
-    dependency_tables(manifest, table)
+fn dependency_crates(manifest: &CargoManifest, table: &str) -> HashSet<String> {
+    manifest
+        .dependency_tables(table)
         .flat_map(|dependencies| dependencies.keys())
         .map(|key| key.replace('-', "_"))
         .collect()

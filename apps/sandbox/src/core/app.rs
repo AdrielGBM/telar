@@ -2,7 +2,7 @@
 
 use crate::core::theme::theme;
 use telar::{
-    AlignItems, App, AvailableSpace, BorderRadius, Children, Color, Component, Container, Event,
+    Accessible, AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event,
     EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
     NodeVec, Reactive, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, SizeDimension,
     StyledContainer, Text, TextStyle, compute_layout, hot_signal, mark_dirty, new_container,
@@ -42,8 +42,8 @@ macro_rules! sections {
     ($(($title:literal, $build:path, $props:ty, $file:literal)),* $(,)?) => {
         &[$(SectionDef {
             title: $title,
-            // A section is a component that names no props and places no children, so it is called like one. The closure captures nothing, which is what lets it stand where a `fn` pointer is wanted.
-            build: || $build(<$props>::props().build(), Children::default()),
+            // A section is a component that names no props, so it is called like one. The closure captures nothing, which is what lets it stand where a `fn` pointer is wanted.
+            build: || $build(<$props>::props().build()),
             file: $file,
             source: include_str!(concat!("../features/", $file)),
         }),*]
@@ -239,7 +239,7 @@ const SECTIONS: &[SectionDef] = sections![
         "surface_title.rsx"
     ),
     (
-        "Badges & chips",
+        "Tags",
         crate::features::pills::pills,
         crate::features::pills::PillsProps,
         "pills.rsx"
@@ -422,7 +422,6 @@ fn build_source_link(
                     .size(12.0)
                     .color(Reactive::of(|| theme().primary))
                     .build(),
-                Children::default(),
             )?,
             Box::new(Text::new(
                 move || file.to_string(),
@@ -583,7 +582,6 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
                 if live(&on_arrow) { t.ink } else { t.muted }
             }))
             .build(),
-        Children::default(),
     )?;
     let label = Text::new(
         || "Back".to_string(),
@@ -662,6 +660,7 @@ fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIte
             vec![Box::new(label)],
         )?
         .hover_style(move |_r| nav_rect_hover(on_hover.active() == i))
+        .control(Role::Button)
         .on_press(move || on_press.select(i));
         // A `list` is a role with a content model: every child of one has to be a `listitem`, exactly as under a `<ul>`. The button is the control inside the item, not the item — without the wrapper the rail is a list of twenty-four things a reader is told are not list items, and the count it would have announced goes with them.
         buttons.push(Box::new(
@@ -689,7 +688,6 @@ fn build_sidebar(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let header_theme = crate::core::sidebar::sidebar(
         crate::core::sidebar::SidebarProps::props().build(),
-        Children::default(),
     )?;
     let nav = build_nav(stacks)?;
     Ok(Box::new(
@@ -714,10 +712,9 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
             .name(telar_icons::icon!("lucide:menu"))
             .size(20.0)
             .color(Reactive::of(|| theme().ink))
-            .label("Menu")
             .build(),
-        Children::default(),
-    )?;
+    )?
+    .a11y_label(|| "Menu");
     let burger = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -747,7 +744,6 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
             .size(18.0)
             .color(Reactive::of(|| theme().ink))
             .build(),
-        Children::default(),
     )?;
     let logo_text = Text::single_line(|| "rsx".to_string(), || TextStyle::new(18.0, theme().ink))?;
     let logo = Container::new(
@@ -1046,5 +1042,5 @@ impl App for SandboxRoot {
 }
 
 #[cfg(test)]
-#[path = "app_test.rs"]
+#[path = "app.test.rs"]
 mod tests;

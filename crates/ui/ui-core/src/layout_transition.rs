@@ -159,5 +159,5 @@ impl Component for LayoutTransition {
 }
 
 #[cfg(test)]
-#[path = "layout_transition_test.rs"]
+#[path = "layout_transition.test.rs"]
 mod tests;

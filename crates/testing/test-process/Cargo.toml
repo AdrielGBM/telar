@@ -1,0 +1,11 @@
+[package]
+name = "telar-test-process"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Runs one test of the workspace alone in a process of its own, for tests that change process-wide state."
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+# Only this workspace's own tests use it.
+publish = false

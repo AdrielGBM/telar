@@ -1,13 +1,13 @@
 //! What the inspection panels read, and the one model both tools keep it in.
 //!
-//! An [`InspectSource`] is something drawn that can be inspected: the whole window the overlay draws over ([`WindowSource`]), or one canvas a workshop shows ([`SurfaceCanvas`], or the [`SurfaceFrame`] showing it). An [`Inspection`] is what the panels show of one, as signals, refreshed from it with [`Inspection::refresh`] or kept refreshed with [`Inspection::follow`]. Both tools read their sources through the same audit and the same walk, so where they show the same components they agree.
+//! An [`InspectSource`] is something drawn that can be inspected: the whole window the overlay draws over ([`WindowSource`]), or one canvas a workshop shows ([`NestedCanvas`], or the [`SurfaceFrame`] showing it). An [`Inspection`] is what the panels show of one, as signals, refreshed from it with [`Inspection::refresh`] or kept refreshed with [`Inspection::follow`]. Both tools read their sources through the same audit and the same walk, so where they show the same components they agree.
 
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    AccessAudit, AccessNode, AccessViolation, Insets, Rect, RelayoutHook, RwSignal,
+    AccessAudit, AccessNode, AccessViolation, Insets, NestedCanvas, Rect, RelayoutHook, RwSignal,
     SegmentNodeInfo, Size, SurfaceCanvas, SurfaceFrame, Transform, on_relayout, signal,
 };
 
@@ -64,6 +64,25 @@ impl InspectSource for SurfaceCanvas {
 
     fn placement(&self) -> Transform {
         SurfaceCanvas::placement(self)
+    }
+}
+
+/// A canvas shown inside another tree, read as the canvas it is.
+impl InspectSource for NestedCanvas {
+    fn generation(&self) -> u64 {
+        InspectSource::generation(&**self)
+    }
+
+    fn walk(&self) -> Vec<SegmentNodeInfo> {
+        InspectSource::walk(&**self)
+    }
+
+    fn audit(&self) -> Option<AccessAudit> {
+        InspectSource::audit(&**self)
+    }
+
+    fn placement(&self) -> Transform {
+        InspectSource::placement(&**self)
     }
 }
 
@@ -362,5 +381,5 @@ fn branches(nodes: &[SegmentNodeInfo]) -> impl Iterator<Item = u64> + '_ {
 }
 
 #[cfg(test)]
-#[path = "inspect_test.rs"]
+#[path = "inspect.test.rs"]
 mod tests;

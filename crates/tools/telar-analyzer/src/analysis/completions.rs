@@ -28,6 +28,8 @@ pub enum CompletionKind {
     PreviewOptionValue(String),
     MatrixAxis,
     MatrixAxisValue(String),
+    /// A value of the prop named, on a component call, when the prop is named after an axis of the shared vocabulary.
+    VocabularyWord(String),
 }
 
 /// What kind of completion the cursor is in, decided from the `.rsx` section around it. A preview header is read from its own line, so one still being typed, with no closing `]` yet, is completed as one.
@@ -84,6 +86,10 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
         if color_attr_keys().contains(&key) {
             return Some(CompletionKind::ColorValue);
         }
+        // A component's prop types are out of a `.rsx`'s sight, so a prop is offered the words of the axis it is named after, which every component that has one names it.
+        if !is_builtin_tag(&tag) && telar_project::vocabulary_axis(key).is_some() {
+            return Some(CompletionKind::VocabularyWord(key.to_string()));
+        }
         return None;
     }
 
@@ -137,7 +143,7 @@ fn ends_in_theme_read(prefix: &str) -> bool {
         .is_some_and(|before| !before.ends_with(is_ident))
 }
 
-/// The built-in tags, the components the `[telar] prelude` crates export, and the `.rsx` components discoverable from `dir` — not a `*.previews.rsx` or a `mod.rsx`, which declare none. A name is offered once: a built-in shadows a component of the same name, and a prelude component's entry carries more than a bare `.rsx` stem.
+/// The built-in tags, the components the `[telar] prelude` crates export, and the `.rsx` components discoverable from `dir` — not a `*.preview.rsx` or a `mod.rsx`, which declare none. A name is offered once: a built-in shadows a component of the same name, and a prelude component's entry carries more than a bare `.rsx` stem.
 pub fn element_name_items(dir: Option<&Path>, prelude: &[PreludeComponent]) -> Vec<CompletionItem> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut items: Vec<CompletionItem> = Vec::new();
@@ -160,7 +166,7 @@ pub fn element_name_items(dir: Option<&Path>, prelude: &[PreludeComponent]) -> V
 
     if let Some(dir) = dir {
         let declares_a_component = |path: &Path| {
-            !telar_project::is_previews_file(path) && !telar_project::is_module_root(path)
+            !telar_project::is_preview_file(path) && !telar_project::is_module_root(path)
         };
         for path in telar_project::find_rsx_files_in_tree(dir)
             .into_iter()
@@ -342,10 +348,15 @@ pub fn style_class_items(
         .collect()
 }
 
-/// The signals a `$` may read on 0-based `line`, offered after it. A preview builds in a fn of its own, out of reach of the component's `[logic]`, so in a preview's body these are the names its `args(…)` declares; anywhere else, the signals and memos `[logic]` declares. `insert_text` drops the `$` (the trigger char is already typed), so completing leaves a single `$name`.
+/// The signals a `$` may read on 0-based `line`, offered after it. A preview builds in a fn of its own, out of reach of the component's `[logic]`, so in a preview's body these are the signals its `args(…)` declares, a `values(…)` name being a plain value written bare; anywhere else, the signals and memos `[logic]` declares. `insert_text` drops the `$` (the trigger char is already typed), so completing leaves a single `$name`.
 pub fn signal_items(source: &str, doc: &RsxDocument, line: u32) -> Vec<CompletionItem> {
     let names = match preview_at(doc, line) {
-        Some(preview) => preview.args.iter().map(|arg| arg.name.clone()).collect(),
+        Some(preview) => preview
+            .args
+            .iter()
+            .filter(|arg| arg.kind == telar_parser::ArgKind::Signal)
+            .map(|arg| arg.name.clone())
+            .collect(),
         None => declared_signals(source),
     };
     names
@@ -383,6 +394,11 @@ pub fn preview_option_items(kind: HeaderKind) -> Vec<CompletionItem> {
             "args(…)",
             "args(${1:name}:${2:default})",
             preview_header::ARGS_DECL_DOC,
+        ));
+        items.push(snippet_item(
+            "values(…)",
+            "values(${1:name}:${2:default})",
+            preview_header::VALUES_DECL_DOC,
         ));
     }
     items
@@ -494,7 +510,9 @@ pub fn matrix_axis_items(doc: &RsxDocument, line: u32, line_text: &str) -> Vec<C
         .into_iter()
         .flat_map(|root| &root.attributes)
         .filter(|attr| {
-            attr.key != "slot" && !attr.value.text().contains('$') && !attr.value.is_closure()
+            attr.key != telar_transpiler::SLOT_ATTR
+                && !attr.value.text().contains('$')
+                && !attr.value.is_closure()
         })
         .map(|attr| attr.key.clone());
     for name in declared.chain(rendered) {
@@ -531,16 +549,10 @@ fn axis_item(name: &str, description: &str) -> CompletionItem {
     }
 }
 
-/// The values of an inline matrix axis that can be listed: a direction, a control size, or a viewport the package names.
+/// The values of an inline matrix axis that can be listed: a direction, a viewport the package names, or the words of an arg named after an axis of the shared vocabulary.
 pub fn matrix_axis_value_items(axis: &str, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     match axis {
         "dir" => direction_items(),
-        "control_size" => word_items(&[
-            ("mini", "The smallest control size."),
-            ("small", "A size below the regular one."),
-            ("regular", "The default control size."),
-            ("large", "A size above the regular one."),
-        ]),
         "viewport" => project
             .and_then(|project| project.previews.viewports.as_ref())
             .into_iter()
@@ -555,8 +567,25 @@ pub fn matrix_axis_value_items(axis: &str, project: Option<&ProjectInfo>) -> Vec
                 ..Default::default()
             })
             .collect(),
-        _ => Vec::new(),
+        _ => vocabulary_items(axis),
     }
+}
+
+/// The words of the shared vocabulary's axis named `axis`, in the order a control lists them; none for a name no axis has.
+pub fn vocabulary_items(axis: &str) -> Vec<CompletionItem> {
+    telar_project::vocabulary_axis(axis)
+        .into_iter()
+        .flat_map(|axis| axis.words.iter().map(move |word| (axis.name, *word)))
+        .map(|(axis, word)| CompletionItem {
+            label: word.to_string(),
+            kind: Some(CompletionItemKind::ENUM_MEMBER),
+            label_details: Some(CompletionItemLabelDetails {
+                detail: None,
+                description: Some(axis.to_string()),
+            }),
+            ..Default::default()
+        })
+        .collect()
 }
 
 fn direction_items() -> Vec<CompletionItem> {
@@ -606,5 +635,5 @@ fn trigger_suggest() -> Command {
 }
 
 #[cfg(test)]
-#[path = "completions_test.rs"]
+#[path = "completions.test.rs"]
 mod tests;

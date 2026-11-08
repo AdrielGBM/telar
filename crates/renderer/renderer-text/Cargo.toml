@@ -21,11 +21,14 @@ etagere = "0.3.0"
 lru = { workspace = true }
 rustc-hash = { workspace = true }
 skrifa = "0.44"
+sys-locale = "0.3.2"
 tiny-skia = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+skera = "0.9.0"
+write-fonts = { version = "0.55.0", features = ["read"] }
 
 [[bench]]
 name = "colr_text"
@@ -34,4 +37,4 @@ harness = false
 # A process of its own: deferring to a host is a property of the whole copy of the crate, which would reach every other test's fonts.
 [[test]]
 name = "font_host"
-path = "src/font_host_test.rs"
+path = "src/font_host.test.rs"

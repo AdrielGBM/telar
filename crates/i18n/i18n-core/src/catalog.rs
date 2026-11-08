@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::locale_tag::canonical_tag;
 use crate::message::{Catalog, Entry, Message, Part};
 use crate::plural::PluralCategory;
 
@@ -82,6 +83,8 @@ impl CatalogModel {
     /// Merges every `(locale, TOML, label)` into one catalog. `label` names the source in error messages — a file path for the baker, a locale tag for a caller that parsed a string it holds in memory.
     ///
     /// `default` is the fallback locale when the active one lacks a key; an unknown or absent one resolves to `en` if the catalog has it, else the first tag alphabetically. Defining one key twice for one locale is an error rather than a last-writer-wins: the two definitions came from different files, and which of them a user sees would otherwise depend on directory order.
+    ///
+    /// Locale tags, `default` among them, are kept with their subtags separated by `-` whichever separator they were written with, so `pt_BR.toml` and `pt-BR/` are one locale, `pt-BR`, and every copy of [`negotiate_locale`](crate::negotiate_locale) sees the tags in the one form a browser reports.
     pub fn from_sources(
         sources: &[(&str, &str, &str)],
         default: Option<&str>,
@@ -89,8 +92,9 @@ impl CatalogModel {
         let mut entries: BTreeMap<String, BTreeMap<String, MessageModel>> = BTreeMap::new();
         let mut locales: Vec<String> = Vec::new();
         for (tag, content, label) in sources {
-            if !locales.iter().any(|l| l == tag) {
-                locales.push((*tag).to_string());
+            let tag = canonical_tag(tag);
+            if !locales.contains(&tag) {
+                locales.push(tag.clone());
             }
             let table: toml::Table = content
                 .parse()
@@ -99,7 +103,7 @@ impl CatalogModel {
             flatten(&table, String::new(), &mut flat, label)?;
             for (key, message) in flat {
                 let per_locale = entries.entry(key.clone()).or_default();
-                if per_locale.insert((*tag).to_string(), message).is_some() {
+                if per_locale.insert(tag.clone(), message).is_some() {
                     return Err(format!(
                         "{label}: duplicate key `{key}` for locale `{tag}` (already defined in another file)"
                     ));
@@ -112,7 +116,7 @@ impl CatalogModel {
         locales.sort();
 
         let default_locale = default
-            .map(str::to_string)
+            .map(canonical_tag)
             .filter(|d| locales.contains(d))
             .or_else(|| locales.iter().find(|l| *l == "en").cloned())
             .unwrap_or_else(|| locales[0].clone());
@@ -328,5 +332,5 @@ impl Catalog {
 }
 
 #[cfg(test)]
-#[path = "catalog_test.rs"]
+#[path = "catalog.test.rs"]
 mod tests;

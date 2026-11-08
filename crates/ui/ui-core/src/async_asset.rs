@@ -405,9 +405,9 @@ impl<V: Clone + Send + 'static> Drop for AssetLoader<V> {
 }
 
 #[cfg(test)]
-#[path = "async_asset_test.rs"]
+#[path = "async_asset.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "async_asset_loader_test.rs"]
+#[path = "async_asset.loader.test.rs"]
 mod loader_tests;

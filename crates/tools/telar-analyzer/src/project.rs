@@ -23,12 +23,7 @@ pub struct ProjectInfo {
 impl ProjectInfo {
     /// The same for the i18n catalog. `None` when the project has no translations at all, so a project that never opted into i18n gets no key diagnostics rather than one per `t"…"`.
     pub fn catalog_view(&self) -> Option<telar_diagnostics::CatalogView<'_>> {
-        if self.i18n_keys.is_empty() {
-            return None;
-        }
-        Some(telar_diagnostics::CatalogView {
-            keys: &self.i18n_keys,
-        })
+        telar_diagnostics::CatalogView::of(&self.i18n_keys)
     }
 
     pub fn find_theme_field_location(&self, field_name: &str) -> Option<(PathBuf, usize)> {
@@ -72,12 +67,7 @@ impl ProjectInfo {
         } else {
             HashSet::new()
         };
-        // A malformed catalog is the baker's error to report, not the analyzer's: "no keys known" silences the check rather than flagging every `t"…"`.
-        let i18n_keys = telar_baker::parse_catalog(&root)
-            .ok()
-            .flatten()
-            .map(|c| c.keys().cloned().collect())
-            .unwrap_or_default();
+        let i18n_keys = telar_baker::catalog_keys(&root);
         let component_root =
             telar_project::find_workspace_root(&root).unwrap_or_else(|| root.clone());
         Ok(Self {
@@ -97,21 +87,22 @@ pub fn manifest_diagnostic(error: &ManifestError) -> telar_diagnostics::Diagnost
     telar_diagnostics::Diagnostic::error(error.to_string(), telar_diagnostics::Span::line(1))
 }
 
+/// What the build says about the name of the `.rsx` at `rsx_path` and of the directories holding it, on its first line, since a name has no line of its own.
+pub fn module_name_diagnostics(rsx_path: &Path) -> Vec<telar_diagnostics::Diagnostic> {
+    let Some(root) = telar_project::find_package_root(rsx_path) else {
+        return Vec::new();
+    };
+    telar_project::rsx_module_name_problems(rsx_path, &root)
+        .into_iter()
+        .map(|problem| {
+            telar_diagnostics::Diagnostic::error(problem, telar_diagnostics::Span::line(1))
+        })
+        .collect()
+}
+
 /// The name `CARGO_CRATE_NAME` gives the library of the package at `package_root`, which is what the generated preview ids start with: its `[lib] name` or else its package name, with `-` spelled `_`.
 pub fn crate_name(package_root: &Path) -> Option<String> {
-    let manifest: toml::Table = std::fs::read_to_string(package_root.join("Cargo.toml"))
-        .ok()?
-        .parse()
-        .ok()?;
-    let named = |table: &str| {
-        manifest
-            .get(table)
-            .and_then(|table| table.get("name"))
-            .and_then(toml::Value::as_str)
-    };
-    named("lib")
-        .or_else(|| named("package"))
-        .map(|name| name.replace('-', "_"))
+    telar_project::CargoManifest::read(package_root)?.lib_name()
 }
 
 fn scan_project_theme_fields(root: &Path, type_name: &str) -> HashSet<String> {
@@ -173,5 +164,5 @@ fn parse_color_field(line: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "project_test.rs"]
+#[path = "project.test.rs"]
 mod tests;

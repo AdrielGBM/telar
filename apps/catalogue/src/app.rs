@@ -9,7 +9,6 @@ impl App for Root {
         reset_layout_runtime();
         let content = crate::home::home(
             crate::home::HomeProps::props().build(),
-            telar::Children::default(),
         )
         .expect("home layout failed");
         Box::new(ScrollPage::new(content).expect("page layout failed"))

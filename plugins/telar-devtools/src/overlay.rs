@@ -1,6 +1,6 @@
 //! The overlay's widget tree: a window-sized [`SurfaceCanvas`] in the host's runtime, drawn over the app in the workbench theme.
 //!
-//! The canvas is a surface of its own, so its focus, overlays, direction and control size never mix with the app's, whether the app shares this runtime or lives in a hot-reloaded dylib with one of its own. Whoever holds the [`Overlay`] decides which events reach it: a pointer only over a panel, the keyboard only while a press on a panel left it focused there.
+//! The canvas is a surface of its own, so its focus, overlays and direction never mix with the app's, whether the app shares this runtime or lives in a hot-reloaded dylib with one of its own. Whoever holds the [`Overlay`] decides which events reach it: a pointer only over a panel, the keyboard only while a press on a panel left it focused there.
 
 mod banner;
 mod inspector;
@@ -9,15 +9,15 @@ mod stats;
 use std::cell::Ref;
 
 use telar::{
-    BuildOutcome, Container, DevAction, Direction, DrawCommand, Event, EventResult, LayoutError,
-    LayoutItem, LayoutStyle, OverlayResponse, RwSignal, Size, SizeDimension, SurfaceCanvas,
-    box_item, focus, interactive_rects, signal,
+    BuildOutcome, Container, DevAction, Direction, DrawCommand, Event, EventResult, GuestStop,
+    LayoutError, LayoutItem, LayoutStyle, OverlayResponse, RwSignal, Size, SizeDimension,
+    SurfaceCanvas, box_item, focus, interactive_rects, signal,
 };
 
 use crate::inspect::{InspectSource, Inspection};
 use crate::meter::Reading;
 use crate::panels::mounted_while;
-use crate::workbench::{WORKBENCH_CONTROL_SIZE, workbench_scope};
+use crate::workbench::workbench_scope;
 
 const DRAWER_WIDTH: f32 = 320.0;
 
@@ -35,7 +35,7 @@ pub(crate) struct Model {
     pub reading: RwSignal<Reading>,
     pub renderer: RwSignal<Option<String>>,
     pub build: RwSignal<BuildOutcome>,
-    pub app_panic: RwSignal<Option<String>>,
+    pub app_stop: RwSignal<Option<GuestStop>>,
     pub panel_open: RwSignal<bool>,
     pub inspector_open: RwSignal<bool>,
     pub drawer_tab: RwSignal<DrawerTab>,
@@ -49,7 +49,7 @@ impl Model {
             reading: signal(Reading::default()),
             renderer: signal(None),
             build: signal(BuildOutcome::Loaded),
-            app_panic: signal(None),
+            app_stop: signal(None),
             panel_open: signal(false),
             inspector_open: signal(false),
             drawer_tab: signal(DrawerTab::default()),
@@ -76,7 +76,6 @@ impl Overlay {
             Ok(box_item(workbench_scope(move || root(model))?))
         })?;
         canvas.set_direction(Some(Direction::Ltr));
-        canvas.set_control_size(Some(WORKBENCH_CONTROL_SIZE));
         let model = built.expect("the canvas runs its build before it returns");
         Ok(Self {
             canvas,
@@ -119,9 +118,9 @@ impl Overlay {
         })
     }
 
-    pub fn set_app_panic(&self, panic: Option<String>) {
+    pub fn set_app_stop(&self, stop: Option<GuestStop>) {
         self.canvas.with_entered(|| {
-            self.model.app_panic.set_if_changed(panic);
+            self.model.app_stop.set_if_changed(stop);
         })
     }
 
@@ -206,9 +205,6 @@ impl Overlay {
         self.captured = true;
         self.hovered = true;
         self.keyboard = true;
-        self.canvas.with_entered(|| {
-            focus::blur_from_pointer(x, y);
-        });
         self.dispatch(event);
         CONSUMED
     }
@@ -275,5 +271,5 @@ fn root(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[cfg(test)]
-#[path = "overlay_test.rs"]
+#[path = "overlay.test.rs"]
 mod tests;

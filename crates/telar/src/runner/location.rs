@@ -2,11 +2,11 @@
 
 use platform_core::{HistoryUpdate, Location, LocationFormat, LocationSource};
 
-use crate::prefs::UserPrefs;
+use crate::user_preferences::{store_history, stored_history};
 
 pub(crate) struct LocationBinding {
     source: Box<dyn LocationSource>,
-    // A target whose platform keeps no history between runs — a command line — has it kept in `UserPrefs` instead, and reopened from there when launched without a location.
+    // A target whose platform keeps no history between runs — a command line — has it kept in the preference store instead, and reopened from there when launched without a location.
     remember: bool,
     history: Vec<Location>,
     opened: bool,
@@ -45,7 +45,7 @@ impl LocationBinding {
         not(target_arch = "wasm32")
     ))]
     pub(crate) fn for_window(source: Box<dyn LocationSource>) -> Self {
-        match std::env::var_os("TELAR_PREVIEW") {
+        match std::env::var_os(telar_project::protocol::PREVIEW_VAR) {
             Some(_) => Self::new(source),
             None => Self::remembered(source),
         }
@@ -67,48 +67,45 @@ impl LocationBinding {
     }
 
     /// The history to hand the app before it builds: the platform's opening one the first time, and whatever it has moved to since on every rebuild after.
-    pub(crate) fn open(&mut self, prefs: &UserPrefs) -> &[Location] {
+    pub(crate) fn open(&mut self) -> &[Location] {
         if !self.opened {
             self.opened = true;
             self.history = self.source.initial();
             if self.history.is_empty() && self.remember {
-                self.history = restore(prefs);
+                self.history = restore();
             }
         }
         &self.history
     }
 
-    /// Carries out a move the app made. `true` when `prefs` changed and should be saved.
-    pub(crate) fn apply(&mut self, update: &HistoryUpdate, prefs: &mut UserPrefs) -> bool {
+    /// Carries out a move the app made.
+    pub(crate) fn apply(&mut self, update: &HistoryUpdate) {
         self.source.apply(update);
-        self.follow(update.history.clone(), prefs)
+        self.follow(update.history.clone());
     }
 
-    /// Records a history the platform moved to by itself. `true` when `prefs` changed and should be saved.
-    pub(crate) fn follow(&mut self, history: Vec<Location>, prefs: &mut UserPrefs) -> bool {
+    /// Records a history the platform moved to by itself.
+    pub(crate) fn follow(&mut self, history: Vec<Location>) {
         self.history = history;
         if !self.remember {
-            return false;
+            return;
         }
         let format = LocationFormat::root();
         let written: Vec<String> = self.history.iter().map(|l| format.format(l)).collect();
-        if prefs.history == written {
-            return false;
+        if stored_history() != written {
+            store_history(&written);
         }
-        prefs.history = written;
-        true
     }
 }
 
-fn restore(prefs: &UserPrefs) -> Vec<Location> {
+fn restore() -> Vec<Location> {
     let format = LocationFormat::root().with_locales(platform_core::location_locales());
-    prefs
-        .history
+    stored_history()
         .iter()
         .filter_map(|written| format.parse(written))
         .collect()
 }
 
 #[cfg(test)]
-#[path = "location_test.rs"]
+#[path = "location.test.rs"]
 mod tests;

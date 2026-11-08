@@ -154,5 +154,5 @@ fn leading_ws(text: &str) -> usize {
 }
 
 #[cfg(test)]
-#[path = "source_map_test.rs"]
+#[path = "source_map.test.rs"]
 mod tests;

@@ -3,8 +3,7 @@
 //! Everything wgpu-specific about the lifecycle is here: the build kept off the UI thread because creating a device takes long enough to see, the device kept warm across a suspend so a resume rebinds a surface instead of rebuilding a pipeline cache, and `Auto` degrading to the rasteriser when there is no adapter — or when wgpu was not compiled in at all.
 
 use renderer_core::RenderBackend;
-
-use crate::config::RendererBackend;
+use telar_project::protocol::RendererBackend;
 
 #[cfg(feature = "hardware")]
 use super::background_build::BackgroundBuild;

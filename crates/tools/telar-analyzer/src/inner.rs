@@ -5,11 +5,11 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender};
-use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
+use lsp_server::{Connection, Message, Notification, Request, RequestId, Response, ResponseError};
 use paths::AbsPathBuf;
 use rust_analyzer::config::Config;
 use serde_json::{Value, json};
@@ -81,14 +81,83 @@ impl Drop for Turn {
     }
 }
 
+/// Why a request to rust-analyzer brought back no answer.
+#[derive(Debug, Clone)]
+pub enum RequestError {
+    /// It answered with an error, kept as it was said.
+    Answered(ResponseError),
+    /// It did not answer before the deadline, which is also what it does with analysis requests that arrive before the workspace has loaded.
+    TimedOut,
+    /// The session is over, so nothing will answer.
+    SessionEnded,
+}
+
+impl std::fmt::Display for RequestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Answered(error) => write!(
+                f,
+                "rust-analyzer answered with an error ({}): {}",
+                error.code, error.message
+            ),
+            Self::TimedOut => f.write_str(
+                "rust-analyzer did not answer in time; it may still be loading the workspace",
+            ),
+            Self::SessionEnded => f.write_str("rust-analyzer's session has ended"),
+        }
+    }
+}
+
 enum Waiting {
     /// A query the `.rsx` side asked; the answer goes back to the awaiting task.
-    Ours(oneshot::Sender<Value>),
+    Ours(oneshot::Sender<Result<Value, RequestError>>),
     /// A request the editor asked and we passed through; the answer goes back to the editor under the id it used.
     Editor(Value),
 }
 
-type Pending = Arc<Mutex<HashMap<RequestId, Waiting>>>;
+type Answer = oneshot::Receiver<Result<Value, RequestError>>;
+
+/// The requests waiting on a reply from rust-analyzer. Closed when the session ends, and a closed table takes no more, so nothing can be left waiting on a reply that will never come.
+#[derive(Clone)]
+struct Pending(Arc<Mutex<Option<HashMap<RequestId, Waiting>>>>);
+
+impl Pending {
+    fn open() -> Self {
+        Self(Arc::new(Mutex::new(Some(HashMap::new()))))
+    }
+
+    fn table(&self) -> MutexGuard<'_, Option<HashMap<RequestId, Waiting>>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Registers `waiting` under `id`, or hands it back when the session has ended.
+    fn insert(&self, id: RequestId, waiting: Waiting) -> Result<(), Waiting> {
+        match self.table().as_mut() {
+            Some(table) => {
+                table.insert(id, waiting);
+                Ok(())
+            }
+            None => Err(waiting),
+        }
+    }
+
+    fn remove(&self, id: &RequestId) -> Option<Waiting> {
+        self.table().as_mut()?.remove(id)
+    }
+
+    /// Closes the table and hands back everything still waiting in it.
+    fn close(&self) -> Vec<Waiting> {
+        self.table()
+            .take()
+            .map(|table| table.into_values().collect())
+            .unwrap_or_default()
+    }
+
+    fn is_closed(&self) -> bool {
+        self.table().is_none()
+    }
+}
+
 /// Requests rust-analyzer sent to the client, relayed onward under an id of ours: maps that id back to the one rust-analyzer is waiting on.
 type Relayed = Arc<Mutex<HashMap<i32, RequestId>>>;
 
@@ -101,6 +170,7 @@ struct Synced {
 pub struct Inner {
     to_ra: Sender<Message>,
     pending: Pending,
+    outgoing: OutgoingSender,
     relayed: Relayed,
     next_id: Arc<AtomicI32>,
     synced: Mutex<HashMap<PathBuf, Synced>>,
@@ -129,10 +199,24 @@ impl Inner {
                 run_server(ra_side, abs)
             })?;
 
-        let Connection { sender, receiver } = our_side;
-        let capabilities = handshake(&sender, &receiver, root, options, &editor_caps)?;
+        let capabilities = handshake(
+            &our_side.sender,
+            &our_side.receiver,
+            root,
+            options,
+            &editor_caps,
+        )?;
+        Self::connect(our_side, capabilities, outgoing)
+    }
 
-        let pending: Pending = Arc::default();
+    /// Serves the `.rsx` side and the editor over `connection`, whose far end is a rust-analyzer past its handshake that advertised `capabilities`.
+    pub fn connect(
+        connection: Connection,
+        capabilities: Value,
+        outgoing: OutgoingSender,
+    ) -> anyhow::Result<Self> {
+        let Connection { sender, receiver } = connection;
+        let pending = Pending::open();
         let relayed: Relayed = Arc::default();
         let next_id = Arc::new(AtomicI32::new(1));
         std::thread::Builder::new()
@@ -141,12 +225,14 @@ impl Inner {
                 let pending = pending.clone();
                 let relayed = relayed.clone();
                 let next_id = next_id.clone();
+                let outgoing = outgoing.clone();
                 move || read_loop(receiver, pending, relayed, next_id, outgoing)
             })?;
 
         Ok(Self {
             to_ra: sender,
             pending,
+            outgoing,
             relayed,
             next_id,
             synced: Mutex::default(),
@@ -159,12 +245,16 @@ impl Inner {
         &self.capabilities
     }
 
-    /// Sends a request and waits for its reply. Yields `None` when rust-analyzer never answers, which is what it does for analysis requests that arrive before the workspace has loaded.
-    pub async fn request(&self, method: &str, params: Value, timeout: Duration) -> Option<Value> {
-        self.request_all(method, vec![params], timeout)
-            .await
-            .pop()
-            .flatten()
+    /// Sends a request and waits for its reply until `timeout`.
+    pub async fn request(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value, RequestError> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        let sent = self.dispatch(method, params);
+        self.answer(sent, deadline).await
     }
 
     /// Sends every request before waiting on any, so rust-analyzer works on them side by side, and answers each as [`Self::request`] would. One deadline covers them all.
@@ -173,38 +263,49 @@ impl Inner {
         method: &str,
         params: Vec<Value>,
         timeout: Duration,
-    ) -> Vec<Option<Value>> {
+    ) -> Vec<Result<Value, RequestError>> {
         let deadline = tokio::time::Instant::now() + timeout;
-        let waiting: Vec<_> = params
+        let sent: Vec<_> = params
             .into_iter()
-            .map(|params| {
-                let id = self.claim_id();
-                let (tx, rx) = oneshot::channel();
-                if let Ok(mut pending) = self.pending.lock() {
-                    pending.insert(id.clone(), Waiting::Ours(tx));
-                }
-                let sent = self.send_request(&id, method, params);
-                (id, sent.then_some(rx))
-            })
+            .map(|params| self.dispatch(method, params))
             .collect();
-        let mut answers = Vec::with_capacity(waiting.len());
-        for (id, rx) in waiting {
-            let answer = match rx {
-                Some(rx) => tokio::time::timeout_at(deadline, rx)
-                    .await
-                    .ok()
-                    .and_then(Result::ok),
-                None => None,
-            };
-            // Timed out, or the server dropped the reply: drop the slot so it cannot leak for the life of the session.
-            if answer.is_none()
-                && let Ok(mut pending) = self.pending.lock()
-            {
-                pending.remove(&id);
-            }
-            answers.push(answer);
+        let mut answers = Vec::with_capacity(sent.len());
+        for sent in sent {
+            answers.push(self.answer(sent, deadline).await);
         }
         answers
+    }
+
+    /// Whether the session is over, after which every request is answered with [`RequestError::SessionEnded`].
+    pub fn ended(&self) -> bool {
+        self.pending.is_closed()
+    }
+
+    fn dispatch(&self, method: &str, params: Value) -> (RequestId, Answer) {
+        let id = self.claim_id();
+        let (tx, rx) = oneshot::channel();
+        // A refused registration or a failed send drops `tx`, which the receiver reads as the session's end.
+        if self.pending.insert(id.clone(), Waiting::Ours(tx)).is_ok()
+            && !self.send_request(&id, method, params)
+        {
+            self.pending.remove(&id);
+        }
+        (id, rx)
+    }
+
+    async fn answer(
+        &self,
+        (id, rx): (RequestId, Answer),
+        deadline: tokio::time::Instant,
+    ) -> Result<Value, RequestError> {
+        match tokio::time::timeout_at(deadline, rx).await {
+            Ok(Ok(answer)) => answer,
+            Ok(Err(_)) => Err(RequestError::SessionEnded),
+            Err(_) => {
+                self.pending.remove(&id);
+                Err(RequestError::TimedOut)
+            }
+        }
     }
 
     pub fn notify(&self, method: &str, params: Value) {
@@ -214,13 +315,18 @@ impl Inner {
         }));
     }
 
-    /// Passes an editor request through to rust-analyzer under an id of ours, so its reply can be routed back under the editor's. Nothing is awaited here — the reply travels the read loop like any other.
+    /// Passes an editor request through to rust-analyzer under an id of ours, so its reply can be routed back under the editor's. Nothing is awaited here — the reply travels the read loop like any other, and a request the session can no longer take is answered with an error at once.
     pub fn pass_request(&self, editor_id: Value, method: &str, params: Value) {
         let id = self.claim_id();
-        if let Ok(mut pending) = self.pending.lock() {
-            pending.insert(id.clone(), Waiting::Editor(editor_id));
+        if let Err(waiting) = self.pending.insert(id.clone(), Waiting::Editor(editor_id)) {
+            abandon(waiting, &self.outgoing);
+            return;
         }
-        let _ = self.send_request(&id, method, params);
+        if !self.send_request(&id, method, params)
+            && let Some(waiting) = self.pending.remove(&id)
+        {
+            abandon(waiting, &self.outgoing);
+        }
     }
 
     /// Routes the editor's answer back to the rust-analyzer request that is waiting on it. A reply for an id we never relayed is dropped.
@@ -285,7 +391,7 @@ impl Inner {
         RequestId::from(self.next_id.fetch_add(1, Ordering::Relaxed))
     }
 
-    /// Whether the request reached rust-analyzer. A closed channel means the session is gone, which every caller treats as "no answer" rather than an error worth surfacing.
+    /// Whether the request reached rust-analyzer. A closed channel means the session is gone.
     fn send_request(&self, id: &RequestId, method: &str, params: Value) -> bool {
         self.to_ra
             .send(Message::Request(Request {
@@ -445,21 +551,21 @@ fn read_loop(
 ) {
     for message in receiver {
         match message {
-            Message::Response(Response { id, result, error }) => {
-                let waiting = pending.lock().ok().and_then(|mut p| p.remove(&id));
-                match waiting {
-                    Some(Waiting::Ours(tx)) => {
-                        let _ = tx.send(result.unwrap_or(Value::Null));
-                    }
-                    Some(Waiting::Editor(editor_id)) => {
-                        outgoing.send(match error {
+            Message::Response(Response { id, result, error }) => match pending.remove(&id) {
+                Some(Waiting::Ours(tx)) => {
+                    let _ = tx.send(match error {
+                        Some(error) => Err(RequestError::Answered(error)),
+                        None => Ok(result.unwrap_or(Value::Null)),
+                    });
+                }
+                Some(Waiting::Editor(editor_id)) => {
+                    outgoing.send(match error {
                             Some(error) => json!({ "jsonrpc": "2.0", "id": editor_id, "error": error }),
                             None => json!({ "jsonrpc": "2.0", "id": editor_id, "result": result.unwrap_or(Value::Null) }),
                         });
-                    }
-                    None => {}
                 }
-            }
+                None => {}
+            },
             Message::Request(Request { id, method, params }) => {
                 let ours = next_id.fetch_add(1, Ordering::Relaxed);
                 if let Ok(mut relayed) = relayed.lock() {
@@ -474,6 +580,24 @@ fn read_loop(
                 outgoing.send(json!({ "jsonrpc": "2.0", "method": method, "params": params }));
             }
         }
+    }
+    for waiting in pending.close() {
+        abandon(waiting, &outgoing);
+    }
+}
+
+/// Answers a request rust-analyzer will never reply to, so neither the editor nor a query of ours is left waiting on it.
+fn abandon(waiting: Waiting, outgoing: &OutgoingSender) {
+    let error = RequestError::SessionEnded;
+    match waiting {
+        Waiting::Ours(tx) => {
+            let _ = tx.send(Err(error));
+        }
+        Waiting::Editor(editor_id) => outgoing.send(json!({
+            "jsonrpc": "2.0",
+            "id": editor_id,
+            "error": crate::rpc::request_failed(&error.to_string()),
+        })),
     }
 }
 
@@ -496,5 +620,9 @@ fn answer_locally(sender: &Sender<Message>, Request { id, method, params }: Requ
 }
 
 #[cfg(test)]
-#[path = "inner_test.rs"]
+#[path = "inner.fake.rs"]
+pub(crate) mod fake;
+
+#[cfg(test)]
+#[path = "inner.test.rs"]
 mod tests;

@@ -1,0 +1,28 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,250,273
+              text 0,1 300x14.28 "Name" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
+            end
+          end
+          element group
+            rect 250,296 300x32 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+            element group
+              matrix 1,0,0,1,262,296
+                clip 0,0 276x32
+                  text 0,8 276x16.8 "Ada" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
+                  rect 26.09,8 1.5x16.8 fill=#171a2eff
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

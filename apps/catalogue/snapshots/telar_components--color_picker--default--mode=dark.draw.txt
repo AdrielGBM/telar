@@ -1,0 +1,231 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,288,155
+              text 0,2 224x14.28 "Accent" size=11.9 family=sans-serif weight=400 color=#99a1b8ff lang=en
+            end
+          end
+          element group
+            element slider
+              rect 288,178 224x139 fill=#00ff85ff radius=10
+              element group
+                rect 288,178 224x139 fill=linear(288,178>512,178;#ffffffff@0;#ffffff00@1) radius=10
+              end
+              element group
+                rect 288,178 224x139 fill=linear(288,178>288,317;#00000000@0;#000000ff@1) radius=10
+              end
+              element group
+                matrix 1,0,0,1,129.85,22.58
+                  rect 288,178 16x16 fill=#4dc78cff border=1.5 border-color=#0d0f1fff radius=8
+                end
+              end
+            end
+            element group
+              element group
+                element group
+                  clip 288,333 32x32 radius=10
+                    matrix 1,0,0,1,288,333
+                      rect 0,0 32x32 fill=#1c1f29ff
+                      rect 0,0 4x4 fill=#3d4252ff
+                      rect 8,0 4x4 fill=#3d4252ff
+                      rect 16,0 4x4 fill=#3d4252ff
+                      rect 24,0 4x4 fill=#3d4252ff
+                      rect 4,4 4x4 fill=#3d4252ff
+                      rect 12,4 4x4 fill=#3d4252ff
+                      rect 20,4 4x4 fill=#3d4252ff
+                      rect 28,4 4x4 fill=#3d4252ff
+                      rect 0,8 4x4 fill=#3d4252ff
+                      rect 8,8 4x4 fill=#3d4252ff
+                      rect 16,8 4x4 fill=#3d4252ff
+                      rect 24,8 4x4 fill=#3d4252ff
+                      rect 4,12 4x4 fill=#3d4252ff
+                      rect 12,12 4x4 fill=#3d4252ff
+                      rect 20,12 4x4 fill=#3d4252ff
+                      rect 28,12 4x4 fill=#3d4252ff
+                      rect 0,16 4x4 fill=#3d4252ff
+                      rect 8,16 4x4 fill=#3d4252ff
+                      rect 16,16 4x4 fill=#3d4252ff
+                      rect 24,16 4x4 fill=#3d4252ff
+                      rect 4,20 4x4 fill=#3d4252ff
+                      rect 12,20 4x4 fill=#3d4252ff
+                      rect 20,20 4x4 fill=#3d4252ff
+                      rect 28,20 4x4 fill=#3d4252ff
+                      rect 0,24 4x4 fill=#3d4252ff
+                      rect 8,24 4x4 fill=#3d4252ff
+                      rect 16,24 4x4 fill=#3d4252ff
+                      rect 24,24 4x4 fill=#3d4252ff
+                      rect 4,28 4x4 fill=#3d4252ff
+                      rect 12,28 4x4 fill=#3d4252ff
+                      rect 20,28 4x4 fill=#3d4252ff
+                      rect 28,28 4x4 fill=#3d4252ff
+                    end
+                  end
+                end
+                element group
+                  rect 288,333 32x32 fill=#4dc78cff border=1 border-color=#3d4252ff radius=10
+                end
+              end
+              element group
+                element slider
+                  rect 328,325 184x24
+                  element group
+                    element group
+                      rect 328,331 184x12 fill=linear(328,331>512,331;#ff0000ff@0;#ffff00ff@0.17;#00ff00ff@0.33;#00ffffff@0.5;#0000ffff@0.67;#ff00ffff@0.83;#ff0000ff@1) border=1 border-color=#3d4252ff radius=6
+                    end
+                    element group
+                      matrix 1,0,0,1,70.58,-2
+                        rect 328,331 16x16 border=1.5 border-color=#0d0f1fff radius=8
+                      end
+                    end
+                  end
+                end
+                element slider
+                  rect 328,349 184x24
+                  element group
+                    element group
+                      clip 328,355 184x12 radius=6
+                        matrix 1,0,0,1,328,355
+                          rect 0,0 184x12 fill=#1c1f29ff
+                          rect 0,0 4x4 fill=#3d4252ff
+                          rect 8,0 4x4 fill=#3d4252ff
+                          rect 16,0 4x4 fill=#3d4252ff
+                          rect 24,0 4x4 fill=#3d4252ff
+                          rect 32,0 4x4 fill=#3d4252ff
+                          rect 40,0 4x4 fill=#3d4252ff
+                          rect 48,0 4x4 fill=#3d4252ff
+                          rect 56,0 4x4 fill=#3d4252ff
+                          rect 64,0 4x4 fill=#3d4252ff
+                          rect 72,0 4x4 fill=#3d4252ff
+                          rect 80,0 4x4 fill=#3d4252ff
+                          rect 88,0 4x4 fill=#3d4252ff
+                          rect 96,0 4x4 fill=#3d4252ff
+                          rect 104,0 4x4 fill=#3d4252ff
+                          rect 112,0 4x4 fill=#3d4252ff
+                          rect 120,0 4x4 fill=#3d4252ff
+                          rect 128,0 4x4 fill=#3d4252ff
+                          rect 136,0 4x4 fill=#3d4252ff
+                          rect 144,0 4x4 fill=#3d4252ff
+                          rect 152,0 4x4 fill=#3d4252ff
+                          rect 160,0 4x4 fill=#3d4252ff
+                          rect 168,0 4x4 fill=#3d4252ff
+                          rect 176,0 4x4 fill=#3d4252ff
+                          rect 4,4 4x4 fill=#3d4252ff
+                          rect 12,4 4x4 fill=#3d4252ff
+                          rect 20,4 4x4 fill=#3d4252ff
+                          rect 28,4 4x4 fill=#3d4252ff
+                          rect 36,4 4x4 fill=#3d4252ff
+                          rect 44,4 4x4 fill=#3d4252ff
+                          rect 52,4 4x4 fill=#3d4252ff
+                          rect 60,4 4x4 fill=#3d4252ff
+                          rect 68,4 4x4 fill=#3d4252ff
+                          rect 76,4 4x4 fill=#3d4252ff
+                          rect 84,4 4x4 fill=#3d4252ff
+                          rect 92,4 4x4 fill=#3d4252ff
+                          rect 100,4 4x4 fill=#3d4252ff
+                          rect 108,4 4x4 fill=#3d4252ff
+                          rect 116,4 4x4 fill=#3d4252ff
+                          rect 124,4 4x4 fill=#3d4252ff
+                          rect 132,4 4x4 fill=#3d4252ff
+                          rect 140,4 4x4 fill=#3d4252ff
+                          rect 148,4 4x4 fill=#3d4252ff
+                          rect 156,4 4x4 fill=#3d4252ff
+                          rect 164,4 4x4 fill=#3d4252ff
+                          rect 172,4 4x4 fill=#3d4252ff
+                          rect 180,4 4x4 fill=#3d4252ff
+                          rect 0,8 4x4 fill=#3d4252ff
+                          rect 8,8 4x4 fill=#3d4252ff
+                          rect 16,8 4x4 fill=#3d4252ff
+                          rect 24,8 4x4 fill=#3d4252ff
+                          rect 32,8 4x4 fill=#3d4252ff
+                          rect 40,8 4x4 fill=#3d4252ff
+                          rect 48,8 4x4 fill=#3d4252ff
+                          rect 56,8 4x4 fill=#3d4252ff
+                          rect 64,8 4x4 fill=#3d4252ff
+                          rect 72,8 4x4 fill=#3d4252ff
+                          rect 80,8 4x4 fill=#3d4252ff
+                          rect 88,8 4x4 fill=#3d4252ff
+                          rect 96,8 4x4 fill=#3d4252ff
+                          rect 104,8 4x4 fill=#3d4252ff
+                          rect 112,8 4x4 fill=#3d4252ff
+                          rect 120,8 4x4 fill=#3d4252ff
+                          rect 128,8 4x4 fill=#3d4252ff
+                          rect 136,8 4x4 fill=#3d4252ff
+                          rect 144,8 4x4 fill=#3d4252ff
+                          rect 152,8 4x4 fill=#3d4252ff
+                          rect 160,8 4x4 fill=#3d4252ff
+                          rect 168,8 4x4 fill=#3d4252ff
+                          rect 176,8 4x4 fill=#3d4252ff
+                        end
+                      end
+                    end
+                    element group
+                      rect 328,355 184x12 fill=linear(328,355>512,355;#4dc78c00@0;#4dc78cff@1) border=1 border-color=#3d4252ff radius=6
+                    end
+                    element group
+                      matrix 1,0,0,1,168,-2
+                        rect 328,355 16x16 border=1.5 border-color=#0d0f1fff radius=8
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              rect 288,381 224x32 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+              element group
+                matrix 1,0,0,1,300,381
+                  clip 0,0 200x32
+                    text 0,8 200x16.8 "#4dc78c" size=14 family=sans-serif weight=400 color=#ebedf5ff line-height=1.2 wrap=none
+                  end
+                end
+              end
+            end
+            element group
+              element radio
+                rect 288,421 24x24
+                element group
+                  rect 288,421 20x20 fill=#7394ffff border=1 border-color=#3d4252ff radius=10
+                end
+              end
+              element radio
+                rect 312,421 24x24
+                element group
+                  rect 312,421 20x20 fill=#6badfaff border=1 border-color=#3d4252ff radius=10
+                end
+              end
+              element radio
+                rect 336,421 24x24
+                element group
+                  rect 336,421 20x20 fill=#4dc78cff border=1.5 border-color=#ebedf5ff radius=10
+                end
+              end
+              element radio
+                rect 360,421 24x24
+                element group
+                  rect 360,421 20x20 fill=#f5b847ff border=1 border-color=#3d4252ff radius=10
+                end
+              end
+              element radio
+                rect 384,421 24x24
+                element group
+                  rect 384,421 20x20 fill=#f06b70ff border=1 border-color=#3d4252ff radius=10
+                end
+              end
+              element radio
+                rect 408,421 24x24
+                element group
+                  rect 408,421 20x20 fill=#99a1b8ff border=1 border-color=#3d4252ff radius=10
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

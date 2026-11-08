@@ -8,8 +8,9 @@ use lsp_types::*;
 use serde_json::Value;
 use telar_diagnostics::semantic_diagnostics;
 
+use crate::build_sync::NoTarget;
 use crate::index::WorkspaceIndex;
-use crate::project::{ProjectInfo, manifest_diagnostic};
+use crate::project::{ProjectInfo, manifest_diagnostic, module_name_diagnostics};
 use crate::ra::Analyzer;
 
 use super::{AnalyzerHandle, AnalyzerState, Backend};
@@ -23,7 +24,7 @@ impl AnalyzerHandle {
         {
             let mut state = self.state.lock().ok()?;
             match &*state {
-                AnalyzerState::Ready(analyzer) => return Some(analyzer.clone()),
+                AnalyzerState::Ready(_) => return self.live(&mut state),
                 AnalyzerState::Starting | AnalyzerState::Failed => return None,
                 AnalyzerState::Idle => *state = AnalyzerState::Starting,
             }
@@ -67,11 +68,26 @@ impl AnalyzerHandle {
 
     /// The running analyzer, without booting one. The passthrough uses this: an editor request for a `.rs` file cannot sit waiting on a workspace load, and `initialize` has already started the boot.
     pub(crate) fn ready(&self) -> Option<Arc<Analyzer>> {
-        match &*self.state.lock().ok()? {
-            AnalyzerState::Ready(analyzer) => Some(analyzer.clone()),
-            _ => None,
-        }
+        let mut state = self.state.lock().ok()?;
+        self.live(&mut state)
     }
+
+    /// The analyzer `state` holds while its session lasts. One whose session ended is retired to `Failed`, so the editor's `.rs` requests fall back instead of being handed to a session that cannot answer, and the user is told once.
+    fn live(&self, state: &mut AnalyzerState) -> Option<Arc<Analyzer>> {
+        let AnalyzerState::Ready(analyzer) = state else {
+            return None;
+        };
+        if !analyzer.ended() {
+            return Some(analyzer.clone());
+        }
+        *state = AnalyzerState::Failed;
+        self.outgoing.show_message(
+            MessageType::ERROR,
+            "rust-analyzer stopped, so Rust features are unavailable until the language server restarts.",
+        );
+        None
+    }
+
     /// Records what the editor said about itself, for the session we boot. Written once from `initialize`, before any query can ask for the analyzer.
     pub(crate) fn set_client(&self, options: Value, caps: Value) {
         if let Ok(mut slot) = self.options.lock() {
@@ -94,13 +110,33 @@ impl Backend {
     pub(crate) async fn reparse_and_diagnose(&self, uri: Uri, text: String) -> Vec<Diagnostic> {
         let revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
         let file_path = crate::uri::to_path(&uri);
-        // Held only for the parse and native diagnostics, then released before the slower rust-analyzer query, so concurrent completion reads are not blocked.
-        let (semantic, source, theme) = {
+        let parsed_buffer = {
             let mut store = self.store.write().await;
             let parse_diagnostics = store.reparse(uri.clone(), text);
             if !parse_diagnostics.is_empty() {
                 return parse_diagnostics.into_iter().map(Into::into).collect();
             }
+            store
+                .get(&uri)
+                .map(|parsed| (parsed.source.clone(), parsed.document.clone()))
+        };
+        let Some((buffer_source, buffer_document)) = parsed_buffer else {
+            return Vec::new();
+        };
+        let bake_diagnostics = match file_path.clone() {
+            Some(rsx_path) => {
+                let bakes = self.bakes.clone();
+                tokio::task::spawn_blocking(move || {
+                    bakes.bake_if_unanswered(&rsx_path, &buffer_source, &buffer_document)
+                })
+                .await
+                .unwrap_or_default()
+            }
+            None => Vec::new(),
+        };
+        // Held only for the native diagnostics, then released before the slower rust-analyzer query, so concurrent completion reads are not blocked. The bake ran before it for the same reason: it reads the whole package.
+        let (semantic, source, theme) = {
+            let mut store = self.store.write().await;
             let Some(parsed) = store.get(&uri) else {
                 return Vec::new();
             };
@@ -114,24 +150,22 @@ impl Backend {
                 .as_deref()
                 .map(|path| store.style_imports(path, &parsed.document))
                 .unwrap_or_default();
-            let names: Vec<&str> = imported
-                .classes
-                .iter()
-                .map(|class| class.class.name.as_str())
-                .collect();
-            let mut semantic =
-                semantic_diagnostics(&parsed.document, catalog_view.as_ref(), &names);
+            let mut semantic = semantic_diagnostics(
+                &parsed.document,
+                catalog_view.as_ref(),
+                &imported.class_names(),
+            );
+            semantic.extend(bake_diagnostics);
             semantic.extend(manifest_error.as_ref().map(manifest_diagnostic));
+            if let Some(rsx_path) = file_path.as_deref() {
+                semantic.extend(module_name_diagnostics(rsx_path));
+            }
             // A new `.rsx` needs something on disk for the crate graph to load; the live buffer itself travels as an overlay, never through the build directory.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             let mut live_map = None;
             if let Some(rsx_path) = file_path.as_deref() {
-                live_map = crate::build_sync::sync_build_file(
-                    rsx_path,
-                    &parsed.source,
-                    &parsed.document,
-                    theme.as_deref(),
-                );
+                live_map =
+                    crate::build_sync::sync_build_file(rsx_path, &parsed.source, theme.as_deref());
             }
             let source = parsed.source.clone();
             if let Some((build_path, map)) = live_map {
@@ -175,14 +209,28 @@ impl Backend {
             if revisions.load(Ordering::Relaxed) != revision {
                 return;
             }
-            let Some(crate::build_sync::GeneratedTarget {
+            let crate::build_sync::GeneratedTarget {
                 path: gen_path,
                 code: gen_text,
                 map,
                 prelude,
-            }) = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())
-            else {
-                return;
+            } = match crate::build_sync::target_or_refusal(&rsx_path, &source, theme.as_deref()) {
+                Ok(target) => target,
+                Err(NoTarget::Unavailable) => return,
+                Err(NoTarget::Refused(message)) => {
+                    if store.read().await.latest_source(&uri) == Some(&source) {
+                        let mut merged = native;
+                        merged.push(
+                            telar_diagnostics::Diagnostic::error(
+                                message,
+                                telar_diagnostics::Span::line(1),
+                            )
+                            .into(),
+                        );
+                        outgoing.publish_diagnostics(uri, merged);
+                    }
+                    return;
+                }
             };
             let Some(root) = crate::build_sync::crate_root(&rsx_path) else {
                 return;
@@ -239,3 +287,7 @@ impl Backend {
         self.analyzer.get(root).await
     }
 }
+
+#[cfg(test)]
+#[path = "lifecycle.test.rs"]
+mod tests;

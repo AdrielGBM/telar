@@ -112,6 +112,9 @@ impl<T: 'static> Memo<T> {
     #[track_caller]
     fn read<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         let node = self.node();
+        if let Some(recompute) = node.recompute.get() {
+            runtime::pull_pending_memo(recompute);
+        }
         runtime::track_signal(self.id);
         node.catch_up();
         let _recompute_missed = RecomputeMissed(&node);
@@ -207,5 +210,5 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
 }
 
 #[cfg(test)]
-#[path = "memo_test.rs"]
+#[path = "memo.test.rs"]
 mod tests;

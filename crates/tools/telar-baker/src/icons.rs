@@ -75,11 +75,24 @@ pub struct RecordedIcon {
     pub from_provider: bool,
 }
 
-/// Reads a package's icon record, `None` when it has none or it cannot be read.
-pub fn read_icon_record(package_dir: &Path) -> Option<IconRecord> {
-    let text =
-        std::fs::read_to_string(package_dir.join(".telar").join(ICONS_RECORD_FILENAME)).ok()?;
-    serde_json::from_str(&text).ok()
+/// Reads a package's icon record: `Ok(None)` when it has none, and an error saying what is wrong when it cannot be read or is in another format.
+pub fn read_icon_record(package_dir: &Path) -> Result<Option<IconRecord>, String> {
+    let shown = format!(".telar/{ICONS_RECORD_FILENAME}");
+    let text = match std::fs::read_to_string(package_dir.join(".telar").join(ICONS_RECORD_FILENAME))
+    {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("`{shown}` cannot be read: {e}")),
+    };
+    let record: IconRecord =
+        serde_json::from_str(&text).map_err(|e| format!("`{shown}` cannot be read: {e}"))?;
+    if record.format != RECORD_FORMAT {
+        return Err(format!(
+            "`{shown}` is in format {}, and this bake reads format {RECORD_FORMAT}",
+            record.format
+        ));
+    }
+    Ok(Some(record))
 }
 
 /// Resolves every literal id in `refs`, then judges, records and notices what resolved, together with the icons of the crates `recording` says the package is built with. Neither holding an icon clears the record and the notice, so a package that stopped drawing icons stops shipping their notice.
@@ -119,7 +132,13 @@ pub(crate) fn resolve_with(
         .provider
         .as_deref()
         .map(|base| HttpProvider::new(base.trim()));
-    let previous = read_icon_record(package_dir);
+    let previous = read_icon_record(package_dir).unwrap_or_else(|problem| {
+        out.warnings.push(format!(
+            "in {}, {problem}; this bake replaces it with only what it resolves itself",
+            package_dir.display()
+        ));
+        None
+    });
 
     let mut answers: Vec<Result<Option<SourcedIcon>, IconError>> = local.icons(&ids);
     let mut from_provider: BTreeSet<IconId> = BTreeSet::new();
@@ -366,16 +385,8 @@ fn notice_sets(icons: &CrateIcons) -> Vec<NoticeSet> {
 }
 
 fn package_name(package_dir: &Path) -> String {
-    std::fs::read_to_string(package_dir.join("Cargo.toml"))
-        .ok()
-        .and_then(|text| text.parse::<toml::Table>().ok())
-        .and_then(|manifest| {
-            manifest
-                .get("package")?
-                .get("name")?
-                .as_str()
-                .map(str::to_string)
-        })
+    telar_project::CargoManifest::read(package_dir)
+        .and_then(|manifest| manifest.package_name().map(str::to_string))
         .or_else(|| {
             package_dir
                 .file_name()
@@ -385,5 +396,5 @@ fn package_name(package_dir: &Path) -> String {
 }
 
 #[cfg(test)]
-#[path = "icons_test.rs"]
+#[path = "icons.test.rs"]
 mod tests;

@@ -1,44 +1,17 @@
 //! What a string is worth to layout when a "pixel" is a fraction of a character cell.
 
-use renderer_core::{Span, TextAlign, TextMetrics, TextStyle, TextWrap, case_text};
+use geometry_core::CellSize;
+use renderer_core::{Span, TextAlign, TextLine, TextMetrics, TextStyle, TextWrap, case_text};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::wrap::{WrapConfig, WrappedLine, grapheme_cols, line_cols, wrap};
 
-/// How many logical pixels one terminal cell stands for.
-///
-/// The terminal has no pixels, but every layout value in a Telar app is written in them — `pad:24`, `width:300`, a theme's `gutter`. Rather than teach the layout engine a second unit, the terminal declares an exchange rate and reports its own size in the same currency: an 80×24 terminal at the default rate is a 640×384 "window". Everything above stays exactly as it is on the desktop, and the rounding to whole cells happens once, in the painter, on absolute edges.
-///
-/// The default is the proportion of a typical monospace face — twice as tall as it is wide — which is what makes a layout authored for the desktop come out with recognisable proportions here.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CellSize {
-    pub width: f32,
-    pub height: f32,
-}
-
-impl Default for CellSize {
-    fn default() -> Self {
-        Self {
-            width: 8.0,
-            height: 16.0,
-        }
-    }
-}
-
-impl CellSize {
-    /// The column a logical x falls in. Rounds, and callers round *both* edges of a box rather than its width, so two boxes that touch in logical space still touch in cells.
-    ///
-    /// Half **up** rather than half away from zero, so that adding a whole number of cells to a coordinate adds the same whole number of columns to the answer. `f32::round` changes direction at the origin and breaks that for anything scrolled past it — see `geometry_core::LayoutGrid`.
-    pub fn col_at(self, x: f32) -> i32 {
-        (x / self.width + 0.5).floor() as i32
-    }
-
-    pub fn row_at(self, y: f32) -> i32 {
-        (y / self.height + 0.5).floor() as i32
-    }
-
-    pub fn cols_in(self, width: f32) -> u16 {
-        (width / self.width).floor().clamp(0.0, u16::MAX as f32) as u16
+/// The column a line `width` columns wide starts at in a box `cols` wide, as `align` places it.
+pub(crate) fn align_cols(align: TextAlign, cols: u16, width: u16) -> u16 {
+    match align {
+        TextAlign::Center => cols.saturating_sub(width) / 2,
+        TextAlign::End => cols.saturating_sub(width),
+        TextAlign::Start | TextAlign::Justify => 0,
     }
 }
 
@@ -119,6 +92,42 @@ impl TextMetrics for CellMetrics {
         self.cell.height
     }
 
+    /// The painter's own wrap and alignment, without the clamp: a terminal draws the cells in the order they are written, each grapheme cluster as many columns wide as it takes.
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        let cased = case_text(text, spans, style);
+        let config = WrapConfig {
+            max_lines: None,
+            ..self.config(max_width, style)
+        };
+        let mut lines = Vec::new();
+        wrap(&cased.text, &config, &mut lines);
+        if cased.text.ends_with('\n') {
+            let end = cased.text.len();
+            lines.push(WrappedLine {
+                range: end..end,
+                cols: 0,
+                ellipsized: false,
+            });
+        }
+        let cols = self.cell.cols_in(max_width);
+        let cell = self.cell.width;
+        lines
+            .into_iter()
+            .map(|line| {
+                let start = align_cols(style.text_align, cols, line.cols);
+                TextLine::left_to_right(&cased, text, line.range, f32::from(start) * cell, |part| {
+                    f32::from(grapheme_cols(part)) * cell
+                })
+            })
+            .collect()
+    }
+
     /// The cell under the point, found the way the painter lays the paragraph out: the same wrap, the same alignment inside the columns it was given.
     fn index_at(
         &self,
@@ -136,12 +145,7 @@ impl TextMetrics for CellMetrics {
         let mut lines = Vec::new();
         self.lines(text, max_width, style, &mut lines);
         let line = lines.get((y / self.cell.height) as usize)?;
-        let cols = self.cell.cols_in(max_width);
-        let start = match style.text_align {
-            TextAlign::Center => cols.saturating_sub(line.cols) / 2,
-            TextAlign::End => cols.saturating_sub(line.cols),
-            TextAlign::Start | TextAlign::Justify => 0,
-        };
+        let start = align_cols(style.text_align, self.cell.cols_in(max_width), line.cols);
         let target = (x / self.cell.width) as u16;
         let mut col = start;
         for (offset, grapheme) in text[line.range.clone()].grapheme_indices(true) {
@@ -153,31 +157,8 @@ impl TextMetrics for CellMetrics {
         }
         None
     }
-
-    /// The painter's own wrap, without the clamp: where each line it would draw begins.
-    fn line_starts(
-        &self,
-        text: &str,
-        spans: Option<&[Span]>,
-        max_width: f32,
-        style: &TextStyle,
-    ) -> Vec<usize> {
-        let cased = case_text(text, spans, style);
-        let config = WrapConfig {
-            max_lines: None,
-            ..self.config(max_width, style)
-        };
-        let mut lines = Vec::new();
-        wrap(&cased.text, &config, &mut lines);
-        let mut starts: Vec<usize> = lines
-            .iter()
-            .map(|line| cased.source_index(line.range.start))
-            .collect();
-        starts.dedup();
-        starts
-    }
 }
 
 #[cfg(test)]
-#[path = "metrics_test.rs"]
+#[path = "metrics.test.rs"]
 mod tests;

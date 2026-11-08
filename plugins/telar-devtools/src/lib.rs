@@ -2,7 +2,7 @@
 //!
 //! The inspection panels are public: an [`Inspection`] reads an [`InspectSource`] — the whole window under the overlay, or a canvas a workshop shows — and [`inspector_panel`], [`accessibility_panel`], [`inspection_toggles`] and [`inspection_marks`] show it, in the overlay and in the workshop alike.
 //!
-//! The overlay is a widget tree built from `telar-components` in the workbench theme, on a window-sized [`SurfaceCanvas`](telar::SurfaceCanvas) of its own in the host's runtime. The host owns it, so it outlives every hot reload and every failed build, and it never reads the application's theme, direction or control size.
+//! The overlay is a widget tree built from `telar-components` in the workbench theme, on a window-sized [`SurfaceCanvas`](telar::SurfaceCanvas) of its own in the host's runtime. The host owns it, so it outlives every hot reload and every failed build, and it never reads the application's theme or direction.
 //!
 //! Nothing here is privileged. It implements [`telar::DevOverlay`], which is the whole of what the runner asks of an overlay, and an overlay of your own goes in through the same door — see `telar::run_app_with_devtools`.
 //!
@@ -18,16 +18,16 @@ mod workbench;
 pub use inspect::{InspectSource, InspectedNode, Inspection, WindowSource};
 pub use panels::{accessibility_panel, inspection_marks, inspection_toggles, inspector_panel};
 pub use workbench::{
-    WORKBENCH_CONTROL_SIZE, WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, WorkbenchTheme,
-    WorkbenchTokens, use_workbench_tokens, workbench_card, workbench_fill, workbench_mono,
-    workbench_muted, workbench_scope, workbench_theme,
+    WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, WorkbenchTheme, WorkbenchTokens,
+    use_workbench_tokens, workbench_card, workbench_fill, workbench_mono, workbench_muted,
+    workbench_scope, workbench_theme,
 };
 
 use std::borrow::Cow;
 
 use telar::{
     AccessNode, AccessViolation, BuildOutcome, Chord, DevAction, DevOverlay, DrawCommand, Event,
-    Key, ModifiersState, OverlayResponse, SegmentNodeInfo, Size,
+    GuestStop, Key, ModifiersState, OverlayResponse, SegmentNodeInfo, Size,
 };
 
 use meter::{Clock, FrameMeter};
@@ -162,9 +162,9 @@ impl DevOverlay for DevTools {
         }
     }
 
-    fn set_app_panic(&mut self, panic: Option<String>) {
+    fn set_app_stop(&mut self, stop: Option<GuestStop>) {
         if let Some(overlay) = self.overlay() {
-            overlay.set_app_panic(panic);
+            overlay.set_app_stop(stop);
         }
     }
 
@@ -202,5 +202,5 @@ impl DevOverlay for DevTools {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

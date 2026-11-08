@@ -68,5 +68,5 @@ pub(crate) fn removes_on_interrupt(path: &Path) -> bool {
 }
 
 #[cfg(test)]
-#[path = "interrupt_test.rs"]
+#[path = "interrupt.test.rs"]
 mod tests;

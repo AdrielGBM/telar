@@ -374,5 +374,5 @@ impl Gap {
 }
 
 #[cfg(test)]
-#[path = "align_test.rs"]
+#[path = "align.test.rs"]
 mod tests;

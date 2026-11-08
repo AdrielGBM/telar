@@ -150,16 +150,21 @@ fn host() -> Option<Arc<dyn FontHost>> {
     HOST.read().expect("font host lock").clone()
 }
 
-/// Makes `host` the database this copy of the crate defers to, and loads what it holds.
+/// Makes `host` the database this copy of the crate defers to: the guest's half of font sharing, whose host's half is [`served`].
 ///
 /// For a library whose text another copy of the shaper draws: a hot-reloaded app's, an embedded one's. From then on every face this copy is asked to add, by [`install`], [`add_faces`], [`install_face`] or [`install_only`], is added to `host`'s database instead, and this copy loads what `host` then holds, so the faces text is measured in here are the ones it is drawn in there. Asked for faces before anything installed any, it has `host` load its own rather than loading the platform's itself.
 ///
-/// `host` is another copy's database, never this one's own [`Served`]: a copy deferring to itself would call itself back without end. Code this process serves itself already sets text in the one database, and is handed none.
-pub fn defer_to(host: Arc<dyn FontHost>) -> Option<Arc<Fonts>> {
+/// Loads nothing and asks `host` nothing until this copy is first asked for faces, so a library that links the shaper but never shapes text, one that measures in terminal cells, defers at no cost and keeps whichever measurer it installs.
+///
+/// `host` is another copy's database, never this one's own [`served`]: a copy deferring to itself would call itself back without end. Code this process serves itself already sets text in the one database, and is handed none.
+pub fn defer_to(host: Arc<dyn FontHost>) {
     release_on_unload();
-    let sources = host.sources();
     *HOST.write().expect("font host lock") = Some(host);
-    sources.map(install_sources)
+}
+
+/// This copy's font database, as the [`FontHost`] a library it loads defers to through [`defer_to`]: the host's half of font sharing, served whenever this crate is linked, since a library that shapes no text never asks it anything.
+pub fn served() -> Arc<dyn FontHost> {
+    Arc::new(Served)
 }
 
 /// What `host` answered with, loaded here, or what is here already when it could not answer.
@@ -167,18 +172,12 @@ fn mirror(sources: Option<FontSources>) -> Arc<Fonts> {
     sources.map_or_else(installed, install_sources)
 }
 
-/// This copy's font database, as the [`FontHost`] a library it loads defers to.
-///
-/// Each call catches a panic before it can leave: the library calling it links its own copy of std, and an unwind reaching its frames aborts the process.
+/// What [`served`] hands a library. Each call catches a panic before it can leave: the library calling it links its own copy of std, and an unwind reaching its frames aborts the process.
 ///
 /// A face the library hands over as `include_bytes!` gave it is copied before it is loaded: those bytes are in the library's image, which its host unmaps when it unloads it, and the database keeps every face for as long as the process runs.
-pub struct Served;
+struct Served;
 
 impl FontHost for Served {
-    fn sources(&self) -> Option<FontSources> {
-        shielded(installed_sources).flatten()
-    }
-
     fn install(&self, config: FontConfig) -> Option<FontSources> {
         shielded(|| {
             install(FontConfig {
@@ -594,14 +593,15 @@ impl FaceSources {
     }
 
     fn load(&self) -> (String, fontdb::Database) {
-        if self.system_scan && self.dirs.is_empty() && self.faces.is_empty() {
+        let db = if self.system_scan && self.dirs.is_empty() && self.faces.is_empty() {
             // cosmic-text's own default database, taken from a `FontSystem` rather than rebuilt here: a hand-rolled copy of its system scan and generic-family choices would drift from every other consumer's.
-            return FontSystem::new().into_locale_and_db();
-        }
-        let mut db = fontdb::Database::new();
-        self.load_into(&mut db);
-        let locale = std::env::var("LANG").unwrap_or_else(|_| "en-US".to_string());
-        (locale, db)
+            FontSystem::new().into_locale_and_db().1
+        } else {
+            let mut db = fontdb::Database::new();
+            self.load_into(&mut db);
+            db
+        };
+        (database_locale(), db)
     }
 
     fn load_into(&self, db: &mut fontdb::Database) {
@@ -615,6 +615,10 @@ impl FaceSources {
             load_asset(db, face);
         }
     }
+}
+
+fn database_locale() -> String {
+    sys_locale::get_locale().unwrap_or_else(|| "en-US".to_string())
 }
 
 fn load_asset(db: &mut fontdb::Database, asset: &FontAsset) -> Vec<fontdb::ID> {
@@ -678,7 +682,7 @@ fn declare(info: &mut fontdb::FaceInfo, asset: &FontAsset, family: &str) {
 pub(crate) static FACES_STABLE: RwLock<()> = RwLock::new(());
 
 #[cfg(test)]
-#[path = "fonts_test.rs"]
+#[path = "fonts.test.rs"]
 mod tests;
 
 /// Loads one face from bytes and reports the families it declares, or `None` when the bytes are not a font.

@@ -111,5 +111,5 @@ pub trait ScrollLinked: LayoutItem + Sized {
 impl<T: LayoutItem> ScrollLinked for T {}
 
 #[cfg(test)]
-#[path = "scroll_timeline_test.rs"]
+#[path = "scroll_timeline.test.rs"]
 mod tests;

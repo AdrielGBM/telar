@@ -14,5 +14,5 @@ impl Point {
 }
 
 #[cfg(test)]
-#[path = "point_test.rs"]
+#[path = "point.test.rs"]
 mod tests;

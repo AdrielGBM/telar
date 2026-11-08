@@ -277,5 +277,5 @@ fn unparsed(item: TokenStream2, prefix: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "props_schema_test.rs"]
+#[path = "props_schema.test.rs"]
 mod tests;

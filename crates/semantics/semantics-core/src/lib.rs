@@ -142,6 +142,8 @@ pub enum Role {
     Log,
     /// Not a control at all: text the interface is showing. Never focusable — it is here because a reader given only the buttons cannot say what the buttons are for.
     Label,
+    /// Keys a person presses, shown as a hint beside the command they run: `Ctrl+K`, a sequence of chords. Read as text, its name in place of what it draws; never focusable. A document writes it as `<kbd>`, which has no ARIA role of its own.
+    KeyboardInput,
 }
 
 impl Role {
@@ -218,6 +220,11 @@ impl Role {
         *self == Self::Group && !drew_beside_controls && controls_inside == 1
     }
 
+    /// Whether a named box with this role is read as its name in place of the words drawn inside it: a box with no role of its own, such as a counter showing "3" and named "3 unread comments", or keys shown as a hint, named "Ctrl+K, then S" over caps drawing each key, is one thing said once, so a run of text inside it that no control owns is not read on its own. The controls inside it keep their own names and stay reachable. A box with a role, such as a dialog or a list, holds what it draws under its name instead. Every target applies this one rule, so the same item is announced the same wherever it is read.
+    pub fn name_replaces_content(&self) -> bool {
+        matches!(self, Self::Group | Self::KeyboardInput)
+    }
+
     /// The name this role goes by in markup and in a stylesheet — the ARIA role, which is also what an application writes in `.rsx`.
     ///
     /// One table rather than one per target: a name that parses and a name that is announced must be the same word, or an author has learned two vocabularies for one idea.
@@ -271,6 +278,7 @@ impl Role {
             Self::Status => "status",
             Self::Log => "log",
             Self::Label => "label",
+            Self::KeyboardInput => "keyboardinput",
         }
     }
 
@@ -367,6 +375,7 @@ impl Role {
             "status" => Self::Status,
             "log" => Self::Log,
             "label" | "text" => Self::Label,
+            "keyboardinput" => Self::KeyboardInput,
             _ => return None,
         })
     }
@@ -469,6 +478,8 @@ pub struct Annotation {
     pub role: Option<Role>,
     pub lang: Option<Arc<str>>,
     pub hidden: bool,
+    /// Skipped by readers while it goes by no `label`: artwork that only decorates until whoever places it says what it means.
+    pub decorative: bool,
     pub anchor: Option<Arc<str>>,
     /// Said by the overlay the box is the top of rather than by the application: the box is a modal layer.
     pub modal: Option<Modal>,
@@ -480,8 +491,14 @@ impl Annotation {
             && self.role.is_none()
             && self.lang.is_none()
             && !self.hidden
+            && !self.decorative
             && self.anchor.is_none()
             && self.modal.is_none()
+    }
+
+    /// Whether a reader skips the box and everything under it: hidden outright, or decorative and named by nothing.
+    pub fn hides(&self) -> bool {
+        self.hidden || (self.decorative && self.label.is_none())
     }
 }
 
@@ -547,7 +564,7 @@ impl Semantics {
         if let Some(lang) = &annotation.lang {
             self.lang = Some(lang.clone());
         }
-        self.hidden |= annotation.hidden;
+        self.hidden |= annotation.hides();
         if let Some(anchor) = &annotation.anchor {
             self.anchor = Some(anchor.clone());
         }
@@ -598,5 +615,5 @@ impl Semantics {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

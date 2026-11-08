@@ -247,5 +247,5 @@ pub(crate) fn draw_rect(
 }
 
 #[cfg(test)]
-#[path = "rect_test.rs"]
+#[path = "rect.test.rs"]
 mod tests;

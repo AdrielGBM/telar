@@ -1,0 +1,472 @@
+use super::*;
+use crate::preview::{BuildFn, Layout, by_role, by_text};
+use crate::{Accessible, Container, Input, RectStyle, Role, StyledContainer, box_item, signal};
+
+type Built = Result<Box<dyn LayoutItem>, LayoutError>;
+
+fn ink() -> TextStyle {
+    TextStyle::new(14.0, Color::BLACK)
+}
+
+fn label(text: impl Fn() -> String + 'static) -> Box<dyn LayoutItem> {
+    box_item(Text::new(text, LayoutStyle::new(), ink).unwrap())
+}
+
+fn button(
+    text: impl Fn() -> String + 'static,
+    on_press: impl Fn() + 'static,
+) -> Box<dyn LayoutItem> {
+    box_item(
+        StyledContainer::new(
+            LayoutStyle::new().padding_all(8.0),
+            |_| RectStyle::default(),
+            vec![label(text)],
+        )
+        .unwrap()
+        .control(Role::Button)
+        .on_press(on_press),
+    )
+}
+
+fn counter(p: &PreviewCtx) -> Built {
+    let presses = p.signal("presses", 0u32);
+    let actions = p.actions();
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![button(
+            move || format!("Pressed {}", presses.get()),
+            move || {
+                presses.update(|count| *count += 1);
+                actions.log("on_press", Vec::new());
+            },
+        )],
+    )?))
+}
+
+fn two_buttons(_: &PreviewCtx) -> Built {
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_row().gap(16.0),
+        vec![
+            button(|| String::from("One"), || {}),
+            button(|| String::from("Two"), || {}),
+        ],
+    )?))
+}
+
+fn field(_: &PreviewCtx) -> Built {
+    let value = signal(String::new());
+    let input =
+        Input::new(value, LayoutStyle::new().width(200.0).height(24.0), ink)?.a11y_label(|| "Name");
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column().gap(8.0),
+        vec![
+            box_item(input),
+            label(move || format!("Hello, {}", value.get())),
+        ],
+    )?))
+}
+
+fn failing(_: &PreviewCtx) -> Built {
+    Err(LayoutError::Engine(String::from("no tree today")))
+}
+
+fn entry(build: BuildFn) -> PreviewEntry {
+    PreviewEntry::new("play--case--default", "case", "Default", build).layout(Layout::Centered)
+}
+
+#[test]
+fn a_click_presses_the_control_a_reader_would_name() {
+    let mut play = Play::mount(&entry(counter)).unwrap();
+    play.click(by_role(Role::Button).named("Pressed 0"))
+        .unwrap();
+    play.expect_text("Pressed 1").unwrap();
+    play.expect_action("on_press", 1).unwrap();
+
+    let steps: Vec<(&str, bool)> = play
+        .steps()
+        .iter()
+        .map(|step| (step.action.as_str(), step.outcome.is_ok()))
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            ("click button \"Pressed 0\"", true),
+            ("expect text \"Pressed 1\"", true),
+            ("expect 1 × on_press", true),
+        ]
+    );
+    assert!(
+        play.steps()[0]
+            .frame
+            .texts()
+            .any(|text| text == "Pressed 1"),
+        "each step keeps the frame it left behind"
+    );
+}
+
+#[test]
+fn a_failed_expectation_fails_its_step_and_says_what_was_there() {
+    let mut play = Play::mount(&entry(counter)).unwrap();
+    let error = play.expect_text("Pressed 9").unwrap_err();
+    assert!(error.message.contains("Pressed 0"), "{error}");
+    let error = play.expect_action("on_press", 1).unwrap_err();
+    assert!(error.message.contains("saw 0"), "{error}");
+    assert!(play.steps().iter().all(|step| step.outcome.is_err()));
+}
+
+#[test]
+fn an_action_on_nothing_or_on_several_fails_with_what_the_canvas_reads() {
+    let mut play = Play::mount(&entry(two_buttons)).unwrap();
+    let missing = play
+        .click(by_role(Role::Button).named("Three"))
+        .unwrap_err();
+    assert!(missing.message.contains("One, button"), "{missing}");
+    let ambiguous = play.click(by_role(Role::Button)).unwrap_err();
+    assert!(ambiguous.message.contains("matches 2 nodes"), "{ambiguous}");
+    play.click(by_role(Role::Button).nth(1)).unwrap();
+}
+
+#[test]
+fn tab_walks_the_canvas_in_order() {
+    let mut play = Play::mount(&entry(two_buttons)).unwrap();
+    play.tab().unwrap();
+    play.expect_focused(by_text("One")).unwrap();
+    play.tab().unwrap();
+    play.expect_focused(by_text("Two")).unwrap();
+    play.tab_back().unwrap();
+    play.expect_focused(by_text("One")).unwrap();
+    assert!(play.expect_focused(by_text("Two")).is_err());
+}
+
+/// A preview canvas is drawn inside a tree around it, headless as in the workshop, so a Tab past either end leaves it for the host. What it reaches there differs from host to host, so the step fails, the same in each.
+#[test]
+fn a_tab_that_leaves_the_canvas_fails_its_step() {
+    let mut play = Play::mount(&entry(two_buttons)).unwrap();
+    play.click(by_role(Role::Button).named("Two")).unwrap();
+    let error = play.tab().unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("tab left the canvas past its last control"),
+        "{error}"
+    );
+    assert!(error.message.contains("`tab_back`"), "{error}");
+    assert!(play.snapshot().iter().all(|node| !node.focused));
+    play.tab().unwrap();
+    play.expect_focused(by_text("One")).unwrap();
+    let error = play.tab_back().unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("shift+tab left the canvas past its first control"),
+        "{error}"
+    );
+    assert!(
+        play.steps()
+            .last()
+            .is_some_and(|step| step.outcome.is_err())
+    );
+}
+
+#[test]
+fn typing_reaches_the_field_a_reader_names() {
+    let mut play = Play::mount(&entry(field)).unwrap();
+    play.type_text(by_role(Role::TextInput).named("Name"), "Ada")
+        .unwrap();
+    play.expect_text("Hello, Ada").unwrap();
+    play.press(Key::Named(NamedKey::Backspace)).unwrap();
+    play.expect_text("Hello, Ad").unwrap();
+}
+
+#[test]
+fn run_calls_the_entry_play_and_ends_the_log_on_its_own_error() {
+    let passing = entry(counter).play(|canvas| {
+        canvas.click(by_role(Role::Button).named("Pressed 0"))?;
+        canvas.expect_action("on_press", 1)
+    });
+    let mut play = Play::mount(&passing).unwrap();
+    assert_eq!(play.run(), Ok(()));
+    assert_eq!(play.steps().len(), 2);
+
+    let checking = entry(counter).play(|_| Err(PlayError::new("not today")));
+    let mut play = Play::mount(&checking).unwrap();
+    assert_eq!(play.run(), Err(PlayError::new("not today")));
+    let last = play.steps().last().unwrap();
+    assert_eq!(last.action, "play");
+    assert!(last.outcome.is_err());
+}
+
+#[test]
+fn a_play_is_set_on_a_const_entry() {
+    const ENTRY: PreviewEntry =
+        PreviewEntry::new("play--const--default", "const", "Default", counter)
+            .play(|canvas| canvas.expect_text("Pressed 0"));
+    let mut play = Play::mount(&ENTRY).unwrap();
+    assert_eq!(play.run(), Ok(()));
+}
+
+#[test]
+fn each_play_starts_from_the_args_defaults() {
+    for _ in 0..2 {
+        let mut play = Play::mount(&entry(counter)).unwrap();
+        play.click(by_role(Role::Button).named("Pressed 0"))
+            .unwrap();
+    }
+}
+
+#[test]
+fn a_preview_that_fails_to_build_does_not_mount() {
+    let error = Play::mount(&entry(failing)).unwrap_err();
+    assert!(error.message.contains("the preview failed"), "{error}");
+}
+
+fn ink_read_once(_: &PreviewCtx) -> Built {
+    let ink = format!("{:?}", crate::use_theme_tokens().ink());
+    Ok(label(move || ink.clone()))
+}
+
+#[test]
+fn a_token_read_once_at_build_is_read_in_the_canvas_environment() {
+    theme_core::register_mode("play-dusk", || {});
+    theme_core::set_mode_scheme("play-dusk", crate::ColorScheme::Dark);
+    let host = format!("{:?}", crate::use_theme_tokens().ink());
+    let play = Play::mount(&entry(ink_read_once).mode("play-dusk")).unwrap();
+    let dark = play
+        .canvas()
+        .with_entered(|| format!("{:?}", crate::use_theme_tokens().ink()));
+    assert_ne!(
+        dark, host,
+        "the canvas's mode is dark and the host's is not"
+    );
+    assert!(play.frame().texts().any(|text| text == dark));
+}
+
+fn notice(_: &PreviewCtx) -> Built {
+    let shown = signal(true);
+    let timer = crate::run_after(Duration::from_secs(3), move || shown.set(false));
+    Ok(label(move || {
+        let _waiting = &timer;
+        String::from(if shown.get() { "Saved" } else { "Gone" })
+    }))
+}
+
+#[test]
+fn advance_lets_a_wait_pass_and_runs_what_came_due() {
+    let mut play = Play::mount(&entry(notice)).unwrap();
+    play.settle().unwrap();
+    play.expect_text("Saved").unwrap();
+    play.advance(Duration::from_secs(2)).unwrap();
+    play.expect_text("Saved").unwrap();
+    play.advance(Duration::from_secs(1)).unwrap();
+    play.expect_text("Gone").unwrap();
+    let advanced: Vec<&str> = play
+        .steps()
+        .iter()
+        .map(|step| step.action.as_str())
+        .filter(|action| action.starts_with("advance"))
+        .collect();
+    assert_eq!(advanced, ["advance 2s", "advance 1s"]);
+}
+
+fn volume(_: &PreviewCtx) -> Built {
+    let level = signal(0.5f64);
+    let open = signal(false);
+    let slider = StyledContainer::new(
+        LayoutStyle::new().width(120.0).height(24.0),
+        |_| RectStyle::default(),
+        vec![label(|| String::from("Volume"))],
+    )?
+    .control(Role::Slider)
+    .valued(move || crate::NumericValue {
+        now: level.get(),
+        min: 0.0,
+        max: 1.0,
+    })
+    .on_press(move || level.set(0.75));
+    let more = StyledContainer::new(
+        LayoutStyle::new().padding_all(8.0),
+        |_| RectStyle::default(),
+        vec![label(|| String::from("More"))],
+    )?
+    .control(Role::Button)
+    .expanded(move || open.get())
+    .on_press(move || open.update(|open| *open = !*open));
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column().gap(8.0),
+        vec![box_item(slider), box_item(more)],
+    )?))
+}
+
+#[test]
+fn a_play_reads_the_value_and_the_expanded_state_a_reader_hears() {
+    let mut play = Play::mount(&entry(volume)).unwrap();
+    play.expect_value(by_role(Role::Slider), 0.5).unwrap();
+    let error = play.expect_value(by_role(Role::Slider), 0.75).unwrap_err();
+    assert!(error.message.contains("reads 0.5"), "{error}");
+    play.click(by_role(Role::Slider)).unwrap();
+    play.expect_value(by_role(Role::Slider), 0.75).unwrap();
+
+    play.expect_expanded(by_role(Role::Button), false).unwrap();
+    play.click(by_role(Role::Button)).unwrap();
+    play.expect_expanded(by_role(Role::Button), true).unwrap();
+    let error = play
+        .expect_expanded(by_role(Role::Slider), true)
+        .unwrap_err();
+    assert!(error.message.contains("neither expands"), "{error}");
+}
+
+fn grip(_: &PreviewCtx) -> Built {
+    let travelled = signal(None::<(f32, f32)>);
+    let grip = StyledContainer::new(
+        LayoutStyle::new().width(40.0).height(40.0),
+        |_| RectStyle::default(),
+        vec![label(|| String::from("Grip"))],
+    )?
+    .control(Role::Button)
+    .on_drag_end(move |x, y| travelled.set(Some((x, y))));
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column().gap(8.0),
+        vec![
+            box_item(grip),
+            label(move || match travelled.get() {
+                Some((x, _)) => format!("Let go at {x:.0}"),
+                None => String::from("Resting"),
+            }),
+        ],
+    )?))
+}
+
+#[test]
+fn a_drag_carries_the_pointer_from_the_node_and_lets_go_there() {
+    let let_go_at = |play: &Play| -> f32 {
+        let frame = play.frame();
+        let text = frame
+            .texts()
+            .find_map(|text| text.strip_prefix("Let go at "))
+            .expect("the grip was let go");
+        text.parse().unwrap()
+    };
+    let mut play = Play::mount(&entry(grip)).unwrap();
+    play.expect_text("Resting").unwrap();
+    play.click(by_role(Role::Button).named("Grip")).unwrap();
+    let pressed = let_go_at(&play);
+    play.drag(by_role(Role::Button).named("Grip"), 60.0, 0.0)
+        .unwrap();
+    assert_eq!(let_go_at(&play) - pressed, 60.0);
+    assert_eq!(
+        play.steps()[2].action,
+        "drag button \"Grip\" by (60, 0)",
+        "{:?}",
+        play.steps()
+    );
+}
+
+fn hosted(entry: PreviewEntry, failures: &CaughtFailures) -> (PreviewCtx, Rc<NestedCanvas>) {
+    crate::install_default_text_metrics();
+    let ctx = PreviewCtx::for_entry_with(&entry, Args::in_memory_for(&entry));
+    let (built, record) = (ctx.clone(), failures.clone());
+    let size = Size::new(320.0, 240.0);
+    let canvas = NestedCanvas::new(size, move || {
+        mount_preview(&entry, built, move |failure| failed(&record, failure), None)
+    })
+    .unwrap();
+    canvas.resize(size);
+    (ctx, Rc::new(canvas))
+}
+
+#[test]
+fn an_attached_play_drives_the_canvas_its_host_mounted_wherever_it_shows_it() {
+    let pressing = entry(counter).play(|canvas| {
+        canvas.click(by_role(Role::Button).named("Pressed 0"))?;
+        canvas.expect_text("Pressed 1")
+    });
+    let failures = CaughtFailures::default();
+    let (ctx, canvas) = hosted(pressing, &failures);
+    canvas.set_placement(
+        crate::Transform::scale_around(0.5, 0.5, 0.0, 0.0)
+            .then(crate::Transform::translate(500.0, 300.0)),
+    );
+    let mut play = Play::attach(&pressing, ctx, Rc::clone(&canvas), failures);
+    assert_eq!(play.run(), Ok(()));
+    assert_eq!(play.steps().len(), 2);
+    drop(play);
+    assert!(
+        Frame::capture(&canvas)
+            .texts()
+            .any(|text| text == "Pressed 1"),
+        "the host keeps the canvas as the play left it"
+    );
+}
+
+#[test]
+fn a_failure_the_host_caught_before_an_attached_run_fails_it() {
+    let checking = entry(failing).play(|canvas| canvas.expect_text("anything"));
+    let failures = CaughtFailures::default();
+    let (ctx, canvas) = hosted(checking, &failures);
+    let mut play = Play::attach(&checking, ctx, canvas, failures);
+    let error = play.run().unwrap_err();
+    assert!(error.message.contains("no tree today"), "{error}");
+    assert_eq!(play.steps().len(), 1);
+    assert_eq!(play.steps()[0].action, "play");
+}
+
+/// A tap outside a panel lands in the widest room left around it, and a panel that covers the canvas leaves none.
+#[test]
+fn the_room_outside_a_node_is_the_widest_strip_beside_it() {
+    let canvas = Size::new(400.0, 300.0);
+    let drawer = crate::Rect::new(0.0, 0.0, 120.0, 300.0);
+    assert_eq!(
+        room_outside(drawer, canvas),
+        Some(crate::Rect::new(120.0, 0.0, 280.0, 300.0))
+    );
+    let sheet = crate::Rect::new(0.0, 200.0, 400.0, 100.0);
+    assert_eq!(
+        room_outside(sheet, canvas),
+        Some(crate::Rect::new(0.0, 0.0, 400.0, 200.0))
+    );
+    assert_eq!(
+        room_outside(crate::Rect::new(0.0, 0.0, 400.0, 300.0), canvas),
+        None
+    );
+}
+
+fn hover_reader(_: &PreviewCtx) -> Built {
+    let over = signal(false);
+    let target = StyledContainer::new(
+        LayoutStyle::new().padding_all(8.0),
+        |_| RectStyle::default(),
+        vec![label(|| String::from("Target"))],
+    )?
+    .control(Role::Button)
+    .on_hover(move |now| over.set(now));
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![
+            box_item(target),
+            label(move || String::from(if over.get() { "over" } else { "away" })),
+        ],
+    )?))
+}
+
+#[test]
+fn letting_go_takes_the_play_s_pointer_off_what_it_hovered() {
+    let mut play = Play::mount(&entry(hover_reader)).unwrap();
+    play.hover(by_role(Role::Button).named("Target")).unwrap();
+    play.expect_text("over").unwrap();
+    play.let_go();
+    play.expect_text("away").unwrap();
+}
+
+#[test]
+fn a_click_on_nothing_focusable_lets_the_field_go() {
+    let mut play = Play::mount(&entry(field)).unwrap();
+    play.click(by_role(Role::TextInput).named("Name")).unwrap();
+    play.expect_focused(by_role(Role::TextInput).named("Name"))
+        .unwrap();
+
+    play.click(by_text("Hello, ")).unwrap();
+    assert!(
+        !play.canvas().holds_focus(),
+        "a click on a run of text clears focus in the canvas"
+    );
+}

@@ -2,7 +2,7 @@
 //!
 //! These tables are the single source of truth shared between the transpiler's codegen (`view.rs`, `style.rs`) and downstream tooling such as `telar-analyzer` (completions, hover, go-to-definition). Keep them in sync with the `match` arms in [`crate::view`] (`emit_element`) and [`crate::style`] (`layout_prop_call`).
 
-/// Sentinel constructor for the `children` slot placeholder, which builds no widget of its own: it builds the call site's children for its slot where it stands, from the component's `Children` recipe, and splices them into the enclosing container.
+/// Sentinel constructor for the `children` placeholder, which builds no widget of its own: `children $props.header` builds the `Children` prop it names where it stands and splices them into the enclosing container.
 pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
 
 /// Built-in RSX tags paired with the Rust type they build, spelled as that type's canonical constructor.
@@ -41,6 +41,9 @@ pub fn builtin_tag_doc(tag: &str) -> Option<&'static str> {
         }
         "layer" => {
             "A layer fixed to the surface over the page, out of its flow and its scroll: a bar that stays at the top while the page scrolls under it. Laid out against the whole surface like an `overlay`, so `align`/`justify`/`pad` and its children's sizes place its boxes. Not modal: it takes the pointer only over its own boxes, and its focusables keep their place in the Tab order. Drawn over every box of the page, sticky ones included, and under every overlay."
+        }
+        "children" => {
+            "Places a `Children` prop where it stands: `children $props.children` the call site's bare children, `children $props.header` the ones it wrote with `slot:\"header\"`, each declared in `Props` as `#[props(default)] pub header: Children`. Each placement builds them there, so they see the `theme:` and contexts in force around it, and `in:ctx` provides one more."
         }
         _ => return None,
     })
@@ -112,11 +115,11 @@ const LAYOUT_ATTRS: &[AttrSpec] = &[
 
 /// What any built-in tag may say about itself: to assistive technology (see [`A11Y_VALUES`]), and as a place on the page a link reaches.
 const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
-    AttrSpec::free("label").doc(
-        "The name assistive technology reads for the box: a quoted string, `t!(…)`, or an expression reading `$state`. An `img` or `svg` without one is decoration.",
+    AttrSpec::free(A11Y_LABEL_ATTR).doc(
+        "The name assistive technology reads for the box: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. On a box with no role of its own it replaces what the box draws, so a counter showing \"3\" named \"3 unread comments\" is read as its name alone, while a control inside keeps its own name and stays reachable; a box with a role of its own (a dialog, a list) holds what it draws under the name. An `img` or `svg` without one is decoration. `label` is always a component's visible text, never this.",
     ),
-    AttrSpec::free("lang").doc(
-        "The language of the box and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`); the nearest one wins.",
+    AttrSpec::free(LANG_ATTR).doc(
+        "The language of the box and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`); the nearest one wins. It decides how the text is shaped, broken and cased, and what language a reader speaks it in.",
     ),
     AttrSpec::keywords("a11y", A11Y_VALUES).doc(
         "`a11y:hidden` takes the box and everything under it out of what assistive technology is told; it is still drawn and still answers the pointer.",
@@ -146,18 +149,58 @@ pub const VIEW_RANGE_VALUES: &[(&str, &str)] = &[
 /// `a11y:` — how assistive technology treats the box, paired with the `Accessible` method it calls.
 pub const A11Y_VALUES: &[(&str, &str)] = &[("hidden", "a11y_hidden")];
 
-/// What a component call may say about the item the component returns, beside its props. Spelled after the `Accessible` methods they call, since `label` and `lang` are a component's own props to declare.
+/// The key naming what assistive technology reads, on a built-in tag and a component call alike.
+pub const A11Y_LABEL_ATTR: &str = telar_project::call_keys::A11Y_LABEL;
+
+/// The key naming the language a box is written in, on a built-in tag and a component call alike: it decides how the text is shaped and broken, not only what a reader is told, so a component may not declare a prop of that name.
+pub const LANG_ATTR: &str = telar_project::call_keys::LANG;
+
+/// How a component call once said its language, refused with the spelling that replaced it: see [`former_lang_error`].
+pub(crate) const FORMER_LANG_ATTR: &str = telar_project::call_keys::FORMER_LANG;
+
+/// Why `a11y_lang:` on `tag` names nothing.
+pub(crate) fn former_lang_error(tag: &str) -> String {
+    format!(
+        "`{FORMER_LANG_ATTR}:` on `{tag}` is spelled `{LANG_ATTR}:`, as on every tag: the language decides how the text is shaped and broken, not only what a reader is told"
+    )
+}
+
+/// The key a child of a component call names the `Children` prop it is handed through with.
+pub const SLOT_ATTR: &str = telar_project::call_keys::SLOT;
+
+/// The keys a `box`, `row`, `col` or `grid` paints a state of its own with. On a component call they name nothing: a component's states are its own.
+pub const STATE_STYLE_KEYS: &[&str] = telar_project::call_keys::STATE_STYLE_KEYS;
+
+/// A `<part>_style:` key on a component call: the key is the callee's, so no table lists it, and this answers for every one.
+const PART_STYLE: AttrSpec = AttrSpec::free("<part>_style").doc(
+    "Hands classes to the part of the component this names, through its `<part>_style` prop: `header_style:@flat`, or `header_style:(@flat @dense)` for several, the later winning. Only `fill`, `stroke`, `stroke_width` and `radius` reach a part, amending the paint the component worked out for it in every state.",
+);
+
+/// Whether `key` on a component call names a part's surface, `<part>_style`, rather than a state a box paints.
+pub(crate) fn is_part_style_key(key: &str) -> bool {
+    !STATE_STYLE_KEYS.contains(&key)
+        && key
+            .strip_suffix("_style")
+            .is_some_and(|part| !part.is_empty())
+}
+
+/// `slot:` on any child of a component call, whatever its own tag: the call routes it, so neither the child nor the callee lists it.
+const SLOT: AttrSpec = AttrSpec::free(SLOT_ATTR).doc(
+    "Hands this child to the component through the `Children` prop it names, `slot:\"header\"` through `header`, where a child without one goes through `children`. The callee places it with `children $props.header`.",
+);
+
+/// What a component call may say about the item the component returns, beside its props, spelled as on a built-in tag.
 const COMPONENT_INSTANCE_ATTRS: &[AttrSpec] = &[
-    AttrSpec::free("a11y_label").doc(
-        "The name assistive technology reads for the item the component returns, over whatever it is named by: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. `label` stays the component's own prop.",
+    AttrSpec::free(A11Y_LABEL_ATTR).doc(
+        "The name assistive technology reads for the item the component returns, over whatever it is named by: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. On an item with no role of its own it replaces what the item draws, so `tag label:\"3\" a11y_label:\"3 unread comments\"` is read as its name alone, while a control inside keeps its own name and stays reachable; an item with a role of its own (a dialog, a list) holds what it draws under the name. `label` stays the component's own prop.",
     ),
-    AttrSpec::free("a11y_lang").doc(
-        "The language of the item the component returns and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`).",
+    AttrSpec::free(LANG_ATTR).doc(
+        "The language of the item the component returns and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`); the nearest one wins. It decides how the text is shaped, broken and cased, and what language a reader speaks it in, so it is never a component's own prop.",
     ),
-    AttrSpec::keywords("a11y", A11Y_VALUES).doc(
+    AttrSpec::keywords(telar_project::call_keys::A11Y, A11Y_VALUES).doc(
         "`a11y:hidden` takes the item the component returns, and everything under it, out of what assistive technology is told.",
     ),
-    AttrSpec::keywords_or_expression("role", COMPONENT_ROLE_VALUES).doc(
+    AttrSpec::keywords_or_expression(telar_project::call_keys::ROLE, COMPONENT_ROLE_VALUES).doc(
         "What the item the component returns is, where the component left it a plain box or a region: a landmark (`navigation`, `main`, `complementary`…), an `article`, a heading (`h1`–`h6`), a live region (`status`, `log`), an item of the list the call sits in (`listitem`), or `group`, by name or as an expression yielding one of them. A role a person operates, or one that promises what is inside the item, stays the component's to say; over a control the component made, this says nothing.",
     ),
 ];
@@ -230,8 +273,9 @@ pub fn is_component_instance_attr(key: &str) -> bool {
     COMPONENT_INSTANCE_ATTRS.iter().any(|spec| spec.key == key)
 }
 
-/// The layout keys, spelling only. Completion and the emitter's unknown-attribute check read the same table [`value_kind`] does.
-pub fn layout_attr_keys() -> Vec<&'static str> {
+/// The keys of the layout table that [`value_kind`], completion and the unknown-attribute check all read, for a test to hold the emitter to that one vocabulary.
+#[cfg(test)]
+fn layout_attr_keys() -> Vec<&'static str> {
     LAYOUT_ATTRS.iter().map(|spec| spec.key).collect()
 }
 
@@ -272,7 +316,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::color("fill"),
     AttrSpec::color("stroke"),
     AttrSpec::edges("stroke_width"),
-    AttrSpec::edges("radius"),
+    AttrSpec::edges("radius").doc(
+        "Rounds the corners, in pixels or `full`: as round as the box allows, a pill on a wide box and a circle on a square one, whatever size it is laid out at. Corners too big for their box shrink together until they meet, as CSS draws them.",
+    ),
     AttrSpec::num("shadow_x"),
     AttrSpec::edges("stroke_top").doc(
         "One number per edge. `stroke_width` and `radius` also take the CSS shorthand (`radius:\"8 8 0 0\"`); these name a single edge, and `start`/`end`, the only form that follows the writing direction.",
@@ -303,6 +349,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     ),
     AttrSpec::free("backdrop_blur").doc(
         "Blurs what the surface drew beneath the box, a radius in pixels as `shadow_blur` is (CSS `backdrop-filter: blur(10px)` is `backdrop_blur:20`), so a translucent `fill` reads as frosted glass. A `$`-reading value is followed, and `transition(backdrop_blur 300ms)` animates it. A document blurs the page behind the box; TUI ignores it and shows the fill alone.",
+    ),
+    AttrSpec::free("surface").doc(
+        "Hands this box's paint to a caller: a `SurfaceStyle` such as `$props.style`, or `$props.header_style` for a part, run over the finished style of the base paint and of every `hover_style`/`active_style`/`disabled_style` after the box's own, so a caller's `@class` restyles it in every state. The focus ring is drawn over the amended state, not amended itself.",
     ),
     AttrSpec::free("on_press"),
     AttrSpec::free("on_alt_press").doc(
@@ -342,6 +391,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
         .doc("Lets the pointer through the box, cutting it out of an `input_opaque` ancestor's claim."),
     AttrSpec::free("inert").doc(
         "Takes the subtree out of input while it reads true: no pointer, keys, focus or input region.",
+    ),
+    AttrSpec::free("hit_outset").doc(
+        "Grows the area the pointer finds the box in by this many pixels past each edge, without moving or drawing anything: a number, or an expression yielding one, re-read on every event. A small control stays small and is still a full-size target; the grown area wins over the box's siblings, and is the rect a reader and a target-size check are told.",
     ),
     AttrSpec::flag("holds_stroke")
         .doc("A control inside something draggable, claiming the stroke that starts on it."),
@@ -573,7 +625,7 @@ pub enum ValueKind {
     KeywordsOrNumber(&'static [(&'static str, &'static str)]),
     /// A closed set of spellings, or any Rust expression yielding the value they name, for a value a component works out from its props: `role:(Role::Heading(level))`. A bare lowercase word is always a spelling.
     KeywordsOrExpression(&'static [(&'static str, &'static str)]),
-    /// A number: a literal, a `50%`, a fraction of the surface on a length (`50sw`, `50sh`, `50smin`, `50smax`), or any Rust expression that yields one.
+    /// A number: a literal, a `50%`, a fraction of the surface on a length (`50sw`, `50sh`, `50smin`, `50smax`), a length in a box's own text on a `row`, `col`, `grid` or `box` (`0.5em` of its size, `1lh` of the height one line of it takes, also inside an expression: `(1lh + $pad * 2)`), or any Rust expression that yields one.
     Number,
     /// A yes or a no: the bare key, `true`/`false`, or any Rust expression that yields one. Only the first three are literals — the rest is read, so a style carrying one re-resolves from what it reads.
     Boolean,
@@ -662,10 +714,19 @@ impl AttrSpec {
 ///
 /// A component tag has no table of its own — its keys are `Props` fields, which rustc checks — but the layout and paint attributes written on one still mean what they mean on a container, so it is read against `box`.
 pub fn attr_spec(tag: &str, key: &str) -> Option<AttrSpec> {
-    if !is_builtin_tag(tag)
-        && let Some(spec) = COMPONENT_INSTANCE_ATTRS.iter().find(|spec| spec.key == key)
-    {
-        return Some(*spec);
+    if key == SLOT_ATTR {
+        return Some(SLOT);
+    }
+    if !is_builtin_tag(tag) {
+        if let Some(spec) = COMPONENT_INSTANCE_ATTRS.iter().find(|spec| spec.key == key) {
+            return Some(*spec);
+        }
+        if STATE_STYLE_KEYS.contains(&key) {
+            return None;
+        }
+        if is_part_style_key(key) {
+            return Some(PART_STYLE);
+        }
     }
     let lens = if is_builtin_tag(tag) { tag } else { "box" };
     tag_attr_specs(lens)
@@ -797,14 +858,9 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             specs
         }
         // Spliced children own their own style, so the placeholder takes no layout or paint keys.
-        "children" => vec![
-            AttrSpec::free("name").doc(
-                "Places the call site's children routed with `slot:\"name\"`; without it, the ones routed nowhere. Each placement builds its slot where it stands, so the children see the `theme:` and contexts in force there.",
-            ),
-            AttrSpec::free("in").doc(
-                "A value the slot's children read with `use_context`, while they are built and whenever they draw or handle an event later.",
-            ),
-        ],
+        "children" => vec![AttrSpec::free("in").doc(
+            "A value the placed children read with `use_context`, while they are built and whenever they draw or handle an event later.",
+        )],
         // box/col/row/grid share one paint set; grid adds its track keys.
         "grid" => {
             let mut specs = with(CONTAINER_PAINT);
@@ -855,8 +911,8 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
                 AttrSpec::edges("arrival_margin_x"),
                 AttrSpec::edges("arrival_margin_y"),
             ]);
-            for spec in specs.iter_mut().filter(|spec| spec.key == "label") {
-                *spec = AttrSpec::free("label").doc(
+            for spec in specs.iter_mut().filter(|spec| spec.key == A11Y_LABEL_ATTR) {
+                *spec = AttrSpec::free(A11Y_LABEL_ATTR).doc(
                     "The name a reader hears for the scroll while it is a Tab stop of its own: while its content overflows and nothing inside it is a stop. A scroll that fits, or is scrolled by moving through the controls in it, stays nameless, so the box around it is not announced twice. A quoted string, `t!(…)`, or an expression reading `$state`.",
                 );
             }
@@ -915,7 +971,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "registry_test.rs"]
+#[path = "registry.test.rs"]
 mod tests;
 
 /// The roles an application may name on a box, and the variant each one is.
@@ -993,11 +1049,11 @@ pub fn role_variant(name: &str) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "registry_role_test.rs"]
+#[path = "registry.role.test.rs"]
 mod role_tests;
 
 #[cfg(test)]
-#[path = "registry_vocabulary_test.rs"]
+#[path = "registry.vocabulary.test.rs"]
 mod vocabulary_tests;
 
 /// The names `consumes_keys:` takes, and the `ConsumedKeys` constant each one is.
@@ -1032,11 +1088,30 @@ pub fn key_constant(name: &str) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "registry_keys_test.rs"]
+#[path = "registry.keys.test.rs"]
 mod keys_tests;
 
-/// Callees known to keep the closure they are given instead of calling it, spelled as paths and matched by their tail; an allowlist because a callee the transpiler cannot see into may run its closure on the spot.
+/// What a closure in a component prop value is handed to: the path written before a call's `(` (`Rc::new`, `std::array::from_fn`), or the name of a method called on a value (`.map`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Callee {
+    Path(String),
+    Method(String),
+}
+
+/// When the closure a callee is handed runs, which decides whether a component prop holding it is wrapped in `Reactive::of(move || …)` to re-read what the closure reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClosureFate {
+    /// Kept to call later: what the closure reads is read when its keeper calls it, so the prop is handed over as it is.
+    Kept,
+    /// Called before the value is had: what it reads is read here, so the prop is wrapped and follows it.
+    Now,
+    /// Nothing written says which, and a `.rsx` transpiles knowing nothing but itself, so the callee cannot be looked at: a closure that reads state is answered in the markup with `later(…)` or `now(…)`.
+    Unknown,
+}
+
+/// Callees whose behaviour is fixed and that keep the closure they are handed, spelled as paths and matched by their tail, turbofish ignored: the markup's `later`, and the framework's and std's keepers. A path whose last segment is capitalised is a tuple struct or variant constructor (`Some`, `Ok`, `Wrapper`), which keeps what it is handed too.
 pub const CLOSURE_KEEPING_CALLEES: &[&str] = &[
+    "later",
     "Reactive::of",
     "Rc::new",
     "Arc::new",
@@ -1046,11 +1121,106 @@ pub const CLOSURE_KEEPING_CALLEES: &[&str] = &[
     "derive_pair",
 ];
 
-/// Whether `callee`, the path written before a call's `(`, is one of [`CLOSURE_KEEPING_CALLEES`].
-pub fn keeps_closure(callee: &str) -> bool {
-    CLOSURE_KEEPING_CALLEES.iter().any(|known| {
-        callee
-            .strip_suffix(known)
+/// Free functions whose behaviour is fixed and that run the closure they are handed before the expression's value is had, matched like [`CLOSURE_KEEPING_CALLEES`]: the markup's `now`, and std's builders that call it on the spot (`std::array::from_fn`) or from the iterator the same expression consumes (`std::iter::from_fn`, `repeat_with`, `successors`).
+pub const CLOSURE_RUNNING_CALLEES: &[&str] = &["now", "from_fn", "repeat_with", "successors"];
+
+/// Methods of std that run the closure they are handed on the spot, or from the iterator the same expression consumes (`.map(…).sum()`): those of `Option`, `Result`, `bool`, `Ordering`, `Iterator`, slices and `Vec`, `str` patterns, map entries, `Cell`, `OnceCell` and `LocalKey`, and a signal's `with` and `update`. Matched by name, since the receiver's type is Rust's to know.
+pub const CLOSURE_RUNNING_METHODS: &[&str] = &[
+    "all",
+    "and_modify",
+    "and_then",
+    "any",
+    "binary_search_by",
+    "binary_search_by_key",
+    "contains",
+    "dedup_by",
+    "dedup_by_key",
+    "ends_with",
+    "filter",
+    "filter_map",
+    "find",
+    "find_map",
+    "flat_map",
+    "fold",
+    "for_each",
+    "get_or_init",
+    "get_or_insert_with",
+    "inspect",
+    "inspect_err",
+    "is_err_and",
+    "is_none_or",
+    "is_ok_and",
+    "is_some_and",
+    "map",
+    "map_err",
+    "map_or",
+    "map_or_else",
+    "map_while",
+    "max_by",
+    "max_by_key",
+    "min_by",
+    "min_by_key",
+    "ok_or_else",
+    "or_else",
+    "or_insert_with",
+    "or_insert_with_key",
+    "partition",
+    "position",
+    "reduce",
+    "retain",
+    "rposition",
+    "scan",
+    "skip_while",
+    "sort_by",
+    "sort_by_cached_key",
+    "sort_by_key",
+    "sort_unstable_by",
+    "sort_unstable_by_key",
+    "split",
+    "starts_with",
+    "take_while",
+    "then",
+    "then_with",
+    "trim_end_matches",
+    "trim_matches",
+    "trim_start_matches",
+    "try_fold",
+    "try_for_each",
+    "unwrap_or_else",
+    "update",
+    "with",
+];
+
+/// When the closure `callee` is handed runs: decided for the callees whose behaviour is fixed, and [`ClosureFate::Unknown`] for every other.
+pub fn closure_fate(callee: &Callee) -> ClosureFate {
+    match callee {
+        Callee::Path(path) if names_any(path, CLOSURE_KEEPING_CALLEES) => ClosureFate::Kept,
+        Callee::Path(path) if names_any(path, CLOSURE_RUNNING_CALLEES) => ClosureFate::Now,
+        Callee::Path(path) if path.rsplit("::").next().is_some_and(starts_uppercase) => {
+            ClosureFate::Kept
+        }
+        Callee::Method(name) if CLOSURE_RUNNING_METHODS.contains(&name.as_str()) => {
+            ClosureFate::Now
+        }
+        Callee::Path(_) | Callee::Method(_) => ClosureFate::Unknown,
+    }
+}
+
+fn names_any(path: &str, known: &[&str]) -> bool {
+    known.iter().any(|known| {
+        path.strip_suffix(known)
             .is_some_and(|head| head.is_empty() || head.ends_with("::"))
     })
 }
+
+fn starts_uppercase(segment: &str) -> bool {
+    segment.chars().next().is_some_and(char::is_uppercase)
+}
+
+#[cfg(test)]
+#[path = "registry.closure.test.rs"]
+mod closure_tests;
+
+#[cfg(test)]
+#[path = "registry.blend.test.rs"]
+mod blend_tests;

@@ -46,5 +46,5 @@ pub trait Route: Clone {
 }
 
 #[cfg(test)]
-#[path = "route_test.rs"]
+#[path = "route.test.rs"]
 mod tests;

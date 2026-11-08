@@ -312,5 +312,5 @@ impl Component for SurfaceScaffold {
 }
 
 #[cfg(test)]
-#[path = "surface_test.rs"]
+#[path = "surface.test.rs"]
 mod tests;

@@ -92,5 +92,5 @@ impl FontFit {
 }
 
 #[cfg(test)]
-#[path = "font_fit_test.rs"]
+#[path = "font_fit.test.rs"]
 mod tests;

@@ -126,5 +126,5 @@ pub(crate) fn line_diff(
 }
 
 #[cfg(test)]
-#[path = "compare_test.rs"]
+#[path = "compare.test.rs"]
 mod tests;

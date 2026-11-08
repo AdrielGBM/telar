@@ -10,10 +10,14 @@ use platform_core::{
     WindowConfig,
 };
 
+use crate::seat::HeadlessSeat;
 use crate::window::{HeadlessWindow, TitleSink};
 
 // AppHandler paces content frames off a real wall clock at 60fps; the run loop waits out this budget before each redraw so the frame actually rasterizes instead of being deferred by the pacing gate.
 const FRAME_BUDGET: Duration = Duration::from_nanos(1_000_000_000 / 60);
+
+// How many frames past its own count a run waits on a seat that still has something for a surface, before calling the script stuck: a surface it names that never attaches.
+const SEAT_PATIENCE: u32 = 600;
 
 /// A shared slot the platform writes the final frame's pixels into. `Platform::run` yields no value, so a caller that wants the rendered pixels passes one of these via [`HeadlessPlatform::capture_into`] and reads it after `run` returns.
 pub type FrameSink = Arc<Mutex<Option<Vec<u8>>>>;
@@ -36,6 +40,8 @@ pub struct HeadlessPlatform {
     location_sink: Option<HistorySink>,
     location_changes: Vec<Vec<Location>>,
     title_sink: Option<TitleSink>,
+    seat: Option<HeadlessSeat>,
+    surface: SurfaceId,
 }
 
 impl HeadlessPlatform {
@@ -53,7 +59,21 @@ impl HeadlessPlatform {
             location_sink: None,
             location_changes: Vec::new(),
             title_sink: None,
+            seat: None,
+            surface: SurfaceId(0),
         }
+    }
+
+    /// Attaches every window of the run to `seat`, so its script drives their pointer and drags. Each window answers to its surface id: the one [`with_surface_id`](Self::with_surface_id) names for a single-surface run, its own in a multi-surface one. The run lasts until the seat has nothing left for anyone, past its frame count if need be.
+    pub fn with_seat(mut self, seat: HeadlessSeat) -> Self {
+        self.seat = Some(seat);
+        self
+    }
+
+    /// The id a single-surface run's window answers to on its seat; `SurfaceId(0)` unless named.
+    pub fn with_surface_id(mut self, surface: SurfaceId) -> Self {
+        self.surface = surface;
+        self
     }
 
     /// The preferences every surface is told the user has, delivered before it first resumes. There is no user here to ask, so a test or a prerender declares them; left alone, every field is unknown.
@@ -140,6 +160,9 @@ impl Platform for HeadlessPlatform {
             window.record_titles_into(sink.clone());
         }
         window.set_title(&config.title);
+        if let Some(seat) = &self.seat {
+            window.attach_to(seat.clone(), self.surface);
+        }
 
         // Mirror the winit loop's iteration shape (new_events → dispatch → about_to_wait) so the handler's reactive batching brackets stay balanced exactly as they do under winit.
         handler.new_events();
@@ -162,15 +185,22 @@ impl Platform for HeadlessPlatform {
             .max(1)
             .max(self.resizes.len() as u32)
             .max(self.location_changes.len() as u32);
-        for frame in 0..frames {
+        let mut frame = 0;
+        while frame < frames || self.seat.as_ref().is_some_and(HeadlessSeat::is_busy) {
+            if frame >= frames + SEAT_PATIENCE {
+                handler.on_suspend();
+                return Err(PlatformError(
+                    "the seat still has steps for a surface that never took them".to_string(),
+                ));
+            }
             handler.new_events();
             if let Some(&(width, height)) = self.resizes.get(frame as usize) {
                 window.resize(width, height);
                 let scale = window.scale_factor();
                 handler.on_event(
                     Event::WindowResized {
-                        width: (width as f64 / scale).round() as u32,
-                        height: (height as f64 / scale).round() as u32,
+                        width: platform_core::logical_extent(width, scale),
+                        height: platform_core::logical_extent(height, scale),
                     },
                     &window,
                 );
@@ -183,9 +213,15 @@ impl Platform for HeadlessPlatform {
                     &window,
                 );
             }
+            if let Some(seat) = &self.seat {
+                for event in seat.take_events(self.surface) {
+                    handler.on_event(event, &window);
+                }
+            }
             std::thread::sleep(FRAME_BUDGET);
             handler.on_redraw(&window);
             handler.about_to_wait();
+            frame += 1;
         }
 
         if let Some(sink) = &self.sink
@@ -225,6 +261,9 @@ impl MultiSurfacePlatform for HeadlessPlatform {
         for (id, config) in surfaces {
             let window = HeadlessWindow::new(config.width, config.height);
             window.set_title(&config.title);
+            if let Some(seat) = &self.seat {
+                window.attach_to(seat.clone(), id);
+            }
             states.push((id, window, factory(id)));
         }
 
@@ -243,24 +282,42 @@ impl MultiSurfacePlatform for HeadlessPlatform {
             let _ =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler.about_to_wait()));
             if resumed.is_err() {
-                eprintln!("surface {} panicked during build; unmounting it", id.0);
+                tracing::error!(?id, "the surface panicked during build; unmounting it");
             }
             matches!(resumed, Ok(true))
         });
 
         // Drive the scripted frame count: pace once per round (so every surface's frame budget has elapsed and its redraw actually rasterizes), then redraw every surface. A surface that panics mid-frame is unmounted so the rest keep rendering.
-        for _ in 0..frames {
+        let seat = self.seat;
+        let mut frame = 0;
+        while frame < frames || seat.as_ref().is_some_and(HeadlessSeat::is_busy) {
+            if frame >= frames + SEAT_PATIENCE {
+                for (_, _, handler) in &mut states {
+                    handler.on_suspend();
+                }
+                return Err(PlatformError(
+                    "the seat still has steps for a surface that never took them".to_string(),
+                ));
+            }
+            frame += 1;
             std::thread::sleep(FRAME_BUDGET);
             states.retain_mut(|(id, window, handler)| {
                 handler.new_events();
+                let events = seat
+                    .as_ref()
+                    .map(|seat| seat.take_events(*id))
+                    .unwrap_or_default();
                 let drawn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    for event in events {
+                        handler.on_event(event, window);
+                    }
                     handler.on_redraw(window)
                 }));
                 let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     handler.about_to_wait()
                 }));
                 if drawn.is_err() {
-                    eprintln!("surface {} panicked during redraw; unmounting it", id.0);
+                    tracing::error!(?id, "the surface panicked during redraw; unmounting it");
                 }
                 drawn.is_ok()
             });
@@ -282,5 +339,5 @@ impl MultiSurfacePlatform for HeadlessPlatform {
 }
 
 #[cfg(test)]
-#[path = "platform_test.rs"]
+#[path = "platform.test.rs"]
 mod tests;

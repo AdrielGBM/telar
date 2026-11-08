@@ -4,8 +4,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use taffy::{TaffyTree, TraversePartialTree};
 
 use geometry_core::Size;
+use i18n_core::Direction;
 
-use crate::direction::Direction;
 use crate::error::LayoutError;
 use crate::sticky::StickyInsets;
 use crate::style::{AvailableSpace, LayoutStyle};
@@ -857,17 +857,17 @@ impl Default for LayoutEngine {
 }
 
 #[cfg(test)]
-#[path = "engine_test.rs"]
+#[path = "engine.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "engine_sticky_test.rs"]
+#[path = "engine.sticky.test.rs"]
 mod sticky_tests;
 
 #[cfg(test)]
-#[path = "engine_direction_test.rs"]
+#[path = "engine.direction.test.rs"]
 mod direction_tests;
 
 #[cfg(test)]
-#[path = "engine_scroll_test.rs"]
+#[path = "engine.scroll.test.rs"]
 mod scroll_tests;

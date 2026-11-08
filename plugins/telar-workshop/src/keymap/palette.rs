@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use telar::{Children, LayoutError, LayoutItem, Reactive};
+use telar::{LayoutError, LayoutItem, Reactive};
 use telar_components::{Command, CommandPaletteProps, command_palette};
 
 use super::{ACTIONS, Action, Keymap, preview_command};
@@ -22,7 +22,6 @@ pub(super) fn palette(keymap: &Keymap) -> Result<Box<dyn LayoutItem>, LayoutErro
                 running.run_command(&command.id)
             }))
             .build(),
-        Children::default(),
     )
 }
 

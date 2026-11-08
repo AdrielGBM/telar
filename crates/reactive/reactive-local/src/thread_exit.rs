@@ -346,5 +346,5 @@ macro_rules! released_slot {
 }
 
 #[cfg(test)]
-#[path = "thread_exit_test.rs"]
+#[path = "thread_exit.test.rs"]
 mod tests;

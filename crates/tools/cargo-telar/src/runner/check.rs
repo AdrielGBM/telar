@@ -74,7 +74,7 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
     report.add_all_prelude_problems();
     report.add_all_previews_include_problems();
 
-    if !report.is_empty() {
+    if report.has_diagnostics() {
         eprintln!();
         eprint!("{}", report.render(true));
     }
@@ -103,33 +103,35 @@ impl diagnostics::Report {
         let dir = super::config::find_package_dir(&[]);
         let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
         for member in telar_project::workspace_member_dirs(&root) {
-            let keys = catalog_keys(&member);
-            let catalog =
-                (!keys.is_empty()).then_some(telar_diagnostics::CatalogView { keys: &keys });
-            for rsx in telar_project::find_rsx_files(&member.join("src")) {
-                let Ok(source) = std::fs::read_to_string(&rsx) else {
-                    continue;
-                };
-                // A file that does not parse is reported by the macro, on the line it broke, with the text the parser produced. Saying it twice from two processes only makes the second one look like a different problem.
-                let Ok(document) = telar_parser::parse(&source) else {
-                    continue;
-                };
-                let imported = telar_transpiler::resolve_style_imports(
-                    &rsx,
-                    &member.join("src"),
-                    &document.style,
-                    &|path| std::fs::read_to_string(path).ok(),
-                );
-                let names: Vec<&str> = imported
-                    .classes
-                    .iter()
-                    .map(|class| class.class.name.as_str())
-                    .collect();
-                self.add_semantic(
-                    &rsx,
-                    telar_diagnostics::semantic_diagnostics(&document, catalog.as_ref(), &names),
-                );
-            }
+            self.add_member_semantic(&member);
+        }
+    }
+
+    fn add_member_semantic(&mut self, member: &std::path::Path) {
+        let keys = telar_baker::catalog_keys(member);
+        let catalog = telar_diagnostics::CatalogView::of(&keys);
+        for rsx in telar_project::find_rsx_files(&member.join("src")) {
+            let Ok(source) = std::fs::read_to_string(&rsx) else {
+                continue;
+            };
+            // A file that does not parse is reported by the macro, on the line it broke, with the text the parser produced. Saying it twice from two processes only makes the second one look like a different problem.
+            let Ok(document) = telar_parser::parse(&source) else {
+                continue;
+            };
+            let imported = telar_transpiler::resolve_style_imports(
+                &rsx,
+                &member.join("src"),
+                &document.style,
+                &|path| std::fs::read_to_string(path).ok(),
+            );
+            self.add_semantic(
+                &rsx,
+                telar_diagnostics::semantic_diagnostics(
+                    &document,
+                    catalog.as_ref(),
+                    &imported.class_names(),
+                ),
+            );
         }
     }
 
@@ -161,15 +163,6 @@ impl diagnostics::Report {
     }
 }
 
-/// Every key one package's catalog defines, or empty when it has none. A malformed catalog reads as empty: the bake reports that, and refusing to run the other checks over it would hide a class error behind a translation one.
-fn catalog_keys(package_root: &std::path::Path) -> std::collections::HashSet<String> {
-    telar_baker::parse_catalog(package_root)
-        .ok()
-        .flatten()
-        .map(|c| c.keys().cloned().collect())
-        .unwrap_or_default()
-}
-
 #[cfg(test)]
-#[path = "check_test.rs"]
+#[path = "check.test.rs"]
 mod tests;

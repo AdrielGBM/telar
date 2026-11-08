@@ -37,9 +37,9 @@ A plugin's own tokens, the fields a theme marks `#[theme(extension)]` (see [plug
 belong to the theme that carries them: under a subtree's theme a plugin reads that theme's value, or its own
 default when that theme supplies none, never the value of a theme further out.
 
-## Components and their slots
+## Components and their children
 
-A component's `theme:` reaches what a call site nests inside it. The `children` placeholder builds its slot where
+A component's `theme:` reaches what a call site nests inside it. The `children $props.children` placeholder builds that prop where
 it stands, under the node it is placed in, so those children draw in the theme in force there, exactly as a child
 written inline would:
 
@@ -51,19 +51,19 @@ let ctx = Context { progress, calm };
 [view]
 col theme:(palette) fill:$theme.background
     col sticky
-        children in:ctx
+        children $props.children in:ctx
 ```
 
 The same holds for every scope around the placeholder: a context an owner above provides, a locale, and the value
-`in:` hands the slot, which stays readable through `use_context` when the children draw or handle an event later,
-not only while they are built. Each `children` placement builds its own slot, so a placeholder inside a reactive
+`in:` hands the children, which stay readable through `use_context` when the children draw or handle an event later,
+not only while they are built. Each `children` placement builds its own copy, so a placeholder inside a reactive
 `if`/`for` builds its children again whenever the branch is rebuilt.
 
-In Rust, `Children::build_slot(slot)` and `Children::build_slot_with(slot, context)` build one slot under the
-current owner; `build()` and `build_with(context)` build every slot at once. A component written in Rust that wants
-its children inside a scope builds them inside it.
+In Rust, `Children::build()` and `Children::build_with(context)` build a `Children` prop under the current owner,
+and a named one such as `header` is built the same way. A component written in Rust that wants its children inside a
+scope builds them inside it.
 
-Every target behaves the same: slots are built when the tree is, before any backend sees it.
+Every target behaves the same: children are built when the tree is, before any backend sees it.
 
 ## Roles
 
@@ -76,35 +76,37 @@ defaults to a primitive or a convention, so a theme that names none of them stil
 | `radius_control` | buttons, fields, select and menu triggers, tabs, icon buttons, steppers | `radius` |
 | `radius_surface` | popups and menus, tooltips, toasts, context menus, code blocks | `radius × 1.5` |
 | `radius_dialog` | modals, the command palette, drawers | `radius × 3` |
-| `radius_item` | rows, options and items inside a surface | `radius_sm` |
+| `radius_item` | rows, options and items inside a surface; key caps and tags | `radius_sm` |
 | `border_width`, `border_width_strong` | a hairline; a frame that is the control's shape | `1`, `1.5` |
 | `focus_ring`, `focus_ring_width`, `focus_ring_offset` | the keyboard's ring, and a list's cursor | `primary`, `2`, `0` |
-| `scrollbar_width`, `scrollbar_inset`, `scrollbar_radius` | the lane a scroll area's bar runs in (scaled by the control size); how much narrower the thumb is than its lane; the corner of its thumb | `8`, `2`, fully rounded (`(width - inset) / 2`) |
+| `scrollbar_width`, `scrollbar_inset`, `scrollbar_radius` | the lane a scroll area's bar runs in; how much narrower the thumb is than its lane; the corner of its thumb | `8`, `2`, fully rounded (`(width - inset) / 2`) |
 | `highlight_low/med/high` | the wash of hover, of selected or held open, of pressed | neutral washes |
 | `inverse_surface`, `inverse_ink` | a tooltip's bubble and its text | `ink`, `surface` |
 | `overlay` | the scrim behind a modal or a drawer | black at 50% |
 | `thumb` | a toggle's knob, a slider's thumb | `surface` in light, `ink` in dark |
 | `font_weight_strong` | titles, headings, matched runs | `600` |
 
-A pill (a chip, a badge, a radio, a toggle's track) is fully rounded at whatever size it is laid out, which no
+A pill (a radio, a toggle's track, a progress bar) is fully rounded at whatever size it is laid out, which no
 number can say, so it is not a role: a component rounds it with `metrics::pill(rect)`. The focus ring's offset
 is measured inward: `0` draws the ring on the box's edge in place of its border, more keeps the border and leaves
 a gap. A `[telar] library`'s `$theme` reads every role like any other token.
 
-## Control size for a subtree
+## A component's size
 
-The control size (`Mini`, `Small`, `Regular`, `Large`) scales every length a catalogue control derives from the
-theme. It resolves like a theme: the nearest subtree scope, else the surface's own (`SurfaceCanvas::set_control_size`),
-else the thread's (`set_control_size`). In Rust:
+A catalogue component with metrics of its own — a control, a `tag`, a field — takes `size`, a
+`telar::ControlSize`: `small`, `regular` (the default) or `large`. It scales every length the component
+derives from the theme and steps its text, and it is decided where the component is written:
 
-| Item | What it is |
-| --- | --- |
-| `provide_control_size(size, \|\| build)` | Builds `build` at `size`. Adds no layout node. |
-| `ScopedControlSize::new(size)`, `.set(size)` | A size for one subtree, switchable in place; only its readers re-run. |
-| `follow_control_size(\|\| size)` | A `ScopedControlSize` that follows what the closure reads. |
-| `use_control_size()`, `control_scale()` | The size in force here, and its factor, read reactively. |
+```rsx
+row gap:8
+    button label:"Save" size:large
+    button label:"Cancel"
+```
 
-So a form can be `Large` while the toolbar beside it stays `Regular`, in one window.
+Nothing inherits a size. A box, a theme or a surface has none to hand down, and a control inside another, such as an
+`icon_button` in a `tag`'s `action`, is sized where it is written, so a form of `large` controls beside a toolbar of
+`regular` ones is each control saying so. A text-like component (`heading`, `text`) takes no `size`: its size is its
+text's.
 
 ## Drawing like the catalogue
 
@@ -112,7 +114,7 @@ So a form can be `Large` while the toolbar beside it stays `Regular`, in one win
 `control_height`, `control_pad_x`, `row_height`, `panel_pad`, `popup_offset`, `gap_xs/sm/md/lg/xl`, `spacing`, `icon_size`,
 `icon_pad`, `measure`, the radius roles and `pill`, `border_width(_strong)`, `focus_ring`, `hover_wash`/`held_wash`/
 `pressed_wash`, `hovered_fill`/`pressed_fill`, `thumb_on`, `strong_weight`, `control_text`, `ink_on` and
-`mark`. Every length is at the control size in force, and the heights and `measure` are in whole pixels. Every single-line control is
+`mark`. Each length takes the `ControlSize` it is for, and the heights and `measure` are in whole pixels. Every single-line control is
 `control_height` tall and centres its line in it, so a button, a field, a select, a tab and a stepper stand level
 in one row; every row of a list, a menu, a select, a tree or a context menu is `row_height` tall; and a panel that drops
 from a control — a menu's, a select's — stands `popup_offset` away from it, on whichever side it opens.
@@ -121,7 +123,7 @@ The rules every catalogue component follows, and a control of an application's o
 
 | Rule | What it says |
 | --- | --- |
-| Widths | A box not sized by what it holds — a field, a slider, a trigger and its list, a tooltip, a dialog, a notice — defaults to `measure(ems)`: `ems` of the document's text at the control size in force, so it keeps as many characters to a line at any text size. A token width wins, at the regular size and scaled with the control size. |
+| Widths | A box not sized by what it holds — a field, a slider, a trigger and its list, a tooltip, a dialog, a notice — defaults to `measure(ems)`: `ems` of the document's text at the component's size, so it keeps as many characters to a line at any text size. A token width wins, at the regular size and scaled with the component's. |
 | Frames | A frame that is the control's shape — a checkbox's box, a radio's ring, an outline button, the ring round a chosen swatch or a thumb — is `border_width_strong`; a selection control draws its frame in `border` until it is on and in its colour once it is. A passive hairline — a field's frame, a chip, a key cap, a panel's edge, a divider — is `border_width` in `border`. |
 | Thumbs | A knob, a thumb or the ring round one is `thumb_on(fill)` over what it sits on: the theme's `thumb` wherever that stands out from the fill at 3:1, else the ink that reads on it. A toggle's knob, a slider's thumb, a handle and a colour picker's thumbs all take it. |
 | Washes | A pointer resting on a control or a row lays `hover_wash` over it, the selected row or a control held open `held_wash`, a press `pressed_wash`. A filled control cannot take a wash over its own fill, so it darkens instead: `hovered_fill`, `pressed_fill`. A soft surface is its colour at a wash's strength. |
@@ -146,16 +148,14 @@ let theme = AppTheme { buttons: ButtonTokens { radius: Some(999.0), ..Default::d
 ```
 
 A component reads its tokens with `XTokens::current()` inside the closure that builds its style, and resolves each
-through the method of the same name. Every length is at the regular control size and scaled with the control size
-in force. Each field and what `None` falls back to (roles in `code`, `metrics` helpers by name):
+through the method of the same name. Every length is at the regular size, and a method that resolves one takes the
+component's `ControlSize` and scales it to that. Each field and what `None` falls back to (roles in `code`, `metrics` helpers by name):
 
 | Tokens | Fields → fallback |
 | --- | --- |
 | `AccordionTokens` | `pad_x` → `control_pad_x`; `radius` → `radius_control` |
-| `BadgeTokens` | `radius` → a pill; `pad_x` → `gap_md` |
 | `ButtonTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width_strong` |
 | `CheckboxTokens` | `size` → `icon_size`; `radius` → `radius_item`; `border_width` → `border_width_strong` |
-| `ChipTokens` | `radius` → a pill; `pad_x` → `gap_md`; `border_width` → `border_width` |
 | `CodeViewTokens` | `radius` → `radius_surface`; `pad` → `gap_md` |
 | `ColorPickerTokens` | `width` → `measure(16)`; `radius` → `radius_control`; `ring` → `border_width_strong` |
 | `CommandPaletteTokens` | `width` → `measure(40)`; `radius` → `radius_dialog`; `inset_top` → six `gap_xl` |
@@ -181,6 +181,7 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 | `StepperTokens` | `radius` → `radius_control` |
 | `SwatchesTokens` | `size` → `icon_size` and `gap_sm`; `ring` → `border_width_strong` |
 | `TabsTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
+| `TagTokens` | `radius` → `radius_item` (a pill is `radius:full` in a class); `pad_x` → `gap_md`; `border_width` (an outline's frame, and an unselected filter's) → `border_width` |
 | `TextFieldTokens` | a `text_field`'s frame, of one line or several, and the `search_field`'s drawn in it: `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(21.5)` |
 | `ToastTokens` | `radius` → `radius_surface`; `pad` → `gap_lg`; `width` → `measure(26)`; `stripe_width` → `gap_xs` |
 | `ToggleTokens` | `knob` → `icon_size`; `inset` → `gap_xs`; `radius` → a pill. A menu row's `switch` draws the same track as tall as `icon_size`, its knob what the inset leaves |
@@ -189,16 +190,36 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 
 ## One instance: `style`
 
-A single call site restyles a component's principal surface with `@class` or the `style` prop, an
+A single call site restyles a component's principal surface with `@class` or the `style` prop (a part such as a header takes `header_style:@class`), an
 `Option<SurfaceAmendment>`: a closure over the paint the component worked out, run in every state, hover and press
 included, after the component's own paint. What every instance should agree on belongs in a role or in the
 component's tokens instead. See [plugins](plugins.md#class-and-surfacestyle) for how a component accepts it.
 
 `button` is the reference for all three: it reads the roles through `metrics`, its `ButtonTokens`, and `style`;
-its `variant` (`Solid`, `Outline`, `Soft`, `Ghost`) says how its `color` (the theme's primary by default) is carried:
+its `variant` (`solid`, `outline`, `soft`, `ghost`) says how its `color` (the theme's primary by default) is carried:
 
 ```rsx
 button label:"Save"
-button label:"Cancel" variant:ButtonVariant::Outline color:$theme.error
-button label:"Undo" variant:ButtonVariant::Ghost
+button label:"Cancel" variant:outline color:$theme.error
+button label:"Undo" variant:ghost
 ```
+
+## The words a component call writes bare
+
+`size`, `variant` and `tone` take a word in place of a Rust path: `size:small`, `variant:ghost`, `tone:danger`. The
+words are one closed vocabulary every component shares:
+
+| Prop | Words |
+| --- | --- |
+| `size` | `small`, `regular`, `large` |
+| `variant` | `solid`, `soft`, `outline`, `ghost` |
+| `tone` | `accent`, `neutral`, `info`, `success`, `warning`, `danger` |
+
+A `.rsx` cannot see a prop's type, so a bare lowercase word on a component call that names no binding of the file
+becomes that name in `telar::kw`, which is the value itself: `telar::kw::small` is `telar::ControlSize::Small`. A
+word no axis has, or a word of another axis (`size:ghost`), is the compiler's error on the line that wrote it. A
+binding of the same name wins: with `let small = …` in `[logic]`, `size:small` hands that binding over. A path
+(`size:(ControlSize::Small)`) still works.
+The same word is the arg's text form in a preview matrix, a link and stored state (see [previews](previews.md)).
+A component of your own takes the words by declaring the prop with one of these types, `telar::ControlSize`,
+`telar::Variant` or `telar::Tone`, as every catalogue component does.

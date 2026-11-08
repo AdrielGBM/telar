@@ -1,0 +1,58 @@
+use std::rc::Rc;
+
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Color, Container, LayoutError, LayoutStyle, Reactive, Role};
+
+use crate::inputs::checkbox::checkbox::{CheckboxProps, checkbox};
+use crate::metrics;
+use telar::ControlSize;
+
+pub(crate) fn previews() -> Vec<PreviewEntry> {
+    vec![
+        preview!(checkbox: CheckboxProps, "Default", |p| {
+            checkbox(
+                CheckboxProps::props()
+                    .on_toggle(Rc::new(|_| {}))
+                    .checked(p.signal("checked", false))
+                    .label(p.arg("label", "I agree to the terms"))
+                    .size(p.arg("size", ControlSize::Regular))
+                    .color(p.arg("color", Color::TRANSPARENT))
+                    .build(),
+            )
+        })
+        .title("Inputs/Checkbox")
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            let agree = by_role(Role::CheckBox).named("I agree to the terms");
+            canvas.click(agree.clone())?;
+            canvas.expect_toggled(agree.clone(), true)?;
+            canvas.click(agree.clone())?;
+            canvas.expect_toggled(agree, false)?;
+            canvas.expect_action("on_toggle", 2)
+        }),
+        preview!(checkbox: CheckboxProps, "Bound", |p| {
+            let agree = p.signal("agree", false);
+            let check = checkbox(
+                CheckboxProps::props()
+                    .checked(agree)
+                    .label("I agree")
+                    .build(),
+            )?;
+            let echo =
+                super::sample::text_of(Reactive::of(move || format!("agree · {}", agree.get())))?;
+            Ok::<_, LayoutError>(Container::new(
+                LayoutStyle::column().gap(metrics::gap_md(telar::ControlSize::Regular)),
+                vec![check, echo],
+            )?)
+        })
+        .title("Inputs/Checkbox")
+        .layout(Layout::Centered)
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.expect_text("agree · false")?;
+            canvas.click(by_role(Role::CheckBox).named("I agree"))?;
+            canvas.expect_text("agree · true")
+        }),
+    ]
+}

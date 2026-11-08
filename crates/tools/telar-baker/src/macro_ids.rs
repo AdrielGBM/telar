@@ -241,5 +241,5 @@ fn string_value(written: &str) -> Option<&str> {
 }
 
 #[cfg(test)]
-#[path = "macro_ids_test.rs"]
+#[path = "macro_ids.test.rs"]
 mod tests;

@@ -78,5 +78,5 @@ fn audit_over(
 }
 
 #[cfg(test)]
-#[path = "inspect_test.rs"]
+#[path = "inspect.test.rs"]
 mod tests;

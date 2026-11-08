@@ -4,23 +4,25 @@ use crate::shared::components::code_line::{CodeLineProps, code_line};
 use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
 use crate::shared::components::example::{ExampleProps, example};
 let tags = signal(3u32);
+let rust = signal(true);
 
 [view]
 col gap:20
-    doc_header kicker:"PRESENTATION" title:"Badges & chips" desc:"badge is a small solid status tag; chip is a softer outlined pill, optionally removable via on_close. Both are components."
-    example title:"badge — a small solid accent tag"
+    doc_header kicker:"PRESENTATION" title:"Tags" desc:"tag is a short label: a status, a category, a value the user removes or a filter they select. What it does follows from the props it is handed, and how it looks is a variant and a tone. A component."
+    example title:"tag — a status or a category, in a tone and a variant"
         card gap:10
             row gap:8 align:center
                 text "Inbox" font_size:15 color:$theme.ink
-                badge label:"12"
-                badge label:"NEW" color:$theme.success
-                badge label:"BETA" color:$theme.purple
-        code_line code:"badge label:'NEW' color:$theme.success"
-    example title:"chip — a softer outlined pill; on_close makes it removable"
+                tag label:"12"
+                tag label:"NEW" tone:success variant:soft
+                tag label:"BETA" tone:$theme.purple variant:outline
+        code_line code:"tag label:'NEW' tone:success"
+    example title:"a control in the action slot acts on the tag; selected or on_toggle makes it a filter"
         card gap:10
             row gap:8 align:center
-                chip label:"design"
-                chip label:"rust"
-                chip label:"removable" on_close:(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) })
-            text "chips · {$tags}" font_size:13 color:$theme.muted
-        code_line code:"chip label:'removable' on_close:|| remove()"
+                tag label:"design"
+                tag label:"rust" selected:$rust
+                tag label:"removable"
+                    icon_button icon:"lucide:x" label:"Remove removable" size:small on_press:(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) }) slot:"action"
+            text "tags · {$tags}" font_size:13 color:$theme.muted
+        code_line code:"tag label:'removable' / icon_button icon:'lucide:x' size:small slot:'action'"

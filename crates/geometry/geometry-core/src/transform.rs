@@ -121,5 +121,5 @@ impl Transform {
 }
 
 #[cfg(test)]
-#[path = "transform_test.rs"]
+#[path = "transform.test.rs"]
 mod tests;

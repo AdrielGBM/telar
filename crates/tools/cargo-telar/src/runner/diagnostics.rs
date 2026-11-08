@@ -17,6 +17,8 @@ use telar_project::{
 };
 use telar_transpiler::{GeneratedSite, RsxSpan, SourceMap};
 
+use super::artifacts::Artifact;
+
 /// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that says what to do about it.
 pub(crate) struct Note {
     level: String,
@@ -41,6 +43,7 @@ pub(crate) struct Report {
     projected: Vec<Projected>,
     /// Diagnostics about hand-written Rust, kept in rustc's own rendering — it is already pointing at a file the author can open, and re-drawing it would only make it look less like the compiler they know.
     passthrough: Vec<String>,
+    artifacts: Vec<Artifact>,
 }
 
 impl Report {
@@ -107,8 +110,13 @@ impl Report {
         }
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.projected.is_empty() && self.passthrough.is_empty()
+    pub(crate) fn has_diagnostics(&self) -> bool {
+        !self.projected.is_empty() || !self.passthrough.is_empty()
+    }
+
+    /// What cargo reported building, in the order it said so.
+    pub(crate) fn artifacts(&self) -> &[Artifact] {
+        &self.artifacts
     }
 
     pub(crate) fn has_errors(&self) -> bool {
@@ -204,6 +212,10 @@ pub(crate) fn collect(reader: impl BufRead) -> Report {
         let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else {
             continue;
         };
+        if let Some(artifact) = Artifact::from_message(&value) {
+            report.artifacts.push(artifact);
+            continue;
+        }
         if value.get("reason").and_then(serde_json::Value::as_str) != Some("compiler-message") {
             continue;
         }
@@ -623,5 +635,5 @@ fn strip_ansi(text: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "diagnostics_test.rs"]
+#[path = "diagnostics.test.rs"]
 mod tests;

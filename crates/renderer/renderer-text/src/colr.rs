@@ -513,3 +513,7 @@ fn load_cpal_colors(font_ref: &FontRef<'_>) -> Vec<[u8; 4]> {
         .map(|rec| [rec.red, rec.green, rec.blue, rec.alpha])
         .collect()
 }
+
+#[cfg(test)]
+#[path = "colr.test.rs"]
+mod tests;

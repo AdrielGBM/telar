@@ -8,7 +8,7 @@
 //!
 //! ```toml
 //! # Cargo.toml
-//! telar-watch = "0.2.2"
+//! telar-watch = "0.2.3"
 //! ```
 //!
 //! It ships no `.rsx` tags, so there is nothing to list in `telar.toml`.
@@ -196,5 +196,5 @@ fn run(path: &Path, out: Emitter<()>) {
 }
 
 #[cfg(test)]
-#[path = "watch_test.rs"]
+#[path = "watch.test.rs"]
 mod tests;

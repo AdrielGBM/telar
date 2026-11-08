@@ -11,9 +11,7 @@ use telar::{
     ShapeStyle, SizeDimension, StyledContainer, WindowRoot, box_item, reset_layout_runtime,
     use_resolved_scheme,
 };
-use telar_devtools::{
-    WORKBENCH_CONTROL_SIZE, WorkbenchTheme, use_workbench_tokens, workbench_scope,
-};
+use telar_devtools::{WorkbenchTheme, use_workbench_tokens, workbench_scope};
 
 use crate::canvas::env::follow_reduced_motion;
 use crate::canvas::states::allow_editor_scheme;
@@ -26,7 +24,7 @@ use crate::{address, canvas, store};
 ///
 /// It opens where the location it was started at points (`--location`, a link the workshop copied, a page's address), else on the preview [`requested_preview`] names by id, else where it was when it last closed, else on the first preview; the component the request names narrows the sidebar. After a hot reload it stays where it was. A `goto:` line on the hot-reload channel moves it while it runs.
 ///
-/// Under `cargo telar preview` it keeps the selection, the view, the pane sizes and the canvas toolbar's settings between runs in `<workspace>/.telar/workshop/state`, or in the page's `localStorage` in a browser. Edited args last the run and travel in its address, which also carries the Matrix view's axes and focused cell, so a page reloaded comes back where it was. Its Snapshot panel reviews the `report.json` the workspace's last `cargo telar test` wrote.
+/// Under `cargo telar preview` it keeps the selection, the view, the sidebar groups left open, the pane sizes and the canvas toolbar's settings between runs in `<workspace>/.telar/workshop/state`, or in the page's `localStorage` in a browser. Edited args last the run and travel in its address, which also carries the Matrix view's axes and focused cell, so a page reloaded comes back where it was. Its Snapshot panel reviews the `report.json` the workspace's last `cargo telar test` wrote.
 pub struct WorkshopApp {
     entries: Rc<[PreviewEntry]>,
     requested: PreviewRequest,
@@ -76,8 +74,6 @@ impl WorkshopApp {
 impl App for WorkshopApp {
     fn root(&self) -> Box<dyn Component> {
         reset_layout_runtime();
-        // The window's own surface, not the thread: a canvas inside keeps the application's control size.
-        telar::set_surface_control_size(Some(WORKBENCH_CONTROL_SIZE));
         let keeper = store::install();
         self.keeper.replace(keeper.clone()).flush();
         let state = WorkshopState::kept_in(
@@ -141,5 +137,5 @@ fn canvas_alone(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutErro
 }
 
 #[cfg(test)]
-#[path = "app_test.rs"]
+#[path = "app.test.rs"]
 mod tests;

@@ -4,9 +4,10 @@
 
 use std::collections::BTreeMap;
 
+use renderer_dom::escape_html;
 use telar_project::PageLocation;
 
-use super::page::{HeadTag, escape, script_json};
+use super::page::{HeadTag, script_json};
 use super::site::{PageMeta, Site, SitePages};
 
 /// `negotiate_locale(preferred, available, fallback)`, rule for rule: for each preferred tag in order, an available tag equal to it ignoring ASCII case, else the first available tag with the same primary language subtag; `fallback` when none matches. The `lower` helper folds ASCII only, as `eq_ignore_ascii_case` does.
@@ -60,14 +61,14 @@ pub(crate) fn root_page(
             let label = titles.get(locale).map(String::as_str).unwrap_or(locale);
             format!(
                 "        <li><a href=\"{}\" hreflang=\"{locale}\" lang=\"{locale}\">{}</a></li>",
-                escape(&site.path_of(&PageLocation::root().in_locale(locale))),
-                escape(label),
-                locale = escape(locale),
+                escape_html(&site.path_of(&PageLocation::root().in_locale(locale))),
+                escape_html(label),
+                locale = escape_html(locale),
             )
         })
         .collect();
     let available = serde_json::Value::from(pages.locales.clone());
-    let dir = if layout_core::Direction::for_locale(base_locale).is_rtl() {
+    let dir = if i18n_core::Direction::for_locale(base_locale).is_rtl() {
         "rtl"
     } else {
         "ltr"
@@ -98,10 +99,10 @@ location.replace({base} + locale + "/" + location.search + location.hash);
   </body>
 </html>
 "#,
-        lang = escape(base_locale),
-        title = escape(title),
+        lang = escape_html(base_locale),
+        title = escape_html(title),
         head = head.join("\n"),
-        fallback = escape(&fallback),
+        fallback = escape_html(&fallback),
         negotiate = NEGOTIATE_JS,
         available = script_json(&available),
         base_locale = script_json(&serde_json::Value::from(base_locale)),
@@ -111,5 +112,5 @@ location.replace({base} + locale + "/" + location.search + location.hash);
 }
 
 #[cfg(test)]
-#[path = "negotiation_test.rs"]
+#[path = "negotiation.test.rs"]
 mod tests;

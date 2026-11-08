@@ -17,13 +17,16 @@ const COPY_QUALITY: u8 = 85;
 pub struct WebImageFile {
     /// The extension the file is served under, without the dot.
     pub extension: &'static str,
+    /// The encoded file, ready to write out as it is.
     pub bytes: Vec<u8>,
 }
 
 /// What a browser build ships for one bitmap.
 #[derive(Debug, Clone)]
 pub struct WebImage {
+    /// Width of the source bitmap, in pixels.
     pub width: u32,
+    /// Height of the source bitmap, in pixels.
     pub height: u32,
     /// The picture at its own size: the source file as it is when a browser reads its format, re-encoded as PNG when it does not.
     pub full: WebImageFile,
@@ -119,5 +122,5 @@ fn encode(image: &DynamicImage, format: ImageFormat) -> Result<WebImageFile, Ima
 }
 
 #[cfg(test)]
-#[path = "web_image_test.rs"]
+#[path = "web_image.test.rs"]
 mod tests;

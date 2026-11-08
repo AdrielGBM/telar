@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use telar::preview::snapshot::SnapshotResult;
 use telar::{
-    Accessible, AlignItems, Children, Clip, ClippedItem, Container, Image, ImageData,
-    JustifyContent, LayoutError, LayoutItem, LayoutStyle, ObjectFit, Raster, Rect, RectStyle, Role,
-    RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text, box_item, children, effect, signal,
+    Accessible, AlignItems, Clip, ClippedItem, Container, Image, ImageData, JustifyContent,
+    LayoutError, LayoutItem, LayoutStyle, ObjectFit, Raster, Rect, RectStyle, Role, RwSignal,
+    ShapeStyle, SizeDimension, StyledContainer, Text, box_item, children, effect, signal,
     track_layout, use_theme_tokens,
 };
 use telar_components::{SliderProps, slider};
@@ -197,7 +197,6 @@ fn with_slider(
             .width(SLIDER_WIDTH)
             .label(strings::reactive(label))
             .build(),
-        Children::default(),
     )?;
     let column = Container::new(fill().gap(WORKBENCH_GRID), vec![pictures, slider])?;
     Ok(box_item(column))

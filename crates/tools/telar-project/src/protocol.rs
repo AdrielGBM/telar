@@ -1,10 +1,306 @@
-//! The names `cargo telar` and the app it launches agree on: the environment variables it sets for a preview host, the lines it sends over the hot-reload channel, and where a running workshop can be reached.
+//! The names `cargo telar` and the app it launches agree on: the environment variables it sets and how each value is spelled in them, the lines it sends over the hot-reload channel, and where a running workshop can be reached.
 
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::PageLocation;
+use crate::{PageLocation, WindowSection};
+
+/// A value no spelling of its kind matches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownValue {
+    pub value: String,
+    /// The values that are accepted, as a sentence names them.
+    pub expected: String,
+}
+
+impl fmt::Display for UnknownValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "unknown value `{}`, expected {}",
+            self.value, self.expected
+        )
+    }
+}
+
+impl std::error::Error for UnknownValue {}
+
+/// The one of `all` that `as_str` spells as `word`.
+pub(crate) fn parse_word<T: Copy>(
+    all: &[T],
+    as_str: fn(T) -> &'static str,
+    word: &str,
+) -> Result<T, UnknownValue> {
+    all.iter()
+        .copied()
+        .find(|value| as_str(*value) == word)
+        .ok_or_else(|| UnknownValue {
+            value: word.to_string(),
+            expected: one_of(&all.iter().map(|value| as_str(*value)).collect::<Vec<_>>()),
+        })
+}
+
+fn one_of(words: &[&str]) -> String {
+    let quoted: Vec<String> = words.iter().map(|word| format!("`{word}`")).collect();
+    match quoted.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
+        _ => quoted.concat(),
+    }
+}
+
+/// Which renderer the built application selects at startup: what `telar.toml`'s `backend` says, what [`RENDERER_BACKEND_VAR`] carries into the build, and what the preference store keeps a person's switch as.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(try_from = "String")]
+pub enum RendererBackend {
+    /// Hardware, falling back to software where there is no adapter.
+    #[default]
+    Auto,
+    Hardware,
+    Software,
+}
+
+impl RendererBackend {
+    pub const ALL: [Self; 3] = [Self::Auto, Self::Hardware, Self::Software];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Hardware => "hardware",
+            Self::Software => "software",
+        }
+    }
+
+    pub fn parse(word: &str) -> Result<Self, UnknownValue> {
+        parse_word(&Self::ALL, Self::as_str, word)
+    }
+}
+
+impl TryFrom<String> for RendererBackend {
+    type Error = UnknownValue;
+
+    fn try_from(word: String) -> Result<Self, Self::Error> {
+        Self::parse(&word)
+    }
+}
+
+/// Whether the dev window covers the screen.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(try_from = "String")]
+pub enum FullscreenMode {
+    Disabled,
+    Borderless,
+    Exclusive,
+}
+
+impl FullscreenMode {
+    pub const ALL: [Self; 3] = [Self::Disabled, Self::Borderless, Self::Exclusive];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Borderless => "borderless",
+            Self::Exclusive => "exclusive",
+        }
+    }
+
+    pub fn parse(word: &str) -> Result<Self, UnknownValue> {
+        parse_word(&Self::ALL, Self::as_str, word)
+    }
+}
+
+impl TryFrom<String> for FullscreenMode {
+    type Error = UnknownValue;
+
+    fn try_from(word: String) -> Result<Self, Self::Error> {
+        Self::parse(&word)
+    }
+}
+
+/// Where the dev window opens: `"centered"`, or `"<x>,<y>"` in screen coordinates.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(try_from = "String")]
+pub enum WindowPosition {
+    Centered,
+    At { x: i32, y: i32 },
+}
+
+impl WindowPosition {
+    const CENTERED: &str = "centered";
+
+    pub fn encode(self) -> String {
+        match self {
+            Self::Centered => Self::CENTERED.to_string(),
+            Self::At { x, y } => format!("{x},{y}"),
+        }
+    }
+
+    pub fn parse(text: &str) -> Result<Self, UnknownValue> {
+        if text == Self::CENTERED {
+            return Ok(Self::Centered);
+        }
+        text.split_once(',')
+            .and_then(|(x, y)| {
+                Some(Self::At {
+                    x: x.trim().parse().ok()?,
+                    y: y.trim().parse().ok()?,
+                })
+            })
+            .ok_or_else(|| UnknownValue {
+                value: text.to_string(),
+                expected: format!("`{}` or `<x>,<y>`", Self::CENTERED),
+            })
+    }
+}
+
+impl TryFrom<String> for WindowPosition {
+    type Error = UnknownValue;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        Self::parse(&text)
+    }
+}
+
+/// The name of [`RENDERER_BACKEND_VAR`] as a literal, which is all `option_env!` takes.
+#[macro_export]
+macro_rules! renderer_backend_var {
+    () => {
+        "TELAR_RENDERER_BACKEND"
+    };
+}
+
+/// The env var every build `cargo telar` runs carries the configured [`RendererBackend`] in, which the runtime reads at compile time.
+pub const RENDERER_BACKEND_VAR: &str = renderer_backend_var!();
+
+/// The env var naming the dylib a `cargo telar dev` host loads the app from.
+pub const HOT_LIB_VAR: &str = "TELAR_HOT_LIB";
+
+/// The env var naming the loopback port of the hot-reload channel.
+pub const HOT_PORT_VAR: &str = "TELAR_HOT_PORT";
+
+/// The env var whose presence makes a preview build show its previews instead of starting the app.
+pub const PREVIEW_VAR: &str = "TELAR_PREVIEW";
+
+/// The env var naming the directory `cargo telar preview --png` has the app render every preview into.
+pub const PREVIEW_PNG_VAR: &str = "TELAR_PREVIEW_PNG";
+
+/// The env var turning the devtools overlay off when it is [`encode_flag`]`(false)`.
+pub const DEVTOOLS_VAR: &str = "TELAR_DEVTOOLS";
+
+/// The env var naming the frontend a build carrying several runs; [`TERMINAL_TARGET`] is the one a binary is asked for by name.
+pub const TARGET_VAR: &str = "TELAR_TARGET";
+
+pub const TERMINAL_TARGET: &str = "tui";
+
+pub const DEV_WINDOW_TITLE_VAR: &str = "TELAR_DEV_WINDOW_TITLE";
+pub const DEV_WINDOW_WIDTH_VAR: &str = "TELAR_DEV_WINDOW_WIDTH";
+pub const DEV_WINDOW_HEIGHT_VAR: &str = "TELAR_DEV_WINDOW_HEIGHT";
+pub const DEV_WINDOW_DECORATIONS_VAR: &str = "TELAR_DEV_WINDOW_DECORATIONS";
+pub const DEV_WINDOW_RESIZABLE_VAR: &str = "TELAR_DEV_WINDOW_RESIZABLE";
+pub const DEV_WINDOW_TRANSPARENT_VAR: &str = "TELAR_DEV_WINDOW_TRANSPARENT";
+pub const DEV_WINDOW_FULLSCREEN_VAR: &str = "TELAR_DEV_WINDOW_FULLSCREEN";
+pub const DEV_WINDOW_POSITION_VAR: &str = "TELAR_DEV_WINDOW_POSITION";
+
+const FLAG_ON: &str = "1";
+const FLAG_OFF: &str = "0";
+
+pub fn encode_flag(on: bool) -> &'static str {
+    if on { FLAG_ON } else { FLAG_OFF }
+}
+
+pub fn decode_flag(text: &str) -> Result<bool, UnknownValue> {
+    match text {
+        FLAG_ON => Ok(true),
+        FLAG_OFF => Ok(false),
+        _ => Err(UnknownValue {
+            value: text.to_string(),
+            expected: one_of(&[FLAG_ON, FLAG_OFF]),
+        }),
+    }
+}
+
+fn decode_pixels(text: &str) -> Result<u32, UnknownValue> {
+    text.parse().map_err(|_| UnknownValue {
+        value: text.to_string(),
+        expected: "a whole number of pixels".to_string(),
+    })
+}
+
+/// An env var `cargo telar` sets whose value the app could not read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnvError {
+    pub var: &'static str,
+    pub error: UnknownValue,
+}
+
+impl fmt::Display for EnvError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.var, self.error)
+    }
+}
+
+impl std::error::Error for EnvError {}
+
+/// The env vars `[telar.dev.window]` reaches a dev session's app through, one for each key it sets.
+pub fn dev_window_env(window: &WindowSection) -> Vec<(&'static str, String)> {
+    let WindowSection {
+        title,
+        width,
+        height,
+        decorations,
+        resizable,
+        transparent,
+        fullscreen,
+        position,
+    } = window;
+    let flag = |on: &Option<bool>| on.map(|on| encode_flag(on).to_string());
+    [
+        (DEV_WINDOW_TITLE_VAR, title.clone()),
+        (DEV_WINDOW_WIDTH_VAR, width.map(|n| n.to_string())),
+        (DEV_WINDOW_HEIGHT_VAR, height.map(|n| n.to_string())),
+        (DEV_WINDOW_DECORATIONS_VAR, flag(decorations)),
+        (DEV_WINDOW_RESIZABLE_VAR, flag(resizable)),
+        (DEV_WINDOW_TRANSPARENT_VAR, flag(transparent)),
+        (
+            DEV_WINDOW_FULLSCREEN_VAR,
+            fullscreen.map(|mode| mode.as_str().to_string()),
+        ),
+        (
+            DEV_WINDOW_POSITION_VAR,
+            position.map(WindowPosition::encode),
+        ),
+    ]
+    .into_iter()
+    .filter_map(|(var, value)| Some((var, value?)))
+    .collect()
+}
+
+/// The `[telar.dev.window]` [`dev_window_env`] wrote, read through `var`.
+pub fn dev_window_from_env(
+    var: impl Fn(&str) -> Option<String>,
+) -> Result<WindowSection, EnvError> {
+    Ok(WindowSection {
+        title: var(DEV_WINDOW_TITLE_VAR),
+        width: decoded(&var, DEV_WINDOW_WIDTH_VAR, decode_pixels)?,
+        height: decoded(&var, DEV_WINDOW_HEIGHT_VAR, decode_pixels)?,
+        decorations: decoded(&var, DEV_WINDOW_DECORATIONS_VAR, decode_flag)?,
+        resizable: decoded(&var, DEV_WINDOW_RESIZABLE_VAR, decode_flag)?,
+        transparent: decoded(&var, DEV_WINDOW_TRANSPARENT_VAR, decode_flag)?,
+        fullscreen: decoded(&var, DEV_WINDOW_FULLSCREEN_VAR, FullscreenMode::parse)?,
+        position: decoded(&var, DEV_WINDOW_POSITION_VAR, WindowPosition::parse)?,
+    })
+}
+
+fn decoded<T>(
+    var: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+    decode: fn(&str) -> Result<T, UnknownValue>,
+) -> Result<Option<T>, EnvError> {
+    var(name)
+        .map(|text| decode(&text).map_err(|error| EnvError { var: name, error }))
+        .transpose()
+}
 
 /// The env var naming the preview to open first.
 pub const PREVIEW_ID_VAR: &str = "TELAR_PREVIEW_ID";
@@ -31,13 +327,15 @@ pub const GOTO_PREFIX: &str = "goto:";
 pub const FOCUS_LINE: &str = "focus";
 
 /// The line the app sends right after its token when it answers each [`HOT_RELOAD_PREFIX`] line with one [`HotReply`]; a `cargo telar` that does not know this version treats the app as one that does not answer.
-pub const HOT_REPLIES_LINE: &str = "replies:2";
+pub const HOT_REPLIES_LINE: &str = "replies:3";
 
 pub const HOT_LOADED_PREFIX: &str = "loaded:";
 
 pub const HOT_PANICKED_PREFIX: &str = "panicked:";
 
 pub const HOT_REFUSED_PREFIX: &str = "refused:";
+
+pub const HOT_UNREADABLE_PREFIX: &str = "unreadable:";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HotReply {
@@ -53,6 +351,8 @@ pub enum HotOutcome {
     Panicked(String),
     /// Why, while the app keeps running the build before.
     Refused(String),
+    /// What the host could not read of the build's answers: built from sources the host was not, nothing of it runs until the session restarts.
+    Unreadable(String),
 }
 
 impl HotReply {
@@ -67,6 +367,9 @@ impl HotReply {
             HotOutcome::Refused(reason) => {
                 format!("{HOT_REFUSED_PREFIX}{library}\t{}", escape_lines(reason))
             }
+            HotOutcome::Unreadable(report) => {
+                format!("{HOT_UNREADABLE_PREFIX}{library}\t{}", escape_lines(report))
+            }
         }
     }
 
@@ -76,6 +379,9 @@ impl HotReply {
         } else if let Some(fields) = line.strip_prefix(HOT_PANICKED_PREFIX) {
             let (library, report) = fields.split_once('\t')?;
             (library, HotOutcome::Panicked(unescape_lines(report)))
+        } else if let Some(fields) = line.strip_prefix(HOT_UNREADABLE_PREFIX) {
+            let (library, report) = fields.split_once('\t')?;
+            (library, HotOutcome::Unreadable(unescape_lines(report)))
         } else {
             let (library, reason) = line.strip_prefix(HOT_REFUSED_PREFIX)?.split_once('\t')?;
             (library, HotOutcome::Refused(unescape_lines(reason)))
@@ -132,7 +438,7 @@ pub const TEST_A11Y_VAR: &str = "TELAR_TEST_A11Y";
 /// The env var saying what a test run does with snapshots: `compare`, `update` or `off`.
 pub const TEST_SNAPSHOTS_VAR: &str = "TELAR_TEST_SNAPSHOTS";
 
-/// The env var naming the directory of the package under test, whose `previews/__snapshots__` holds the goldens.
+/// The env var naming the directory of the package under test, whose `snapshots/` holds the goldens.
 pub const TEST_PACKAGE_DIR_VAR: &str = "TELAR_TEST_PACKAGE_DIR";
 
 /// The env var naming the Cargo target directory, under which a test run writes `telar-snapshots/report.json` and its diffs.
@@ -150,8 +456,8 @@ pub const TEST_OUT_DIR: &str = "telar-snapshots";
 /// The report a test run writes in [`TEST_OUT_DIR`].
 pub const TEST_REPORT_FILE: &str = "report.json";
 
-/// The name of the test `rsx_modules!` emits in a library's preview build, which `cargo telar test -p <library>` runs.
-pub const LIBRARY_TEST_NAME: &str = "telar_previews";
+/// The name of the test `rsx_modules!` emits in a library's preview build, which `cargo telar test -p <library>` runs by this name alone, wherever the macro sits in the module tree: no other test should contain it.
+pub const LIBRARY_TEST_NAME: &str = "__telar_library_previews";
 
 /// Where the session running `package`'s workshop names the loopback port it takes `goto:` and [`FOCUS_LINE`] requests on.
 pub fn workshop_channel_file(workspace_root: &Path, package: &str) -> PathBuf {
@@ -206,8 +512,8 @@ pub struct WorkshopFiles {
 
 /// The files the workshops of the package at `package_dir` are reached through. `None` when its manifest names no package.
 pub fn package_workshop_files(package_dir: &Path) -> Option<WorkshopFiles> {
-    let manifest = crate::cargo_manifest::read_manifest(package_dir)?;
-    let package = manifest.get("package")?.get("name")?.as_str()?;
+    let manifest = crate::CargoManifest::read(package_dir)?;
+    let package = manifest.package_name()?;
     let workspace_root =
         crate::find_workspace_root(package_dir).unwrap_or_else(|| package_dir.to_path_buf());
     Some(WorkshopFiles {
@@ -299,5 +605,5 @@ fn page_at<'a>(segments: impl IntoIterator<Item = &'a str>) -> PageLocation {
 }
 
 #[cfg(test)]
-#[path = "protocol_test.rs"]
+#[path = "protocol.test.rs"]
 mod tests;

@@ -2,6 +2,7 @@
 //!
 //! Split by document section: [`style`] parses `[style]` classes, [`view`] parses `[view]` element trees, [`preview`] parses the trailing `[previews …]` meta and `[preview ...]` blocks with their `[play]` zones. All three `impl Parser` blocks live in this file's descendant modules and can reach `Parser`'s private fields because Rust privacy is scoped to a module and its descendants.
 
+mod header;
 mod preview;
 mod style;
 mod view;

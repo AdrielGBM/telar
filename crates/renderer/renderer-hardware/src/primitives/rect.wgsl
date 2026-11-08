@@ -6,11 +6,10 @@ struct RectInstance {
     _pad_ft_1: u32,
     _pad_ft_2: u32,
     fill_color: vec4<f32>,
-    grad_p0: vec2<f32>,
-    grad_p1: vec2<f32>,
-    grad_radius: f32,
+    grad_origin: vec2<f32>,
     grad_stop_count: u32,
-    _pad_g: vec2<f32>,
+    _pad_g: u32,
+    grad_map: vec4<f32>,
     grad_positions: vec4<f32>,
     grad_colors_0: vec4<f32>,
     grad_colors_1: vec4<f32>,
@@ -29,11 +28,10 @@ struct RectInstance {
     _pad_st_0: u32,
     _pad_st_1: u32,
     _pad_st_2: u32,
-    stroke_grad_p0: vec2<f32>,
-    stroke_grad_p1: vec2<f32>,
-    stroke_grad_radius: f32,
+    stroke_grad_origin: vec2<f32>,
     stroke_grad_stop_count: u32,
-    _pad_sg: vec2<f32>,
+    _pad_sg: u32,
+    stroke_grad_map: vec4<f32>,
     stroke_grad_positions: vec4<f32>,
     stroke_grad_colors_0: vec4<f32>,
     stroke_grad_colors_1: vec4<f32>,
@@ -165,22 +163,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 
     var fill_color: vec4<f32>;
-    if inst.fill_type == 1u {
-        let dir = inst.grad_p1 - inst.grad_p0;
-        let len_sq = dot(dir, dir);
-        var t = 0.0;
-        if len_sq > 0.0001 {
-            t = dot(in.world_pos - inst.grad_p0, dir) / len_sq;
-        }
-        fill_color = sample_gradient(t, inst.grad_positions, grad_colors, inst.grad_stop_count);
-    } else if inst.fill_type == 2u {
-        var t = 0.0;
-        if inst.grad_radius > 0.0001 {
-            t = length(in.world_pos - inst.grad_p0) / inst.grad_radius;
-        }
-        fill_color = sample_gradient(t, inst.grad_positions, grad_colors, inst.grad_stop_count);
-    } else {
+    if inst.fill_type == 0u {
         fill_color = inst.fill_color;
+    } else {
+        let t = gradient_t(inst.fill_type, inst.grad_origin, inst.grad_map, in.world_pos);
+        fill_color = sample_gradient(t, inst.grad_positions, grad_colors, inst.grad_stop_count);
     }
 
     let stroke_grad_colors = array<vec4<f32>, 4>(
@@ -191,22 +178,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 
     var stroke_color: vec4<f32>;
-    if inst.stroke_type == 1u {
-        let dir = inst.stroke_grad_p1 - inst.stroke_grad_p0;
-        let len_sq = dot(dir, dir);
-        var t = 0.0;
-        if len_sq > 0.0001 {
-            t = dot(in.world_pos - inst.stroke_grad_p0, dir) / len_sq;
-        }
-        stroke_color = sample_gradient(t, inst.stroke_grad_positions, stroke_grad_colors, inst.stroke_grad_stop_count);
-    } else if inst.stroke_type == 2u {
-        var t = 0.0;
-        if inst.stroke_grad_radius > 0.0001 {
-            t = length(in.world_pos - inst.stroke_grad_p0) / inst.stroke_grad_radius;
-        }
-        stroke_color = sample_gradient(t, inst.stroke_grad_positions, stroke_grad_colors, inst.stroke_grad_stop_count);
-    } else {
+    if inst.stroke_type == 0u {
         stroke_color = inst.stroke_color;
+    } else {
+        let t = gradient_t(inst.stroke_type, inst.stroke_grad_origin, inst.stroke_grad_map, in.world_pos);
+        stroke_color = sample_gradient(t, inst.stroke_grad_positions, stroke_grad_colors, inst.stroke_grad_stop_count);
     }
 
     // A gradient stroke leaves `stroke_color` transparent in the instance data (its colour lives in the stop slots), so presence is decided by the paint type, not by that alpha.

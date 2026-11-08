@@ -187,7 +187,7 @@ fn css_list(entries: impl Iterator<Item = (FontTag, String)>) -> String {
         if !out.is_empty() {
             out.push_str(", ");
         }
-        let _ = write!(out, "\"{}\" {value}", tag.as_str().replace(['"', '\\'], ""));
+        let _ = write!(out, "{} {value}", super::css_string(tag.as_str()));
     }
     if out.is_empty() {
         out.push_str("normal");
@@ -196,5 +196,5 @@ fn css_list(entries: impl Iterator<Item = (FontTag, String)>) -> String {
 }
 
 #[cfg(test)]
-#[path = "font_settings_test.rs"]
+#[path = "font_settings.test.rs"]
 mod tests;

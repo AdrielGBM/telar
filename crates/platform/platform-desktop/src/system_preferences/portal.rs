@@ -80,3 +80,7 @@ fn as_u32(value: &Value) -> Option<u32> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+#[path = "portal.test.rs"]
+mod tests;

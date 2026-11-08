@@ -21,7 +21,9 @@ use crate::{
 
 #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
 pub use renderer_dom::{CanvasTextMetrics, DomRenderer};
-pub use ui_core::reset_keyboard;
+#[cfg(feature = "hardware")]
+pub use renderer_hardware::testing::skip_without_gpu;
+pub use ui_core::{live_node_count, reset_keyboard};
 pub use ui_tree::set_element_capture;
 
 /// Where a surface is repainted going from the frame `old` to the frame `new`, in window space: the regions the renderers' shared diff damages, a scroll's whole clip where the change inside it only scrolled, and nothing where nothing visible changed. `None` where the change reaches the whole surface.
@@ -264,22 +266,6 @@ pub fn paints(command: &DrawCommand) -> bool {
     }
 }
 
-/// An empty value counts as unset: a workflow that picks the variable per matrix leg still defines it as `""` on the legs that do not want it, and reading that as "required" would fail every skip.
-fn gpu_required() -> bool {
-    std::env::var("TELAR_REQUIRE_GPU").is_ok_and(|v| !v.is_empty())
-}
-
-/// Skips `what` for want of a GPU adapter — unless `TELAR_REQUIRE_GPU` is set, which turns a missing adapter into a failure.
-///
-/// A pixel-exact test that opens with `let Ok(gpu) = gpu::open() else { return }` passes having asserted nothing on a machine with no adapter, which is every CI runner that was not set up for one. This is the guard that makes that a decision rather than an accident, and it is `pub` because the tests relying on it most are the ones outside this repository.
-pub fn require_gpu(what: &str, error: impl std::fmt::Debug) {
-    assert!(
-        !gpu_required(),
-        "{what}: TELAR_REQUIRE_GPU is set, so an adapter was expected: {error:?}"
-    );
-    eprintln!("skipping {what}: no GPU adapter available: {error:?}");
-}
-
 #[cfg(test)]
-#[path = "testing_test.rs"]
+#[path = "testing.test.rs"]
 mod tests;

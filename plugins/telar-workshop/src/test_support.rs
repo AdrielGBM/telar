@@ -1,9 +1,9 @@
 use telar::preview::{PreviewCtx, PreviewEntry};
 use telar::{
-    AccessNode, App, Children, Component, ComponentList, DrawCommand, LayoutError, LayoutItem,
-    Reactive, Rect, Role, WindowRoot, for_each_with_matrix, relayout_if_dirty, transform_clip_rect,
+    AccessNode, App, Component, ComponentList, DrawCommand, LayoutError, LayoutItem, Reactive,
+    Rect, Role, WindowRoot, for_each_with_matrix, relayout_if_dirty, transform_clip_rect,
 };
-use telar_components::{BadgeProps, ButtonProps, badge, button};
+use telar_components::{ButtonProps, TagProps, button, tag};
 use telar_devtools::workbench_scope;
 
 use crate::state::WorkshopState;
@@ -92,18 +92,14 @@ fn sample_button(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
         ButtonProps::props()
             .label(Reactive::of(move || label.clone()))
             .build(),
-        Children::default(),
     )
 }
 
 fn sample_badge(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let count = ctx.arg("count", 3_i64);
-    badge(
-        BadgeProps::props()
-            .label(Reactive::of(move || count.to_string()))
-            .build(),
-        Children::default(),
-    )
+    tag(TagProps::props()
+        .label(Reactive::of(move || count.to_string()))
+        .build())
 }
 
 /// A small library of previews written as an application writes them, over two groups, for what has to hold whatever the previews are.

@@ -3,14 +3,14 @@ use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use super::page::page;
 use crate::{NavTransition, Navigator, TabHost, TabStacks};
 
-#[derive(Clone, Copy, PartialEq, Eq, telar::PreviewArg)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, telar::PreviewArg)]
 enum Tab {
     Home,
     Search,
     Profile,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Root;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {

@@ -57,5 +57,5 @@ fn lens(line: usize, title: &str, command: &str, target: &PreviewTarget) -> Code
 }
 
 #[cfg(test)]
-#[path = "lens_test.rs"]
+#[path = "lens.test.rs"]
 mod tests;

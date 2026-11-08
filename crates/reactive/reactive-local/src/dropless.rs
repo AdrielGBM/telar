@@ -67,5 +67,5 @@ macro_rules! __refuse_destructor {
 }
 
 #[cfg(test)]
-#[path = "dropless_test.rs"]
+#[path = "dropless.test.rs"]
 mod tests;

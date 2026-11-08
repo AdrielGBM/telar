@@ -28,7 +28,7 @@ reactive_core::surface_local! {
 }
 
 reactive_core::surface_local! {
-    /// A per-surface layout tree: the taffy engine plus the node→rect-signal registry. The layout tree is a per-surface world so nodes can be created and laid out from anywhere — including reactive effects (reactive lists) that fire from an effect body. Under M3 several surfaces share one UI thread, so the runner activates each surface's [`LayoutContext`] around its build/event/frame; app code just calls the free functions, which operate on whichever surface is currently active.
+    /// A per-surface layout tree: the taffy engine plus the node→rect-signal registry. The layout tree is a per-surface world so nodes can be created and laid out from anywhere — including reactive effects (reactive lists) that fire from an effect body. Several surfaces share one UI thread, so the runner activates each surface's [`LayoutContext`] around its build/event/frame; app code just calls the free functions, which operate on whichever surface is currently active.
     slot LAYOUT_RUNTIME: LayoutRuntime = LayoutRuntime::new();
     access with_runtime, with_runtime_ref;
     context LayoutContext;
@@ -1228,7 +1228,7 @@ fn report_dead_child(engine: &LayoutEngine, parent: NodeId, children: &[NodeId])
 }
 
 #[cfg(test)]
-#[path = "context_test.rs"]
+#[path = "context.test.rs"]
 mod tests;
 
 /// The CSS for what `node` was asked for, resolved against the direction in force and the active surface's size.
@@ -1273,5 +1273,5 @@ pub fn declared_css(node: NodeId) -> Option<layout_core::Css> {
 }
 
 #[cfg(test)]
-#[path = "context_sticky_test.rs"]
+#[path = "context.sticky.test.rs"]
 mod sticky_tests;

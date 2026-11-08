@@ -91,6 +91,12 @@ impl Container {
         self
     }
 
+    /// Keeps `text` at what this box knows of its text — see [`StyledContainer::following_text`](crate::StyledContainer::following_text).
+    pub fn following_text(self, text: RwSignal<crate::BoxText>) -> Self {
+        crate::styled_container::text_follows(self.node, text);
+        self
+    }
+
     /// What this box *is*, beyond a box: a region of the screen, a list, a heading.
     ///
     /// Only a description — it does not make the box focusable, because a region is not something the keyboard stops at. A control says so with [`StyledContainer::control`](crate::StyledContainer::control), which declares the role *and* joins the tab order.
@@ -220,5 +226,5 @@ impl Component for Container {
 }
 
 #[cfg(test)]
-#[path = "container_test.rs"]
+#[path = "container.test.rs"]
 mod tests;

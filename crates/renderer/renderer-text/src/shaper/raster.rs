@@ -9,22 +9,24 @@ use renderer_core::{Raster, Span, TextStyle, premultiply_rgba};
 use std::sync::Arc;
 
 impl TextShaper {
-    /// Walks a shaped buffer's glyphs, handing each covered pixel to `callback` as `(x, y, w, h, color)` — the same shape [`Buffer::draw`] uses, and delegating to it outright for the smooth raster so that path stays byte-identical.
+    /// Walks a shaped buffer's glyphs in `style`, handing each covered pixel to `callback` as `(x, y, w, h, color)` — the same shape [`Buffer::draw`] uses, and delegating to it outright for the smooth raster so that path stays byte-identical, moved down by the [`baseline_shift`](Self::baseline_shift) it does not know about.
     ///
     /// The pixel raster needs its own walk because the two things it changes both live inside that call: where a glyph's origin is rounded, and what its coverage resolves to. Text decorations are not reproduced here — no `TextStyle` axis sets any, so a shaped buffer never carries one.
     fn draw_buffer(
         &mut self,
         buffer: &mut Buffer,
         default: CosmicColor,
-        raster: Raster,
+        style: &TextStyle,
         mut callback: impl FnMut(i32, i32, u32, u32, CosmicColor),
     ) {
+        let raster = style.raster;
+        let shift = self.baseline_shift(style);
         if raster == Raster::Smooth {
             buffer.draw(
                 &mut self.font_system,
                 &mut self.swash_cache,
                 default,
-                callback,
+                |x, y, w, h, color| callback(x, y + shift, w, h, color),
             );
             return;
         }
@@ -52,7 +54,7 @@ impl TextShaper {
                         pixel.b(),
                         resolve_coverage(pixel.a(), raster),
                     );
-                    callback(physical.x + x, physical.y + y, 1, 1, covered);
+                    callback(physical.x + x, physical.y + shift + y, 1, 1, covered);
                 },
             );
         }
@@ -78,8 +80,8 @@ impl TextShaper {
         let key = make_text_cache_key(
             text,
             font_size,
-            width,
-            height,
+            rect.width,
+            rect.height,
             color,
             text_style_bits(style),
         );
@@ -108,28 +110,23 @@ impl TextShaper {
         );
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
-        self.draw_buffer(
-            &mut buffer,
-            cosmic_color,
-            style.raster,
-            |bx, by, bw, bh, color| {
-                let col_start = ((-bx).max(0)) as usize;
-                let col_end = ((width as i32 - bx).max(0) as usize).min(bw as usize);
-                let row_start = ((-by).max(0)) as usize;
-                let row_end = ((height as i32 - by).max(0) as usize).min(bh as usize);
-                for row in row_start..row_end {
-                    for col in col_start..col_end {
-                        let px = (bx + col as i32) as usize;
-                        let py = (by + row as i32) as usize;
-                        let idx = (py * width as usize + px) * 4;
-                        pixels[idx] = color.r();
-                        pixels[idx + 1] = color.g();
-                        pixels[idx + 2] = color.b();
-                        pixels[idx + 3] = color.a();
-                    }
+        self.draw_buffer(&mut buffer, cosmic_color, style, |bx, by, bw, bh, color| {
+            let col_start = ((-bx).max(0)) as usize;
+            let col_end = ((width as i32 - bx).max(0) as usize).min(bw as usize);
+            let row_start = ((-by).max(0)) as usize;
+            let row_end = ((height as i32 - by).max(0) as usize).min(bh as usize);
+            for row in row_start..row_end {
+                for col in col_start..col_end {
+                    let px = (bx + col as i32) as usize;
+                    let py = (by + row as i32) as usize;
+                    let idx = (py * width as usize + px) * 4;
+                    pixels[idx] = color.r();
+                    pixels[idx + 1] = color.g();
+                    pixels[idx + 2] = color.b();
+                    pixels[idx + 3] = color.a();
                 }
-            },
-        );
+            }
+        });
 
         if a < 255 {
             for chunk in pixels.as_chunks_mut::<4>().0 {
@@ -175,7 +172,7 @@ impl TextShaper {
         );
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
-        self.draw_buffer(&mut buffer, white, style.raster, |bx, by, bw, bh, color| {
+        self.draw_buffer(&mut buffer, white, style, |bx, by, bw, bh, color| {
             let col_start = ((-bx).max(0)) as usize;
             let col_end = ((width as i32 - bx).max(0) as usize).min(bw as usize);
             let row_start = ((-by).max(0)) as usize;

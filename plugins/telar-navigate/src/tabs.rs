@@ -1,12 +1,13 @@
 //! Tabs: one route stack per tab, and the host that shows whichever tab is active.
 
+use std::fmt::Debug;
 use std::rc::Rc;
 
 use telar::motion::Animated;
 use telar::{
     Component, Event, EventResult, LayoutError, LayoutItem, LayoutStyle, NodeId, RenderNode,
-    RwSignal, SizeDimension, absolute_rect, mark_dirty, new_container, set_children, set_display,
-    signal,
+    RwSignal, SizeDimension, absolute_rect, mark_dirty, new_container, remove_node, set_children,
+    set_display, signal,
 };
 
 use crate::host::NavHost;
@@ -18,7 +19,7 @@ use crate::transition::NavTransition;
 type TabPageFactory<T, R> = dyn Fn(&T, &R) -> Result<Box<dyn NavPage>, LayoutError>;
 
 /// One tab's navigation stack, plus the [`NavHost`] rendering it — minted on the tab's first visit, then kept for the life of the host. That is the whole point of nested stacks: a tab you leave is still standing where you left it, several screens deep, without any per-route keep-alive policy holding it up.
-struct BuiltTab<T, R: Clone + Eq + 'static> {
+struct BuiltTab<T, R: Clone + Debug + Eq + 'static> {
     tab: T,
     host: NavHost<R>,
     node: NodeId,
@@ -26,7 +27,7 @@ struct BuiltTab<T, R: Clone + Eq + 'static> {
 
 /// One navigation stack per tab, and which tab is active — the state half of [`TabHost`], and the handle the app's tab bar or rail drives.
 ///
-/// A single [`Navigator`] is a browser: one shared history that every destination pushes onto. This is the native model instead — `UITabBarController` giving each tab its own `UINavigationController`, Flutter's nested `Navigator`, Compose's nested graph — where switching tabs is not a navigation at all: it swaps which stack you are looking at, and each tab keeps its own depth and its own history.
+/// A single [`Navigator`] is a browser: one shared history that every destination pushes onto. This is the model native tab bars use instead, each tab holding a navigation stack of its own, where switching tabs is not a navigation at all: it swaps which stack you are looking at, and each tab keeps its own depth and its own history.
 ///
 /// Cheap to clone (the active-tab signal and the stack table are refcounted), so the rail that selects tabs, the back control, and the pages that push all hold their own handle.
 pub struct TabStacks<T: Clone + Eq + 'static, R: Clone + 'static> {
@@ -211,7 +212,7 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
 /// Where [`NavHost`] shows the top of *one* stack, this shows the top of *the active tab's* stack, and holds the other tabs' hosts alongside it — built on first visit, then collapsed out of layout with [`set_display`] while another tab is on screen. Nothing is torn down on a tab switch, so a tab that was three screens deep with a half-filled form is exactly that when you come back to it.
 ///
 /// The [`PagePolicy`] and [`NavTransition`] set here apply to every tab's host, so `Transient` — the real page stack semantics — is the sane default choice here in a way it never was for a single shared stack: each tab's persistence comes from its stack staying alive, not from pinning pages by route.
-pub struct TabHost<T: Clone + Eq + 'static, R: Clone + Eq + 'static> {
+pub struct TabHost<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> {
     stacks: TabStacks<T, R>,
     factory: Rc<TabPageFactory<T, R>>,
     policy: Rc<dyn Fn(&R) -> PagePolicy>,
@@ -223,9 +224,12 @@ pub struct TabHost<T: Clone + Eq + 'static, R: Clone + Eq + 'static> {
     current: T,
     /// A running entrance animation for the tab just switched to, plus whether it sits later in declaration order than the one it replaced (so a slide enters from the side the tab bar suggests).
     entrance: Option<(T, bool, Animated<f32>)>,
+    /// The tab whose host failed to build, so the reconcile that follows every event does not retry it until the active tab changes.
+    failed_tab: Option<T>,
 }
 
-impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
+impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T, R> {
+    /// Starts a host over `stacks`, building the active tab's host at once, so a factory error surfaces here rather than on the first tab switch.
     pub fn new(
         stacks: TabStacks<T, R>,
         factory: impl Fn(&T, &R) -> Result<Box<dyn NavPage>, LayoutError> + 'static,
@@ -248,8 +252,12 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
             content_area,
             current: current.clone(),
             entrance: None,
+            failed_tab: None,
         };
-        host.ensure_built(&current)?;
+        if let Err(error) = host.ensure_built(&current) {
+            remove_node(host.content_area);
+            return Err(error);
+        }
         host.refresh_display();
         Ok(host)
     }
@@ -341,10 +349,19 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
     pub fn sync(&mut self) -> bool {
         let active = self.stacks.peek_active();
         let switched = active != self.current;
+        if !switched {
+            self.failed_tab = None;
+        }
         if switched {
-            if self.ensure_built(&active).is_err() {
+            if self.failed_tab.as_ref() == Some(&active) {
                 return false;
             }
+            if let Err(error) = self.ensure_built(&active) {
+                tracing::error!(tab = ?active, "the tab's host could not be built, so the previous tab stays: {error}");
+                self.failed_tab = Some(active);
+                return false;
+            }
+            self.failed_tab = None;
             let forward = self.order_of(&active) >= self.order_of(&self.current);
             self.current = active;
             self.refresh_display();
@@ -391,7 +408,7 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
     }
 }
 
-impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> Component for TabHost<T, R> {
+impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> Component for TabHost<T, R> {
     fn view(&self) -> RenderNode {
         // Subscribe to the active tab so this view re-renders on a switch; the per-tab host subscribes to its own stack, which re-subscribes on each switch because only the active one is rendered.
         let _subscribe = self.stacks.active();
@@ -425,12 +442,14 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> Component for TabHost<T, 
     }
 }
 
-impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> LayoutItem for TabHost<T, R> {
+impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> LayoutItem
+    for TabHost<T, R>
+{
     fn layout_node(&self) -> NodeId {
         self.content_area
     }
 }
 
 #[cfg(test)]
-#[path = "tabs_test.rs"]
+#[path = "tabs.test.rs"]
 mod tests;

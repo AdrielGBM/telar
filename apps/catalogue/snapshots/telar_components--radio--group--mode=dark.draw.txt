@@ -1,0 +1,54 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element radio
+            rect 361,250 78x32
+            element group
+              rect 361,258 16x16 fill=#1c1f29ff border=1.5 border-color=#3d4252ff radius=8
+              element group
+                rect 365,262 8x8 fill=#00000000 radius=4
+              end
+            end
+            element group
+              matrix 1,0,0,1,385,250
+                text 0,8 36x16.8 "Small" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+              end
+            end
+          end
+          element radio
+            rect 361,284 78x32
+            element group
+              rect 361,292 16x16 fill=#1c1f29ff border=1.5 border-color=#3d4252ff radius=8
+              element group
+                rect 365,296 8x8 fill=#00000000 radius=4
+              end
+            end
+            element group
+              matrix 1,0,0,1,385,284
+                text 0,8 54x16.8 "Medium" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+              end
+            end
+          end
+          element radio
+            rect 361,318 78x32
+            element group
+              rect 361,326 16x16 fill=#1c1f29ff border=1.5 border-color=#7394ffff radius=8
+              element group
+                rect 365,330 8x8 fill=#7394ffff radius=4
+              end
+            end
+            element group
+              matrix 1,0,0,1,385,318
+                text 0,8 38x16.8 "Large" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

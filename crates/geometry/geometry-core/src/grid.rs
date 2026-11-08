@@ -1,6 +1,6 @@
 //! The step a surface can actually resolve.
 //!
-//! Every layout value in a Telar app is written in logical pixels, which assumes a surface that can put an edge anywhere. A terminal cannot: it has character cells, and an edge lands on a cell boundary or it lands on the wrong one. [`CellSize`](https://docs.rs/telar-renderer-tui) declares the exchange rate so layout runs unchanged, but an exchange rate alone leaves boxes whose height is a fraction of a cell — and a fractional box does not have a size, it has a *size that depends on where it is*.
+//! Every layout value in a Telar app is written in logical pixels, which assumes a surface that can put an edge anywhere. A terminal cannot: it has character cells, and an edge lands on a cell boundary or it lands on the wrong one. [`CellSize`](crate::CellSize) declares the exchange rate so layout runs unchanged, but an exchange rate alone leaves boxes whose height is a fraction of a cell — and a fractional box does not have a size, it has a *size that depends on where it is*.
 //!
 //! The arithmetic is why. A backend that quantises maps an edge with `round(v / step)`, and rounds both edges of a box independently so two boxes sharing an edge share a cell instead of leaving a seam. The rows a box covers are then
 //!
@@ -128,5 +128,5 @@ pub fn layout_grid() -> LayoutGrid {
 }
 
 #[cfg(test)]
-#[path = "grid_test.rs"]
+#[path = "grid.test.rs"]
 mod tests;

@@ -4,6 +4,9 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+// Named by the macros a boundary declares its tables with, which expand in other crates.
+#[doc(hidden)]
+pub use wire_core;
 pub mod access_audit;
 pub mod accessibility;
 pub mod app_ctx;
@@ -12,6 +15,7 @@ pub mod chord;
 pub mod consumed_keys;
 pub mod destination;
 pub mod dom_code;
+pub mod drag_drop;
 pub mod error;
 pub mod event;
 pub mod event_sink;
@@ -20,6 +24,7 @@ pub mod history;
 pub mod key_pairing;
 pub mod location_format;
 pub mod location_source;
+mod logical_extent;
 pub mod loop_waker;
 pub mod primary_scroll;
 pub mod route;
@@ -45,6 +50,10 @@ pub use destination::{
     UriError, address_of, allow_uri_scheme, anchor, external, in_locale, is_uri_scheme_allowed,
 };
 pub use dom_code::unmodified_key_of_code;
+pub use drag_drop::{
+    DragActions, DragData, DragIcon, DragOffer, DragOutcome, DropAction, DropAnswer, DroppedData,
+    MimeType, MimeTypeError, OutgoingDrag, Representation,
+};
 pub use error::PlatformError;
 pub use event::{
     Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta, TAP_SLOP,
@@ -64,6 +73,7 @@ pub use location_format::{
 pub use location_source::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, LocationSource,
 };
+pub use logical_extent::logical_extent;
 pub use loop_waker::{loop_waker, set_loop_waker};
 pub use primary_scroll::{
     PrimaryScroll, PrimaryScrollClaim, claim_primary_scroll, primary_scroll_offset,

@@ -1,29 +1,14 @@
-#[cfg(feature = "advanced")]
 use telar::preview::{Play, PlayError, PlayResult, Query};
-#[cfg(feature = "advanced")]
-use telar::{Border, BorderRadius, RectStyle, ShapeStyle, StyledContainer};
-use telar::{Children, LayoutError, LayoutItem, LayoutStyle, Reactive, Slots, Text, box_item};
+use telar::{Border, BorderRadius, Children, RectStyle, ShapeStyle, StyledContainer};
+use telar::{LayoutError, LayoutItem, LayoutStyle, Reactive, Text, box_item};
 
 pub(super) fn text(content: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::declaring(move || content.to_string(), LayoutStyle::new(), |t| t)?;
     Ok(box_item(text))
 }
 
-pub(super) fn children(
-    build: impl Fn() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> + 'static,
-) -> Children {
-    Children::new(move || {
-        let mut slots = Slots::new();
-        for item in build()? {
-            slots.push(None, item);
-        }
-        Ok(slots)
-    })
-}
-
-#[cfg(feature = "advanced")]
 pub(super) fn paragraph(content: &'static str) -> Children {
-    children(move || Ok(vec![text(content)?]))
+    Children::one(move || text(content))
 }
 
 pub(super) fn text_of(content: Reactive<String>) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -31,7 +16,6 @@ pub(super) fn text_of(content: Reactive<String>) -> Result<Box<dyn LayoutItem>, 
     Ok(box_item(text))
 }
 
-#[cfg(feature = "advanced")]
 pub(super) fn tile(label: Reactive<String>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = text_of(label)?;
     let tile = StyledContainer::new(
@@ -50,7 +34,6 @@ pub(super) fn tile(label: Reactive<String>) -> Result<Box<dyn LayoutItem>, Layou
     Ok(box_item(tile))
 }
 
-#[cfg(feature = "advanced")]
 /// That the nodes `query` matches are named `names`, in reading order: the order a reader meets a list in after it was rearranged.
 pub(super) fn expect_names(canvas: &mut Play, query: &Query, names: &[&str]) -> PlayResult {
     let read: Vec<String> = canvas

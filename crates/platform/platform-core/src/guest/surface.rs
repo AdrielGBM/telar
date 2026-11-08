@@ -55,16 +55,24 @@ macro_rules! surface_report {
                 concat!(stringify!($field), ": fn(Handle, ", $(stringify!($arg), ", ",)* ")"),
                 std::mem::offset_of!(SurfaceReport<()>, $field),
             ),)*],
+            shape: {
+                let hash = wire_core::shape_named("SurfaceReport");
+                $(let hash = wire_core::fold_shape(
+                    hash,
+                    super::field_shape(|report: &SurfaceReport<()>| &raw const report.$field),
+                );)*
+                hash
+            },
         };
     };
 }
 
 surface_report! {
-    access_snapshot: fn(*mut LentBytes);
+    access_snapshot: fn(*mut LentBytes<Vec<AccessNode>>);
     access_action: fn(u64, bool);
-    text_input: fn(*mut LentBytes);
+    text_input: fn(*mut LentBytes<Option<TextInput>>);
     arrive: fn(bool, *mut bool);
-    tab: fn(LentBytes, *mut bool);
+    tab: fn(LentBytes<Event>, *mut bool);
     blur: fn();
     holds_focus: fn(*mut bool);
     text_entry_focused: fn(*mut bool);
@@ -81,7 +89,7 @@ impl<T> Copy for SurfaceReport<T> {}
 
 unsafe extern "C" fn access_snapshot<T: ReportsSurface>(
     surface: Handle<T>,
-    nodes: *mut LentBytes,
+    nodes: *mut LentBytes<Vec<AccessNode>>,
 ) -> CallOutcome {
     guest_entry(|| {
         let read = unsafe { surface.get() }.access_snapshot();
@@ -99,7 +107,7 @@ unsafe extern "C" fn access_action<T: ReportsSurface>(
 
 unsafe extern "C" fn text_input<T: ReportsSurface>(
     surface: Handle<T>,
-    input: *mut LentBytes,
+    input: *mut LentBytes<Option<TextInput>>,
 ) -> CallOutcome {
     guest_entry(|| {
         let caret = unsafe { surface.get() }.text_input();
@@ -120,7 +128,7 @@ unsafe extern "C" fn arrive<T: ReportsSurface>(
 
 unsafe extern "C" fn tab<T: ReportsSurface>(
     surface: Handle<T>,
-    key: LentBytes,
+    key: LentBytes<Event>,
     departed: *mut bool,
 ) -> CallOutcome {
     guest_entry(|| {
@@ -166,5 +174,5 @@ unsafe extern "C" fn keeps<T: ReportsSurface>(
 }
 
 #[cfg(test)]
-#[path = "surface_test.rs"]
+#[path = "surface.test.rs"]
 mod tests;

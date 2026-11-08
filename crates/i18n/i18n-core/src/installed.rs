@@ -72,5 +72,5 @@ pub fn t(key: &str, args: &[(&str, &str)]) -> String {
 }
 
 #[cfg(test)]
-#[path = "installed_test.rs"]
+#[path = "installed.test.rs"]
 mod tests;

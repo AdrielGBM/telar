@@ -18,6 +18,31 @@ pub(crate) fn drawn(role: telar::focus::Role) -> Vec<telar::Rect> {
         .collect()
 }
 
+/// The keys each element of `role` declares it keeps, in the order it is drawn; `build` makes the tree with element capture already on.
+pub(crate) fn declared_keys(
+    role: telar::focus::Role,
+    build: impl FnOnce() -> telar::ComponentList,
+) -> Vec<telar::ConsumedKeys> {
+    let was = telar::testing::set_element_capture(true);
+    let tree = build();
+    let keys = tree
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            telar::DrawCommand::PushElement { element } if element.semantics.role == role => {
+                element
+                    .semantics
+                    .focusable
+                    .as_ref()
+                    .map(|focusable| focusable.consumes)
+            }
+            _ => None,
+        })
+        .collect();
+    telar::testing::set_element_capture(was);
+    keys
+}
+
 /// A theme whose control and item corners are `role`, supplying `tokens` as a component's own when there are any: what every `XTokens` test is written against.
 #[derive(Clone)]
 pub(crate) struct TokensTheme<K> {
@@ -115,7 +140,6 @@ pub(crate) fn painted_at(tree: &telar::ComponentList, at: telar::Rect) -> telar:
 }
 
 /// The corner role a floating panel is rounded by.
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum PanelRole {
     Surface,
@@ -123,7 +147,6 @@ pub(crate) enum PanelRole {
 }
 
 /// A theme that rounds `role` by `radius` and the other panel role by a value nothing should land on, supplying `tokens` as a component's own when there are any.
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 #[derive(Clone)]
 pub(crate) struct PanelTheme<K> {
     pub(crate) role: PanelRole,
@@ -131,7 +154,6 @@ pub(crate) struct PanelTheme<K> {
     pub(crate) tokens: Option<K>,
 }
 
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 impl<K> PanelTheme<K> {
     const ELSEWHERE: f32 = 31.0;
 
@@ -145,7 +167,6 @@ impl<K> PanelTheme<K> {
     }
 }
 
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 impl<K: Clone + Default + 'static> telar::ThemeTokens for PanelTheme<K> {
     fn radius_surface(&self) -> f32 {
         self.corner(PanelRole::Surface)
@@ -161,7 +182,6 @@ impl<K: Clone + Default + 'static> telar::ThemeTokens for PanelTheme<K> {
 }
 
 /// [`assert_corner_follows_the_role_until_the_tokens_name_one`] for a panel rounded by `role`: left `None` the radius is the role's, read when the panel paints, a radius the theme names wins, and `shape` says which corners a radius reaches.
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 pub(crate) fn assert_panel_corner_follows_its_role<K: Clone + Default + 'static>(
     role: PanelRole,
     mount: impl FnOnce() -> telar::testing::Scoped<telar::ComponentList>,
@@ -224,4 +244,38 @@ pub(crate) fn run_insets(
     });
     let (x, width) = run.expect("the label is drawn");
     (x - control.x, control.x + control.width - (x + width))
+}
+
+/// A body of one 20 px line reading `label`: what an accordion, a dialog or a drawer is opened on when only its own box is under test.
+pub(crate) fn text_body(label: &'static str) -> telar::Children {
+    telar::Children::one(move || {
+        let body = telar::Text::declaring(
+            move || label.to_string(),
+            telar::LayoutStyle::new().height(20.0),
+            |t| t,
+        )?;
+        Ok(telar::box_item(body))
+    })
+}
+
+/// A body of `lines` 20 px lines, `Line 0` onwards: enough of them to be taller than the window a dialog or a drawer is opened in.
+pub(crate) fn tall_body(lines: usize) -> telar::Children {
+    telar::Children::new(move || {
+        (0..lines)
+            .map(|line| {
+                let text = telar::Text::declaring(
+                    move || format!("Line {line}"),
+                    telar::LayoutStyle::new().height(20.0),
+                    |t| t,
+                )?;
+                Ok(telar::box_item(text) as Box<dyn telar::LayoutItem>)
+            })
+            .collect()
+    })
+}
+
+/// Whether any text `cmds` draw reads exactly `needle`.
+pub(crate) fn find_text(cmds: &[telar::DrawCommand], needle: &str) -> bool {
+    cmds.iter()
+        .any(|c| matches!(c, telar::DrawCommand::Text { text, .. } if text.as_ref() == needle))
 }

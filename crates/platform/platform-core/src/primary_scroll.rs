@@ -74,5 +74,5 @@ impl Drop for PrimaryScrollClaim {
 }
 
 #[cfg(test)]
-#[path = "primary_scroll_test.rs"]
+#[path = "primary_scroll.test.rs"]
 mod tests;

@@ -1,0 +1,1089 @@
+//! Guards over shaping, measurement, the caches and the pixel raster's grid.
+
+use super::cache::{hash_text, text_style_bits};
+use super::*;
+use cosmic_text::Family;
+use geometry_core::Rect;
+use renderer_core::FontFamily;
+use renderer_core::TextWrap;
+use renderer_core::{Color, Declared, Span, TextStyle};
+
+// Every generic resolves to the cosmic-text family fontdb actually indexes it under, deterministically — `SystemUi` has no such face and so takes the same route `SansSerif` always has. A bare generic never queries the database at all: `family_exists` treats every generic as always resolvable.
+#[test]
+fn every_generic_resolves_to_a_concrete_cosmic_family() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::SansSerif, &mut sh.font_system, &mut cache),
+        Family::SansSerif
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::Serif, &mut sh.font_system, &mut cache),
+        Family::Serif
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::Monospace, &mut sh.font_system, &mut cache),
+        Family::Monospace
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::SystemUi, &mut sh.font_system, &mut cache),
+        Family::SansSerif
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::Cursive, &mut sh.font_system, &mut cache),
+        Family::Cursive
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::Fantasy, &mut sh.font_system, &mut cache),
+        Family::Fantasy
+    );
+}
+
+// `Attrs` still takes one family, but which one is now walked against the font database the shaper already holds — a `Named` with no installed face is skipped exactly as the browser skips a missing face in a CSS `font-family` list, rather than being shaped in regardless.
+#[test]
+fn a_stack_falls_to_the_next_member_whose_face_is_missing() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    let missing = FontFamily::from("Definitely Not An Installed Face 9182");
+    let stack = FontFamily::stack([missing, FontFamily::Monospace]);
+    assert_eq!(
+        resolve_cosmic_family(&stack, &mut sh.font_system, &mut cache),
+        Family::Monospace,
+        "the missing first preference must be skipped, not shaped in anyway"
+    );
+}
+
+// The common case: nothing is missing, so the chain never looks past its own first preference.
+#[test]
+fn a_stack_uses_its_first_member_when_every_member_exists() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    let installed = installed_family_name(&mut sh);
+    let Some(installed) = installed else {
+        return;
+    };
+    let stack = FontFamily::stack([FontFamily::from(installed.as_str()), FontFamily::Monospace]);
+    assert_eq!(
+        resolve_cosmic_family(&stack, &mut sh.font_system, &mut cache),
+        Family::Name(installed.as_str())
+    );
+}
+
+// A generic is always resolvable, so it wins wherever it sits in the chain — including last, after every named preference ahead of it turned out missing.
+#[test]
+fn a_generic_at_the_end_always_wins() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    let stack = FontFamily::stack([
+        FontFamily::from("Also Not Installed Anywhere 4471"),
+        FontFamily::from("Nor This One Either 5582"),
+        FontFamily::Serif,
+    ]);
+    assert_eq!(
+        resolve_cosmic_family(&stack, &mut sh.font_system, &mut cache),
+        Family::Serif
+    );
+}
+
+// The whole point of caching by name: a chain shaped many times over must query the database once per distinct name in it, not once per shape.
+#[test]
+fn a_missing_names_availability_is_cached_after_the_first_query() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    let missing: std::sync::Arc<str> = "Still Not Installed Anywhere 6693".into();
+    assert!(!family_exists(
+        &FontFamily::Named(missing.clone()),
+        &mut sh.font_system,
+        &mut cache
+    ));
+    assert_eq!(
+        cache.len(),
+        1,
+        "the query must be recorded under the name it asked about"
+    );
+    assert!(!family_exists(
+        &FontFamily::Named(missing),
+        &mut sh.font_system,
+        &mut cache
+    ));
+    assert_eq!(
+        cache.len(),
+        1,
+        "a second lookup of the same name must be answered from the cache, not a second query"
+    );
+}
+
+/// The first family name the loaded font database actually indexes a face under, or `None` on a host with nothing installed — the same escape hatch `a_named_family_shapes_in_that_face` uses below, for a test that needs a real, existing face rather than two of them.
+fn installed_family_name(sh: &mut TextShaper) -> Option<String> {
+    sh.font_system
+        .db()
+        .faces()
+        .find_map(|face| face.families.first().map(|(name, _)| name.clone()))
+}
+
+// Text positions are logical, so a multi-line block must occupy the same vertical extent at any scale factor. cosmic-text's `physical` adds the y-offset unscaled, which collapsed every line onto the first.
+#[test]
+fn line_layout_is_scale_independent() {
+    let mut sh = TextShaper::new();
+    let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa";
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 90.0,
+        height: 100000.0,
+    };
+    let style = TextStyle::new(20.0, renderer_core::Color::rgba(0.0, 0.0, 0.0, 1.0));
+    let bottom_extent = |sh: &mut TextShaper, sf: f32| -> f32 {
+        let mut out = Vec::new();
+        sh.layout_glyphs(text, None, rect, &style, sf, &mut out);
+        out.iter().map(|g| g.dest_rect[1]).fold(0.0_f32, f32::max)
+    };
+    let at_1x = bottom_extent(&mut sh, 1.0);
+    let at_3x = bottom_extent(&mut sh, 3.0);
+    assert!(at_1x > 40.0, "text did not wrap to multiple lines: {at_1x}");
+    assert!(
+        (at_1x - at_3x).abs() < 5.0,
+        "line layout collapsed at high DPI: 1x bottom={at_1x}, 3x bottom={at_3x}"
+    );
+}
+
+#[test]
+fn larger_line_height_increases_measured_height() {
+    let mut sh = TextShaper::new();
+    let text = "Line height affects the reserved vertical space";
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let (_, h_natural) = sh.measure_text(text, None, 120.0, &base);
+    if h_natural <= 0.0 {
+        return;
+    }
+    let (_, h_tall) = sh.measure_text(text, None, 120.0, &base.with_line_height(2.5));
+    assert!(
+        h_tall > h_natural,
+        "a larger line_height should increase measured height: natural={h_natural} tall={h_tall}"
+    );
+}
+
+// `max_lines` must cut the shaped paragraph and `ellipsis` must mark the cut rather than dropping the tail in silence. Every clamped label rests on this and nothing asserted it. Guarded on text that really wrapped past the clamp, so a font-less machine skips instead of passing vacuously.
+#[test]
+fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
+    let mut sh = TextShaper::new();
+    let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 90.0,
+        height: 10_000.0,
+    };
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let shaped = |sh: &mut TextShaper, style: &TextStyle| {
+        make_buffer(
+            &mut sh.font_system,
+            &mut sh.family_availability,
+            text,
+            None,
+            rect,
+            style,
+        )
+    };
+
+    if shaped(&mut sh, &base).layout_runs().count() <= 2 {
+        return;
+    }
+
+    let clamped = shaped(&mut sh, &base.clone().with_clamp(2, false));
+    assert_eq!(
+        clamped.layout_runs().count(),
+        2,
+        "max_lines(2) must leave two visual lines"
+    );
+
+    let elided = shaped(&mut sh, &base.clone().with_clamp(2, true));
+    assert_eq!(
+        elided.layout_runs().count(),
+        2,
+        "the ellipsis must fit inside the clamp, not push a third line"
+    );
+    let elided_text: String = elided.lines.iter().map(|line| line.text()).collect();
+    assert!(
+        elided_text.ends_with('\u{2026}'),
+        "a clamped label with ellipsis must end in `…`: {elided_text:?}"
+    );
+}
+
+// cosmic-text reports a glyph's byte offset within its own logical line, so a clamp that cuts a later paragraph has to translate it before slicing the whole text. Read as a whole-text offset, it cut inside the first paragraph, and panicked when that landed inside a multi-byte character.
+#[test]
+fn a_clamp_that_cuts_a_later_paragraph_keeps_every_earlier_paragraph_whole() {
+    let mut sh = TextShaper::new();
+    let first = "Configuración guardada é";
+    let second = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
+    let text = format!("{first}\n{second}");
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 90.0,
+        height: 10_000.0,
+    };
+    let base = TextStyle::new(16.0, Color::BLACK);
+
+    let unclamped = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        &text,
+        None,
+        rect,
+        &base,
+    );
+    let first_runs = unclamped
+        .layout_runs()
+        .filter(|run| run.line_i == 0)
+        .count();
+    if unclamped.layout_runs().count() <= first_runs + 2 {
+        return;
+    }
+
+    let max = u16::try_from(first_runs + 2).expect("a label wraps to a handful of lines");
+    for ellipsis in [false, true] {
+        let clamped = make_buffer(
+            &mut sh.font_system,
+            &mut sh.family_availability,
+            &text,
+            None,
+            rect,
+            &base.clone().with_clamp(max, ellipsis),
+        );
+        let kept: Vec<&str> = clamped.lines.iter().map(|line| line.text()).collect();
+        assert_eq!(
+            kept.first().copied(),
+            Some(first),
+            "the paragraph before the cut must survive whole (ellipsis={ellipsis}): {kept:?}"
+        );
+        assert!(
+            kept.len() == 2 && second.starts_with(kept[1].trim_end_matches('\u{2026}')),
+            "the cut paragraph must keep a prefix of itself (ellipsis={ellipsis}): {kept:?}"
+        );
+    }
+}
+
+#[test]
+fn max_lines_clamps_the_measured_height() {
+    let mut sh = TextShaper::new();
+    let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let (_, wrapped) = sh.measure_text(text, None, 90.0, &base);
+    let (_, single) = sh.measure_text("alpha", None, 90.0, &base);
+    if single <= 0.0 || wrapped <= single * 2.0 {
+        return;
+    }
+    let (_, clamped) = sh.measure_text(text, None, 90.0, &base.with_clamp(2, false));
+    assert!(
+        clamped < wrapped,
+        "max_lines must shrink the measured height: wrapped={wrapped} clamped={clamped}"
+    );
+    assert!(
+        clamped <= single * 2.5,
+        "two clamped lines should measure about two lines tall: single={single} clamped={clamped}"
+    );
+}
+
+// Default spacing keeps the exact packed style bits, so existing keys and the byte-golden are untouched, while any non-default spacing yields distinct bits. Pure bit math, so font-independent.
+#[test]
+fn text_style_bits_default_unchanged_and_spacing_perturbs() {
+    let base = TextStyle::new(16.0, Color::BLACK);
+    assert_eq!(text_style_bits(&base), 400);
+    let bits_default = text_style_bits(&base);
+    let bits_lh = text_style_bits(&base.clone().with_line_height(1.5));
+    let bits_ls = text_style_bits(&base.clone().with_letter_spacing(2.0));
+    assert_ne!(bits_lh, bits_default, "line_height must perturb the bits");
+    assert_ne!(
+        bits_ls, bits_default,
+        "letter_spacing must perturb the bits"
+    );
+    assert_ne!(bits_lh, bits_ls, "the two axes must not alias each other");
+    let bits_pixel = text_style_bits(&base.clone().with_raster(Raster::Pixel));
+    assert_ne!(
+        bits_pixel, bits_default,
+        "the raster grid must perturb the bits, or a smooth raster is served to a pixel style"
+    );
+    let bits_family = text_style_bits(&base.clone().with_font_family("LanaPixel"));
+    let bits_other = text_style_bits(&base.clone().with_font_family("Inter"));
+    assert_ne!(
+        bits_family, bits_default,
+        "a named family must perturb the bits"
+    );
+    assert_ne!(bits_family, bits_other, "two families must not share a key");
+}
+
+const TEST_FACE: &[u8] = include_bytes!("../../test-fonts/TelarTest.ttf");
+
+fn install_test_face() {
+    let _installing = crate::fonts::FACES_STABLE
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    assert!(
+        crate::fonts::install_face(TEST_FACE.to_vec()).is_some(),
+        "the bundled face must load, or text is drawn in whatever the machine has"
+    );
+}
+
+// Coverage under the pixel raster is ink or nothing: a glyph half-covering a pixel is the grid the artist drew being taken apart.
+#[test]
+fn pixel_raster_leaves_no_partial_coverage() {
+    install_test_face();
+    let mut sh = TextShaper::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 40.0,
+    };
+    let base = TextStyle::new(16.0, Color::WHITE);
+    let (smooth, _, _) = sh.rasterize("Hamburgefonstiv", None, rect, &base);
+    let partial = |pixels: &[u8]| {
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|px| px[3] > 0 && px[3] < 255)
+            .count()
+    };
+    assert!(
+        partial(&smooth) > 0,
+        "the smooth raster must anti-alias, or this test proves nothing"
+    );
+    let (pixel, _, _) = sh.rasterize(
+        "Hamburgefonstiv",
+        None,
+        rect,
+        &base.with_raster(Raster::Pixel),
+    );
+    let inked = pixel
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|px| **px == [255, 255, 255, 255])
+        .count();
+    assert!(
+        inked > 0,
+        "the pixel raster must ink the text in its colour"
+    );
+    assert_eq!(
+        partial(&pixel),
+        0,
+        "pixel raster must resolve every glyph pixel to on or off"
+    );
+}
+
+// The half that does not show in a `PhysicalGlyph`'s integer coordinates: the fractional part of a glyph's origin rides in its cache key as a quarter-pixel bin. Rounding before the binning collapses those four rasters into one.
+#[test]
+fn pixel_raster_collapses_the_subpixel_bins_smooth_keeps() {
+    let mut sh = TextShaper::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 40.0,
+    };
+    let style = TextStyle::new(16.0, Color::WHITE);
+    let buffer = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        "Hi",
+        None,
+        rect,
+        &style,
+    );
+    let Some(glyph) = buffer
+        .layout_runs()
+        .flat_map(|run| run.glyphs.iter())
+        .next()
+    else {
+        return;
+    };
+    let key_at = |dx: f32, raster| physical_glyph(glyph, (dx, 0.0), 1.0, raster).cache_key;
+    assert_eq!(
+        key_at(0.0, Raster::Pixel),
+        key_at(0.5, Raster::Pixel),
+        "a half-pixel shift must not mint a second raster of the same glyph"
+    );
+    assert_ne!(
+        key_at(0.0, Raster::Smooth),
+        key_at(0.5, Raster::Smooth),
+        "the smooth raster is supposed to keep subpixel positions; this test proves nothing without it"
+    );
+}
+
+// A pixel-raster glyph must not land in the atlas slot of the smooth raster of the same glyph at the same size: the two are different pictures, and the atlas is keyed by cosmic-text's `CacheKey`.
+#[test]
+fn pixel_raster_shapes_under_its_own_cache_key() {
+    let mut sh = TextShaper::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 40.0,
+    };
+    let base = TextStyle::new(16.0, Color::WHITE);
+    let flags = |style: &TextStyle, sh: &mut TextShaper| {
+        make_buffer(
+            &mut sh.font_system,
+            &mut sh.family_availability,
+            "Hi",
+            None,
+            rect,
+            style,
+        )
+        .layout_runs()
+        .flat_map(|run| run.glyphs.iter())
+        .next()
+        .map(|glyph| glyph.cache_key_flags)
+    };
+    let Some(smooth) = flags(&base, &mut sh) else {
+        return;
+    };
+    let pixel = flags(&base.with_raster(Raster::Pixel), &mut sh).expect("same string shapes");
+    assert!(!smooth.contains(CacheKeyFlags::PIXEL_FONT));
+    assert!(pixel.contains(CacheKeyFlags::PIXEL_FONT));
+}
+
+#[test]
+fn text_shaper_new_does_not_panic() {
+    let _ = TextShaper::new();
+}
+
+#[test]
+fn text_shaper_with_empty_config() {
+    let _ = TextShaper::with_config(TextShaperConfig::default());
+}
+
+#[test]
+fn text_shaper_with_no_faces_of_its_own() {
+    let config = TextShaperConfig {
+        font: renderer_core::FontConfig {
+            faces: vec![],
+            system_fonts_dir: None,
+            sans_serif_family_candidates: Vec::new(),
+        },
+        ..TextShaperConfig::default()
+    };
+    let _ = TextShaper::with_config(config);
+}
+
+#[test]
+#[ignore]
+fn measure_text_returns_nonzero_for_text() {
+    let mut shaper = TextShaper::new();
+    let (w, h) = shaper.measure_text("hello", None, 500.0, &TextStyle::new(16.0, Color::BLACK));
+    assert!(
+        w > 0.0 && h > 0.0,
+        "Systems without installed fonts may not render text correctly"
+    );
+}
+
+#[test]
+fn measure_text_empty_returns_zero() {
+    let mut shaper = TextShaper::new();
+    let (w, h) = shaper.measure_text("", None, 500.0, &TextStyle::new(16.0, Color::BLACK));
+    assert_eq!(w, 0.0);
+    assert_eq!(h, 0.0);
+}
+
+#[test]
+fn measure_cache_keeps_hot_entry_past_cap() {
+    // The old policy cleared the whole cache at 1000 entries, evicting even constantly-used keys. The LRU must keep a re-touched entry alive while cold ones flood past the cap.
+    let cap_entries = limits::TEXT_MEASURE.capacity / limits::SMALL_ENTRY_BYTES;
+    let mut sh = TextShaper::new();
+    let hot = "hot text that stays warm";
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let hot_key = (
+        hash_text(hot),
+        200.0f32.to_bits(),
+        16.0f32.to_bits(),
+        text_style_bits(&style),
+    );
+    sh.measure_text(hot, None, 200.0, &style);
+    for i in 0..(cap_entries as u32 + 50) {
+        sh.measure_text(&format!("cold entry {i}"), None, 200.0, &style);
+        sh.measure_text(hot, None, 200.0, &style);
+    }
+    assert!(sh.measure_cache.get(&hot_key).is_some());
+    assert!(sh.measure_cache.len() <= cap_entries);
+}
+
+#[test]
+fn collect_colr_gating_records_and_skips() {
+    // The first call records a has-COLR flag; a later call with a cached `false` must short-circuit. Both halves are font-independent, even though the flag's value is not.
+    let mut sh = TextShaper::new();
+    let text = "ui label";
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 100.0,
+    };
+    let flag_key = (
+        hash_text(text),
+        16.0f32.to_bits(),
+        text_style_bits(&style),
+        rect.width.to_bits(),
+        super::cache::visible_lines(rect.height, &style),
+    );
+
+    assert!(sh.has_colr_cache.get(&flag_key).is_none());
+    let mut out = Vec::new();
+    sh.collect_colr_glyphs(text, rect, &style, &mut out);
+    assert!(
+        sh.has_colr_cache.get(&flag_key).is_some(),
+        "first call must record the COLR flag"
+    );
+
+    sh.has_colr_cache.insert(flag_key, false);
+    let mut out2 = Vec::new();
+    sh.collect_colr_glyphs(text, rect, &style, &mut out2);
+    assert!(
+        out2.is_empty(),
+        "a cached false flag must skip COLR collection"
+    );
+}
+
+// The clock case end to end. Admission itself is covered in `renderer-cache`, so what matters here is that `rasterize` is wired to it: the previous arrangement applied admission in the shaper and kept an unconditional second copy in the software backend, making the policy a no-op where it counted.
+#[test]
+fn a_string_rasterized_once_is_not_kept_and_a_second_sighting_keeps_it() {
+    let _stable = crate::fonts::FACES_STABLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut shaper = TextShaper::new();
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 120.0,
+        height: 24.0,
+    };
+
+    shaper.rasterize("14:32:07", None, rect, &style);
+    assert_eq!(
+        shaper.raster_cache.len(),
+        0,
+        "a clock's seconds are drawn once and never asked for again"
+    );
+
+    shaper.rasterize("14:32:07", None, rect, &style);
+    assert_eq!(
+        shaper.raster_cache.len(),
+        1,
+        "a string asked for twice is the only kind a cache can serve"
+    );
+}
+
+// Trimming the glyph rasters is all-or-nothing, so the risk is not that it fails to fire but that it fires when it should not: clearing a shell's working set costs re-rasterizing every glyph still on screen.
+#[test]
+fn an_idle_sweep_keeps_the_glyph_rasters_a_shell_actually_uses() {
+    let mut sh = TextShaper::new();
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 24.0,
+    };
+    sh.rasterize("workspace 1", None, rect, &style);
+    let resident = sh.swash_cache.image_cache.len();
+
+    sh.sweep_idle();
+
+    assert_eq!(
+        sh.swash_cache.image_cache.len(),
+        resident,
+        "a glyph cache well under its ceiling must survive the sweep"
+    );
+}
+
+// The shaping cache takes no admission: its entries are a couple of hundred bytes, so the budget bounds them without help, and making a string shape twice would trade the expensive half of drawing text for the cheap half.
+#[test]
+fn shaped_positions_are_kept_on_the_first_sighting() {
+    let mut shaper = TextShaper::new();
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 24.0,
+    };
+    let mut out = Vec::new();
+
+    shaper.layout_glyphs("ui label", None, rect, &style, 1.0, &mut out);
+    assert_eq!(shaper.shaping_cache.len(), 1);
+}
+
+// N lines measure N line heights. The box used to be anchored on the last line's baseline, which counted the ascent on top of the line height and left every block reserving a slab it never drew into. Read as a ratio so it holds for whatever face the machine resolves.
+#[test]
+fn a_text_box_measures_its_line_heights_and_nothing_more() {
+    let mut sh = TextShaper::new();
+    let style = TextStyle::new(16.0, Color::BLACK).with_line_height(1.5);
+    let line_height = 16.0 * 1.5;
+    let (_, one) = sh.measure_text("Una línea", None, 400.0, &style);
+    if one <= 0.0 {
+        return;
+    }
+    assert!(
+        (one - line_height).abs() < 0.01,
+        "one line should measure one line height ({line_height}), not {one}"
+    );
+
+    let (_, two) = sh.measure_text("Una línea que no cabe entera", None, 60.0, &style);
+    let lines = (two / line_height).round();
+    assert!(lines >= 2.0, "the text did not wrap: {two}");
+    assert!(
+        (two - lines * line_height).abs() < 0.01,
+        "{lines} lines should measure {} , not {two}",
+        lines * line_height
+    );
+}
+
+/// A label that is a token, not prose: it keeps one line whatever width the box offers, and measures the width it actually needs. Wrapping it is how a status bar turns "object mode" into two stacked words.
+#[test]
+fn a_no_wrap_style_measures_one_line_however_narrow_the_box() {
+    let style = TextStyle::new(14.0, Color::BLACK);
+    let text = "Frame selected";
+    let (wrapped_w, wrapped_h) = crate::measure_text(text, None, 40.0, &style);
+    let (flat_w, flat_h) = crate::measure_text(
+        text,
+        None,
+        40.0,
+        &style.clone().with_text_wrap(TextWrap::NoWrap),
+    );
+    assert!(
+        flat_h < wrapped_h,
+        "wrapping stacks lines ({wrapped_h}) that no-wrap does not ({flat_h})"
+    );
+    assert!(
+        flat_w > wrapped_w,
+        "and it reports the width it needs ({flat_w}) rather than the box it was offered ({wrapped_w})"
+    );
+}
+
+#[test]
+fn a_named_family_shapes_in_that_face() {
+    let mut sh = TextShaper::new();
+    let mut names: Vec<String> = sh
+        .font_system
+        .db()
+        .faces()
+        .filter_map(|face| face.families.first().map(|(name, _)| name.clone()))
+        .collect();
+    names.sort();
+    names.dedup();
+    let [first, second] = &names[..] else {
+        return;
+    };
+
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 10_000.0,
+        height: 1000.0,
+    };
+    let face_of = |sh: &mut TextShaper, family: &str| {
+        let style = TextStyle::new(16.0, Color::BLACK).with_font_family(family);
+        let buffer = make_buffer(
+            &mut sh.font_system,
+            &mut sh.family_availability,
+            "Ag",
+            None,
+            rect,
+            &style,
+        );
+        buffer
+            .layout_runs()
+            .next()
+            .and_then(|run| run.glyphs.first().map(|g| g.font_id))
+    };
+    assert_ne!(
+        face_of(&mut sh, first),
+        face_of(&mut sh, second),
+        "two different families must shape in two different faces"
+    );
+}
+
+// The merge's reason for existing: a clamped mixed paragraph gets the `…` a clamped plain one always got. The rich path could not — it held one `&str` per run, and cutting across runs to append an ellipsis was never written, so a clamped notification body did nothing and said nothing.
+#[test]
+fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
+    let mut sh = TextShaper::new();
+    let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 90.0,
+        height: 10_000.0,
+    };
+    let base = TextStyle::new(16.0, Color::BLACK).with_clamp(2, true);
+    let spans = [Span::new(0..5, Declared::default().with_font_weight(700))];
+
+    let plain = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        text,
+        None,
+        rect,
+        &base,
+    );
+    if plain.layout_runs().count() < 2 {
+        return;
+    }
+    let elided: String = plain.lines.iter().map(|line| line.text()).collect();
+    if !elided.ends_with('\u{2026}') {
+        return;
+    }
+
+    let spanned = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        text,
+        Some(&spans),
+        rect,
+        &base,
+    );
+    assert_eq!(
+        spanned.layout_runs().count(),
+        2,
+        "the clamp must hold for a spanned paragraph too"
+    );
+    let spanned_text: String = spanned.lines.iter().map(|line| line.text()).collect();
+    assert!(
+        spanned_text.ends_with('\u{2026}'),
+        "a spanned paragraph must be elided like a plain one: {spanned_text:?}"
+    );
+}
+
+// A span restyles its own bytes and nothing else, which is what makes it a cascade child rather than a separate widget.
+#[test]
+fn a_span_restyles_only_its_own_range() {
+    let mut sh = TextShaper::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 10_000.0,
+        height: 1000.0,
+    };
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let text = "aaa bbb";
+    let spans = [Span::new(4..7, Declared::default().with_font_weight(900))];
+    let buffer = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        text,
+        Some(&spans),
+        rect,
+        &style,
+    );
+    let weights: Vec<(usize, u16)> = buffer
+        .layout_runs()
+        .flat_map(|run| run.glyphs.iter().map(|g| (g.start, g.font_weight.0)))
+        .collect();
+    if weights.is_empty() {
+        return;
+    }
+    for (start, weight) in weights {
+        let expected = if start >= 4 { 900 } else { 400 };
+        assert_eq!(weight, expected, "byte {start} took the wrong weight");
+    }
+}
+
+// A span may set a size of its own, which a `TextRun` could not express at all.
+#[test]
+fn a_span_can_change_the_size_mid_paragraph() {
+    let mut sh = TextShaper::new();
+    let style = TextStyle::new(12.0, Color::BLACK);
+    let text = "small large";
+    let spans = [Span::new(6..11, Declared::default().with_font_size(32.0))];
+    let (plain_w, _) = sh.measure_text(text, None, 10_000.0, &style);
+    if plain_w <= 0.0 {
+        return;
+    }
+    let (spanned_w, _) = sh.measure_text(text, Some(&spans), 10_000.0, &style);
+    assert!(
+        spanned_w > plain_w,
+        "a span at 32px must measure wider than the same text at 12px: {plain_w} vs {spanned_w}"
+    );
+}
+
+// A variable face placed along `wght` shapes at that weight, and every other axis or feature keys its own cache entry even where the shaper cannot apply it.
+#[test]
+fn text_style_bits_follow_axes_and_features() {
+    use renderer_core::{FontFeatures, FontVariations};
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let heavier = base
+        .clone()
+        .with_font_variations(FontVariations::new().with("wght", 650.0));
+    assert_eq!(
+        super::drawn_weight(&heavier),
+        650,
+        "wght wins over font_weight"
+    );
+    let wider = base
+        .clone()
+        .with_font_variations(FontVariations::new().with("wdth", 110.0));
+    let tabular = base
+        .clone()
+        .with_font_features(FontFeatures::new().with("tnum", 1));
+    let bits = [&base, &heavier, &wider, &tabular].map(text_style_bits);
+    for (i, a) in bits.iter().enumerate() {
+        for b in &bits[i + 1..] {
+            assert_ne!(a, b, "each setting keys its own shaping");
+        }
+    }
+}
+
+// Tracking follows every glyph, the last one too, as CSS applies it: the document's measurer counts it the same way, which is what keeps a tracked display line the same width on every target.
+#[test]
+fn tracking_widens_a_line_by_one_step_per_glyph() {
+    let mut shaper = TextShaper::new();
+    let plain = TextStyle::new(40.0, Color::BLACK).with_text_wrap(TextWrap::NoWrap);
+    let tracked = plain.clone().with_letter_spacing(10.0);
+    let (untracked, _) = shaper.measure_text("ABCD", None, 10_000.0, &plain);
+    let (wide, _) = shaper.measure_text("ABCD", None, 10_000.0, &tracked);
+    assert!(
+        (wide - untracked - 40.0).abs() <= 1.0,
+        "four glyphs, four steps: {untracked} -> {wide}"
+    );
+}
+
+// A size of nothing is text that takes no room, not a shaper that falls over: a size given as a fraction of a surface not measured yet comes to zero.
+#[test]
+fn text_of_no_size_takes_no_room() {
+    let mut shaper = TextShaper::new();
+    let none = TextStyle::new(0.0, Color::BLACK);
+    assert_eq!(shaper.measure_text("Name", None, 400.0, &none), (0.0, 0.0));
+    let flat = TextStyle::new(16.0, Color::BLACK).with_line_height(0.0);
+    assert_eq!(shaper.measure_text("Name", None, 400.0, &flat), (0.0, 0.0));
+    assert!(
+        shaper
+            .index_at("Name", None, 400.0, &none, (1.0, 1.0))
+            .is_none()
+    );
+}
+
+fn plain(size: f32) -> TextStyle {
+    TextStyle::new(size, Color::BLACK)
+}
+
+#[test]
+fn a_text_case_measures_the_string_it_shows() {
+    let mut sh = TextShaper::new();
+    let shown = sh.measure_text("MENU STRASSE", None, 1000.0, &plain(16.0));
+    let cased = sh.measure_text(
+        "menu straße",
+        None,
+        1000.0,
+        &plain(16.0).with_text_case(renderer_core::TextCase::Upper),
+    );
+    assert_eq!(cased, shown);
+    let written = sh.measure_text("menu straße", None, 1000.0, &plain(16.0));
+    assert_ne!(
+        written, shown,
+        "the cache must not hand back the uncased width"
+    );
+}
+
+#[test]
+fn a_cased_text_answers_where_a_press_lands_in_the_bytes_it_was_written_in() {
+    let mut sh = TextShaper::new();
+    let style = plain(16.0).with_text_case(renderer_core::TextCase::Upper);
+    let text = "\u{fb01}x link";
+    let spans = [Span::new(5..9, Declared::default().with_font_weight(700))];
+    let (width, _) = sh.measure_text(text, Some(&spans), 1000.0, &style);
+    let index = sh
+        .index_at(text, Some(&spans), 1000.0, &style, (width - 2.0, 4.0))
+        .expect("the last glyph is under the press");
+    assert!(
+        (5..9).contains(&index),
+        "{index} lies in the written span, not the shown one"
+    );
+}
+
+#[test]
+fn nothing_underlined_draws_no_line_and_shapes_nothing() {
+    let mut sh = TextShaper::new();
+    let rect = Rect::new(0.0, 0.0, 400.0, 40.0);
+    assert!(
+        sh.decorations("plain", None, rect, &plain(16.0), 1.0)
+            .is_empty()
+    );
+}
+
+#[test]
+fn an_underline_sits_its_offset_below_the_baseline_across_the_glyphs() {
+    let mut sh = TextShaper::new();
+    let rect = Rect::new(10.0, 20.0, 400.0, 40.0);
+    let style = plain(16.0)
+        .with_underline(true)
+        .with_underline_offset(4.0)
+        .with_underline_thickness(2.0);
+    let strokes = sh.decorations("underlined", None, rect, &style, 1.0);
+    assert_eq!(strokes.len(), 1);
+    let stroke = &strokes[0];
+    let (width, _) = sh.measure_text("underlined", None, 400.0, &style);
+    assert_eq!(stroke.rect.x, 10.0);
+    assert!(
+        (stroke.rect.width - width).abs() <= 1.0,
+        "{} vs {width}",
+        stroke.rect.width
+    );
+    assert_eq!(stroke.rect.height, 2.0);
+    let buffer = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        "underlined",
+        None,
+        rect,
+        &style,
+    );
+    let baseline =
+        buffer.layout_runs().next().expect("one line").line_y + sh.baseline_shift(&style) as f32;
+    assert_eq!(stroke.rect.y, (20.0 + baseline + 4.0).round());
+    assert_eq!(
+        stroke.paint, style.color,
+        "no colour of its own takes the text's"
+    );
+}
+
+#[test]
+fn an_underline_from_the_font_is_at_least_a_device_pixel_and_below_the_baseline() {
+    let mut sh = TextShaper::new();
+    let rect = Rect::new(0.0, 0.0, 400.0, 40.0);
+    let strokes = sh.decorations("auto", None, rect, &plain(12.0).with_underline(true), 2.0);
+    assert_eq!(strokes.len(), 1);
+    assert!(strokes[0].rect.height >= 0.5);
+    let buffer = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        "auto",
+        None,
+        rect,
+        &plain(12.0),
+    );
+    let baseline = buffer.layout_runs().next().expect("one line").line_y
+        + sh.baseline_shift(&plain(12.0)) as f32;
+    assert!(strokes[0].rect.y >= baseline);
+}
+
+#[test]
+fn a_wrapped_underline_draws_one_line_per_line() {
+    let mut sh = TextShaper::new();
+    let style = plain(16.0).with_underline(true);
+    let (_, one_line) = sh.measure_text("word", None, 1000.0, &style);
+    let rect = Rect::new(0.0, 0.0, 60.0, one_line * 4.0);
+    let lines = sh.measure_text("word word word", None, 60.0, &style).1 / one_line;
+    let strokes = sh.decorations("word word word", None, rect, &style, 1.0);
+    assert_eq!(strokes.len() as f32, lines.round());
+    assert!(
+        strokes
+            .windows(2)
+            .all(|pair| pair[1].rect.y > pair[0].rect.y)
+    );
+}
+
+#[test]
+fn a_span_underlines_only_its_own_glyphs_in_its_own_colour() {
+    let mut sh = TextShaper::new();
+    let accent = Color::rgb(0.9, 0.2, 0.1);
+    let text = "read the docs";
+    let spans = [Span::new(
+        9..13,
+        Declared::default()
+            .with_underline(true)
+            .with_underline_color(accent),
+    )];
+    let rect = Rect::new(0.0, 0.0, 400.0, 40.0);
+    let strokes = sh.decorations(text, Some(&spans), rect, &plain(16.0), 1.0);
+    assert_eq!(strokes.len(), 1);
+    let (before, _) = sh.measure_text("read the ", None, 400.0, &plain(16.0));
+    assert!(
+        (strokes[0].rect.x - before).abs() <= 1.0,
+        "{} vs {before}",
+        strokes[0].rect.x
+    );
+    assert_eq!(strokes[0].paint, renderer_core::Paint::Solid(accent));
+}
+
+/// A label read `[ Settings   ]` in a button sized by it: the measure rounded the line up to a whole pixel, so the box was up to a pixel wider than the run drawn in it and every bit of that fell after the last glyph.
+#[test]
+fn a_measured_line_is_as_wide_as_the_run_drawn_from_it() {
+    let mut shaper = TextShaper::new();
+    for (text, weight) in [("Settings", 400), ("Preview", 600), ("catalogue", 400)] {
+        let style = TextStyle::new(13.0, Color::BLACK)
+            .with_font_weight(weight)
+            .with_text_wrap(TextWrap::NoWrap);
+        let (measured, _) = shaper.measure_text(text, None, 0.0, &style);
+        let unbounded = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+        let buffer = make_buffer(
+            &mut shaper.font_system,
+            &mut shaper.family_availability,
+            text,
+            None,
+            unbounded,
+            &style,
+        );
+        let drawn = buffer
+            .layout_runs()
+            .filter_map(|run| run.glyphs.last().map(|glyph| glyph.x + glyph.w))
+            .fold(0.0_f32, f32::max);
+        assert!(drawn > 0.0, "{text} draws nothing here");
+        assert!(
+            (measured - drawn).abs() <= LAYOUT_UNIT,
+            "{text} measures {measured} and draws {drawn}"
+        );
+    }
+}
+
+fn line_starts(shaper: &mut TextShaper, text: &str, width: f32, style: &TextStyle) -> Vec<usize> {
+    shaper
+        .laid_lines(text, None, width, style)
+        .into_iter()
+        .map(|line| line.range.start)
+        .collect()
+}
+
+#[test]
+fn a_paragraph_reports_the_lines_it_wraps_into_where_each_begins() {
+    let mut shaper = TextShaper::new();
+    let style = plain(16.0);
+    let (pair, _) = shaper.measure_text("abc abc", None, 1000.0, &style);
+    assert!(pair > 0.0, "nothing measures here");
+    let text = "abc abc abc abc abc";
+    let starts = line_starts(&mut shaper, text, pair + 1.0, &style);
+    assert_eq!(
+        starts,
+        vec![0, 8, 16],
+        "a space at a break ends the line before it"
+    );
+    let (_, height) = shaper.measure_text(text, None, pair + 1.0, &style);
+    assert_eq!(
+        (height / effective_line_height(&style)).round() as usize,
+        starts.len(),
+        "as many lines as the measure stacks"
+    );
+}
+
+#[test]
+fn a_word_wider_than_the_line_breaks_inside_itself_on_a_char_boundary() {
+    let mut shaper = TextShaper::new();
+    let style = plain(16.0);
+    let text = "ééééééééééééééééééééé";
+    let (whole, _) = shaper.measure_text(text, None, 1000.0, &style);
+    let starts = line_starts(&mut shaper, text, whole / 3.0, &style);
+    assert!(starts.len() >= 3, "{starts:?}");
+    assert!(starts.iter().all(|at| text.is_char_boundary(*at)));
+}
+
+#[test]
+fn only_a_newline_breaks_a_line_that_does_not_wrap() {
+    let mut shaper = TextShaper::new();
+    let style = plain(16.0).with_text_wrap(TextWrap::NoWrap);
+    assert_eq!(
+        line_starts(&mut shaper, "abc abc abc\nabc", 10.0, &style),
+        vec![0, 12]
+    );
+    assert_eq!(line_starts(&mut shaper, "", 10.0, &style), vec![0]);
+}

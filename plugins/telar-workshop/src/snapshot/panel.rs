@@ -4,13 +4,13 @@ use std::rc::Rc;
 
 use telar::preview::snapshot::{FileStatus, Moment, SnapshotResult, SnapshotStatus};
 use telar::{
-    AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children,
-    use_theme_tokens,
+    AlignItems, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
+    LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children, use_theme_tokens,
 };
+use telar::{ControlSize, Tone};
 use telar_components::{
-    BadgeProps, ButtonProps, CodeSpan, CodeViewProps, Tab, TokenKind, badge, button, code_view,
-    tab_list,
+    ButtonProps, CodeSpan, CodeViewProps, Tab, TagProps, TokenKind, button, code_view, tab_list,
+    tag,
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_mono, workbench_muted};
 
@@ -112,13 +112,10 @@ pub(crate) fn tab_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, La
         },
         |drifted: &usize| *drifted,
         |drifted| {
-            badge(
-                BadgeProps::props()
-                    .label(Reactive::of(move || drifted.to_string()))
-                    .color(Reactive::of(|| use_theme_tokens().error()))
-                    .build(),
-                Children::default(),
-            )
+            tag(TagProps::props()
+                .label(Reactive::of(move || drifted.to_string()))
+                .tone(Tone::Danger)
+                .build())
         },
     )?;
     Ok(box_item(count))
@@ -139,13 +136,10 @@ pub(crate) fn drift_badge(
         },
         |_: &()| (),
         |()| {
-            badge(
-                BadgeProps::props()
-                    .label(strings::reactive(SNAPSHOT_DRIFT))
-                    .color(Reactive::of(|| use_theme_tokens().error()))
-                    .build(),
-                Children::default(),
-            )
+            tag(TagProps::props()
+                .label(strings::reactive(SNAPSHOT_DRIFT))
+                .tone(Tone::Danger)
+                .build())
         },
     )?;
     Ok(box_item(shown))
@@ -220,6 +214,7 @@ fn moment_switch(
         tabs,
         Color::TRANSPARENT.into(),
         Some(strings::reactive(SNAPSHOT_MOMENT)),
+        ControlSize::Regular,
     )
 }
 
@@ -307,6 +302,7 @@ fn mode_switch(review: &SnapshotReview) -> Result<Box<dyn LayoutItem>, LayoutErr
         ],
         Color::TRANSPARENT.into(),
         Some(strings::reactive(SNAPSHOT_COMPARE)),
+        ControlSize::Regular,
     )
 }
 
@@ -319,7 +315,6 @@ fn accept(review: &SnapshotReview, id: &str) -> Result<Box<dyn LayoutItem>, Layo
             .label(strings::reactive(SNAPSHOT_ACCEPT))
             .on_press(Rc::new(move || review.accept(&id)))
             .build(),
-        Children::default(),
     )
 }
 
@@ -362,7 +357,6 @@ fn draw_diff(result: &SnapshotResult) -> Result<Option<Box<dyn LayoutItem>>, Lay
             .line_numbers(false)
             .label(strings::reactive(SNAPSHOT_DRAW_DIFF))
             .build(),
-        Children::default(),
     )?;
     let caption = Text::declaring(
         || strings::text(SNAPSHOT_DRAW_DIFF),

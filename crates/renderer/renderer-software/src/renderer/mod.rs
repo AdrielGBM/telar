@@ -94,6 +94,7 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
+    /// A renderer presenting to `window`, shaped by `config`. `display` is the connection the window belongs to, which softbuffer and the Wayland alpha path both need.
     pub fn new(
         display: D,
         window: W,
@@ -499,5 +500,5 @@ impl Target {
 }
 
 #[cfg(test)]
-#[path = "renderer_test.rs"]
+#[path = "renderer.test.rs"]
 mod tests;

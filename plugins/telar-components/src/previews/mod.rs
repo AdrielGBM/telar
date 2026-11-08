@@ -1,77 +1,91 @@
 //! The catalogue's previews written in Rust, compiled only under `telar/previews`.
 
-#[cfg(feature = "advanced")]
+#[path = "../layout/accordion/accordion.preview.rs"]
 mod accordion;
-mod badge;
+#[path = "../inputs/button/button.preview.rs"]
 mod button;
+#[path = "../inputs/checkbox/checkbox.preview.rs"]
 mod checkbox;
-mod chip;
-#[cfg(feature = "workbench")]
+#[path = "../workbench/code_view/code_view.preview.rs"]
 mod code_view;
-#[cfg(feature = "workbench")]
+#[path = "../workbench/color_picker/color_picker.preview.rs"]
 mod color_picker;
-#[cfg(feature = "overlays")]
+#[path = "../overlays/command_palette/command_palette.preview.rs"]
 mod command_palette;
-#[cfg(feature = "overlays")]
+#[path = "../overlays/menu/context_menu.preview.rs"]
 mod context_menu;
-#[cfg(feature = "advanced")]
+#[path = "../display/data_table/data_table.preview.rs"]
 mod data_table;
-#[cfg(feature = "overlays")]
+#[path = "../overlays/drawer/drawer.preview.rs"]
 mod drawer;
+#[path = "../inputs/handle/handle.preview.rs"]
 mod handle;
-mod heading;
-#[cfg(feature = "workbench")]
+#[path = "../workbench/icon_button/icon_button.preview.rs"]
 mod icon_button;
+#[path = "../display/image/image.preview.rs"]
 mod image;
-#[cfg(feature = "overlays")]
-mod kbd;
+#[path = "../workbench/line_gutter/line_gutter.preview.rs"]
 mod line_gutter;
+#[path = "../navigation/link/link.preview.rs"]
 mod link;
+#[path = "../layout/list/list.preview.rs"]
 mod list;
-#[cfg(feature = "overlays")]
+#[path = "../overlays/menu/menu.preview.rs"]
 mod menu;
-#[cfg(feature = "overlays")]
+#[path = "../overlays/modal/modal.preview.rs"]
 mod modal;
+#[path = "../feedback/progress/progress.preview.rs"]
 mod progress;
+#[path = "../inputs/radio/radio.preview.rs"]
 mod radio;
-#[cfg(feature = "advanced")]
+#[path = "../layout/reorder_zones/reorder_zones.preview.rs"]
 mod reorder_zones;
-#[cfg(feature = "advanced")]
+#[path = "../layout/reorderable/reorderable.preview.rs"]
 mod reorderable;
-#[cfg(feature = "workbench")]
+#[path = "../workbench/resizable/resizable.preview.rs"]
 mod resizable;
 mod sample;
+#[path = "../inputs/scrub_field/scrub_field.preview.rs"]
 mod scrub_field;
+#[path = "../inputs/search_field/search_field.preview.rs"]
 mod search_field;
+#[path = "../layout/section/section.preview.rs"]
 mod section;
+#[path = "../inputs/select/select.preview.rs"]
 mod select;
+#[path = "../inputs/slider/slider.preview.rs"]
 mod slider;
+#[path = "../feedback/spinner/spinner.preview.rs"]
 mod spinner;
-#[cfg(feature = "workbench")]
+#[path = "../workbench/split_pane/split_pane.preview.rs"]
 mod split_pane;
-#[cfg(feature = "advanced")]
+#[path = "../inputs/stepper/stepper.preview.rs"]
 mod stepper;
+#[path = "../inputs/swatches/swatches.preview.rs"]
 mod swatches;
+#[path = "../navigation/tabs/tabs.preview.rs"]
 mod tabs;
+#[path = "../inputs/text_field/text_field.preview.rs"]
 mod text_field;
-#[cfg(feature = "overlays")]
+#[path = "../overlays/toast/toast.preview.rs"]
 mod toast;
+#[path = "../inputs/toggle/toggle.preview.rs"]
 mod toggle;
-#[cfg(feature = "workbench")]
+#[path = "../workbench/toolbar/toolbar.preview.rs"]
 mod toolbar;
-#[cfg(feature = "overlays")]
+#[path = "../overlays/tooltip/tooltip.preview.rs"]
 mod tooltip;
-#[cfg(feature = "workbench")]
+#[path = "../workbench/tree_view/tree_view.preview.rs"]
 mod tree_view;
-#[cfg(feature = "advanced")]
+#[path = "../layout/virtual_list/virtual_list.preview.rs"]
 mod virtual_list;
-#[cfg(feature = "chrome")]
+#[path = "../chrome/title_bar/window_controls.preview.rs"]
 mod window_controls;
-#[cfg(feature = "chrome")]
+#[path = "../chrome/window_frame/window_frame.preview.rs"]
 mod window_frame;
 
 #[cfg(test)]
-#[path = "previews_test.rs"]
+#[path = "previews.test.rs"]
 mod tests;
 
 use telar::preview::PreviewEntry;
@@ -89,62 +103,35 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(scrub_field::previews());
     entries.extend(swatches::previews());
     entries.extend(handle::previews());
-    #[cfg(feature = "advanced")]
     entries.extend(stepper::previews());
-    entries.extend(badge::previews());
-    entries.extend(chip::previews());
     entries.extend(image::previews());
     entries.extend(link::previews());
-    #[cfg(feature = "overlays")]
-    entries.extend(kbd::previews());
     entries.extend(progress::previews());
     entries.extend(spinner::previews());
-    entries.extend(heading::previews());
     entries.extend(section::previews());
     entries.extend(list::previews());
-    #[cfg(feature = "advanced")]
     entries.extend(virtual_list::previews());
-    #[cfg(feature = "advanced")]
     entries.extend(data_table::previews());
-    #[cfg(feature = "advanced")]
     entries.extend(accordion::previews());
-    #[cfg(feature = "advanced")]
     entries.extend(reorderable::previews());
-    #[cfg(feature = "advanced")]
     entries.extend(reorder_zones::previews());
     entries.extend(tabs::previews());
-    #[cfg(feature = "overlays")]
     entries.extend(modal::previews());
-    #[cfg(feature = "overlays")]
     entries.extend(drawer::previews());
-    #[cfg(feature = "overlays")]
     entries.extend(menu::previews());
-    #[cfg(feature = "overlays")]
     entries.extend(context_menu::previews());
-    #[cfg(feature = "overlays")]
     entries.extend(tooltip::previews());
-    #[cfg(feature = "overlays")]
     entries.extend(command_palette::previews());
-    #[cfg(feature = "overlays")]
     entries.extend(toast::previews());
-    #[cfg(feature = "workbench")]
     entries.extend(icon_button::previews());
-    #[cfg(feature = "workbench")]
     entries.extend(toolbar::previews());
-    #[cfg(feature = "workbench")]
     entries.extend(split_pane::previews());
-    #[cfg(feature = "workbench")]
     entries.extend(resizable::previews());
-    #[cfg(feature = "workbench")]
     entries.extend(tree_view::previews());
-    #[cfg(feature = "workbench")]
     entries.extend(color_picker::previews());
-    #[cfg(feature = "workbench")]
     entries.extend(code_view::previews());
     entries.extend(line_gutter::previews());
-    #[cfg(feature = "chrome")]
     entries.extend(window_controls::previews());
-    #[cfg(feature = "chrome")]
     entries.extend(window_frame::previews());
     entries
 }

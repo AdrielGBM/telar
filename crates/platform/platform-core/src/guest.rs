@@ -16,7 +16,7 @@
 //! - **Wakers cross as a [`CWaker`]**: data plus `wake`, `clone` and `release` pointing into the image that made it. Whoever holds one owns one reference and drops it before that image is unloaded.
 //! - **A frame's context crosses as a [`FrameCtx`]** in place of an `AppCtx`: the redraw the guest asks for written back, the host's loop waker borrowed for the call, and the window's raw handles as bytes.
 //! - **Time crosses as a [`Timestamp`]**, signed nanoseconds since an [`Epoch`] the host sets at load and the guest adopts through `adopt_epoch`, read back with [`host_epoch`]; durations and every other rich value cross as bytes.
-//! - **Process-global backends cross as one [`HostServices`] table**: the clipboard, the URI opener, file dialogs, the preference store, the app's paths and name, the keyboard convention, the location format, the asset base, the layout grid, the loop wake, the font database and the threads the guest starts. The host builds it over what it installed and keeps it until the guest is unloaded, or with the library for the rest of the process when the guest's threads could not be joined; the guest installs a backend of its own per entry, which asks the host through it, and frees those when it is unloaded like any other static of its own.
+//! - **Process-global backends cross as one [`HostServices`] table**: the clipboard, the URI opener, the preference store, the keyboard convention, the location format, the asset base, the layout grid, the loop wake and the threads the guest starts, and, in its `upper` table of the layer above ([`UpperServices`]), file dialogs, the app's paths and name and the font database. Every entry types its request and answer, and the stamp holds their shapes. The host builds it over what it installed and keeps it until the guest is unloaded, or with the library for the rest of the process when the guest's threads could not be joined; the guest installs a backend of its own per entry, which asks the host through it, and frees those when it is unloaded like any other static of its own.
 //! - **The host starts the guest's threads.** std runs its spawn hooks on the thread that spawns, through a thread-local whose destructor keeps the library that reached it mapped until that thread exits, and the host's UI thread never does. So every thread the runtime starts goes through `reactive_local::threads`, which a guest routes to the table's `spawn_thread`: it hands over an entry point of its own and the data it runs on as a [`ThreadStart`], the host spawns a thread with its own std that calls it, and hands back a [`HostThread`] the guest joins or lets go through the table exactly once. A guest joins every thread still running its code before its host unmaps it, through `quiesce`.
 //! - **One [`CONTRACT_VERSION`]** for both boundaries, and a [`ContractStamp`] that names the [`GuestKind`] a library was built as and hashes the layout of every `repr(C)` type involved with [`wire_core::WIRE_VERSION`]. A guest exports it with [`export_contract_stamp!`](crate::export_contract_stamp), and [`open_guest`], the one loader, refuses a library whose stamp differs before reading anything else of it. Loading stays `unsafe`: a matching stamp proves the builds agree, not that the code is sound.
 //!
@@ -38,19 +38,21 @@ mod waker;
 pub use clock::{Epoch, Timestamp};
 #[doc(hidden)]
 pub use contract::check_entry_table;
+#[doc(hidden)]
+pub use contract::field_shape;
 pub use contract::{
-    BUILDING_BLOCKS, CONTRACT_SYMBOL, CONTRACT_VERSION, ContractMismatch, ContractStamp, GuestKind,
-    TypeLayout,
+    ArgShape, BUILDING_BLOCKS, CONTRACT_SYMBOL, CONTRACT_VERSION, ContractMismatch, ContractStamp,
+    GuestKind, TypeLayout,
 };
 #[cfg(all(feature = "dylib", not(target_arch = "wasm32")))]
 pub use contract::{OpenGuestError, open_guest};
 pub use frame_ctx::FrameCtx;
 pub(crate) use frame_ctx::RawHandles;
-pub use lent::{Handle, LentBytes};
+pub use lent::{Handle, LentBytes, Utf8};
 pub use lifecycle::{Entries, Lifecycle, host_epoch};
 pub use outcome::{CallOutcome, guest_entry};
 pub use services::{
-    EndThread, HOST_SERVICES_LAYOUT, HostServices, REPLY_LAYOUT, Reply, Service, SpawnThread, serve,
+    EndThread, HostServices, REPLY_LAYOUT, Reply, Service, SpawnThread, UpperServices, serve,
 };
 pub use surface::{ReportsSurface, SurfaceReport};
 pub use threads::{HostThread, ThreadStart, detach_thread, join_thread, spawn_thread};
@@ -160,6 +162,28 @@ impl fmt::Display for GuestPanic {
 
 impl std::error::Error for GuestPanic {}
 
+/// Why a host calls nothing more of a guest.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GuestStop {
+    /// It panicked, leaving whatever it was in the middle of half done; a build that compiles can take over.
+    Panicked(GuestPanic),
+    /// It answered in bytes this host cannot read: the two were built from sources that spell a value differently, which their stamps did not tell apart, so only building both again from the same sources ends it.
+    Unreadable(String),
+}
+
+impl fmt::Display for GuestStop {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Panicked(panic) => panic.fmt(f),
+            Self::Unreadable(error) => {
+                write!(f, "answered in bytes this host cannot read:\n{error}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for GuestStop {}
+
 /// The host's reading of how an entry ended, owned on its side: what it answered, or the panic it caught at its edge, from [`CallOutcome::into_result`].
 pub type GuestResult<T> = Result<T, GuestPanic>;
 
@@ -227,44 +251,55 @@ fn payload_message(payload: &(dyn Any + Send)) -> String {
     }
 }
 
-/// The host's record of one loaded guest: whether it has panicked, what the panic said, and whether anybody has been told.
+/// The host's record of one loaded guest: whether it has stopped, why, and whether anybody has been told.
 ///
-/// A guest that panicked is never called again. The unwind left whatever it was in the middle of half done — a borrow released mid-update, a batch never closed — and the next call would run on top of that.
+/// A guest that stopped is never called again. A panic's unwind left whatever it was in the middle of half done — a borrow released mid-update, a batch never closed — and the next call would run on top of that; a guest answering in bytes the host cannot read would answer so on every call.
 #[derive(Default)]
 pub struct Guest {
-    panic: OnceCell<GuestPanic>,
+    stop: OnceCell<GuestStop>,
     reported: Cell<bool>,
 }
 
 impl Guest {
-    /// Makes one call into the guest, unless it has already panicked. `None` when it had, or does now.
+    /// Makes one call into the guest, unless it has already stopped. `None` when it had, or panics now.
     pub fn call<T>(&self, call: impl FnOnce() -> GuestResult<T>) -> Option<T> {
-        if self.has_panicked() {
+        if self.has_stopped() {
             return None;
         }
         match call() {
             Ok(value) => Some(value),
             Err(panic) => {
                 tracing::error!("a guest panicked; nothing more of it runs");
-                let _ = self.panic.set(panic);
+                let _ = self.stop.set(GuestStop::Panicked(panic));
                 None
             }
         }
     }
 
-    pub fn has_panicked(&self) -> bool {
-        self.panic.get().is_some()
+    pub fn has_stopped(&self) -> bool {
+        self.stop.get().is_some()
     }
 
-    /// The panic that stopped the guest, for as long as the guest is held.
-    pub fn panic(&self) -> Option<&GuestPanic> {
-        self.panic.get()
+    /// Why the guest stopped, for as long as the guest is held.
+    pub fn stop(&self) -> Option<&GuestStop> {
+        self.stop.get()
     }
 
-    /// The panic that stopped the guest, the first time it is asked for: what a host polling once a frame shows exactly once.
-    pub fn take_panic(&self) -> Option<GuestPanic> {
-        let panic = self.panic.get()?;
-        (!self.reported.replace(true)).then(|| panic.clone())
+    /// Why the guest stopped, the first time it is asked for: what a host polling once a frame shows exactly once.
+    pub fn take_stop(&self) -> Option<GuestStop> {
+        let stop = self.stop.get()?;
+        (!self.reported.replace(true)).then(|| stop.clone())
+    }
+
+    /// Stops the guest because it answered in bytes this host cannot read, unless it had already stopped.
+    pub fn refuse_answer(&self, error: impl fmt::Display) {
+        if self
+            .stop
+            .set(GuestStop::Unreadable(error.to_string()))
+            .is_ok()
+        {
+            tracing::error!(%error, "a guest answered in bytes this host cannot read; nothing more of it runs");
+        }
     }
 
     /// Unmaps a guest by dropping `library`: tells it it is `unloading` unless it panicked, has it `quiesce` its threads either way, and keeps `library` for the rest of the process if they could not be joined, since unmapping code a thread may still run is never safe and leaking the mapping only costs memory. `library` is everything those threads may still reach, the backends its services call into with the mapping, so all of it is leaked together.
@@ -296,5 +331,5 @@ pub fn shield<T>(fallback: T, call: impl FnOnce() -> T) -> T {
 }
 
 #[cfg(test)]
-#[path = "guest_test.rs"]
+#[path = "guest.test.rs"]
 mod tests;

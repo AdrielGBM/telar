@@ -31,9 +31,9 @@ telar-dynamic = { workspace = true, features = ["svg"] }
 
 [[test]]
 name = "runtime"
-path = "src/runtime_test.rs"
+path = "src/runtime.test.rs"
 required-features = ["runtime"]
 
 [[test]]
 name = "licenses"
-path = "src/licenses_test.rs"
+path = "src/licenses.test.rs"

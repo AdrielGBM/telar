@@ -26,7 +26,6 @@ pub(crate) const NO_RESULTS: &str = "no_results";
 pub(crate) const NOTHING_TO_SHOW: &str = "nothing_to_show";
 pub(crate) const NOTIFICATIONS: &str = "notifications";
 pub(crate) const OPACITY: &str = "opacity";
-pub(crate) const REMOVE: &str = "remove";
 pub(crate) const RESIZE: &str = "resize";
 pub(crate) const RESIZE_COLUMN: &str = "resize_column";
 pub(crate) const RESIZE_HEIGHT: &str = "resize_height";
@@ -36,6 +35,7 @@ pub(crate) const SATURATION_BRIGHTNESS: &str = "saturation_brightness";
 pub(crate) const SEARCH: &str = "search";
 pub(crate) const SEARCH_COMMANDS: &str = "search_commands";
 pub(crate) const SELECT: &str = "select";
+pub(crate) const THEN: &str = "then";
 pub(crate) const WINDOW: &str = "window";
 
 static CATALOG: Catalog = Catalog {
@@ -262,23 +262,6 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
-            key: REMOVE,
-            messages: &[
-                (
-                    "ar",
-                    Message::Format(&[Part::Lit("إزالة "), Part::Arg("label")]),
-                ),
-                (
-                    "en",
-                    Message::Format(&[Part::Lit("Remove "), Part::Arg("label")]),
-                ),
-                (
-                    "es",
-                    Message::Format(&[Part::Lit("Quitar "), Part::Arg("label")]),
-                ),
-            ],
-        },
-        Entry {
             key: RESIZE,
             messages: &[
                 ("ar", Message::Plain("تغيير الحجم")),
@@ -367,6 +350,27 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
+            key: THEN,
+            messages: &[
+                (
+                    "ar",
+                    Message::Format(&[Part::Arg("first"), Part::Lit("، ثم "), Part::Arg("next")]),
+                ),
+                (
+                    "en",
+                    Message::Format(&[Part::Arg("first"), Part::Lit(", then "), Part::Arg("next")]),
+                ),
+                (
+                    "es",
+                    Message::Format(&[
+                        Part::Arg("first"),
+                        Part::Lit(", luego "),
+                        Part::Arg("next"),
+                    ]),
+                ),
+            ],
+        },
+        Entry {
             key: WINDOW,
             messages: &[
                 ("ar", Message::Plain("النافذة")),
@@ -388,5 +392,5 @@ pub(crate) fn text_with(key: &str, args: &[(&str, &str)]) -> String {
 }
 
 #[cfg(test)]
-#[path = "strings_catalog_test.rs"]
+#[path = "strings.catalog.test.rs"]
 mod tests;

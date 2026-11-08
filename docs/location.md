@@ -113,7 +113,7 @@ its locale, so a copied link, a reload and a prerendered page each open in the r
 | Target | Where the locale lives |
 | --- | --- |
 | Web (DOM and canvas) | The first segment under the base path: `/es/`, `/portfolio/en/projects#team`. `/` is handled like any address without a locale; serving it as a negotiation page belongs to the web packaging ([docs/web-packaging.md](web-packaging.md#the-root-of-a-site-in-several-locales)). |
-| Desktop, terminal | In every entry of the history saved in `UserPrefs`, and in `--location /en/projects`. Also kept as `telar.locale`, for a launch with no saved history. |
+| Desktop, terminal | In every entry of the history saved in the preference store, and in `--location /en/projects`. Also kept as `telar.locale`, for a launch with no saved history. |
 | Android | The `ACTION_VIEW` link (`https://example.com/en/projects`), and `telar.locale` for a launch without one. |
 | Headless | The fixed location: `HeadlessPlatform::with_location([route.to_location().with_locale("en")])` is one route in one language, which is what a prerender of each route × locale builds. |
 
@@ -125,9 +125,9 @@ two segments there as it always was.
 | Target | Opens on | App moves | Platform moves | Back |
 | --- | --- | --- | --- | --- |
 | Web (DOM and canvas) | The page's address, plus the stack stored in `history.state` when the entry has one | `pushState` / `replaceState`; a pop is `history.go(-n)`, so forward still works | `popstate` and `hashchange`, reported once | The browser's own back is a `popstate` |
-| Desktop | `--location <ref>` or `--location=<ref>`; without it, the history saved in `UserPrefs` | Saved to `UserPrefs` | None | Mouse back button and `BrowserBack` key; unhandled back does nothing |
+| Desktop | `--location <ref>` or `--location=<ref>`; without it, the history saved in the preference store | Saved to the preference store | None | Mouse back button and `BrowserBack` key; unhandled back does nothing |
 | Android | The `ACTION_VIEW` intent the activity started with (`getDataString`) | Nothing: Android keeps no page history | None (see below) | Back button or gesture; unhandled back sends the task to the background (`moveTaskToBack`) |
-| Terminal | `--location`, then `UserPrefs`, as on desktop | Saved to `UserPrefs` | None | None: Escape is not back |
+| Terminal | `--location`, then the preference store, as on desktop | Saved to the preference store | None | None: Escape is not back |
 | Headless | `HeadlessPlatform::with_location(history)`; the app's root when nothing is declared | Recorded with `record_location_into(sink)` | `with_location_changes(...)`, one before each frame | Not simulated |
 
 Notes on the less obvious cases:
@@ -148,7 +148,7 @@ Notes on the less obvious cases:
 - **Desktop and terminal.** A dedicated flag is used instead of the first free argument, so an app that
   takes file paths never has one read as a location. Scanning stops at `--`. The app is not registered
   with the system as the handler of a URI scheme; an `https://` or `myapp:` URI is accepted as the flag's value. The saved history lives under
-  `history` in the app's `prefs.toml`.
+  the `telar.history` key of the app's preference store.
 - **Android.** Declaring the intent filter (scheme, host, `autoVerify` for app links) belongs to the app's
   packaging. `NativeActivity` does not forward `onNewIntent`, so a link opened while the app is already
   running reaches it only if the system starts the activity again.

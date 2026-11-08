@@ -6,12 +6,15 @@ use std::path::{Path, PathBuf};
 use clap::ValueEnum;
 use serde::Deserialize;
 
+use telar_project::protocol::RendererBackend;
+use telar_project::{CargoManifest, ManifestError, TelarManifest};
 pub(crate) use telar_project::{DevSection, TelarSection, WindowSection};
-use telar_project::{ManifestError, RendererBackend, TelarManifest};
+
+use super::cargo_args::selected_package;
 
 /// The three words the `--backend` flag takes.
 ///
-/// A CLI vocabulary, not a config one: [`telar_project::RendererBackend`] is the same three words parsed by serde out of `telar.toml`, and this is what clap parses out of an argument. They convert; they are not one type because `ValueEnum` cannot be derived for a type from another crate.
+/// A CLI vocabulary, not a config one: [`RendererBackend`] is the same three words parsed by serde out of `telar.toml`, and this is what clap parses out of an argument. They convert; they are not one type because `ValueEnum` cannot be derived for a type from another crate.
 #[derive(Clone, Copy, ValueEnum)]
 pub(crate) enum BackendArg {
     Auto,
@@ -44,7 +47,7 @@ pub(crate) struct CargoWorkspacePackage {
     pub(crate) description: Option<String>,
 }
 #[derive(Deserialize, Default)]
-pub(crate) struct CargoManifest {
+pub(crate) struct ManifestView {
     pub(crate) workspace: Option<CargoWorkspace>,
     pub(crate) package: Option<CargoPackage>,
     pub(crate) lib: Option<CargoLib>,
@@ -115,17 +118,13 @@ fn find_package_dir_in_workspace(workspace_root: &Path, package_name: &str) -> O
     telar_project::workspace_member_dirs(workspace_root)
         .into_iter()
         .find(|member| {
-            read_package_manifest_in(member).is_some_and(|package| package.name == package_name)
+            CargoManifest::read(member)
+                .is_some_and(|manifest| manifest.package_name() == Some(package_name))
         })
 }
 
 pub(crate) fn find_package_dir(args: &[String]) -> PathBuf {
-    let package_name = args
-        .windows(2)
-        .find(|pair| pair[0] == "-p" || pair[0] == "--package")
-        .map(|pair| pair[1].as_str());
-
-    if let Some(name) = package_name {
+    if let Some(name) = selected_package(args) {
         let cwd = std::env::current_dir().unwrap_or_default();
         if let Some(root) = telar_project::find_workspace_root(&cwd)
             && let Some(dir) = find_package_dir_in_workspace(&root, name)
@@ -146,9 +145,8 @@ pub(crate) fn find_package_dir(args: &[String]) -> PathBuf {
     }
 }
 
-fn read_manifest_in(dir: &Path) -> Option<CargoManifest> {
-    let content = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
-    toml::from_str(&content).ok()
+fn read_manifest_in(dir: &Path) -> Option<ManifestView> {
+    CargoManifest::read(dir)?.view().ok()
 }
 
 pub(crate) fn read_package_manifest_in(dir: &Path) -> Option<CargoPackage> {
@@ -169,6 +167,7 @@ pub(crate) struct ResolvedPackage {
     pub(crate) produces_cdylib: bool,
     // What the frontend selection reads before deciding it may turn the package's defaults off.
     pub(crate) features: BTreeMap<String, toml::Value>,
+    pub(crate) default_run: Option<String>,
 }
 
 impl ResolvedPackage {
@@ -191,7 +190,7 @@ impl ResolvedPackage {
     }
 
     // Debian's `Maintainer` and Cargo's `authors` share the `Name <email>` shape, so the manifest is the one source. There is no honest default: a placeholder address ships inside the package.
-    pub(crate) fn maintainer(&self) -> Option<String> {
+    pub(crate) fn maintainer(&self) -> Option<Maintainer> {
         self.package
             .as_ref()
             .and_then(|p| {
@@ -199,6 +198,10 @@ impl ResolvedPackage {
                     .resolve(|| Some(self.workspace_package.as_ref()?.authors.clone()))
             })
             .and_then(|authors| authors.first().cloned())
+            .map(|value| Maintainer {
+                value,
+                source: MaintainerSource::CargoAuthors,
+            })
             .or_else(maintainer_from_env)
     }
 
@@ -393,19 +396,24 @@ pub(crate) fn missing_devtools_note(package: &str) -> String {
     )
 }
 
-/// What a package that declares no optional `telar-workshop` is told when `cargo telar preview` falls back to the page that lists every preview.
-pub(crate) fn missing_workshop_note(package: &str) -> String {
+/// Why `cargo telar preview` cannot show `resolved`'s previews, with the command that fixes it, or `None` when the package declares the optional `telar-workshop` they open in.
+///
+/// Optional, never a dev-dependency: the preview builds the package's own library, which cannot see dev-dependencies, and a shipping build leaves the feature off. `cargo add --optional` also writes the feature that turns it on.
+pub(crate) fn missing_workshop(resolved: &ResolvedPackage) -> Option<String> {
     let workshop = telar_project::WORKSHOP_PACKAGE;
-    format!(
-        "`{package}` declares no optional `{workshop}` dependency, so previews open in a plain page instead of the workshop. Add it with `cargo add -p {package} {workshop} --optional`."
-    )
+    if telar_project::declares_optional_dependency(&resolved.package_dir, workshop) {
+        return None;
+    }
+    let package = resolved.name();
+    Some(format!(
+        "`{package}` declares no optional `{workshop}` dependency, which `cargo telar preview` shows the previews in. Add it with `cargo add -p {package} {workshop} --optional`."
+    ))
 }
 
-/// A `telar` feature that is a crate of its own now, and the feature groups of that crate it stood for.
+/// A `telar` feature that is a crate of its own now.
 struct MovedFeature {
     feature: &'static str,
     package: &'static str,
-    groups: &'static [&'static str],
 }
 
 const COMPONENTS: &str = "telar-components";
@@ -417,37 +425,30 @@ const MOVED_FEATURES: [MovedFeature; 7] = [
     MovedFeature {
         feature: "components",
         package: COMPONENTS,
-        groups: &["overlays", "chrome", "advanced"],
     },
     MovedFeature {
         feature: "components-base",
         package: COMPONENTS,
-        groups: &[],
     },
     MovedFeature {
         feature: "components-overlays",
         package: COMPONENTS,
-        groups: &["overlays"],
     },
     MovedFeature {
         feature: "components-chrome",
         package: COMPONENTS,
-        groups: &["chrome"],
     },
     MovedFeature {
         feature: "components-advanced",
         package: COMPONENTS,
-        groups: &["advanced"],
     },
     MovedFeature {
         feature: "navigate",
         package: "telar-navigate",
-        groups: &[],
     },
     MovedFeature {
         feature: "watch",
         package: WATCH,
-        groups: &[],
     },
 ];
 
@@ -455,19 +456,12 @@ const DEPENDENCY_TABLES: [&str; 3] = ["dependencies", "dev-dependencies", "build
 
 /// The moved `telar` features `manifest` turns on: in a `telar` dependency's `features`, or in a `[features]` entry naming `telar/<feature>`. `workspace_dependencies` answers for a `telar = { workspace = true }`, whose features the workspace's own entry carries.
 pub(crate) fn moved_telar_features(
-    manifest: &toml::Table,
+    manifest: &CargoManifest,
     workspace_dependencies: Option<&toml::Table>,
 ) -> BTreeSet<&'static str> {
-    let targets = manifest
-        .get("target")
-        .and_then(toml::Value::as_table)
-        .into_iter()
-        .flat_map(|targets| targets.values())
-        .filter_map(toml::Value::as_table);
-    let tables: Vec<&toml::Table> = std::iter::once(manifest)
-        .chain(targets)
-        .flat_map(|scope| DEPENDENCY_TABLES.iter().filter_map(|t| scope.get(*t)))
-        .filter_map(toml::Value::as_table)
+    let tables: Vec<&toml::Table> = DEPENDENCY_TABLES
+        .iter()
+        .flat_map(|kind| manifest.dependency_tables(kind))
         .collect();
 
     let mut keys = BTreeSet::from(["telar".to_string()]);
@@ -487,7 +481,10 @@ pub(crate) fn moved_telar_features(
             ));
         }
     }
-    let features = manifest.get("features").and_then(toml::Value::as_table);
+    let features = manifest
+        .table()
+        .get("features")
+        .and_then(toml::Value::as_table);
     for entry in features
         .into_iter()
         .flat_map(|features| features.values())
@@ -524,25 +521,10 @@ pub(crate) fn moved_features_hint(
     let mut commands: Vec<String> = Vec::new();
     let mut entries: Vec<String> = prelude.iter().map(ToString::to_string).collect();
     for crate_package in [COMPONENTS, "telar-navigate", WATCH] {
-        let wanted: Vec<&&MovedFeature> = moved
-            .iter()
-            .filter(|m| m.package == crate_package)
-            .collect();
-        if wanted.is_empty() {
+        if !moved.iter().any(|m| m.package == crate_package) {
             continue;
         }
-        let groups: BTreeSet<&str> = wanted
-            .iter()
-            .flat_map(|m| m.groups.iter().copied())
-            .collect();
-        let features = match groups.is_empty() {
-            true => String::new(),
-            false => format!(
-                " --features {}",
-                groups.into_iter().collect::<Vec<_>>().join(",")
-            ),
-        };
-        commands.push(format!("cargo add -p {package} {crate_package}{features}"));
+        commands.push(format!("cargo add -p {package} {crate_package}"));
         let crate_name = crate_package.replace('-', "_");
         if crate_package != WATCH && !entries.contains(&crate_name) {
             entries.push(crate_name);
@@ -572,23 +554,14 @@ pub(crate) fn moved_features_hint(
 
 /// [`moved_features_hint`] for the package at `dir`, reading its manifest, its workspace's `[workspace.dependencies]` and its prelude.
 pub(crate) fn moved_features_hint_for(dir: &Path) -> Option<String> {
-    let manifest: toml::Table = std::fs::read_to_string(dir.join("Cargo.toml"))
-        .ok()?
-        .parse()
-        .ok()?;
-    let workspace: Option<toml::Table> = telar_project::find_workspace_root(dir)
-        .and_then(|root| std::fs::read_to_string(root.join("Cargo.toml")).ok())
-        .and_then(|content| content.parse().ok());
+    let manifest = CargoManifest::read(dir)?;
+    let workspace =
+        telar_project::find_workspace_root(dir).and_then(|root| CargoManifest::read(&root));
     let workspace_dependencies = workspace
         .as_ref()
-        .and_then(|root| root.get("workspace"))
-        .and_then(|workspace| workspace.get("dependencies"))
-        .and_then(toml::Value::as_table);
+        .and_then(CargoManifest::workspace_dependencies);
     let moved = moved_telar_features(&manifest, workspace_dependencies);
-    let package = manifest
-        .get("package")
-        .and_then(|package| package.get("name"))
-        .and_then(toml::Value::as_str)?;
+    let package = manifest.package_name()?;
     let prelude = telar_project::resolve_prelude(dir).unwrap_or_default();
     moved_features_hint(package, &moved, &prelude)
 }
@@ -605,30 +578,51 @@ pub(crate) fn warn_if_features_moved(args: &[String]) {
 }
 
 // dpkg reads the maintainer from `DEBFULLNAME`/`DEBEMAIL`, so honour the same pair: cargo stopped emitting `authors` years ago, and refusing every manifest without it would rule out most projects.
-fn maintainer_from_env() -> Option<String> {
+fn maintainer_from_env() -> Option<Maintainer> {
     maintainer_from(
         std::env::var("DEBFULLNAME").ok(),
         std::env::var("DEBEMAIL").ok(),
     )
 }
 
-fn maintainer_from(name: Option<String>, email: Option<String>) -> Option<String> {
-    let email = email?;
-    let email = email.trim();
+// Only spaces are trimmed: a newline or tab in the environment must reach the control-character check rather than vanish here.
+pub(crate) fn maintainer_from(name: Option<String>, email: Option<String>) -> Option<Maintainer> {
+    let email = email?.trim_matches(' ').to_string();
     if email.is_empty() {
         return None;
     }
-    match name {
-        Some(name) if !name.trim().is_empty() => Some(format!("{} <{email}>", name.trim())),
-        _ => Some(email.to_string()),
-    }
+    let value = match name.map(|name| name.trim_matches(' ').to_string()) {
+        Some(name) if !name.is_empty() => format!("{name} <{email}>"),
+        _ => email,
+    };
+    Some(Maintainer {
+        value,
+        source: MaintainerSource::DebEnv,
+    })
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum MaintainerSource {
+    CargoAuthors,
+    DebEnv,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct Maintainer {
+    pub(crate) value: String,
+    pub(crate) source: MaintainerSource,
 }
 
 // Resolved in a single pass, so the packaging paths stop re-deriving them at each call site.
 pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
     let dir = find_package_dir(args);
     let workspace_root = telar_project::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
-    let manifest = read_manifest_in(&dir);
+    let cargo_manifest = CargoManifest::read(&dir);
+    let default_run = cargo_manifest
+        .as_ref()
+        .and_then(CargoManifest::default_run)
+        .map(str::to_string);
+    let manifest = cargo_manifest.and_then(|manifest| manifest.view::<ManifestView>().ok());
     let produces_cdylib = manifest
         .as_ref()
         .and_then(|m| m.lib.as_ref())
@@ -653,6 +647,7 @@ pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
         workspace_package,
         produces_cdylib,
         features,
+        default_run,
     }
 }
 
@@ -676,13 +671,13 @@ struct MetadataTelarOnly {
 
 // Only `package.metadata.telar` is held to the telar schema; the rest of Cargo.toml is cargo's. Absent is `Ok(None)`, present but invalid is an error, as it is for telar.toml.
 pub(crate) fn read_manifest_telar(dir: &Path) -> Result<Option<TelarSection>, ManifestError> {
-    let path = dir.join("Cargo.toml");
-    let Ok(content) = std::fs::read_to_string(&path) else {
+    let Some(manifest) = CargoManifest::load(dir)? else {
         return Ok(None);
     };
-    let parsed =
-        toml::from_str::<ManifestTelarOnly>(&content).map_err(|e| ManifestError::Invalid {
-            path,
+    let parsed = manifest
+        .view::<ManifestTelarOnly>()
+        .map_err(|e| ManifestError::Invalid {
+            path: dir.join("Cargo.toml"),
             message: e.to_string(),
         })?;
     Ok(parsed
@@ -701,16 +696,7 @@ pub(crate) const WEB_PROFILE_TOML: &str =
 /// manifest at the root of the build — a workspace root, or a standalone package's own manifest when it
 /// is not part of one — so that is the one file worth checking regardless of which member is building.
 pub(crate) fn has_web_profile(workspace_root: &Path) -> bool {
-    let Ok(content) = std::fs::read_to_string(workspace_root.join("Cargo.toml")) else {
-        return false;
-    };
-    let Ok(value) = toml::from_str::<toml::Value>(&content) else {
-        return false;
-    };
-    value
-        .get("profile")
-        .and_then(|profile| profile.get("web"))
-        .is_some()
+    CargoManifest::read(workspace_root).is_some_and(|manifest| manifest.has_profile("web"))
 }
 
 // Lowest to highest: built-in defaults, `[package.metadata.telar]`, `telar.toml`. The CLI flags are layered on by each command.
@@ -767,14 +753,6 @@ fn merge_config(base: TelarSection, over: TelarSection) -> TelarSection {
     }
 }
 
-pub(crate) fn backend_as_str(backend: RendererBackend) -> &'static str {
-    match backend {
-        RendererBackend::Auto => "auto",
-        RendererBackend::Hardware => "hardware",
-        RendererBackend::Software => "software",
-    }
-}
-
 pub(crate) fn split_android_flag(args: Vec<String>) -> (bool, Vec<String>) {
     let android = args.contains(&"--android".to_string());
     let rest = args.into_iter().filter(|a| a != "--android").collect();
@@ -805,5 +783,5 @@ pub(crate) fn warn_if_foreign_version(project_telar: &str) {
 }
 
 #[cfg(test)]
-#[path = "config_test.rs"]
+#[path = "config.test.rs"]
 mod tests;

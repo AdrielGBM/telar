@@ -15,6 +15,6 @@ mod renderer;
 
 pub(crate) use canvas::dom_window;
 pub use canvas::{CanvasSurface, canvas_in};
-pub use fonts::{FAMILY_ATTRIBUTE, load_page_fonts};
+pub use fonts::load_page_fonts;
 pub use probe::{NoGpu, webgpu_available};
 pub use renderer::{WebGpuRenderer, WebGpuRendererFactory};

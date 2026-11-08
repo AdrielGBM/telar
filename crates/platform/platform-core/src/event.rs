@@ -233,6 +233,22 @@ pub enum Event {
     LocationChanged {
         history: Vec<crate::Location>,
     },
+    /// A drag, from this app or another, hovers the surface. The surface takes a drop here only if handling this pushed [`WindowCommand::AcceptDrop`](crate::WindowCommand::AcceptDrop); otherwise it refuses.
+    DragOver {
+        x: f64,
+        y: f64,
+        offer: crate::DragOffer,
+    },
+    DragLeft,
+    Dropped {
+        x: f64,
+        y: f64,
+        data: crate::DroppedData,
+    },
+    /// The drag this surface started is over.
+    DragEnded {
+        outcome: crate::DragOutcome,
+    },
 }
 
 /// How far a pointer may travel from where it went down, in logical pixels, and still be a tap rather than a drag or a scroll. One number for every layer that tells the two apart.

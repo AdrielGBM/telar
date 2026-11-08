@@ -9,14 +9,14 @@ use std::rc::Rc;
 use telar::focus::{self, Role};
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Container, Key, LayoutError, LayoutItem,
-    LayoutStyle, Memo, NamedKey, NodeId, PointerButton, Reactive, ReactiveList, RectStyle,
-    RwSignal, StyledContainer, Text, box_item, children, effect, memo, pointer_position, signal,
+    Accessible, AlignItems, BorderRadius, Container, Key, LayoutError, LayoutItem, LayoutStyle,
+    Memo, NamedKey, NodeId, PointerButton, Reactive, ReactiveList, RectStyle, RwSignal,
+    StyledContainer, Text, box_item, children, effect, memo, pointer_position, signal,
     use_theme_tokens,
 };
 use telar_components::{
-    SearchFieldProps, TrailingBuilder, TreeContext, TreeNode, TreeViewProps, search_field,
-    tree_view,
+    MenuPlace, SearchFieldProps, TrailingBuilder, TreeContext, TreeNode, TreeViewProps,
+    search_field, tree_view,
 };
 use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, workbench_muted};
 
@@ -24,7 +24,7 @@ use crate::snapshot::drift_badge;
 use crate::state::{SIDEBAR_MAX_WIDTH, WorkshopState};
 use crate::strings::{self, CLEAR_SEARCH, NO_MATCHES, NO_PREVIEWS, PREVIEWS, SEARCH};
 
-pub(crate) use model::{group_ids, listed};
+pub(crate) use model::{group_ids, groups_holding, listed};
 
 /// What fills the sidebar pane the shell sizes.
 pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -51,8 +51,7 @@ pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
         if button == PointerButton::Secondary {
             asked.set(Some(context::Asked {
                 node: None,
-                at: pointer_position().unwrap_or_default(),
-                around: None,
+                place: MenuPlace::At(pointer_position().unwrap_or_default()),
             }));
         }
     });
@@ -165,7 +164,6 @@ fn search_field_item(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutErr
                 _ => false,
             }))
             .build(),
-        Children::default(),
     )?;
     if let Some(id) = focus.peek() {
         panel.state.set_search_field(id);
@@ -246,12 +244,11 @@ fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .trailing(drift_badges(state))
             .label(Reactive::of(|| strings::text(PREVIEWS)))
             .build(),
-        Children::default(),
     )?;
     panel.tree.set(Some(tree.layout_node()));
     Ok(tree)
 }
 
 #[cfg(test)]
-#[path = "sidebar_test.rs"]
+#[path = "sidebar.test.rs"]
 mod tests;

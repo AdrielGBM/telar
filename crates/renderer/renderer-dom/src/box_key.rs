@@ -55,5 +55,5 @@ impl fmt::Display for BoxKey {
 }
 
 #[cfg(test)]
-#[path = "box_key_test.rs"]
+#[path = "box_key.test.rs"]
 mod tests;

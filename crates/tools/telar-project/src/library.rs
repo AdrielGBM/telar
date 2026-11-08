@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::{
     ASSETS_INDEX_FILENAME, ASSETS_SOURCE_FILENAME, BuildFlavour, CATALOG_INDEX_FILENAME,
-    CATALOG_SOURCE_FILENAME, MANIFEST_FILENAME, SITE_DIR,
+    CATALOG_SOURCE_FILENAME, MANIFEST_FILENAME, SITE_DIR, relative_slashed,
 };
 
 const PACKAGE_TELAR_DIR: &str = ".telar";
@@ -92,17 +92,6 @@ pub fn library_files(package_dir: &Path) -> Vec<String> {
     files
 }
 
-pub fn relative_slashed(path: &Path, base: &Path) -> Option<String> {
-    let relative = path.strip_prefix(base).ok()?;
-    Some(
-        relative
-            .components()
-            .map(|part| part.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
-    )
-}
-
 #[cfg(test)]
-#[path = "library_test.rs"]
+#[path = "library.test.rs"]
 mod tests;

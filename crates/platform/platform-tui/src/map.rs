@@ -30,6 +30,7 @@ pub fn map_modifiers(m: KeyModifiers) -> ModifiersState {
 pub fn map_key(code: KeyCode) -> Option<Key> {
     let named = |k| Some(Key::Named(k));
     match code {
+        KeyCode::Char(' ') => named(NamedKey::Space),
         KeyCode::Char(c) => Some(Key::Char(c)),
         KeyCode::Enter => named(NamedKey::Enter),
         KeyCode::Backspace => named(NamedKey::Backspace),
@@ -230,5 +231,5 @@ impl Mapper {
 }
 
 #[cfg(test)]
-#[path = "map_test.rs"]
+#[path = "map.test.rs"]
 mod tests;

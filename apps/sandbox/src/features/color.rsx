@@ -85,11 +85,11 @@ col gap:20
                 text "however many children it has, and the sidebar's switch does not reach it." font_size:12 color:$theme.muted
                 box fill:$theme.primary radius:8 pad_x:12 pad_y:6
                     text "primary" font_size:12 color:$theme.on_primary
-            button label:"Switch this one" variant:ButtonVariant::Ghost on_press:(|| $night.toggle())
+            button label:"Switch this one" variant:ghost on_press:(|| $night.toggle())
         code_line code:"col theme:(if $night {{ Theme::midnight() }} else {{ Theme::pastel() }})"
     example title:"A component's theme reaches what it wraps"
         card gap:8
             themed_panel mode:"midnight"
                 text "Nested at the call site, drawn in {$theme.name}" font_size:14 color:$theme.ink
                 text "and inside the panel's context: {use_context::<ThemedPanelContext>().map(|panel| panel.mode).unwrap_or_default()}" font_size:12 color:$theme.muted
-        code_line code:"col theme:(…)  ›  children in:ctx   — slot children are built where they are placed"
+        code_line code:"col theme:(…)  ›  children $props.children in:ctx   — children are built where they are placed"

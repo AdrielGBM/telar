@@ -1,0 +1,60 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 240,288 51x24 fill=#4dc78cff border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,248,288
+                  text 0,5 35x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 299,288 117x24 fill=#f5b847ff border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,307,288
+                  text 0,5 101x14.28 "Unsaved changes" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 424,288 87x24 fill=#f06b70ff border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,432,288
+                  text 0,5 71x14.28 "Export failed" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 518,288 41x24 fill=#6badfaff border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,526,288
+                  text 0,5 25.36x14.28 "Beta" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

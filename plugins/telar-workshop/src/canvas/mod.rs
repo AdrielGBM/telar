@@ -1,6 +1,6 @@
 //! The canvas: the selected preview, mounted on a surface of its own so its overlays, focus, size and environment stay inside it, under a header naming it, or with no header where the workshop shows no chrome.
 //!
-//! Each mount is a new [`telar::SurfaceCanvas`] shown through a [`telar::SurfaceFrame`], with the preview built inside an error boundary by [`mount_preview`]: a failed build or a panic shows a card in the canvas, and the workshop around it keeps running. An arg the preview read at build builds it again inside the same canvas; [`WorkshopState::remount`] replaces the canvas itself. The preview's callbacks log their calls in the workshop's one action log, which each mount empties, and its play drives the canvas as the interactions panel says.
+//! Each mount is a new [`telar::NestedCanvas`] shown through a [`telar::SurfaceFrame`], with the preview built inside an error boundary by [`mount_preview`]: a failed build or a panic shows a card in the canvas, and the workshop around it keeps running. An arg the preview read at build builds it again inside the same canvas; [`WorkshopState::remount`] replaces the canvas itself. The preview's callbacks log their calls in the workshop's one action log, which each mount empties, and its play drives the canvas as the interactions panel says.
 
 telar::rsx_modules!();
 
@@ -21,9 +21,10 @@ use telar::{
     StyledContainer, Text, TextWrap, box_item, children, effect, memo, modifiers, on_cleanup,
     pointer_position, signal, track_layout,
 };
+use telar_components::{MenuPlace, menu_layer};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill};
 
-use crate::more_menu::{Asked, menu_layer, more_button};
+use crate::more_menu::more_button;
 use crate::state::WorkshopState;
 use crate::strings::MORE_TOOLS;
 use crate::{canvas_toolbar, interactions};
@@ -82,7 +83,8 @@ fn mount(
     let failing = state.clone();
     let failures = CaughtFailures::default();
     let (playing, caught) = (ctx.clone(), failures.clone());
-    let surface = env::canvas(state, &entry, globals, move || {
+    let custom_room = signal(None);
+    let surface = env::canvas(state, &entry, globals, custom_room, move || {
         mount_preview(
             &entry,
             ctx,
@@ -98,7 +100,7 @@ fn mount(
         .inspection()
         .follow(inspected::PreviewOnly(Rc::clone(&surface)));
     on_cleanup(move || drop(following));
-    let stage = frame::stage(state, entry.layout, globals, surface)?;
+    let stage = frame::stage(state, entry.layout, globals, surface, custom_room)?;
     let items = match header {
         Header::Shown => {
             let tools = Rc::new(canvas_toolbar::HeaderTools::new(
@@ -227,8 +229,7 @@ fn more(
     tools: &Rc<canvas_toolbar::HeaderTools>,
     all: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let tools = Rc::clone(tools);
-    more_button(MORE_TOOLS, Rc::new(move || tools.menu_rows(all)))
+    more_button(MORE_TOOLS, tools.menu_rows(all))
 }
 
 /// How far the wheel turns, in px, for one step of zoom: a notch of a mouse wheel, which a trackpad reaches by many smaller ones.
@@ -241,16 +242,13 @@ fn acting_on(
     tools: &Rc<canvas_toolbar::HeaderTools>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let tools = Rc::clone(tools);
-    let open = signal(None::<Asked>);
+    let open = signal(None::<MenuPlace>);
     let settings = state.canvas_settings();
     let turned = Rc::new(Cell::new(0.0_f32));
     let stage = StyledContainer::new(fill(), |_| RectStyle::default(), vec![stage])?
         .on_alt_press(move |button| {
             if button == PointerButton::Secondary {
-                open.set(Some(Asked {
-                    at: pointer_position().unwrap_or_default(),
-                    around: None,
-                }));
+                open.set(Some(MenuPlace::At(pointer_position().unwrap_or_default())));
             }
         })
         .on_scroll(move |_, dy| {
@@ -275,7 +273,7 @@ fn acting_on(
         fill(),
         vec![
             box_item(stage),
-            menu_layer(open, Rc::new(move || tools.menu_rows(true)))?,
+            menu_layer(open, |place| *place, move |_| tools.menu_rows(true))?,
         ],
     )?))
 }
@@ -285,5 +283,5 @@ fn fill() -> LayoutStyle {
 }
 
 #[cfg(test)]
-#[path = "canvas_test.rs"]
+#[path = "canvas.test.rs"]
 mod tests;

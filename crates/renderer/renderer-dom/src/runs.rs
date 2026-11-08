@@ -35,38 +35,29 @@ impl Run {
     }
 }
 
-/// `text` cut at its spans, in order, with the gaps between them as plain runs. A span out of order, past the end or off a character boundary is skipped rather than trusted, as the shaper does.
+/// `text` cut at its spans, in order, with the gaps between them as plain runs. A link's `run` is its span's index in `spans`.
 pub(crate) fn runs_of(text: &str, spans: &[Span]) -> Vec<Run> {
-    let mut runs = Vec::with_capacity(spans.len() * 2 + 1);
-    let mut at = 0usize;
-    for (index, span) in spans.iter().enumerate() {
-        let start = (span.range.start as usize).clamp(at, text.len());
-        let end = (span.range.end as usize).clamp(start, text.len());
-        if !text.is_char_boundary(start) || !text.is_char_boundary(end) || start == end {
-            continue;
-        }
-        if start > at {
-            runs.push(Run::plain(&text[at..start]));
-        }
-        let mut css = String::new();
-        crate::paint::span_style(&span.over, &mut css);
-        let link = span.link.as_ref().map(|destination| RunLink {
-            href: platform_core::address_of(destination),
-            external: matches!(destination, Destination::External(_)),
-            opens_beside: matches!(destination, Destination::External(uri) if uri.is_web()),
-            run: index as u32,
-        });
-        runs.push(Run {
-            text: text[start..end].to_owned(),
-            css,
-            link,
-        });
-        at = end;
-    }
-    if at < text.len() {
-        runs.push(Run::plain(&text[at..]));
-    }
-    runs
+    renderer_core::span_segments(text, spans)
+        .map(|segment| {
+            let piece = &text[segment.range];
+            let Some((index, span)) = segment.span else {
+                return Run::plain(piece);
+            };
+            let mut css = String::new();
+            crate::paint::span_style(&span.over, &mut css);
+            let link = span.link.as_ref().map(|destination| RunLink {
+                href: platform_core::address_of(destination),
+                external: matches!(destination, Destination::External(_)),
+                opens_beside: matches!(destination, Destination::External(uri) if uri.is_web()),
+                run: index as u32,
+            });
+            Run {
+                text: piece.to_owned(),
+                css,
+                link,
+            }
+        })
+        .collect()
 }
 
 /// A string that changes whenever what the runs write does, for telling a frame that restyled a run from one that did not.
@@ -122,5 +113,5 @@ pub(crate) fn write(
 }
 
 #[cfg(test)]
-#[path = "runs_test.rs"]
+#[path = "runs.test.rs"]
 mod tests;

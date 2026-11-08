@@ -4,10 +4,9 @@ use std::rc::Rc;
 
 use telar::preview::Frame;
 use telar::{
-    Accessible, AlignItems, Canvas, Children, Container, DrawCommand, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, ReactiveList, Rect, RectStyle, RenderNode, Role, ShapeStyle, Size,
-    SizeDimension, StyledContainer, Text, Transform, box_item, children, composite_surface,
-    use_theme_tokens,
+    Accessible, AlignItems, Canvas, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
+    Reactive, ReactiveList, Rect, RectStyle, RenderNode, Role, ShapeStyle, Size, SizeDimension,
+    StyledContainer, Text, Transform, box_item, children, composite_surface, use_theme_tokens,
 };
 use telar_components::{ButtonProps, button};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_mono};
@@ -87,7 +86,6 @@ fn bar(interactions: &Interactions, shown: &Shown) -> Result<Box<dyn LayoutItem>
             .label(Reactive::of(|| strings::text(BACK_TO_LIVE)))
             .on_press(Rc::new(move || interactions.back_to_live()))
             .build(),
-        Children::default(),
     )?;
     let bar = StyledContainer::new(
         LayoutStyle::row()

@@ -38,5 +38,5 @@ impl AssetDecoder for CatalogDecoder {
 }
 
 #[cfg(test)]
-#[path = "catalog_test.rs"]
+#[path = "catalog.test.rs"]
 mod tests;

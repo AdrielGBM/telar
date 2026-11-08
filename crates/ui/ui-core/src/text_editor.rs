@@ -16,6 +16,7 @@ use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, LineHeight, RectStyle, Semantics, ShapeStyle, TextStyle, TextWrap};
 use ui_tree::{EventResult, RenderNode};
 
+use crate::cap_band::CapBandCache;
 use crate::caret::Blink;
 use crate::composition::{self, Composed, Composition, Step};
 use crate::context::mark_dirty;
@@ -26,7 +27,7 @@ use crate::surface_context::HomeSurface;
 use crate::text_edit::{
     Clicks, Granularity, floor_boundary, line_at, next_boundary, prev_boundary, word_at,
 };
-use crate::text_place::{CARET_WIDTH, Frame, Hit, Placed, RowCache};
+use crate::text_place::{CARET_WIDTH, Frame, Hit, Placed, RowCache, masked};
 use crate::visual_lines::{Affinity, VisualLines};
 
 /// How much of the field's ink a hint keeps: enough that it still reads at 4.5:1 on a field's surface, which WCAG asks of placeholder text as of any other.
@@ -94,6 +95,7 @@ pub(crate) struct Shape {
     placeholder: RefCell<String>,
     mask: Cell<Option<char>>,
     rows: RowCache,
+    cap_band: CapBandCache,
     // What the box was last measured from: its row count, the width that count was taken at, and the style.
     measured: RefCell<Option<(usize, Option<f32>, TextStyle)>>,
     /// How far the text is scrolled sideways under a box it runs past.
@@ -108,8 +110,10 @@ impl Shape {
 
     /// How a box `width` by `height` frames text in `style`, scrolled `scroll_x` sideways.
     fn frame(&self, width: f32, height: f32, style: &TextStyle, scroll_x: f32) -> Frame {
+        let line_h = crate::text_metrics::line_box(style);
+        // A box of several lines is as tall as its rows and grows from the top as they are typed, so only the single line is placed the way a text leaf is.
         let top = match self.lines {
-            Lines::Single => line_inset(height, style.font_size),
+            Lines::Single => self.cap_band.top_in(height, line_h, &pinned(style.clone())),
             Lines::Multi => 0.0,
         };
         Frame {
@@ -117,7 +121,7 @@ impl Shape {
             width,
             top,
             scroll_x,
-            line_h: crate::text_metrics::line_box(style),
+            line_h,
         }
     }
 
@@ -190,6 +194,7 @@ impl Editor {
             placeholder: RefCell::new(String::new()),
             mask: Cell::new(None),
             rows: RowCache::default(),
+            cap_band: CapBandCache::default(),
             measured: RefCell::new(None),
             scroll_x: signal(0.0),
         });
@@ -328,10 +333,10 @@ impl Editor {
         }
     }
 
-    /// What is drawn for `text`: the text itself, or one mask character per character of it.
+    /// What is drawn for `text`: the text itself, or one mask character per grapheme cluster of it.
     pub(crate) fn shown(&self, text: &str) -> String {
         match self.mask() {
-            Some(bullet) => text.chars().map(|_| bullet).collect(),
+            Some(bullet) => masked(text, bullet),
             None => text.to_string(),
         }
     }
@@ -637,7 +642,7 @@ impl Editor {
     /// The run a press selects at `hit`, by `granularity`.
     fn run_at(&self, text: &str, hit: Hit, granularity: Granularity) -> (usize, usize) {
         let range = match granularity {
-            Granularity::Char => hit.at..hit.at,
+            Granularity::Cluster => hit.at..hit.at,
             Granularity::Word => word_at(text, hit.under),
             Granularity::Line => match self.shape.lines {
                 Lines::Single => 0..text.len(),
@@ -660,7 +665,8 @@ impl Editor {
         let area = self.leaf.rect.get();
         let placed = self.placed(&text, &style);
         let hit = placed.hit(x - area.x, y - area.y);
-        let extending = granularity == Granularity::Char && crate::keyboard::modifiers().is_shift;
+        let extending =
+            granularity == Granularity::Cluster && crate::keyboard::modifiers().is_shift;
         let origin = match extending {
             true => {
                 let from = self
@@ -673,7 +679,7 @@ impl Editor {
         };
         let (anchor, caret, affinity) = match extending {
             true => (origin.0, hit.at, hit.affinity),
-            false if granularity == Granularity::Char => (hit.at, hit.at, hit.affinity),
+            false if granularity == Granularity::Cluster => (hit.at, hit.at, hit.affinity),
             false => (origin.0, origin.1, run_end_affinity(&placed, origin.1)),
         };
         self.select(anchor, caret, affinity);
@@ -698,7 +704,7 @@ impl Editor {
             false => (start, high.max(end)),
         };
         let affinity = match drag.granularity {
-            Granularity::Char => hit.affinity,
+            Granularity::Cluster => hit.affinity,
             _ => run_end_affinity(&placed, caret),
         };
         self.select(anchor, caret, affinity);
@@ -796,7 +802,7 @@ impl Editor {
         let line_h = placed.frame.line_h;
         let pinned = pinned(style.clone());
         let height = match self.shape.lines {
-            Lines::Single => area.height - placed.frame.top * 2.0,
+            Lines::Single => line_h,
             Lines::Multi => area.height.max(line_h),
         };
         let placeholder = self.shape.placeholder.borrow();
@@ -972,13 +978,6 @@ fn composing_marks(
     RenderNode::group(marks)
 }
 
-/// How far down a box taller than its single line puts that line, so the text sits mid-box and the whole box is the control.
-fn line_inset(height: f32, font_size: f32) -> f32 {
-    ((height - crate::text_metrics::single_line_box(font_size)) / 2.0)
-        .max(0.0)
-        .round()
-}
-
 /// The width the box's rows wrap at: as wide as layout made it before rounding took any off, since that is the width it was measured at and a row measured to fit must not break again when drawn.
 pub(crate) fn laid_width(node: NodeId, rect: Rect) -> f32 {
     if rect.width <= 0.0 {
@@ -1113,5 +1112,5 @@ fn keep_in_view(scroll: f32, x: f32, width: f32, max: f32) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "text_editor_test.rs"]
+#[path = "text_editor.test.rs"]
 mod tests;

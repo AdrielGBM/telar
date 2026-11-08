@@ -30,5 +30,5 @@ pub fn asset_url(path: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "asset_base_test.rs"]
+#[path = "asset_base.test.rs"]
 mod tests;

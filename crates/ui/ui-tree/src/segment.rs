@@ -1,4 +1,4 @@
-//! Fine-grained reactive segments (T-1.1 / F010).
+//! Fine-grained reactive segments.
 //!
 //! Today the whole app is one effect that re-runs `app.root().view()` — recursing every component — on any tracked signal, so a single hover/animation costs O(tree). A `Segment` instead mounts a component with its OWN effect that flattens only that component's `view()` into its own command buffer. A parent references a child via `RenderNode::Boundary` (a cheap `Rc` clone) instead of calling `child.view()`, so the parent's effect never re-runs the child, and a child's signal change re-runs only the child. The flat command list is composed lazily at collect time.
 
@@ -567,5 +567,5 @@ impl SegmentRoot {
 }
 
 #[cfg(test)]
-#[path = "segment_test.rs"]
+#[path = "segment.test.rs"]
 mod tests;

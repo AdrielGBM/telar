@@ -11,9 +11,7 @@
 use std::sync::Arc;
 
 use telar::preview::host::title_path;
-use telar::preview::{
-    ArgValue, control_size_word, direction_word, parse_control_size, parse_direction, parse_size,
-};
+use telar::preview::{ArgValue, direction_word, parse_direction, parse_size};
 use telar::{Location, Route};
 
 use crate::matrix::{CustomAxis, PickedAxis};
@@ -145,7 +143,6 @@ pub(crate) fn axes_text(axes: &[PickedAxis]) -> String {
                 CustomAxis::Mode => "mode".to_string(),
                 CustomAxis::Locale => "locale".to_string(),
                 CustomAxis::Direction => "dir".to_string(),
-                CustomAxis::ControlSize => "control_size".to_string(),
                 CustomAxis::Viewport => "viewport".to_string(),
                 CustomAxis::Arg(name) => format!("arg.{name}"),
             };
@@ -178,7 +175,6 @@ fn parse_axis(word: &str) -> Option<CustomAxis> {
         "mode" => Some(CustomAxis::Mode),
         "locale" => Some(CustomAxis::Locale),
         "dir" => Some(CustomAxis::Direction),
-        "control_size" => Some(CustomAxis::ControlSize),
         "viewport" => Some(CustomAxis::Viewport),
         _ => word
             .strip_prefix("arg.")
@@ -241,9 +237,6 @@ pub(crate) fn settings_text(settings: &CanvasSettings) -> String {
     if let Some(direction) = settings.direction {
         words.push(format!("dir:{}", direction_word(direction)));
     }
-    if let Some(size) = settings.control_size {
-        words.push(format!("control_size:{}", control_size_word(size)));
-    }
     if let Some(background) = background_word(settings.background) {
         words.push(format!("bg:{background}"));
     }
@@ -287,7 +280,6 @@ pub(crate) fn parse_settings(text: &str) -> CanvasSettings {
             ("mode", mode) => settings.mode = ModeChoice::parse(mode),
             ("locale", locale) if !locale.is_empty() => settings.locale = Some(locale.to_string()),
             ("dir", direction) => settings.direction = parse_direction(direction),
-            ("control_size", size) => settings.control_size = parse_control_size(size),
             ("bg", background) => settings.background = parse_background(background),
             ("size", size) => settings.size = parse_canvas_size(size).unwrap_or_default(),
             ("rotated", "") => settings.rotated = true,
@@ -360,5 +352,5 @@ fn parse_canvas_size(word: &str) -> Option<CanvasSize> {
 }
 
 #[cfg(test)]
-#[path = "route_test.rs"]
+#[path = "route.test.rs"]
 mod tests;

@@ -3,6 +3,7 @@
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
+mod css_string;
 mod dash;
 mod declared;
 mod decoration;
@@ -12,9 +13,11 @@ mod gradient;
 mod paint;
 mod scale;
 mod shape;
+mod span_segments;
 mod text_case;
 mod text_length;
 
+pub use css_string::css_string;
 pub use dash::Dash;
 pub use declared::{Declared, Span, link_at};
 pub use decoration::{DecorationLength, DecorationLine, DecorationMetric, TextDecoration};
@@ -23,6 +26,7 @@ pub use font_settings::{FontFeatures, FontTag, FontVariations};
 pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};
 pub use shape::{Border, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
+pub use span_segments::{Segment, span_segments};
 pub use text_case::{CasedText, TextCase, case_text};
 pub use text_length::TextLength;
 
@@ -441,5 +445,5 @@ pub trait Scale: Sized {
 }
 
 #[cfg(test)]
-#[path = "style_test.rs"]
+#[path = "style.test.rs"]
 mod tests;

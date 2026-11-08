@@ -1,0 +1,414 @@
+use std::collections::BTreeMap;
+
+use super::*;
+
+const GLUE: &str = "const url = new URL('app_bg.wasm', import.meta.url);\n";
+
+/// A package root and a staging directory holding what `wasm-bindgen` leaves behind.
+fn project(name: &str) -> (PathBuf, PathBuf) {
+    let root = std::env::temp_dir().join(format!("telar_web_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let package = root.join("package");
+    let out = root.join("out");
+    std::fs::create_dir_all(&package).unwrap();
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("app.js"), GLUE).unwrap();
+    std::fs::write(out.join("app_bg.wasm"), b"\0asm module").unwrap();
+    (package, out)
+}
+
+fn manifest(out: &Path) -> BTreeMap<String, String> {
+    serde_json::from_slice(&std::fs::read(out.join(MANIFEST_FILE)).unwrap()).unwrap()
+}
+
+fn cleanup(package: &Path) {
+    let _ = std::fs::remove_dir_all(package.parent().unwrap());
+}
+
+/// `assemble` for an app named `demo`, with the site `web` describes.
+fn assemble_demo(
+    out: &Path,
+    package: &Path,
+    web: &WebSection,
+    fonts: &[FontDeclaration],
+    renderer: Option<WebRenderer>,
+    locale: &str,
+) -> Result<(Page, String), String> {
+    let site = Site::new(web, package, "demo")?;
+    let shell = Shell {
+        app_name: "demo",
+        renderer,
+        locale,
+        site: &site,
+        reserved: &reserved_paths(&SitePlan::Root, web.host()),
+    };
+    assemble(out, package, web, fonts, &shell)
+}
+
+#[test]
+fn a_project_with_nothing_under_web_gets_the_built_in_page_and_hashed_bootstrap() {
+    let (package, out) = project("defaults");
+    assemble_demo(&out, &package, &WebSection::default(), &[], None, "en").unwrap();
+
+    let manifest = manifest(&out);
+    let glue = &manifest["app.js"];
+    let module = &manifest["app_bg.wasm"];
+    assert_eq!(manifest.len(), 2);
+    assert!(glue.starts_with("app-") && glue.ends_with(".js"), "{glue}");
+    assert!(
+        module.starts_with("app_bg-") && module.ends_with(".wasm"),
+        "{module}"
+    );
+    assert!(!out.join("app.js").exists() && !out.join("app_bg.wasm").exists());
+
+    let glue_source = std::fs::read_to_string(out.join(glue)).unwrap();
+    assert!(
+        glue_source.contains(&format!("'{module}'")),
+        "the glue fetches the hashed module: {glue_source}"
+    );
+
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert!(page.contains(&format!("import init from \"/{glue}\";")));
+    assert!(page.contains(r#"<meta name="description" content="demo, a Telar application." />"#));
+    cleanup(&package);
+}
+
+#[test]
+fn the_page_lang_and_dir_follow_the_locale_passed_in() {
+    let (package, out) = project("locale_ltr");
+    assemble_demo(&out, &package, &WebSection::default(), &[], None, "es").unwrap();
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert!(page.contains(r#"lang="es""#), "{page}");
+    assert!(page.contains(r#"dir="ltr""#), "{page}");
+    cleanup(&package);
+
+    let (package, out) = project("locale_rtl");
+    assemble_demo(&out, &package, &WebSection::default(), &[], None, "ar").unwrap();
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert!(page.contains(r#"lang="ar""#), "{page}");
+    assert!(page.contains(r#"dir="rtl""#), "{page}");
+    cleanup(&package);
+}
+
+#[test]
+fn a_new_module_gives_the_glue_a_new_name_too() {
+    let (package, out) = project("chain_a");
+    assemble_demo(&out, &package, &WebSection::default(), &[], None, "en").unwrap();
+    let first = manifest(&out);
+    cleanup(&package);
+
+    let (package, out) = project("chain_b");
+    std::fs::write(out.join("app_bg.wasm"), b"\0asm another module").unwrap();
+    assemble_demo(&out, &package, &WebSection::default(), &[], None, "en").unwrap();
+    let second = manifest(&out);
+    cleanup(&package);
+
+    assert_ne!(first["app_bg.wasm"], second["app_bg.wasm"]);
+    assert_ne!(first["app.js"], second["app.js"]);
+}
+
+#[test]
+fn the_project_template_and_public_directory_are_used() {
+    let (package, out) = project("custom");
+    std::fs::create_dir_all(package.join("web/public/img")).unwrap();
+    std::fs::write(
+        package.join("web/index.html"),
+        "<html lang=\"%telar.lang%\"><head>%telar.bootstrap%</head><body><main id=\"telar-root\"></main></body></html>\n",
+    )
+    .unwrap();
+    std::fs::write(package.join("web/public/robots.txt"), "User-agent: *\n").unwrap();
+    std::fs::write(package.join("web/public/img/og.png"), b"png").unwrap();
+
+    assemble_demo(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        Some(WebRenderer::Dom),
+        "en",
+    )
+    .unwrap();
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert!(
+        page.starts_with("<html lang=\"en\"><head><meta name=\"telar-assets\""),
+        "{page}"
+    );
+    assert!(page.contains("<main id=\"telar-root\"></main>"));
+    assert!(out.join("robots.txt").is_file());
+    assert!(out.join("img/og.png").is_file());
+    assert_eq!(
+        manifest(&out).len(),
+        2,
+        "public files keep their names and stay out of the manifest"
+    );
+    cleanup(&package);
+}
+
+#[test]
+fn the_web_table_can_move_the_template_and_the_public_directory() {
+    let (package, out) = project("moved");
+    std::fs::create_dir_all(package.join("site/static")).unwrap();
+    std::fs::write(package.join("site/page.html"), "%telar.bootstrap%\n").unwrap();
+    std::fs::write(package.join("site/static/favicon.ico"), b"ico").unwrap();
+    let web = WebSection {
+        template: Some("site/page.html".to_string()),
+        public: Some("site/static".to_string()),
+        ..WebSection::default()
+    };
+    assemble_demo(&out, &package, &web, &[], None, "en").unwrap();
+    assert!(
+        std::fs::read_to_string(out.join(PAGE_FILE))
+            .unwrap()
+            .starts_with("<meta name=\"telar-assets\"")
+    );
+    assert!(out.join("favicon.ico").is_file());
+    cleanup(&package);
+}
+
+#[test]
+fn a_named_template_or_public_directory_that_is_not_there_is_an_error() {
+    let (package, out) = project("named_missing_template");
+    let web = WebSection {
+        template: Some("site/page.html".to_string()),
+        public: None,
+        ..WebSection::default()
+    };
+    let error = assemble_demo(&out, &package, &web, &[], None, "en").unwrap_err();
+    assert!(error.contains("site/page.html"), "{error}");
+    cleanup(&package);
+
+    let (package, out) = project("named_missing_public");
+    let web = WebSection {
+        template: None,
+        public: Some("static".to_string()),
+        ..WebSection::default()
+    };
+    let error = assemble_demo(&out, &package, &web, &[], None, "en").unwrap_err();
+    assert!(error.contains("[telar.web] public"), "{error}");
+    cleanup(&package);
+}
+
+#[test]
+fn a_template_error_names_the_template() {
+    let (package, out) = project("broken_template");
+    std::fs::create_dir_all(package.join("web")).unwrap();
+    std::fs::write(
+        package.join("web/index.html"),
+        "<script src=\"./app.js\"></script>\n",
+    )
+    .unwrap();
+    let error = assemble_demo(&out, &package, &WebSection::default(), &[], None, "en").unwrap_err();
+    assert!(error.contains("web/index.html"), "{error}");
+    assert!(error.contains("%telar.bootstrap%"), "{error}");
+    cleanup(&package);
+}
+
+#[test]
+fn glue_that_does_not_name_the_module_is_an_error() {
+    let (package, out) = project("foreign_glue");
+    std::fs::write(out.join("app.js"), "export default function init() {}\n").unwrap();
+    let error = assemble_demo(&out, &package, &WebSection::default(), &[], None, "en").unwrap_err();
+    assert!(error.contains("'app_bg.wasm'"), "{error}");
+    cleanup(&package);
+}
+
+#[test]
+fn publishing_replaces_the_previous_output_whole() {
+    let (package, staging) = project("publish");
+    let out = staging.with_file_name("web");
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("app-000000000000.js"), "stale").unwrap();
+    publish(&staging, &out).unwrap();
+    assert!(!staging.exists());
+    assert!(!out.join("app-000000000000.js").exists());
+    assert!(out.join("app.js").is_file());
+    cleanup(&package);
+}
+
+#[test]
+fn a_named_output_is_assembled_beside_it_and_replaces_only_a_web_build() {
+    let (package, _) = project("named_out");
+    let root = package.parent().unwrap();
+    let fresh = root.join("site");
+    assert_eq!(staging_beside(&fresh).unwrap(), root.join("site.staging"));
+
+    std::fs::create_dir_all(&fresh).unwrap();
+    assert!(check_site_dir(&fresh).is_ok(), "an empty directory");
+    std::fs::write(fresh.join(MANIFEST_FILE), "{}").unwrap();
+    std::fs::write(fresh.join("index.html"), "old").unwrap();
+    assert!(check_site_dir(&fresh).is_ok(), "an earlier web build");
+
+    let error = check_site_dir(root).unwrap_err();
+    assert!(error.contains("would delete them"), "{error}");
+    std::fs::write(root.join("file"), "").unwrap();
+    assert!(check_site_dir(&root.join("file")).is_err(), "a file");
+    assert!(check_site_dir(Path::new("/")).is_err(), "no directory name");
+    cleanup(&package);
+}
+
+fn declared(toml: &str) -> Vec<FontDeclaration> {
+    toml::from_str::<telar_project::TelarManifest>(toml)
+        .unwrap()
+        .telar
+        .fonts
+}
+
+#[test]
+fn a_declared_font_ships_hashed_with_its_face_rule_and_preload() {
+    let (package, out) = project("fonts");
+    std::fs::create_dir_all(package.join("assets/fonts")).unwrap();
+    std::fs::write(package.join("assets/fonts/Display.ttf"), b"\0\x01\0\0 face").unwrap();
+    let fonts = declared(
+        r#"
+        [[telar.fonts]]
+        family = "Display"
+        src = "assets/fonts/Display.ttf"
+        axes = { wght = [100, 900] }
+        size_adjust = 1.05
+
+        [[telar.fonts]]
+        family = "Display"
+        src = "assets/fonts/Display.ttf"
+        style = "oblique"
+        "#,
+    );
+    assemble_demo(&out, &package, &WebSection::default(), &fonts, None, "en").unwrap();
+
+    let hashed = manifest(&out)["fonts/Display.ttf"].clone();
+    assert!(
+        hashed.starts_with("fonts/Display-") && hashed.ends_with(".ttf"),
+        "{hashed}"
+    );
+    assert!(out.join(&hashed).is_file());
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert_eq!(
+        page.matches(r#"rel="preload""#).count(),
+        2,
+        "one preload for the module and one for the face, which two rules share: {page}"
+    );
+    assert!(page.contains(&format!(
+        r#"<link rel="preload" href="/{hashed}" as="font" type="font/ttf" crossorigin data-telar-family="Display" />"#
+    )));
+    assert_eq!(page.matches("@font-face").count(), 2);
+    assert!(page.contains(&format!(r#"src: url("/{hashed}") format("truetype");"#)));
+    assert!(page.contains("font-weight: 100 900;"));
+    assert!(page.contains("font-display: swap;"));
+    assert!(page.contains("size-adjust: 105%;"));
+    assert!(page.contains("font-style: oblique;"));
+    assert!(
+        page.find("@font-face").unwrap() < page.find("<script type=\"module\">").unwrap(),
+        "the faces are declared in the head, ahead of the app"
+    );
+    cleanup(&package);
+}
+
+#[test]
+fn a_template_without_a_place_for_declared_fonts_is_refused() {
+    let (package, out) = project("fonts_nowhere");
+    std::fs::create_dir_all(package.join("web")).unwrap();
+    std::fs::write(package.join("web/index.html"), "%telar.bootstrap%\n").unwrap();
+    std::fs::write(package.join("a.ttf"), b"face").unwrap();
+    let fonts = declared("[[telar.fonts]]\nfamily = \"A\"\nsrc = \"a.ttf\"\n");
+    let error =
+        assemble_demo(&out, &package, &WebSection::default(), &fonts, None, "en").unwrap_err();
+    assert!(error.contains("%telar.fonts%"), "{error}");
+    cleanup(&package);
+}
+
+#[test]
+fn a_declared_font_that_is_not_there_is_an_error_naming_it() {
+    let (package, out) = project("fonts_missing");
+    let fonts = declared("[[telar.fonts]]\nfamily = \"Gone\"\nsrc = \"gone.woff2\"\n");
+    let error =
+        assemble_demo(&out, &package, &WebSection::default(), &fonts, None, "en").unwrap_err();
+    assert!(
+        error.contains("Gone") && error.contains("gone.woff2"),
+        "{error}"
+    );
+    cleanup(&package);
+}
+
+#[test]
+fn a_baked_picture_ships_at_the_address_the_module_was_baked_with() {
+    let (package, out) = project("pictures");
+    let dot = include_bytes!("../../../../../telar-baker/fixtures/dot.png");
+    std::fs::create_dir_all(package.join("assets")).unwrap();
+    std::fs::create_dir_all(package.join("src")).unwrap();
+    std::fs::write(package.join("assets/dot.png"), dot).unwrap();
+    std::fs::write(package.join("src/app.rsx"), "[view]\nimg src:\"dot.png\"\n").unwrap();
+    telar_baker::bake_package(&package, "test", "0.0.0").expect("the package bakes");
+
+    assemble_demo(&out, &package, &WebSection::default(), &[], None, "en").unwrap();
+    images::ship_images(&out, std::slice::from_ref(&package)).unwrap();
+
+    let address = telar_baker::web_image(dot).unwrap().full.path;
+    let baked = std::fs::read_to_string(package.join(".telar/assets.rs")).unwrap();
+    assert!(baked.contains(&format!("{address:?}")), "{baked}");
+    assert_eq!(std::fs::read(out.join(&address)).unwrap(), dot);
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert!(
+        page.contains("<meta name=\"telar-assets\" content=\"/\" />"),
+        "{page}"
+    );
+    cleanup(&package);
+}
+
+#[test]
+fn the_page_lang_is_the_default_locale_in_bcp_47_form() {
+    assert_eq!(page_locale(Some("pt_BR".to_string())), "pt-BR");
+    assert_eq!(page_locale(Some("es".to_string())), "es");
+    assert_eq!(page_locale(None), "en");
+}
+
+fn strings(args: &[&str]) -> Vec<String> {
+    args.iter().map(|arg| arg.to_string()).collect()
+}
+
+/// Whatever came after `--` is cargo's to read, so it reaches the wasm build as written; only the profile is the build's own word.
+#[test]
+fn the_wasm_build_forwards_the_cargo_arguments_verbatim() {
+    let passthrough = strings(&[
+        "-p",
+        "landing",
+        "--features=analytics",
+        "--all-features",
+        "--locked",
+    ]);
+    let frontend = strings(&["--features", "telar/web-dom"]);
+    assert_eq!(
+        wasm_build_args(&passthrough, true, &frontend),
+        [
+            "build",
+            "--target",
+            WASM_TARGET,
+            "--lib",
+            "-p",
+            "landing",
+            "--features=analytics",
+            "--all-features",
+            "--locked",
+            "--profile",
+            "web",
+            "--features",
+            "telar/web-dom",
+            "--message-format=json",
+        ]
+    );
+}
+
+#[test]
+fn a_debug_wasm_build_names_no_profile_of_its_own() {
+    let passthrough = strings(&["--profile", "dev-fast"]);
+    assert_eq!(
+        wasm_build_args(&passthrough, false, &[]),
+        [
+            "build",
+            "--target",
+            WASM_TARGET,
+            "--lib",
+            "--profile",
+            "dev-fast",
+            "--message-format=json",
+        ]
+    );
+}

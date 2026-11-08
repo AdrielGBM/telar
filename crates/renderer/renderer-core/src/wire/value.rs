@@ -1,7 +1,10 @@
 //! How each value a draw command carries is spelled, field by field, with every enum's tags written out so the wire never follows declaration order. Geometry and semantics are spelled beside their own types, in `geometry-core` and `semantics-core`.
 
-use semantics_core::wire::{put_link, take_link};
-use wire_core::{Reader, Wire, WireError, Writer, wire_enum, wire_struct};
+use semantics_core::wire::{LINK_SHAPE, put_link, take_link};
+use wire_core::{
+    Reader, Shaped, Wire, WireError, Writer, fold, fold_fields, fold_shape, shape_named, wire_enum,
+    wire_struct,
+};
 
 use crate::{
     BlendMode, Border, Clamp, Color, Dash, Declared, DecorationLength, DecorationLine,
@@ -73,7 +76,7 @@ wire_enum!(FontFamily {
     Cursive = 4,
     Fantasy = 5,
     Named(name) = 6,
-    Stack(families) = 7,
+    Stack(families: Self) = 7,
 });
 wire_enum!(Paint {
     Solid(color) = 0,
@@ -192,6 +195,16 @@ wire_struct!(Declared {
     decoration_color,
 });
 
+impl Shaped for Span {
+    const SHAPE: u64 = fold_shape(
+        fold(
+            fold_fields!(shape_named("Span"), Span { range, over }),
+            b"link",
+        ),
+        LINK_SHAPE,
+    );
+}
+
 impl Wire for Span {
     fn put(&self, w: &mut Writer) {
         self.range.put(w);
@@ -209,37 +222,13 @@ impl Wire for Span {
 
 wire_struct!(ImageSlice { insets, scale });
 
-impl Wire for GradientKind {
-    fn put(&self, w: &mut Writer) {
-        match self {
-            GradientKind::Linear { start, end } => {
-                w.u8(0);
-                start.put(w);
-                end.put(w);
-            }
-            GradientKind::Radial { center, radius } => {
-                w.u8(1);
-                center.put(w);
-                radius.put(w);
-            }
-        }
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        match r.u8()? {
-            0 => Ok(GradientKind::Linear {
-                start: Wire::take(r)?,
-                end: Wire::take(r)?,
-            }),
-            1 => Ok(GradientKind::Radial {
-                center: Wire::take(r)?,
-                radius: Wire::take(r)?,
-            }),
-            tag => Err(WireError::Tag {
-                of: "GradientKind",
-                tag,
-            }),
-        }
-    }
+wire_enum!(GradientKind {
+    Linear { start, end } = 0,
+    Radial { transform } = 1,
+});
+
+impl Shaped for GradientStops {
+    const SHAPE: u64 = fold_shape(shape_named("GradientStops"), <Vec<(f32, Color)>>::SHAPE);
 }
 
 impl Wire for GradientStops {
@@ -252,7 +241,7 @@ impl Wire for GradientStops {
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         let len = r.len()?;
-        if len > 8 {
+        if len > GradientStops::CAPACITY {
             return Err(WireError::Invalid("more than 8 gradient stops"));
         }
         let stops: Vec<(f32, Color)> = (0..len)
@@ -260,6 +249,13 @@ impl Wire for GradientStops {
             .collect::<Result<_, WireError>>()?;
         Ok(GradientStops::new(&stops))
     }
+}
+
+impl Shaped for Dash {
+    const SHAPE: u64 = fold_shape(
+        fold_shape(shape_named("Dash"), <Vec<f32>>::SHAPE),
+        f32::SHAPE,
+    );
 }
 
 impl Wire for Dash {
@@ -275,6 +271,14 @@ impl Wire for Dash {
         let lengths: Vec<f32> = (0..len).map(|_| f32::take(r)).collect::<Result<_, _>>()?;
         Dash::new(&lengths, f32::take(r)?).ok_or(WireError::Invalid("dash pattern"))
     }
+}
+
+impl Shaped for Clamp {
+    const SHAPE: u64 = {
+        let hash = fold(fold(shape_named("Clamp"), b"None"), &[0]);
+        let hash = fold(fold(hash, b"Lines"), &[1]);
+        fold_shape(fold_shape(hash, u16::SHAPE), bool::SHAPE)
+    };
 }
 
 impl Wire for Clamp {
@@ -304,6 +308,10 @@ impl Wire for Clamp {
     }
 }
 
+impl Shaped for FontTag {
+    const SHAPE: u64 = fold(shape_named("FontTag"), &[4]);
+}
+
 impl Wire for FontTag {
     fn put(&self, w: &mut Writer) {
         w.raw(&self.bytes());
@@ -312,6 +320,10 @@ impl Wire for FontTag {
         let bytes: [u8; 4] = r.raw(4)?.try_into().map_err(|_| WireError::Truncated)?;
         Ok(FontTag::new(&bytes))
     }
+}
+
+impl Shaped for FontVariations {
+    const SHAPE: u64 = fold_shape(shape_named("FontVariations"), <Vec<(FontTag, f32)>>::SHAPE);
 }
 
 impl Wire for FontVariations {
@@ -330,6 +342,10 @@ impl Wire for FontVariations {
     }
 }
 
+impl Shaped for FontFeatures {
+    const SHAPE: u64 = fold_shape(shape_named("FontFeatures"), <Vec<(FontTag, u32)>>::SHAPE);
+}
+
 impl Wire for FontFeatures {
     fn put(&self, w: &mut Writer) {
         w.len(self.iter().count());
@@ -346,51 +362,16 @@ impl Wire for FontFeatures {
     }
 }
 
-impl Wire for PathVerb {
-    fn put(&self, w: &mut Writer) {
-        match self {
-            PathVerb::MoveTo(to) => {
-                w.u8(0);
-                to.put(w);
-            }
-            PathVerb::LineTo(to) => {
-                w.u8(1);
-                to.put(w);
-            }
-            PathVerb::QuadTo { ctrl, to } => {
-                w.u8(2);
-                ctrl.put(w);
-                to.put(w);
-            }
-            PathVerb::CubicTo { ctrl1, ctrl2, to } => {
-                w.u8(3);
-                ctrl1.put(w);
-                ctrl2.put(w);
-                to.put(w);
-            }
-            PathVerb::Close => w.u8(4),
-        }
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        match r.u8()? {
-            0 => Ok(PathVerb::MoveTo(Wire::take(r)?)),
-            1 => Ok(PathVerb::LineTo(Wire::take(r)?)),
-            2 => Ok(PathVerb::QuadTo {
-                ctrl: Wire::take(r)?,
-                to: Wire::take(r)?,
-            }),
-            3 => Ok(PathVerb::CubicTo {
-                ctrl1: Wire::take(r)?,
-                ctrl2: Wire::take(r)?,
-                to: Wire::take(r)?,
-            }),
-            4 => Ok(PathVerb::Close),
-            tag => Err(WireError::Tag {
-                of: "PathVerb",
-                tag,
-            }),
-        }
-    }
+wire_enum!(PathVerb {
+    MoveTo(to) = 0,
+    LineTo(to) = 1,
+    QuadTo { ctrl, to } = 2,
+    CubicTo { ctrl1, ctrl2, to } = 3,
+    Close = 4,
+});
+
+impl Shaped for PathData {
+    const SHAPE: u64 = fold_shape(shape_named("PathData"), <Vec<PathVerb>>::SHAPE);
 }
 
 impl Wire for PathData {
@@ -409,34 +390,11 @@ impl Wire for PathData {
     }
 }
 
-impl Wire for ImageFill {
-    fn put(&self, w: &mut Writer) {
-        match self {
-            ImageFill::Stretch => w.u8(0),
-            ImageFill::Tile { scale } => {
-                w.u8(1);
-                scale.put(w);
-            }
-            ImageFill::Slice(slice) => {
-                w.u8(2);
-                slice.put(w);
-            }
-        }
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        match r.u8()? {
-            0 => Ok(ImageFill::Stretch),
-            1 => Ok(ImageFill::Tile {
-                scale: Wire::take(r)?,
-            }),
-            2 => Ok(ImageFill::Slice(Wire::take(r)?)),
-            tag => Err(WireError::Tag {
-                of: "ImageFill",
-                tag,
-            }),
-        }
-    }
-}
+wire_enum!(ImageFill {
+    Stretch = 0,
+    Tile { scale } = 1,
+    Slice(slice) = 2,
+});
 
 wire_struct!(Linked { url, variants });
 wire_struct!(Element {
@@ -453,6 +411,10 @@ wire_struct!(Element {
     caret,
 });
 
+impl Shaped for ElementId {
+    const SHAPE: u64 = fold_shape(shape_named("ElementId"), u64::SHAPE);
+}
+
 impl Wire for ElementId {
     fn put(&self, w: &mut Writer) {
         self.0.put(w);
@@ -463,6 +425,21 @@ impl Wire for ElementId {
 }
 
 const PICTURE_FITS: [&str; 5] = ["fill", "contain", "cover", "none", "scale-down"];
+
+impl Shaped for Picture {
+    const SHAPE: u64 = {
+        let hash = fold_fields!(
+            shape_named("Picture"),
+            Picture {
+                source,
+                width,
+                height
+            }
+        );
+        let hash = fold_shape(fold(hash, b"fit"), String::SHAPE);
+        fold_fields!(hash, Picture { priority })
+    };
+}
 
 impl Wire for Picture {
     fn put(&self, w: &mut Writer) {

@@ -8,24 +8,31 @@ use super::clock::{Epoch, Timestamp};
 use super::contract::{ContractStamp, TypeLayout};
 use super::lent::release_answers;
 use super::outcome::{CallOutcome, guest_entry, release_report};
-use super::services::HostServices;
+use super::services::{HostServices, UpperServices};
 use super::surface::SurfaceReport;
 
 /// The entries a host calls on every guest, in this order: `loaded` and `adopt_epoch`, for a library it will unmap, then `install_services`, before anything else; once every instance is released, `unloading`, unless the guest panicked, and `quiesce`, always, right before the library is unmapped. Entries a process serves itself share its epoch and are never unmapped.
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Lifecycle {
+pub struct Lifecycle<Upper> {
     pub loaded: unsafe extern "C" fn() -> CallOutcome,
     pub adopt_epoch: unsafe extern "C" fn(now: Timestamp) -> CallOutcome,
-    pub install_services: unsafe extern "C" fn(services: HostServices) -> CallOutcome,
+    pub install_services: unsafe extern "C" fn(services: HostServices<Upper>) -> CallOutcome,
     pub unloading: unsafe extern "C" fn() -> CallOutcome,
     pub quiesce: unsafe extern "C" fn() -> CallOutcome,
 }
 
-impl Lifecycle {
+impl<Upper> Clone for Lifecycle<Upper> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<Upper> Copy for Lifecycle<Upper> {}
+
+impl<Upper: UpperServices> Lifecycle<Upper> {
     /// The lifecycle a guest serves, with `install_services` filling its stores from the host's table: the one entry each boundary writes itself, since what a guest installs beyond those stores, its shaper's font database, is in a crate this one does not link.
     pub const fn serving(
-        install_services: unsafe extern "C" fn(services: HostServices) -> CallOutcome,
+        install_services: unsafe extern "C" fn(services: HostServices<Upper>) -> CallOutcome,
     ) -> Self {
         Self {
             loaded,
@@ -35,30 +42,49 @@ impl Lifecycle {
             quiesce,
         }
     }
+
+    /// The layout [`ContractStamp`] hashes for [`Lifecycle`], each entry with its signature and the shape of the services it installs.
+    pub const LAYOUT: TypeLayout = TypeLayout {
+        name: "Lifecycle",
+        size: std::mem::size_of::<Self>(),
+        align: std::mem::align_of::<Self>(),
+        fields: &[
+            ("loaded: fn()", std::mem::offset_of!(Self, loaded)),
+            (
+                "adopt_epoch: fn(Timestamp)",
+                std::mem::offset_of!(Self, adopt_epoch),
+            ),
+            (
+                "install_services: fn(HostServices)",
+                std::mem::offset_of!(Self, install_services),
+            ),
+            ("unloading: fn()", std::mem::offset_of!(Self, unloading)),
+            ("quiesce: fn()", std::mem::offset_of!(Self, quiesce)),
+        ],
+        shape: {
+            let hash = wire_core::shape_named("Lifecycle");
+            let hash =
+                wire_core::fold_shape(hash, super::field_shape(|it: &Self| &raw const it.loaded));
+            let hash = wire_core::fold_shape(
+                hash,
+                super::field_shape(|it: &Self| &raw const it.adopt_epoch),
+            );
+            let hash = wire_core::fold_shape(
+                hash,
+                super::field_shape(|it: &Self| &raw const it.install_services),
+            );
+            let hash = wire_core::fold_shape(
+                hash,
+                super::field_shape(|it: &Self| &raw const it.unloading),
+            );
+            wire_core::fold_shape(hash, super::field_shape(|it: &Self| &raw const it.quiesce))
+        },
+    };
 }
 
-/// The layout [`ContractStamp`] hashes for [`Lifecycle`], each entry with its signature.
-pub(super) const LIFECYCLE_LAYOUT: TypeLayout = TypeLayout {
-    name: "Lifecycle",
-    size: std::mem::size_of::<Lifecycle>(),
-    align: std::mem::align_of::<Lifecycle>(),
-    fields: &[
-        ("loaded: fn()", std::mem::offset_of!(Lifecycle, loaded)),
-        (
-            "adopt_epoch: fn(Timestamp)",
-            std::mem::offset_of!(Lifecycle, adopt_epoch),
-        ),
-        (
-            "install_services: fn(HostServices)",
-            std::mem::offset_of!(Lifecycle, install_services),
-        ),
-        (
-            "unloading: fn()",
-            std::mem::offset_of!(Lifecycle, unloading),
-        ),
-        ("quiesce: fn()", std::mem::offset_of!(Lifecycle, quiesce)),
-    ],
-};
+impl<Upper: UpperServices> super::contract::ArgShape for Lifecycle<Upper> {
+    const ARG_SHAPE: u64 = Self::LAYOUT.shape;
+}
 
 /// A boundary's table of entries, which starts with its [`Lifecycle`] and carries the [`SurfaceReport`] of the instances it builds, as [`entry_table!`](crate::entry_table) declares one: what [`open_guest`](super::open_guest) copies out of a library, and what a host drives any guest through.
 ///
@@ -68,13 +94,15 @@ pub(super) const LIFECYCLE_LAYOUT: TypeLayout = TypeLayout {
 pub unsafe trait Entries: Copy + 'static {
     /// The instance on the guest's side whose surface [`report`](Self::report) reads, behind the handles its host holds.
     type Surface;
+    /// The `upper` table of the [`HostServices`] its [`Lifecycle`] installs.
+    type Upper: UpperServices;
     /// The symbol the table is exported as, ending in a nul.
     const SYMBOL: &'static [u8];
     const LAYOUT: TypeLayout;
     /// The stamp a library exports beside the table, and its host refuses it without.
     const CONTRACT: ContractStamp;
 
-    fn lifecycle(&self) -> &Lifecycle;
+    fn lifecycle(&self) -> &Lifecycle<Self::Upper>;
 
     fn report(&self) -> &SurfaceReport<Self::Surface>;
 }
@@ -115,5 +143,5 @@ extern "C" fn quiesce() -> CallOutcome {
 }
 
 #[cfg(test)]
-#[path = "lifecycle_test.rs"]
+#[path = "lifecycle.test.rs"]
 mod tests;

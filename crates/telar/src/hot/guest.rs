@@ -7,12 +7,17 @@ use platform_core::guest::{
     CWaker, CallOutcome, FrameCtx, Handle, HostServices, LentBytes, Timestamp, guest_entry,
     host_epoch,
 };
-use platform_core::{Event, Location, SystemPreferences};
+use std::time::Duration;
+
+use platform_core::{AccessAudit, Event, Location, SystemPreferences, WindowCommand, WindowConfig};
 use reactive_core::OpenBatch;
 use renderer_core::Color;
+use renderer_core::wire::{DrawList, Pixels};
+use services_core::guest::UpperTable;
+use ui_tree::SegmentNodeInfo;
 
 use crate::app::App;
-use crate::tree::HotTree;
+use crate::tree::hot::HotTree;
 
 /// What a hot-reload library exports, as the `app!` macro writes it: its [`HotEntries`](crate::hot::HotEntries), whose `create` builds the app `make` returns, and the [`HOT_CONTRACT`](crate::hot::HOT_CONTRACT) its host checks before reading them.
 #[doc(hidden)]
@@ -58,16 +63,20 @@ pub unsafe fn create(
     })
 }
 
-/// Fills this copy's stores from the host's table, and has its shaper defer to the host's font database. The table is the host's, kept until it has unloaded this copy.
-pub(super) unsafe extern "C" fn install_services(services: HostServices) -> CallOutcome {
+/// Fills this copy's stores from the host's table, has its shaper defer to the host's font database, and installs the shaper's measurer as the runner of the app this library swaps in does on resume. The table is the host's, kept until it has unloaded this copy.
+pub(super) unsafe extern "C" fn install_services(
+    services: HostServices<UpperTable>,
+) -> CallOutcome {
     guest_entry(move || {
         let fonts = unsafe { services_core::guest::install_host_services(services) };
-        #[cfg(feature = "shaper")]
+        #[cfg(any(feature = "shaper", feature = "font-faces"))]
         if let Some(fonts) = fonts {
             renderer_text::fonts::defer_to(fonts);
         }
-        #[cfg(not(feature = "shaper"))]
+        #[cfg(not(any(feature = "shaper", feature = "font-faces")))]
         drop(fonts);
+        #[cfg(feature = "shaper")]
+        crate::install_default_text_metrics();
     })
 }
 
@@ -78,7 +87,7 @@ pub(super) unsafe extern "C" fn release(app: Handle<GuestApp>) -> CallOutcome {
 
 pub(super) unsafe extern "C" fn window_config(
     app: Handle<GuestApp>,
-    config: *mut LentBytes,
+    config: *mut LentBytes<Option<WindowConfig>>,
 ) -> CallOutcome {
     guest_entry(|| {
         let configured = unsafe { app.get() }.0.window_config();
@@ -88,7 +97,7 @@ pub(super) unsafe extern "C" fn window_config(
 
 pub(super) unsafe extern "C" fn clear_color(
     app: Handle<GuestApp>,
-    color: *mut LentBytes,
+    color: *mut LentBytes<Option<Color>>,
 ) -> CallOutcome {
     guest_entry(|| {
         let clear: Option<Color> = unsafe { app.get() }.0.clear_color();
@@ -120,7 +129,7 @@ pub(super) unsafe extern "C" fn tree_release(tree: Handle<HotTree>) -> CallOutco
 
 pub(super) unsafe extern "C" fn tree_on_event(
     tree: Handle<HotTree>,
-    event: LentBytes,
+    event: LentBytes<Event>,
     handled: *mut bool,
 ) -> CallOutcome {
     guest_entry(|| {
@@ -132,7 +141,7 @@ pub(super) unsafe extern "C" fn tree_on_event(
 
 pub(super) unsafe extern "C" fn tree_on_covered_event(
     tree: Handle<HotTree>,
-    event: LentBytes,
+    event: LentBytes<Event>,
 ) -> CallOutcome {
     guest_entry(|| {
         let event: Event = unsafe { event.read() };
@@ -146,7 +155,7 @@ pub(super) unsafe extern "C" fn tree_end_frame(tree: Handle<HotTree>) -> CallOut
 
 pub(super) unsafe extern "C" fn tree_paint(
     tree: Handle<HotTree>,
-    frame: *mut LentBytes,
+    frame: *mut LentBytes<DrawList>,
 ) -> CallOutcome {
     guest_entry(|| {
         let painted = unsafe { tree.get() }.paint();
@@ -157,7 +166,7 @@ pub(super) unsafe extern "C" fn tree_paint(
 pub(super) unsafe extern "C" fn tree_pixels(
     tree: Handle<HotTree>,
     image: u64,
-    pixels: *mut LentBytes,
+    pixels: *mut LentBytes<Pixels>,
     found: *mut bool,
 ) -> CallOutcome {
     guest_entry(|| unsafe { tree.get().lend_pixels(image, pixels, found) })
@@ -189,7 +198,7 @@ pub(super) unsafe extern "C" fn tree_generation(
 
 pub(super) unsafe extern "C" fn tree_walk(
     tree: Handle<HotTree>,
-    nodes: *mut LentBytes,
+    nodes: *mut LentBytes<Vec<SegmentNodeInfo>>,
 ) -> CallOutcome {
     guest_entry(|| {
         let walked = unsafe { tree.get() }.walk();
@@ -200,8 +209,8 @@ pub(super) unsafe extern "C" fn tree_walk(
 /// What a reader is told and what the checks find, for the host's inspector, read from this library's registries, which the host's copies of them never see.
 pub(super) unsafe extern "C" fn tree_access_audit(
     tree: Handle<HotTree>,
-    background: LentBytes,
-    audit: *mut LentBytes,
+    background: LentBytes<Option<Color>>,
+    audit: *mut LentBytes<AccessAudit>,
 ) -> CallOutcome {
     guest_entry(|| {
         let background: Option<Color> = unsafe { background.read() };
@@ -210,14 +219,14 @@ pub(super) unsafe extern "C" fn tree_access_audit(
     })
 }
 
-pub(super) unsafe extern "C" fn hot_snapshot(blob: *mut LentBytes) -> CallOutcome {
+pub(super) unsafe extern "C" fn hot_snapshot(blob: *mut LentBytes<String>) -> CallOutcome {
     guest_entry(|| {
         let taken = crate::hot_snapshot_json();
         unsafe { blob.write(LentBytes::answer(&taken)) };
     })
 }
 
-pub(super) unsafe extern "C" fn hot_restore(blob: LentBytes) -> CallOutcome {
+pub(super) unsafe extern "C" fn hot_restore(blob: LentBytes<String>) -> CallOutcome {
     guest_entry(|| {
         let blob: String = unsafe { blob.read() };
         crate::hot_restore_json(&blob);
@@ -255,7 +264,7 @@ pub(super) extern "C" fn relayout() -> CallOutcome {
 }
 
 pub(super) unsafe extern "C" fn dispatch_overlays(
-    event: LentBytes,
+    event: LentBytes<Event>,
     handled: *mut bool,
 ) -> CallOutcome {
     guest_entry(|| {
@@ -264,7 +273,9 @@ pub(super) unsafe extern "C" fn dispatch_overlays(
     })
 }
 
-pub(super) unsafe extern "C" fn set_system_preferences(preferences: LentBytes) -> CallOutcome {
+pub(super) unsafe extern "C" fn set_system_preferences(
+    preferences: LentBytes<SystemPreferences>,
+) -> CallOutcome {
     guest_entry(|| {
         let preferences: SystemPreferences = unsafe { preferences.read() };
         crate::set_system_preferences(preferences);
@@ -288,28 +299,32 @@ pub(super) extern "C" fn set_surface_maximized(maximized: bool) -> CallOutcome {
     guest_entry(|| crate::set_surface_maximized(maximized))
 }
 
-pub(super) unsafe extern "C" fn drain_window_commands(commands: *mut LentBytes) -> CallOutcome {
+pub(super) unsafe extern "C" fn drain_window_commands(
+    commands: *mut LentBytes<Vec<WindowCommand>>,
+) -> CallOutcome {
     guest_entry(|| {
         let drained = crate::take_window_commands();
         unsafe { commands.write(LentBytes::answer(&drained)) };
     })
 }
 
-pub(super) unsafe extern "C" fn set_location_history(history: LentBytes) -> CallOutcome {
+pub(super) unsafe extern "C" fn set_location_history(
+    history: LentBytes<Vec<Location>>,
+) -> CallOutcome {
     guest_entry(|| {
         let history: Vec<Location> = unsafe { history.read() };
         crate::receive_location_history(history);
     })
 }
 
-pub(super) unsafe extern "C" fn open_title(title: LentBytes) -> CallOutcome {
+pub(super) unsafe extern "C" fn open_title(title: LentBytes<(String, String)>) -> CallOutcome {
     guest_entry(|| {
         let (app, showing): (String, String) = unsafe { title.read() };
         crate::open_surface_title(&app, &showing);
     })
 }
 
-pub(super) unsafe extern "C" fn open_font_family(family: LentBytes) -> CallOutcome {
+pub(super) unsafe extern "C" fn open_font_family(family: LentBytes<Option<String>>) -> CallOutcome {
     guest_entry(|| {
         let family: Option<String> = unsafe { family.read() };
         crate::open_surface_font_family(family.as_deref().map(crate::FontFamily::from));
@@ -328,7 +343,9 @@ pub(super) extern "C" fn fire_timers() -> CallOutcome {
     guest_entry(crate::fire_timers)
 }
 
-pub(super) unsafe extern "C" fn until_next_timer(after: *mut LentBytes) -> CallOutcome {
+pub(super) unsafe extern "C" fn until_next_timer(
+    after: *mut LentBytes<Option<Duration>>,
+) -> CallOutcome {
     guest_entry(|| {
         let due = crate::until_next_timer();
         unsafe { after.write(LentBytes::answer(&due)) };

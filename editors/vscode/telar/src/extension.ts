@@ -2,7 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import * as vscode from "vscode";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 
 import { PreviewPanel } from "./previewPanel";
 import {
@@ -554,17 +554,20 @@ async function patchelf(dest: string): Promise<void> {
       await fs.promises.rename(dest, orig);
       try {
         await new Promise<void>((resolve, reject) => {
-          const handle = exec(
-            `nix-build -E - --argstr srcStr '${orig}' -o '${dest}'`,
+          const handle = execFile(
+            "nix-build",
+            ["-E", "-", "--argstr", "srcStr", orig, "-o", dest],
             (err, _stdout, stderr) =>
-              err ? reject(new Error(stderr)) : resolve(),
+              err ? reject(new Error(stderr || err.message)) : resolve(),
           );
           handle.stdin?.write(expression);
           handle.stdin?.end();
         });
-      } finally {
-        await fs.promises.rm(orig, { force: true });
+      } catch (err) {
+        await fs.promises.rename(orig, dest);
+        throw err;
       }
+      await fs.promises.rm(orig, { force: true });
     },
   );
 }

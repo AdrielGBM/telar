@@ -3,7 +3,6 @@
 //! Two formatters behind one command, because a Telar project is two languages. `.rsx` goes through [`telar_parser::format`], the same function the language server serves `textDocument/formatting` from, so a file formatted from a terminal and one formatted on save come out identical. `.rs` goes to `rustfmt`, one file at a time — which is the whole reason this command exists, since `cargo fmt` walks the module tree from the crate root and a telar crate declares that tree from a macro `cargo fmt` cannot expand.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use super::cli::FmtArgs;
 
@@ -118,10 +117,11 @@ fn source_roots(package: &Path) -> Vec<PathBuf> {
     if build_script.is_file() {
         roots.push(build_script);
     }
-    let manifest = std::fs::read_to_string(package.join("Cargo.toml"))
-        .ok()
-        .and_then(|text| text.parse::<toml::Table>().ok());
-    for declared in manifest.iter().flat_map(declared_paths) {
+    let manifest = telar_project::CargoManifest::read(package);
+    let declared = manifest
+        .iter()
+        .flat_map(telar_project::CargoManifest::declared_target_paths);
+    for (_, declared) in declared {
         let path = package.join(declared);
         if roots.iter().any(|root| path.starts_with(root)) {
             continue;
@@ -133,22 +133,6 @@ fn source_roots(package: &Path) -> Vec<PathBuf> {
     roots
 }
 
-fn declared_paths(manifest: &toml::Table) -> Vec<String> {
-    let path_of = |table: &toml::Value| {
-        table
-            .get("path")
-            .and_then(toml::Value::as_str)
-            .map(str::to_string)
-    };
-    let mut paths: Vec<String> = manifest.get("lib").and_then(path_of).into_iter().collect();
-    for kind in ["bin", "test", "example", "bench"] {
-        if let Some(targets) = manifest.get(kind).and_then(toml::Value::as_array) {
-            paths.extend(targets.iter().filter_map(path_of));
-        }
-    }
-    paths
-}
-
 /// Formats one file, reporting whether it changed. `check` reads and compares without writing.
 fn format_file(path: &Path, check: bool) -> Result<bool, String> {
     let source = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
@@ -158,39 +142,37 @@ fn format_file(path: &Path, check: bool) -> Result<bool, String> {
             Some(formatted) => formatted,
             None => return Ok(false),
         },
-        _ => rustfmt(&source)?,
+        _ => telar_parser::format::rustfmt_stdin(&source)?,
     };
     if formatted == source {
         return Ok(false);
     }
     if !check {
-        std::fs::write(path, &formatted).map_err(|e| e.to_string())?;
+        replace_contents(path, &formatted).map_err(|e| e.to_string())?;
     }
     Ok(true)
 }
 
-/// Runs `rustfmt` over one file's text. Through stdin rather than by path so `--check` never writes, and so a file rustfmt rejects leaves the original untouched instead of half-formatted.
-fn rustfmt(source: &str) -> Result<String, String> {
+/// Replaces the contents of the file `path` leads to, all at once: a write that fails leaves the source as it was, a symlink stays a symlink to the file it named, and the file keeps its permissions.
+fn replace_contents(path: &Path, contents: &str) -> std::io::Result<()> {
     use std::io::Write;
+    let target = std::fs::canonicalize(path)?;
+    let permissions = std::fs::metadata(&target)?.permissions();
+    let dir = target
+        .parent()
+        .expect("a canonical path to a file has a parent");
+    let mut file = tempfile::NamedTempFile::new_in(dir)?;
+    file.write_all(contents.as_bytes())?;
+    file.as_file().set_permissions(permissions)?;
+    rename_over(file.into_temp_path(), &target)
+}
 
-    let mut child = Command::new("rustfmt")
-        .args(["--edition", "2024", "--emit", "stdout", "--quiet"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("could not run rustfmt: {e}"))?;
-    child
-        .stdin
-        .take()
-        .ok_or("rustfmt took no stdin")?
-        .write_all(source.as_bytes())
-        .map_err(|e| e.to_string())?;
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
-    }
-    String::from_utf8(out.stdout).map_err(|e| e.to_string())
+// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
+fn rename_over(temp: tempfile::TempPath, path: &Path) -> std::io::Result<()> {
+    let temp = temp.keep()?;
+    std::fs::rename(&temp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
 }
 
 fn display(path: &Path) -> String {
@@ -203,5 +185,5 @@ fn display(path: &Path) -> String {
 }
 
 #[cfg(test)]
-#[path = "fmt_test.rs"]
+#[path = "fmt.test.rs"]
 mod tests;

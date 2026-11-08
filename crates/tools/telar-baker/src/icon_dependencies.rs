@@ -134,7 +134,7 @@ impl IconDependency {
         if self.library {
             return read_library_icons(&self.dir);
         }
-        Ok(read_icon_record(&self.dir)
+        Ok(read_icon_record(&self.dir)?
             .map(|record| CrateIcons::own(&record))
             .filter(|icons| !icons.icons.is_empty()))
     }
@@ -307,9 +307,14 @@ pub(crate) fn dependency_icons(
                         .absorb(found),
                     Ok(None) => {}
                     Err(problem) => warnings.push(format!(
-                        "the icons `{}` draws are left out of this package's licence notice: in {}, {problem}. A library has to be packaged with a `cargo telar` that ships its icon record",
+                        "the icons `{}` draws are left out of this package's licence notice: in {}, {problem}. {}",
                         dependency.name,
-                        dependency.dir.display()
+                        dependency.dir.display(),
+                        if dependency.library {
+                            "A library has to be packaged with a `cargo telar` that ships its icon record"
+                        } else {
+                            "Bake it again to rewrite its record"
+                        }
                     )),
                 }
             }
@@ -335,5 +340,5 @@ pub(crate) fn dependency_icons(
 }
 
 #[cfg(test)]
-#[path = "icon_dependencies_test.rs"]
+#[path = "icon_dependencies.test.rs"]
 mod tests;

@@ -1,22 +1,9 @@
 //! Starting from a page that was prerendered: the first tree is built from the inputs the page was written from, so it opens the same layout nodes and the document renderer can take the page over element by element. What the browser really reports follows as an ordinary update.
 //!
-//! The state is the `telar-state` script `cargo telar build --prerender` writes (`telar_project::PrerenderState`). The browser reads it (`platform_web::served_state`) without the packaging crate or a JSON parser of the app's own; `hydration_test.rs` holds the packager to the format it reads.
+//! The state is the [`STATE_ELEMENT_ID`] script `cargo telar build --prerender` writes (`telar_project::PrerenderState`). The browser reads it (`platform_web::served_state`) without the packaging crate or a JSON parser of the app's own; `hydration.test.rs` holds the packager to the format it reads.
 
 use platform_core::SystemPreferences;
-
-/// The `id` of the script element a prerendered page carries its inputs in.
-#[cfg_attr(
-    not(all(feature = "web-dom", target_arch = "wasm32")),
-    allow(dead_code)
-)]
-pub(crate) const STATE_ELEMENT_ID: &str = "telar-state";
-
-/// The format of the state this client reads. A page that carries another is built from nothing.
-#[cfg_attr(
-    not(all(feature = "web-dom", target_arch = "wasm32")),
-    allow(dead_code)
-)]
-pub(crate) const STATE_VERSION: u32 = 1;
+use telar_project::{STATE_ELEMENT_ID, STATE_VERSION};
 
 /// How many rounds of instant motion the first tree is given to reach the frame the page was written from, for an animation that starts another as it ends.
 const SETTLE_ROUNDS: usize = 8;
@@ -112,5 +99,5 @@ pub(super) fn settle_motion(
 }
 
 #[cfg(all(test, feature = "prerender", not(target_arch = "wasm32")))]
-#[path = "hydration_test.rs"]
+#[path = "hydration.test.rs"]
 mod tests;

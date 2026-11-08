@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, PreviewEntry, ViewportPreset};
 use telar::{
-    Accessible, Children, Container, ControlSize, Direction, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, RwSignal, Size, Slots, box_item, effect, signal,
+    Accessible, Children, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Reactive,
+    RwSignal, Size, box_item, effect, signal,
 };
 use telar_components::{
     GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, SubmenuProps,
@@ -21,11 +21,10 @@ use crate::settings::{
 use crate::state::WorkshopState;
 use crate::strings::{
     self, BACKGROUND, BACKGROUND_DARK, BACKGROUND_LIGHT, BACKGROUND_PREVIEW,
-    BACKGROUND_TRANSPARENT, CANVAS_TOOLS, CONTROL_SIZE, CONTROL_SIZE_DEFAULT, CONTROL_SIZE_LARGE,
-    CONTROL_SIZE_MINI, CONTROL_SIZE_REGULAR, CONTROL_SIZE_SMALL, COPY_LINK, DEVICE_FRAMES,
-    DIRECTION, DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL, GRID, HIGH_CONTRAST, LOCALE,
-    LOCALE_DEFAULT, MODE, PROJECT_VIEWPORTS, REDUCED_MOTION, REMOUNT, ROTATE, RULERS, SETTINGS,
-    VIEWPORT, VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM, ZOOM_FIT,
+    BACKGROUND_TRANSPARENT, CANVAS_TOOLS, COPY_LINK, DEVICE_FRAMES, DIRECTION, DIRECTION_AUTO,
+    DIRECTION_LTR, DIRECTION_RTL, GRID, HIGH_CONTRAST, LOCALE, LOCALE_DEFAULT, MODE,
+    PROJECT_VIEWPORTS, REDUCED_MOTION, REMOUNT, ROTATE, RULERS, SETTINGS, VIEWPORT,
+    VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM, ZOOM_FIT,
     ZOOM_PERCENT,
 };
 
@@ -35,7 +34,7 @@ const WIDE: f32 = WORKBENCH_GRID * 22.0;
 /// The index a select shows as nothing chosen.
 const NO_ROW: u32 = u32::MAX;
 
-/// The top bar's preview settings as one menu: the mode, locale, direction, control size and background every canvas is shown in, each a row naming the one in use that opens a submenu of its choices, then reduced motion and high contrast, ticked while on.
+/// The top bar's preview settings as one menu: the mode, locale, direction and background every canvas is shown in, each a row naming the one in use that opens a submenu of its choices, then reduced motion and high contrast, ticked while on.
 pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let settings: Rc<[Box<dyn Setting>]> = environment_settings(state).into();
     menu(
@@ -43,22 +42,19 @@ pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutIt
             .label(Reactive::of(|| strings::text(SETTINGS)))
             .caret(false)
             .fit(true)
-            .build(),
-        Children::new(move || {
-            let mut slots = Slots::new();
-            let mut after_choice = false;
-            for setting in settings.iter() {
-                if setting.is_switch() && after_choice {
-                    slots.push(
-                        None,
-                        separator(SeparatorProps::props().build(), Children::default())?,
-                    );
+            .children(Children::new(move || {
+                let mut rows = Vec::new();
+                let mut after_choice = false;
+                for setting in settings.iter() {
+                    if setting.is_switch() && after_choice {
+                        rows.push(separator(SeparatorProps::props().build())?);
+                    }
+                    after_choice = !setting.is_switch();
+                    setting.menu_rows(&mut rows)?;
                 }
-                after_choice = !setting.is_switch();
-                setting.menu_rows(&mut slots)?;
-            }
-            Ok(slots)
-        }),
+                Ok(rows)
+            }))
+            .build(),
     )
 }
 
@@ -101,19 +97,6 @@ fn environment_settings(state: &WorkshopState) -> Vec<Box<dyn Setting>> {
             ],
             move || settings.with(|settings| settings.direction),
             move |direction| settings.update(|settings| settings.direction = direction),
-        )),
-        Box::new(Choice::new(
-            CONTROL_SIZE,
-            REGULAR,
-            vec![
-                Row::choice(None, Label::Key(CONTROL_SIZE_DEFAULT)),
-                Row::choice(Some(ControlSize::Mini), Label::Key(CONTROL_SIZE_MINI)),
-                Row::choice(Some(ControlSize::Small), Label::Key(CONTROL_SIZE_SMALL)),
-                Row::choice(Some(ControlSize::Regular), Label::Key(CONTROL_SIZE_REGULAR)),
-                Row::choice(Some(ControlSize::Large), Label::Key(CONTROL_SIZE_LARGE)),
-            ],
-            move || settings.with(|settings| settings.control_size),
-            move |size| settings.update(|settings| settings.control_size = size),
         )),
         Box::new(Choice::new(
             BACKGROUND,
@@ -220,14 +203,15 @@ impl HeaderTools {
         toolbar(
             ToolbarProps::props()
                 .label(Reactive::of(|| strings::text(CANVAS_TOOLS)))
+                .children(Children::new(move || {
+                    tools
+                        .marks
+                        .iter()
+                        .chain(&tools.acts)
+                        .map(|setting| setting.inline())
+                        .collect()
+                }))
                 .build(),
-            Children::new(move || {
-                let mut slots = Slots::new();
-                for setting in tools.marks.iter().chain(&tools.acts) {
-                    slots.push(None, setting.inline()?);
-                }
-                Ok(slots)
-            }),
         )
     }
 
@@ -235,7 +219,7 @@ impl HeaderTools {
     pub(crate) fn menu_rows(self: &Rc<Self>, all: bool) -> Children {
         let tools = Rc::clone(self);
         Children::new(move || {
-            let mut slots = Slots::new();
+            let mut rows = Vec::new();
             let none = Vec::new();
             let (marks, acts) = match all {
                 true => (&tools.marks, &tools.acts),
@@ -243,17 +227,14 @@ impl HeaderTools {
             };
             let groups = [&tools.frame, &tools.look, marks, acts];
             for group in groups.into_iter().filter(|group| !group.is_empty()) {
-                if !slots.is_empty() {
-                    slots.push(
-                        None,
-                        separator(SeparatorProps::props().build(), Children::default())?,
-                    );
+                if !rows.is_empty() {
+                    rows.push(separator(SeparatorProps::props().build())?);
                 }
                 for setting in group.iter() {
-                    setting.menu_rows(&mut slots)?;
+                    setting.menu_rows(&mut rows)?;
                 }
             }
-            Ok(slots)
+            Ok(rows)
         })
     }
 }
@@ -288,7 +269,7 @@ fn high_contrast(settings: RwSignal<CanvasSettings>) -> Switch {
 trait Setting {
     fn inline(&self) -> Result<Box<dyn LayoutItem>, LayoutError>;
 
-    fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError>;
+    fn menu_rows(&self, rows: &mut Vec<Box<dyn LayoutItem>>) -> Result<(), LayoutError>;
 
     fn is_switch(&self) -> bool {
         false
@@ -297,7 +278,7 @@ trait Setting {
 
 /// A setting turned on and off: an icon button pressed while on, or a menu row with a switch.
 struct Switch {
-    icon: telar_icons::IconName,
+    icon: telar::IconName,
     name: &'static str,
     on: Rc<dyn Fn() -> bool>,
     flip: Rc<dyn Fn()>,
@@ -306,7 +287,7 @@ struct Switch {
 
 impl Switch {
     fn new(
-        icon: telar_icons::IconName,
+        icon: telar::IconName,
         name: &'static str,
         on: impl Fn() -> bool + 'static,
         flip: impl Fn() + 'static,
@@ -352,11 +333,10 @@ impl Setting for Switch {
                 .disabled(self.is_disabled())
                 .on_press(Rc::clone(&self.flip))
                 .build(),
-            Children::default(),
         )
     }
 
-    fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError> {
+    fn menu_rows(&self, rows: &mut Vec<Box<dyn LayoutItem>>) -> Result<(), LayoutError> {
         let row = item(
             ItemProps::props()
                 .label(self.label())
@@ -364,9 +344,8 @@ impl Setting for Switch {
                 .disabled(self.is_disabled())
                 .on_press(Rc::clone(&self.flip))
                 .build(),
-            Children::default(),
         )?;
-        slots.push(None, row);
+        rows.push(row);
         Ok(())
     }
 
@@ -377,13 +356,13 @@ impl Setting for Switch {
 
 /// Something done to the canvas at once: an icon button, or a menu row.
 struct Action {
-    icon: telar_icons::IconName,
+    icon: telar::IconName,
     name: &'static str,
     act: Rc<dyn Fn()>,
 }
 
 impl Action {
-    fn new(icon: telar_icons::IconName, name: &'static str, act: impl Fn() + 'static) -> Self {
+    fn new(icon: telar::IconName, name: &'static str, act: impl Fn() + 'static) -> Self {
         Self {
             icon,
             name,
@@ -401,20 +380,18 @@ impl Setting for Action {
                 .label(Reactive::of(move || strings::text(name)))
                 .on_press(Rc::clone(&self.act))
                 .build(),
-            Children::default(),
         )
     }
 
-    fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError> {
+    fn menu_rows(&self, rows: &mut Vec<Box<dyn LayoutItem>>) -> Result<(), LayoutError> {
         let name = self.name;
         let row = item(
             ItemProps::props()
                 .label(Reactive::of(move || strings::text(name)))
                 .on_press(Rc::clone(&self.act))
                 .build(),
-            Children::default(),
         )?;
-        slots.push(None, row);
+        rows.push(row);
         Ok(())
     }
 }
@@ -467,11 +444,9 @@ impl<T: Clone + PartialEq + 'static> Choice<T> {
             Rc::clone(&self.pick),
         );
         Children::new(move || {
-            let mut slots = Slots::new();
-            for row in rows.iter() {
-                slots.push(None, choice_row(row, &current, &pick)?);
-            }
-            Ok(slots)
+            rows.iter()
+                .map(|row| choice_row(row, &current, &pick))
+                .collect()
         })
     }
 }
@@ -496,7 +471,7 @@ fn choice_row<T: Clone + PartialEq + 'static>(
         Some(hint) => props.hint(Reactive::of(move || hint.clone())),
         None => props,
     };
-    item(props.build(), Children::default())
+    item(props.build())
 }
 
 impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
@@ -523,14 +498,8 @@ impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
                 .selected(selected)
                 .stretch(true)
                 .on_select(on_select)
+                .children(Children::new(move || rows.iter().map(Row::build).collect()))
                 .build(),
-            Children::new(move || {
-                let mut slots = Slots::new();
-                for row in rows.iter() {
-                    slots.push(None, row.build()?);
-                }
-                Ok(slots)
-            }),
         )?
         .a11y_label(move || strings::text(name));
         // A row, so the stretched select grows along the width it is given: in a column it grew along the height instead, leaving this box no height and the select spilling out below it.
@@ -541,16 +510,16 @@ impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
         Ok(box_item(sized))
     }
 
-    fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError> {
+    fn menu_rows(&self, rows: &mut Vec<Box<dyn LayoutItem>>) -> Result<(), LayoutError> {
         let name = self.name;
         let row = submenu(
             SubmenuProps::props()
                 .label(Reactive::of(move || strings::text(name)))
                 .hint(self.shown())
+                .children(self.choices())
                 .build(),
-            self.choices(),
         )?;
-        slots.push(None, row);
+        rows.push(row);
         Ok(())
     }
 }
@@ -729,16 +698,13 @@ impl<T: PartialEq> Row<T> {
                     Some(hint) => props.hint(Reactive::of(move || hint.clone())),
                     None => props,
                 };
-                item(props.build(), Children::default())
+                item(props.build())
             }
-            Self::Heading(label) => group(
-                GroupProps::props().label(label.reactive()).build(),
-                Children::default(),
-            ),
+            Self::Heading(label) => group(GroupProps::props().label(label.reactive()).build()),
         }
     }
 }
 
 #[cfg(test)]
-#[path = "canvas_toolbar_test.rs"]
+#[path = "canvas_toolbar.test.rs"]
 mod tests;

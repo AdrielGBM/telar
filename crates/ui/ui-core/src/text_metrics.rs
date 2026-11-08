@@ -3,7 +3,7 @@
 //! The indirection exists for the test-time install below: `renderer-text` is a dev-dependency now, so without it every test that lays out a label would have to name a shaper itself.
 
 use layout_core::AvailableSpace;
-use renderer_core::{Span, TextStyle};
+use renderer_core::{Color, Span, TextLine, TextStyle};
 
 // Idempotent and yielding, so a test that installed its own stub keeps it.
 #[cfg(test)]
@@ -43,10 +43,10 @@ pub(crate) fn measure_in(
 /// Wide enough that nothing wraps, and finite, since a measurer turns the width into whole pixels or cells.
 const MAX_CONTENT_WIDTH: f32 = 1.0e6;
 
-pub(crate) fn line_starts(text: &str, max_width: f32, style: &TextStyle) -> Vec<usize> {
+pub(crate) fn laid_lines(text: &str, max_width: f32, style: &TextStyle) -> Vec<TextLine> {
     #[cfg(test)]
     ensure_installed();
-    renderer_core::text_line_starts(text, None, max_width, style)
+    renderer_core::text_laid_lines(text, None, max_width, style)
 }
 
 pub(crate) fn measure_ink_bounds(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
@@ -71,6 +71,41 @@ pub fn single_line_box(font_size: f32) -> f32 {
         font_size * SINGLE_LINE_LEADING
     } else {
         line_height(font_size)
+    }
+}
+
+/// What a box knows of the text in it, for a style written in it: lengths in the text the box holds, and the ink of the place the box sits in.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BoxText {
+    /// The size of the text the box holds, its own declaration included.
+    pub em: f32,
+    /// The height a single line of that text takes, as [`single_line_box`] reserves one.
+    pub lh: f32,
+    /// The ink the box is placed in: what it inherits, without what it declares itself, so a box that works its own text colour out from this one reads the same value it writes over.
+    pub ink: Color,
+}
+
+impl BoxText {
+    /// The text at `node`, subscribing the caller to every declaration it reads and to a face landing.
+    pub fn of(node: layout_core::NodeId) -> Self {
+        let _ = use_text_metrics_generation();
+        let held = crate::inherit::inherited_text_style(node);
+        let around = crate::inherit::text_around(node);
+        Self::of_styles(&held, &around)
+    }
+
+    /// The text at the root of a surface, for a style built before its node exists.
+    pub fn initial() -> Self {
+        let root = crate::inherit::inherited_text_style_at(None);
+        Self::of_styles(&root, &root)
+    }
+
+    fn of_styles(held: &TextStyle, around: &TextStyle) -> Self {
+        Self {
+            em: held.font_size,
+            lh: single_line_box(held.font_size),
+            ink: around.color.solid_color(),
+        }
     }
 }
 
@@ -123,5 +158,5 @@ pub(crate) fn fitted_font_size(
 }
 
 #[cfg(test)]
-#[path = "text_metrics_test.rs"]
+#[path = "text_metrics.test.rs"]
 mod tests;

@@ -19,19 +19,19 @@ col gap:20
         card
             row gap:12 wrap align:center
                 button label:"Solid"
-                button label:"Outline" variant:ButtonVariant::Outline
-                button label:"Soft" variant:ButtonVariant::Soft
-                button label:"Ghost" variant:ButtonVariant::Ghost
+                button label:"Outline" variant:outline
+                button label:"Soft" variant:soft
+                button label:"Ghost" variant:ghost
                 button label:"Danger" color:$theme.danger
                 button label:"Success" color:$theme.success
-        code_line code:"button label:'Save' variant:ButtonVariant::Outline color:$theme.danger"
+        code_line code:"button label:'Save' variant:outline color:$theme.danger"
     example title:"on_press — every click runs a closure that mutates a signal"
         card gap:12
             text "Clicks · {$clicks}" font_size:18 color:$theme.ink
             row gap:10
                 button label:"+1" color:$theme.primary on_press:(|| $clicks += 1)
                 button label:"+10" color:$theme.primary on_press:(|| $clicks += 10)
-                button label:"Reset" variant:ButtonVariant::Ghost on_press:(|| $clicks.set(0))
+                button label:"Reset" variant:ghost on_press:(|| $clicks.set(0))
         code_line code:"button label:'+1' on_press:|| $clicks += 1      ($x += n desugars to .update)"
     example title:"A whole box is clickable — on_press works on any container, not just buttons"
         card gap:10

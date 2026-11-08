@@ -117,5 +117,5 @@ fn install_panic_report(path: PathBuf) {
 }
 
 #[cfg(test)]
-#[path = "logging_test.rs"]
+#[path = "logging.test.rs"]
 mod tests;

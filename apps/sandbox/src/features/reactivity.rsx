@@ -64,9 +64,9 @@ col gap:20
             text "doubled memo · {$doubled}" font_size:14 color:$theme.muted
             text "{$remaining} left before 10" font_size:14 color:$theme.primary
             row gap:10
-                button label:"−" variant:ButtonVariant::Outline color:$theme.primary on_press:(|| $count.update(|n| *n = (*n - 1).max(0)))
+                button label:"−" variant:outline color:$theme.primary on_press:(|| $count.update(|n| *n = (*n - 1).max(0)))
                 button label:"+" color:$theme.primary on_press:(|| $count.update(|n| *n = (*n + 1).min(10)))
-                button label:"Reset" variant:ButtonVariant::Ghost on_press:(|| $count.set(0))
+                button label:"Reset" variant:ghost on_press:(|| $count.set(0))
         code_line code:"let count = signal(0);   let doubled = memo(move || count.get() * 2);"
     example title:"A reactive property — the bar's opacity tracks the same signal"
         card gap:8
@@ -78,13 +78,18 @@ col gap:20
         card gap:10
             row gap:8
                 button label:"Add" color:$theme.primary on_press:(|| $todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }))
-                button label:"Reverse" variant:ButtonVariant::Outline color:$theme.primary on_press:(|| $todos.update(|v| v.reverse()))
-                button label:"Remove first" variant:ButtonVariant::Ghost on_press:(|| $todos.update(|v| { if !v.is_empty() { v.remove(0); } }))
+                button label:"Reverse" variant:outline color:$theme.primary on_press:(|| $todos.update(|v| v.reverse()))
+                button label:"Remove first" variant:ghost on_press:(|| $todos.update(|v| { if !v.is_empty() { v.remove(0); } }))
             for todo in $todos key todo.id
                 row gap:8 align:center pad_y:4
                     box fill:$theme.primary radius:4 width:8 height:8
                     text "{todo.label}" font_size:14 color:$theme.ink
         code_line code:"for todo in $todos key todo.id   >   row …   (reused/moved/dropped by key)"
+    example title:"Reactive list without a key — each row stays at its index and follows the item now there"
+        card gap:10
+            for todo in $todos
+                text "{$todo.label}" font_size:14 color:$theme.ink
+        code_line code:"for todo in $todos   >   text …$todo.label…   (todo is the row's item signal)"
     example title:"Reactive if/else — the shown branch swaps on a signal"
         card gap:10
             button label:"Toggle" color:$theme.primary on_press:(|| $show.toggle())
@@ -134,7 +139,7 @@ col gap:20
                     box fill:$theme.surface stroke:$theme.border radius:12 pad:24 gap:12 on_press:(|| ())
                         text "I'm rendered in an overlay" font_size:18 color:$theme.ink
                         text "Above the page and outside any clip. Click the dim area to dismiss." font_size:13 color:$theme.muted
-                        button label:"Close" variant:ButtonVariant::Outline color:$theme.primary on_press:(|| $show_modal.set(false))
+                        button label:"Close" variant:outline color:$theme.primary on_press:(|| $show_modal.set(false))
         code_line code:"if $open  >  overlay  >  box (scrim, on_press dismiss)  >  box (dialog)"
     example title:"Primitives"
         col gap:6

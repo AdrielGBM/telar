@@ -15,8 +15,15 @@ pub fn number_or(value: &str, fallback: &str, theme: ThemeAccess) -> String {
 
 /// A number in a position with no attribute of its own to carry a diagnostic — a nested `hover_style(…)` property — where the error has to travel inside the expression or not at all.
 pub fn number_or_error(value: &str, theme: ThemeAccess) -> String {
-    format_number(value, theme)
-        .unwrap_or_else(|message| format!("compile_error!({})", crate::view::rust_str(&message)))
+    format_number(value, theme).unwrap_or_else(|message| format!("compile_error!({message:?})"))
+}
+
+/// A corner radius: `full`, the roundest corner its box allows, or a number as [`format_number`] reads one.
+pub fn format_radius(value: &str, theme: ThemeAccess) -> Result<String, String> {
+    match value.trim() {
+        "full" => Ok("BorderRadius::FULL".to_string()),
+        _ => format_number(value, theme),
+    }
 }
 
 /// What a `key:value` attribute contributes to a `LayoutStyle`.
@@ -69,14 +76,15 @@ pub fn class_errors(class: &StyleClass, theme: ThemeAccess) -> String {
                 Some(format!("`{}` is not a style property", prop.key))
             }
             PropCall::Other => crate::view::value_error("box", &prop.key, &prop.value, theme),
+            PropCall::Call(call) if reads_box_text(&call) => Some(format!(
+                "`{}:{}` is a length in the text of the box it lands on, which a class is written apart from: write it on the box",
+                prop.key, prop.value
+            )),
             PropCall::Call(_) => None,
         };
         if let Some(message) = message {
-            let _ = writeln!(
-                out,
-                "compile_error!({});",
-                crate::view::rust_str(&format!("in `@{}`: {message}", class.name))
-            );
+            let message = format!("in `@{}`: {message}", class.name);
+            let _ = writeln!(out, "compile_error!({message:?});");
         }
     }
     out
@@ -365,11 +373,14 @@ pub fn color(value: &str) -> Result<(), String> {
 
 /// Resolves a numeric value to the Rust expression it stands for.
 ///
-/// Three token shapes resolve here — `50%`, a fraction of the surface like `50sw` (see [`surface_fraction`]) and a `$` read — and a plain literal is normalised so `12` reaches an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge against this attribute's own line.
+/// Four token shapes resolve here — `50%`, a fraction of the surface like `50sw` (see [`surface_fraction`]), a length in the box's text like `1lh` (see [`text_lengths`]) and a `$` read — and a plain literal is normalised so `12` reaches an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge against this attribute's own line.
 pub fn format_number(value: &str, theme: ThemeAccess) -> Result<String, String> {
     // Emitted, the markup's delimiting parens warn `unused_parens` in code the author cannot edit.
     let v = value.trim();
     let v = crate::view::redundant_parens(v).unwrap_or(v);
+    if let Some(v) = text_lengths(v) {
+        return Ok(crate::view::substitute_reads(&v, theme));
+    }
     // A token shape rather than a key's private grammar, so it expands wherever written and rustc rejects it under a key that is not a length.
     if let Some(pct) = v.strip_suffix('%') {
         return match pct.trim().parse::<f32>() {
@@ -407,6 +418,100 @@ pub fn surface_fraction(value: &str) -> Option<(&'static str, f32)> {
     })
 }
 
+/// The `BoxText` signal a `row`, `col`, `grid` or `box` keeps when anything it says reads its own text: a length in `em` or `lh`, or a `$text` read.
+pub const BOX_TEXT_BINDING: &str = "__text";
+
+const TEXT_UNITS: [&str; 2] = ["em", "lh"];
+
+/// `value` with every length in its box's text written out as what it comes to, or `None` when it names none: `0.5em` of the size of the text the box holds, `1lh` of the height one line of it takes, and either after a parenthesised number (`(scale)em`), anywhere in an expression (`(1lh + $pad * 2)`).
+///
+/// Never a misreading of the author's Rust: a unit after a number or a closing paren is no Rust a box length could hold.
+pub fn text_lengths(value: &str) -> Option<String> {
+    let mut out = value.to_string();
+    let mut found = false;
+    while let Some((start, end, unit)) = first_text_length(&out) {
+        let quantity = &out[start..end - unit.len()];
+        let quantity = match quantity.parse::<f32>() {
+            Ok(n) => format_f32(n),
+            Err(_) => quantity.to_string(),
+        };
+        out.replace_range(
+            start..end,
+            &format!("({quantity} * {BOX_TEXT_BINDING}.get().{unit})"),
+        );
+        found = true;
+    }
+    found.then_some(out)
+}
+
+/// Whether a style expression reads [`BOX_TEXT_BINDING`], so whatever builds it has to bind them.
+pub fn reads_box_text(style: &str) -> bool {
+    style.contains(&format!("{BOX_TEXT_BINDING}."))
+}
+
+/// The first length in a text unit in `s`, as the span of its number and unit, and the unit.
+fn first_text_length(s: &str) -> Option<(usize, usize, &'static str)> {
+    let bytes = s.as_bytes();
+    let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let mut quoted = false;
+    for i in 1..bytes.len() {
+        if bytes[i] == b'"' && bytes[i - 1] != b'\\' {
+            quoted = !quoted;
+        }
+        if quoted {
+            continue;
+        }
+        let Some(unit) = TEXT_UNITS
+            .into_iter()
+            .find(|unit| bytes[i..].starts_with(unit.as_bytes()))
+        else {
+            continue;
+        };
+        let end = i + unit.len();
+        if bytes.get(end).copied().is_some_and(ident) {
+            continue;
+        }
+        let start = match bytes[i - 1] {
+            b')' => opening_paren(bytes, i - 1),
+            b'0'..=b'9' | b'.' => Some(
+                bytes[..i]
+                    .iter()
+                    .rposition(|b| !(b.is_ascii_digit() || *b == b'.'))
+                    .map_or(0, |at| at + 1),
+            ),
+            _ => None,
+        };
+        match start {
+            Some(start)
+                if (bytes[start] == b'(' || bytes[start].is_ascii_digit())
+                    && (start == 0 || !ident(bytes[start - 1])) =>
+            {
+                return Some((start, end, unit));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Where the paren closed at `close` opens.
+fn opening_paren(bytes: &[u8], close: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for at in (0..=close).rev() {
+        match bytes[at] {
+            b')' => depth += 1,
+            b'(' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(at);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// The integer twin of [`format_number`], for the one property that counts rather than measures: `lines:2` feeds a `u16`, so it stays `2` where a length would become `2.0`.
 pub fn format_integer(value: &str, theme: ThemeAccess) -> String {
     let v = value.trim();
@@ -427,12 +532,12 @@ pub fn format_f32(n: f32) -> String {
     }
 }
 
-/// Builds a `Color::rgba(...)` const expression from a hex string, at any length [`telar_parser::parse_hex`] accepts. Anything else falls back to opaque black, which the parser has already rejected before a value reaches here.
+/// Builds a `Color::rgba(...)` const expression from a hex string, at any length [`geometry_core::parse_hex`] accepts. Anything else falls back to opaque black, which the parser has already rejected before a value reaches here.
 pub fn hex_to_color_expr(hex: &str) -> String {
-    let [r, g, b, a] = telar_parser::parse_hex(hex).unwrap_or([0, 0, 0, 255]);
+    let [r, g, b, a] = geometry_core::parse_hex(hex).unwrap_or([0, 0, 0, 255]);
     format!("Color::rgba({r}.0 / 255.0, {g}.0 / 255.0, {b}.0 / 255.0, {a}.0 / 255.0)")
 }
 
 #[cfg(test)]
-#[path = "style_test.rs"]
+#[path = "style.test.rs"]
 mod tests;

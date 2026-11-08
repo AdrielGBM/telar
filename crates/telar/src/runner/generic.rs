@@ -8,16 +8,14 @@ use ui_tree::DevOverlay;
 
 use crate::app::App;
 use crate::app_config::AppConfig;
-use crate::config;
-use crate::prefs::UserPrefs;
 
-use super::handler::build_app_handler;
+use super::boot::{StoredChoices, SurfaceBoot, split_config};
 use super::host::{SurfaceRenderer, SurfaceWindow};
 use super::location::LocationBinding;
 
 /// Drive a full rsx app on an arbitrary [`Platform`] backend. This is the backend-agnostic entry point: an out-of-tree backend (e.g. a Wayland layer-shell `Platform`) constructs its own platform and paths provider and calls this, with no winit dependency. [`crate::run_app_with_name`] is the winit-defaulting convenience wrapper over it.
 ///
-/// The whole event → reactive → layout → render → present bridge (`AppHandler`) is already generic over the window type, so this simply loads prefs, resolves the renderer backend, applies the app's optional [`App::window_config`] override, and hands a fresh handler to `platform.run`.
+/// The whole event → reactive → layout → render → present bridge (`AppHandler`) is already generic over the window type, so this simply reads the stored backend, resolves the renderer backend, applies the app's optional [`App::window_config`] override, and hands a fresh handler to `platform.run`.
 ///
 /// The window has to be a [`SurfaceWindow`]: this entry point draws with the renderers Telar ships, and both need a real surface behind it. A backend whose window is not one uses [`run_with_platform_and_renderer`].
 pub fn run_with_platform<P, A, D>(
@@ -95,36 +93,21 @@ where
     A: App,
     D: DevOverlay,
 {
-    // The one place every runner passes through, so app code can ask `telar::paths::cache()` instead of resolving XDG for itself and landing somewhere other than the runtime it is embedded in.
-    services_core::app_paths::install(app_name, paths.clone());
     platform_core::set_keyboard_convention(platform.keyboard_convention());
-    match hydration {
-        Some(_) => crate::user_preferences::install_store(app_name),
-        None => crate::user_preferences::install(app_name),
-    }
-    let prefs = UserPrefs::load(app_name, paths.as_ref());
-    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
-    let AppConfig {
-        window,
-        fonts: faces,
-        font_family,
-    } = config;
+    let (window, fonts) = split_config(config);
+    let choices = match hydration {
+        Some(_) => StoredChoices::AfterHydration,
+        None => StoredChoices::Now,
+    };
+    let boot = SurfaceBoot::new(app_name, paths, fonts, choices);
     let window = super::resolved_window(window, &app, app_name);
     let location = location.or_else(|| platform.location_source().map(LocationBinding::new));
-    let mut handler = build_app_handler::<P::Window, D>(
+    let mut handler = boot.handler::<P::Window, D>(
         Box::new(crate::app_runtime::LocalApp(app)),
-        paths,
-        crate::runner::font_config::FontSetup {
-            faces,
-            family: font_family,
-        },
-        backend,
-        prefs,
-        app_name.to_owned(),
+        &window.title,
         renderer,
     );
     handler.location = location;
     handler.hydration = hydration;
-    handler.title = Some(super::state::WindowTitle::opened_as(&window.title));
     platform.run(window, handler)
 }

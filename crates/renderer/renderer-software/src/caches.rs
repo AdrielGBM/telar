@@ -86,6 +86,7 @@ fn caches_or_build(
 
 fn release() {
     CACHES.with(|slot| slot.borrow_mut().take());
+    renderer_cache::registry::unpublish();
 }
 
 /// Builds this thread's caches if no renderer has yet, using `config`'s budgets and fonts.
@@ -137,5 +138,5 @@ pub(crate) fn with_caches<R>(f: impl FnOnce(&mut SharedCaches) -> R) -> R {
 }
 
 #[cfg(test)]
-#[path = "caches_test.rs"]
+#[path = "caches.test.rs"]
 mod tests;

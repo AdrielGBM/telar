@@ -70,5 +70,5 @@ fn resolve(root: &Path, id: &str) -> Result<PathBuf, AssetError> {
 }
 
 #[cfg(test)]
-#[path = "dir_test.rs"]
+#[path = "dir.test.rs"]
 mod tests;

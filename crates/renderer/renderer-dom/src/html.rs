@@ -10,8 +10,9 @@ use renderer_core::{Color, DrawCommand, ImageData, TextStyle};
 use crate::box_key::BoxKey;
 use crate::document::{
     self, ARRIVAL_ID, AUDIT_ATTRIBUTE, BoxNode, Content, DOCUMENT_SCROLL_OVERRIDES, HOST_ATTRIBUTE,
-    ID_ATTRIBUTE, Node, PaintNode, RESET, RESET_ID, Surface,
+    ID_ATTRIBUTE, Node, PaintNode, RESET, RESET_ID, SPOKEN_ATTRIBUTE, Surface,
 };
+use crate::markup::{attribute, escape_html};
 use crate::runs::{RUN_ATTRIBUTE, RUN_BOX_ATTRIBUTE, Run};
 
 /// One frame as a page writes it before the app runs.
@@ -145,6 +146,13 @@ fn write_box(out: &mut String, node: &BoxNode) {
     if node.tag == "img" {
         return;
     }
+    if let Some(name) = &node.spoken {
+        out.push_str("<span");
+        attribute(out, SPOKEN_ATTRIBUTE, "");
+        out.push('>');
+        out.push_str(&escape_html(name));
+        out.push_str("</span>");
+    }
     match &node.content {
         Content::Children { children, pieces } => {
             for child in children {
@@ -157,10 +165,23 @@ fn write_box(out: &mut String, node: &BoxNode) {
                 write_paint(out, piece, Some(node.key), true);
             }
         }
-        Content::Text { text, runs } => match runs {
-            Some(runs) => write_runs(out, runs, node.key),
-            None => text_into(out, text),
-        },
+        Content::Text { text, runs, muted } => {
+            let wrapped = node.spoken.is_some() || *muted;
+            if wrapped {
+                out.push_str("<span");
+                if *muted {
+                    attribute(out, "aria-hidden", "true");
+                }
+                out.push('>');
+            }
+            match runs {
+                Some(runs) => write_runs(out, runs, node.key),
+                None => out.push_str(&escape_html(text)),
+            }
+            if wrapped {
+                out.push_str("</span>");
+            }
+        }
         Content::Drawing(markup) => out.push_str(markup),
     }
     let _ = write!(out, "</{}>", node.tag);
@@ -175,10 +196,13 @@ fn write_paint(out: &mut String, node: &PaintNode, owner: Option<BoxKey>, presen
     if !node.style.is_empty() {
         attribute(out, "style", &node.style);
     }
+    if node.muted {
+        attribute(out, "aria-hidden", "true");
+    }
     out.push('>');
     match (&node.runs, owner) {
         (Some(runs), Some(owner)) => write_runs(out, runs, owner),
-        _ => text_into(out, &node.text),
+        _ => out.push_str(&escape_html(&node.text)),
     }
     out.push_str("</div>");
 }
@@ -186,7 +210,7 @@ fn write_paint(out: &mut String, node: &PaintNode, owner: Option<BoxKey>, presen
 fn write_runs(out: &mut String, runs: &[Run], owner: BoxKey) {
     for run in runs {
         match (&run.link, run.css.is_empty()) {
-            (None, true) => text_into(out, &run.text),
+            (None, true) => out.push_str(&escape_html(&run.text)),
             (link, _) => {
                 let tag = if link.is_some() { "a" } else { "span" };
                 let _ = write!(out, "<{tag}");
@@ -205,42 +229,13 @@ fn write_runs(out: &mut String, runs: &[Run], owner: BoxKey) {
                     attribute(out, RUN_ATTRIBUTE, &link.run.to_string());
                 }
                 out.push('>');
-                text_into(out, &run.text);
+                out.push_str(&escape_html(&run.text));
                 let _ = write!(out, "</{tag}>");
             }
         }
     }
 }
 
-/// An attribute with its value escaped, written the way a browser writes one back.
-fn attribute(out: &mut String, name: &str, value: &str) {
-    out.push(' ');
-    out.push_str(name);
-    out.push_str("=\"");
-    for c in value.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '"' => out.push_str("&quot;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-}
-
-fn text_into(out: &mut String, text: &str) {
-    for c in text.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '\u{a0}' => out.push_str("&nbsp;"),
-            c => out.push(c),
-        }
-    }
-}
-
 #[cfg(test)]
-#[path = "html_test.rs"]
+#[path = "html.test.rs"]
 mod tests;

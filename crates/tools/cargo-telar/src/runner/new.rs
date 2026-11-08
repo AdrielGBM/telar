@@ -12,6 +12,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use clap::ValueEnum;
+
 use crate::runner::cli::{InitArgs, NewArgs, Target, WebRenderer};
 use crate::runner::config::WEB_PROFILE_TOML;
 
@@ -169,9 +171,12 @@ fn finish(path: &Path, crate_name: &str, target: Target, renderer: Option<WebRen
     let dev = match (target, renderer) {
         (Target::Desktop, _) => "cargo telar dev".to_string(),
         (Target::Web, Some(renderer)) => {
+            let renderer = renderer
+                .to_possible_value()
+                .expect("every renderer is a value of the flag");
             format!(
                 "cargo telar dev --target web --renderer {}",
-                renderer.as_str()
+                renderer.get_name()
             )
         }
         (other, _) => format!("cargo telar dev --target {}", target_name(other)),
@@ -302,7 +307,7 @@ path = "src/main.rs"
 # `default-features = false` so this file is the only place a target is named: telar's own default is a
 # desktop window, and it would otherwise ride along into a build that asked for the terminal or a browser.
 telar = {{ version = "{TELAR_VERSION}", default-features = false, features = ["runtime"] }}
-# The widget catalogue. Name the groups you draw beyond the basics: "overlays", "chrome", "advanced".
+# The widget catalogue, every widget in every build. Its `icons` feature draws `icon:"set:name"` ids through `telar-icons`.
 telar-components = {{ version = "{TELAR_VERSION}", default-features = false }}
 # The devtools overlay: an FPS counter, a node inspector and the build-error banner. Optional, so only
 # `cargo telar dev` and `cargo telar preview` compile it, by turning on the `telar-devtools` feature below.
@@ -436,11 +441,8 @@ pub struct Root;
 impl App for Root {
     fn root(&self) -> Box<dyn telar::Component> {
         reset_layout_runtime();
-        let content = crate::home::home(
-            crate::home::HomeProps::props().build(),
-            telar::Children::default(),
-        )
-        .expect("home layout failed");
+        let content = crate::home::home(crate::home::HomeProps::props().build())
+            .expect("home layout failed");
         Box::new(ScrollPage::new(content).expect("page layout failed"))
     }
 
@@ -485,11 +487,11 @@ impl AppTheme {
             surface_alt: Color::rgba(0.96, 0.97, 0.99, 1.0),
             border: Color::rgba(0.86, 0.87, 0.93, 1.0),
             ink: Color::rgba(0.09, 0.10, 0.18, 1.0),
-            muted: Color::rgba(0.46, 0.48, 0.58, 1.0),
+            muted: Color::rgba(0.38, 0.40, 0.50, 1.0),
             scrollbar: Color::rgba(0.66, 0.68, 0.76, 1.0),
             success: Color::rgba(0.18, 0.69, 0.45, 1.0),
             warning: Color::rgba(0.90, 0.62, 0.16, 1.0),
-            error: Color::rgba(0.86, 0.26, 0.30, 1.0),
+            error: Color::rgba(0.80, 0.20, 0.26, 1.0),
             on_error: Color::WHITE,
             info: Color::rgba(0.24, 0.55, 0.90, 1.0),
             highlight_low: Color::rgba(0.0, 0.0, 0.0, 0.04),
@@ -541,12 +543,12 @@ col grow:1 gap:16 pad:32 align:center fill:$theme.surface_alt
     text "Clicks · {$clicks}" font_size:16 color:$theme.muted
     row gap:10
         button label:"+1" on_press:(|| $clicks += 1)
-        button label:"Reset" variant:ButtonVariant::Ghost on_press:(|| $clicks.set(0))
+        button label:"Reset" variant:Variant::Ghost on_press:(|| $clicks.set(0))
 
 [preview "Home"]
 home
 "#;
 
 #[cfg(test)]
-#[path = "new_test.rs"]
+#[path = "new.test.rs"]
 mod tests;

@@ -210,5 +210,5 @@ impl<R: Route + 'static> HistoryFollower for Follower<R> {
 }
 
 #[cfg(test)]
-#[path = "navigator_test.rs"]
+#[path = "navigator.test.rs"]
 mod tests;

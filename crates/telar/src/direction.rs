@@ -1,10 +1,10 @@
 //! Binds the layout writing direction to the active locale.
 //!
-//! Lives in the facade rather than in either crate it joins: `i18n-core` is deliberately dependency-light (only `reactive-core`) and must not learn about layout, and `layout-core` resolves direction without knowing translations exist. The facade is the one place that already has both.
+//! `i18n-core` says which direction a locale is written in and `ui-core` holds the direction every surface lays out against; neither makes one follow the other, since an application may drive the direction itself. Binding them is the facade's opt-in.
 
 use std::cell::RefCell;
 
-use layout_core::Direction;
+use i18n_core::Direction;
 
 reactive_core::dropless_thread_local! {
     // Replaced on re-call, since a hot reload re-runs the app's setup.
@@ -26,5 +26,5 @@ pub fn follow_locale_direction() {
 }
 
 #[cfg(test)]
-#[path = "direction_test.rs"]
+#[path = "direction.test.rs"]
 mod tests;

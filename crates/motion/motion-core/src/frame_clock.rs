@@ -163,5 +163,5 @@ pub fn use_frame_time_while(running: impl Fn() -> bool + 'static) -> Memo<Durati
 }
 
 #[cfg(test)]
-#[path = "frame_clock_test.rs"]
+#[path = "frame_clock.test.rs"]
 mod tests;

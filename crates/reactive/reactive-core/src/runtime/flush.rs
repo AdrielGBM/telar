@@ -285,5 +285,5 @@ impl Drop for UnrunSettled {
 }
 
 #[cfg(test)]
-#[path = "settle_test.rs"]
+#[path = "settle.test.rs"]
 mod settle_tests;

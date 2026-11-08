@@ -35,7 +35,7 @@ impl App for FillApp {
     }
 }
 
-/// A fill app that can be told to panic during build, to exercise the multi-surface panic quarantine (T-4.2): a surface whose build panics must unmount without tumbling the other surfaces.
+/// A fill app that can be told to panic during build, to exercise the multi-surface panic quarantine: a surface whose build panics must unmount without tumbling the other surfaces.
 pub struct MaybePanicApp {
     pub color: Color,
     pub panic_on_build: bool,
@@ -78,11 +78,4 @@ pub fn assert_center_rgb(pixels: &[u8], w: u32, h: u32, expected: [u8; 3], label
         &[0u8, 0, 0],
         "{label}: fill did not paint over clear"
     );
-}
-
-/// Reports that a GPU test is skipping for want of an adapter — and fails instead when `TELAR_REQUIRE_GPU` is set.
-///
-/// CI sets it on the leg that installs lavapipe, so a suite that quietly stopped covering the GPU reads as red there rather than as passing tests that never ran. Everywhere else the absence is a real answer and the test skips.
-pub fn skip_without_gpu(what: &str) {
-    telar::testing::require_gpu(what, "no adapter");
 }

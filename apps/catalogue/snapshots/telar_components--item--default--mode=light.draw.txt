@@ -1,0 +1,30 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element button
+          rect 16,16 117x36
+          element group
+            element group
+              matrix 1,0,0,1,27,29
+                path M0,5.5 L3.8,9.5 L10,1 stroke=1.5 stroke-color=#00000000
+              end
+            end
+          end
+          element group
+            matrix 1,0,0,1,48,16
+              text 0,10 54x16.8 "Rename" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,110,16
+              text 0,10 15.13x15.12 "F2" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

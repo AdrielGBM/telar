@@ -3,8 +3,8 @@
 use std::rc::Weak;
 
 use telar::{
-    Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Rect, RectStyle, RenderNode,
-    RwSignal, ShapeStyle, SurfaceCanvas, TextStyle, TextWrap, Transform, box_item, children,
+    Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, NestedCanvas, Rect, RectStyle,
+    RenderNode, RwSignal, ShapeStyle, TextStyle, TextWrap, Transform, box_item, children,
     use_theme_tokens,
 };
 use telar_devtools::use_workbench_tokens;
@@ -88,7 +88,7 @@ pub(super) fn ticks(from: f32, to: f32, scale: f32) -> Vec<Tick> {
 /// The grid over a canvas whose frame's box this fills: the canvas sits `edge` px inside it, at the scale `canvas` is shown at.
 pub(super) fn grid(
     settings: RwSignal<CanvasSettings>,
-    canvas: Weak<SurfaceCanvas>,
+    canvas: Weak<NestedCanvas>,
     edge: impl Fn() -> f32 + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     see_through(Canvas::new(
@@ -144,7 +144,7 @@ pub(super) struct Measured<E> {
 /// Rulers along the top and left of the stage this fills, `band` px deep, their zero at the canvas's origin.
 pub(super) fn rulers(
     settings: RwSignal<CanvasSettings>,
-    canvas: Weak<SurfaceCanvas>,
+    canvas: Weak<NestedCanvas>,
     measured: Measured<impl Fn() -> f32 + 'static>,
     band: f32,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {

@@ -8,6 +8,7 @@
 
 mod assets;
 mod build;
+pub mod call_keys;
 mod cargo_manifest;
 mod catalog;
 mod declared;
@@ -18,13 +19,18 @@ mod icons;
 mod library;
 mod manifest;
 pub mod naming;
+mod orphan_tests;
+mod page;
 mod paths;
 mod prelude;
 mod prerender;
 mod previews;
 pub mod protocol;
+mod relative;
+mod rust_source;
 mod theme;
 pub mod theme_tokens;
+mod vocabulary;
 mod web;
 
 pub use assets::{
@@ -37,9 +43,9 @@ pub use assets::{
 };
 pub use build::{
     BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildFlavour, BuildIndex, clear_build_failure,
-    generated_dir, read_build_failure, read_build_index, relative_source, write_build_failure,
-    write_build_index,
+    generated_dir, read_build_failure, read_build_index, write_build_failure, write_build_index,
 };
+pub use cargo_manifest::{CargoManifest, TargetKind};
 pub use catalog::{
     CATALOG_ARTIFACT_FORMAT, CATALOG_INDEX_FILENAME, CATALOG_SOURCE_FILENAME, CatalogContext,
     CatalogEntry, CatalogIndex, CatalogSourceFile, I18N_CATALOG_PATH, I18N_MODULE,
@@ -48,11 +54,12 @@ pub use catalog::{
 pub use declared::{DeclaredEntry, EntryProblem};
 pub use dependencies::{DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE, declares_optional_dependency};
 pub use discovery::{
-    MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, MODULE_TREE_DIR, ModuleTree, SITE_DIR,
-    assets_root, collect_files_by_ext, component_name, find_rsx_files, find_rsx_files_in_tree,
-    invokes_placement_macro, is_generated_output, is_module_root, is_previews_file, module_name,
-    placement_sites, prune_stale_generated, prune_stale_sites, relative_output_path,
-    site_include_path, source_for_generated, stray_placement_files,
+    MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, MODULE_TREE_DIR, ModuleTree, ModuleVisibility,
+    SITE_DIR, assets_root, collect_files_by_ext, component_name, find_rsx_files,
+    find_rsx_files_in_tree, invokes_placement_macro, is_generated_output, is_module_root,
+    is_preview_file, module_name, placement_sites, prune_stale_generated, prune_stale_sites,
+    relative_output_path, rsx_module_name_problems, site_include_path, source_for_generated,
+    stray_placement_files,
 };
 pub use fonts::{
     FontDeclaration, FontDisplay, FontFormat, FontStyleDeclaration, WeightDeclaration,
@@ -63,11 +70,14 @@ pub use icons::{
 };
 pub use library::{
     ICONS_LIBRARY_RECORD_FILENAME, library_files, library_include, library_include_covers,
-    relative_slashed,
 };
 pub use manifest::{
-    DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,
-    TelarManifest, TelarSection, WebSection, WindowSection,
+    DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, TelarManifest,
+    TelarSection, WebSection, WindowSection,
+};
+pub use orphan_tests::orphan_test_warnings;
+pub use page::{
+    ASSETS_META_NAME, FONT_FAMILY_ATTRIBUTE, HOST_ELEMENT_ID, PageRenderer, RENDERER_SETTING,
 };
 pub use paths::{
     cargo_metadata, find_ancestor_dir, find_package_root, find_target_dir, find_telar_root,
@@ -75,18 +85,21 @@ pub use paths::{
     write_if_changed_atomic,
 };
 pub use prelude::{
-    PreludeDeclaration, PreludeEntry, PreludeProblem, prelude_declarations, prelude_problems,
-    resolve_prelude,
+    PreludeDeclaration, PreludeEntry, PreludeProblem, is_plain_identifier, prelude_declarations,
+    prelude_problems, resolve_prelude,
 };
 pub use prerender::{
     DEFAULT_SURFACE, PRERENDER_ENV, PageLocation, PageRequest, Preferences, PrerenderRequest,
     PrerenderState, PrerenderedPage, STATE_ELEMENT_ID, STATE_VERSION, Surface,
+    is_contained_segment,
 };
 pub use previews::{
-    MATRIX_GLOBAL_AXES, MatrixAxes, MatrixAxis, MatrixControlSize, MatrixDirection, MatrixValue,
-    PreviewsInclude, PreviewsIncludeDeclaration, PreviewsIncludeProblem, PreviewsSection,
-    SnapshotSettings, Viewport, is_preview_name, preview_hosts, previews_include_declarations,
+    MATRIX_GLOBAL_AXES, MatrixAxes, MatrixAxis, MatrixDirection, MatrixValue, PreviewsInclude,
+    PreviewsIncludeDeclaration, PreviewsIncludeProblem, PreviewsSection, SnapshotSettings,
+    Viewport, is_preview_name, preview_hosts, previews_include_declarations,
     previews_include_problems,
 };
+pub use relative::relative_slashed;
 pub use theme::{normalize_theme_path, theme_type_in_config};
+pub use vocabulary::{VOCABULARY, VocabularyAxis, vocabulary_axis, vocabulary_axis_of};
 pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};

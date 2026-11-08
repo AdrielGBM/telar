@@ -11,7 +11,7 @@ facade, and lists it as a `prelude` so every `.rsx` file can write `icon`:
 
 ```toml
 # Cargo.toml
-telar-icons = "0.2.2"
+telar-icons = "0.2.3"
 
 # telar.toml
 [telar]
@@ -27,13 +27,13 @@ svg = "icons"              # icons/app/logo.svg is `app:logo`
 row gap:8 align:center
     icon name:"mdi:home"
     text "Home"
-icon name:"app:logo" size:32 label:"Acme"
+icon name:"app:logo" size:32 a11y_label:"Acme"
 ```
 
 ## The tag
 
 `icon name:"set:name"` draws one icon in a square box of `size` px (the theme's `icon_size` when unset). It is
-decoration a screen reader skips, unless `label:` names it.
+decoration a screen reader skips, unless `a11y_label:` names it.
 
 A monochrome icon takes the colour of the text around it, so it follows its row's `color:`, the theme and a
 hover state like the text beside it; `color:` sets one instead. Which icons are monochrome follows Iconify, and is
@@ -85,10 +85,12 @@ Rust names a baked icon with `icon!`, which is the `IconName` the `icon` tag, or
 ```rust
 use telar_icons::{IconProps, icon};
 
-let search = icon(IconProps::props().name(telar_icons::icon!("lucide:search")).build(), Children::default())?;
+let search = icon(IconProps::props().name(telar_icons::icon!("lucide:search")).build())?;
 ```
 
 The bake finds every `icon!("…")` in the crate's `.rs` files, and in the Rust its `.rsx` writes (the logic zone, `[play]`, a `let` or an expression in `[view]`), and bakes those ids as it bakes an `icon name:"…"`, through the crate's own `[telar.icons]`. The call reads the baked artwork from the crate's artifact as it compiles, so an id the bake did not resolve is a compile error on the literal, naming the bake, rather than an empty box at run time. Call it as `icon!` or by its path, `telar_icons::icon!`: the bake looks for that name, and only a string literal names an id. A string given where an `IconName` is taken, `"lucide:search"`, is still an id for a runtime source to resolve.
+
+`IconName` and `icon!` are the facade's, `telar::IconName` and `telar::icon!`, which this crate republishes. Every prop that names an icon takes that one type in every build, so a widget library such as `telar-components` takes the same `icon:"lucide:x"` whether or not this crate is in the build, and only what it draws changes.
 
 This works in a crate written wholly in Rust, such as a widget library. Make it a `[telar] library` with a source of its own, so its artifact and the record of its icons ship in its package (see [Icons from libraries](#icons-from-libraries)):
 

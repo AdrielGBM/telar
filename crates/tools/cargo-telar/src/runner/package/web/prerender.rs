@@ -4,11 +4,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use telar_project::{
     PRERENDER_ENV, PageLocation, PageRequest, PrerenderRequest, PrerenderSection, PrerenderedPage,
 };
+
+use crate::runner::artifacts::{self, build_with_diagnostics, with_json_messages};
+use crate::runner::config::ResolvedPackage;
 
 use super::assets;
 use super::negotiation;
@@ -22,79 +25,30 @@ pub(super) const NOT_FOUND_FILE: &str = "404.html";
 pub(super) fn build_host_binary(
     cargo_args: &[String],
     frontend: &[String],
-    manifest_path: &Path,
+    package: &ResolvedPackage,
 ) -> Result<PathBuf, String> {
-    let mut args = vec![
-        "build".to_string(),
-        "--bins".to_string(),
-        "--message-format=json-render-diagnostics".to_string(),
-    ];
-    args.extend(cargo_args.iter().filter(|a| *a != "--release").cloned());
+    let args = host_binary_args(cargo_args, frontend);
+    eprintln!("[cargo-telar] Building the app for this machine, to prerender its pages...");
+    let (succeeded, report) = build_with_diagnostics(Command::new("cargo").args(&args));
+    if !succeeded {
+        return Err("the prerender build failed".to_string());
+    }
+    artifacts::binary(
+        report.artifacts(),
+        &package.package_dir,
+        package.default_run.as_deref(),
+    )
+    .map_err(|e| format!("{e} The prerender runs the binary whose `main` calls `run()`."))
+}
+
+fn host_binary_args(cargo_args: &[String], frontend: &[String]) -> Vec<String> {
+    let mut args = vec!["build".to_string(), "--bins".to_string()];
+    args.extend(cargo_args.iter().cloned());
     args.extend(frontend.iter().cloned());
     args.push("--features".to_string());
     args.push("telar/prerender".to_string());
-
-    eprintln!("[cargo-telar] Building the app for this machine, to prerender its pages...");
-    let output = Command::new("cargo")
-        .args(&args)
-        .stderr(Stdio::inherit())
-        .output()
-        .map_err(|e| format!("failed to invoke cargo: {e}"))?;
-    if !output.status.success() {
-        return Err("the prerender build failed".to_string());
-    }
-    executable_in(&String::from_utf8_lossy(&output.stdout), manifest_path).ok_or_else(|| {
-        format!(
-            "the prerender build produced no binary for {}. Does this package have a `[[bin]]` whose `main` calls `run()`?",
-            manifest_path.display()
-        )
-    })
-}
-
-/// The binary cargo reports building for the package at `manifest_path`, from its JSON messages: the one named after the package when it has several.
-fn executable_in(messages: &str, manifest_path: &Path) -> Option<PathBuf> {
-    let mut found = Vec::new();
-    for line in messages.lines() {
-        let Ok(message) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        if message["reason"] != "compiler-artifact"
-            || !same_file(
-                Path::new(message["manifest_path"].as_str().unwrap_or_default()),
-                manifest_path,
-            )
-        {
-            continue;
-        }
-        let Some(executable) = message["executable"].as_str() else {
-            continue;
-        };
-        let name = message["target"]["name"].as_str().unwrap_or_default();
-        found.push((name.to_string(), PathBuf::from(executable)));
-    }
-    let package = package_name(manifest_path);
-    found
-        .iter()
-        .find(|(name, _)| Some(name) == package.as_ref())
-        .or_else(|| found.first())
-        .map(|(_, path)| path.clone())
-}
-
-fn same_file(a: &Path, b: &Path) -> bool {
-    match (a.canonicalize(), b.canonicalize()) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => a == b,
-    }
-}
-
-fn package_name(manifest: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(manifest).ok()?;
-    let parsed: toml::Value = toml::from_str(&text).ok()?;
-    parsed
-        .get("package")?
-        .get("name")?
-        .as_str()
-        .map(str::to_string)
+    with_json_messages(&mut args);
+    args
 }
 
 /// Every page to write once the app has said which it has: each of its pages in each locale its address carries, or each page once when it carries none.
@@ -277,7 +231,7 @@ fn page_for(
     let mut filled = base.clone();
     if let Some(lang) = &page.lang {
         filled.lang = lang.clone();
-        filled.dir = layout_core::Direction::for_locale(lang);
+        filled.dir = i18n_core::Direction::for_locale(lang);
     }
     if !page.title.is_empty() {
         filled.title = page.title.clone();
@@ -289,7 +243,7 @@ fn page_for(
         location,
         pages,
     });
-    filled.host = page.host_attributes.clone();
+    filled.host = page.host_attributes_html.clone();
     filled.head.push(page.head.clone());
     filled.prerendered = page.markup.clone();
     filled.state = serde_json::to_value(&page.state).ok();
@@ -317,5 +271,5 @@ pub(super) fn write_page(
 }
 
 #[cfg(test)]
-#[path = "prerender_test.rs"]
+#[path = "prerender.test.rs"]
 mod tests;

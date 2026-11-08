@@ -35,9 +35,10 @@ fn hover_preview_option(source: &str, line: u32, character: u32) -> Option<Hover
         return None;
     }
     let declares = line_text[token.start + token.len..].starts_with('(');
-    let doc = match declares {
-        true => preview_header::ARGS_DECL_DOC,
-        false => preview_header::option(key)?.doc,
+    let doc = match (declares, key) {
+        (true, "values") => preview_header::VALUES_DECL_DOC,
+        (true, _) => preview_header::ARGS_DECL_DOC,
+        (false, _) => preview_header::option(key)?.doc,
     };
     Some(make_hover(format!("`{key}` — preview option\n\n{doc}")))
 }
@@ -119,5 +120,5 @@ fn make_hover(text: String) -> Hover {
 }
 
 #[cfg(test)]
-#[path = "hover_test.rs"]
+#[path = "hover.test.rs"]
 mod tests;

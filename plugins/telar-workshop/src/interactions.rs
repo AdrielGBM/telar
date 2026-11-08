@@ -10,7 +10,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::preview::{CaughtFailures, Frame, Play, PreviewCtx, PreviewEntry};
-use telar::{RwSignal, SurfaceCanvas, batch, on_cleanup, signal};
+use telar::{NestedCanvas, RwSignal, batch, on_cleanup, signal};
 
 pub(crate) use frame::frame_layer;
 pub(crate) use run::{Run, Step, StepStatus, Verdict};
@@ -164,7 +164,7 @@ pub(crate) fn drive(
     state: &WorkshopState,
     entry: &PreviewEntry,
     ctx: PreviewCtx,
-    canvas: &Rc<SurfaceCanvas>,
+    canvas: &Rc<NestedCanvas>,
     failures: CaughtFailures,
 ) {
     let interactions = state.interactions().clone();
@@ -180,5 +180,5 @@ pub(crate) fn drive(
 }
 
 #[cfg(test)]
-#[path = "interactions_test.rs"]
+#[path = "interactions.test.rs"]
 mod tests;

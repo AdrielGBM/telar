@@ -34,5 +34,5 @@ fn bake_svg(bytes: &[u8]) -> Result<String, String> {
 }
 
 #[cfg(test)]
-#[path = "svg_test.rs"]
+#[path = "svg.test.rs"]
 mod tests;

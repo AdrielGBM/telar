@@ -6,11 +6,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::{Reader, Wire, WireError, Writer};
+use crate::{Reader, Shaped, Wire, WireError, Writer, fold, fold_shape, shape_named};
 
 macro_rules! wire_scalar {
     ($($ty:ty => $put:ident / $take:ident),+ $(,)?) => {
-        $(impl Wire for $ty {
+        $(impl Shaped for $ty {
+            const SHAPE: u64 = shape_named(stringify!($ty));
+        }
+        impl Wire for $ty {
             fn put(&self, w: &mut Writer) {
                 w.$put(*self);
             }
@@ -31,6 +34,10 @@ wire_scalar!(
     f64 => f64 / f64,
 );
 
+impl Shaped for u32 {
+    const SHAPE: u64 = shape_named("u32");
+}
+
 impl Wire for u32 {
     fn put(&self, w: &mut Writer) {
         w.varint(u64::from(*self));
@@ -38,6 +45,10 @@ impl Wire for u32 {
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         r.varint_u32()
     }
+}
+
+impl Shaped for usize {
+    const SHAPE: u64 = shape_named("usize");
 }
 
 impl Wire for usize {
@@ -49,6 +60,10 @@ impl Wire for usize {
     }
 }
 
+impl Shaped for char {
+    const SHAPE: u64 = shape_named("char");
+}
+
 impl Wire for char {
     fn put(&self, w: &mut Writer) {
         u32::from(*self).put(w);
@@ -56,6 +71,10 @@ impl Wire for char {
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         char::from_u32(u32::take(r)?).ok_or(WireError::Invalid("a char that is no Unicode scalar"))
     }
+}
+
+impl Shaped for String {
+    const SHAPE: u64 = shape_named("str");
 }
 
 impl Wire for String {
@@ -67,6 +86,10 @@ impl Wire for String {
     }
 }
 
+impl Shaped for Box<str> {
+    const SHAPE: u64 = shape_named("str");
+}
+
 impl Wire for Box<str> {
     fn put(&self, w: &mut Writer) {
         w.str(self);
@@ -74,6 +97,10 @@ impl Wire for Box<str> {
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         r.str().map(Box::from)
     }
+}
+
+impl Shaped for Arc<str> {
+    const SHAPE: u64 = shape_named("str");
 }
 
 impl Wire for Arc<str> {
@@ -85,6 +112,10 @@ impl Wire for Arc<str> {
     }
 }
 
+impl Shaped for Cow<'static, str> {
+    const SHAPE: u64 = shape_named("str");
+}
+
 impl Wire for Cow<'static, str> {
     fn put(&self, w: &mut Writer) {
         w.str(self);
@@ -92,6 +123,10 @@ impl Wire for Cow<'static, str> {
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         r.str().map(|text| Cow::Owned(text.to_owned()))
     }
+}
+
+impl Shaped for () {
+    const SHAPE: u64 = shape_named("()");
 }
 
 impl Wire for () {
@@ -102,6 +137,10 @@ impl Wire for () {
 }
 
 /// Spelled as the platform keeps it, so a path that is no UTF-8 crosses intact: both sides of a boundary run on the one platform.
+impl Shaped for PathBuf {
+    const SHAPE: u64 = shape_named("path");
+}
+
 impl Wire for PathBuf {
     #[cfg(unix)]
     fn put(&self, w: &mut Writer) {
@@ -138,6 +177,10 @@ impl Wire for PathBuf {
     }
 }
 
+impl<T: Wire, E: Wire> Shaped for Result<T, E> {
+    const SHAPE: u64 = fold_shape(fold_shape(shape_named("Result"), T::SHAPE), E::SHAPE);
+}
+
 impl<T: Wire, E: Wire> Wire for Result<T, E> {
     fn put(&self, w: &mut Writer) {
         match self {
@@ -160,6 +203,10 @@ impl<T: Wire, E: Wire> Wire for Result<T, E> {
     }
 }
 
+impl<T: Wire> Shaped for Option<T> {
+    const SHAPE: u64 = fold_shape(shape_named("Option"), T::SHAPE);
+}
+
 impl<T: Wire> Wire for Option<T> {
     fn put(&self, w: &mut Writer) {
         match self {
@@ -179,6 +226,10 @@ impl<T: Wire> Wire for Option<T> {
     }
 }
 
+impl<T: Wire> Shaped for Box<T> {
+    const SHAPE: u64 = T::SHAPE;
+}
+
 impl<T: Wire> Wire for Box<T> {
     fn put(&self, w: &mut Writer) {
         T::put(self, w);
@@ -186,6 +237,10 @@ impl<T: Wire> Wire for Box<T> {
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         T::take(r).map(Box::new)
     }
+}
+
+impl<T: Wire> Shaped for Arc<T> {
+    const SHAPE: u64 = T::SHAPE;
 }
 
 impl<T: Wire> Wire for Arc<T> {
@@ -204,6 +259,10 @@ fn put_all<T: Wire>(w: &mut Writer, items: &[T]) {
     }
 }
 
+impl<T: Wire> Shaped for Vec<T> {
+    const SHAPE: u64 = fold_shape(shape_named("sequence"), T::SHAPE);
+}
+
 impl<T: Wire> Wire for Vec<T> {
     fn put(&self, w: &mut Writer) {
         put_all(w, self);
@@ -214,6 +273,10 @@ impl<T: Wire> Wire for Vec<T> {
     }
 }
 
+impl<T: Wire> Shaped for Arc<[T]> {
+    const SHAPE: u64 = fold_shape(shape_named("sequence"), T::SHAPE);
+}
+
 impl<T: Wire> Wire for Arc<[T]> {
     fn put(&self, w: &mut Writer) {
         put_all(w, self);
@@ -222,6 +285,13 @@ impl<T: Wire> Wire for Arc<[T]> {
         let len = r.len()?;
         (0..len).map(|_| T::take(r)).collect()
     }
+}
+
+impl<T: Wire, const N: usize> Shaped for [T; N] {
+    const SHAPE: u64 = fold(
+        fold_shape(shape_named("array"), T::SHAPE),
+        &(N as u64).to_le_bytes(),
+    );
 }
 
 impl<T: Wire, const N: usize> Wire for [T; N] {
@@ -238,6 +308,10 @@ impl<T: Wire, const N: usize> Wire for [T; N] {
     }
 }
 
+impl<A: Wire, B: Wire> Shaped for (A, B) {
+    const SHAPE: u64 = fold_shape(fold_shape(shape_named("pair"), A::SHAPE), B::SHAPE);
+}
+
 impl<A: Wire, B: Wire> Wire for (A, B) {
     fn put(&self, w: &mut Writer) {
         self.0.put(w);
@@ -248,6 +322,10 @@ impl<A: Wire, B: Wire> Wire for (A, B) {
     }
 }
 
+impl<T: Wire> Shaped for Range<T> {
+    const SHAPE: u64 = fold_shape(shape_named("Range"), T::SHAPE);
+}
+
 impl<T: Wire> Wire for Range<T> {
     fn put(&self, w: &mut Writer) {
         self.start.put(w);
@@ -256,6 +334,10 @@ impl<T: Wire> Wire for Range<T> {
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         Ok(T::take(r)?..T::take(r)?)
     }
+}
+
+impl Shaped for Duration {
+    const SHAPE: u64 = shape_named("Duration");
 }
 
 impl Wire for Duration {

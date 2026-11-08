@@ -11,7 +11,7 @@
 pub struct SidebarProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn sidebar(props: SidebarProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -21,7 +21,7 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
     let __col_0 = {
         let __col_1 = {
             let __row_0 = {
-                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
+                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build())?;
                 let __text_0 = {
                     Text::declaring(
                         || "rsx".to_string(),
@@ -50,9 +50,9 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
             };
             let __col_3 = {
                 let __row_1 = {
-                    let __node_1 = button(ButtonProps::props().label("Modern").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("modern"))).build(), Children::default())?;
-                    let __node_2 = button(ButtonProps::props().label("Pastel").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("pastel"))).build(), Children::default())?;
-                    let __node_3 = button(ButtonProps::props().label("Midnight").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("midnight"))).build(), Children::default())?;
+                    let __node_1 = button(ButtonProps::props().label("Modern").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("modern"))).build())?;
+                    let __node_2 = button(ButtonProps::props().label("Pastel").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("pastel"))).build())?;
+                    let __node_3 = button(ButtonProps::props().label("Midnight").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("midnight"))).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), children![__node_1, __node_2, __node_3])?
                 };
                 let __text_3 = {

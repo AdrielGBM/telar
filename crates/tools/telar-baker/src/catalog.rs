@@ -4,6 +4,7 @@
 //!
 //! The model and the TOML grammar are `i18n-core`'s, shared with the runtime loader an app without any `.rsx` file uses. What is baker-only is here: discovery, serialization, and the index that lets `t!` validate a key without any of this being linked into the macro.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use i18n_core::PluralCategory;
@@ -20,6 +21,8 @@ pub struct CatalogReport {
     pub keys: usize,
     pub changed: bool,
     pub warnings: Vec<String>,
+    /// What a build must not go on from: a catalog file that does not parse, or an artifact that cannot be written. Either leaves the previous catalog in place, which would otherwise ship as if it were this one.
+    pub errors: Vec<String>,
 }
 
 /// Bakes `package_dir`'s translation catalog, writing `<package_dir>/.telar/i18n.{json,rs}`. `None` when the package has neither `.rsx` files nor locale files, so a crate with no stake in either never grows a `.telar/`.
@@ -42,7 +45,7 @@ pub fn bake_catalog(
     let model = match parse_sources(&sources, config.default.as_deref()) {
         Ok(model) => model,
         Err(e) => {
-            report.warnings.push(format!("catalog: {e}"));
+            report.errors.push(format!("catalog: {e}"));
             return Ok(Some(report));
         }
     };
@@ -70,11 +73,13 @@ pub fn bake_catalog(
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
         };
-        let relative = path
-            .strip_prefix(package_dir)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let Some(relative) = telar_project::relative_slashed(&path, package_dir) else {
+            report.warnings.push(format!(
+                "catalog: {} has a name that is not valid UTF-8, so a change to it will not mark the baked catalog stale",
+                path.display()
+            ));
+            continue;
+        };
         source_files.push(CatalogSourceFile {
             path: relative,
             hash: content_hash(&bytes),
@@ -97,16 +102,16 @@ pub fn bake_catalog(
     report.keys = index.entries.len();
 
     if let Err(e) = std::fs::create_dir_all(&telar_dir)
+        .and_then(|()| write_if_changed_atomic(&telar_dir.join(CATALOG_SOURCE_FILENAME), &source))
         .and_then(|()| {
             write_if_changed_atomic(
                 &telar_dir.join(CATALOG_INDEX_FILENAME),
                 &format!("{}\n", index.to_json()),
             )
         })
-        .and_then(|()| write_if_changed_atomic(&telar_dir.join(CATALOG_SOURCE_FILENAME), &source))
     {
         report
-            .warnings
+            .errors
             .push(format!("could not write {}: {e}", telar_dir.display()));
         report.changed = false;
     }
@@ -131,8 +136,9 @@ impl I18nConfig {
     }
 }
 
-/// The locale files that feed the catalog, sorted — used to emit `include_str!` rerun triggers so editing a translation re-bakes, exactly like editing a `.rsx` file.
-pub fn catalog_files(package_root: &Path) -> Result<Vec<PathBuf>, ManifestError> {
+/// The locale files that feed the catalog, sorted: the files [`bake_catalog`] records as the index's `sources`, which the macro turns into rerun triggers.
+#[cfg(test)]
+fn catalog_files(package_root: &Path) -> Result<Vec<PathBuf>, ManifestError> {
     let config = I18nConfig::load(package_root)?;
     Ok(catalog_sources(package_root, &config)
         .into_iter()
@@ -198,6 +204,15 @@ pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, String
     )
 }
 
+/// Every key the catalog of `package_root` defines, or empty when it has none. A malformed catalog reads as empty: the bake reports that, and refusing to run the other checks over it would hide a class error behind a translation one.
+pub fn catalog_keys(package_root: &Path) -> HashSet<String> {
+    parse_catalog(package_root)
+        .ok()
+        .flatten()
+        .map(|catalog| catalog.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
 fn parse_sources(
     sources: &[(String, PathBuf)],
     default: Option<&str>,
@@ -224,26 +239,17 @@ fn parse_sources(
 pub fn to_source(model: &CatalogModel) -> String {
     let mut s = String::new();
     s.push_str("pub static CATALOG: Catalog = Catalog {\n");
+    let locales: Vec<String> = model.locales.iter().map(|tag| format!("{tag:?}")).collect();
+    s.push_str(&format!("    locales: &[{}],\n", locales.join(", ")));
     s.push_str(&format!(
-        "    locales: &[{}],\n",
-        ser_str_list(&model.locales)
-    ));
-    s.push_str(&format!(
-        "    default_locale: {},\n",
-        ser_str(&model.default_locale)
+        "    default_locale: {:?},\n",
+        model.default_locale
     ));
     s.push_str("    entries: &[\n");
     for (key, per_locale) in &model.entries {
-        s.push_str(&format!(
-            "        Entry {{ key: {}, messages: &[",
-            ser_str(key)
-        ));
+        s.push_str(&format!("        Entry {{ key: {key:?}, messages: &["));
         for (locale, message) in per_locale {
-            s.push_str(&format!(
-                "({}, {}), ",
-                ser_str(locale),
-                ser_message(message)
-            ));
+            s.push_str(&format!("({locale:?}, {}), ", ser_message(message)));
         }
         s.push_str("] },\n");
     }
@@ -261,13 +267,13 @@ pub fn to_source(model: &CatalogModel) -> String {
 
 fn ser_message(message: &MessageModel) -> String {
     match message {
-        MessageModel::Plain(text) => format!("Message::Plain({})", ser_str(text)),
+        MessageModel::Plain(text) => format!("Message::Plain({text:?})"),
         MessageModel::Format(parts) => {
             let inner: Vec<String> = parts
                 .iter()
                 .map(|p| match p {
-                    PartModel::Lit(s) => format!("Part::Lit({})", ser_str(s)),
-                    PartModel::Arg(s) => format!("Part::Arg({})", ser_str(s)),
+                    PartModel::Lit(s) => format!("Part::Lit({s:?})"),
+                    PartModel::Arg(s) => format!("Part::Arg({s:?})"),
                 })
                 .collect();
             format!("Message::Format(&[{}])", inner.join(", "))
@@ -300,34 +306,10 @@ fn ser_category(name: &str) -> &'static str {
     }
 }
 
-fn ser_str(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
-            '\r' => out.push_str("\\r"),
-            _ => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-fn ser_str_list(items: &[String]) -> String {
-    items
-        .iter()
-        .map(|s| ser_str(s))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
 #[cfg(test)]
-#[path = "catalog_test.rs"]
+#[path = "catalog.test.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "catalog_plural_test.rs"]
+#[path = "catalog.plural.test.rs"]
 mod plural_tests;

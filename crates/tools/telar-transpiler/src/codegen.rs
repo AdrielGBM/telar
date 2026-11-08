@@ -1,6 +1,6 @@
 //! The codegen engine: turns a parsed [`RsxDocument`] into compilable Rust source, wiring the `[logic]`, `[style]`, `[view]`, and `[preview]` zones together with a per-line source map.
 
-use telar_parser::{RsxDocument, ViewNode};
+use telar_parser::RsxDocument;
 
 use crate::error::TranspileError;
 use crate::lexer::{contains_ident, literal_or_comment_end};
@@ -128,6 +128,17 @@ fn item_kind(line: &str) -> Option<ItemKind> {
             return None;
         }
     }
+}
+
+/// The names the logic zone's top-level items declare as values, which a sibling of the component fn sees as well as its body.
+fn logic_item_names(logic: &str) -> Vec<String> {
+    let lines: Vec<&str> = logic.lines().collect();
+    let items: String = hoisted_items(logic)
+        .iter()
+        .flat_map(|item| &lines[item.start..item.end])
+        .map(|line| format!("{line}\n"))
+        .collect();
+    crate::rust::item_value_names(&items)
 }
 
 /// Every top-level item of the logic zone, in source order. An item that never ends stays in the function rather than being guessed at, so a malformed one fails where it was written.
@@ -387,6 +398,12 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     let imported = imports.class_list();
     let classes: Vec<StyleClass> = doc.style.classes.iter().chain(&imported).cloned().collect();
     let style_module = is_style_module(doc, props_span.is_some());
+    if doc.view.nodes.is_empty() && !style_module {
+        return Err(TranspileError::Codegen(format!(
+            "`{0}.rsx` has no `[view]`, so it would be a component that draws nothing: add a `[view]`, or, if this file holds only previews of a component written elsewhere, name it `{0}.preview.rsx`",
+            input.component_name
+        )));
+    }
     let style_section = match style_module {
         true => doc
             .style
@@ -397,15 +414,19 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         false => generate_classes(&doc.style.classes, &imported, theme_type, theme),
     };
 
-    let mut locals = scan_locals(logic_source);
+    let locals = scan_locals(logic_source);
     let view_locals_bind_scheme = locals.iter().any(|name| name == "scheme");
-    // The recipe is a parameter, not a `[logic]` binding, but a placeholder builds from it wherever it stands, so a closure around one has to clone it in like a local.
-    if view_uses_slot(&doc.view.nodes) && !locals.iter().any(|l| l == "children") {
-        locals.push("children".to_string());
-    }
+    let items = logic_item_names(logic_source);
     let mut view_gen = ViewGen::new(&classes, input.assets)
         .with_theme_access(theme)
         .with_locals(locals)
+        .with_file_bindings(
+            items
+                .iter()
+                .cloned()
+                .chain(crate::view::view_let_names(&doc.view.nodes))
+                .collect(),
+        )
         .with_signals(signals.iter().map(|s| s.name.clone()).collect());
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let scheme_line = scheme_binding(&view_body, view_locals_bind_scheme);
@@ -413,8 +434,8 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     let logic = logic_source.trim_end().to_string();
 
     let ret = "Result<Box<dyn LayoutItem>, LayoutError>";
-    // One signature for every component removes the need for a registry describing each callee's arity: an unused props builder is empty, and unplaced children never run their recipe.
-    let signature = format!("pub fn {fn_name}(props: {props_type}, children: Children) -> {ret}");
+    // One signature for every component removes the need for a registry describing each callee's arity: whatever a caller hands it, children included, is a prop.
+    let signature = format!("pub fn {fn_name}(props: {props_type}) -> {ret}");
 
     let logic_start0 = doc.logic.start_line.saturating_sub(1) as u32;
     let logic_line_src = |j: usize| -> u32 {
@@ -682,6 +703,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
                 theme_type,
                 rsx_path: input.rsx_path,
                 classes: &classes,
+                bindings: &items,
             },
         );
         expr_spans.extend(mapped.expr_spans);
@@ -786,23 +808,6 @@ fn find_move_keyword(line: &str) -> Option<usize> {
         from = pos + 4;
     }
     None
-}
-
-/// Whether any node in the view tree is a `children` slot placeholder, so the component function must take a `Slots` argument. Recurses through element children and `if`/`for` branches.
-fn view_uses_slot(nodes: &[ViewNode]) -> bool {
-    nodes.iter().any(node_uses_slot)
-}
-
-fn node_uses_slot(node: &ViewNode) -> bool {
-    match node {
-        ViewNode::Element(el) => el.tag == "children" || view_uses_slot(&el.children),
-        ViewNode::IfBlock(b) => {
-            view_uses_slot(&b.then_branch) || b.else_branch.as_deref().is_some_and(view_uses_slot)
-        }
-        ViewNode::ForBlock(b) => view_uses_slot(&b.body),
-        ViewNode::MatchBlock(b) => b.arms.iter().any(|arm| view_uses_slot(&arm.body)),
-        ViewNode::LetStmt(_) | ViewNode::Comment(_) => false,
-    }
 }
 
 /// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone, renames it to `{PascalFnName}Props`, and returns `(struct_code, default_impl, span)`. `default_impl` is `Some` only when the struct uses inline `field: Type = expr` defaults (a synthesized `Default` impl); it is emitted after the struct with no source mapping. `span` is the struct's `[start, end]` (inclusive) line span within `logic`, so the caller can map the struct back to source. The emitted struct, the `.rsx` line each of its lines came from (`None` for a line the transpiler injected), and the span of the declaration lifted out of `[logic]`.
@@ -990,14 +995,14 @@ fn field_line(lines: &[&str], name: &str) -> Option<usize> {
     })
 }
 
-/// The module a `*.previews.rsx` compiles to: previews of a component written elsewhere, beside it, under the component's name.
+/// The module a `*.preview.rsx` compiles to: previews of a component written elsewhere, beside it, under the component's name.
 ///
 /// Everything in it exists for its previews, so its `[logic]` — the `use` lines and the items its previews name, such as a `fixture:` or a `decorator:` — and its `[style]` sit inside the same `::telar::__previews!` as the previews. In a build without `telar/previews` the module is empty. A `[view]` is refused rather than compiled into a component nothing calls.
-pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
+pub(crate) fn preview_file(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
     let doc = input.document;
     if !doc.view.nodes.is_empty() {
         return Err(TranspileError::Codegen(
-            "a `.previews.rsx` holds previews of components written elsewhere, so it has no `[view]`: move the view to a `.rsx` of its own".into(),
+            "a `.preview.rsx` holds previews of components written elsewhere, so it has no `[view]`: move the view to a `.rsx` of its own".into(),
         ));
     }
     let mut code = Code::default();
@@ -1052,6 +1057,7 @@ pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSourc
                 theme_type,
                 rsx_path: input.rsx_path,
                 classes: &classes,
+                bindings: &crate::rust::item_value_names(&doc.logic.source),
             },
         );
         code.push(crate::preview::CLOSE, None);
@@ -1153,7 +1159,7 @@ pub(crate) fn scheme_binding(view_body: &str, shadowed: bool) -> Option<&'static
 }
 
 #[cfg(test)]
-#[path = "codegen_test.rs"]
+#[path = "codegen.test.rs"]
 mod tests;
 
 /// Whether `doc` is a module of classes for other `.rsx` to `use`, rather than a component: it declares classes, and no `[view]`, preview or props to call it with.
@@ -1168,10 +1174,7 @@ fn is_style_module(doc: &RsxDocument, has_props: bool) -> bool {
 fn push_import_errors(code: &mut Code, imports: &ResolvedImports) {
     for error in &imports.errors {
         code.push(
-            &format!(
-                "compile_error!({});\n",
-                crate::view::rust_str(&error.message)
-            ),
+            &format!("compile_error!({:?});\n", error.message),
             Some(error.line.saturating_sub(1) as u32),
         );
     }

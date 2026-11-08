@@ -1,5 +1,6 @@
 //! The desktop backend: the winit runner, plus the accessibility, clipboard, dialog, URI-opening and system-preference integrations a desktop expects.
 
+#![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
 #[cfg(feature = "a11y")]

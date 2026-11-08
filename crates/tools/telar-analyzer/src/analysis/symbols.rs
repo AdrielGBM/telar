@@ -97,5 +97,5 @@ fn block_range(lines: &[&str], start: usize, next: Option<usize>) -> Range {
 }
 
 #[cfg(test)]
-#[path = "symbols_test.rs"]
+#[path = "symbols.test.rs"]
 mod tests;

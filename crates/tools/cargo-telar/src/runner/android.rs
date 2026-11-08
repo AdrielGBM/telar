@@ -3,11 +3,12 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use telar_project::protocol::RENDERER_BACKEND_VAR;
+
 use super::config::{
-    TelarSection, backend_as_str, default_app_id, read_package_manifest, resolve_package,
-    split_android_flag,
+    TelarSection, default_app_id, read_package_manifest, resolve_package, split_android_flag,
 };
-use super::package::{apk_notice_path, copy_icon_notice, dist_dir, profile_of};
+use super::package::{apk_notice_path, copy_icon_notice, dist_dir};
 
 pub(crate) fn resolve_ndk_root() -> Option<String> {
     if let Ok(v) = std::env::var("ANDROID_NDK_ROOT")
@@ -40,9 +41,17 @@ fn android_package_id(args: &[String]) -> String {
     default_app_id(&crate_name)
 }
 
+// cargo-apk takes no `--message-format`, so it reports no artifact to read the APK's path from; it is rebuilt from the profile flag every caller here passes.
+fn apk_profile(args: &[String]) -> &'static str {
+    match args.iter().any(|arg| arg == "--release") {
+        true => "release",
+        false => "debug",
+    }
+}
+
 fn apk_path(args: &[String]) -> PathBuf {
     let resolved = resolve_package(args);
-    let profile = profile_of(args);
+    let profile = apk_profile(args);
     telar_project::find_target_dir(&resolved.workspace_root)
         .join(profile)
         .join("apk")
@@ -87,10 +96,11 @@ fn load_dotenv(cmd: &mut Command) -> Result<(), String> {
 
 pub(crate) fn make_android_cmd(cargo_args: Vec<String>, config: TelarSection) -> Command {
     let ndk_root = resolve_ndk_root();
-    let backend_value = backend_as_str(config.backend.unwrap_or_default());
     let mut cmd = Command::new("cargo");
-    cmd.args(cargo_args)
-        .env("TELAR_RENDERER_BACKEND", backend_value);
+    cmd.args(cargo_args).env(
+        RENDERER_BACKEND_VAR,
+        config.backend.unwrap_or_default().as_str(),
+    );
     if let Some(ndk) = ndk_root {
         cmd.env("ANDROID_NDK_ROOT", ndk);
     }
@@ -149,9 +159,6 @@ pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarSectio
     let (_android, rest) = split_android_flag(cargo_args);
     let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
     build_args.extend(rest.clone());
-    if !build_args.contains(&"--release".to_string()) {
-        build_args.push("--release".to_string());
-    }
     let status = make_android_cmd(build_args, config)
         .status()
         .expect("[cargo-telar] failed to invoke cargo");
@@ -189,5 +196,5 @@ pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarSectio
 }
 
 #[cfg(test)]
-#[path = "android_test.rs"]
+#[path = "android.test.rs"]
 mod tests;

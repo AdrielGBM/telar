@@ -25,6 +25,12 @@ pub enum WindowCommand {
     SetCursor(crate::Cursor),
     /// Move the platform's history: the step the app took, and where it now stands. Queued by [`report_location_history`](crate::report_location_history) and carried out by the surface's [`LocationSource`](crate::LocationSource), which is why it travels with the other window commands: the app moves inside a widget closure, and only the runner holds the source.
     Navigate(crate::HistoryUpdate),
+    /// Start an OS drag from the pointer stroke under way. Answered by [`Event::DragEnded`](crate::Event::DragEnded) on this surface, `NotStarted` included.
+    StartDrag(crate::OutgoingDrag),
+    /// Take a drop at the point the [`Event::DragOver`](crate::Event::DragOver) being handled names.
+    AcceptDrop(crate::DropAnswer),
+    /// Show or hide the picture following this process's drag, for a target that draws its own preview.
+    ShowDragIcon(bool),
 }
 
 reactive_local::surface_local! {
@@ -45,5 +51,5 @@ pub fn take_window_commands() -> Vec<WindowCommand> {
 }
 
 #[cfg(test)]
-#[path = "window_command_test.rs"]
+#[path = "window_command.test.rs"]
 mod tests;

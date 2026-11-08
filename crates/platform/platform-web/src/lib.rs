@@ -27,7 +27,7 @@ pub use keyboard::keyboard_convention;
 pub use location::WebLocation;
 pub use log::install_console_logging;
 pub use page_hidden::PageHidden;
-pub use platform::{IDLE_ATTRIBUTE, WebPlatform, WebPlatformConfig};
+pub use platform::{IDLE_ATTRIBUTE, PageNames, WebPlatform, WebPlatformConfig};
 pub use preferences::{MediaAnswers, read as read_system_preferences};
 pub use served::{ServedState, parse_served_state, served_state};
 pub use storage::WebStorage;

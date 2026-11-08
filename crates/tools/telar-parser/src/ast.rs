@@ -30,7 +30,7 @@ pub struct Preview {
     pub name: String,
     /// Header options (`width:360`, `bg:surface`, `args:none`, `dark`), kept raw: their meaning belongs to the transpiler. A bare flag carries an empty value.
     pub options: Vec<StyleProp>,
-    /// The `args(name:default …)` declarations: live, preview-scoped signals the body reads as `$name`.
+    /// The `args(name:default …)` and `values(name:default …)` declarations, in the order the header writes them: what the body reads as `$name`.
     pub args: Vec<ArgDecl>,
     pub body: Vec<ViewNode>,
     /// The `[play]` zone written after the body.
@@ -39,13 +39,23 @@ pub struct Preview {
     pub line: usize,
 }
 
-/// One `name:default` declaration of a preview's `args(…)`. The default is read exactly like an attribute value: a quoted one is a string, anything else a Rust expression.
+/// One `name:default` declaration of a preview's `args(…)` or `values(…)`. The default is read exactly like an attribute value: a quoted one is a string, anything else a Rust expression.
 #[derive(Debug, Clone)]
 pub struct ArgDecl {
     pub name: String,
+    pub kind: ArgKind,
     pub default: Value,
     /// Byte offset in the source where the default's text begins, so a rustc error on it maps back to the header.
     pub default_start: usize,
+}
+
+/// How the body reads an arg, which its header says by the list it declares it in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArgKind {
+    /// Declared in `args(…)`: a live signal, two-way with its control, that the body reads as it runs.
+    Signal,
+    /// Declared in `values(…)`: the arg's value, which a change of its control builds the preview again to hand over, so a prop that takes a plain value can take it.
+    Value,
 }
 
 /// A `[play]` zone: verbatim Rust run against the preview it follows.
@@ -101,14 +111,6 @@ impl StyleImportName {
     pub fn local(&self) -> &str {
         self.alias.as_deref().unwrap_or(&self.name)
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-/// A `[style]` property's value, as written.
-pub enum StyleValue {
-    Hex(String),
-    Number(f32),
-    Raw(String),
 }
 
 /// A style class, e.g. `@card` followed by indented property pairs, or an inline `@badge: ...`.
@@ -263,7 +265,7 @@ pub struct IfBlock {
     pub condition_start: usize,
 }
 
-/// A `for ... in ...` loop block in the view. A `$`-prefixed `iterable` marks a reactive list (re-run + keyed reconciliation); a plain iterable is a one-time construction loop. `key_expr` is the optional `key <expr>` clause giving each item a stable identity for reconciliation; without it, a reactive list reconciles by position instead. `gap_expr` is the optional trailing `gap:<expr>` clause (space between reconciled items), reactive-list only.
+/// A `for ... in ...` loop block in the view. A `$`-prefixed `iterable` marks a reactive list (re-run + keyed reconciliation); a plain iterable is a one-time construction loop. `key_expr` is the optional `key <expr>` clause giving each item a stable identity for reconciliation; without it, a reactive list keys each row on its index and binds the pattern, a single name, to a signal of the item now at that index. `gap_expr` is the optional trailing `gap:<expr>` clause (space between reconciled items), reactive-list only.
 #[derive(Debug, Clone)]
 pub struct ForBlock {
     pub pattern: String,

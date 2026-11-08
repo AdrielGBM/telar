@@ -75,5 +75,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "source_test.rs"]
+#[path = "source.test.rs"]
 mod tests;

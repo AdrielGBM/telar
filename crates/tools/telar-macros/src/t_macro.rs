@@ -182,5 +182,5 @@ fn lookup(namespace: Option<&str>, key: &str, args: &[(Ident, Expr)]) -> TokenSt
 }
 
 #[cfg(test)]
-#[path = "t_macro_test.rs"]
+#[path = "t_macro.test.rs"]
 mod tests;

@@ -207,5 +207,5 @@ fn indent(line: &str) -> usize {
 }
 
 #[cfg(test)]
-#[path = "selection_range_test.rs"]
+#[path = "selection_range.test.rs"]
 mod tests;

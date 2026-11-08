@@ -3,14 +3,12 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use renderer_core::css_string;
 use telar_project::FontDeclaration;
 
 use super::assets::Assets;
 use super::media::media_type;
 use super::page::{Page, PageFont};
-
-/// What a preload carries to name the family its face answers to, which is how a canvas build finds the faces to fetch into its shaper. Read by `renderer_web::FAMILY_ATTRIBUTE`, which must spell it the same.
-pub(crate) const FAMILY_ATTRIBUTE: &str = "data-telar-family";
 
 /// Where the faces go in the output, under their own names before hashing.
 const FONTS_DIR: &str = "fonts";
@@ -91,23 +89,6 @@ fn round_percent(factor: f32) -> f32 {
     (factor * 10_000.0).round() / 100.0
 }
 
-/// A CSS string literal. `<` is escaped too: the rules sit inside a `<style>`, which a `</style>` in a family name would close.
-fn css_string(text: &str) -> String {
-    let mut quoted = String::with_capacity(text.len() + 2);
-    quoted.push('"');
-    for c in text.chars() {
-        match c {
-            '"' => quoted.push_str("\\\""),
-            '\\' => quoted.push_str("\\\\"),
-            '<' => quoted.push_str("\\3c "),
-            '\n' => quoted.push_str("\\a "),
-            c => quoted.push(c),
-        }
-    }
-    quoted.push('"');
-    quoted
-}
-
 #[cfg(test)]
-#[path = "fonts_test.rs"]
+#[path = "fonts.test.rs"]
 mod tests;

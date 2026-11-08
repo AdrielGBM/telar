@@ -1,12 +1,13 @@
 //! Paragraphs, in the glyphs themselves.
 
 use geometry_core::Rect;
-use renderer_core::{Declared, FontStyle, Paint, Span, TextAlign, TextStyle};
+use renderer_core::{Declared, FontStyle, Paint, Span, TextStyle};
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::Painter;
 use super::geom::{cell_center, mapped, sample};
 use crate::cell::{Attrs, Grapheme};
+use crate::metrics::align_cols;
 use crate::wrap::{ELLIPSIS, grapheme_cols};
 
 impl Painter<'_> {
@@ -42,12 +43,7 @@ impl Painter<'_> {
                 } else {
                     0
                 };
-            let mut col = cells.col0
-                + match style.text_align {
-                    TextAlign::Center => (cols.saturating_sub(width) / 2) as i32,
-                    TextAlign::End => cols.saturating_sub(width) as i32,
-                    TextAlign::Start | TextAlign::Justify => 0,
-                };
+            let mut col = cells.col0 + i32::from(align_cols(style.text_align, cols, width));
             for (offset, grapheme) in text[line.range.clone()].grapheme_indices(true) {
                 if col >= cells.col1 {
                     break;
@@ -93,7 +89,7 @@ impl Painter<'_> {
         if !self.clipped_in(col, row) {
             return width;
         }
-        let mapped = mapped(paint, self.matrix(), self.scale());
+        let mapped = mapped(paint, self.matrix());
         let p = cell_center(col, row, self.cell);
         let color = sample(&mapped, p.x, p.y);
         self.put_glyph(col, row, Grapheme::new(grapheme), color, attrs)

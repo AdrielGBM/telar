@@ -1,0 +1,380 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              element grid
+                clip 190,140 420x320
+                  matrix 1,0,0,1,190,140
+                    element group
+                      element group
+                        element row
+                          rect 0,36 420x36 radius=6
+                          element gridcell
+                            rect 0,36 253x36 radius=6
+                            element group
+                              matrix 1,0,0,1,8,40
+                                text 0,6 237x16.8 "Ship the release notes" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,36 95x36 radius=6
+                            element group
+                              clip 261,40 26x28
+                                matrix 1,0,0,1,261,40
+                                  text 0,6 26.09x16.8 "Ada" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,36 64x36 radius=6
+                            element group
+                              clip 375,40 29x28
+                                matrix 1,0,0,1,375,40
+                                  text 0,6 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,72 420x58 radius=6
+                          element gridcell
+                            rect 0,72 253x58 radius=6
+                            element group
+                              matrix 1,0,0,1,8,76
+                                text 0,0 237x50.4 "Rewrite the onboarding guide so each step says what it is for before what to type" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,72 95x58 radius=6
+                            element group
+                              clip 261,76 40x50
+                                matrix 1,0,0,1,261,76
+                                  text 0,17 40x16.8 "Grace" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,72 64x58 radius=6
+                            element group
+                              clip 380,76 24x50
+                                matrix 1,0,0,1,380,76
+                                  text 0,17 24.45x16.8 "Tue" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,130 420x36 fill=#ffffff0d radius=6
+                          element gridcell
+                            rect 0,130 253x36 radius=6
+                            element group
+                              matrix 1,0,0,1,8,134
+                                text 0,6 237x16.8 "Fix the flaky test" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,130 95x36 radius=6
+                            element group
+                              clip 261,134 29x28
+                                matrix 1,0,0,1,261,134
+                                  text 0,6 29.19x16.8 "Alan" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,130 64x36 radius=6
+                            element group
+                              clip 374,134 30x28
+                                matrix 1,0,0,1,374,134
+                                  text 0,6 30x16.8 "Wed" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,166 420x59 fill=#ffffff1a radius=6
+                          element gridcell
+                            rect 0,166 253x59 radius=6
+                            element group
+                              matrix 1,0,0,1,8,170
+                                text 0,0 237x50.4 "Check keyboard paging in the tree, the table and the list against rows of different heights" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,166 95x59 radius=6
+                            element group
+                              clip 261,170 52x51
+                                matrix 1,0,0,1,261,170
+                                  text 0,18 52.22x16.8 "Barbara" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,166 64x59 radius=6
+                            element group
+                              clip 378,170 26x51
+                                matrix 1,0,0,1,378,170
+                                  text 0,18 26x16.8 "Thu" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,225 420x36 radius=6
+                          element gridcell
+                            rect 0,225 253x36 radius=6
+                            element group
+                              matrix 1,0,0,1,8,229
+                                text 0,6 237x16.8 "Order more coffee" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,225 95x36 radius=6
+                            element group
+                              clip 261,229 25x28
+                                matrix 1,0,0,1,261,229
+                                  text 0,6 25.3x16.8 "Ken" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,225 64x36 radius=6
+                            element group
+                              clip 387,229 17x28
+                                matrix 1,0,0,1,387,229
+                                  text 0,6 17x16.8 "Fri" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,261 420x58 radius=6
+                          element gridcell
+                            rect 0,261 253x58 radius=6
+                            element group
+                              matrix 1,0,0,1,8,265
+                                text 0,0 237x50.4 "Move the nightly build to the new runners, keeping the old ones for a week" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,261 95x58 radius=6
+                            element group
+                              clip 261,265 46x50
+                                matrix 1,0,0,1,261,265
+                                  text 0,17 46.41x16.8 "Edsger" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,261 64x58 radius=6
+                            element group
+                              clip 375,265 29x50
+                                matrix 1,0,0,1,375,265
+                                  text 0,17 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,319 420x36 radius=6
+                          element gridcell
+                            rect 0,319 253x36 radius=6
+                            element group
+                              matrix 1,0,0,1,8,323
+                                text 0,6 237x16.8 "Ship the release notes" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,319 95x36 radius=6
+                            element group
+                              clip 261,323 26x28
+                                matrix 1,0,0,1,261,323
+                                  text 0,6 26.09x16.8 "Ada" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,319 64x36 radius=6
+                            element group
+                              clip 375,323 29x28
+                                matrix 1,0,0,1,375,323
+                                  text 0,6 29.31x16.8 "Mon" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,355 420x59 radius=6
+                          element gridcell
+                            rect 0,355 253x59 radius=6
+                            element group
+                              matrix 1,0,0,1,8,359
+                                text 0,0 237x50.4 "Rewrite the onboarding guide so each step says what it is for before what to type" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,355 95x59 radius=6
+                            element group
+                              clip 261,359 40x51
+                                matrix 1,0,0,1,261,359
+                                  text 0,18 40x16.8 "Grace" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,355 64x59 radius=6
+                            element group
+                              clip 380,359 24x51
+                                matrix 1,0,0,1,380,359
+                                  text 0,18 24.45x16.8 "Tue" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,414 420x36 radius=6
+                          element gridcell
+                            rect 0,414 253x36 radius=6
+                            element group
+                              matrix 1,0,0,1,8,418
+                                text 0,6 237x16.8 "Fix the flaky test" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,414 95x36 radius=6
+                            element group
+                              clip 261,418 29x28
+                                matrix 1,0,0,1,261,418
+                                  text 0,6 29.19x16.8 "Alan" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,414 64x36 radius=6
+                            element group
+                              clip 374,418 30x28
+                                matrix 1,0,0,1,374,418
+                                  text 0,6 30x16.8 "Wed" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,450 420x58 radius=6
+                          element gridcell
+                            rect 0,450 253x58 radius=6
+                            element group
+                              matrix 1,0,0,1,8,454
+                                text 0,0 237x50.4 "Check keyboard paging in the tree, the table and the list against rows of different heights" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 253,450 95x58 radius=6
+                            element group
+                              clip 261,454 52x50
+                                matrix 1,0,0,1,261,454
+                                  text 0,17 52.22x16.8 "Barbara" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 348,450 64x58 radius=6
+                            element group
+                              clip 378,454 26x50
+                                matrix 1,0,0,1,378,454
+                                  text 0,17 26x16.8 "Thu" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element group
+                          rect 0,508 420x2292
+                        end
+                      end
+                      element row
+                        rect 0,0 420x36 fill=#1c1f29ff border=0,0,1,0 border-color=#3d4252ff
+                        element columnheader
+                          rect 0,0 253x36 radius=6
+                          element group
+                            clip 8,0 32x36
+                              matrix 1,0,0,1,8,0
+                                text 0,10 32x16.8 "Task" size=14 family=sans-serif weight=600 color=#ebedf5ff wrap=none lang=en
+                              end
+                            end
+                          end
+                          element group
+                          end
+                        end
+                        element columnheader
+                          rect 253,0 95x36 radius=6
+                          element group
+                            clip 261,0 45x36
+                              matrix 1,0,0,1,261,0
+                                text 0,10 45x16.8 "Owner" size=14 family=sans-serif weight=600 color=#ebedf5ff wrap=none lang=en
+                              end
+                            end
+                          end
+                          element group
+                          end
+                        end
+                        element columnheader
+                          rect 348,0 64x36 radius=6
+                          element group
+                            clip 377,0 27x36
+                              matrix 1,0,0,1,377,0
+                                text 0,10 27x16.8 "Due" size=14 family=sans-serif weight=600 color=#ebedf5ff wrap=none lang=en
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element status
+              element group
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

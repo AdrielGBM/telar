@@ -39,5 +39,5 @@ fn build_panicked() -> RendererError {
 }
 
 #[cfg(test)]
-#[path = "background_build_test.rs"]
+#[path = "background_build.test.rs"]
 mod tests;

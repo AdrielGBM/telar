@@ -329,6 +329,8 @@ fn role_of(role: Role) -> AkRole {
         Role::Status => AkRole::Status,
         Role::Log => AkRole::Log,
         Role::Label => AkRole::Label,
+        // Static text, so a reader reads its name where a generic container's may be passed over.
+        Role::KeyboardInput => AkRole::Label,
         Role::Banner => AkRole::Banner,
         Role::Navigation => AkRole::Navigation,
         Role::Main => AkRole::Main,
@@ -364,5 +366,5 @@ pub(crate) fn requested_focus_id(
 }
 
 #[cfg(test)]
-#[path = "accessibility_test.rs"]
+#[path = "accessibility.test.rs"]
 mod tests;

@@ -2,7 +2,7 @@
 
 use cosmic_text::{
     Align, Attrs, Buffer, CacheKey, CacheKeyFlags, Color as CosmicColor, Family, FontSystem,
-    LayoutGlyph, Metrics, PhysicalGlyph, Shaping, Style, SwashCache, Weight, fontdb,
+    LayoutGlyph, Metrics, PhysicalGlyph, Shaping, Style, SwashCache, Weight, Wrap, fontdb,
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
@@ -11,14 +11,18 @@ use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
 mod atlas;
+mod baseline;
 mod cache;
 mod colr;
 mod decoration;
 mod layout;
+#[cfg(test)]
+#[path = "shaper.lines.test.rs"]
+mod lines_tests;
 mod metrics;
 mod raster;
 #[cfg(test)]
-#[path = "shaper_test.rs"]
+#[path = "shaper.test.rs"]
 mod tests;
 
 pub use atlas::{ATLAS_SIZE, GlyphAtlas, GlyphInfo};
@@ -69,8 +73,9 @@ pub struct TextShaper {
     raster_cache: Cache<TextCacheKey, Arc<[u8]>>,
     shaping_cache: Cache<ShapingCacheKey, GlyphPositions>,
     measure_cache: Cache<(u64, u32, u32, u32), (f32, f32)>,
+    baseline_cache: Cache<(u32, u32), i32>,
     // Lets the software COLR fallback skip the buffer build and per-glyph lookup for plain UI text after the first evaluation. Symmetric with `blank_glyphs`.
-    has_colr_cache: Cache<(u64, u32, u32), bool>,
+    has_colr_cache: Cache<(u64, u32, u32, u32, u32), bool>,
     // So COLR rasterization does not re-read the font file on every atlas miss.
     colr_font_cache: Cache<fontdb::ID, Arc<(Vec<u8>, u32)>>,
     // Glyphs swash cannot rasterize that are not COLR either, skipped on later frames. Left unbounded, unlike the caches above: an entry is one `CacheKey`, the set is bounded by the glyph repertoire attempted, and evicting one buys 16 bytes in exchange for re-running a rasterization that already failed.
@@ -190,31 +195,17 @@ fn text_attrs<'a>(
     attrs
 }
 
-/// The paragraph cut into runs of one style each: every span in order, with the paragraph's own style filling the gaps between them. Spans are expected sorted and non-overlapping; anything reaching backwards or past the end is clamped rather than trusted, since they are byte offsets that outlived the text they indexed.
+/// The paragraph cut into runs of one style each: every span in order, with the paragraph's own style filling the gaps between them.
 fn styled_runs<'a>(text: &'a str, spans: &[Span], style: &TextStyle) -> Vec<(&'a str, TextStyle)> {
-    let mut runs = Vec::with_capacity(spans.len() * 2 + 1);
-    let mut at = 0usize;
-    for span in spans {
-        let start = (span.range.start as usize).clamp(at, text.len());
-        let end = (span.range.end as usize).clamp(start, text.len());
-        if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
-            continue;
-        }
-        if start > at {
-            runs.push((&text[at..start], style.clone()));
-        }
-        if end > start {
-            runs.push((
-                &text[start..end],
-                span.over.over(style, geometry_core::Size::ZERO),
-            ));
-        }
-        at = end;
-    }
-    if at < text.len() {
-        runs.push((&text[at..], style.clone()));
-    }
-    runs
+    renderer_core::span_segments(text, spans)
+        .map(|segment| {
+            let run_style = match segment.span {
+                Some((_, span)) => span.over.over(style, geometry_core::Size::ZERO),
+                None => style.clone(),
+            };
+            (&text[segment.range], run_style)
+        })
+        .collect()
 }
 
 fn shape_buffer(
@@ -233,9 +224,14 @@ fn shape_buffer(
     let font_size = style.font_size;
     let metrics = Metrics::new(font_size, effective_line_height(style));
     let mut buffer = Buffer::new(font_system, metrics);
-    // `None` width is cosmic-text for "do not wrap": the line grows past the box instead of breaking, which is what a label that is really a token wants.
-    let wrap_width = (!(style.text_wrap == TextWrap::NoWrap)).then_some(rect.width);
-    buffer.set_size(wrap_width, Some(rect.height));
+    // A line that must not break still keeps the box's width, so it is aligned in the box it is drawn in, as a document aligns `white-space: nowrap` text; with no width cosmic-text aligns a line in its own width, which is no alignment at all.
+    if style.text_wrap == TextWrap::NoWrap {
+        buffer.set_wrap(Wrap::None);
+    }
+    buffer.set_size(
+        Some(rect.width).filter(|width| width.is_finite()),
+        Some(rect.height),
+    );
     let attrs = text_attrs(style, font_system, family_availability);
     // `set_text` rather than a one-span `set_rich_text`: the same call underneath, but this is the one the byte-exact software golden was recorded against.
     match spans.filter(|s| !s.is_empty()) {
@@ -530,6 +526,7 @@ impl TextShaper {
                     .saturating_mul(size_of::<(CacheKey, i32, i32)>())
             }),
             measure_cache: Cache::new(limits::TEXT_MEASURE, |_| limits::SMALL_ENTRY_BYTES),
+            baseline_cache: Cache::new(limits::TEXT_MEASURE, |_| limits::SMALL_ENTRY_BYTES),
             has_colr_cache: Cache::new(limits::TEXT_HAS_COLR, |_| limits::SMALL_ENTRY_BYTES),
             colr_font_cache: Cache::new(limits::FONT_FILE, |font| font.0.len()),
             blank_glyphs: FxHashSet::default(),
@@ -546,6 +543,7 @@ impl TextShaper {
         self.raster_cache.sweep();
         self.shaping_cache.sweep();
         self.measure_cache.sweep();
+        self.baseline_cache.sweep();
         self.has_colr_cache.sweep();
         self.colr_font_cache.sweep();
         self.trim_glyph_rasters();
@@ -566,6 +564,7 @@ impl TextShaper {
             self.raster_cache.stat("text.raster"),
             self.shaping_cache.stat("text.shaping"),
             self.measure_cache.stat("text.measure"),
+            self.baseline_cache.stat("text.baseline"),
             self.has_colr_cache.stat("text.has_colr"),
             self.colr_font_cache.stat("text.font_file"),
             CacheStat {
@@ -624,6 +623,7 @@ impl TextShaper {
         self.raster_cache.clear();
         self.shaping_cache.clear();
         self.measure_cache.clear();
+        self.baseline_cache.clear();
         self.has_colr_cache.clear();
         self.blank_glyphs.clear();
         self.font_metrics_cache = None;

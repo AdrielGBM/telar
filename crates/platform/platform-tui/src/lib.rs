@@ -2,6 +2,7 @@
 //!
 //! Pairs with `telar-renderer-tui`, which draws the frames. The two agree on one number — how many logical pixels a cell stands for — and on nothing else: this crate knows nothing about how a frame is painted, and the renderer knows nothing about how input arrives.
 
+#![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod clipboard;

@@ -64,5 +64,5 @@ pub fn logical_border_radius(
 }
 
 #[cfg(test)]
-#[path = "border_test.rs"]
+#[path = "border.test.rs"]
 mod tests;

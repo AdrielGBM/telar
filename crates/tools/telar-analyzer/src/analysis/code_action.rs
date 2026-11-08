@@ -117,5 +117,5 @@ fn quick_fix(title: String, edit: WorkspaceEdit, diag: &Diagnostic) -> CodeActio
 }
 
 #[cfg(test)]
-#[path = "code_action_test.rs"]
+#[path = "code_action.test.rs"]
 mod tests;

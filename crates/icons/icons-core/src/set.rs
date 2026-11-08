@@ -254,5 +254,5 @@ fn num(value: f32) -> String {
 }
 
 #[cfg(test)]
-#[path = "set_test.rs"]
+#[path = "set.test.rs"]
 mod tests;

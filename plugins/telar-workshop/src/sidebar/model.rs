@@ -6,7 +6,7 @@ use telar::preview::PreviewEntry;
 use telar::preview::host::title_path;
 use telar_components::{TreeNode, fuzzy_match};
 
-/// The tree of `entries` whose package, title, name or tags match `query`, grouped by package when there is more than one and then by title path, with `badge` naming what a preview's row carries. An empty query keeps every preview.
+/// The tree of `entries` whose package, title, name or tags match `query`, grouped by package when there is more than one and then by title path, with `badge` naming what a preview's row carries. Groups are listed alphabetically, and a group's previews in the order they are written. An empty query keeps every preview.
 pub(super) fn tree(
     entries: &[PreviewEntry],
     query: &str,
@@ -42,6 +42,27 @@ fn collect_leaves(nodes: &[TreeNode], ids: &mut Vec<Arc<str>>) {
 /// The id of every group `entries` are listed under.
 pub(crate) fn group_ids(entries: &[PreviewEntry]) -> Vec<Arc<str>> {
     TreeNode::branch_ids(&tree(entries, "", |_| None))
+}
+
+/// The id of every group the preview `id` is listed under, outermost first; empty for an id no preview has.
+pub(crate) fn groups_holding(entries: &[PreviewEntry], id: &str) -> Vec<Arc<str>> {
+    let mut path = Vec::new();
+    path_to(&tree(entries, "", |_| None), id, &mut path);
+    path
+}
+
+fn path_to(nodes: &[TreeNode], id: &str, path: &mut Vec<Arc<str>>) -> bool {
+    nodes.iter().any(|node| {
+        if !node.is_branch() {
+            return *node.id == *id;
+        }
+        path.push(node.id.clone());
+        let found = path_to(&node.children, id, path);
+        if !found {
+            path.pop();
+        }
+        found
+    })
 }
 
 fn matches(query: &str, entry: &PreviewEntry) -> bool {
@@ -103,16 +124,19 @@ fn insert(groups: &mut Vec<Group>, parent: &str, path: &[&'static str], entry: P
     let Some((&label, rest)) = path.split_first() else {
         return;
     };
-    let at = match groups.iter().position(|group| group.label == label) {
-        Some(at) => at,
-        None => {
-            groups.push(Group {
-                label,
-                path: format!("{parent}/{label}"),
-                groups: Vec::new(),
-                previews: Vec::new(),
-            });
-            groups.len() - 1
+    let at = match groups.binary_search_by(|group| listing_order(group.label, label)) {
+        Ok(at) => at,
+        Err(at) => {
+            groups.insert(
+                at,
+                Group {
+                    label,
+                    path: format!("{parent}/{label}"),
+                    groups: Vec::new(),
+                    previews: Vec::new(),
+                },
+            );
+            at
         }
     };
     let group = &mut groups[at];
@@ -122,4 +146,11 @@ fn insert(groups: &mut Vec<Group>, parent: &str, path: &[&'static str], entry: P
         let parent = group.path.clone();
         insert(&mut group.groups, &parent, rest, entry);
     }
+}
+
+/// Groups are listed alphabetically, ignoring case, so where a preview is written, or in which language, never moves its group.
+fn listing_order(a: &str, b: &str) -> std::cmp::Ordering {
+    a.to_lowercase()
+        .cmp(&b.to_lowercase())
+        .then_with(|| a.cmp(b))
 }

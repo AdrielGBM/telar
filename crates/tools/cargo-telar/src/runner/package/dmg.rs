@@ -88,5 +88,5 @@ pub(crate) fn build_dmg(cargo_args: Vec<String>, config: TelarSection) -> ! {
 }
 
 #[cfg(test)]
-#[path = "dmg_test.rs"]
+#[path = "dmg.test.rs"]
 mod tests;

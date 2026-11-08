@@ -1,0 +1,52 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 324,288 71x24 fill=#7394ffff border=1 border-color=#00000000 radius=6
+            element button
+              rect 324,288 71x24 fill=#00000000 border=2 border-color=#7394ffff radius=6
+              element group
+                element group
+                  matrix 1,0,0,1,332,295
+                    path M0,5.5 L3.8,9.5 L10,1 stroke=1.5 stroke-color=#0d0f1fff
+                  end
+                end
+              end
+              element group
+                matrix 1,0,0,1,346,288
+                  text 0,5 41x14.28 "Images" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 403,288 73x24 fill=#7394ffff border=1 border-color=#00000000 radius=6
+            element button
+              rect 403,288 73x24 fill=#86a5ffff radius=6
+              element group
+                element group
+                  matrix 1,0,0,1,411,295
+                    path M0,5.5 L3.8,9.5 L10,1 stroke=1.5 stroke-color=#0d0f1fff
+                  end
+                end
+              end
+              element group
+                matrix 1,0,0,1,425,288
+                  text 0,5 43.02x14.28 "Vectors" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

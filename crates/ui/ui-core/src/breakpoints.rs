@@ -64,5 +64,5 @@ impl<T: Clone + PartialEq + 'static> Breakpoints<T> {
 }
 
 #[cfg(test)]
-#[path = "breakpoints_test.rs"]
+#[path = "breakpoints.test.rs"]
 mod tests;

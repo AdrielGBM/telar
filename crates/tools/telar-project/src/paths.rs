@@ -2,6 +2,7 @@
 //!
 //! `cargo-telar` (the dev/build CLI) and `telar-analyzer` (the LSP) both anchor file discovery — generated `.telar/` output, theme scanning — to the same directory. The upward walk and the marker definitions live here so the two tools cannot diverge on where a project starts.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// Walks up from `start` (or its parent directory if `start` is a file), returning the first ancestor directory for which `matches` returns true.
@@ -94,24 +95,16 @@ pub fn find_workspace_root(start: &Path) -> Option<PathBuf> {
 
 /// The package directories of the workspace rooted at `workspace_root`: the root itself when its manifest is a package too, then every `members` entry that holds a `Cargo.toml`. A lone package with no `[workspace]` is its own only member.
 pub fn workspace_member_dirs(workspace_root: &Path) -> Vec<PathBuf> {
-    let manifest = std::fs::read_to_string(workspace_root.join("Cargo.toml"))
-        .ok()
-        .and_then(|content| content.parse::<toml::Table>().ok());
+    let manifest = crate::CargoManifest::read(workspace_root);
     let mut dirs = Vec::new();
     let mut has_workspace = false;
     if let Some(manifest) = manifest {
-        if manifest.contains_key("package") {
+        if manifest.package_name().is_some() {
             dirs.push(workspace_root.to_path_buf());
         }
-        if let Some(workspace) = manifest.get("workspace") {
+        if manifest.is_workspace() {
             has_workspace = true;
-            let patterns = workspace
-                .get("members")
-                .and_then(toml::Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(toml::Value::as_str);
-            for pattern in patterns {
+            for pattern in manifest.workspace_members() {
                 dirs.extend(
                     expand_member(workspace_root, pattern)
                         .into_iter()
@@ -147,13 +140,7 @@ fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
 }
 
 fn is_workspace_root_dir(dir: &Path) -> bool {
-    let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
-        return false;
-    };
-    content
-        .parse::<toml::Table>()
-        .map(|table| table.contains_key("workspace"))
-        .unwrap_or(false)
+    crate::CargoManifest::read(dir).is_some_and(|manifest| manifest.is_workspace())
 }
 
 /// Writes `content` to `path`, but only when it differs, and via a same-directory temp file plus rename. Both artifacts under `.telar/` need both guarantees: an unchanged write would retrigger rustc and the editor's file watcher for nothing, and a half-written file is something a concurrent reader can observe — the analyzer and the CLI legitimately race to bake the same package.
@@ -164,16 +151,36 @@ pub fn write_if_changed_atomic(path: &Path, content: &str) -> std::io::Result<()
     {
         return Ok(());
     }
-    let tmp_name = format!(
-        "{}.tmp-{}",
-        path.file_name().and_then(|n| n.to_str()).unwrap_or("out"),
-        std::process::id()
-    );
-    let tmp_path = path.with_file_name(tmp_name);
-    std::fs::write(&tmp_path, content)?;
-    std::fs::rename(&tmp_path, path)
+    let mut file = file_beside(path.parent().unwrap_or(Path::new("")))?;
+    file.write_all(content.as_bytes())?;
+    rename_over(file.into_temp_path(), path)
+}
+
+// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
+fn rename_over(temp: tempfile::TempPath, path: &Path) -> std::io::Result<()> {
+    let temp = temp.keep()?;
+    std::fs::rename(&temp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
+}
+
+fn file_beside(dir: &Path) -> std::io::Result<tempfile::NamedTempFile> {
+    with_umask_mode(tempfile::Builder::new()).tempfile_in(dir)
+}
+
+// A temporary file is created owner-only, while a generated file is expected to be readable as one written in place would be: whatever the umask allows.
+#[cfg(unix)]
+fn with_umask_mode<'a, 'b>(mut builder: tempfile::Builder<'a, 'b>) -> tempfile::Builder<'a, 'b> {
+    use std::os::unix::fs::PermissionsExt;
+    builder.permissions(std::fs::Permissions::from_mode(0o666));
+    builder
+}
+
+#[cfg(not(unix))]
+fn with_umask_mode<'a, 'b>(builder: tempfile::Builder<'a, 'b>) -> tempfile::Builder<'a, 'b> {
+    builder
 }
 
 #[cfg(test)]
-#[path = "paths_test.rs"]
+#[path = "paths.test.rs"]
 mod tests;

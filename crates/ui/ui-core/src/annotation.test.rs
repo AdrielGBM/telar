@@ -1,0 +1,149 @@
+use layout_core::LayoutStyle;
+use reactive_core::{dispose_owner, owner_scope, signal};
+use renderer_core::{Color, Element, TextStyle};
+use ui_tree::{Component, RenderNode};
+
+use super::*;
+use crate::container::Container;
+use crate::context::reset_layout_runtime;
+use crate::layout_item::box_item;
+use crate::text::Text;
+
+fn letter(c: &'static str) -> Text {
+    Text::new(
+        move || c.to_string(),
+        LayoutStyle::new(),
+        || TextStyle::new(12.0, Color::BLACK),
+    )
+    .unwrap()
+}
+
+fn captured(view: &RenderNode) -> Vec<Element> {
+    let mut out = Vec::new();
+    collect(view, &mut out);
+    out
+}
+
+fn collect(node: &RenderNode, out: &mut Vec<Element>) {
+    match node {
+        RenderNode::Element { element, children } => {
+            out.push((**element).clone());
+            children.iter().for_each(|child| collect(child, out));
+        }
+        RenderNode::Group { children }
+        | RenderNode::Transform { children, .. }
+        | RenderNode::Clip { children, .. }
+        | RenderNode::Layer { children, .. }
+        | RenderNode::Overlay { children } => children.iter().for_each(|child| collect(child, out)),
+        _ => {}
+    }
+}
+
+fn as_document<R>(f: impl FnOnce() -> R) -> R {
+    let was = ui_tree::set_element_capture(true);
+    let out = f();
+    ui_tree::set_element_capture(was);
+    out
+}
+
+/// The case the three annotations exist for: a word drawn one letter per box reads as the word, once, and a document says so with the attributes a reader understands.
+#[test]
+fn split_letters_reach_a_document_as_one_named_word() {
+    reset_layout_runtime();
+    let h = letter("H").a11y_hidden();
+    let i = letter("i").a11y_hidden();
+    let letters = as_document(|| [captured(&h.view()), captured(&i.view())]);
+    let word = Container::new(LayoutStyle::new(), vec![box_item(h), box_item(i)])
+        .unwrap()
+        .a11y_label(|| "Hi")
+        .lang(|| "en");
+    let row = as_document(|| captured(&word.view()));
+    assert_eq!(row[0].semantics.label.as_deref(), Some("Hi"));
+    assert_eq!(row[0].semantics.lang.as_deref(), Some("en"));
+    assert!(!row[0].semantics.hidden, "the word itself is read");
+    assert!(
+        letters.iter().all(|letter| letter[0].semantics.hidden),
+        "and none of its letters is"
+    );
+}
+
+/// A decorative box is hidden from a document while it goes by no name, whichever of the two its caller says first.
+#[test]
+fn a_decorative_box_is_hidden_until_it_is_named() {
+    reset_layout_runtime();
+    let decoration = letter("★").a11y_decorative();
+    assert!(
+        as_document(|| captured(&decoration.view()))[0]
+            .semantics
+            .hidden
+    );
+
+    let named_after = letter("★").a11y_decorative().a11y_label(|| "Starred");
+    let named_before = letter("★").a11y_label(|| "Starred").a11y_decorative();
+    for named in [named_after, named_before] {
+        let element = &as_document(|| captured(&named.view()))[0];
+        assert!(!element.semantics.hidden);
+        assert_eq!(element.semantics.label.as_deref(), Some("Starred"));
+    }
+}
+
+/// A box nobody annotated is exactly the element it always was.
+#[test]
+fn an_unannotated_box_says_nothing_new() {
+    reset_layout_runtime();
+    let text = letter("x");
+    let elements = as_document(|| captured(&text.view()));
+    assert!(elements[0].semantics.label.is_none());
+    assert!(elements[0].semantics.lang.is_none());
+    assert!(!elements[0].semantics.hidden);
+}
+
+/// A name built from state follows it, the way a translated name follows the locale.
+#[test]
+fn a_label_follows_what_it_reads() {
+    reset_layout_runtime();
+    let name = signal(String::from("Play"));
+    let button = letter("▶").a11y_label(move || name.get());
+    let node = button.layout_node();
+    assert_eq!(peek(node).and_then(|a| a.label).as_deref(), Some("Play"));
+    name.set(String::from("Pause"));
+    assert_eq!(peek(node).and_then(|a| a.label).as_deref(), Some("Pause"));
+}
+
+/// Withdrawn with the scope that said it, so a node id minted again later does not inherit a stranger's name.
+#[test]
+fn an_annotation_goes_with_the_scope_that_made_it() {
+    reset_layout_runtime();
+    let scope = owner_scope();
+    let text = letter("x").a11y_label(|| "gone soon");
+    let node = text.layout_node();
+    let id = scope.id();
+    drop(scope);
+    assert!(peek(node).is_some());
+    dispose_owner(id);
+    assert!(peek(node).is_none());
+}
+
+/// A role said from outside reaches a document as the element it is, over a box that was only a group, and a control keeps the role it was made with.
+#[test]
+fn a_said_role_makes_a_group_a_region_and_leaves_a_control_alone() {
+    reset_layout_runtime();
+    let region = Container::new(LayoutStyle::new(), vec![box_item(letter("x"))])
+        .unwrap()
+        .a11y_role(Role::Navigation);
+    let region = as_document(|| captured(&region.view()));
+    assert_eq!(region[0].semantics.role, Role::Navigation);
+    let pressed = Container::new(LayoutStyle::new(), vec![box_item(letter("y"))])
+        .unwrap()
+        .on_press(|| ())
+        .a11y_role(Role::Navigation);
+    let pressed = as_document(|| captured(&pressed.view()));
+    assert_eq!(pressed[0].semantics.role, Role::Button);
+    let title = letter("Settings").a11y_role(Role::Heading(2));
+    assert_eq!(
+        peek(title.layout_node()).and_then(|a| a.role),
+        Some(Role::Heading(2))
+    );
+    let title = as_document(|| captured(&title.view()));
+    assert_eq!(title[0].semantics.role, Role::Heading(2));
+}

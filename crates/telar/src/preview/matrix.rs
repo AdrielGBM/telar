@@ -5,8 +5,9 @@
 use std::fmt;
 use std::sync::{PoisonError, RwLock};
 
-use crate::{ControlSize, Direction, Size};
+use crate::{Direction, Size};
 
+use super::args::unbuilt_control;
 use super::host::{ArgError, Args};
 use super::{ArgValue, Globals, PreviewCtx, PreviewEntry};
 
@@ -37,14 +38,17 @@ pub enum Axis {
     RegisteredModes,
     /// BCP 47 language tags.
     Locale(&'static [&'static str]),
+    /// Every locale the application's catalog has, as [`Matrices::installed`] reads them or [`Matrices::with_locales`] lists them.
+    CatalogLocales,
     Dir(&'static [Direction]),
     /// Canvas sizes, each written `"390x844"` or named in `[telar.previews.viewports]`.
     Viewport(&'static [&'static str]),
     /// Every viewport `[telar.previews.viewports]` names, by name, as [`Matrices::installed`] reads them.
     ProjectViewports,
-    ControlSize(&'static [ControlSize]),
     /// An arg, by name, and its values in [`ArgValue`]'s text form: `"12"`, `"true"`, `"Primary"`, `"\"Save\""`.
     Arg(&'static str, &'static [&'static str]),
+    /// An arg, by name, across every value its control picks among before the preview is built: its prop's variants, or `false` and `true`.
+    ArgValues(&'static str),
 }
 
 impl Axis {
@@ -52,26 +56,30 @@ impl Axis {
     pub fn name(&self) -> &'static str {
         match self {
             Self::Mode(_) | Self::RegisteredModes => "mode",
-            Self::Locale(_) => "locale",
+            Self::Locale(_) | Self::CatalogLocales => "locale",
             Self::Dir(_) => "dir",
             Self::Viewport(_) | Self::ProjectViewports => "viewport",
-            Self::ControlSize(_) => "control_size",
-            Self::Arg(name, _) => name,
+            Self::Arg(name, _) | Self::ArgValues(name) => name,
         }
     }
 
-    fn len(&self, matrices: &Matrices) -> usize {
+    fn len(&self, entry: &PreviewEntry, matrices: &Matrices) -> usize {
         match self {
             Self::Mode(values) | Self::Locale(values) | Self::Viewport(values) => values.len(),
             Self::RegisteredModes => matrices.modes.len(),
+            Self::CatalogLocales => matrices.locales.len(),
             Self::ProjectViewports => matrices.viewports.len(),
             Self::Dir(values) => values.len(),
-            Self::ControlSize(values) => values.len(),
             Self::Arg(_, values) => values.len(),
+            Self::ArgValues(name) => arg_values(entry, name).map_or(0, <[_]>::len),
         }
     }
 
-    fn settings(&self, matrices: &Matrices) -> Result<Vec<Setting>, MatrixError> {
+    fn settings(
+        &self,
+        entry: &PreviewEntry,
+        matrices: &Matrices,
+    ) -> Result<Vec<Setting>, MatrixError> {
         let axis = self.name();
         Ok(match *self {
             Self::Mode(modes) => modes
@@ -79,10 +87,8 @@ impl Axis {
                 .map(|mode| Setting::Mode(mode.to_string()))
                 .collect(),
             Self::RegisteredModes => matrices.modes.iter().cloned().map(Setting::Mode).collect(),
-            Self::Locale(locales) => locales
-                .iter()
-                .map(|locale| Setting::Locale(locale.to_string()))
-                .collect(),
+            Self::Locale(locales) => locale_settings(locales),
+            Self::CatalogLocales => locale_settings(matrices.locales),
             Self::Dir(directions) => directions.iter().copied().map(Setting::Dir).collect(),
             Self::Viewport(viewports) => viewports
                 .iter()
@@ -98,17 +104,38 @@ impl Axis {
                 .iter()
                 .map(|preset| Setting::Viewport(preset.name, preset.size))
                 .collect(),
-            Self::ControlSize(sizes) => sizes.iter().copied().map(Setting::ControlSize).collect(),
-            Self::Arg(name, texts) => texts
-                .iter()
-                .map(|text| {
-                    text.parse()
-                        .map(|value| Setting::Arg(name, value))
-                        .map_err(|_| MatrixError::ArgValue { axis, text })
-                })
-                .collect::<Result<_, _>>()?,
+            Self::Arg(name, texts) => arg_settings(name, texts)?,
+            Self::ArgValues(name) => arg_settings(
+                name,
+                arg_values(entry, name).ok_or(MatrixError::NoFixedValues { axis })?,
+            )?,
         })
     }
+}
+
+fn locale_settings(locales: &[&str]) -> Vec<Setting> {
+    locales
+        .iter()
+        .map(|locale| Setting::Locale(locale.to_string()))
+        .collect()
+}
+
+fn arg_values(entry: &PreviewEntry, name: &str) -> Option<&'static [&'static str]> {
+    unbuilt_control(entry, name)?.fixed_values()
+}
+
+fn arg_settings(
+    name: &'static str,
+    texts: &'static [&'static str],
+) -> Result<Vec<Setting>, MatrixError> {
+    texts
+        .iter()
+        .map(|text| {
+            text.parse()
+                .map(|value| Setting::Arg(name, value))
+                .map_err(|_| MatrixError::ArgValue { axis: name, text })
+        })
+        .collect()
 }
 
 /// One value of an axis, as a cell applies it.
@@ -118,7 +145,6 @@ enum Setting {
     Locale(String),
     Dir(Direction),
     Viewport(&'static str, Size),
-    ControlSize(ControlSize),
     Arg(&'static str, ArgValue),
 }
 
@@ -128,7 +154,6 @@ impl Setting {
             Self::Mode(text) | Self::Locale(text) => text.clone(),
             Self::Dir(direction) => direction_word(*direction).to_string(),
             Self::Viewport(text, _) => text.trim().to_string(),
-            Self::ControlSize(size) => control_size_word(*size).to_string(),
             Self::Arg(_, value) => value.to_string(),
         }
     }
@@ -140,20 +165,12 @@ impl Setting {
             Self::Locale(locale) => globals.locale = Some(locale.clone()),
             Self::Dir(direction) => globals.direction = Some(*direction),
             Self::Viewport(_, size) => globals.viewport = Some(*size),
-            Self::ControlSize(size) => globals.control_size = Some(*size),
             Self::Arg(name, value) => cell.args.push((*name, value.clone())),
         }
     }
 }
 
 const DIRECTION_WORDS: [(&str, Direction); 2] = [("ltr", Direction::Ltr), ("rtl", Direction::Rtl)];
-
-const CONTROL_SIZE_WORDS: [(&str, ControlSize); 4] = [
-    ("mini", ControlSize::Mini),
-    ("small", ControlSize::Small),
-    ("regular", ControlSize::Regular),
-    ("large", ControlSize::Large),
-];
 
 fn word_of<T: Copy + PartialEq>(words: &[(&'static str, T)], value: T) -> &'static str {
     words
@@ -177,16 +194,6 @@ pub fn direction_word(direction: Direction) -> &'static str {
 /// The direction [`direction_word`] writes as `word`.
 pub fn parse_direction(word: &str) -> Option<Direction> {
     value_of(&DIRECTION_WORDS, word)
-}
-
-/// The word a matrix's `control_size` axis and a workshop link write `size` as: `mini`, `small`, `regular` or `large`.
-pub fn control_size_word(size: ControlSize) -> &'static str {
-    word_of(&CONTROL_SIZE_WORDS, size)
-}
-
-/// The control size [`control_size_word`] writes as `word`.
-pub fn parse_control_size(word: &str) -> Option<ControlSize> {
-    value_of(&CONTROL_SIZE_WORDS, word)
 }
 
 /// A matrix a preview names rather than writes out.
@@ -224,12 +231,13 @@ impl ViewportPreset {
     }
 }
 
-/// What a matrix is expanded against: the matrices and viewports the package names, and the modes registered for [`Axis::RegisteredModes`].
+/// What a matrix is expanded against: the matrices and viewports the package names, the modes registered for [`Axis::RegisteredModes`] and the catalog's locales for [`Axis::CatalogLocales`].
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Matrices {
     named: &'static [NamedMatrix],
     viewports: &'static [ViewportPreset],
     modes: Vec<String>,
+    locales: &'static [&'static str],
 }
 
 #[derive(Clone, Copy)]
@@ -247,16 +255,19 @@ impl Matrices {
             named,
             viewports,
             modes: Vec::new(),
+            locales: &[],
         }
     }
 
-    /// The matrices and viewports the application's `telar.toml` names, as `app!` installed them, or none, with the modes registered now for [`Axis::RegisteredModes`], which [`Self::with_modes`] overrides.
+    /// The matrices and viewports the application's `telar.toml` names, as `app!` installed them, or none, with the modes registered now and the catalog's locales, which [`Self::with_modes`] and [`Self::with_locales`] override.
     pub fn installed() -> Self {
         let installed = *INSTALLED.read().unwrap_or_else(PoisonError::into_inner);
         let matrices = installed.map_or_else(Self::default, |installed| {
             Self::new(installed.named, installed.viewports)
         });
-        matrices.with_modes(theme_core::registered_modes())
+        matrices
+            .with_modes(theme_core::registered_modes())
+            .with_locales(i18n_core::catalog().map_or(&[], |catalog| catalog.locales))
     }
 
     /// The modes [`Axis::RegisteredModes`] takes, in order.
@@ -265,6 +276,11 @@ impl Matrices {
             modes: modes.into_iter().map(Into::into).collect(),
             ..self
         }
+    }
+
+    /// The locales [`Axis::CatalogLocales`] takes, in order.
+    pub fn with_locales(self, locales: &'static [&'static str]) -> Self {
+        Self { locales, ..self }
     }
 
     /// The matrix `name` names: the package's, or else a built-in one.
@@ -296,6 +312,10 @@ impl Matrices {
 
     pub fn modes(&self) -> &[String] {
         &self.modes
+    }
+
+    pub fn locales(&self) -> &'static [&'static str] {
+        self.locales
     }
 }
 
@@ -340,8 +360,12 @@ impl Matrix {
     }
 
     /// How many cells [`Self::cells`] would expand to, without expanding them: what a view checks against [`MATRIX_CELL_CAP`]. Saturates rather than overflowing.
-    pub fn cell_count(&self, matrices: &Matrices) -> Result<usize, MatrixError> {
-        Ok(Self::count(self.axes(matrices)?, matrices))
+    pub fn cell_count(
+        &self,
+        entry: &PreviewEntry,
+        matrices: &Matrices,
+    ) -> Result<usize, MatrixError> {
+        Ok(Self::count(self.axes(matrices)?, entry, matrices))
     }
 
     /// One cell per combination of the axes' values, the first axis outermost, each with the id `<preview-id>--<axis>=<value>…` that deep links and snapshot files name it by.
@@ -356,9 +380,9 @@ impl Matrix {
     }
 
     /// [`Self::cell_count`] for axes chosen as the program runs, as a workshop's ad-hoc matrix is.
-    pub fn count(axes: &[Axis], matrices: &Matrices) -> usize {
+    pub fn count(axes: &[Axis], entry: &PreviewEntry, matrices: &Matrices) -> usize {
         axes.iter()
-            .map(|axis| axis.len(matrices))
+            .map(|axis| axis.len(entry, matrices))
             .filter(|len| *len > 0)
             .reduce(usize::saturating_mul)
             .unwrap_or(0)
@@ -377,7 +401,7 @@ impl Matrix {
                 return Err(MatrixError::RepeatedAxis { axis: name });
             }
             let mut values: Vec<AxisValue> = Vec::new();
-            for setting in axis.settings(matrices)? {
+            for setting in axis.settings(entry, matrices)? {
                 let label = setting.label();
                 let segment = id_segment(&label);
                 if segment.is_empty() {
@@ -475,7 +499,6 @@ pub struct CellGlobals {
     pub direction: Option<Direction>,
     /// The canvas size, in logical px.
     pub viewport: Option<Size>,
-    pub control_size: Option<ControlSize>,
 }
 
 impl MatrixCell {
@@ -506,7 +529,6 @@ impl MatrixCell {
             locale,
             direction,
             viewport,
-            control_size,
         } = &self.globals;
         if let Some(mode) = mode {
             globals.mode().set(Some(mode.clone()));
@@ -519,9 +541,6 @@ impl MatrixCell {
         }
         if let Some(viewport) = viewport {
             globals.viewport().set(Some(*viewport));
-        }
-        if let Some(control_size) = control_size {
-            globals.control_size().set(Some(*control_size));
         }
     }
 
@@ -560,6 +579,8 @@ pub enum MatrixError {
         axis: &'static str,
         text: &'static str,
     },
+    /// [`Axis::ArgValues`] names an arg whose control, as its declaration or its prop gives it, picks from no fixed set of values.
+    NoFixedValues { axis: &'static str },
 }
 
 impl fmt::Display for MatrixError {
@@ -584,6 +605,10 @@ impl fmt::Display for MatrixError {
             Self::ArgValue { axis, text } => {
                 write!(f, "matrix axis `{axis}` value `{text}` is not an arg value")
             }
+            Self::NoFixedValues { axis } => write!(
+                f,
+                "matrix axis `{axis}` lists no values, and the preview has no prop `{axis}` that picks among a fixed set: list them, like `{axis}:[a b]`"
+            ),
         }
     }
 }
@@ -591,5 +616,5 @@ impl fmt::Display for MatrixError {
 impl std::error::Error for MatrixError {}
 
 #[cfg(test)]
-#[path = "matrix_test.rs"]
+#[path = "matrix.test.rs"]
 mod tests;

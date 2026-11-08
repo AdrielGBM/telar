@@ -1,0 +1,32 @@
+frame 120x48 lang=en
+element group
+  rect 0,0 120x48 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element keyboardinput
+          element group
+            element group
+              element group
+                rect 35,15 28x18 fill=#f5b847ff border=1 border-color=#00000000 radius=6
+                element group
+                  matrix 1,0,0,1,39,17
+                    text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                  end
+                end
+              end
+              element group
+                rect 65,15 20x18 fill=#f5b847ff border=1 border-color=#00000000 radius=6
+                element group
+                  matrix 1,0,0,1,71,17
+                    text 0,0 8.59x14.28 "D" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

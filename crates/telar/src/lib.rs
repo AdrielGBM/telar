@@ -15,7 +15,8 @@
 
 mod macros;
 
-pub mod config;
+#[cfg(feature = "runtime")]
+mod config;
 
 mod licenses;
 
@@ -41,6 +42,8 @@ pub mod hot;
     all(feature = "web-dom", target_arch = "wasm32")
 ))]
 pub mod hot_state;
+#[cfg(all(feature = "runtime", feature = "svg"))]
+mod icon_name;
 #[cfg(feature = "icons")]
 #[doc(hidden)]
 pub mod icons;
@@ -49,7 +52,6 @@ mod location;
 #[cfg(feature = "runtime")]
 mod location_locale;
 #[cfg(feature = "runtime")]
-pub mod prefs;
 #[cfg(feature = "headless")]
 mod raster;
 #[cfg(feature = "runtime")]
@@ -69,7 +71,7 @@ pub mod user_preferences;
 #[cfg(feature = "runtime")]
 pub mod window;
 
-pub use config::RendererBackend;
+pub use telar_project::protocol::RendererBackend;
 
 #[cfg(feature = "runtime")]
 pub mod inspect;
@@ -77,6 +79,11 @@ pub mod inspect;
 #[cfg(feature = "previews")]
 pub mod preview;
 
+mod closure;
+pub use closure::{later, now};
+
+#[cfg(feature = "runtime")]
+pub mod kw;
 mod markup_number;
 pub use markup_number::{Float, Int, PropNumber};
 
@@ -115,11 +122,11 @@ macro_rules! __without_previews {
 }
 
 #[cfg(test)]
-#[path = "previews_gate_test.rs"]
+#[path = "previews_gate.test.rs"]
 mod previews_gate_tests;
 
 #[cfg(all(test, feature = "shaper"))]
-#[path = "test_face_test.rs"]
+#[path = "test_face.test.rs"]
 mod test_face;
 
 #[cfg(all(test, feature = "dev", target_os = "linux"))]
@@ -137,22 +144,27 @@ pub use platform_core::{
 #[cfg(feature = "runtime")]
 pub use app_runtime::{AppRuntime, LocalApp};
 #[cfg(feature = "runtime")]
-pub use geometry_core::{Insets, ObjectFit, Point, Rect, Size, Transform};
-#[cfg(feature = "runtime")]
-pub use layout_core::{
-    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, Margin,
-    MeasureInput, SizeDimension, TemplateTrack,
+pub use geometry_core::{
+    BODY_TEXT_CONTRAST, CellSize, Insets, NON_TEXT_CONTRAST, ObjectFit, Point, Rect, Size,
+    Transform,
 };
 #[cfg(feature = "runtime")]
-pub use prefs::UserPrefs;
+pub use layout_core::{
+    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, Margin, MeasureInput,
+    SizeDimension, TemplateTrack,
+};
+#[cfg(feature = "runtime")]
 pub use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 // The faces a surface loads and the family it shapes in — what an `AppConfig` carries, as one value, for the seams that take it directly.
 #[cfg(feature = "runtime")]
 pub use runner::font_config::FontSetup;
 #[cfg(feature = "runtime")]
-pub use tree::{Frame, HotTree, LocalTree, UiTree};
+pub use tree::{Frame, LocalTree, UiTree};
 #[cfg(feature = "runtime")]
 pub use ui_tree::{BuildOutcome, DevAction, DevOverlay, OverlayResponse};
+// What `DevOverlay::set_app_stop` is handed, so an overlay outside this crate can say why the app stopped.
+#[cfg(feature = "runtime")]
+pub use platform_core::guest::{GuestPanic, GuestStop};
 // Named by `UiTree::walk`, which the runner reads a hot-reloaded tree through, so it has to be reachable through the facade.
 #[cfg(feature = "runtime")]
 pub use ui_tree::SegmentNodeInfo;
@@ -168,16 +180,20 @@ pub use i18n_core::set_catalog;
 #[doc(hidden)]
 pub use ctor as __ctor;
 // The notice of the icons an application baked, installed by the same constructor and read back by `telar-icons`.
-pub use i18n_core::{current_locale, negotiate_locale, set_locale, use_locale};
+pub use i18n_core::{Direction, current_locale, negotiate_locale, set_locale, use_locale};
+#[cfg(all(feature = "runtime", feature = "svg"))]
+pub use icon_name::IconName;
 pub use licenses::icon_licenses;
 #[doc(hidden)]
 pub use licenses::install_icon_licenses as __install_icon_licenses;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    Chord, ChordError, ConsumedKeys, Cursor, Event, FullscreenMode, HasPopup, Key,
-    KeyboardConvention, NamedKey, NumericValue, Orientation, ResizeEdge, ScrollDelta,
-    SortDirection, WindowCommand, WindowConfig, WindowPosition, keyboard_convention,
-    push_window_command, set_keyboard_convention, take_window_commands,
+    Chord, ChordError, ConsumedKeys, Cursor, DragActions, DragData, DragIcon, DragOffer,
+    DragOutcome, DropAction, DropAnswer, DroppedData, Event, FullscreenMode, HasPopup, Key,
+    KeyboardConvention, MimeType, MimeTypeError, NamedKey, NumericValue, Orientation, OutgoingDrag,
+    Representation, ResizeEdge, ScrollDelta, SortDirection, TAP_SLOP, WindowCommand, WindowConfig,
+    WindowPosition, keyboard_convention, push_window_command, set_keyboard_convention,
+    take_window_commands,
 };
 // The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]
@@ -268,14 +284,17 @@ pub use renderer_text::fonts::install_face as install_font_face;
 
 #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
 pub use platform_web::{PageHidden, WebStorage};
-#[cfg(any(feature = "software", feature = "async-assets"))]
+#[cfg(any(feature = "software", feature = "hardware", feature = "async-assets"))]
 pub use renderer_cache::CacheStat;
+/// What the renderer's caches are holding, summed over every rendering thread and the GPU's shared set. Exposed so an app can answer "is the memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
+#[cfg(any(feature = "software", feature = "hardware"))]
+pub use renderer_cache::registry::snapshot as cache_stats;
 /// The weight-budgeted LRU every renderer cache is an instance of, and what bounds it, for an [`AssetCache`] that keeps bytes in memory.
 #[cfg(feature = "async-assets")]
 pub use renderer_cache::{Cache as LruCache, Policy as CachePolicy};
-/// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
+/// Makes the CPU renderer's caches on the calling thread let go of what nothing has asked for lately.
 #[cfg(feature = "software")]
-pub use renderer_software::{cache_stats, sweep_idle as sweep_renderer_caches};
+pub use renderer_software::sweep_idle as sweep_renderer_caches;
 pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
@@ -317,20 +336,16 @@ pub use preferences_core::{
 #[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
 #[cfg(feature = "runtime")]
-pub use surface::{
-    SurfaceContent, SurfaceControl, SurfaceHost, SurfaceToken, open_surface, set_surface_host,
-    surface_content,
-};
+pub use surface::{SurfaceControl, SurfaceToken};
 #[cfg(feature = "runtime")]
 pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ControlSize, ResolvedScheme, SchemePreference, ScopedControlSize, ScopedTheme, Theme,
-    ThemeExtensions, ThemeTokens, active_mode, control_scale, current_control_size, follow_system,
-    is_dark, nearest_control_size, nearest_theme, register_mode, register_mode_theme,
-    registered_modes, scheme_mode, scheme_preference, set_control_size, set_mode, set_mode_scheme,
-    set_scheme_preference, set_surface_control_size, set_theme, use_control_size, use_mode,
-    use_resolved_scheme, use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
+    ControlSize, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions,
+    ThemeTokens, Tone, Variant, active_mode, follow_system, is_dark, nearest_theme, register_mode,
+    register_mode_theme, registered_modes, scheme_mode, scheme_preference, set_mode,
+    set_mode_scheme, set_scheme_preference, set_theme, use_mode, use_resolved_scheme,
+    use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
@@ -348,42 +363,42 @@ pub use ui_core::{
     use_text_metrics_generation,
 };
 #[cfg(feature = "runtime")]
+pub use ui_core::{NestedCanvas, SurfaceCanvas, SurfaceEnv, SurfaceFrame, composite_surface};
+#[cfg(feature = "runtime")]
+pub use ui_core::{SurfaceAmendment, SurfaceStyle, amend_surface};
+#[cfg(feature = "runtime")]
 pub use ui_core::{
     TitleParts, compose_title, open_surface_title, set_page_title, set_title_format, surface_title,
     use_surface_title,
 };
 // The family a surface's text shapes in where nothing above it names one: seeded from `AppConfig::font_family`, changed live with `set_font_family`.
 #[cfg(feature = "runtime")]
-pub use ui_core::{SurfaceAmendment, SurfaceStyle, amend_surface};
-#[cfg(feature = "runtime")]
-pub use ui_core::{SurfaceCanvas, SurfaceEnv, SurfaceFrame, composite_surface};
-#[cfg(feature = "runtime")]
 pub use ui_core::{open_surface_font_family, set_font_family, use_font_family};
 // The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Accessible, AnchorAlign, Anchoring, AuthoredText, Axis, BuildFailure, COARSE_STEP, Canvas,
-    Caret, ChildSlot, Children, Clip, ClipAxis, ClippedItem, Component, ComponentList, Container,
-    DOUBLE_CLICK, DismissRegistration, DragAxis, DragStart, Edge, ErrorBoundary, EventResult,
-    FINE_STEP, FixedLayer, HeightIndex, Image, Inherited, Input, IntoClip, KeyAnswer, KeyNav,
-    KeyNavMove, LayoutItem, LayoutLeaf, LayoutScrollArea, LayoutTransition, Lazy, Mask, NodeId,
-    NodeVec, Overlay, Path, Placement, PointerButtons, Presence, ReactiveList, Rectangle,
-    RelayoutHook, RenderNode, ScopeProvider, Scrim, ScrollPage, ScrollViewport, ScrollbarStyle,
-    SlotRequest, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
-    TextRun, TransformOrigin, Transition, Underline, VirtualList, VirtualRows, WindowRoot,
-    absolute_rect, anchor_rect, animate_layout, apply_move, box_item, box_transform,
+    Accessible, AnchorAlign, Anchoring, AuthoredText, Axis, BoxText, BuildFailure, COARSE_STEP,
+    Canvas, Caret, ChildSlot, Children, Clip, ClipAxis, ClippedItem, Component, ComponentList,
+    Container, DOUBLE_CLICK, DismissRegistration, DragAxis, DragStart, DropTarget, Edge,
+    ErrorBoundary, EventResult, FINE_STEP, FixedLayer, HeightIndex, Image, Inherited, Input,
+    IntoClip, KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutLeaf, LayoutScrollArea,
+    LayoutTransition, Lazy, Mask, NodeId, NodeVec, Overlay, Path, Placement, PointerButtons,
+    Presence, ReactiveList, Rectangle, RelayoutHook, RenderNode, ScopeProvider, Scrim, ScrollPage,
+    ScrollViewport, ScrollbarStyle, StyledContainer, SurfaceScaffold, SurfaceTransition, Text,
+    TextArea, TextRun, TransformOrigin, Transition, Underline, VirtualList, VirtualRows,
+    WindowRoot, absolute_rect, anchor_rect, animate_layout, apply_move, box_item, box_transform,
     box_transform_about, chord_pressed, close_overlay, compute_layout, confirm_top,
     current_direction, declare, dismiss_depth, dismiss_top, drag_start, drag_travel,
-    exits_in_flight, focus, focus_ring_border, follow_control_size, follow_theme, fragment,
+    exits_in_flight, focus, focus_ring_border, follow_theme, fragment, fragment_keyed,
     fragment_positional, inherited_text_style, insertion_index, interactive_rects, is_hidden, kept,
     key_held, key_nav_apply, key_nav_apply_grid, key_pressed, line_box, logical_border_radius,
     logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
     observe_pointer, on_relayout, open_overlay, overlay_state, overlay_viewport, pointer_buttons,
-    pointer_position, provide_control_size, provide_theme, register_transaction,
-    register_transaction_within, relayout_if_dirty, remove_node, requested_cursor, set_children,
-    set_direction, set_display, set_min_height, set_overlay_host, shortcut_key, single_line_box,
-    step_factor, style_follows, track_layout, transform_pointer, undeclare, use_context,
-    use_direction, use_dismiss_depth, visible_rect, visible_window,
+    pointer_position, provide_theme, register_transaction, register_transaction_within,
+    relayout_if_dirty, remove_node, requested_cursor, set_children, set_direction, set_display,
+    set_min_height, set_overlay_host, shortcut_key, single_line_box, step_factor, style_follows,
+    track_layout, transform_pointer, undeclare, use_context, use_direction, use_dismiss_depth,
+    visible_rect, visible_window,
 };
 #[cfg(feature = "async-assets")]
 pub use ui_core::{
@@ -481,7 +496,7 @@ pub use runner::{run_app_with_devtools, run_app_with_name};
 
 // Always present, like `Props`: an enum derives it in every build, and the impl it expands to is gated behind `__previews!`.
 pub use telar_macros::{PreviewArg, Props, ThemeTokens, app, component, rsx_modules, t};
-// Reached only through a plugin's own macro naming a baked asset by id, such as `telar_icons::icon!`.
+// Reached only through a macro naming a baked asset by id, such as `icon!`.
 #[doc(hidden)]
 pub use telar_macros::__baked_id;
 

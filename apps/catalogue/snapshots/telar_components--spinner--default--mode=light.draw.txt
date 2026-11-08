@@ -1,0 +1,21 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 384,284 32x32 border=3.84 border-color=#616680ff radius=16
+          element group
+            matrix 1,0,0,1,0,0
+              rect 384,284 32x32
+              element group
+                rect 396,284 8x7 fill=#4261edff radius=3.5
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

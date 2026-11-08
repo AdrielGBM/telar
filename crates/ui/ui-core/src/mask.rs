@@ -12,7 +12,7 @@ use crate::pointer::dispatch_container_event;
 ///
 /// The box is laid out by its own style with the content in its flow, and the source laid over the whole of it, centred down its height, so a word set to fill the width is a window the height of its line. Only the content answers the pointer.
 ///
-/// Each target shows it its own way, from the same pair of layers (see `LayerMask`): the GPU and the software rasterizer composite the content through the source's alpha, a document draws the pair as an SVG `<mask>`, and a terminal, which has no alpha to show anything through, draws the content whole and the source not at all. In a document the box is a drawing, so what is inside it is a picture rather than elements of the page: name it with `label:` for a reader.
+/// Each target shows it its own way, from the same pair of layers (see `LayerMask`): the GPU and the software rasterizer composite the content through the source's alpha, a document draws the pair as an SVG `<mask>`, and a terminal, which has no alpha to show anything through, draws the content whole and the source not at all. In a document the box is a drawing, so what is inside it is a picture rather than elements of the page: name it with `a11y_label:` for a reader.
 pub struct Mask {
     node: NodeId,
     source: TrackedChildren,
@@ -69,5 +69,5 @@ impl Component for Mask {
 }
 
 #[cfg(test)]
-#[path = "mask_test.rs"]
+#[path = "mask.test.rs"]
 mod tests;

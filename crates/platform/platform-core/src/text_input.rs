@@ -75,5 +75,5 @@ fn utf16_to_byte(text: &str, units: u32) -> usize {
 }
 
 #[cfg(test)]
-#[path = "text_input_test.rs"]
+#[path = "text_input.test.rs"]
 mod tests;

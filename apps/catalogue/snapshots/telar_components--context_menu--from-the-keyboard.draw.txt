@@ -1,0 +1,140 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 16,16 92x32
+            element button
+              rect 16,16 92x32 fill=#4261edff radius=10
+              element group
+                matrix 1,0,0,1,28,16
+                  text 0,8 68.06x16.8 "Document" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                end
+              end
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end
+element group
+  rect 0,0 800x600
+  element group
+    matrix 1,0,0,1,16,56
+      rect 0,0 182x157 fill=#ffffffff border=1 border-color=#dbdeedff radius=12
+      element menu
+        clip 4,4 174x149
+          matrix 1,0,0,1,4,4
+            element group
+              element menuitem
+                rect 0,0 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,0
+                    text 0,10 112.17x16.8 "Cut" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,128,0
+                    text 0,10 38x15.12 "Ctrl+X" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                  end
+                end
+              end
+              element menuitem
+                rect 0,36 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,36
+                    text 0,10 111.14x16.8 "Copy" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,127,36
+                    text 0,10 39x15.12 "Ctrl+C" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                  end
+                end
+              end
+              element menuitem
+                rect 0,72 174x36 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,72
+                    text 0,10 112.28x16.8 "Paste" size=14 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,128,72
+                    text 0,10 38x15.12 "Ctrl+V" size=12.6 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                  end
+                end
+              end
+              element group
+                rect 0,110 174x1 fill=#dbdeedff
+              end
+              element menuitem
+                rect 0,113 174x36 fill=#0000000a radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,113
+                    text 0,10 144x16.8 "Share" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,160,125
+                    path M0,0 L6,6 L0,12 stroke=1.5 stroke-color=#616680ff
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  element group
+    element group
+      matrix 1,0,0,1,198,169
+        rect 0,0 182x80 fill=#ffffffff border=1 border-color=#dbdeedff radius=12
+        element menu
+          clip 4,4 174x72
+            matrix 1,0,0,1,4,4
+              element group
+                element menuitem
+                  rect 0,0 174x36 fill=#0000000a radius=6
+                  element group
+                  end
+                  element group
+                    matrix 1,0,0,1,8,0
+                      text 0,10 158x16.8 "Copy link" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                    end
+                  end
+                end
+                element menuitem
+                  rect 0,36 174x36 radius=6
+                  element group
+                  end
+                  element group
+                    matrix 1,0,0,1,8,36
+                      text 0,10 158x16.8 "Email" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                    end
+                  end
+                end
+              end
+            end
+          end
+          rect 4,4 174x72
+        end
+      end
+    end
+  end
+end

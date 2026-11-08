@@ -1,0 +1,1078 @@
+use crate::context::reset_layout_runtime;
+use layout_core::AvailableSpace;
+use platform_core::PointerSource;
+use renderer_core::{Color, DrawCommand, LineHeight, Paint, TextAlign};
+use std::time::Duration;
+
+use super::*;
+use crate::context::{compute_layout, new_container};
+use crate::layout_item::LayoutItem;
+use crate::text_editor::{POINT_MARK, UNDERLINE_THICKNESS};
+use crate::text_place::CARET_WIDTH;
+use geometry_core::Rect;
+use platform_core::{Ime, NamedKey, PointerButton};
+use reactive_core::signal;
+use renderer_core::RectStyle;
+
+fn key(k: Key) -> Event {
+    Event::KeyPressed {
+        key: k,
+        modifiers: ModifiersState::default(),
+        unmodified: None,
+    }
+}
+
+/// `k` with the primary modifier held: Command on a Mac, Ctrl elsewhere.
+fn chord(k: Key) -> Event {
+    Event::KeyPressed {
+        key: k,
+        modifiers: platform_core::keyboard_convention().primary(),
+        unmodified: None,
+    }
+}
+
+fn shifted(k: Key) -> Event {
+    Event::KeyPressed {
+        key: k,
+        modifiers: ModifiersState {
+            is_shift: true,
+            ..ModifiersState::default()
+        },
+        unmodified: None,
+    }
+}
+
+#[test]
+fn shift_arrows_grow_a_selection_and_a_plain_one_drops_it() {
+    let (mut input, _) = focused_input("hello");
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    assert_eq!(
+        input.editor.selection("hello"),
+        Some((3, 5)),
+        "two chars selected"
+    );
+    input.on_event(&key(Key::Named(NamedKey::ArrowRight)));
+    assert_eq!(
+        input.editor.selection("hello"),
+        None,
+        "a plain arrow drops it"
+    );
+}
+
+/// The behaviour that makes a selection worth having: what you type lands *instead of* it.
+#[test]
+fn typing_over_a_selection_replaces_it() {
+    let (mut input, value) = focused_input("hello");
+    input.on_event(&chord(Key::Char('a')));
+    input.on_event(&key(Key::Char('x')));
+    assert_eq!(value.get(), "x");
+}
+
+#[test]
+fn backspace_takes_the_selection_rather_than_one_character() {
+    let (mut input, value) = focused_input("hello");
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&key(Key::Named(NamedKey::Backspace)));
+    assert_eq!(value.get(), "hel");
+}
+
+/// An unshifted arrow with a selection collapses to its edge — pressing Left with three characters selected puts the caret before them, not one step in from wherever the caret happened to be.
+#[test]
+fn a_plain_arrow_collapses_to_the_selection_edge() {
+    let (mut input, _) = focused_input("hello");
+    input.on_event(&chord(Key::Char('a')));
+    input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
+    assert_eq!(input.editor.caret.get(), 0, "collapsed to the low edge");
+}
+
+#[test]
+fn cut_removes_the_selection_and_copy_leaves_it() {
+    let (mut input, value) = focused_input("hello");
+    input.on_event(&chord(Key::Char('a')));
+    input.on_event(&chord(Key::Char('c')));
+    assert_eq!(value.get(), "hello", "copy leaves the text alone");
+    assert_eq!(
+        input.editor.selection("hello"),
+        Some((0, 5)),
+        "and the selection"
+    );
+    input.on_event(&chord(Key::Char('x')));
+    assert_eq!(value.get(), "", "cut takes it");
+}
+
+/// Copy and cut with nothing selected report `Ignored`, so a global shortcut table still sees the chord instead of it being swallowed by a field that did nothing with it.
+#[test]
+fn copy_without_a_selection_is_not_consumed() {
+    let (mut input, _) = focused_input("hello");
+    assert_eq!(input.on_event(&chord(Key::Char('c'))), EventResult::Ignored);
+}
+
+fn focused_input(initial: &str) -> (Input, RwSignal<String>) {
+    focused_input_of(initial, 20.0)
+}
+
+/// A field `height` tall holding `initial`, focused, laid out at the top of a column.
+fn focused_input_of(initial: &str, height: f32) -> (Input, RwSignal<String>) {
+    reset_layout_runtime();
+    let value = signal(initial.to_string());
+    let input = Input::new(
+        value,
+        LayoutStyle::new().width(200.0).height(height),
+        || TextStyle::new(14.0, Color::BLACK),
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(200.0).height(100.0),
+        &[input.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    focus::request(input.editor.id);
+    (input, value)
+}
+
+/// A field styled to the given alignment, focused, with its rect laid out.
+fn aligned_input(initial: &str, align: TextAlign) -> Input {
+    reset_layout_runtime();
+    let value = signal(initial.to_string());
+    let input = Input::new(
+        value,
+        LayoutStyle::new().width(200.0).height(20.0),
+        move || {
+            let mut style = TextStyle::new(14.0, Color::BLACK);
+            style.text_align = align;
+            style
+        },
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(200.0).height(100.0),
+        &[input.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    focus::request(input.editor.id);
+    input
+}
+
+/// Where the caret was drawn, and how lit it was.
+fn caret_of(input: &Input) -> (Rect, f32) {
+    fn walk(node: &RenderNode, found: &mut Option<(Rect, f32)>) {
+        match node {
+            RenderNode::Primitive(DrawCommand::Rect { rect, style })
+                if rect.width == CARET_WIDTH =>
+            {
+                let lit = match style.fill {
+                    Some(Paint::Solid(color)) => color.a,
+                    _ => 0.0,
+                };
+                *found = Some((*rect, lit));
+            }
+            RenderNode::Group { children }
+            | RenderNode::Element { children, .. }
+            | RenderNode::Transform { children, .. }
+            | RenderNode::Clip { children, .. }
+            | RenderNode::Layer { children, .. } => {
+                for child in children.iter() {
+                    walk(child, found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let view = input.view();
+    let mut found = None;
+    walk(&view, &mut found);
+    found.expect("a focused field draws its caret")
+}
+
+/// **The caret goes where the letters went.** A field inherits its alignment from the region around it — a centred column of chrome hands one down — and the text is placed by the shaper while the caret is placed here, so the two have to answer the same question. They did not: the letters sat in the middle of the box and the caret against its left edge, a whole field's width away from the text it was in.
+#[test]
+fn the_caret_follows_the_alignment_the_text_was_drawn_with() {
+    let left = caret_of(&aligned_input("hola", TextAlign::Start)).0.x;
+    let middle = caret_of(&aligned_input("hola", TextAlign::Center)).0.x;
+    let right = caret_of(&aligned_input("hola", TextAlign::End)).0.x;
+
+    assert!(
+        middle > left && right > middle,
+        "el cursor no sigue la alineación: {left} / {middle} / {right}"
+    );
+    assert!(
+        (right - 200.0).abs() < 1.0,
+        "alineado a la derecha el cursor va al borde, no a {right}"
+    );
+}
+
+/// **A caret that does not blink is a caret nobody finds** — a hairline of ink that may be sitting in an empty field, and the eye goes to what changes.
+#[test]
+fn the_caret_blinks_while_the_field_holds_the_keyboard() {
+    let input = aligned_input("hola", TextAlign::Start);
+    motion_core::reset();
+    input.editor.blink.follow(true);
+
+    let start = web_time::Instant::now();
+    motion_core::tick(start);
+    let lit = caret_of(&input).1;
+    motion_core::tick(start + Duration::from_millis(700));
+    let out = caret_of(&input).1;
+
+    assert!(lit > 0.9, "el cursor empieza encendido, no en {lit}");
+    assert!(out < 0.1, "y se apaga a la mitad del ciclo, no en {out}");
+}
+
+/// And it is lit again by the key, so it is never missing at the moment somebody is looking for it.
+#[test]
+fn typing_lights_the_caret_again() {
+    let (mut input, _) = focused_input("hola");
+    motion_core::reset();
+    input.editor.blink.follow(true);
+    let start = web_time::Instant::now();
+    motion_core::tick(start);
+    motion_core::tick(start + Duration::from_millis(700));
+    assert!(caret_of(&input).1 < 0.1, "el cursor debería estar apagado");
+
+    input.on_event(&key(Key::Char('x')));
+
+    assert!(
+        caret_of(&input).1 > 0.9,
+        "la tecla no volvió a encender el cursor"
+    );
+}
+
+/// **The caret stands in the line, not over it.** The height came from the face's natural leading while the text was laid out at whatever the tree declared, so under a `line_height: 1.0` — a pixel face kept on its own grid — the caret hung below the descenders of the very word it was standing in.
+#[test]
+fn the_caret_is_as_tall_as_the_line_the_text_is_laid_out_on() {
+    reset_layout_runtime();
+    let value = signal("hola".to_string());
+    let input = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+        let mut style = TextStyle::new(14.0, Color::BLACK);
+        style.line_height = LineHeight::Times(1.0);
+        style
+    })
+    .unwrap();
+    focus::request(input.editor.id);
+
+    let tall = caret_of(&input).0.height;
+
+    assert!(
+        (tall - 14.0).abs() < 0.01,
+        "una línea de 1.0 sobre 14 mide 14, no {tall}"
+    );
+    assert!(
+        crate::text_metrics::line_height(14.0) > 14.5,
+        "la natural es más alta, que es lo que hacía el cursor demasiado largo"
+    );
+}
+
+/// Escape is a key a focused field eats, so an application watching from the outside cannot tell it from a click elsewhere — and where losing focus commits, those are opposite answers.
+#[test]
+fn escape_says_so_before_it_hands_the_keyboard_back() {
+    let (mut input, _) = focused_input("hola");
+    let given_up = Rc::new(std::cell::Cell::new(false));
+    let said = Rc::clone(&given_up);
+    input = input.on_cancel(move || said.set(true));
+
+    input.on_event(&key(Key::Named(NamedKey::Escape)));
+
+    assert!(given_up.get(), "el campo se rindió sin decirlo");
+    assert!(!focus::is_focused(input.editor.id), "y soltó el teclado");
+}
+
+/// The other half of the blink, and the one that decides what the window costs: a sequence registered with the ticker is a standing request to redraw, so a field nobody is typing into must not be running one.
+#[test]
+fn a_field_without_the_keyboard_asks_for_no_frames() {
+    motion_core::reset();
+    let input = aligned_input("hola", TextAlign::Start);
+    input.editor.blink.follow(false);
+    motion_core::tick(web_time::Instant::now());
+    assert!(
+        !motion_core::has_active(),
+        "un campo sin el teclado sigue pidiendo cuadros"
+    );
+}
+
+/// The guard a global shortcut handler consults ([`focus::text_entry_takes_key`]) is a second list of what this editor eats, kept apart from `edit` because it has to answer without running the edit. A key added here and not there re-opens the bug it exists for: typing that also fires the app's shortcuts.
+#[test]
+fn the_shortcut_guard_covers_every_key_this_field_edits() {
+    let plain = ModifiersState::default();
+    let named = [
+        NamedKey::Space,
+        NamedKey::Backspace,
+        NamedKey::Delete,
+        NamedKey::ArrowLeft,
+        NamedKey::ArrowRight,
+        NamedKey::ArrowUp,
+        NamedKey::ArrowDown,
+        NamedKey::Home,
+        NamedKey::End,
+        NamedKey::Enter,
+        NamedKey::Escape,
+        NamedKey::Tab,
+        NamedKey::PageUp,
+        NamedKey::PageDown,
+        NamedKey::F5,
+        NamedKey::Insert,
+    ];
+    let keys: Vec<Key> = std::iter::once(Key::Char('3'))
+        .chain(std::iter::once(Key::Char('s')))
+        .chain(named.into_iter().map(Key::Named))
+        .collect();
+    for k in keys {
+        let (mut input, _value) = focused_input("hello");
+        input.editor.caret.set(2);
+        // Asked first, as dispatch does: a global handler decides before the field acts, and Escape proves it — the field answers by giving up the focus the guard reads.
+        let guarded = focus::text_entry_takes_key(&k, plain);
+        let edited = input.editor.edit(&k, &plain) == EventResult::Handled;
+        assert!(
+            !edited || guarded,
+            "{k:?} is edited by the field but the shortcut guard lets it through"
+        );
+        focus::clear();
+    }
+}
+
+#[test]
+fn autofocus_makes_a_field_typable_without_a_tap() {
+    reset_layout_runtime();
+    focus::clear();
+    let value = signal(String::new());
+    let mut input = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap()
+    .autofocus();
+    assert!(
+        focus::is_focused(input.editor.id),
+        "the field holds focus from construction"
+    );
+    input.on_event(&key(Key::Char('x')));
+    assert_eq!(value.get(), "x", "and the very first keystroke is text");
+
+    reset_layout_runtime();
+    focus::clear();
+    let untouched = signal(String::new());
+    let mut plain = Input::new(
+        untouched,
+        LayoutStyle::new().width(200.0).height(20.0),
+        || TextStyle::new(14.0, Color::BLACK),
+    )
+    .unwrap();
+    assert!(
+        !focus::is_focused(plain.editor.id),
+        "a field without autofocus is not focused for it"
+    );
+    plain.on_event(&key(Key::Char('x')));
+    assert_eq!(untouched.get(), "");
+}
+
+/// A capital is typed with `Shift` down, as a keyboard sends it — and `Shift` is the selection modifier, so the anchor it left behind made the next keystroke replace the letter just typed. A name came out with every capital missing but the last, which no test that presses `M` where a hand presses `Shift`+`M` can see.
+#[test]
+fn a_capital_is_not_a_selection() {
+    let (mut input, value) = focused_input("");
+    for (c, held) in [
+        ('L', true),
+        ('a', false),
+        (' ', false),
+        ('C', true),
+        ('u', false),
+        ('e', false),
+        ('v', false),
+        ('a', false),
+    ] {
+        let event = match (c, held) {
+            (' ', _) => key(Key::Named(NamedKey::Space)),
+            (c, true) => shifted(Key::Char(c)),
+            (c, false) => key(Key::Char(c)),
+        };
+        input.on_event(&event);
+    }
+    assert_eq!(value.get(), "La Cueva");
+}
+
+/// `Shift` still selects when the key it is held with is a movement.
+#[test]
+fn a_shifted_arrow_still_selects() {
+    let (mut input, value) = focused_input("hola");
+    input.on_event(&key(Key::Named(NamedKey::End)));
+    for _ in 0..2 {
+        input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    }
+    input.on_event(&key(Key::Char('y')));
+    assert_eq!(value.get(), "hoy");
+}
+
+#[test]
+fn typing_inserts_at_caret() {
+    let (mut input, value) = focused_input("");
+    for c in "hi".chars() {
+        input.on_event(&key(Key::Char(c)));
+    }
+    assert_eq!(value.get(), "hi");
+    assert_eq!(input.editor.caret.get(), 2);
+}
+
+#[test]
+fn backspace_and_arrows_edit_mid_string() {
+    let (mut input, value) = focused_input("abc");
+    input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
+    assert_eq!(input.editor.caret.get(), 1);
+    input.on_event(&key(Key::Named(NamedKey::Backspace)));
+    assert_eq!(value.get(), "bc");
+    assert_eq!(input.editor.caret.get(), 0);
+    input.on_event(&key(Key::Char('X')));
+    assert_eq!(value.get(), "Xbc");
+}
+
+#[test]
+fn keys_ignored_when_not_focused() {
+    let (mut input, value) = focused_input("a");
+    focus::clear();
+    let r = input.on_event(&key(Key::Char('z')));
+    assert_eq!(r, EventResult::Ignored);
+    assert_eq!(value.get(), "a", "an unfocused input must not edit");
+}
+
+#[test]
+fn a_masked_field_hides_the_text_without_changing_it() {
+    let (mut input, value) = focused_input("");
+    input = input.secret();
+    for c in ['h', 'u', 'n', 't', 'e', 'r'] {
+        input.on_event(&key(Key::Char(c)));
+    }
+    assert_eq!(
+        value.get(),
+        "hunter",
+        "the bound signal keeps the real text, which is what a submit handler reads"
+    );
+    assert_eq!(
+        input.editor.shown(&value.get()),
+        "••••••",
+        "and the screen does not"
+    );
+
+    // One per character, not per byte: a multi-byte password must not leak its length, and the caret is measured against this string.
+    assert_eq!(input.editor.shown("mañana"), "••••••");
+    assert_eq!(input.editor.shown(""), "");
+}
+
+#[test]
+fn an_unmasked_field_is_unchanged() {
+    let (input, value) = focused_input("plain");
+    assert_eq!(input.editor.shown(&value.get()), "plain");
+}
+
+#[test]
+fn tap_focuses_and_ctrl_chord_is_ignored() {
+    let (mut input, value) = focused_input("hi");
+    focus::clear();
+    let r = input.on_event(&Event::PointerPressed {
+        x: 10.0,
+        y: 5.0,
+        button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    });
+    assert_eq!(r, EventResult::Handled);
+    assert!(
+        focus::is_focused(input.editor.id),
+        "a tap inside focuses the input"
+    );
+    let paste = chord(Key::Char('v'));
+    assert_eq!(input.on_event(&paste), EventResult::Ignored);
+    assert_eq!(value.get(), "hi");
+}
+
+/// A value opened for editing in place is replaced by what is typed, even when the text was written after the field was built.
+#[test]
+fn a_field_that_selects_on_focus_is_typed_over() {
+    reset_layout_runtime();
+    focus::clear();
+    let value = signal(String::new());
+    let mut input = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap()
+    .select_on_focus();
+    value.set("12.5".to_string());
+    focus::request(input.editor.id);
+    input.on_event(&key(Key::Char('7')));
+    assert_eq!(value.get(), "7");
+}
+
+/// A field with suggestions under it walks them with the arrows and chooses with Enter, keys the field would otherwise keep: the handler hears them first, and what it does not take still reaches the field.
+#[test]
+fn a_key_handler_hears_the_keys_first_and_takes_only_what_it_answers_for() {
+    let (input, value) = focused_input("ab");
+    let submitted = Rc::new(std::cell::Cell::new(false));
+    let said = Rc::clone(&submitted);
+    let walked = Rc::new(std::cell::Cell::new(0));
+    let counted = Rc::clone(&walked);
+    let mut input = input
+        .on_submit(move || said.set(true))
+        .on_key(move |key, _| {
+            let taken = matches!(
+                key,
+                Key::Named(NamedKey::ArrowDown) | Key::Named(NamedKey::Enter)
+            );
+            if taken {
+                counted.set(counted.get() + 1);
+            }
+            taken
+        });
+
+    assert_eq!(
+        input.on_event(&key(Key::Named(NamedKey::ArrowDown))),
+        EventResult::Handled
+    );
+    input.on_event(&key(Key::Named(NamedKey::Enter)));
+    assert!(!submitted.get(), "the handler took Enter from the field");
+    input.on_event(&key(Key::Char('c')));
+    assert_eq!(value.get(), "abc", "and left the letters to it");
+    assert_eq!(walked.get(), 2);
+}
+
+/// What inserts at the caret reads it, and leaves it after what it inserted; moving it drops a selection, which would otherwise make the next letter replace text nobody chose.
+#[test]
+fn the_caret_is_read_and_moved_from_outside() {
+    let (mut input, value) = focused_input("hello");
+    let caret = input.caret();
+    input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
+    assert_eq!(caret.get(), 4);
+    input.on_event(&chord(Key::Char('a')));
+    caret.set(2);
+    assert_eq!(input.editor.selection("hello"), None);
+    input.on_event(&key(Key::Char('x')));
+    assert_eq!(value.get(), "hexllo");
+    assert_eq!(caret.peek(), 3);
+}
+
+/// The underlines drawn in a field's view, left to right.
+fn underlines_of(input: &Input) -> Vec<Rect> {
+    fn walk(node: &RenderNode, found: &mut Vec<Rect>) {
+        match node {
+            RenderNode::Primitive(DrawCommand::Rect { rect, .. })
+                if rect.height == UNDERLINE_THICKNESS =>
+            {
+                found.push(*rect);
+            }
+            RenderNode::Group { children }
+            | RenderNode::Element { children, .. }
+            | RenderNode::Transform { children, .. }
+            | RenderNode::Clip { children, .. }
+            | RenderNode::Layer { children, .. } => {
+                for child in children.iter() {
+                    walk(child, found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    walk(&input.view(), &mut found);
+    found.sort_by(|a, b| a.x.total_cmp(&b.x));
+    found
+}
+
+/// An underline sits under the letters of its run, along the bottom of the line, focused or not; an empty run is a short mark where it starts, and a run past the end of the text is drawn at the end.
+#[test]
+fn an_underline_runs_under_the_letters_it_is_about() {
+    let (input, _) = focused_input("abcdef");
+    let input = input.underline(|| {
+        vec![
+            Underline {
+                range: 2..4,
+                color: Color::BLACK,
+            },
+            Underline {
+                range: 9..9,
+                color: Color::BLACK,
+            },
+        ]
+    });
+    let drawn = underlines_of(&input);
+    assert_eq!(drawn.len(), 2);
+    let (run, mark) = (drawn[0], drawn[1]);
+    let laid =
+        crate::text_metrics::laid_lines("abcdef", 1.0e6, &TextStyle::new(14.0, Color::BLACK));
+    let clusters = &laid[0].clusters;
+    let before = |byte: usize| {
+        clusters
+            .iter()
+            .find(|cluster| cluster.bytes.start == byte)
+            .map(|cluster| cluster.leading_x())
+            .unwrap_or_else(|| {
+                clusters
+                    .iter()
+                    .find(|cluster| cluster.bytes.end == byte)
+                    .expect("a cluster borders every letter boundary")
+                    .trailing_x()
+            })
+    };
+    assert!((run.x - before(2)).abs() < 0.01, "{run:?}");
+    assert!((run.width - (before(4) - before(2))).abs() < 0.01);
+    assert!((mark.x - before(6)).abs() < 0.01, "{mark:?}");
+    assert_eq!(mark.width, POINT_MARK);
+    let line = crate::text_metrics::line_box(&TextStyle::new(14.0, Color::BLACK));
+    assert_eq!(run.y + run.height, drawn_line(&input).y + line);
+
+    focus::clear();
+    assert_eq!(
+        underlines_of(&input).len(),
+        2,
+        "a field without the keyboard still shows what is wrong with it"
+    );
+}
+
+/// A field inherits every text property but the case: its caret and selection index the value it shows, so it shows the value as typed.
+#[test]
+fn a_field_shows_what_was_typed_whatever_case_it_inherits() {
+    reset_layout_runtime();
+    let value = reactive_core::signal("typed".to_string());
+    let field = Input::declaring(value, LayoutStyle::new(), |inherited| inherited).unwrap();
+    let outer = new_container(LayoutStyle::new(), &[field.layout_node()]).unwrap();
+    crate::inherit::declare(
+        outer,
+        renderer_core::Declared::default()
+            .with_text_case(renderer_core::TextCase::Upper)
+            .with_underline(true),
+    );
+    let style = (field.editor.style)();
+    assert_eq!(style.text_case, renderer_core::TextCase::AsWritten);
+    assert!(style.decoration.is_drawn(), "the rest still inherits");
+}
+
+/// A key belongs to whoever held focus when it arrived. A control before the field that hands it the caret on `/` without claiming the key — a handler answering `()` — must not have the field type the `/` it was summoned by, nor anything after it.
+#[test]
+fn a_key_that_moves_focus_to_a_field_is_not_typed_into_it() {
+    use crate::layout_item::box_item;
+    use crate::styled_container::StyledContainer;
+    reset_layout_runtime();
+    focus::clear();
+    let value = signal(String::new());
+    let field = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap();
+    let field_focus = field.focus_id();
+    let list = StyledContainer::new(
+        LayoutStyle::new().width(200.0).height(100.0),
+        |_| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(focus::Role::Tree)
+    .on_focused_key(move |key: &Key| {
+        if matches!(key, Key::Char('/')) {
+            focus::request(field_focus);
+        }
+    });
+    let list_focus = list.focus_id().expect("a control is focusable");
+    let root = crate::container::Container::new(
+        LayoutStyle::new().flex_column().width(200.0).height(200.0),
+        vec![box_item(list), box_item(field)],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    let mut tree = ui_tree::ComponentList::new(root);
+    focus::request(list_focus);
+
+    tree.on_event(&key(Key::Char('/')));
+    assert!(
+        focus::is_focused(field_focus),
+        "the list handed the field the caret"
+    );
+    assert_eq!(
+        value.get(),
+        "",
+        "the key that did it was the list's, not the field's"
+    );
+    assert!(
+        !focus::is_key_target(list_focus),
+        "outside a key's dispatch, the key target is whoever holds focus now"
+    );
+
+    tree.on_event(&key(Key::Char('/')));
+    assert_eq!(value.get(), "/", "the next one is typed");
+    focus::clear();
+}
+
+/// The line a field draws its text on, in the field's own coordinates.
+fn drawn_line(input: &Input) -> Rect {
+    let mut line = None;
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Text { rect, .. } = command {
+            line = Some(*rect);
+        }
+    });
+    line.expect("the field draws its line")
+}
+
+/// The cap band of the field's style as its line is drawn: `(top, height)` inside the line.
+fn field_cap_band() -> (f32, f32) {
+    let mut style = TextStyle::new(14.0, Color::BLACK);
+    style.line_height = LineHeight::Times(crate::text_metrics::line_box(&style) / 14.0);
+    crate::text_metrics::measure_ink_bounds("H", 1_000.0, &style)
+}
+
+/// A field taller than its line places that line as a text leaf would, with the cap band in the middle of the box, and the caret stands on the line drawn.
+#[test]
+fn a_field_taller_than_its_line_centres_its_cap_band_and_the_caret_stands_on_it() {
+    let (top, height) = field_cap_band();
+    assert!(height > 0.0, "the capital inks");
+    for box_height in [20.0_f32, 28.0, 31.0, 40.0] {
+        let (input, _) = focused_input_of("hola", box_height);
+        let line = drawn_line(&input);
+        let middle = line.y + top + height / 2.0;
+        assert!(
+            (middle - box_height / 2.0).abs() <= 0.5,
+            "a {box_height}px field puts its cap band's middle at {middle}"
+        );
+        let caret = caret_of(&input).0;
+        assert_eq!(
+            (caret.y, caret.height),
+            (line.y, line.height),
+            "the caret stands on the line"
+        );
+        focus::clear();
+    }
+}
+
+/// A field leaving an odd number of rows around its cap band puts the spare one below it, as a label does.
+#[test]
+fn a_field_puts_an_odd_spare_row_below_the_cap_band() {
+    let (top, height) = field_cap_band();
+    for box_height in 20..32 {
+        let box_height = box_height as f32;
+        let (input, _) = focused_input_of("hola", box_height);
+        let above = drawn_line(&input).y + top;
+        let below = box_height - above - height;
+        assert_eq!(
+            below - above,
+            ((box_height - height) as u32 % 2) as f32,
+            "a {box_height}px field leaves {above} above the cap band and {below} below"
+        );
+        focus::clear();
+    }
+}
+
+/// A field and a label of one style side by side in a row, each as tall as the row, put their cap bands at one height, so a form's text lines up whatever is editable.
+#[test]
+fn a_field_and_a_label_beside_it_share_the_cap_band() {
+    reset_layout_runtime();
+    let style = || TextStyle::new(14.0, Color::BLACK);
+    let label = crate::Text::new(|| "Name".to_string(), LayoutStyle::new(), style).unwrap();
+    let input = Input::new(
+        signal("Ada".to_string()),
+        LayoutStyle::new().width(200.0),
+        style,
+    )
+    .unwrap();
+    let row = new_container(
+        LayoutStyle::new().flex_row().gap(8.0).height(32.0),
+        &[label.layout_node(), input.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        row,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(32.0),
+    )
+    .unwrap();
+    fn line_of(node: &RenderNode) -> Option<Rect> {
+        let mut line = None;
+        walk_view(node, &mut |command| {
+            if let DrawCommand::Text { rect, .. } = command {
+                line = Some(*rect);
+            }
+        });
+        line
+    }
+    let label_line = line_of(&label.view()).expect("the label draws");
+    let field_line = line_of(&input.view()).expect("the field draws");
+    assert_eq!(
+        (label_line.y, label_line.height),
+        (field_line.y, field_line.height),
+        "the label and the field draw their lines alike"
+    );
+}
+
+/// The selection is drawn on the line the text is, in a field taller than it.
+#[test]
+fn the_selection_follows_the_line_the_text_is_drawn_on() {
+    let (mut input, _) = focused_input_of("hola", 40.0);
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    let line = drawn_line(&input);
+    let mut bands = Vec::new();
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Rect { rect, .. } = command
+            && rect.width > CARET_WIDTH
+        {
+            bands.push(*rect);
+        }
+    });
+    assert_eq!(bands.len(), 1, "one band under the two letters: {bands:?}");
+    assert_eq!((bands[0].y, bands[0].height), (line.y, line.height));
+    focus::clear();
+}
+
+/// A press anywhere along the line lands between the letters drawn under it, in a field taller than its line.
+#[test]
+fn a_press_lands_on_the_letter_drawn_under_it() {
+    let style = TextStyle::new(14.0, Color::BLACK);
+    let before = crate::text_metrics::measure_text("ho", None, 1.0e6, &style).0;
+    for row in [0.1_f32, 0.5, 0.9] {
+        let (mut input, value) = focused_input_of("hola", 40.0);
+        let line = drawn_line(&input);
+        let (x, y) = (
+            f64::from(before + 0.5),
+            f64::from(line.y + line.height * row),
+        );
+        input.on_event(&Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        input.on_event(&Event::PointerReleased {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        input.on_event(&key(Key::Char('X')));
+        assert_eq!(
+            value.get(),
+            "hoXla",
+            "a press at {y} on the line lands after \"ho\""
+        );
+        focus::clear();
+    }
+}
+
+fn ime(event: Ime) -> Event {
+    Event::Ime(event)
+}
+
+fn walk_view(node: &RenderNode, visit: &mut impl FnMut(&DrawCommand)) {
+    match node {
+        RenderNode::Primitive(command) => visit(command),
+        RenderNode::Group { children }
+        | RenderNode::Element { children, .. }
+        | RenderNode::Transform { children, .. }
+        | RenderNode::Clip { children, .. }
+        | RenderNode::Layer { children, .. } => {
+            for child in children.iter() {
+                walk_view(child, visit);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn drawn_text(input: &Input) -> String {
+    let mut drawn = String::new();
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Text { text, .. } = command {
+            drawn = text.to_string();
+        }
+    });
+    drawn
+}
+
+/// The thin lines drawn under a composition, and the heavy one under the part being converted.
+fn composition_lines(input: &Input) -> (Vec<Rect>, Vec<Rect>) {
+    let (mut thin, mut heavy) = (Vec::new(), Vec::new());
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Rect { rect, .. } = command {
+            if rect.height == 1.0 {
+                thin.push(*rect);
+            } else if rect.height == 2.0 {
+                heavy.push(*rect);
+            }
+        }
+    });
+    (thin, heavy)
+}
+
+/// **A composition is shown, not typed.** What the input method has not decided on is drawn in the field at the caret, underlined, while the value stays what was typed: an application reading it mid-word must not see half a kana.
+#[test]
+fn a_composition_is_drawn_at_the_caret_and_left_out_of_the_value() {
+    let (mut input, value) = focused_input("ab");
+    input.editor.caret.set(1);
+    assert_eq!(
+        input.on_event(&ime(Ime::preedit("かな", Some((6, 6))))),
+        EventResult::Handled
+    );
+    assert_eq!(drawn_text(&input), "aかなb");
+    assert_eq!(value.get(), "ab");
+    let (thin, heavy) = composition_lines(&input);
+    assert_eq!(thin.len(), 1, "one line under the whole composition");
+    assert!(heavy.is_empty(), "nothing is being converted");
+    let caret = caret_of(&input).0;
+    assert!(
+        (caret.x - (thin[0].x + thin[0].width)).abs() < 0.5,
+        "the caret stands where the input method put it, at the end of the composition"
+    );
+}
+
+#[test]
+fn the_part_being_converted_is_marked_and_has_no_caret() {
+    let (mut input, _) = focused_input("");
+    input.on_event(&ime(Ime::preedit("日本語", Some((3, 9)))));
+    let (thin, heavy) = composition_lines(&input);
+    assert_eq!((thin.len(), heavy.len()), (1, 1));
+    assert!(heavy[0].x > thin[0].x, "the converted part starts after 日");
+    let mut caret = None;
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Rect { rect, .. } = command
+            && rect.width == CARET_WIDTH
+        {
+            caret = Some(*rect);
+        }
+    });
+    assert_eq!(caret, None);
+}
+
+/// **A commit is typed once.** The composition goes and its text lands at the caret, which ends up after it.
+#[test]
+fn a_commit_inserts_its_text_once_at_the_caret() {
+    let (mut input, value) = focused_input("ab");
+    input.editor.caret.set(1);
+    input.on_event(&ime(Ime::preedit("か", Some((3, 3)))));
+    input.on_event(&ime(Ime::preedit("", None)));
+    input.on_event(&ime(Ime::Commit("可".into())));
+    assert_eq!(value.get(), "a可b");
+    assert_eq!(input.editor.caret.get(), 4);
+    assert_eq!(drawn_text(&input), "a可b", "the composition is gone");
+}
+
+/// The behaviour typing has, for the text an input method types: a selection gives way to the composition as soon as it starts.
+#[test]
+fn a_composition_replaces_the_selection() {
+    let (mut input, value) = focused_input("hello");
+    input.on_event(&chord(Key::Char('a')));
+    input.on_event(&ime(Ime::preedit("x", None)));
+    assert_eq!(value.get(), "");
+    assert_eq!(drawn_text(&input), "x");
+    input.on_event(&ime(Ime::Commit("x".into())));
+    assert_eq!(value.get(), "x");
+}
+
+/// What an input method sends for a letter it had nothing to compose for: a commit without a composition, typed over the selection like a key.
+#[test]
+fn a_commit_without_a_composition_types_over_the_selection() {
+    let (mut input, value) = focused_input("hello");
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&ime(Ime::Commit("p".into())));
+    assert_eq!(value.get(), "hellp");
+    assert_eq!(input.editor.selection("hellp"), None);
+}
+
+/// An abandoned composition leaves the text as it was.
+#[test]
+fn an_emptied_composition_inserts_nothing() {
+    let (mut input, value) = focused_input("ab");
+    input.on_event(&ime(Ime::preedit("か", None)));
+    input.on_event(&ime(Ime::preedit("", None)));
+    input.on_event(&ime(Ime::Commit(String::new())));
+    assert_eq!(value.get(), "ab");
+    assert_eq!(drawn_text(&input), "ab");
+}
+
+/// While the input method composes, the keys are its own: a Backspace that reached the field anyway must not delete what is already typed.
+#[test]
+fn keys_that_reach_a_composing_field_edit_nothing() {
+    let (mut input, value) = focused_input("ab");
+    input.on_event(&ime(Ime::preedit("か", None)));
+    assert_eq!(
+        input.on_event(&key(Key::Named(NamedKey::Backspace))),
+        EventResult::Handled
+    );
+    assert_eq!(value.get(), "ab");
+}
+
+#[test]
+fn a_single_line_field_keeps_the_first_line_of_a_commit() {
+    let (mut input, value) = focused_input("");
+    input.on_event(&ime(Ime::Commit("one\ntwo".into())));
+    assert_eq!(value.get(), "one");
+}
+
+#[test]
+fn a_field_without_the_keyboard_hears_no_composition() {
+    let (mut input, value) = focused_input("ab");
+    focus::clear();
+    assert_eq!(
+        input.on_event(&ime(Ime::Commit("x".into()))),
+        EventResult::Ignored
+    );
+    assert_eq!(value.get(), "ab");
+}
+
+/// **The keyboard leaving keeps the word on screen.** The input method is turned off with the field, so it will never commit what it was composing: the field types it itself, as a browser's field does, rather than lose it.
+#[test]
+fn losing_the_keyboard_types_the_composition_in() {
+    let (mut input, value) = focused_input("ab");
+    input.on_event(&ime(Ime::preedit("か", None)));
+    focus::clear();
+    assert_eq!(value.get(), "abか");
+    focus::request(input.editor.id);
+    assert_eq!(
+        drawn_text(&input),
+        "abか",
+        "and shows it once, not as a composition"
+    );
+    assert_eq!(input.editor.caret.get(), 5);
+}
+
+/// A masked field masks what is composed too.
+#[test]
+fn a_masked_field_masks_its_composition() {
+    let (input, _) = focused_input("ab");
+    let mut input = input.secret();
+    input.on_event(&ime(Ime::preedit("か", None)));
+    assert_eq!(drawn_text(&input), "•••");
+}
+
+/// The caret an input method is told about is the caret that is drawn, whichever way the surface and the text write.
+#[test]
+fn the_reported_caret_is_the_drawn_one_in_a_right_to_left_surface() {
+    crate::context::set_direction(i18n_core::Direction::Rtl);
+    let input = aligned_input("\u{5e9}\u{5dc}\u{5d5}\u{5dd}", TextAlign::Start);
+    let drawn = caret_of(&input).0;
+    let reported = crate::text_input().expect("the field holds the keyboard");
+    crate::context::set_direction(i18n_core::Direction::Ltr);
+    assert_eq!(reported.caret, drawn);
+    assert!(drawn.x > 100.0, "the line starts at the right: {drawn:?}");
+}
+
+/// A document is told where the caret is on the field's own element, so the element the browser types into can stand there.
+#[test]
+fn a_document_reads_the_caret_off_the_field_s_element() {
+    let was = ui_tree::set_element_capture(true);
+    let (input, _) = focused_input("ab");
+    let mut caret = None;
+    if let RenderNode::Element { element, .. } = input.view() {
+        caret = element.caret;
+    }
+    ui_tree::set_element_capture(was);
+    assert_eq!(caret, Some(caret_of(&input).0));
+}

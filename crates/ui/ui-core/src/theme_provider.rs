@@ -1,8 +1,8 @@
-//! [`ScopeProvider`]: a subtree drawn in a theme or at a control size of its own.
+//! [`ScopeProvider`]: a subtree drawn in a theme of its own.
 
 use layout_core::{LayoutError, NodeId};
 use platform_core::Event;
-use theme_core::{ControlSize, ScopedControlSize, ScopedTheme};
+use theme_core::ScopedTheme;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::record_nodes;
@@ -13,7 +13,7 @@ pub fn provide_theme(
     theme: impl Into<ScopedTheme>,
     child: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
 ) -> Result<ScopeProvider, LayoutError> {
-    ScopeProvider::build("ThemeProvider", child, move |built| {
+    ScopeProvider::build(child, move |built| {
         let theme = theme.into();
         theme.provide();
         let built = built()?;
@@ -31,34 +31,14 @@ pub fn follow_theme<T: theme_core::ThemeTokens + Clone + 'static>(
     scoped
 }
 
-/// Builds `child` with `size` as the control size of it and everything beneath it, over the surface's and the thread's. `size` is a [`ControlSize`] held for the subtree's lifetime, or a [`ScopedControlSize`] the caller keeps to switch it later; switching it re-spaces only the controls inside the subtree.
-pub fn provide_control_size(
-    size: impl Into<ScopedControlSize>,
-    child: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
-) -> Result<ScopeProvider, LayoutError> {
-    ScopeProvider::build("ControlSizeProvider", child, move |built| {
-        size.into().provide();
-        built()
-    })
-}
-
-/// A scoped control size that follows what `read` reads, so a subtree's density can be bound to state.
-pub fn follow_control_size(read: impl Fn() -> ControlSize + 'static) -> ScopedControlSize {
-    let scoped = ScopedControlSize::new(read());
-    reactive_core::effect(move || scoped.set(read()));
-    scoped
-}
-
-/// What [`provide_theme`] and [`provide_control_size`] return. Adds no layout node: it lays out, draws and takes events exactly as its child does, under the owner the scope was provided to.
+/// What [`provide_theme`] returns. Adds no layout node: it lays out, draws and takes events exactly as its child does, under the owner the scope was provided to.
 pub struct ScopeProvider {
     child: Child,
-    name: &'static str,
 }
 
 impl ScopeProvider {
     /// Runs `scope` under a fresh owner, handing it the child's build to run once it has provided what the subtree reads.
     fn build<C: FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>>(
-        name: &'static str,
         child: C,
         scope: impl FnOnce(C) -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, LayoutError> {
@@ -66,7 +46,7 @@ impl ScopeProvider {
         // Mounted here rather than by the parent, so the child's rendering re-runs under the scope it was provided to.
         let (child, _) = build_owned(|| scope(child).map(make_child))?;
         nodes.keep();
-        Ok(Self { child, name })
+        Ok(Self { child })
     }
 }
 
@@ -94,10 +74,10 @@ impl Component for ScopeProvider {
     }
 
     fn debug_name(&self) -> &'static str {
-        self.name
+        "ThemeProvider"
     }
 }
 
 #[cfg(test)]
-#[path = "theme_provider_test.rs"]
+#[path = "theme_provider.test.rs"]
 mod tests;

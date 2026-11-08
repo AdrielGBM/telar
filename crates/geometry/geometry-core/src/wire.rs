@@ -2,7 +2,7 @@
 
 use wire_core::wire_struct;
 
-use crate::{BorderRadius, Color, Insets, LayoutGrid, Point, Rect, Size};
+use crate::{BorderRadius, Color, Insets, LayoutGrid, Point, Rect, Size, Transform};
 
 wire_struct!(Point { x, y });
 wire_struct!(Size { width, height });
@@ -26,7 +26,8 @@ wire_struct!(Insets {
     bottom,
     left
 });
+wire_struct!(Transform { a, b, c, d, e, f });
 
 #[cfg(test)]
-#[path = "wire_test.rs"]
+#[path = "wire.test.rs"]
 mod tests;

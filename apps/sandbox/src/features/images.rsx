@@ -50,7 +50,7 @@ col gap:20
     example title:"A PNG baked from disk at build time"
         card
             row gap:20 align:center
-                img src:"dot.png" width:64 height:64 priority label:"A baked dot"
+                img src:"dot.png" width:64 height:64 priority a11y_label:"A baked dot"
                 img src:"dot.png" raster:nearest width:96 height:96
         code_line code:"img src:'assets/dot.png'   (decoded + baked, no runtime loader)"
         code_line code:"on the web: a file beside the page, fetched first with priority"

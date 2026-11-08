@@ -1,0 +1,544 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              element grid
+                clip 190,140 420x320
+                  matrix 1,0,0,1,190,140
+                    element group
+                      element group
+                        element row
+                          rect 0,36 420x36 radius=6
+                          element gridcell
+                            rect 0,36 211x36 radius=6
+                            element group
+                              clip 8,36 69x36
+                                matrix 1,0,0,1,8,36
+                                  text 0,10 69x16.8 "file_000.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,36 113x36 radius=6
+                            element group
+                              clip 219,36 29x36
+                                matrix 1,0,0,1,219,36
+                                  text 0,10 29.27x16.8 "Rust" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,36 88x36 radius=6
+                            element group
+                              clip 390,36 14x36
+                                matrix 1,0,0,1,390,36
+                                  text 0,10 14.23x16.8 "12" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,72 420x36 radius=6
+                          element gridcell
+                            rect 0,72 211x36 radius=6
+                            element group
+                              clip 8,72 82x36
+                                matrix 1,0,0,1,8,72
+                                  text 0,10 82.06x16.8 "file_037.toml" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,72 113x36 radius=6
+                            element group
+                              clip 219,72 57x36
+                                matrix 1,0,0,1,219,72
+                                  text 0,10 57.08x16.8 "Manifest" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,72 88x36 radius=6
+                            element group
+                              clip 373,72 31x36
+                                matrix 1,0,0,1,373,72
+                                  text 0,10 31x16.8 "7931" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,108 420x36 fill=#00000014 radius=6
+                          element gridcell
+                            rect 0,108 211x36 radius=6
+                            element group
+                              clip 8,108 75x36
+                                matrix 1,0,0,1,8,108
+                                  text 0,10 75x16.8 "file_074.md" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,108 113x36 radius=6
+                            element group
+                              clip 219,108 69x36
+                                matrix 1,0,0,1,219,108
+                                  text 0,10 69.81x16.8 "Markdown" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,108 88x36 radius=6
+                            element group
+                              clip 370,108 34x36
+                                matrix 1,0,0,1,370,108
+                                  text 0,10 34.48x16.8 "6850" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,144 420x36 fill=#00000014 radius=6
+                          element gridcell
+                            rect 0,144 211x36 radius=6
+                            element group
+                              clip 8,144 72x36
+                                matrix 1,0,0,1,8,144
+                                  text 0,10 72x16.8 "file_111.png" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,144 113x36 radius=6
+                            element group
+                              clip 219,144 40x36
+                                matrix 1,0,0,1,219,144
+                                  text 0,10 40.64x16.8 "Image" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,144 88x36 radius=6
+                            element group
+                              clip 371,144 33x36
+                                matrix 1,0,0,1,371,144
+                                  text 0,10 33.38x16.8 "5769" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,180 420x36 radius=6
+                          element gridcell
+                            rect 0,180 211x36 radius=6
+                            element group
+                              clip 8,180 72x36
+                                matrix 1,0,0,1,8,180
+                                  text 0,10 72.42x16.8 "file_148.rsx" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,180 113x36 radius=6
+                            element group
+                              clip 219,180 32x36
+                                matrix 1,0,0,1,219,180
+                                  text 0,10 32.42x16.8 "View" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,180 88x36 radius=6
+                            element group
+                              clip 369,180 35x36
+                                matrix 1,0,0,1,369,180
+                                  text 0,10 35.06x16.8 "4688" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,216 420x36 radius=6
+                          element gridcell
+                            rect 0,216 211x36 radius=6
+                            element group
+                              clip 8,216 64x36
+                                matrix 1,0,0,1,8,216
+                                  text 0,10 64x16.8 "file_185.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,216 113x36 radius=6
+                            element group
+                              clip 219,216 29x36
+                                matrix 1,0,0,1,219,216
+                                  text 0,10 29.27x16.8 "Rust" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,216 88x36 radius=6
+                            element group
+                              clip 370,216 34x36
+                                matrix 1,0,0,1,370,216
+                                  text 0,10 34x16.8 "3607" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,252 420x36 radius=6
+                          element gridcell
+                            rect 0,252 211x36 radius=6
+                            element group
+                              clip 8,252 85x36
+                                matrix 1,0,0,1,8,252
+                                  text 0,10 85x16.8 "file_222.toml" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,252 113x36 radius=6
+                            element group
+                              clip 219,252 57x36
+                                matrix 1,0,0,1,219,252
+                                  text 0,10 57.08x16.8 "Manifest" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,252 88x36 radius=6
+                            element group
+                              clip 370,252 34x36
+                                matrix 1,0,0,1,370,252
+                                  text 0,10 34.08x16.8 "2526" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,288 420x36 radius=6
+                          element gridcell
+                            rect 0,288 211x36 radius=6
+                            element group
+                              clip 8,288 77x36
+                                matrix 1,0,0,1,8,288
+                                  text 0,10 77x16.8 "file_259.md" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,288 113x36 radius=6
+                            element group
+                              clip 219,288 69x36
+                                matrix 1,0,0,1,219,288
+                                  text 0,10 69.81x16.8 "Markdown" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,288 88x36 radius=6
+                            element group
+                              clip 372,288 32x36
+                                matrix 1,0,0,1,372,288
+                                  text 0,10 32.09x16.8 "1445" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,324 420x36 radius=6
+                          element gridcell
+                            rect 0,324 211x36 radius=6
+                            element group
+                              clip 8,324 81x36
+                                matrix 1,0,0,1,8,324
+                                  text 0,10 81.41x16.8 "file_296.png" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,324 113x36 radius=6
+                            element group
+                              clip 219,324 40x36
+                                matrix 1,0,0,1,219,324
+                                  text 0,10 40.64x16.8 "Image" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,324 88x36 radius=6
+                            element group
+                              clip 378,324 26x36
+                                matrix 1,0,0,1,378,324
+                                  text 0,10 26.38x16.8 "364" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,360 420x36 radius=6
+                          element gridcell
+                            rect 0,360 211x36 radius=6
+                            element group
+                              clip 8,360 76x36
+                                matrix 1,0,0,1,8,360
+                                  text 0,10 76x16.8 "file_333.rsx" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,360 113x36 radius=6
+                            element group
+                              clip 219,360 32x36
+                                matrix 1,0,0,1,219,360
+                                  text 0,10 32.42x16.8 "View" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,360 88x36 radius=6
+                            element group
+                              clip 369,360 35x36
+                                matrix 1,0,0,1,369,360
+                                  text 0,10 35x16.8 "8283" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,396 420x36 radius=6
+                          element gridcell
+                            rect 0,396 211x36 radius=6
+                            element group
+                              clip 8,396 67x36
+                                matrix 1,0,0,1,8,396
+                                  text 0,10 67.41x16.8 "file_370.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,396 113x36 radius=6
+                            element group
+                              clip 219,396 29x36
+                                matrix 1,0,0,1,219,396
+                                  text 0,10 29.27x16.8 "Rust" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,396 88x36 radius=6
+                            element group
+                              clip 370,396 34x36
+                                matrix 1,0,0,1,370,396
+                                  text 0,10 34x16.8 "7202" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,432 420x36 radius=6
+                          element gridcell
+                            rect 0,432 211x36 radius=6
+                            element group
+                              clip 8,432 82x36
+                                matrix 1,0,0,1,8,432
+                                  text 0,10 82.03x16.8 "file_407.toml" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,432 113x36 radius=6
+                            element group
+                              clip 219,432 57x36
+                                matrix 1,0,0,1,219,432
+                                  text 0,10 57.08x16.8 "Manifest" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,432 88x36 radius=6
+                            element group
+                              clip 375,432 29x36
+                                matrix 1,0,0,1,375,432
+                                  text 0,10 29x16.8 "6121" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,468 420x36 radius=6
+                          element gridcell
+                            rect 0,468 211x36 radius=6
+                            element group
+                              clip 8,468 77x36
+                                matrix 1,0,0,1,8,468
+                                  text 0,10 77.25x16.8 "file_444.md" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,468 113x36 radius=6
+                            element group
+                              clip 219,468 69x36
+                                matrix 1,0,0,1,219,468
+                                  text 0,10 69.81x16.8 "Markdown" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,468 88x36 radius=6
+                            element group
+                              clip 369,468 35x36
+                                matrix 1,0,0,1,369,468
+                                  text 0,10 35.02x16.8 "5040" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element row
+                          rect 0,504 420x36 radius=6
+                          element gridcell
+                            rect 0,504 211x36 radius=6
+                            element group
+                              clip 8,504 79x36
+                                matrix 1,0,0,1,8,504
+                                  text 0,10 79x16.8 "file_481.png" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 211,504 113x36 radius=6
+                            element group
+                              clip 219,504 40x36
+                                matrix 1,0,0,1,219,504
+                                  text 0,10 40.64x16.8 "Image" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                          element gridcell
+                            rect 324,504 88x36 radius=6
+                            element group
+                              clip 370,504 34x36
+                                matrix 1,0,0,1,370,504
+                                  text 0,10 34.33x16.8 "3959" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                                end
+                              end
+                            end
+                          end
+                        end
+                        element group
+                          rect 0,540 420x17496
+                        end
+                      end
+                      element row
+                        rect 0,0 420x36 fill=#ffffffff border=0,0,1,0 border-color=#dbdeedff
+                        element columnheader
+                          rect 0,0 211x36 radius=6
+                          element group
+                            clip 8,0 40x36
+                              matrix 1,0,0,1,8,0
+                                text 0,10 40x16.8 "Name" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                              end
+                            end
+                          end
+                          element group
+                          end
+                          element group
+                            element separator
+                              rect 203,0 8x36
+                            end
+                          end
+                        end
+                        element columnheader
+                          rect 211,0 113x36 radius=6
+                          element group
+                            clip 219,0 31x36
+                              matrix 1,0,0,1,219,0
+                                text 0,10 31x16.8 "Kind" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                              end
+                            end
+                          end
+                          element group
+                          end
+                        end
+                        element columnheader
+                          rect 324,0 88x36 radius=6
+                          element group
+                            clip 375,0 29x36
+                              matrix 1,0,0,1,375,0
+                                text 0,10 29x16.8 "Size" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                              end
+                            end
+                          end
+                          element group
+                          end
+                          element group
+                            element separator
+                              rect 404,0 8x36
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element status
+              element group
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

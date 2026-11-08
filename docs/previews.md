@@ -44,9 +44,10 @@ canvas.expect_text("agree · true")?;
   option wins, and `tags` add up.
 - **`[preview "Name" …]`** is a variant. Its body is a node tree, as in `[view]`. A file may hold any number of them.
 - **`[play]`** follows a preview and holds verbatim Rust that drives it; see [Play](#play).
-- A `.rsx` file written for a component keeps its previews beside its `[view]`. A **`checkbox.previews.rsx`** file
+- A `.rsx` file written for a component keeps its previews beside its `[view]`. A **`checkbox.preview.rsx`** file
   holds previews alone, with no `[view]`, for the component named by its file stem: use it when the component is
-  written in Rust, or when the previews would drown the component.
+  written in Rust, or when the previews would drown the component. A file of previews with no `[view]` under any other
+  name is a build error.
 
 Header options are `key:value`, on `[previews]` and on `[preview]` alike. A misspelled one is a build error on its
 own line, which lists the keys it takes.
@@ -86,9 +87,8 @@ telar::__previews! {
                 button(
                     ButtonProps::props()
                         .label(p.arg("label", "Save"))
-                        .variant(p.arg("variant", ButtonVariant::Solid))
+                        .variant(p.arg("variant", Variant::Solid))
                         .build(),
-                    Children::default(),
                 )
             })
             .title("Inputs/Button")
@@ -100,7 +100,6 @@ telar::__previews! {
                         .label("Press me")
                         .on_press(Rc::new(move || pressed.update(|n| *n += 1)))
                         .build(),
-                    Children::default(),
                 )
             })
             .play(|canvas| {
@@ -114,7 +113,9 @@ telar::__previews! {
 
 - **`button: ButtonProps`** names the component under preview and its props type. The props feed the Docs page and
   refine the control of each arg named after a prop. The type can be left out for a component with no derived
-  props. When it is written, every callback the body hands to `button` is logged in the Actions panel.
+  props. When it is written, every callback the body hands to `button` is logged in the Actions panel. An optional
+  callback the body leaves unset stays unset, since its presence can be what a component does (`tag`'s `on_toggle`
+  makes it a filter): set it, even to `Rc::new(|| {})`, for a play to expect its calls.
 - **`"Primary"`** names the variant and, slugged, ends its [id](#ids). A name with no letter or digit is a compile
   error.
 - **`|p| body`** builds the tree and returns what a component call returns, `Result<impl LayoutItem, LayoutError>`.
@@ -146,13 +147,22 @@ An arg is a value of a preview the workshop can change while the preview is on s
 - **Plain args** are read when the preview is built: `p.arg("label", "Save")` in Rust, and in `.rsx` every literal
   attribute of the root component call (a string, a number, a bool or flag, a hex colour, a `Path::Variant`). They
   are declared with no extra syntax, and changing one builds the preview again. A value containing `$` or a closure
-  stays fixed, and `args:none` in the header fixes all of them.
+  stays fixed, and `args:none` in the header fixes all of them. A plain arg the body hands anywhere else, to a component
+  nested in a column for instance, is declared in `values(tone:Tone::Ink)` and read bare, as `tone`: the value itself,
+  so a prop that takes a plain value takes it. `$` reads a signal, and a `values(…)` name is none.
 - **Signals** are shared with the tree: `p.signal("pressed", 0u32)` in Rust and `args(agree:false)` in `.rsx`,
   read as `$agree`. They are two-way, so the tree can write what the control shows, and changing one does not
   rebuild the preview.
 
-`p.arg` returns the default's own type, so a setter's `into` coerces it as a literal would. Setting a name both in
-`args(…)` and as a literal on the root is a build error: bind the root to the signal with `agree:$agree`.
+`p.arg` returns the default's own type, so a setter's `into` coerces it as a literal would. A name is declared once,
+in `args(…)` or in `values(…)`; setting it there and as a literal on the root is a build error: bind the root to it
+with `agree:$agree`.
+
+In `.rsx`, as in Rust, every callback the body hands to the component under preview is logged in the Actions panel: the
+file's own component, or the one a `x.preview.rsx` is named after, wherever the body calls it. A call to another
+component, a remove button in a tag's `action` for instance, is logged by the body itself through `actions`, the
+canvas's action log, written bare as a value is: `on_press:(move || actions.log("remove", vec![label.to_string()]))`. No arg takes the
+name.
 
 The type of an arg decides its control, and the prop of the same name refines it:
 
@@ -200,16 +210,29 @@ laptop = "1280x800"
 [preview "Default" matrix:rtl]
 ```
 
-- **Environment axes** are `mode`, `locale`, `dir`, `viewport` and `control_size` (`mini`, `small`, `regular`,
-  `large`). A viewport value is a size such as `390x844` or a name from `[telar.previews.viewports]`.
-- **Any other key names an arg** of the preview, declared in `args(…)` or written as a literal on the root, and
-  takes values in their text form: `12`, `true`, `Primary`, `#ff8800`, `"Save"`.
+- **Environment axes** are `mode`, `locale`, `dir` and `viewport`. A viewport value is a size such as `390x844` or a
+  name from `[telar.previews.viewports]`.
+- **Any other key names an arg** of the preview, declared in `args(…)` or `values(…)` or written as a literal on the root, and
+  takes values in their text form: `12`, `true`, `small`, `Primary`, `#ff8800`, `"Save"`. A value of the shared
+  vocabulary is its word, as a `.rsx` prop writes it (`size`, `variant`, `tone`), and an enum deriving `PreviewArg` its
+  variant's name. A component's size is one of them, its `size` arg, since nothing inherits one:
+  `size:[small regular large]`, or `size = ["small", "regular", "large"]` in `telar.toml`. A link, stored state or matrix
+  that still writes the variant's name (`Small`) gives the arg its default, as the removed `control_size` setting is
+  skipped; a matrix that still writes the old `control_size` axis is refused, naming that arg.
+- **An axis written alone takes every value it has**: `matrix:(mode variant tone)`. `mode` is every registered mode,
+  `locale` every locale of the application's catalog, `dir` both directions, `viewport` every name in
+  `[telar.previews.viewports]`, and an arg every value its prop picks among: an enum's variants, or `false` and `true`.
+  An arg whose prop has no fixed set of values, or that is no prop of the root, has no cells to give, and the run says
+  so: list its values instead.
 - The cells are the product of the axes, the first outermost. `themes` is built in: every registered mode, side by
   side. A package's own `themes` replaces it.
-- In Rust, `.matrix(Matrix::Named("themes"))` or `.matrix(Matrix::Axes(&[Axis::Dir(&[…]), Axis::Arg("size", &["12", "16"])]))`.
+- In Rust, `.matrix(Matrix::Named("themes"))` or `.matrix(Matrix::Axes(&[Axis::Dir(&[…]), Axis::Arg("size", &["12", "16"])]))`, and
+  `Axis::RegisteredModes`, `Axis::CatalogLocales`, `Axis::ProjectViewports` or `Axis::ArgValues("variant")` for an axis
+  written alone.
 
 `cargo telar test` and the snapshots treat each cell as a preview of its own. The workshop's Matrix view lays the
-cells out in a grid, and builds one from the axes you pick for a preview that has no matrix.
+cells out in a grid, and builds one from the axes you pick for a preview that has no matrix: the environment's, and
+each arg with a fixed set of values, a component's `size` among them.
 
 ## Ids
 
@@ -257,7 +280,7 @@ that rule out: `.a11y_ignore(&[Rule::TargetSize])` in Rust.
 
 ## Snapshots
 
-A snapshot is two files per preview and per matrix cell, kept under the package's `previews/__snapshots__/`:
+A snapshot is two files per preview and per matrix cell, kept under the package's `snapshots/`:
 
 | File | Is | Compared |
 | --- | --- | --- |
@@ -311,7 +334,8 @@ max_differing_pixels = 0     # how many pixels may differ and the picture still 
 ## `cargo telar test`
 
 For each preview, and each cell of its matrix, the run builds and lays it out, plays it, checks it for
-accessibility, and compares its snapshots. It prints a line for each and exits non-zero when any failed.
+accessibility, compares its snapshots, and unmounts it. It prints a line for each and exits non-zero when any
+failed, a panic while one is unmounted included.
 
 | Flag | Does |
 | --- | --- |
@@ -322,11 +346,15 @@ accessibility, and compares its snapshots. It prints a line for each and exits n
 | `--report <json\|junit> <PATH>` | Also write the run's report to a path, as `report.json` or JUnit XML for a CI |
 
 `-p`, `-F`, `--target` and `--release` work as they do for the other commands. `--target web` and `--target
-android` are refused: the run renders on the host. The run always writes `target/telar-snapshots/report.json`.
+android` are refused: the run renders on the host. The run always writes `target/telar-snapshots/report.json`;
+a run that wrote none, or whose `--report` copy could not be written, fails even when cargo succeeded.
 
-A library has no binary to run. `rsx_modules!` gives it a unit test, `telar_previews`, in preview builds, and
-`cargo telar test -p <library>` runs it through `cargo test`. The first-party components are tested this way
-through `apps/catalogue`: `cargo telar test -p catalogue`.
+A library has no binary to run. `rsx_modules!` gives it a unit test, `__telar_library_previews`, in preview
+builds, wherever in the crate the macro is called, and `cargo telar test -p <library>` runs it through
+`cargo test`. A crate calls `rsx_modules!` once for each module that places its own `.rsx`, so it may carry several
+of these tests; each lists every preview of the crate, and the first to run tests them and writes the one
+`report.json`, while the others return at once. The first-party components are tested this way through `apps/catalogue`:
+`cargo telar test -p catalogue`.
 
 ### Auditing the exported workshop
 
@@ -336,7 +364,7 @@ serves the export on a loopback port, opens every `preview/<id>` and `matrix/<id
 `?chrome=0`, and runs [axe-core](https://github.com/dequelabs/axe-core) over the canvas. It also audits the
 workshop's own chrome once, as a whole page, so its landmarks are checked too. The rules are WCAG 2.2 A/AA plus
 best practices, read from `crates/renderer/renderer-dom/axe.json`, the same file
-`plugins/telar-components/src/audit_test.rs` uses; `region` is off for the canvas, which is a fragment of a page,
+`plugins/telar-components/src/audit.test.rs` uses; `region` is off for the canvas, which is a fragment of a page,
 and on for the chrome. CI's `workshop-audit` job runs it on `apps/catalogue` and keeps the export as the
 `catalogue-site` artifact. Inside the dev shell, which provides Chrome, `CHROMEDRIVER` and `TELAR_AXE_CORE`, run:
 
@@ -380,11 +408,11 @@ includes them: `cargo telar preview -p catalogue`.
 ## The workshop
 
 `cargo telar preview` opens the workshop, provided by [`telar-workshop`](../plugins/telar-workshop), an optional
-dependency of your package that `cargo telar new` writes. Without it the command falls back to a plain page that
-lists every preview, and says how to add it.
+dependency of your package that `cargo telar new` writes. Without it the command stops before building and gives the
+line that adds it, `cargo add -p <package> telar-workshop --optional`; `--list` and `--png` need no workshop.
 
 - **Top bar.** A bold Preview label and the Settings menu, setting the environment every canvas is shown in: a row for
-  each of mode, locale, direction, control size and background that names the value it holds and opens a submenu of
+  each of mode, locale, direction and background that names the value it holds and opens a submenu of
   its choices, then high contrast and reduced motion, ticked while on (the mode is System until Light, Dark or another registered
   mode is picked: a preview's own mode where it asks for one, else the application's light or dark mode as the
   system's scheme is, following it live); a search field centred on the window, showing the project's
@@ -392,7 +420,8 @@ lists every preview, and says how to add it.
   desktop it is the window's title bar: the window opens without the system's decorations, the bar moves it and a
   double-click maximizes it, minimize, maximize and close sit at its end, and the window's borders resize it.
 - **Sidebar.** Search over the tree of group, component and preview, with a badge on a preview whose snapshot
-  failed. Below 900 px it becomes a drawer.
+  failed. Groups are listed alphabetically, and a component's previews in the order they are written. Below 900 px it
+  becomes a drawer.
 - **Canvas.** One preview, mounted alone on a surface of its own, with its size, device frame, zoom, rulers, grid,
   outline and measure.
 - **Panels,** along the bottom or the right: Controls, Actions, Interactions, Layout, Accessibility, Snapshot.
@@ -467,4 +496,4 @@ The [VS Code extension](../editors/vscode/telar/README.md) works on previews fro
   enters. It never starts a workshop.
 - A **▶ Run play** lens above each `[play]` runs `cargo telar test --preview <id> --no-snapshots` in a terminal in
   the package, so a play can be run without a golden being compared.
-- Completion and hover for the header options, `args(…)` and the names of the matrices `telar.toml` defines.
+- Completion and hover for the header options, `args(…)`, `values(…)` and the names of the matrices `telar.toml` defines.

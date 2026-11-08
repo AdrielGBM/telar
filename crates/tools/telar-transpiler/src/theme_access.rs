@@ -70,10 +70,9 @@ impl<'a> TokensRead<'a> {
                 let parens = if *called { "" } else { "()" };
                 format!("{TOKENS_FN}.{mark}{name}{parens}")
             }
-            Self::Unknown { name } => format!(
-                "compile_error!({})",
-                crate::view::rust_str(&unknown_token_message(name))
-            ),
+            Self::Unknown { name } => {
+                format!("compile_error!({:?})", unknown_token_message(name))
+            }
         }
     }
 }
@@ -87,5 +86,5 @@ fn unknown_token_message(name: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "theme_access_test.rs"]
+#[path = "theme_access.test.rs"]
 mod tests;

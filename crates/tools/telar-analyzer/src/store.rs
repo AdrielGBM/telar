@@ -89,5 +89,5 @@ impl Store {
 }
 
 #[cfg(test)]
-#[path = "store_test.rs"]
+#[path = "store.test.rs"]
 mod tests;

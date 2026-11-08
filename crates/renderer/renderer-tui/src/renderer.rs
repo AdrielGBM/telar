@@ -2,13 +2,13 @@
 
 use std::io::Write;
 
+use geometry_core::CellSize;
 use renderer_core::{
     BuiltRenderer, Color, DrawCommand, RenderBackend, RendererBuild, RendererError, RendererFactory,
 };
 
 use crate::buffer::CellBuffer;
 use crate::color::{ColorDepth, Rgb};
-use crate::metrics::CellSize;
 use crate::paint::Painter;
 
 /// What a terminal renderer is built with.
@@ -146,5 +146,5 @@ impl<W: 'static> RendererFactory<W> for TuiRendererFactory {
 }
 
 #[cfg(test)]
-#[path = "renderer_test.rs"]
+#[path = "renderer.test.rs"]
 mod tests;

@@ -32,7 +32,7 @@ mod package;
 mod svg;
 mod web_image;
 
-pub use catalog::{CatalogReport, bake_catalog, catalog_files, parse_catalog, to_source};
+pub use catalog::{CatalogReport, bake_catalog, catalog_keys, parse_catalog, to_source};
 pub use icon_dependencies::{CrateIcons, DependencyGraph, IconDependency, read_library_icons};
 pub use icons::{ICONS_RECORD_FILENAME, IconRecord, RecordedIcon, RecordedSet, read_icon_record};
 pub use ids::{IdRef, collect_id_refs};
@@ -65,5 +65,5 @@ pub fn baker_for_id(id: &str) -> Option<&'static dyn Baker> {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

@@ -1,0 +1,100 @@
+use super::*;
+
+fn package(name: &str, telar_toml: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!(
+        "telar_analyzer_project_{name}_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"probe\"\n").unwrap();
+    std::fs::write(root.join(telar_project::MANIFEST_FILENAME), telar_toml).unwrap();
+    root
+}
+
+#[test]
+fn a_telar_toml_that_does_not_load_is_reported_rather_than_read_as_the_defaults() {
+    let root = package("broken", "[telar]\nlibary = true\n");
+    let rsx = root.join("src/home.rsx");
+
+    let loaded = ProjectInfo::load(&rsx).expect("the file is inside a package");
+    let discovered = ProjectInfo::discover(&rsx);
+    let _ = std::fs::remove_dir_all(&root);
+
+    let Err(error) = loaded else {
+        panic!("a misspelled key loaded as a project");
+    };
+    let diagnostic = manifest_diagnostic(&error);
+    assert_eq!(diagnostic.severity, telar_diagnostics::Severity::Error);
+    assert_eq!(diagnostic.span.line, 1);
+    assert!(
+        diagnostic.message.contains("libary"),
+        "{}",
+        diagnostic.message
+    );
+    assert!(
+        diagnostic
+            .message
+            .contains(telar_project::MANIFEST_FILENAME),
+        "{}",
+        diagnostic.message
+    );
+    assert!(discovered.is_none());
+}
+
+#[test]
+fn a_telar_toml_that_loads_is_the_projects() {
+    let root = package("library", "[telar]\nlibrary = true\n");
+    let loaded = ProjectInfo::load(&root.join("src/home.rsx"));
+    let _ = std::fs::remove_dir_all(&root);
+
+    let project = loaded.unwrap().unwrap_or_else(|e| panic!("{e}"));
+    assert!(project.library);
+}
+
+#[test]
+fn a_name_the_build_refuses_is_reported_on_the_first_line_of_the_file() {
+    let root = package("name", "");
+    let bad = root.join("src/mi-card.rsx");
+
+    let diagnostics = module_name_diagnostics(&bad);
+
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].span.line, 1);
+    assert!(
+        diagnostics[0].message.contains("src/mi_card.rsx"),
+        "{}",
+        diagnostics[0].message
+    );
+    assert!(module_name_diagnostics(&root.join("src/card.rsx")).is_empty());
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_package_is_checked_against_its_catalog_and_its_style_classes() {
+    let root = package("semantic", "");
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Home\"\n").unwrap();
+    let source = "[view]\n    column @missing\n        text t\"nope\"\n";
+    let rsx = root.join("src/home.rsx");
+    std::fs::write(&rsx, source).unwrap();
+
+    let project = ProjectInfo::load(&rsx).unwrap().unwrap();
+    let document = telar_parser::parse(source).unwrap();
+    let messages: Vec<String> =
+        telar_diagnostics::semantic_diagnostics(&document, project.catalog_view().as_ref(), &[])
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        messages.iter().any(|m| m.contains("`@missing`")),
+        "{messages:?}"
+    );
+    assert!(
+        messages.iter().any(|m| m.contains("`nope`")),
+        "{messages:?}"
+    );
+}

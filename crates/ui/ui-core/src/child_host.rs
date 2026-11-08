@@ -11,10 +11,11 @@ use std::rc::Rc;
 
 use layout_core::{LayoutError, NodeId};
 use platform_core::Event;
-use reactive_core::{Effect, RwSignal, effect, signal};
+use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
 use ui_tree::{EventResult, RenderNode};
 
 use crate::context::{container_is_row, set_children, set_leading_margin};
+use crate::keyed_values::KeyedValues;
 use crate::layout_item::{BuildPass, Child, LayoutItem, dispose_child, make_child};
 use crate::pointer::dispatch_container_event;
 use crate::row_keys::{Occurrences, index_by_key};
@@ -26,7 +27,7 @@ fn hash_key<K: Hash>(k: &K) -> u64 {
     h.finish()
 }
 
-/// One child position in a container: a fixed widget, or a reactive fragment (built lazily once the host node exists). Produced by [`ChildSlot::stat`] / [`fragment`] / [`fragment_positional`].
+/// One child position in a container: a fixed widget, or a reactive fragment (built lazily once the host node exists). Produced by [`ChildSlot::stat`] / [`fragment`] / [`fragment_keyed`] / [`fragment_positional`].
 pub enum ChildSlot {
     Static(Box<dyn LayoutItem>),
     Dynamic(FragmentSpec),
@@ -57,27 +58,70 @@ where
     make_fragment(
         source,
         move |item: &Item, _idx: usize| hash_key(&key(item)),
+        move |item, _| build(item),
+        |_, _| {},
+        gap,
+    )
+}
+
+/// A keyed reactive region whose builder receives a live handle to its item rather than a copy, as [`ReactiveList::keyed`](crate::reactive_list::ReactiveList::keyed) does for a boxed list: an item that keeps its key keeps its widget and follows what it now carries. `gap` as in [`fragment`].
+pub fn fragment_keyed<Item, Key, S, K, B>(source: S, key: K, build: B, gap: f32) -> ChildSlot
+where
+    Key: Hash + 'static,
+    Item: Clone + 'static,
+    S: Fn() -> Vec<Item> + 'static,
+    K: Fn(&Item) -> Key + 'static,
+    B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+{
+    make_held_fragment(
+        source,
+        move |item: &Item, _idx: usize| hash_key(&key(item)),
         build,
         gap,
     )
 }
 
-/// A keyless reactive region — `for item in $items` (reconciles by position). `gap` as in [`fragment`].
+/// A keyless reactive region — `for item in $items`. It is a [`fragment_keyed`] whose key is the item's index, so the item at a position keeps its widget and its handle follows whatever now sits there, through an append, a reorder or an edit in place alike. `gap` as in [`fragment`].
 pub fn fragment_positional<Item, S, B>(source: S, build: B, gap: f32) -> ChildSlot
 where
-    Item: 'static,
+    Item: Clone + 'static,
     S: Fn() -> Vec<Item> + 'static,
-    B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 {
-    make_fragment(source, |_item: &Item, idx: usize| idx as u64, build, gap)
+    make_held_fragment(source, |_item: &Item, idx: usize| idx as u64, build, gap)
 }
 
-fn make_fragment<Item, S, B, KeyFn>(source: S, keyer: KeyFn, build: B, gap: f32) -> ChildSlot
+fn make_held_fragment<Item, S, KeyFn, B>(source: S, keyer: KeyFn, build: B, gap: f32) -> ChildSlot
+where
+    Item: Clone + 'static,
+    S: Fn() -> Vec<Item> + 'static,
+    KeyFn: Fn(&Item, usize) -> u64 + 'static,
+    B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+{
+    let values = KeyedValues::new();
+    let held = values.clone();
+    make_fragment(
+        source,
+        keyer,
+        move |item, k| build(held.hold(item, k)),
+        move |item, k| values.sync(item, k),
+        gap,
+    )
+}
+
+fn make_fragment<Item, S, B, KeyFn, Sync>(
+    source: S,
+    keyer: KeyFn,
+    build: B,
+    sync: Sync,
+    gap: f32,
+) -> ChildSlot
 where
     Item: 'static,
     S: Fn() -> Vec<Item> + 'static,
-    B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    B: Fn(Item, u64) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     KeyFn: Fn(&Item, usize) -> u64 + 'static,
+    Sync: Fn(&Item, u64) + 'static,
 {
     let install = Box::new(
         move |state: Rc<RefCell<HostState>>, index: usize| -> Effect {
@@ -85,7 +129,7 @@ where
             effect(move || {
                 let items = source();
                 serial.run(items, |items| {
-                    reconcile_slot(&state, index, items, &keyer, &build)
+                    reconcile_slot(&state, index, items, &keyer, &build, &sync)
                 });
             })
         },
@@ -136,15 +180,17 @@ fn collect_children(slots: &[SlotState]) -> Vec<Child> {
     out
 }
 
-fn reconcile_slot<Item, KeyFn, B>(
+fn reconcile_slot<Item, KeyFn, B, Sync>(
     state: &Rc<RefCell<HostState>>,
     index: usize,
     items: Vec<Item>,
     keyer: &KeyFn,
     build: &B,
+    sync: &Sync,
 ) where
     KeyFn: Fn(&Item, usize) -> u64,
-    B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    B: Fn(Item, u64) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    Sync: Fn(&Item, u64),
 {
     let (old_items, old_keys) = match &state.borrow().slots[index] {
         SlotState::Dynamic(dyn_state) => (dyn_state.items.clone(), dyn_state.keys.clone()),
@@ -161,10 +207,12 @@ fn reconcile_slot<Item, KeyFn, B>(
     let mut pass = BuildPass::start();
     for (idx, item) in items.into_iter().enumerate() {
         let k = occurrences.identify(keyer(&item, idx));
+        // Before the reuse decision, so an item keeping its key sees the value it now carries.
+        sync(&item, k);
         let child = match old.remove(&k) {
             Some(existing) => existing,
             None => pass
-                .build_child(|| build(item))
+                .build_child(|| build(item, k))
                 .expect("fragment item build"),
         };
         new_items.push(child);
@@ -282,5 +330,5 @@ impl DynHost {
 }
 
 #[cfg(test)]
-#[path = "child_host_test.rs"]
+#[path = "child_host.test.rs"]
 mod tests;

@@ -75,7 +75,7 @@ pub struct TestOptions {
     pub filter: Option<PreviewFilter>,
     pub a11y: A11yLevel,
     pub snapshots: SnapshotSetting,
-    /// The package under test, whose `previews/__snapshots__` holds the goldens.
+    /// The package under test, whose `snapshots/` holds the goldens.
     pub package_dir: Option<PathBuf>,
     /// The Cargo target directory, under which the report and the diffs go.
     pub target_dir: Option<PathBuf>,
@@ -193,5 +193,5 @@ fn glob_matches(glob: &[char], text: &[char]) -> bool {
 }
 
 #[cfg(test)]
-#[path = "options_test.rs"]
+#[path = "options.test.rs"]
 mod tests;

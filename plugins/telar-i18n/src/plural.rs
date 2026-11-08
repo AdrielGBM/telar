@@ -54,5 +54,5 @@ pub fn install() {
 }
 
 #[cfg(test)]
-#[path = "plural_test.rs"]
+#[path = "plural.test.rs"]
 mod tests;

@@ -18,5 +18,5 @@ pub fn icon_licenses() -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "licenses_test.rs"]
+#[path = "licenses.test.rs"]
 mod tests;

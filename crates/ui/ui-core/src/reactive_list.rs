@@ -1,6 +1,6 @@
 //! [`ReactiveList`]: children reconciled from a signal by key, reusing the widgets whose keys persist.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -10,10 +10,11 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use motion_core::Curve;
 use platform_core::Event;
-use reactive_core::{Effect, RwSignal, effect, on_cleanup, signal};
+use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{new_container, set_children, track_layout};
+use crate::keyed_values::KeyedValues;
 use crate::layout_item::{BuildPass, Child, LayoutItem, TrackedChildren, dispose_child};
 use crate::pointer::dispatch_container_event;
 use crate::presence::{Transition, watch_exits};
@@ -26,9 +27,6 @@ fn hash_key<K: Hash>(k: &K) -> u64 {
     k.hash(&mut h);
     h.finish()
 }
-
-/// Each key's value handle, with the token of the row that created it.
-type KeyedValues<Item> = Rc<RefCell<HashMap<u64, (u64, RwSignal<Item>)>>>;
 
 /// Shared reconciliation state, never borrowed across user code: a reconcile releases it to build rows and commits the new ones in one borrow at the end, so a build that panics leaves the last committed list standing.
 struct ListState {
@@ -50,7 +48,7 @@ struct ListExits {
     started: RwSignal<u64>,
 }
 
-/// A reactive list: `for item in $items key id` (or, keyless, `for item in $items`) in `.rsx`. Re-runs its source reactively and reconciles the item widgets — reused keys/positions keep their node/widget, new ones are built, gone ones are disposed, and the layout children are reordered — instead of rebuilding the whole block on every change. `new`/`with_gap` reconcile by key (identity-stable); `positional`/ `positional_with_gap` reconcile by index (no `key` clause needed, cheap append/truncate).
+/// A reactive list: `for item in $items key id` (or, keyless, `for item in $items`) in `.rsx`. Re-runs its source reactively and reconciles the item widgets — a row whose key persists keeps its node and widget, new keys are built, gone ones are disposed, and the layout children are reordered — instead of rebuilding the whole block on every change. [`new`](Self::new) and [`with_style`](Self::with_style) key each row on its item and hand the builder an owned copy; [`keyed`](Self::keyed) and [`positional`](Self::positional) hand it a live handle on the item, keyed on an identity or on the row's index.
 pub struct ReactiveList {
     node: NodeId,
     rect: RwSignal<Rect>,
@@ -161,21 +159,6 @@ impl ReactiveList {
         )
     }
 
-    /// A keyless reactive list: `for item in $items` with no `key` clause. Reconciles by POSITION — the item at index `i` always reuses the node previously at index `i`, so an append/truncate reuses every surviving node cheaply, but a reorder rebuilds rather than moving nodes (no per-item identity without a key).
-    pub fn positional<Item, S, B>(source: S, build: B, gap: f32) -> Result<Self, LayoutError>
-    where
-        Item: 'static,
-        S: Fn() -> Vec<Item> + 'static,
-        B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
-    {
-        Self::build(
-            LayoutStyle::new().flex_column().gap(gap),
-            source,
-            build,
-            |_item: &Item, idx: usize| idx as u64,
-        )
-    }
-
     /// A keyed list whose builder receives a **live handle** to its item rather than a copy of it.
     ///
     /// The difference decides what a row is allowed to be. With an owned snapshot, a key that persists reuses the widget and the new value is discarded — so a row that must follow its data has to be keyed on that data, which rebuilds it and throws away whatever local state it held: a caret, a drag in progress, a scroll position. Keying on identity and reading the value through a handle separates the two questions — the key decides whether this is still the same row, the handle carries what that row now says.
@@ -187,47 +170,55 @@ impl ReactiveList {
         Item: Clone + 'static,
         S: Fn() -> Vec<Item> + 'static,
         K: Fn(&Item) -> Key + 'static,
-        B: Fn(reactive_core::ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError>
-            + 'static,
+        B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        // One signal per row, held outside `ListState` so that stays non-generic. Each is created in its row's build, so it belongs to the row's owner and is freed with the row, and `sync` runs before the reuse decision so a persisting row's handle already holds the new value. The token tells a row's cleanup whether the entry is still its own.
-        let values: KeyedValues<Item> = Rc::new(RefCell::new(HashMap::new()));
-        let next_token = Rc::new(Cell::new(0u64));
-
-        let sync_values = Rc::clone(&values);
-        let sync = move |item: &Item, k: u64| {
-            let existing = sync_values.borrow().get(&k).map(|(_, value)| *value);
-            if let Some(existing) = existing {
-                existing.set(item.clone());
-            }
-        };
-
-        let build_values = Rc::clone(&values);
-        Self::build_with_sync(
+        Self::build_held(
             LayoutStyle::new().flex_column(),
             source,
-            move |item: Item, k: u64| {
-                let token = next_token.replace(next_token.get().wrapping_add(1));
-                let held = signal(item);
-                build_values.borrow_mut().insert(k, (token, held));
-                let values = Rc::downgrade(&build_values);
-                on_cleanup(move || {
-                    let Some(values) = values.upgrade() else {
-                        return;
-                    };
-                    let mut values = values.borrow_mut();
-                    if values.get(&k).is_some_and(|(owner, _)| *owner == token) {
-                        values.remove(&k);
-                    }
-                });
-                build(held.read_only())
-            },
             move |item: &Item, _idx: usize| hash_key(&key(item)),
-            sync,
+            build,
         )
     }
 
-    /// Shared constructor: `keyer` erases both reconciliation modes (hashed key, or plain index) to a `u64` so `reconcile` doesn't need to know which mode produced it.
+    /// A keyless reactive list: `for item in $items` with no `key` clause. It is a [`keyed`](Self::keyed) list whose key is the row's index, so the row at a position stays and its handle follows whatever item now sits there: an append or truncate reuses every surviving row, and a reorder or an edit in place reaches each row through its handle.
+    pub fn positional<Item, S, B>(source: S, build: B, gap: f32) -> Result<Self, LayoutError>
+    where
+        Item: Clone + 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    {
+        Self::build_held(
+            LayoutStyle::new().flex_column().gap(gap),
+            source,
+            |_item: &Item, idx: usize| idx as u64,
+            build,
+        )
+    }
+
+    fn build_held<Item, S, KeyFn, B>(
+        container_style: LayoutStyle,
+        source: S,
+        keyer: KeyFn,
+        build: B,
+    ) -> Result<Self, LayoutError>
+    where
+        Item: Clone + 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        KeyFn: Fn(&Item, usize) -> u64 + 'static,
+        B: Fn(ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    {
+        // Held outside `ListState` so that stays non-generic.
+        let values = KeyedValues::new();
+        let held = values.clone();
+        Self::build_with_sync(
+            container_style,
+            source,
+            move |item: Item, k: u64| build(held.hold(item, k)),
+            keyer,
+            move |item: &Item, k: u64| values.sync(item, k),
+        )
+    }
+
     fn build<Item, S, B, KeyFn>(
         container_style: LayoutStyle,
         source: S,
@@ -249,7 +240,7 @@ impl ReactiveList {
         )
     }
 
-    fn build_with_sync<Item, S, B, KeyFn, Sync>(
+    pub(crate) fn build_with_sync<Item, S, B, KeyFn, Sync>(
         container_style: LayoutStyle,
         source: S,
         build: B,
@@ -522,5 +513,5 @@ impl Component for ReactiveList {
 }
 
 #[cfg(test)]
-#[path = "reactive_list_test.rs"]
+#[path = "reactive_list.test.rs"]
 mod tests;

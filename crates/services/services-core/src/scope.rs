@@ -57,5 +57,5 @@ pub fn context<T: Clone + 'static>() -> Option<T> {
 }
 
 #[cfg(test)]
-#[path = "scope_test.rs"]
+#[path = "scope.test.rs"]
 mod tests;

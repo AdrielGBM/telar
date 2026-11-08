@@ -6,9 +6,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use i18n_core::MessageModel;
+use renderer_dom::escape_html;
 use telar_project::{OgImage, PageLocation, ThemeColor, WebSection, is_absolute_url};
 
-use super::page::{HeadTag, escape};
+use super::page::HeadTag;
 
 /// The file the sitemap is written to, at the output root.
 pub(crate) const SITEMAP_FILE: &str = "sitemap.xml";
@@ -221,13 +222,13 @@ impl Site {
         );
         for page in &pages.pages {
             let url = self.url_of(page)?;
-            xml.push_str(&format!("  <url>\n    <loc>{}</loc>\n", escape(&url)));
+            xml.push_str(&format!("  <url>\n    <loc>{}</loc>\n", escape_html(&url)));
             if page.locale.is_some() {
                 for (hreflang, href) in self.alternate_hrefs(page, pages) {
                     xml.push_str(&format!(
                         "    <xhtml:link rel=\"alternate\" hreflang=\"{}\" href=\"{}\"/>\n",
-                        escape(&hreflang),
-                        escape(&href)
+                        escape_html(&hreflang),
+                        escape_html(&href)
                     ));
                 }
             }
@@ -328,5 +329,5 @@ fn encode_segment(segment: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "site_test.rs"]
+#[path = "site.test.rs"]
 mod tests;

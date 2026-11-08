@@ -3,23 +3,23 @@
 //! A variant reads its inputs from the canvas's `PreviewCtx`, named `__preview` in its build fn:
 //!
 //! - each `args(name:default)` becomes a two-way signal the body reads as `$name`, through `::telar::__preview_signal!`;
+//! - each `values(name:default)` becomes the arg's value the body reads as `$name`, through `::telar::__preview_arg!`, so a change of its control builds the preview again;
 //! - each literal attribute of the root component call becomes a value its control can change, through `::telar::__preview_arg!`, unless the header says `args:none`;
-//! - the root's builder logs every callback it holds in the canvas's action log.
+//! - every call to the component under preview logs the callbacks it holds in the canvas's action log, as a Rust preview's calls do.
 //!
 //! A `[play]` zone is part of its preview's source and is also compiled, into a `{component}_play_{i}` fn the entry's `.play(…)` runs against the mounted preview.
 
 use std::fmt::Write;
 
 use telar_parser::{
-    ArgDecl, Attr, Element, Preview, PreviewsMeta, RsxDocument, StyleClass, StyleProp, Value,
-    ViewNode,
+    ArgDecl, ArgKind, Attr, Element, Preview, PreviewsMeta, RsxDocument, StyleClass, StyleProp,
+    Value, ViewNode,
 };
 use telar_project::naming::{
     is_ident, preview_entries_const_name, preview_file_expr, preview_slug, to_pascal_case,
 };
 use telar_project::{
-    AssetContext, MATRIX_GLOBAL_AXES, MatrixAxis, MatrixControlSize, MatrixDirection, Viewport,
-    is_preview_name,
+    AssetContext, MATRIX_GLOBAL_AXES, MatrixAxis, MatrixDirection, Viewport, is_preview_name,
 };
 
 use crate::codegen::{Code, push_theme_binding, scheme_binding};
@@ -29,7 +29,6 @@ use crate::style::{format_f32, hex_to_color_expr};
 use crate::theme_access::ThemeAccess;
 use crate::view::{
     ViewGen, expr_marker, is_component_tag, on_source_line, props_type, resolve_source_map,
-    rust_str,
 };
 
 /// What the previews of one `.rsx` are emitted against.
@@ -37,7 +36,7 @@ pub(crate) struct Previews<'a> {
     pub document: &'a RsxDocument,
     /// The snake-case name of the component the previews belong to, which names their build fns, their ids and their table.
     pub component: &'a str,
-    /// The props type of that component, which describes it to the docs and refines its args' controls. `None` to read it from the root of each preview, as a previews file does.
+    /// The props type of that component, which describes it to the docs and refines its args' controls. `None` to read it from the root of each preview, as a preview file does.
     pub props_type: Option<&'a str>,
     /// The `.rsx` text, which each preview's source is cut from.
     pub source: &'a str,
@@ -47,7 +46,12 @@ pub(crate) struct Previews<'a> {
     /// The `.rsx` path relative to its package root, which each entry records as where it is written.
     pub rsx_path: Option<&'a str>,
     pub classes: &'a [StyleClass],
+    /// What the file's items declare, which a build fn sees as a sibling of them and a bare word naming one means.
+    pub bindings: &'a [String],
 }
+
+/// The local a build fn binds the canvas's action log to, which the body reads as `actions` to log a call no root prop holds.
+const ACTIONS: &str = "actions";
 
 /// The opening of the block every preview item is emitted in; [`CLOSE`] ends it.
 pub(crate) const OPEN: &str = "::telar::__previews! {\n";
@@ -87,13 +91,52 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
         }
         let options = own.over(&meta);
         errors.extend(options.errors(&header));
+        if preview.args.iter().any(|arg| arg.name == ACTIONS) {
+            errors.push(format!(
+                "{header} declares an arg named `{ACTIONS}`, which is the preview's action log, read as `{ACTIONS}`: give the arg another name"
+            ));
+        }
 
         let explicit: Vec<String> = preview.args.iter().map(|arg| arg.name.clone()).collect();
+        let plain: Vec<String> = preview
+            .args
+            .iter()
+            .filter(|arg| arg.kind == ArgKind::Value)
+            .map(|arg| arg.name.clone())
+            .chain([ACTIONS.to_string()])
+            .collect();
+        errors.extend(signal_reads_of_plain(
+            &header,
+            excerpt(previews.source, &doc.previews, index),
+            &plain,
+        ));
+        let signals: Vec<String> = preview
+            .args
+            .iter()
+            .filter(|arg| arg.kind == ArgKind::Signal)
+            .map(|arg| arg.name.clone())
+            .collect();
         let root = root_component(&preview.body);
         let mut view = ViewGen::new(previews.classes, previews.assets)
             .with_theme_access(previews.theme)
-            .with_locals(explicit.clone())
-            .with_signals(explicit.clone());
+            .with_previewed(previews.component)
+            .with_locals(
+                explicit
+                    .iter()
+                    .cloned()
+                    .chain([ACTIONS.to_string()])
+                    .collect(),
+            )
+            .with_signals(signals)
+            .with_file_bindings(
+                previews
+                    .bindings
+                    .iter()
+                    .cloned()
+                    .chain(crate::view::view_let_names(&preview.body))
+                    .chain(plain.iter().cloned())
+                    .collect(),
+            );
         let implicit: Vec<&Attr> = match (root, options.implicit_args) {
             (Some(root), true) => view.implicit_args(root),
             _ => Vec::new(),
@@ -225,20 +268,22 @@ fn emit_build_fn(
     if let Some(fixture) = fixture {
         code.push(&format!("    {fixture}();\n"), None);
     }
-    let signals: String = preview
-        .args
-        .iter()
-        .map(|arg| {
+    let signals: String = std::iter::once(format!("    let {ACTIONS} = __preview.actions();\n"))
+        .chain(preview.args.iter().map(|arg| {
             on_source_line(
                 preview.line,
                 &format!(
-                    "    let {} = ::telar::__preview_signal!(__preview, {}, {});",
+                    "    let {} = ::telar::{}!(__preview, {:?}, {});",
                     arg.name,
-                    rust_str(&arg.name),
+                    match arg.kind {
+                        ArgKind::Signal => "__preview_signal",
+                        ArgKind::Value => "__preview_arg",
+                    },
+                    arg.name,
                     arg_default_expr(arg)
                 ),
             ) + "\n"
-        })
+        }))
         .collect();
     let prefix = code.out.len();
     let resolved = resolve_source_map(&format!("{signals}{body}"));
@@ -365,26 +410,37 @@ impl Entry<'_> {
         }
     }
 
-    /// The args the preview declares ahead of being built, so each has its control before the first build: the explicit ones live, the implicit ones read at build. A default is declared only where its text form is certain from the literal.
+    /// The args the preview declares ahead of being built, so each has its control before the first build: the `args(…)` ones live, the `values(…)` and implicit ones read at build. A default is declared only where its text form is certain from the literal.
     fn arg_specs(&self) -> Vec<String> {
         let explicit = self.preview.args.iter().map(|arg| {
-            let spec = format!(
-                "::telar::preview::ArgSpec::new({}).binding(::telar::preview::ArgBinding::Live)",
-                rust_str(&arg.name)
-            );
+            let spec = format!("::telar::preview::ArgSpec::new({:?})", arg.name);
+            let spec = match arg.kind {
+                ArgKind::Signal => {
+                    format!("{spec}.binding(::telar::preview::ArgBinding::Live)")
+                }
+                ArgKind::Value => spec,
+            };
             with_default(spec, arg_value_text(&arg.default, Numbers::AsWritten))
         });
         let implicit = self.implicit.iter().map(|attr| {
-            let spec = format!("::telar::preview::ArgSpec::new({})", rust_str(&attr.key));
-            with_default(spec, arg_value_text(&attr.value, Numbers::AsFloat))
+            let spec = format!("::telar::preview::ArgSpec::new({:?})", attr.key);
+            let default =
+                arg_value_text(&attr.value, Numbers::AsFloat).or_else(|| word_text(&attr.value));
+            with_default(spec, default)
         });
         explicit.chain(implicit).collect()
     }
 }
 
+/// The text form of an implicit arg written as a word of the vocabulary, which is the word itself.
+fn word_text(value: &Value) -> Option<String> {
+    let text = value.text().trim();
+    (matches!(value, Value::Expr(_)) && is_ident(text)).then(|| text.to_string())
+}
+
 fn with_default(spec: String, default: Option<String>) -> String {
     match default {
-        Some(text) => format!("{spec}.default({})", rust_str(&text)),
+        Some(text) => format!("{spec}.default({text:?})"),
         None => spec,
     }
 }
@@ -412,11 +468,11 @@ fn line_offset(source: &str, line: usize) -> usize {
 /// The Rust a declared arg starts from: a quoted default is a string, a hex colour a `Color`, and anything else the expression as written, mapped back to where it was written.
 fn arg_default_expr(arg: &ArgDecl) -> String {
     match &arg.default {
-        Value::Quoted(text) => rust_str(text),
+        Value::Quoted(text) => format!("{text:?}"),
         Value::Flag => "true".to_string(),
         Value::Expr(text) | Value::Directive(text) => {
             let text = text.trim();
-            if text.starts_with('#') && telar_parser::parse_hex(text).is_some() {
+            if text.starts_with('#') && geometry_core::parse_hex(text).is_some() {
                 return hex_to_color_expr(text);
             }
             format!("{}{text}", expr_marker(arg.default_start, text.len()))
@@ -451,7 +507,7 @@ fn literal_expr(text: &str) -> Option<Literal> {
         return Some(Literal::Number);
     }
     if text.starts_with('#') {
-        return telar_parser::parse_hex(text).map(|_| Literal::Color);
+        return geometry_core::parse_hex(text).map(|_| Literal::Color);
     }
     let mut segments = text.split("::");
     let is_path = segments.clone().count() > 1 && segments.all(is_ident);
@@ -476,7 +532,7 @@ fn arg_value_text(value: &Value, numbers: Numbers) -> Option<String> {
     match literal_expr(text)? {
         Literal::Bool => Some(text.to_string()),
         Literal::Color => {
-            let [r, g, b, a] = telar_parser::parse_hex(text)?;
+            let [r, g, b, a] = geometry_core::parse_hex(text)?;
             Some(match a {
                 255 => format!("#{r:02x}{g:02x}{b:02x}"),
                 _ => format!("#{r:02x}{g:02x}{b:02x}{a:02x}"),
@@ -545,11 +601,32 @@ fn arg_conflicts(header: &str, args: &[ArgDecl], implicit: &[&Attr]) -> Vec<Stri
         .filter(|arg| implicit.iter().any(|attr| attr.key == arg.name))
         .map(|arg| {
             format!(
-                "{header} declares `{name}` in `args(…)` and also sets it as a literal on its root: bind the root to it with `{name}:${name}`, or leave it out of `args(…)`",
+                "{header} declares `{name}` in its header and also sets it as a literal on its root: bind the root to it with `{name}:${name}`, or leave it out of the header",
                 name = arg.name
             )
         })
         .collect()
+}
+
+/// Each `$name` the preview, as `written`, for a name that holds a plain value, a `values(…)` arg or the action log: `$` reads a signal, so it would ask the value for a read it has none of.
+fn signal_reads_of_plain(header: &str, written: &str, plain: &[String]) -> Vec<String> {
+    plain
+        .iter()
+        .filter(|name| reads_as_signal(written, name))
+        .map(|name| {
+            format!(
+                "{header} reads `${name}`, but `{name}` holds a plain value rather than a signal: write it bare, `{name}`"
+            )
+        })
+        .collect()
+}
+
+fn reads_as_signal(body: &str, name: &str) -> bool {
+    body.match_indices('$').any(|(at, _)| {
+        let rest = &body[at + 1..];
+        rest.starts_with(name)
+            && !rest[name.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+    })
 }
 
 /// A matrix's arg axis that names no arg of the preview, so its cells would differ in nothing.
@@ -561,7 +638,7 @@ fn unknown_arg_axes(
 ) -> Vec<String> {
     axes.iter()
         .filter_map(|axis| match axis {
-            MatrixAxis::Arg { name, .. } => Some(name),
+            MatrixAxis::Arg { name, .. } | MatrixAxis::ArgValues { name } => Some(name),
             _ => None,
         })
         .filter(|name| {
@@ -569,7 +646,7 @@ fn unknown_arg_axes(
         })
         .map(|name| {
             format!(
-                "{header} `matrix:` varies `{name}`, which is neither one of {} nor an arg of this preview: declare it in `args(…)`, or write it as a literal attribute of the root component",
+                "{header} `matrix:` varies `{name}`, which is neither one of {} nor an arg of this preview: declare it in `args(…)` or `values(…)`, or write it as a literal attribute of the root component",
                 MATRIX_GLOBAL_AXES.join(", ")
             )
         })
@@ -686,7 +763,7 @@ impl Options {
                 self.viewport = Some((size.width as f32, size.height as f32));
             }
             "bg" => {
-                if telar_parser::parse_hex(text).is_none() || !text.starts_with('#') {
+                if geometry_core::parse_hex(text).is_none() || !text.starts_with('#') {
                     return Err(format!(
                         "`bg:{text}` is not a colour: write it in hex, like bg:#202020"
                     ));
@@ -885,7 +962,7 @@ fn list(value: &str) -> Vec<String> {
 }
 
 impl Matrix {
-    /// `themes`, a matrix named in `[telar.previews.matrices]` or built in, or `(mode:[light dark] size:[12 16])`, its axes written out, the first outermost.
+    /// `themes`, a matrix named in `[telar.previews.matrices]` or built in, or `(mode:[light dark] size:[12 16])`, its axes written out, the first outermost; an axis written alone, `(mode variant)`, takes every value it has.
     fn parse(value: &str) -> Result<Self, String> {
         let value = value.trim();
         let Some(inner) = value
@@ -902,15 +979,14 @@ impl Matrix {
         };
         let mut axes: Vec<MatrixAxis> = Vec::new();
         for token in split_top_level(inner, char::is_whitespace, false) {
-            let Some((name, values)) = token.split_once(':') else {
-                return Err(format!(
-                    "`matrix:` axis `{token}` needs its values, like `{token}:[a b]`"
-                ));
+            let parsed = match token.split_once(':') {
+                Some((name, values)) => axis(name, &items(values))?,
+                None => every_value_axis(token)?,
             };
-            if axes.iter().any(|axis| axis.name() == name) {
-                return Err(format!("`matrix:` varies `{name}` twice"));
+            if axes.iter().any(|held| held.name() == parsed.name()) {
+                return Err(format!("`matrix:` varies `{}` twice", parsed.name()));
             }
-            axes.push(axis(name, &items(values))?);
+            axes.push(parsed);
         }
         match axes.is_empty() {
             true => Err(
@@ -979,21 +1055,16 @@ fn axis(name: &str, written: &[&str]) -> Result<MatrixAxis, String> {
             |value| Viewport::parse(value).is_some() || is_preview_name(value),
             "a size like 390x844 nor a name in `[telar.previews.viewports]`",
         )?),
-        "control_size" => MatrixAxis::ControlSize(
-            values
-                .iter()
-                .map(|value| {
-                    MatrixControlSize::parse(value).ok_or_else(|| {
-                        format!("{at}: `{value}` is not one of mini, small, regular, large")
-                    })
-                })
-                .collect::<Result<_, _>>()?,
-        ),
+        "control_size" => {
+            return Err(format!(
+                "{at} no longer exists: a component takes its own `size` arg rather than inheriting one, so vary that, as `size:[small regular large]`"
+            ));
+        }
         _ if is_ident(name) => MatrixAxis::Arg {
             name: name.to_string(),
             values: each(
                 is_arg_value_text,
-                "an arg value: a bool, a number, a hex colour, a variant name or text in quotes",
+                "an arg value: a bool, a number, a hex colour, a word such as `small`, a variant name or text in quotes",
             )?,
         },
         _ => {
@@ -1005,12 +1076,31 @@ fn axis(name: &str, written: &[&str]) -> Result<MatrixAxis, String> {
     })
 }
 
-/// Whether `text` is an arg value as a matrix writes one: `true`, `none`, `12`, `1.5`, `#ff8800`, `Primary` or `"Save"`.
+/// An axis written without values, which takes every value it has: the registered modes, the catalog's locales, both directions, the package's viewports, or every value an arg's control picks among.
+fn every_value_axis(name: &str) -> Result<MatrixAxis, String> {
+    Ok(match name {
+        "mode" => MatrixAxis::RegisteredModes,
+        "locale" => MatrixAxis::CatalogLocales,
+        "dir" => MatrixAxis::Dir(vec![MatrixDirection::Ltr, MatrixDirection::Rtl]),
+        "viewport" => MatrixAxis::ProjectViewports,
+        _ if is_ident(name) => MatrixAxis::ArgValues {
+            name: name.to_string(),
+        },
+        _ => {
+            return Err(format!(
+                "`matrix:` axis `{name}` is neither one of {} nor an arg name",
+                MATRIX_GLOBAL_AXES.join(", ")
+            ));
+        }
+    })
+}
+
+/// Whether `text` is an arg value as a matrix writes one: `true`, `none`, `12`, `1.5`, `#ff8800`, a word such as `small`, a variant name such as `Primary`, or `"Save"`.
 fn is_arg_value_text(text: &str) -> bool {
     match text {
         "true" | "false" | "none" => true,
         _ if text.starts_with('"') => text.len() > 1 && text.ends_with('"'),
-        _ if text.starts_with('#') => telar_parser::parse_hex(text).is_some(),
+        _ if text.starts_with('#') => geometry_core::parse_hex(text).is_some(),
         _ if text.starts_with(|c: char| c.is_ascii_digit() || c == '-' || c == '+') => {
             is_arg_number(text)
         }
@@ -1022,6 +1112,10 @@ fn axis_expr(axis: &MatrixAxis) -> String {
     let path = "::telar::preview::Axis";
     match axis {
         MatrixAxis::Mode(modes) => format!("{path}::Mode(&{modes:?})"),
+        MatrixAxis::RegisteredModes => format!("{path}::RegisteredModes"),
+        MatrixAxis::CatalogLocales => format!("{path}::CatalogLocales"),
+        MatrixAxis::ProjectViewports => format!("{path}::ProjectViewports"),
+        MatrixAxis::ArgValues { name } => format!("{path}::ArgValues({name:?})"),
         MatrixAxis::Locale(locales) => format!("{path}::Locale(&{locales:?})"),
         MatrixAxis::Dir(directions) => {
             let directions: Vec<&str> = directions
@@ -1034,22 +1128,10 @@ fn axis_expr(axis: &MatrixAxis) -> String {
             format!("{path}::Dir(&[{}])", directions.join(", "))
         }
         MatrixAxis::Viewport(viewports) => format!("{path}::Viewport(&{viewports:?})"),
-        MatrixAxis::ControlSize(sizes) => {
-            let sizes: Vec<&str> = sizes
-                .iter()
-                .map(|size| match size {
-                    MatrixControlSize::Mini => "::telar::ControlSize::Mini",
-                    MatrixControlSize::Small => "::telar::ControlSize::Small",
-                    MatrixControlSize::Regular => "::telar::ControlSize::Regular",
-                    MatrixControlSize::Large => "::telar::ControlSize::Large",
-                })
-                .collect();
-            format!("{path}::ControlSize(&[{}])", sizes.join(", "))
-        }
         MatrixAxis::Arg { name, values } => format!("{path}::Arg({name:?}, &{values:?})"),
     }
 }
 
 #[cfg(test)]
-#[path = "preview_test.rs"]
+#[path = "preview.test.rs"]
 mod tests;

@@ -5,13 +5,12 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Children, Container, LayoutError, LayoutItem, LayoutStyle, Memo, PointerButton, Reactive,
-    ReactiveList, Rect, RectStyle, RwSignal, Slots, StyledContainer, box_item, pointer_position,
-    signal,
+    Children, Container, LayoutError, LayoutItem, Memo, PointerButton, Reactive, RectStyle,
+    RwSignal, StyledContainer, box_item, pointer_position, signal,
 };
 use telar_components::{
-    ContextHandler, ContextMenuProps, ItemProps, SeparatorProps, TreeContext, TreeNode,
-    context_menu, item, separator,
+    ContextHandler, ItemProps, MenuPlace, SeparatorProps, TreeContext, TreeNode, item, menu_layer,
+    separator,
 };
 
 use crate::strings::{self, COLLAPSE, COLLAPSE_ALL, EXPAND, EXPAND_ALL};
@@ -21,8 +20,7 @@ use crate::workbench::workbench_fill;
 #[derive(Clone)]
 struct Asked {
     node: Option<TreeNode>,
-    at: (f32, f32),
-    around: Option<Rect>,
+    place: MenuPlace,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,9 +75,8 @@ impl TreeMenu {
     pub(super) fn on_context(self) -> ContextHandler {
         Rc::new(move |context: TreeContext| {
             self.asked.set(Some(Asked {
+                place: context.place(),
                 node: Some(context.node),
-                at: context.at,
-                around: context.around,
             }))
         })
     }
@@ -114,8 +111,7 @@ impl TreeMenu {
                 if button == PointerButton::Secondary {
                     asked.set(Some(Asked {
                         node: None,
-                        at: pointer_position().unwrap_or_default(),
-                        around: None,
+                        place: MenuPlace::At(pointer_position().unwrap_or_default()),
                     }));
                 }
             });
@@ -126,31 +122,16 @@ impl TreeMenu {
     }
 
     fn layer(self) -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let asked = self.asked;
-        let layer = ReactiveList::new(
-            move || vec![asked.with(Option::is_some)],
-            |shown: &bool| *shown,
-            move |shown| {
-                let Some(asked_for) = asked.peek().filter(|_| shown) else {
-                    return Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?));
-                };
-                let props = ContextMenuProps::props()
-                    .on_close(Rc::new(move || asked.set(None)))
-                    .at(asked_for.at);
-                let props = match asked_for.around {
-                    Some(around) => props.around(around),
-                    None => props,
-                };
-                context_menu(props.build(), self.rows(asked_for.node))
-            },
-            0.0,
-        )?;
-        Ok(box_item(layer))
+        menu_layer(
+            self.asked,
+            |asked| asked.place,
+            move |asked| self.rows(asked.node.clone()),
+        )
     }
 
     fn rows(self, node: Option<TreeNode>) -> Children {
         Children::new(move || {
-            let mut slots = Slots::new();
+            let mut rows = Vec::new();
             for command in commands(node.as_ref()) {
                 let row = match command {
                     Some(command) => {
@@ -160,14 +141,13 @@ impl TreeMenu {
                                 .label(Reactive::of(move || strings::text(command.label())))
                                 .on_press(Rc::new(move || self.run(command, node.as_ref())))
                                 .build(),
-                            Children::default(),
                         )?
                     }
-                    None => separator(SeparatorProps::props().build(), Children::default())?,
+                    None => separator(SeparatorProps::props().build())?,
                 };
-                slots.push(None, row);
+                rows.push(row);
             }
-            Ok(slots)
+            Ok(rows)
         })
     }
 }
@@ -178,5 +158,5 @@ fn within(branch: &TreeNode) -> Vec<Arc<str>> {
 }
 
 #[cfg(test)]
-#[path = "tree_menu_test.rs"]
+#[path = "tree_menu.test.rs"]
 mod tests;

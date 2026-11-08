@@ -30,4 +30,4 @@ telar = { workspace = true, features = ["testing"] }
 
 [[test]]
 name = "previews"
-path = "src/previews_test.rs"
+path = "src/previews.test.rs"

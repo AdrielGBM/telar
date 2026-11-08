@@ -201,5 +201,5 @@ impl fmt::Display for UriError {
 impl std::error::Error for UriError {}
 
 #[cfg(test)]
-#[path = "uri_test.rs"]
+#[path = "uri.test.rs"]
 mod tests;

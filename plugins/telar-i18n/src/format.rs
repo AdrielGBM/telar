@@ -38,5 +38,5 @@ pub fn format_date(date: Date<Iso>, length: Length) -> String {
 }
 
 #[cfg(test)]
-#[path = "format_test.rs"]
+#[path = "format.test.rs"]
 mod tests;

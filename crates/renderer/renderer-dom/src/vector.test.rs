@@ -1,0 +1,492 @@
+use super::*;
+use renderer_core::{Color, FillRule, ImageSlice, Insets, LineCap, Shadow, ShapeStyle};
+
+fn drawing() -> Drawing {
+    Drawing::new(7)
+}
+
+#[test]
+fn an_empty_drawing_has_nothing_to_show() {
+    assert_eq!(drawing().finish(), "");
+}
+
+#[test]
+fn a_path_becomes_its_verbs() {
+    let data = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(10.0, 0.0))
+        .quad_to(Point::new(15.0, 5.0), Point::new(10.0, 10.0))
+        .cubic_to(
+            Point::new(8.0, 12.0),
+            Point::new(2.0, 12.0),
+            Point::new(0.0, 10.0),
+        )
+        .close();
+    let mut d = drawing();
+    d.path(&data, &PathStyle::default().with_fill(Color::BLACK));
+    let out = d.finish();
+    assert!(
+        out.contains("d=\"M0 0L10 0Q15 5 10 10C8 12 2 12 0 10Z\""),
+        "{out}"
+    );
+    assert!(out.contains("fill=\"#000000\""), "{out}");
+}
+
+#[test]
+fn a_path_with_no_fill_is_not_filled_black() {
+    let data = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(10.0, 10.0));
+    let mut d = drawing();
+    d.path(
+        &data,
+        &PathStyle::default().with_stroke(Stroke::new(Color::BLACK, 2.0).with_cap(LineCap::Round)),
+    );
+    let out = d.finish();
+    assert!(out.contains("fill=\"none\""), "{out}");
+    assert!(out.contains("stroke-width=\"2\""), "{out}");
+    assert!(out.contains("stroke-linecap=\"round\""), "{out}");
+}
+
+#[test]
+fn a_dashed_stroke_names_its_pattern_and_offset() {
+    let mut d = drawing();
+    d.path(
+        &PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(10.0, 0.0)),
+        &PathStyle::default()
+            .with_stroke(Stroke::new(Color::BLACK, 1.0).with_dash(&[1.0, 4.0], 2.0)),
+    );
+    d.line(
+        Point::new(0.0, 0.0),
+        Point::new(0.0, 10.0),
+        &Stroke::new(Color::BLACK, 1.0).with_dash(&[3.0], 0.0),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("stroke-dasharray=\"1 4\" stroke-dashoffset=\"2\""),
+        "{out}"
+    );
+    assert!(out.contains("stroke-dasharray=\"3 3\"/>"), "{out}");
+}
+
+#[test]
+fn a_solid_stroke_names_no_pattern() {
+    let mut d = drawing();
+    d.line(
+        Point::new(0.0, 0.0),
+        Point::new(0.0, 10.0),
+        &Stroke::new(Color::BLACK, 1.0),
+    );
+    assert!(!d.finish().contains("stroke-dash"));
+}
+
+#[test]
+fn an_even_odd_fill_says_so() {
+    let data = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(4.0, 0.0))
+        .close();
+    let mut d = drawing();
+    d.path(
+        &data,
+        &PathStyle::default()
+            .with_fill(Color::WHITE)
+            .with_fill_rule(FillRule::EvenOdd),
+    );
+    let svg = d.finish();
+    assert!(svg.contains("fill-rule=\"evenodd\""), "{svg}");
+}
+
+#[test]
+fn a_gradient_becomes_a_definition_the_shape_points_at() {
+    let mut d = drawing();
+    d.path(
+        &PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(4.0, 4.0)),
+        &PathStyle::default().with_fill(Paint::Gradient(Gradient::linear(
+            Point::new(0.0, 0.0),
+            Point::new(0.0, 20.0),
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        ))),
+    );
+    let out = d.finish();
+    assert!(
+        out.starts_with("<defs><linearGradient id=\"t7-1\""),
+        "{out}"
+    );
+    assert!(out.contains("gradientUnits=\"userSpaceOnUse\""), "{out}");
+    assert!(out.contains("y2=\"20\""), "{out}");
+    assert!(out.contains("fill=\"url(#t7-1)\""), "{out}");
+}
+
+#[test]
+fn a_uniform_radius_is_a_rect_and_a_mixed_one_is_a_path() {
+    let mut d = drawing();
+    d.rect(
+        Rect::new(0.0, 0.0, 20.0, 10.0),
+        &RectStyle::default()
+            .with_fill(Color::BLACK)
+            .with_radius(BorderRadius::all(3.0)),
+    );
+    assert!(
+        d.finish()
+            .contains("<rect x=\"0\" y=\"0\" width=\"20\" height=\"10\" rx=\"3\""),
+        "a uniform radius stays a rect"
+    );
+
+    let mut d = drawing();
+    d.rect(
+        Rect::new(0.0, 0.0, 20.0, 10.0),
+        &RectStyle::default()
+            .with_fill(Color::BLACK)
+            .with_radius(BorderRadius {
+                top_left: 4.0,
+                top_right: 0.0,
+                bottom_right: 4.0,
+                bottom_left: 0.0,
+            }),
+    );
+    let out = d.finish();
+    assert!(out.starts_with("<path d=\"M4 0"), "{out}");
+    assert!(out.contains("A4 4 0 0 1"), "{out}");
+}
+
+#[test]
+fn a_border_is_drawn_inside_the_box_a_stroke_would_straddle() {
+    let mut d = drawing();
+    d.rect(
+        Rect::new(0.0, 0.0, 20.0, 20.0),
+        &RectStyle::default().with_border(renderer_core::Border::uniform(Color::BLACK, 4.0)),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("x=\"2\" y=\"2\" width=\"16\" height=\"16\""),
+        "{out}"
+    );
+    assert!(out.contains("stroke-width=\"4\""), "{out}");
+}
+
+#[test]
+fn a_shadow_becomes_a_filter() {
+    let mut d = drawing();
+    d.rect(
+        Rect::new(0.0, 0.0, 10.0, 10.0),
+        &RectStyle::default()
+            .with_fill(Color::BLACK)
+            .with_shadow(Shadow {
+                offset_x: 0.0,
+                offset_y: 2.0,
+                blur_radius: 8.0,
+                spread: 0.0,
+                color: Color::BLACK,
+            }),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("<feDropShadow dx=\"0\" dy=\"2\" stdDeviation=\"4\""),
+        "{out}"
+    );
+    assert!(out.contains("filter=\"url(#t7-1)\""), "{out}");
+}
+
+#[test]
+fn text_carries_the_css_a_box_would_have_given_it() {
+    let mut d = drawing();
+    d.text(
+        "fill & stroke",
+        Rect::new(2.0, 4.0, 100.0, 14.0),
+        &TextStyle::new(11.0, Color::BLACK),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("<foreignObject x=\"2\" y=\"4\" width=\"100\" height=\"14\">"),
+        "{out}"
+    );
+    assert!(
+        out.contains("xmlns=\"http://www.w3.org/1999/xhtml\""),
+        "{out}"
+    );
+    assert!(out.contains("font-size:11px"), "{out}");
+    assert!(out.contains(">fill &amp; stroke<"), "{out}");
+}
+
+#[test]
+fn groups_close_in_the_order_they_opened() {
+    let mut d = drawing();
+    d.open_layer(0.5, BlendMode::Normal, renderer_core::LayerMask::None);
+    d.open_matrix([2.0, 0.0, 0.0, 2.0, 4.0, 4.0]);
+    d.line(
+        Point::new(0.0, 0.0),
+        Point::new(4.0, 4.0),
+        &Stroke::new(Color::BLACK, 1.0),
+    );
+    d.close_group();
+    let out = d.finish();
+    assert_eq!(
+        out,
+        "<g opacity=\"0.5\"><g transform=\"matrix(2,0,0,2,4,4)\"><line x1=\"0\" y1=\"0\" x2=\"4\" y2=\"4\" stroke=\"#000000\" stroke-width=\"1\"/></g></g>"
+    );
+}
+
+#[test]
+fn a_pop_with_nothing_open_closes_nothing() {
+    let mut d = drawing();
+    d.close_group();
+    d.line(
+        Point::new(0.0, 0.0),
+        Point::new(1.0, 1.0),
+        &Stroke::new(Color::BLACK, 1.0),
+    );
+    let svg = d.finish();
+    assert!(
+        !svg.contains("</g>"),
+        "a pop with nothing open must close nothing: {svg}"
+    );
+}
+
+#[test]
+fn a_clip_is_a_definition_the_group_points_at() {
+    let mut d = drawing();
+    d.open_clip(Rect::new(0.0, 0.0, 30.0, 30.0), BorderRadius::all(6.0));
+    d.image(
+        Some("data:image/png;base64,AAA"),
+        (4, 4),
+        Rect::new(0.0, 0.0, 30.0, 30.0),
+        Raster::Pixel,
+        ImageFill::Stretch,
+    );
+    let out = d.finish();
+    assert!(out.contains("<clipPath id=\"t7-1\"><rect x=\"0\" y=\"0\" width=\"30\" height=\"30\" rx=\"6\"/></clipPath>"), "{out}");
+    assert!(out.contains("<g clip-path=\"url(#t7-1)\">"), "{out}");
+    assert!(out.contains("image-rendering:pixelated"), "{out}");
+    assert!(out.ends_with("</g>"), "{out}");
+}
+
+#[test]
+fn a_picture_without_its_pixels_keeps_its_element_and_its_place_among_the_definitions() {
+    let mut d = drawing();
+    d.image(
+        None,
+        (4, 4),
+        Rect::new(0.0, 0.0, 30.0, 30.0),
+        Raster::Smooth,
+        ImageFill::Tile { scale: 1.0 },
+    );
+    d.open_clip(Rect::new(0.0, 0.0, 30.0, 30.0), BorderRadius::all(0.0));
+    let out = d.finish();
+    assert!(
+        out.contains(
+            "<image x=\"0\" y=\"0\" width=\"4\" height=\"4\" preserveAspectRatio=\"none\"/>"
+        ),
+        "{out}"
+    );
+    assert!(out.contains("<clipPath id=\"t7-2\">"), "{out}");
+}
+
+#[test]
+fn a_collapsed_rect_draws_nothing() {
+    let mut d = drawing();
+    d.rect(
+        Rect::new(0.0, 0.0, 0.0, 10.0),
+        &RectStyle::default().with_fill(Color::BLACK),
+    );
+    assert_eq!(d.finish(), "");
+}
+
+/// The ring the rasterising backends fill, as a picture that can be laid over the box: outer outline, inner outline, even-odd. Drawn in the box's own corner, and the gradient moved to meet it — measured where the widget drew it, the colours would have started off the left edge of the picture.
+#[test]
+fn a_gradient_frame_is_a_ring_drawn_in_the_box_s_own_corner() {
+    let svg = frame_svg(
+        Rect::new(300.0, 500.0, 100.0, 40.0),
+        BorderRadius::all(8.0),
+        [2.0; 4],
+        &Gradient::linear(
+            Point::new(300.0, 500.0),
+            Point::new(400.0, 500.0),
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        ),
+    );
+    assert!(svg.contains("width=\"100\" height=\"40\""), "{svg}");
+    assert!(svg.contains("fill-rule=\"evenodd\""), "{svg}");
+    assert!(
+        svg.contains("x1=\"0\" y1=\"0\" x2=\"100\" y2=\"0\""),
+        "{svg}"
+    );
+    assert!(svg.contains("d=\"M8 0"), "{svg}");
+    assert!(svg.contains("M8 2"), "{svg}");
+    assert!(svg.contains("A6 6 0 0 1"), "{svg}");
+}
+
+/// A frame thicker than the box it frames has no interior to punch out, and the outline alone is the whole of it — a second subpath of nothing would have cut a hole under the even-odd rule.
+#[test]
+fn a_frame_that_swallows_its_box_is_the_outline_alone() {
+    let svg = frame_svg(
+        Rect::new(0.0, 0.0, 6.0, 6.0),
+        BorderRadius::zero(),
+        [4.0; 4],
+        &Gradient::linear(
+            Point::new(0.0, 0.0),
+            Point::new(6.0, 0.0),
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        ),
+    );
+    assert_eq!(svg.matches('M').count(), 1, "{svg}");
+}
+
+#[test]
+fn a_tile_is_a_pattern_repeating_at_the_scaled_picture_size() {
+    let mut d = drawing();
+    d.image(
+        Some("p.png"),
+        (4, 2),
+        Rect::new(10.0, 20.0, 40.0, 30.0),
+        Raster::Smooth,
+        ImageFill::Tile { scale: 3.0 },
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("<pattern id=\"t7-1\" patternUnits=\"userSpaceOnUse\" x=\"10\" y=\"20\" width=\"12\" height=\"6\"><image x=\"0\" y=\"0\" width=\"12\" height=\"6\""),
+        "{out}"
+    );
+    assert!(
+        out.ends_with("<rect x=\"10\" y=\"20\" width=\"40\" height=\"30\" fill=\"url(#t7-1)\"/>"),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_nine_slice_is_one_viewport_per_piece() {
+    let mut d = drawing();
+    d.image(
+        Some("p.png"),
+        (8, 8),
+        Rect::new(0.0, 0.0, 40.0, 20.0),
+        Raster::Pixel,
+        ImageFill::Slice(ImageSlice::new(Insets::all(2.0))),
+    );
+    let out = d.finish();
+    assert_eq!(out.matches("<svg ").count(), 9, "{out}");
+    assert!(
+        out.starts_with("<svg x=\"0\" y=\"0\" width=\"2\" height=\"2\" viewBox=\"0 0 2 2\""),
+        "the corner keeps its size: {out}"
+    );
+    assert!(
+        out.contains("<svg x=\"2\" y=\"0\" width=\"36\" height=\"2\" viewBox=\"2 0 4 2\""),
+        "the top edge stretches along its length: {out}"
+    );
+}
+
+#[test]
+fn a_blended_layer_names_its_mode_in_css() {
+    let mut d = drawing();
+    d.open_layer(1.0, BlendMode::ColorDodge, renderer_core::LayerMask::None);
+    d.close_group();
+    assert_eq!(
+        d.finish(),
+        "<g opacity=\"1\" style=\"mix-blend-mode:color-dodge\"></g>"
+    );
+}
+
+/// A mask source goes into a `<mask>` definition drawn as SVG, alpha-driven and unbounded, and the next layer is a group shown through it.
+#[test]
+fn a_mask_source_is_a_definition_and_its_content_is_shown_through_it() {
+    let mut d = Drawing::new(7);
+    d.open_layer(1.0, BlendMode::Normal, renderer_core::LayerMask::Source);
+    assert!(d.in_mask());
+    d.mask_text(
+        "SIMULACION",
+        Rect::new(10.0, 20.0, 300.0, 80.0),
+        &renderer_core::TextStyle::new(64.0, renderer_core::Color::WHITE),
+        60.0,
+    );
+    d.close_group();
+    assert!(!d.in_mask());
+    d.open_layer(1.0, BlendMode::Normal, renderer_core::LayerMask::Apply);
+    d.rect(
+        Rect::new(0.0, 0.0, 400.0, 200.0),
+        &renderer_core::RectStyle::filled(renderer_core::Color::rgb(0.0, 0.0, 1.0), 0.0),
+    );
+    let markup = d.finish();
+    let (defs, body) = markup
+        .split_once("</defs>")
+        .expect("the mask is a definition");
+    assert!(
+        defs.contains("<mask id=\"t7-1\" maskUnits=\"userSpaceOnUse\"")
+            && defs.contains("mask-type:alpha")
+            && defs.contains("<text x=\"10\" y=\"80\"")
+            && defs.contains(">SIMULACION</text>"),
+        "{defs}"
+    );
+    assert!(
+        body.starts_with("<g opacity=\"1\" mask=\"url(#t7-1)\">"),
+        "{body}"
+    );
+    assert!(
+        !body.contains("SIMULACION"),
+        "the source is never drawn itself: {body}"
+    );
+}
+
+#[test]
+fn paint_placed_on_the_surface_lands_in_the_innermost_box() {
+    let mut d = Drawing::at(7, Rect::new(0.0, 300.0, 400.0, 200.0));
+    d.open_box(Rect::new(56.0, 428.0, 200.0, 80.0));
+    d.open_clip_on_surface(Rect::new(56.0, 428.0, 200.0, 80.0), BorderRadius::zero());
+    d.open_matrix_on_surface([1.5, 0.0, 0.0, 1.5, -28.0, -234.0]);
+    d.rect_on_surface(
+        Rect::new(56.0, 428.0, 200.0, 80.0),
+        &RectStyle::default().with_fill(Paint::Gradient(Gradient::linear(
+            Point::new(56.0, 428.0),
+            Point::new(256.0, 428.0),
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        ))),
+    );
+    let out = d.finish();
+    assert!(out.contains("<g transform=\"translate(56,128)\">"), "{out}");
+    assert!(
+        out.contains("<clipPath id=\"t7-1\"><rect x=\"0\" y=\"0\" width=\"200\" height=\"80\"/>"),
+        "{out}"
+    );
+    assert!(
+        out.contains("<g transform=\"matrix(1.5,0,0,1.5,0,-20)\">"),
+        "the scale about (56, 468) on the surface is the scale about (0, 40) in the box: {out}"
+    );
+    assert!(
+        out.contains("x1=\"0\" y1=\"0\" x2=\"200\" y2=\"0\""),
+        "{out}"
+    );
+    assert!(
+        out.contains("<rect x=\"0\" y=\"0\" width=\"200\" height=\"80\" fill=\"url(#t7-2)\"/>"),
+        "{out}"
+    );
+}
+
+#[test]
+fn an_elliptical_radial_gradient_is_the_unit_circle_under_its_transform() {
+    let mut d = drawing();
+    d.path(
+        &PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(80.0, 40.0)),
+        &PathStyle::default().with_fill(Paint::Gradient(Gradient::elliptical(
+            Transform {
+                a: 40.0,
+                b: 0.0,
+                c: 0.0,
+                d: 20.0,
+                e: 40.0,
+                f: 20.0,
+            },
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        ))),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("<radialGradient id=\"t7-1\" gradientUnits=\"userSpaceOnUse\" cx=\"0\" cy=\"0\" r=\"1\" gradientTransform=\"matrix(40 0 0 20 40 20)\">"),
+        "{out}"
+    );
+    assert!(out.contains("fill=\"url(#t7-1)\""), "{out}");
+}

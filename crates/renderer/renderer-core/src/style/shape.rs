@@ -163,5 +163,5 @@ impl ShapeStyle for PathStyle {
 }
 
 #[cfg(test)]
-#[path = "shape_test.rs"]
+#[path = "shape.test.rs"]
 mod tests;

@@ -140,11 +140,11 @@ pub(crate) fn label_follows<S: Into<Arc<str>>>(
 
 /// The annotations every widget with a layout node takes. See the module docs.
 ///
-/// Prefixed because a widget may well have a `label` of its own that means something else — the text a button draws — and a method of that name here would silently lose to it.
+/// Prefixed because a widget may well have a `label` of its own that means something else — the text a button draws — and a method of that name here would silently lose to it. `lang` is not: the language a box is written in is one thing on every widget, and `lang:` spells it in `.rsx` too.
 pub trait Accessible: LayoutItem + Sized {
     /// The name assistive technology reads for this box. Re-read when what `label` reads changes, so a translated name follows the locale.
     ///
-    /// A name, not a replacement for the content: a reader that walks into the box still finds what is drawn there, which is what [`a11y_hidden`](Self::a11y_hidden) on the pieces is for.
+    /// On a box with no role of its own, the name replaces what the box draws ([`Role::name_replaces_content`]): a counter showing "3" and named "3 unread comments" is read as its name alone, while a control inside the box keeps its own name and stays reachable. A box with a role, such as a dialog or a list, holds what it draws under the name.
     ///
     /// An empty name is no name: the box goes by what it draws, as if it had been given none. A control named `""` would otherwise be announced as nothing at all.
     fn a11y_label<S: Into<Arc<str>>>(self, label: impl Fn() -> S + 'static) -> Self {
@@ -168,7 +168,7 @@ pub trait Accessible: LayoutItem + Sized {
     }
 
     /// The language this box and everything under it is written in, as a BCP 47 tag. Nearer boxes win, so a quotation inside a paragraph says only its own.
-    fn a11y_lang<S: Into<Arc<str>>>(self, lang: impl Fn() -> S + 'static) -> Self {
+    fn lang<S: Into<Arc<str>>>(self, lang: impl Fn() -> S + 'static) -> Self {
         follow(self.layout_node(), move |annotation| {
             annotation.lang = Some(lang().into());
         });
@@ -180,10 +180,18 @@ pub trait Accessible: LayoutItem + Sized {
         follow(self.layout_node(), |annotation| annotation.hidden = true);
         self
     }
+
+    /// Takes this box and everything under it out of what assistive technology is told for as long as it goes by no name, for artwork that only decorates unless whoever places it names it with [`Self::a11y_label`], called before or after this.
+    fn a11y_decorative(self) -> Self {
+        follow(self.layout_node(), |annotation| {
+            annotation.decorative = true
+        });
+        self
+    }
 }
 
 impl<T: LayoutItem> Accessible for T {}
 
 #[cfg(test)]
-#[path = "annotation_test.rs"]
+#[path = "annotation.test.rs"]
 mod tests;

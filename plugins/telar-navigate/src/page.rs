@@ -27,6 +27,7 @@ pub enum PagePolicy {
 pub struct SimplePage(pub Box<dyn LayoutItem>);
 
 impl SimplePage {
+    /// Boxes `item` as the page's widget, so a screen built as a concrete type needs no `Box::new` at the call site.
     pub fn new(item: impl LayoutItem + 'static) -> Self {
         Self(Box::new(item))
     }

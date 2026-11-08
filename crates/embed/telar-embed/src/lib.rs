@@ -4,7 +4,7 @@
 //!
 //! The novel part hot-reload never needed is **compositing two runtimes into one window**: the guest flattens its own view tree to a self-contained draw list and lends it as bytes, which the host decodes into a [`DrawList`] of its own ([`LoadedEmbed::paint`]), translates and clips into the guest's sub-rect, marks as the guest's ([`composite`]) and splices into its own frame. What a screen reader and the input method need of the guest, it reports itself through the same contract, and its keyboard sits behind one focus stop of the host's ([`LoadedEmbed::focus_stop`]). No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
 //!
-//! Host and guest meet on the guest contract both boundaries share ([`platform_core::guest`]): one `repr(C)` table of `extern "C"` entries ([`EmbedEntries`]), stamped with [`EMBED_CONTRACT`], through which nothing owned crosses. Each side frees only what it allocated, so a `#[global_allocator]` on either side does not matter, and a guest built against another contract, with other features, or as a hot-reload library is refused before any of its code runs but its initializers.
+//! Host and guest meet on the guest contract both boundaries share ([`platform_core::guest`]): one `repr(C)` table of `extern "C"` entries ([`EmbedEntries`]), stamped with [`EMBED_CONTRACT`], through which nothing owned crosses. Each side frees only what it allocated, so a `#[global_allocator]` on either side does not matter, and a guest built against another contract or as a hot-reload library is refused before any of its code runs but its initializers.
 //!
 //! Layering: this crate is app-agnostic. A guest author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`embed!`](crate::embed) macro to export the entries. The host enables `host`, calls [`load_embedded`] and drives the returned [`LoadedEmbed`]. Nothing here knows about any particular app.
 //!
@@ -30,9 +30,9 @@ use std::time::Duration;
 use web_time::Instant;
 
 use geometry_core::{Rect, Size, Transform};
-use platform_core::{AppCtx, Event, PointerButton, SystemPreferences, WindowCommand};
+use platform_core::{AppCtx, Event, SystemPreferences, WindowCommand};
 use renderer_core::{Color, DrawCommand};
-use ui_core::{EventResult, NodeId, SurfaceCanvas, composite_surface};
+use ui_core::{EventResult, NestedCanvas, NodeId, composite_surface};
 use ui_tree::{Component, RenderNode};
 
 #[doc(hidden)]
@@ -41,9 +41,9 @@ pub use entries::{CreateInstance, EMBED_CONTRACT, EmbedEntries};
 pub use host::{LoadedEmbed, load_embedded};
 #[doc(hidden)]
 pub use platform_core::export_contract_stamp;
-pub use platform_core::guest::GuestPanic;
 #[doc(hidden)]
 pub use platform_core::guest::{CallOutcome, Handle, LentBytes};
+pub use platform_core::guest::{GuestPanic, GuestStop};
 pub use ui_core::{ForeignBoundary, ForeignSurface, FrameFocus};
 
 /// A guest's frame as the host holds it: decoded from the bytes the guest lent into commands the host allocated and owns.
@@ -66,7 +66,7 @@ pub fn composite(rect: Rect, boundary: &ForeignBoundary, commands: DrawList) -> 
 pub trait EmbeddedApp: 'static {
     /// Build the content's layout tree. Called once by the driver with the guest's surface active, so nodes are allocated in this surface's layout world. [`layout_root`](Self::layout_root) must be valid after it.
     ///
-    /// **Also where a guest installs what only a runner would have installed for it.** A guest is a `cdylib`: it links its own copy of every crate behind the facade, so the statics and thread-locals those keep are its own and start empty. The host's process-wide backends are installed before this runs, from the [`HostServices`](platform_core::guest::HostServices) table it serves: the clipboard, the URI opener, file dialogs, the preference store, the app's paths and name, the keyboard convention, the location format, the asset base, the layout grid, the loop wake and, for a guest with `shaper`, the font database its shaper measures in. The theme is not among them; `TextMetrics` is the one that bites, because nothing sets a default and the first text laid out here panics without it — call `telar::install_default_text_metrics()` (or `renderer_core::set_text_metrics` with whatever suits the surface) before building the tree. The driver cannot do it: a measurer is code, not a backend the table serves, and only the guest knows whether it draws to pixels or to cells.
+    /// **Also where a guest installs what only a runner would have installed for it.** A guest is a `cdylib`: it links its own copy of every crate behind the facade, so the statics and thread-locals those keep are its own and start empty. The host's process-wide backends are installed before this runs, from the [`HostServices`](platform_core::guest::HostServices) table it serves: the clipboard, the URI opener, file dialogs, the preference store, the app's paths and name, the keyboard convention, the location format, the asset base, the layout grid, the loop wake and the font database its shaper measures in. The theme is not among them; `TextMetrics` is the one that bites, because nothing sets a default and the first text laid out here panics without it — call `telar::install_default_text_metrics()` (or `renderer_core::set_text_metrics` with whatever suits the surface) before building the tree. The driver cannot do it: a measurer is code, not a backend the table serves, and only the guest knows whether it draws to pixels or to cells.
     fn build(&mut self);
 
     /// The content's top layout node — the one the driver `compute_layout`s to the host-assigned rect size.
@@ -119,25 +119,24 @@ impl Component for EmbeddedComponent {
     }
 }
 
-/// The dylib-side guest driver: a headless single-surface runtime (no window, no renderer) that the host drives through the entries its library exports. A [`SurfaceCanvas`] over the guest's content, so every method works in this guest's thread-local worlds, not the host's.
+/// The dylib-side guest driver: a headless single-surface runtime (no window, no renderer) that the host drives through the entries its library exports. A [`NestedCanvas`] over the guest's content, so every method works in this guest's thread-local worlds, not the host's, and its keyboard sits behind one focus stop of the host's.
 ///
 /// The host holds it only behind an opaque [`Handle`], with the frames it lends ([`guest::GuestInstance`]), and never reads through it: every call goes through an entry, so the code runs in the dylib.
 pub struct EmbedInstance {
     embedded: Rc<RefCell<Box<dyn EmbeddedApp>>>,
-    canvas: SurfaceCanvas,
+    canvas: NestedCanvas,
 }
 
 impl EmbedInstance {
     /// Build the guest: allocate its surface, build the content tree inside it, and mount the segment tree.
     pub fn new(embedded: Box<dyn EmbeddedApp>) -> Self {
         let embedded = Rc::new(RefCell::new(embedded));
-        let canvas = SurfaceCanvas::with_root(Size::new(0.0, 0.0), || {
+        let canvas = NestedCanvas::with_root(Size::new(0.0, 0.0), || {
             embedded.borrow_mut().build();
             let root = embedded.borrow().layout_root();
             Ok((EmbeddedComponent(Rc::clone(&embedded)), root))
         })
         .expect("an embedded app's build reports no layout error");
-        canvas.host_keyboard();
         Self { embedded, canvas }
     }
 
@@ -183,16 +182,6 @@ impl EmbedInstance {
             | Event::RunActivated { .. }
             | Event::FocusLeftBoxes
             | Event::AccessAction { .. } => self.canvas.dispatch_box_event(event),
-            Event::PointerPressed {
-                x,
-                y,
-                button: PointerButton::Primary,
-                ..
-            } => {
-                self.canvas
-                    .with_entered(|| ui_core::focus::blur_from_pointer(*x as f32, *y as f32));
-                self.canvas.dispatch_tree(event)
-            }
             _ => self.canvas.dispatch_tree(event),
         };
         result == EventResult::Handled
@@ -294,5 +283,5 @@ impl EmbedInstance {
 }
 
 #[cfg(test)]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

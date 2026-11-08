@@ -3,10 +3,12 @@
 #[cfg(feature = "dynamic-svg")]
 mod bake;
 #[cfg(feature = "dynamic-svg")]
+mod options;
+#[cfg(feature = "dynamic-svg")]
 mod raster;
 mod refit;
 #[cfg(all(test, feature = "dynamic-svg"))]
-#[path = "svg_test.rs"]
+#[path = "svg.test.rs"]
 mod tests;
 #[cfg(feature = "dynamic-svg")]
 mod vector;
@@ -59,14 +61,21 @@ enum SvgSource {
 /// A `Vec<DrawCommand>` said the same thing in a comment, and three walkers over it each answered a different way when handed something else — one panicked, one cloned it through with a debug assertion, one hashed a marker byte — while the public constructor accepted any command at all. Narrowing the type deletes the question: every walk is exhaustive and there is no unexpected command to disagree about.
 #[derive(Debug, Clone, PartialEq)]
 pub enum VectorCommand {
+    /// One filled or stroked path.
     Path {
+        /// The outline, shared with every other command that draws the same shape.
         data: Arc<PathData>,
+        /// How the outline is painted.
         style: Arc<PathStyle>,
     },
+    /// Starts compositing what follows as one group, until the matching [`PopLayer`](Self::PopLayer).
     PushLayer {
+        /// How opaque the finished group is drawn, from 0 to 1.
         opacity: f32,
+        /// Handed to [`DrawCommand::PushLayer`](renderer_core::DrawCommand::PushLayer) as it is; an SVG asks for no backdrop blur, so the parser leaves it 0.
         backdrop_blur: f32,
     },
+    /// Ends the group the last unmatched [`PushLayer`](Self::PushLayer) opened.
     PopLayer,
 }
 
@@ -106,31 +115,6 @@ pub(crate) enum BakedSvg {
 #[cfg(feature = "dynamic-svg")]
 pub(crate) struct Unsupported;
 
-#[cfg(feature = "dynamic-svg")]
-const MAX_EMBEDDED_IMAGE_BYTES: usize = 8 * 1024 * 1024;
-
-// Runtime SVG comes from untrusted sources, and usvg's default string resolver would read any href that names a local file.
-#[cfg(feature = "dynamic-svg")]
-fn runtime_options() -> &'static usvg::Options<'static> {
-    static OPTIONS: std::sync::OnceLock<usvg::Options<'static>> = std::sync::OnceLock::new();
-    OPTIONS.get_or_init(|| {
-        let default_data = usvg::ImageHrefResolver::default_data_resolver();
-        usvg::Options {
-            image_href_resolver: usvg::ImageHrefResolver {
-                resolve_data: Box::new(move |mime, data, opts| {
-                    if data.len() > MAX_EMBEDDED_IMAGE_BYTES {
-                        None
-                    } else {
-                        default_data(mime, data, opts)
-                    }
-                }),
-                resolve_string: Box::new(|_: &str, _: &usvg::Options| None),
-            },
-            ..usvg::Options::default()
-        }
-    })
-}
-
 // SvgData is shared across threads via Arc; hold this for every feature combination.
 const _: fn() = || {
     fn assert_send_sync<T: Send + Sync>() {}
@@ -139,11 +123,12 @@ const _: fn() = || {
 
 impl SvgData {
     // Named `from_str` per the public API; it is fallible on content, not a `FromStr` impl.
+    /// Parses SVG source at run time; the content hash of `svg` is the [`id`](Self::id).
     #[cfg(feature = "dynamic-svg")]
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(svg: &str) -> Result<Self, SvgError> {
-        let tree =
-            usvg::Tree::from_str(svg, runtime_options()).map_err(|e| SvgError(e.to_string()))?;
+        let tree = usvg::Tree::from_str(svg, options::usvg_options())
+            .map_err(|e| SvgError(e.to_string()))?;
         let size = tree.size();
         let mut hasher = FxHasher::default();
         svg.as_bytes().hash(&mut hasher);
@@ -189,6 +174,7 @@ impl SvgData {
         self.id
     }
 
+    /// The SVG's own width and height, in the viewBox space its commands are baked in.
     pub fn intrinsic_size(&self) -> (f32, f32) {
         self.size
     }
@@ -256,7 +242,7 @@ impl SvgData {
                 }
             }
             SvgSource::Baked(baked) => match baked {
-                // Baking converts under an identity transform, so re-fitting each point by `(p.x*sx+dx, p.y*sy+dy)` reproduces the dynamic `fit_ts.pre_concat(abs)` mapping exactly (the determinant argument makes stroke widths and gradient radii agree too).
+                // Baking converts under an identity transform, so re-fitting each point by `(p.x*sx+dx, p.y*sy+dy)` reproduces the dynamic `fit_ts.pre_concat(abs)` mapping exactly (the determinant argument makes stroke widths agree too).
                 BakedSvg::Vector(cmds) => {
                     refit::refit_vector(cmds, sx, sy, offset_x, offset_y, tint)
                 }

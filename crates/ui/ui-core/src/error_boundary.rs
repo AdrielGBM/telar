@@ -244,5 +244,5 @@ impl Component for ErrorBoundary {
 }
 
 #[cfg(test)]
-#[path = "error_boundary_test.rs"]
+#[path = "error_boundary.test.rs"]
 mod tests;

@@ -1,18 +1,19 @@
 [logic]
-// The standard surface panel used across the sandbox. The card recipe (fill:$theme.surface stroke:$theme.border
-// radius:12 pad:16) lives here once instead of inline at every call site. `gap` spaces the stacked
-// body children (pass 0 for a single child). `pad` overrides the 16px inset via the `= 16.0` inline
-// default, so an omitted `pad` is 16 while `pad:0` genuinely means zero. An optional "header" slot renders above the body.
+// `pad` defaults through `= 16.0`, so an omitted `pad` is 16 while `pad:0` means zero.
 #[derive(Default)]
 pub struct Props {
     pub gap: f32,
     pub pad: f32 = 16.0,
+    #[props(default)]
+    pub header: Children,
+    #[props(default)]
+    pub children: Children,
 }
 
 [view]
 box fill:$theme.surface stroke:$theme.border radius:12 pad:props.pad gap:props.gap
-    children name:"header"
-    children
+    children $props.header
+    children $props.children
 
 [previews "Sandbox/Card" layout:centered]
 The standard surface panel: a rounded, bordered container with an optional header slot above its stacked body.

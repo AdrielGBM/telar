@@ -15,5 +15,5 @@ pub fn step_factor(modifiers: ModifiersState) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "step_test.rs"]
+#[path = "step.test.rs"]
 mod tests;

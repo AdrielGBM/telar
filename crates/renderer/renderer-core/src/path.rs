@@ -216,5 +216,5 @@ fn canonical_bits(value: f32) -> u32 {
 }
 
 #[cfg(test)]
-#[path = "path_test.rs"]
+#[path = "path.test.rs"]
 mod tests;

@@ -1,0 +1,89 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              matrix 1,0,0,1,24,18
+                text 0,0 21.22x14.28 "Edit" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              end
+            end
+          end
+          element button
+            rect 16,34 240x36
+            element group
+            end
+            element group
+              matrix 1,0,0,1,24,34
+                text 0,10 178.41x16.8 "Undo" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,210,34
+                text 0,10 38x15.12 "Ctrl+Z" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              end
+            end
+          end
+          element button
+            rect 16,70 240x36
+            element group
+            end
+            element group
+              matrix 1,0,0,1,24,70
+                text 0,10 143.38x16.8 "Redo" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,175,70
+                text 0,10 73x15.12 "Ctrl+Shift+Z" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              end
+            end
+          end
+          element group
+            rect 16,108 240x1 fill=#dbdeedff
+          end
+          element group
+            element group
+              matrix 1,0,0,1,24,113
+                text 0,0 28x14.28 "View" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              end
+            end
+          end
+          element button
+            rect 16,130 240x36
+            element group
+            end
+            element group
+              matrix 1,0,0,1,24,130
+                text 0,10 178x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,210,130
+                text 0,10 38x15.12 "Ctrl+=" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              end
+            end
+          end
+          element button
+            rect 16,166 240x36
+            element group
+            end
+            element group
+              matrix 1,0,0,1,24,166
+                text 0,10 181x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,213,166
+                text 0,10 35.45x15.12 "Ctrl+-" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

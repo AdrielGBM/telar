@@ -399,5 +399,5 @@ pub(super) fn try_new(
 }
 
 #[cfg(test)]
-#[path = "wayland_alpha_test.rs"]
+#[path = "wayland_alpha.test.rs"]
 mod tests;

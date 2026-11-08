@@ -12,7 +12,7 @@ repository = { workspace = true }
 
 [features]
 default = []
-# Dependency-injection scope/registry. Off by default; no runtime consumer wires it yet, so it stays opt-in to keep the default build lean.
+# Dependency-injection scope/registry. Off by default: ui-core turns it on for every surface it builds, and a platform crate that runs without ui-core has no scope to inject from.
 di = ["dep:rustc-hash", "dep:thiserror"]
 # The host OS's user directories. Opt-in: a target with no filesystem (the web) must not link a crate
 # whose whole job is to name paths on one.
@@ -31,8 +31,14 @@ wire-core = { workspace = true }
 
 dirs = { version = "7.0.0", optional = true }
 rustc-hash = { workspace = true, optional = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+test-process = { workspace = true }
 wire-core = { workspace = true, features = ["golden"] }
+
+serde_json = { workspace = true }
+toml = { workspace = true }
+tracing-subscriber = { workspace = true }

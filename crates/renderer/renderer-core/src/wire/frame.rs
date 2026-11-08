@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use geometry_core::{BorderRadius, Point, Rect};
 use rustc_hash::FxHashMap;
-use wire_core::{Reader, Wire, WireError, Writer};
+use wire_core::{
+    Reader, Shaped, Wire, WireError, Writer, fold, fold_shape, shape_named, shapes_at,
+};
 
 use super::intern::{Interner, Slots};
 use super::{FrameError, WIRE_VERSION};
@@ -35,6 +37,78 @@ const POP_SURFACE: u8 = 14;
 const PIXELS: u8 = 0;
 const LINKED: u8 = 1;
 const EXTERNAL: u8 = 2;
+
+/// A frame's draw list as [`FrameEncoder`] spells it, which an entry that lends one names.
+pub enum DrawList {}
+
+/// The pixels of one image a frame draws, lent apart from the frame.
+pub enum Pixels {}
+
+impl Shaped for Pixels {
+    const SHAPE: u64 = shape_named("pixels");
+}
+
+/// `hash` with one command's tag and the shapes of the fields it is spelled from folded in.
+macro_rules! fold_command {
+    ($hash:expr, $tag:expr, $variant:ident) => {
+        fold($hash, &[$tag])
+    };
+    ($hash:expr, $tag:expr, $variant:ident { $($field:ident),+ }) => {
+        fold_shape(
+            fold($hash, &[$tag]),
+            shapes_at(|command: &DrawCommand| match command {
+                DrawCommand::$variant { $($field,)+ .. } => ($($field as *const _,)+),
+                _ => unreachable!(),
+            }),
+        )
+    };
+}
+
+impl Shaped for DrawList {
+    const SHAPE: u64 = {
+        let hash = fold(
+            fold(shape_named("draw list"), &MAGIC),
+            &WIRE_VERSION.to_le_bytes(),
+        );
+        let hash = fold_command!(hash, RECT, Rect { rect, style });
+        let hash = fold_command!(
+            hash,
+            TEXT,
+            Text {
+                text,
+                spans,
+                rect,
+                style
+            }
+        );
+        let hash = fold_command!(hash, IMAGE, Image { rect, raster, fill });
+        // An image is spelled by hand, as where its pixels are, then its id, its size and a link to its source.
+        let hash = fold(hash, &[PIXELS, LINKED, EXTERNAL]);
+        let hash = fold_shape(fold_shape(hash, u64::SHAPE), u32::SHAPE);
+        let hash = fold_shape(hash, Linked::SHAPE);
+        let hash = fold_command!(hash, LINE, Line { p1, p2, style });
+        let hash = fold_command!(hash, PATH, Path { data, style });
+        let hash = fold_command!(hash, PUSH_CLIP, PushClip { rect, radius });
+        let hash = fold_command!(hash, POP_CLIP, PopClip);
+        let hash = fold_command!(hash, PUSH_MATRIX, PushMatrix { matrix });
+        let hash = fold_command!(hash, POP_MATRIX, PopMatrix);
+        let hash = fold_command!(
+            hash,
+            PUSH_LAYER,
+            PushLayer {
+                opacity,
+                backdrop_blur,
+                blend,
+                mask
+            }
+        );
+        let hash = fold_command!(hash, POP_LAYER, PopLayer);
+        let hash = fold_command!(hash, PUSH_ELEMENT, PushElement { element });
+        let hash = fold_command!(hash, POP_ELEMENT, PopElement);
+        let hash = fold_command!(hash, PUSH_SURFACE, PushSurface { surface });
+        fold_command!(hash, POP_SURFACE, PopSurface)
+    };
+}
 
 /// Declares one table per side of every payload a frame interns, `Sent` the encoder's and `Received` the decoder's, each kept by the frames that still use it.
 macro_rules! payloads {
@@ -494,5 +568,5 @@ fn take_command(
 }
 
 #[cfg(test)]
-#[path = "frame_test.rs"]
+#[path = "frame.test.rs"]
 mod tests;

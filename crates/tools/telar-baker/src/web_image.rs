@@ -43,5 +43,5 @@ pub fn web_image(bytes: &[u8]) -> Result<WebImage, String> {
 }
 
 #[cfg(test)]
-#[path = "web_image_test.rs"]
+#[path = "web_image.test.rs"]
 mod tests;

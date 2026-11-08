@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use geometry_core::CellSize;
 use platform_core::{
     Event, EventHandler, Key, KeyboardConvention, ModifiersState, Platform, PlatformError,
     WindowConfig,
@@ -24,8 +25,8 @@ pub const READING_ENV: &str = "TELAR_TUI_READING";
 /// How the terminal surface is sized and coloured.
 pub struct TuiPlatformConfig {
     /// How many logical pixels one cell stands for. Must match what the renderer was built with, or the window reports a size the frames do not fill.
-    pub cell_width: f32,
-    pub cell_height: f32,
+    pub cell: CellSize,
+    /// Whether the terminal is asked to report the mouse, which also stops it selecting text on its own.
     pub mouse: bool,
     /// Whether Ctrl+C asks the application to close.
     ///
@@ -40,8 +41,7 @@ pub struct TuiPlatformConfig {
 impl Default for TuiPlatformConfig {
     fn default() -> Self {
         Self {
-            cell_width: 8.0,
-            cell_height: 16.0,
+            cell: CellSize::default(),
             mouse: true,
             quit_on_ctrl_c: true,
             reading: std::env::var_os(READING_ENV).map(PathBuf::from),
@@ -55,6 +55,7 @@ pub struct TuiPlatform {
 }
 
 impl TuiPlatform {
+    /// A platform sized and coloured by `config`.
     pub fn new(config: TuiPlatformConfig) -> Self {
         Self { config }
     }
@@ -96,10 +97,10 @@ impl Platform for TuiPlatform {
             ))
         })?;
         let (cols, rows) = term::size();
-        let window = TuiWindow::new(cols, rows, self.config.cell_width, self.config.cell_height);
+        let window = TuiWindow::new(cols, rows, self.config.cell.width, self.config.cell.height);
         let mut mapper = Mapper::new(
-            self.config.cell_width,
-            self.config.cell_height,
+            self.config.cell.width,
+            self.config.cell.height,
             mode.reports_key_releases(),
         );
 
@@ -180,11 +181,11 @@ impl TuiPlatform {
     }
 
     fn cell_width(&self) -> f32 {
-        self.config.cell_width
+        self.config.cell.width
     }
 
     fn cell_height(&self) -> f32 {
-        self.config.cell_height
+        self.config.cell.height
     }
 }
 
@@ -219,5 +220,5 @@ impl Reading {
 }
 
 #[cfg(test)]
-#[path = "platform_test.rs"]
+#[path = "platform.test.rs"]
 mod tests;

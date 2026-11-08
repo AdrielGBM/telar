@@ -92,5 +92,5 @@ impl Component for Canvas {
 }
 
 #[cfg(test)]
-#[path = "canvas_test.rs"]
+#[path = "canvas.test.rs"]
 mod tests;

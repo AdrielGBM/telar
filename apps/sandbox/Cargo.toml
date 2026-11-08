@@ -43,6 +43,7 @@ web = ["telar/web"]
 # The browser drawing as a document alone: no GPU, no shaper, and no faces to carry for one.
 web-dom = ["telar/web-dom"]
 telar-devtools = ["dep:telar-devtools"]
+telar-workshop = ["dep:telar-workshop"]
 
 [dependencies]
 # The frontend is this app's `default` to choose rather than telar's — the workspace turns telar's own off.
@@ -51,8 +52,8 @@ telar = { workspace = true, features = [
     "runtime",
     "svg",
 ] }
-# Menus, dialogs and drawers draw over the page; steppers, accordions and reorderable lists are the rest.
-telar-components = { workspace = true, features = ["overlays", "advanced"] }
+# `icons` draws the icons this app bakes in its icon buttons, rather than their Unicode stand-ins.
+telar-components = { workspace = true, features = ["icons"] }
 telar-devtools = { workspace = true, optional = true }
 # `demo_svgs.rs` builds its icons with `SvgData::from_str`, and the runtime parser behind it lives here now
 # rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is
@@ -60,6 +61,7 @@ telar-devtools = { workspace = true, optional = true }
 telar-dynamic = { workspace = true, features = ["svg"] }
 telar-icons = { workspace = true }
 telar-navigate = { workspace = true }
+telar-workshop = { workspace = true, optional = true }
 
 serde = { workspace = true }
 
@@ -83,23 +85,23 @@ pollster = { workspace = true }
 
 [[test]]
 name = "baked_assets"
-path = "src/baked_assets_test.rs"
+path = "src/baked_assets.test.rs"
 
 [[test]]
 name = "cell_grid"
-path = "src/cell_grid_test.rs"
+path = "src/cell_grid.test.rs"
 
 [[test]]
 name = "frame_pacing"
-path = "src/frame_pacing_test.rs"
+path = "src/frame_pacing.test.rs"
 
 [[test]]
 name = "frontend_isolation"
-path = "src/frontend_isolation_test.rs"
+path = "src/frontend_isolation.test.rs"
 
 [[test]]
 name = "hot_tree"
-path = "src/hot_tree_test.rs"
+path = "src/hot_tree.test.rs"
 
 [[bench]]
 name = "frontend_frame"

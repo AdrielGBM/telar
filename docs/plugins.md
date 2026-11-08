@@ -31,10 +31,11 @@ manifest. And a plugin depends on no crate under `crates/` but `telar`: what it 
 re-exported by the facade, and what only a plugin needs sits behind the features `telar` lists under *For
 plugins*, hidden from its documentation. `.github/scripts/check-layering.sh` fails the build on either.
 
-That check sees only this workspace. A plugin you write outside it should hold itself to the second rule all the
-same: depend on `telar` and nothing behind it. The kernel crates are published because `telar` is built from
-them, not as an API of their own, and naming one directly is the easiest way to end up with the two copies the
-next section describes. A plugin that needs something the facade does not re-export is a request for the facade.
+That check sees only this repository: the workspace and every crate in it with a workspace of its own, which
+puts a guest crate under `fixtures/` with the applications, free to depend on anything. A plugin you write
+outside it should hold itself to the second rule all the same: depend on `telar` and nothing behind it. The
+kernel crates are published because `telar` is built from them, not as an API of their own, and naming one
+directly is the easiest way to end up with the two copies the next section describes. A plugin that needs something the facade does not re-export is a request for the facade.
 
 ## Versioning: in lockstep with `telar`
 
@@ -48,7 +49,7 @@ A `.rsx` library pins it with `=`:
 
 ```toml
 [dependencies]
-telar = { version = "=0.2.2", default-features = false, features = ["runtime"] }
+telar = { version = "=0.2.3", default-features = false, features = ["runtime"] }
 ```
 
 `cargo telar new --lib` writes that line with the version of the `cargo-telar` that ran. The pin matters more
@@ -60,12 +61,12 @@ here than for a Rust crate: a library ships the code `.rsx` transpiled to, and t
 ### The component protocol
 
 A component is a props struct and a function. The struct derives `Props`, which gives it a builder
-(`ButtonProps::props().label("Save").build()`), and the function takes it and the nested children and returns a
-layout item. This is a pill tag in the shape of [`badge`](../plugins/telar-components/src/badge.rs), fully rounded at whatever size it is laid out:
+(`ButtonProps::props().label("Save").build()`), and the function takes it and returns a
+layout item. Nested content is a prop too, `pub children: Children`, declared only by a component that takes children. This is a pill in the spirit of the catalogue's [`tag`](../plugins/telar-components/src/display/tag/tag.rsx), fully rounded at whatever size it is laid out:
 
 ```rust
 use telar::{
-    BorderRadius, Children, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle,
+    BorderRadius, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle,
     StyledContainer, SurfaceAmendment, SurfaceStyle, Text, amend_surface, box_item, use_theme_tokens,
 };
 
@@ -77,7 +78,7 @@ pub struct PillProps {
     pub style: Option<SurfaceAmendment>,
 }
 
-pub fn pill(props: PillProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn pill(props: PillProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let PillProps { label, style } = props;
     let surface: SurfaceStyle = style;
     let label = Text::declaring(move || label.get(), LayoutStyle::new(), |inherited| {
@@ -98,12 +99,12 @@ pub fn pill(props: PillProps, _children: Children) -> Result<Box<dyn LayoutItem>
 ```
 
 The tag is the function name, and its props type is that name in PascalCase plus `Props`: `pill …` in a `[view]` calls
-`pill(PillProps::props()….build(), children)`, so the two have to be spelled that way. Properties are `#[props(…)]` attributes on the fields: `default`, `into` (accepts anything
+`pill(PillProps::props()….build())`, so the two have to be spelled that way. Properties are `#[props(…)]` attributes on the fields: `default`, `into` (accepts anything
 convertible, which is how a plain string reaches a `Reactive<String>`) and `some` (stores an `Option`).
 
 A widget that a `[view]` cannot build, because it owns a canvas or a document, can skip the struct: `#[telar::component]` on a
-function of named arguments derives the props from the arguments, and an argument named `children` receives the
-nested children instead of becoming a prop.
+function of named arguments derives the props from the arguments, and an argument named `children` becomes the
+`children: Children` prop that receives the nested children.
 
 Re-export every component and its props type from `lib.rs`, so a `prelude` glob sees both:
 
@@ -145,7 +146,9 @@ wraps them.
 A `virtual row_height:` loop is `VirtualList::new(style, viewport, row_height, overscan, source, key, build)?`, every
 row the same height. Rows that differ are `virtual estimated_height:<expr>`, which makes a `VirtualRows::new(viewport,
 estimate)` handle and builds `VirtualList::measured(style, rows, overscan_px, source, key, build)?` over it. The two are
-alternatives. Either way the items must be `Clone`: the list keeps what the source last returned and builds each row
+alternatives. A loop without a `key` is `VirtualList::positional` or `VirtualList::measured_positional`, the same calls
+without the key: each row is keyed on its index and `build` gets a `ReadSignal` of the item now there, which the row's
+body reads as `$item`. Either way the items must be `Clone`: the list keeps what the source last returned and builds each row
 from a clone of its item, so the source runs again only when what it reads changes, not on every scroll; a type that
 is not is refused with a message naming `Clone`. `overscan:<px>` is how far beyond each edge to build (two estimated
 rows by default), and `rows:$handle` stores the handle in a `signal(None::<VirtualRows>)` so the view can call
@@ -174,6 +177,16 @@ and an amendment composes with the states where a `radius` prop would have to be
 A component with no principal surface (a layout, a fragment, something that paints three boxes) declares no
 `style` prop, and `@class` on it is a compile error on the author's line saying there is no `style` prop. What an
 entire application should agree on belongs in a theme token, not here.
+
+A component with other pieces a caller restyles, a card's header or a dialog's footer, declares one more prop of the
+same type per piece, named `<part>_style` (`header_style`), and a call site hands it a class with
+`header_style:@flat`, or several with `header_style:(@a @b)`. Parts are per instance only: a theme speaks through
+tokens, and "every sidebar" is a wrapper component. In `.rsx`, `surface:$props.style` and
+`surface:$props.header_style` on a `box`, `row`, `col` or `grid` amend its paint in every state, after its own.
+
+Named content is a prop of type `Children` as well, `pub header: Children`; a call site fills it with a child marked
+`slot:"header"`, and the rest of its children go to `children`. In `.rsx` the component places each with
+`children $props.header` and `children $props.children`.
 
 ### Theme tokens
 
@@ -299,7 +312,9 @@ of `telar.toml` that configures where ids resolve and whether they are baked. Wh
 and the transpiler hands the prop the triple `("set:name", Arc<Data>, monochrome)` instead of the string, so the
 props type accepts both through `From`. The id is spelled the way the bake keyed it, so a bare name written where
 `[telar.icons] default_set` is set arrives read in that set, and `monochrome` is the tint decision the bake made from
-the set's Iconify `palette` and the SVG's `currentColor`:
+the set's Iconify `palette` and the SVG's `currentColor`. For icons that type is the facade's `telar::IconName`,
+the same in every build, so a component taking an icon, such as `telar-components`' `icon_button`, takes the
+triple whether or not `telar-icons` is in its build, and only what it draws changes:
 
 ```rust
 pub enum IconName {
@@ -450,6 +465,12 @@ refuses an artifact or module tree that disagrees with `src/`. So adding, moving
 `.rs` module needs `cargo telar transpile` before the next build (`cargo telar check`, `dev`, `build` and `test`
 run it for you); a plain `cargo build` is refused with a message naming the command.
 
+A library's module tree is its own: every module it discovers is `pub(crate)`, so where a file sits in `src/` never
+becomes a path a dependent can name, and the library's API is what its root re-exports. An application's stays
+`pub`, which its benches and integration tests reach by path. A component keeps a directory of its own by sharing
+its name, `display/kbd/kbd.rsx` beside `kbd.test.rs` and `kbd.preview.rs`, since a component takes the name of its
+file; `telar-components` is laid out that way, grouped as its workshop sidebar lists them.
+
 ### Shipping previews
 
 A plugin, Rust or `.rsx`, shows its components in the workshop of every application that wants them. It carries
@@ -466,7 +487,7 @@ include = ["my-plugin"]
 
 A `.rsx` library needs nothing else: its previews are in the Plain artifact it publishes, the only one a library
 has. `cargo telar test -p my-plugin` plays, accessibility-checks and snapshots them without an application. The
-goldens stay in the library's own `previews/__snapshots__/`, in the repository rather than the published
+goldens stay in the library's own `snapshots/`, in the repository rather than the published
 package. See [docs/previews.md](previews.md) for writing previews.
 
 ### The `CARGO_PRIMARY_PACKAGE` caveat

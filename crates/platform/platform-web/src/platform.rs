@@ -168,6 +168,16 @@ pub struct WebPlatformConfig {
     pub owns_keyboard: bool,
     /// How the app's locations are written as addresses on this page. `None` takes the base path from the page's `<base href>`, and `/` where it has none.
     pub location: Option<platform_core::LocationFormat>,
+    pub page: PageNames,
+}
+
+/// The names a packaged page gives what the app looks up in it. Unset, the app mounts on `<body>` and finds its files beside the page.
+#[derive(Clone, Debug, Default)]
+pub struct PageNames {
+    /// The id of the element the page sets aside for the app, filled when no selector names another.
+    pub host_id: Option<&'static str>,
+    /// The `name` of the meta tag saying where the build's files live, relative to the page.
+    pub assets_meta: Option<&'static str>,
 }
 
 impl Default for WebPlatformConfig {
@@ -180,6 +190,7 @@ impl Default for WebPlatformConfig {
             owns_context_menu: true,
             owns_keyboard: true,
             location: None,
+            page: PageNames::default(),
         }
     }
 }
@@ -233,12 +244,13 @@ impl Platform for WebPlatform {
     ) -> Result<(), PlatformError> {
         let host = match self.host.clone() {
             Some(host) => host,
-            None => dom::host(self.config.host.as_deref()).map_err(PlatformError)?,
+            None => dom::host(self.config.host.as_deref(), self.config.page.host_id)
+                .map_err(PlatformError)?,
         };
         prepare_host(&host, &self.config);
         dom::document().set_title(&config.title);
 
-        if let Some(base) = dom::asset_base() {
+        if let Some(base) = dom::asset_base(self.config.page.assets_meta) {
             platform_core::set_asset_base(&base);
         }
         let window = WebWindow::new(host.clone());

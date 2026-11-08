@@ -16,6 +16,7 @@ pub struct DiskCache {
 }
 
 impl DiskCache {
+    /// A cache that keeps its entries under `root`, which nothing creates until the first write.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }
@@ -37,17 +38,28 @@ impl AssetCache for DiskCache {
 
     fn put(&self, key: &AssetKey, bytes: &[u8]) {
         let path = self.path(key);
-        let Some(dir) = path.parent() else {
-            return;
-        };
-        if let Err(e) = std::fs::create_dir_all(dir) {
-            tracing::warn!("could not create asset cache {}: {e}", dir.display());
-            return;
-        }
-        if let Err(e) = std::fs::write(&path, bytes) {
+        if let Err(e) = write_whole(&path, bytes) {
             tracing::warn!("could not cache asset {}: {e}", path.display());
         }
     }
+}
+
+/// A reader finds the previous entry or the new one, never part of one: `get` is trusted without a fetch, so a truncated entry that still decodes would be kept for good.
+fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let dir = path.parent().unwrap_or(Path::new(""));
+    std::fs::create_dir_all(dir)?;
+    let mut file = tempfile::NamedTempFile::new_in(dir)?;
+    file.write_all(bytes)?;
+    rename_over(file.into_temp_path(), path)
+}
+
+// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
+fn rename_over(temp: tempfile::TempPath, path: &Path) -> std::io::Result<()> {
+    let temp = temp.keep()?;
+    std::fs::rename(&temp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
 }
 
 /// The hash over the original name keeps case-distinct ids apart on case-insensitive file systems, keeps every segment off Windows device names, and stops a crafted id from landing on another id's file.
@@ -77,5 +89,5 @@ fn file_name(name: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "disk_cache_test.rs"]
+#[path = "disk_cache.test.rs"]
 mod tests;

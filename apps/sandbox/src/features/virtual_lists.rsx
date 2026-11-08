@@ -38,10 +38,18 @@ col gap:20
             row gap:8
                 button label:"Note 40" on_press:(|| if let Some(rows) = $rows.get() { rows.reveal(40, 8.0) })
                 button label:"Note 250" on_press:(|| if let Some(rows) = $rows.get() { rows.reveal(250, 8.0) })
-                button label:"Note 399" variant:ButtonVariant::Outline on_press:(|| if let Some(rows) = $rows.get() { rows.reveal(399, 8.0) })
+                button label:"Note 399" variant:outline on_press:(|| if let Some(rows) = $rows.get() { rows.reveal(399, 8.0) })
             scroll height:200 width:100%
                 for note in $notes key note.id virtual estimated_height:64 overscan:96 rows:$rows
                     col width:100% pad_x:12 pad_y:10 gap:4 stroke:$theme.border
                         text "{note.title}" font_size:14 font_weight:600 color:$theme.ink
                         text "{note.body}" font_size:13 color:$theme.muted
         code_line code:"let rows = signal(None::<VirtualRows>);   for … virtual estimated_height:64 overscan:96 rows:$rows   ·   rows.reveal(index, margin)"
+    example title:"Without a key — each row stays at its index and follows the note now there"
+        card gap:10
+            button label:"Reverse" variant:outline on_press:(|| $notes.update(|v| v.reverse()))
+            scroll height:200 width:100%
+                for note in $notes virtual row_height:32
+                    row height:32 align:center pad_x:12
+                        text "{$note.title}" font_size:14 color:$theme.ink
+        code_line code:"for note in $notes virtual row_height:32   ·   note is the row's item signal: text …$note.title…"

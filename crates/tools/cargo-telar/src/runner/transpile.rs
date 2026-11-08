@@ -26,7 +26,13 @@ pub(crate) fn transpile_workspace() -> bool {
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));
 
     // Collected before judging, so a failing member does not stop the ones after it from being transpiled and reported.
-    telar_project::workspace_member_dirs(&workspace_root)
+    let members = telar_project::workspace_member_dirs(&workspace_root);
+    for member in &members {
+        for warning in telar_project::orphan_test_warnings(member) {
+            eprintln!("[cargo-telar] warning: {}: {warning}", member.display());
+        }
+    }
+    members
         .iter()
         .map(|member| transpile_member(member, &producer, &telar_version))
         .collect::<Vec<bool>>()
@@ -121,6 +127,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
                 &src_dir,
                 &generated_dir,
                 flavour.site_file_name(),
+                telar.module_visibility(),
             );
             for problem in tree.problems() {
                 all_ok = false;
@@ -150,5 +157,5 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
 }
 
 #[cfg(test)]
-#[path = "transpile_test.rs"]
+#[path = "transpile.test.rs"]
 mod tests;

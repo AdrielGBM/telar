@@ -9,5 +9,5 @@ telar::app!(
 );
 
 #[cfg(all(test, feature = "tooling"))]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

@@ -1,12 +1,8 @@
 //! The function families this crate ships. Each is a plain function registering into a [`Registry`], which is all a host's own family needs to be too.
 //!
-//! The families follow KLWP's — `tc`, `mu` and the rest — but as one function per operation rather than a mode word as the first argument, so every form has a signature the checker can hold it to: KLWP's `tc(up, x)` is `upper(x)`, `mu(round, x)` is `round(x)`.
+//! Each family is one function per operation rather than a mode word as the first argument, so every form has a signature the checker can hold it to: `upper(x)` rather than `case(up, x)`, `round(x)` rather than `math(round, x)`.
 
-use std::fmt::Write;
-
-use crate::{
-    Arguments, CallError, ErrorCode, MAX_TEXT_BYTES, Pattern, Registry, Signature, Type, Value,
-};
+use crate::{Arguments, Budget, CallError, ErrorCode, Pattern, Registry, Signature, Type, Value};
 
 type Unary = (&'static str, fn(f64) -> f64, &'static str);
 
@@ -22,11 +18,14 @@ fn color_pattern() -> Pattern {
     Pattern::Exact(Type::Color)
 }
 
-fn bounded(text: String) -> Result<Value, CallError> {
-    if text.len() > MAX_TEXT_BYTES {
-        return Err(CallError::new(ErrorCode::text_too_long()));
-    }
-    Ok(Value::text(text))
+fn recased<I: Iterator<Item = char>>(
+    budget: &Budget,
+    text: &str,
+    map_char: fn(char) -> I,
+    map_str: fn(&str) -> String,
+) -> Result<Value, CallError> {
+    budget.charge(text.chars().flat_map(map_char).map(char::len_utf8).sum())?;
+    Ok(Value::text(map_str(text)))
 }
 
 /// Text: `fmt`, `upper`, `lower`, `trim`, `len`, `substring`, `replace`, `contains`.
@@ -42,16 +41,26 @@ pub fn text(registry: &mut Registry) {
             format,
         )
         .function("upper", text_to_text(), "The text in upper case", |a| {
-            bounded(a.text(0)?.to_uppercase())
+            recased(
+                a.budget(),
+                a.text(0)?,
+                char::to_uppercase,
+                str::to_uppercase,
+            )
         })
         .function("lower", text_to_text(), "The text in lower case", |a| {
-            bounded(a.text(0)?.to_lowercase())
+            recased(
+                a.budget(),
+                a.text(0)?,
+                char::to_lowercase,
+                str::to_lowercase,
+            )
         })
         .function(
             "trim",
             text_to_text(),
             "The text without leading or trailing whitespace",
-            |a| Ok(Value::text(a.text(0)?.trim())),
+            |a| a.budget().text(a.text(0)?.trim()),
         )
         .function(
             "len",
@@ -63,13 +72,13 @@ pub fn text(registry: &mut Registry) {
             "substring",
             Signature::new([text_pattern(), number()], Type::Text),
             "The characters from a position to the end",
-            |a| substring(a.text(0)?, a.number(1)?, f64::INFINITY),
+            |a| substring(a.budget(), a.text(0)?, a.number(1)?, f64::INFINITY),
         )
         .function(
             "substring",
             Signature::new([text_pattern(), number(), number()], Type::Text),
             "The characters from a position up to, not including, another",
-            |a| substring(a.text(0)?, a.number(1)?, a.number(2)?),
+            |a| substring(a.budget(), a.text(0)?, a.number(1)?, a.number(2)?),
         )
         .function(
             "replace",
@@ -89,13 +98,13 @@ fn format(arguments: Arguments<'_>) -> Result<Value, CallError> {
     let template = arguments.text(0)?;
     let values = arguments.rest(1);
     let malformed = || CallError::argument(0, ErrorCode::MalformedFormat);
-    let mut out = String::new();
+    let mut out = arguments.budget().writer();
     let mut next = 0;
     let mut chars = template.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
-            '{' if chars.next_if_eq(&'{').is_some() => out.push('{'),
-            '}' if chars.next_if_eq(&'}').is_some() => out.push('}'),
+            '{' if chars.next_if_eq(&'{').is_some() => out.push('{')?,
+            '}' if chars.next_if_eq(&'}').is_some() => out.push('}')?,
             '}' => return Err(malformed()),
             '{' => {
                 let mut digits = String::new();
@@ -121,15 +130,12 @@ fn format(arguments: Arguments<'_>) -> Result<Value, CallError> {
                         },
                     )
                 })?;
-                let _ = write!(out, "{value}");
-                if out.len() > MAX_TEXT_BYTES {
-                    return Err(CallError::new(ErrorCode::text_too_long()));
-                }
+                out.push_value(value)?;
             }
-            other => out.push(other),
+            other => out.push(other)?,
         }
     }
-    Ok(Value::text(out))
+    Ok(out.finish())
 }
 
 fn char_position(position: f64, len: usize) -> usize {
@@ -140,16 +146,12 @@ fn char_position(position: f64, len: usize) -> usize {
     }
 }
 
-fn substring(text: &str, start: f64, end: f64) -> Result<Value, CallError> {
+fn substring(budget: &Budget, text: &str, start: f64, end: f64) -> Result<Value, CallError> {
     let len = text.chars().count();
     let start = char_position(start, len);
     let end = char_position(end, len).max(start);
-    Ok(Value::text(
-        text.chars()
-            .skip(start)
-            .take(end - start)
-            .collect::<String>(),
-    ))
+    let byte = |at: usize| text.char_indices().nth(at).map_or(text.len(), |(i, _)| i);
+    budget.text(&text[byte(start)..byte(end)])
 }
 
 fn replace(arguments: Arguments<'_>) -> Result<Value, CallError> {
@@ -163,9 +165,7 @@ fn replace(arguments: Arguments<'_>) -> Result<Value, CallError> {
     };
     let length = (text.len() - occurrences * from.len())
         .saturating_add(occurrences.saturating_mul(to.len()));
-    if length > MAX_TEXT_BYTES {
-        return Err(CallError::new(ErrorCode::text_too_long()));
-    }
+    arguments.budget().charge(length)?;
     Ok(Value::text(text.replace(from, to)))
 }
 
@@ -316,17 +316,14 @@ fn at(arguments: Arguments<'_>) -> Result<Value, CallError> {
 fn join(arguments: Arguments<'_>) -> Result<Value, CallError> {
     let items = arguments.list(0)?;
     let separator = arguments.text(1)?;
-    let mut out = String::new();
+    let mut out = arguments.budget().writer();
     for (index, item) in items.iter().enumerate() {
         if index > 0 {
-            out.push_str(separator);
+            out.push_str(separator)?;
         }
-        let _ = write!(out, "{item}");
-        if out.len() > MAX_TEXT_BYTES {
-            return Err(CallError::new(ErrorCode::text_too_long()));
-        }
+        out.push_value(item)?;
     }
-    Ok(Value::text(out))
+    Ok(out.finish())
 }
 
 /// Colour: `mix` (in Oklch, so the middle of two saturated colours stays saturated), `alpha` and `contrast` (the WCAG ratio, 1 to 21). Fractions are clamped to `0..=1`, so `mix(a, b, 30%)` is three tenths of the way.
@@ -363,5 +360,5 @@ pub fn color(registry: &mut Registry) {
 }
 
 #[cfg(test)]
-#[path = "families_test.rs"]
+#[path = "families.test.rs"]
 mod tests;

@@ -2,7 +2,7 @@
 
 use proc_macro2::{Literal, TokenStream as TokenStream2};
 use quote::quote;
-use telar_project::{MatrixAxis, MatrixControlSize, MatrixDirection, PreviewsSection};
+use telar_project::{MatrixAxis, MatrixDirection, PreviewsSection};
 
 use crate::Invocation;
 
@@ -49,6 +49,10 @@ fn axis_tokens(axis: &MatrixAxis) -> TokenStream2 {
     let axis_path = quote! { ::telar::preview::Axis };
     match axis {
         MatrixAxis::Mode(modes) => quote! { #axis_path::Mode(&[#(#modes),*]) },
+        MatrixAxis::RegisteredModes => quote! { #axis_path::RegisteredModes },
+        MatrixAxis::CatalogLocales => quote! { #axis_path::CatalogLocales },
+        MatrixAxis::ProjectViewports => quote! { #axis_path::ProjectViewports },
+        MatrixAxis::ArgValues { name } => quote! { #axis_path::ArgValues(#name) },
         MatrixAxis::Locale(locales) => quote! { #axis_path::Locale(&[#(#locales),*]) },
         MatrixAxis::Dir(directions) => {
             let directions = directions.iter().map(|direction| match direction {
@@ -58,19 +62,10 @@ fn axis_tokens(axis: &MatrixAxis) -> TokenStream2 {
             quote! { #axis_path::Dir(&[#(#directions),*]) }
         }
         MatrixAxis::Viewport(viewports) => quote! { #axis_path::Viewport(&[#(#viewports),*]) },
-        MatrixAxis::ControlSize(sizes) => {
-            let sizes = sizes.iter().map(|size| match size {
-                MatrixControlSize::Mini => quote! { ::telar::ControlSize::Mini },
-                MatrixControlSize::Small => quote! { ::telar::ControlSize::Small },
-                MatrixControlSize::Regular => quote! { ::telar::ControlSize::Regular },
-                MatrixControlSize::Large => quote! { ::telar::ControlSize::Large },
-            });
-            quote! { #axis_path::ControlSize(&[#(#sizes),*]) }
-        }
         MatrixAxis::Arg { name, values } => quote! { #axis_path::Arg(#name, &[#(#values),*]) },
     }
 }
 
 #[cfg(test)]
-#[path = "preview_matrices_test.rs"]
+#[path = "preview_matrices.test.rs"]
 mod tests;

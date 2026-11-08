@@ -259,5 +259,5 @@ fn extend(out: &Path, name: &str, derived: &str, limit: usize, what: &str) -> Re
 }
 
 #[cfg(test)]
-#[path = "cloudflare_test.rs"]
+#[path = "cloudflare.test.rs"]
 mod tests;

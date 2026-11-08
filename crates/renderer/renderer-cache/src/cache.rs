@@ -21,9 +21,11 @@ const MIN_SWEEP_INTERVAL: Duration = Duration::from_millis(100);
 /// What one cache is holding, for a census something outside the renderer can read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CacheStat {
+    /// The label the cache was registered under in the census.
     pub name: &'static str,
     /// Resident weight, as the cache's weigh function counts it — bytes for every cache Telar builds.
     pub bytes: usize,
+    /// How many values are resident, whatever each weighs.
     pub entries: usize,
     /// The ceiling `bytes` is measured against, so a reader can tell "full" from "growing".
     pub capacity: usize,
@@ -31,7 +33,9 @@ pub struct CacheStat {
 
 /// What [`Cache::get_or_build`] hands back: the resident value, or one the cache declined to keep.
 pub enum Fetched<'a, V> {
+    /// The cache kept the value, so a later frame finds it again.
     Cached(&'a V),
+    /// The cache declined the value, so it is drawn this once and built again next time.
     Built(V),
 }
 
@@ -113,6 +117,7 @@ impl<K: Eq + Hash, V> Cache<K, V> {
         }
     }
 
+    /// The resident value for `key`, counting the lookup as a use that keeps it from going idle.
     pub fn get(&mut self, key: &K) -> Option<&V> {
         self.sweep_if_due();
         self.touch(key)
@@ -172,10 +177,12 @@ impl<K: Eq + Hash, V> Cache<K, V> {
             .map_err(|(_, rejected)| rejected.value)
     }
 
+    /// Takes `key` out of the cache and hands its value back, if it was resident.
     pub fn remove(&mut self, key: &K) -> Option<V> {
         self.entries.pop(key).map(|entry| entry.value)
     }
 
+    /// Drops every resident entry and forgets which keys admission has seen once.
     pub fn clear(&mut self) {
         self.entries.clear();
         if let Some(admission) = &mut self.admission {
@@ -194,10 +201,12 @@ impl<K: Eq + Hash, V> Cache<K, V> {
             .retain(|_, entry| now.saturating_duration_since(entry.last_used.get()) < idle);
     }
 
+    /// How many entries are resident.
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    /// Whether nothing is resident.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -207,6 +216,7 @@ impl<K: Eq + Hash, V> Cache<K, V> {
         self.entries.weight()
     }
 
+    /// The ceiling [`weight`](Self::weight) is held under, from the policy this cache was built with.
     pub fn capacity(&self) -> usize {
         self.entries.capacity()
     }
@@ -239,5 +249,5 @@ impl<K: Eq + Hash, V> Cache<K, V> {
 }
 
 #[cfg(test)]
-#[path = "cache_test.rs"]
+#[path = "cache.test.rs"]
 mod tests;

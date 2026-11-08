@@ -211,5 +211,5 @@ fn underline_overshoot(style: &TextStyle, spans: Option<&[Span]>) -> f32 {
 const UNDERLINE_FROM_FONT_RATIO: f32 = 0.15;
 
 #[cfg(test)]
-#[path = "culling_test.rs"]
+#[path = "culling.test.rs"]
 mod tests;

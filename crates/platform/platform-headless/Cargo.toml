@@ -14,3 +14,4 @@ repository = { workspace = true }
 platform-core = { workspace = true }
 
 raw-window-handle = { workspace = true }
+tracing = { workspace = true }

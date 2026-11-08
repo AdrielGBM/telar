@@ -8,6 +8,9 @@ pub(crate) const ACCESSIBILITY: &str = "accessibility";
 pub(crate) const APP_PANIC: &str = "app_panic";
 pub(crate) const APP_PANICKED: &str = "app_panicked";
 pub(crate) const APP_PANICKED_HINT: &str = "app_panicked_hint";
+pub(crate) const APP_UNREADABLE: &str = "app_unreadable";
+pub(crate) const APP_UNREADABLE_HINT: &str = "app_unreadable_hint";
+pub(crate) const APP_UNREADABLE_REASON: &str = "app_unreadable_reason";
 pub(crate) const AUDIT_CLEAN: &str = "audit_clean";
 pub(crate) const AUDIT_UNAVAILABLE: &str = "audit_unavailable";
 pub(crate) const BORDER: &str = "border";
@@ -66,6 +69,12 @@ static CATALOG: Catalog = Catalog {
             APP_PANICKED_HINT,
             "Nothing more of this build runs; the next build that compiles takes over."
         ),
+        english!(APP_UNREADABLE, "Out of step with this host"),
+        english!(
+            APP_UNREADABLE_HINT,
+            "This build answers in a way this host cannot read, so nothing of it runs; restart cargo telar to build both from the same sources."
+        ),
+        english!(APP_UNREADABLE_REASON, "What could not be read"),
         english!(AUDIT_CLEAN, "No problems found."),
         english!(
             AUDIT_UNAVAILABLE,
@@ -134,5 +143,5 @@ pub(crate) fn text_with(key: &str, arg: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "strings_test.rs"]
+#[path = "strings.test.rs"]
 mod tests;

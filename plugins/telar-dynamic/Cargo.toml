@@ -102,6 +102,7 @@ telar = { workspace = true, features = ["async-assets"] }
 document-features = { workspace = true, optional = true }
 image = { workspace = true, features = ["png", "jpeg"], optional = true }
 sha2 = "0.11.1"
+tempfile = { workspace = true }
 tracing = { workspace = true }
 
 # Target-gated rather than plain-optional: `http` is one feature with two bodies, and neither client is
@@ -126,7 +127,7 @@ web-sys = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-# Self-referencing so `src/http_assets_test.rs` gets the transport and the decoder it exercises without them
+# Self-referencing so `src/http_assets.test.rs` gets the transport and the decoder it exercises without them
 # being defaults every dependent links. That test is real coverage of the HTTP path end to end, not an
 # `--all-features`-only extra.
 telar-dynamic = { path = ".", features = ["http", "svg"] }
@@ -136,7 +137,7 @@ telar-dynamic = { path = ".", features = ["http", "svg"] }
 
 [[test]]
 name = "http_assets"
-path = "src/http_assets_test.rs"
+path = "src/http_assets.test.rs"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

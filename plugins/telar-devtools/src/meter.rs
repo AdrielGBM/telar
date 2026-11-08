@@ -85,5 +85,5 @@ impl FrameMeter {
 }
 
 #[cfg(test)]
-#[path = "meter_test.rs"]
+#[path = "meter.test.rs"]
 mod tests;

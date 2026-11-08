@@ -12,19 +12,16 @@ use services_core::Clipboard;
 /// Reading the real clipboard would mean an OSC 52 query, whose answer arrives as *input* — interleaved with the user's keystrokes, on a terminal that may never reply at all, and which most emulators disable by default because it lets any program read the user's clipboard. So a paste of something copied elsewhere reaches the app the way it does in every other terminal program: the terminal's own paste, which arrives as bracketed-paste input.
 pub struct OscClipboard {
     last_copied: Mutex<String>,
+    out: Mutex<Box<dyn Write + Send>>,
 }
 
 impl OscClipboard {
-    pub fn new() -> Self {
+    /// A clipboard that has not copied anything yet, asking the terminal on the other end of `out`.
+    pub fn new(out: impl Write + Send + 'static) -> Self {
         Self {
             last_copied: Mutex::new(String::new()),
+            out: Mutex::new(Box::new(out)),
         }
-    }
-}
-
-impl Default for OscClipboard {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -39,9 +36,10 @@ impl Clipboard for OscClipboard {
             last.clear();
             last.push_str(text);
         }
-        let mut out = std::io::stdout();
-        let _ = write!(out, "\x1b]52;c;{}\x07", base64(text.as_bytes()));
-        let _ = out.flush();
+        if let Ok(mut out) = self.out.lock() {
+            let _ = write!(out, "\x1b]52;c;{}\x07", base64(text.as_bytes()));
+            let _ = out.flush();
+        }
     }
 }
 
@@ -73,5 +71,5 @@ fn base64(input: &[u8]) -> String {
 }
 
 #[cfg(test)]
-#[path = "clipboard_test.rs"]
+#[path = "clipboard.test.rs"]
 mod tests;

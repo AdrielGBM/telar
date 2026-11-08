@@ -1,0 +1,167 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element tree
+            clip 270,140 260x320
+              matrix 1,0,0,1,270,140
+                element group
+                  element group
+                    element treeitem
+                      rect 4,0 252x36 radius=6
+                      element group
+                        element group
+                          matrix 1,0,0,1,14,15
+                            path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#ebedf5b3
+                          end
+                        end
+                      end
+                      element group
+                        clip 32,0 216x36
+                          matrix 1,0,0,1,32,0
+                            text 0,10 216x16.8 "src" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,36 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        clip 48,36 200x36
+                          matrix 1,0,0,1,48,36
+                            text 0,10 200x16.8 "main.rs" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,72 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        clip 48,72 185x36
+                          matrix 1,0,0,1,48,72
+                            text 0,10 185.25x16.8 "lib.rs" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                      element group
+                        matrix 1,0,0,1,237,72
+                          text 0,11 11x14.28 "M" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,108 252x36 radius=6
+                      element group
+                        element group
+                          matrix 1,0,0,1,30,123
+                            path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#ebedf5b3
+                          end
+                        end
+                      end
+                      element group
+                        clip 48,108 200x36
+                          matrix 1,0,0,1,48,108
+                            text 0,10 200x16.8 "ui" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,144 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        clip 64,144 184x36
+                          matrix 1,0,0,1,64,144
+                            text 0,10 184x16.8 "button.rs" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,180 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        clip 64,180 172x36
+                          matrix 1,0,0,1,64,180
+                            text 0,10 172x16.8 "theme.rs" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                      element group
+                        matrix 1,0,0,1,240,180
+                          text 0,11 8.22x14.28 "A" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,216 252x36 fill=#ffffff1a radius=6
+                      element group
+                        element group
+                          matrix 1,0,0,1,14,231
+                            path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#ebedf5b3
+                          end
+                        end
+                      end
+                      element group
+                        clip 32,216 216x36
+                          matrix 1,0,0,1,32,216
+                            text 0,10 216x16.8 "tests" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,252 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        clip 48,252 200x36
+                          matrix 1,0,0,1,48,252
+                            text 0,10 200x16.8 "smoke.rs" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,288 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        clip 32,288 216x36
+                          matrix 1,0,0,1,32,288
+                            text 0,10 216x16.8 "Cargo.toml" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,324 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        clip 32,324 216x36
+                          matrix 1,0,0,1,32,324
+                            text 0,10 216x16.8 "README.md" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

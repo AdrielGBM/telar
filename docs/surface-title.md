@@ -60,14 +60,14 @@ telar::set_title_format(|parts| match parts.page {
 ## A title bar of your own
 
 A desktop app that draws its own title bar reads the title with `telar::window::title()` and builds the rest
-from `telar-components`, under its `chrome` feature: the window's controls, and the behaviour that makes a box
+from `telar-components`: the window's controls, and the behaviour that makes a box
 the app owns the window's title bar.
 
 ```rust
 use telar_components::{TitleBarOptions, WindowControlsProps, title_bar, window_controls, window_edges};
 
 let title = Text::declaring(telar::window::title, LayoutStyle::new(), |text| text)?;
-let controls = window_controls(WindowControlsProps::props().build(), Children::default())?;
+let controls = window_controls(WindowControlsProps::props().build())?;
 let bar = StyledContainer::new(bar_style(), |_| RectStyle::default(), vec![box_item(title), controls])?
     .role(Role::Banner);
 let bar = title_bar(bar, TitleBarOptions { replace_decorations: true, ..TitleBarOptions::default() });

@@ -1,16 +1,15 @@
 //! The workbench theme: the one look the workshop and the overlay share, light and dark, applied to a subtree without touching the application's own theme.
 
 use telar::{
-    Border, BorderRadius, Color, ColorScheme, ControlSize, Declared, FontFamily, LayoutError,
-    LayoutItem, LayoutStyle, RectStyle, ScopeProvider, ScopedTheme, TextStyle, ThemeTokens,
-    follow_theme, provide_theme, use_resolved_scheme, use_theme_extension, use_theme_tokens,
+    Border, BorderRadius, Color, ColorScheme, Declared, FontFamily, LayoutError, LayoutItem,
+    LayoutStyle, RectStyle, ScopeProvider, ScopedTheme, TextStyle, ThemeTokens, follow_theme,
+    provide_theme, use_resolved_scheme, use_theme_extension, use_theme_tokens,
 };
 use telar_components::ResizableTokens;
 
 pub const WORKBENCH_TEXT_SIZE: f32 = 13.0;
 pub const WORKBENCH_RADIUS: f32 = 6.0;
 pub const WORKBENCH_GRID: f32 = 8.0;
-pub const WORKBENCH_CONTROL_SIZE: ControlSize = ControlSize::Regular;
 
 const fn hex(rgb: u32) -> Color {
     Color::rgba(
@@ -231,5 +230,5 @@ pub fn workbench_fill() -> LayoutStyle {
 }
 
 #[cfg(test)]
-#[path = "workbench_test.rs"]
+#[path = "workbench.test.rs"]
 mod tests;

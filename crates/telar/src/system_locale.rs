@@ -37,5 +37,5 @@ pub fn follow_system_locale(
 }
 
 #[cfg(test)]
-#[path = "system_locale_test.rs"]
+#[path = "system_locale.test.rs"]
 mod tests;

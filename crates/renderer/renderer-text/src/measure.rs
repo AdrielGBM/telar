@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use renderer_core::{Span, TextStyle};
+use renderer_core::{Span, TextLine, TextStyle};
 
 use crate::TextShaper;
 use crate::fonts::{self, Fonts};
@@ -64,6 +64,16 @@ impl renderer_core::TextMetrics for ShaperMetrics {
         font_size * crate::LINE_HEIGHT_FACTOR
     }
 
+    fn laid_lines(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<TextLine> {
+        with_shaper(|shaper| shaper.laid_lines(text, spans, max_width, style))
+    }
+
     fn index_at(
         &self,
         text: &str,
@@ -73,16 +83,6 @@ impl renderer_core::TextMetrics for ShaperMetrics {
         at: (f32, f32),
     ) -> Option<usize> {
         with_shaper(|shaper| shaper.index_at(text, spans, max_width, style, at))
-    }
-
-    fn line_starts(
-        &self,
-        text: &str,
-        spans: Option<&[Span]>,
-        max_width: f32,
-        style: &TextStyle,
-    ) -> Vec<usize> {
-        with_shaper(|shaper| shaper.line_starts(text, spans, max_width, style))
     }
 }
 
@@ -114,5 +114,5 @@ pub fn font_family_available(family: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "measure_test.rs"]
+#[path = "measure.test.rs"]
 mod tests;

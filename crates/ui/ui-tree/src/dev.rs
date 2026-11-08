@@ -5,6 +5,7 @@
 use std::borrow::Cow;
 
 use crate::SegmentNodeInfo;
+use platform_core::guest::GuestStop;
 use platform_core::{AccessNode, AccessViolation, Event};
 use renderer_core::DrawCommand;
 
@@ -90,9 +91,11 @@ pub trait DevOverlay: Default + 'static {
         let _ = outcome;
     }
 
-    /// Sets (or clears with `None`) the report of a panic that stopped the app, which then runs nothing until a rebuild loads. An overlay with no way of its own to say so shows it as it shows a failed build.
-    fn set_app_panic(&mut self, panic: Option<String>) {
-        self.set_build_outcome(panic.map_or(BuildOutcome::Loaded, BuildOutcome::Failed));
+    /// Sets (or clears with `None`) why the app stopped, which then runs nothing: a panic, until a rebuild loads, or an answer the host cannot read, until the session restarts. An overlay with no way of its own to say so shows it as it shows a failed build.
+    fn set_app_stop(&mut self, stop: Option<GuestStop>) {
+        self.set_build_outcome(stop.map_or(BuildOutcome::Loaded, |stop| {
+            BuildOutcome::Failed(stop.to_string())
+        }));
     }
 
     /// Names the backend that is now drawing, so the overlay can say which one `ctrl+shift+b` just switched to.

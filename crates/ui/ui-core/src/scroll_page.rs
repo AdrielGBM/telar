@@ -138,5 +138,5 @@ impl Component for ScrollPage {
 }
 
 #[cfg(test)]
-#[path = "scroll_page_test.rs"]
+#[path = "scroll_page.test.rs"]
 mod tests;

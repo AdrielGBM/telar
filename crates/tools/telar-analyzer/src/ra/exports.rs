@@ -43,7 +43,7 @@ impl Analyzer {
         let mut exports: Vec<Option<Vec<CompletionItem>>> = answers
             .into_iter()
             .map(|answer| {
-                let items = completion_list(answer?);
+                let items = completion_list(answer.ok()?);
                 (!items.is_empty()).then(|| keep(&items))
             })
             .collect();
@@ -78,8 +78,9 @@ impl Analyzer {
             .request_all("completionItem/resolve", params, QUERY_TIMEOUT)
             .await;
         for (item, answer) in unresolved.into_iter().zip(answers) {
-            if let Some(resolved) =
-                answer.and_then(|value| serde_json::from_value::<CompletionItem>(value).ok())
+            if let Some(resolved) = answer
+                .ok()
+                .and_then(|value| serde_json::from_value::<CompletionItem>(value).ok())
             {
                 item.detail = resolved.detail.or(item.detail.take());
                 item.documentation = resolved.documentation.or(item.documentation.take());
@@ -112,5 +113,5 @@ fn probe_text(base: &str, paths: &[String]) -> (String, Vec<usize>) {
 }
 
 #[cfg(test)]
-#[path = "exports_test.rs"]
+#[path = "exports.test.rs"]
 mod tests;

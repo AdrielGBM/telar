@@ -31,7 +31,7 @@ struct Registry {
     // Weak so a dropped/unmounted `Animated` deregisters itself; keyed by animation id for idempotent re-registration.
     entries: HashMap<u64, Weak<dyn Tickable>>,
     next_id: u64,
-    // Global time scale (D5): 1.0 normal, 0.0 = jump instantly to targets, in-between = slow motion.
+    // Global time scale: 1.0 normal, 0.0 = jump instantly to targets, in-between = slow motion.
     scale: f32,
     follow_reduced_motion: bool,
     // Here rather than in their own registry: the runner asks the same question of both, and this one already crosses the hot-reload FFI boundary a second registry would have to duplicate.
@@ -161,7 +161,7 @@ pub fn reset() {
     });
 }
 
-/// Set the global time scale (D5). 1.0 is normal; 0.0 makes animations jump instantly to their targets; values in between slow motion down. Negative inputs clamp to 0.0.
+/// Set the global time scale. 1.0 is normal; 0.0 makes animations jump instantly to their targets; values in between slow motion down. Negative inputs clamp to 0.0.
 pub fn set_scale(scale: f32) {
     REGISTRY.with(|r| r.borrow_mut().scale = scale.max(0.0));
 }
@@ -184,5 +184,5 @@ pub fn follows_reduced_motion() -> bool {
 }
 
 #[cfg(test)]
-#[path = "ticker_test.rs"]
+#[path = "ticker.test.rs"]
 mod tests;

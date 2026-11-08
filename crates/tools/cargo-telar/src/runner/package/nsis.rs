@@ -109,5 +109,5 @@ pub(crate) fn build_nsis(cargo_args: Vec<String>, config: TelarSection) -> ! {
 }
 
 #[cfg(test)]
-#[path = "nsis_test.rs"]
+#[path = "nsis.test.rs"]
 mod tests;

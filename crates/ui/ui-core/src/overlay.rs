@@ -545,5 +545,5 @@ impl Overlay {
 }
 
 #[cfg(test)]
-#[path = "overlay_test.rs"]
+#[path = "overlay.test.rs"]
 mod tests;

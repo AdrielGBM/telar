@@ -2,7 +2,8 @@
 
 use std::rc::Rc;
 
-use layout_core::{Direction, NodeId};
+use i18n_core::Direction;
+use layout_core::NodeId;
 use platform_core::Cursor;
 use reactive_core::{OwnerId, RwSignal, signal};
 use renderer_core::{Declared, TextStyle};
@@ -18,7 +19,7 @@ pub struct Inherited {
 }
 
 impl Inherited {
-    /// `telar/src/text_style_baseline_test.rs` asserts these values against a real frame, so changing one is a decision.
+    /// `telar/src/text_style_baseline.test.rs` asserts these values against a real frame, so changing one is a decision.
     pub fn initial() -> Self {
         Self::from_tokens(&*use_theme_tokens())
     }
@@ -349,6 +350,17 @@ pub fn inherited_text_style(node: NodeId) -> TextStyle {
     context(node).text_style()
 }
 
+/// The text style of the place `node` sits in: what it inherits from above, without what it declares itself.
+pub(crate) fn text_around(node: NodeId) -> TextStyle {
+    match lineage(node).nth(1) {
+        Some(parent) => inherited_text_style(parent),
+        None => {
+            let _ = with_cascade_ref(|c| c.structure).get();
+            Inherited::initial().text_style()
+        }
+    }
+}
+
 /// [`inherited_text_style`] for a leaf whose style is read before its node exists — a measured leaf builds its measure first — which resolves against the surface's root until it has one.
 pub(crate) fn inherited_text_style_at(node: Option<NodeId>) -> TextStyle {
     match node {
@@ -358,5 +370,5 @@ pub(crate) fn inherited_text_style_at(node: Option<NodeId>) -> TextStyle {
 }
 
 #[cfg(test)]
-#[path = "inherit_test.rs"]
+#[path = "inherit.test.rs"]
 mod tests;

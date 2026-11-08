@@ -19,8 +19,8 @@ use platform_headless::HeadlessWindow;
 use renderer_core::{Color, DrawCommand, RenderBackend};
 use renderer_hardware::HardwareRenderer;
 use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
-use renderer_tui::{CellMetrics, CellSize, ColorDepth, TuiConfig, TuiRenderer};
-use telar::{App, Event};
+use renderer_tui::{CellMetrics, ColorDepth, TuiConfig, TuiRenderer};
+use telar::{App, CellSize, Event};
 
 const WINDOW_W: u32 = 1200;
 const WINDOW_H: u32 = 900;

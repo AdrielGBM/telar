@@ -1332,6 +1332,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                 &shadow_style,
                                 &mut self.pending_shadow_path_vertices,
                                 &mut self.pending_shadow_path_indices,
+                                self.draw_state.cumulative_matrix,
                                 &mut self.pending_shadow_path_fill_data,
                             )
                         });
@@ -1401,7 +1402,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     {
                         let vertex_start = self.pending_path_vertices.len();
                         let index_start = self.pending_path_indices.len() as u32;
-                        let fill_data_start = self.pending_path_fill_data.len();
                         crate::caches::with_shared(|caches| {
                             crate::primitives::path::prepare_path(
                                 &mut caches.path_tess,
@@ -1409,6 +1409,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                 &style,
                                 &mut self.pending_path_vertices,
                                 &mut self.pending_path_indices,
+                                self.draw_state.cumulative_matrix,
                                 &mut self.pending_path_fill_data,
                             )
                         });
@@ -1417,14 +1418,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                 self.draw_state.apply_point(v.position[0], v.position[1]);
                             v.position[0] = wx;
                             v.position[1] = wy;
-                        }
-                        for fd in &mut self.pending_path_fill_data[fill_data_start..] {
-                            let (gx0, gy0) =
-                                self.draw_state.apply_point(fd.grad_p0[0], fd.grad_p0[1]);
-                            let (gx1, gy1) =
-                                self.draw_state.apply_point(fd.grad_p1[0], fd.grad_p1[1]);
-                            fd.grad_p0 = [gx0, gy0];
-                            fd.grad_p1 = [gx1, gy1];
                         }
                         let index_end = self.pending_path_indices.len() as u32;
                         if index_end > index_start {
@@ -3016,5 +3009,5 @@ fn plan_frame(
 }
 
 #[cfg(test)]
-#[path = "frame_test.rs"]
+#[path = "frame.test.rs"]
 mod tests;

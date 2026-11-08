@@ -14,7 +14,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
 use geometry_core::LayoutGrid;
-use platform_core::guest::{HostServices, HostThread, LentBytes, Reply, Service, serve};
+use platform_core::guest::{
+    ArgShape, HostServices, HostThread, LentBytes, Reply, Service, TypeLayout, UpperServices, serve,
+};
 use platform_core::{KeyboardConvention, LocationFormat};
 use reactive_local::threads::{Joinable, Spawner};
 use renderer_core::{ExclusiveFontsError, FontAsset, FontConfig, FontHost, FontSources};
@@ -50,7 +52,7 @@ struct Backends {
 }
 
 impl ServedServices {
-    /// What this side has installed, served as it is now. `fonts` is this side's font database for a guest's shaper to defer to, `renderer_text::fonts::Served` in a build that shapes its own text; `None` where there is none, and for a guest that is this process's own, whose text already sets in the one database.
+    /// What this side has installed, served as it is now. `fonts` is this side's font database for a guest's shaper to defer to, `renderer_text::fonts::served()` in a build that links the shaper; `None` where there is none, and for a guest that is this process's own, whose text already sets in the one database.
     pub fn installed(fonts: Option<Arc<dyn FontHost>>) -> Self {
         Self {
             backends: Box::new(Backends {
@@ -70,41 +72,91 @@ impl ServedServices {
     }
 
     /// The table a guest is handed, valid for as long as `self` lives; an entry is missing where this side has no such backend.
-    pub fn table(&self) -> HostServices {
+    pub fn table(&self) -> HostServices<UpperTable> {
         let backends = &*self.backends;
-        let some = |present: bool, entry: Entry| present.then_some(entry);
         HostServices {
             data: std::ptr::from_ref(backends).cast(),
             clipboard_text: some(backends.clipboard.is_some(), clipboard_text),
             set_clipboard_text: some(backends.clipboard.is_some(), set_clipboard_text),
             open_uri: some(backends.uri_opener.is_some(), open_uri),
             open_beside: some(backends.uri_opener.is_some(), open_beside),
-            open_file: some(backends.file_dialogs.is_some(), open_file),
-            open_files: some(backends.file_dialogs.is_some(), open_files),
-            save_file: some(backends.file_dialogs.is_some(), save_file),
-            pick_folder: some(backends.file_dialogs.is_some(), pick_folder),
             stored_preference: Some(stored_preference),
             store_preference: Some(store_preference),
-            app_paths: Some(app_dirs),
             keyboard_convention: Some(keyboard_convention),
             location_format: Some(location_format),
             asset_base: Some(asset_base),
             layout_grid: Some(layout_grid),
             wake_loop: some(backends.loop_waker.is_some(), wake_loop),
-            font_sources: some(backends.fonts.is_some(), font_sources),
-            install_fonts: some(backends.fonts.is_some(), install_fonts),
-            add_font_faces: some(backends.fonts.is_some(), add_font_faces),
-            install_only_fonts: some(backends.fonts.is_some(), install_only_fonts),
             spawn_thread: Some(platform_core::guest::spawn_thread),
             join_thread: Some(platform_core::guest::join_thread),
             detach_thread: Some(platform_core::guest::detach_thread),
+            upper: UpperTable {
+                open_file: some(backends.file_dialogs.is_some(), open_file),
+                open_files: some(backends.file_dialogs.is_some(), open_files),
+                save_file: some(backends.file_dialogs.is_some(), save_file),
+                pick_folder: some(backends.file_dialogs.is_some(), pick_folder),
+                app_paths: Some(app_dirs),
+                install_fonts: some(backends.fonts.is_some(), install_fonts),
+                add_font_faces: some(backends.fonts.is_some(), add_font_faces),
+                install_only_fonts: some(backends.fonts.is_some(), install_only_fonts),
+            },
         }
     }
 }
 
-type Entry = unsafe extern "C" fn(*const c_void, LentBytes, Reply);
+fn some<Entry>(present: bool, entry: Entry) -> Option<Entry> {
+    present.then_some(entry)
+}
 
-unsafe extern "C" fn clipboard_text(data: *const c_void, request: LentBytes, reply: Reply) {
+/// What installing only some faces answers: the sources then, or why they could not be the only ones; `None` where the host has no font database.
+type OnlyFonts = Option<Result<FontSources, ExclusiveFontsError>>;
+
+/// The services of [`HostServices`] whose values live above `platform-core`: file dialogs, the app's name and directories, and the font database, each typed like the rest of the table.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct UpperTable {
+    pub(crate) open_file: Service<FileDialog, Option<PathBuf>>,
+    pub(crate) open_files: Service<FileDialog, Vec<PathBuf>>,
+    pub(crate) save_file: Service<FileDialog, Option<PathBuf>>,
+    pub(crate) pick_folder: Service<FileDialog, Option<PathBuf>>,
+    pub(crate) app_paths: Service<(), Option<AppDirs>>,
+    pub(crate) install_fonts: Service<FontConfig, Option<FontSources>>,
+    pub(crate) add_font_faces: Service<Vec<FontAsset>, Option<FontSources>>,
+    pub(crate) install_only_fonts: Service<(Vec<FontAsset>, Vec<String>), OnlyFonts>,
+}
+
+impl UpperServices for UpperTable {
+    const NONE: Self = Self {
+        open_file: None,
+        open_files: None,
+        save_file: None,
+        pick_folder: None,
+        app_paths: None,
+        install_fonts: None,
+        add_font_faces: None,
+        install_only_fonts: None,
+    };
+    const LAYOUT: TypeLayout = platform_core::type_layout!(UpperTable {
+        open_file,
+        open_files,
+        save_file,
+        pick_folder,
+        app_paths,
+        install_fonts,
+        add_font_faces,
+        install_only_fonts,
+    });
+}
+
+impl ArgShape for UpperTable {
+    const ARG_SHAPE: u64 = <Self as UpperServices>::LAYOUT.shape;
+}
+
+unsafe extern "C" fn clipboard_text(
+    data: *const c_void,
+    request: LentBytes<()>,
+    reply: Reply<Option<String>>,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.clipboard
@@ -114,7 +166,11 @@ unsafe extern "C" fn clipboard_text(data: *const c_void, request: LentBytes, rep
     }
 }
 
-unsafe extern "C" fn set_clipboard_text(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn set_clipboard_text(
+    data: *const c_void,
+    request: LentBytes<String>,
+    reply: Reply<()>,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, text: String| {
             if let Some(clipboard) = &host.clipboard {
@@ -124,7 +180,7 @@ unsafe extern "C" fn set_clipboard_text(data: *const c_void, request: LentBytes,
     }
 }
 
-unsafe extern "C" fn open_uri(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn open_uri(data: *const c_void, request: LentBytes<Uri>, reply: Reply<bool>) {
     unsafe {
         serve(data, request, reply, |host: &Backends, uri: Uri| {
             host.uri_opener
@@ -134,7 +190,11 @@ unsafe extern "C" fn open_uri(data: *const c_void, request: LentBytes, reply: Re
     }
 }
 
-unsafe extern "C" fn open_beside(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn open_beside(
+    data: *const c_void,
+    request: LentBytes<RouteAddress>,
+    reply: Reply<bool>,
+) {
     unsafe {
         serve(
             data,
@@ -149,7 +209,11 @@ unsafe extern "C" fn open_beside(data: *const c_void, request: LentBytes, reply:
     }
 }
 
-unsafe extern "C" fn open_file(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn open_file(
+    data: *const c_void,
+    request: LentBytes<FileDialog>,
+    reply: Reply<Option<PathBuf>>,
+) {
     unsafe {
         serve(
             data,
@@ -164,7 +228,11 @@ unsafe extern "C" fn open_file(data: *const c_void, request: LentBytes, reply: R
     }
 }
 
-unsafe extern "C" fn open_files(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn open_files(
+    data: *const c_void,
+    request: LentBytes<FileDialog>,
+    reply: Reply<Vec<PathBuf>>,
+) {
     unsafe {
         serve(
             data,
@@ -179,7 +247,11 @@ unsafe extern "C" fn open_files(data: *const c_void, request: LentBytes, reply: 
     }
 }
 
-unsafe extern "C" fn save_file(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn save_file(
+    data: *const c_void,
+    request: LentBytes<FileDialog>,
+    reply: Reply<Option<PathBuf>>,
+) {
     unsafe {
         serve(
             data,
@@ -194,7 +266,11 @@ unsafe extern "C" fn save_file(data: *const c_void, request: LentBytes, reply: R
     }
 }
 
-unsafe extern "C" fn pick_folder(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn pick_folder(
+    data: *const c_void,
+    request: LentBytes<FileDialog>,
+    reply: Reply<Option<PathBuf>>,
+) {
     unsafe {
         serve(
             data,
@@ -209,7 +285,11 @@ unsafe extern "C" fn pick_folder(data: *const c_void, request: LentBytes, reply:
     }
 }
 
-unsafe extern "C" fn stored_preference(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn stored_preference(
+    data: *const c_void,
+    request: LentBytes<String>,
+    reply: Reply<Option<String>>,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, key: String| {
             host.preferences.get(&key)
@@ -217,7 +297,11 @@ unsafe extern "C" fn stored_preference(data: *const c_void, request: LentBytes, 
     }
 }
 
-unsafe extern "C" fn store_preference(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn store_preference(
+    data: *const c_void,
+    request: LentBytes<(String, Option<String>)>,
+    reply: Reply<()>,
+) {
     unsafe {
         serve(
             data,
@@ -230,7 +314,11 @@ unsafe extern "C" fn store_preference(data: *const c_void, request: LentBytes, r
     }
 }
 
-unsafe extern "C" fn app_dirs(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn app_dirs(
+    data: *const c_void,
+    request: LentBytes<()>,
+    reply: Reply<Option<AppDirs>>,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.app_paths.as_ref().map(AppDirs::of)
@@ -238,7 +326,11 @@ unsafe extern "C" fn app_dirs(data: *const c_void, request: LentBytes, reply: Re
     }
 }
 
-unsafe extern "C" fn keyboard_convention(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn keyboard_convention(
+    data: *const c_void,
+    request: LentBytes<()>,
+    reply: Reply<KeyboardConvention>,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.keyboard_convention
@@ -246,7 +338,11 @@ unsafe extern "C" fn keyboard_convention(data: *const c_void, request: LentBytes
     }
 }
 
-unsafe extern "C" fn location_format(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn location_format(
+    data: *const c_void,
+    request: LentBytes<()>,
+    reply: Reply<Option<LocationFormat>>,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.location_format.clone()
@@ -254,7 +350,11 @@ unsafe extern "C" fn location_format(data: *const c_void, request: LentBytes, re
     }
 }
 
-unsafe extern "C" fn asset_base(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn asset_base(
+    data: *const c_void,
+    request: LentBytes<()>,
+    reply: Reply<Option<String>>,
+) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             host.asset_base.clone()
@@ -262,11 +362,15 @@ unsafe extern "C" fn asset_base(data: *const c_void, request: LentBytes, reply: 
     }
 }
 
-unsafe extern "C" fn layout_grid(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn layout_grid(
+    data: *const c_void,
+    request: LentBytes<()>,
+    reply: Reply<LayoutGrid>,
+) {
     unsafe { serve(data, request, reply, |host: &Backends, ()| host.layout_grid) }
 }
 
-unsafe extern "C" fn wake_loop(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn wake_loop(data: *const c_void, request: LentBytes<()>, reply: Reply<()>) {
     unsafe {
         serve(data, request, reply, |host: &Backends, ()| {
             if let Some(wake) = &host.loop_waker {
@@ -276,15 +380,11 @@ unsafe extern "C" fn wake_loop(data: *const c_void, request: LentBytes, reply: R
     }
 }
 
-unsafe extern "C" fn font_sources(data: *const c_void, request: LentBytes, reply: Reply) {
-    unsafe {
-        serve(data, request, reply, |host: &Backends, ()| {
-            host.fonts.as_ref().and_then(|fonts| fonts.sources())
-        })
-    }
-}
-
-unsafe extern "C" fn install_fonts(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn install_fonts(
+    data: *const c_void,
+    request: LentBytes<FontConfig>,
+    reply: Reply<Option<FontSources>>,
+) {
     unsafe {
         serve(
             data,
@@ -297,7 +397,11 @@ unsafe extern "C" fn install_fonts(data: *const c_void, request: LentBytes, repl
     }
 }
 
-unsafe extern "C" fn add_font_faces(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn add_font_faces(
+    data: *const c_void,
+    request: LentBytes<Vec<FontAsset>>,
+    reply: Reply<Option<FontSources>>,
+) {
     unsafe {
         serve(
             data,
@@ -310,7 +414,11 @@ unsafe extern "C" fn add_font_faces(data: *const c_void, request: LentBytes, rep
     }
 }
 
-unsafe extern "C" fn install_only_fonts(data: *const c_void, request: LentBytes, reply: Reply) {
+unsafe extern "C" fn install_only_fonts(
+    data: *const c_void,
+    request: LentBytes<(Vec<FontAsset>, Vec<String>)>,
+    reply: Reply<OnlyFonts>,
+) {
     unsafe {
         serve(
             data,
@@ -327,7 +435,7 @@ unsafe extern "C" fn install_only_fonts(data: *const c_void, request: LentBytes,
 
 /// The host's app name and the directories its provider answered, read once: a guest nests its own under the same name, so both keep their files in one place.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct AppDirs {
+pub(crate) struct AppDirs {
     name: String,
     config: Option<PathBuf>,
     data: Option<PathBuf>,
@@ -396,17 +504,21 @@ impl AppPathsProvider for AppDirs {
 }
 
 /// The table as a guest holds it, shared by every backend [`install_host_services`] makes of it and freed with the last of them.
-struct Host(HostServices);
+struct Host(HostServices<UpperTable>);
 
 impl Host {
-    fn ask<T: Wire>(&self, entry: fn(&HostServices) -> Service, request: &impl Wire) -> Option<T> {
+    fn ask<Request: Wire, Answer: Wire>(
+        &self,
+        entry: fn(&HostServices<UpperTable>) -> Service<Request, Answer>,
+        request: &Request,
+    ) -> Option<Answer> {
         // The table came through `install_host_services`, whose caller vouched that the host keeps it until this copy is unloaded, and every backend holding this is freed by then.
         unsafe { self.0.ask(entry(&self.0), request) }
     }
 }
 
 /// The table every thread of a guest's is started through, kept as the plain data it is: what [`install_host_services`] routes this copy's spawns to holds nothing the host's unload has to free, so a thread started while the guest is being released still starts on the host.
-struct HostThreads(RwLock<Option<HostServices>>);
+struct HostThreads(RwLock<Option<HostServices<UpperTable>>>);
 
 static HOST_THREADS: HostThreads = HostThreads(RwLock::new(None));
 
@@ -430,7 +542,7 @@ unsafe impl Spawner for HostThreads {
 
 /// A thread the host started for this copy, handed back to it exactly once: joined, or let go when dropped unjoined.
 struct OnHost {
-    table: HostServices,
+    table: HostServices<UpperTable>,
     thread: Option<HostThread>,
 }
 
@@ -454,14 +566,12 @@ struct HostClipboard(Arc<Host>);
 
 impl Clipboard for HostClipboard {
     fn text(&self) -> Option<String> {
-        self.0
-            .ask::<Option<String>>(|table| table.clipboard_text, &())
-            .flatten()
+        self.0.ask(|table| table.clipboard_text, &()).flatten()
     }
 
     fn set_text(&self, text: &str) {
         self.0
-            .ask::<()>(|table| table.set_clipboard_text, &text.to_owned());
+            .ask(|table| table.set_clipboard_text, &text.to_owned());
     }
 }
 
@@ -483,21 +593,27 @@ struct HostFileDialogs(Arc<Host>);
 
 impl FileDialogs for HostFileDialogs {
     fn open_file(&self, request: FileDialog) -> Option<PathBuf> {
-        self.0.ask(|table| table.open_file, &request).flatten()
+        self.0
+            .ask(|table| table.upper.open_file, &request)
+            .flatten()
     }
 
     fn open_files(&self, request: FileDialog) -> Vec<PathBuf> {
         self.0
-            .ask(|table| table.open_files, &request)
+            .ask(|table| table.upper.open_files, &request)
             .unwrap_or_default()
     }
 
     fn save_file(&self, request: FileDialog) -> Option<PathBuf> {
-        self.0.ask(|table| table.save_file, &request).flatten()
+        self.0
+            .ask(|table| table.upper.save_file, &request)
+            .flatten()
     }
 
     fn pick_folder(&self, request: FileDialog) -> Option<PathBuf> {
-        self.0.ask(|table| table.pick_folder, &request).flatten()
+        self.0
+            .ask(|table| table.upper.pick_folder, &request)
+            .flatten()
     }
 }
 
@@ -511,7 +627,7 @@ impl PreferenceStore for HostPreferenceStore {
     }
 
     fn set(&self, key: &str, value: Option<&str>) {
-        self.0.ask::<()>(
+        self.0.ask(
             |table| table.store_preference,
             &(key.to_owned(), value.map(str::to_owned)),
         );
@@ -521,16 +637,16 @@ impl PreferenceStore for HostPreferenceStore {
 struct HostFonts(Arc<Host>);
 
 impl FontHost for HostFonts {
-    fn sources(&self) -> Option<FontSources> {
-        self.0.ask(|table| table.font_sources, &()).flatten()
-    }
-
     fn install(&self, config: FontConfig) -> Option<FontSources> {
-        self.0.ask(|table| table.install_fonts, &config).flatten()
+        self.0
+            .ask(|table| table.upper.install_fonts, &config)
+            .flatten()
     }
 
     fn add_faces(&self, faces: Vec<FontAsset>) -> Option<FontSources> {
-        self.0.ask(|table| table.add_font_faces, &faces).flatten()
+        self.0
+            .ask(|table| table.upper.add_font_faces, &faces)
+            .flatten()
     }
 
     fn install_only(
@@ -539,7 +655,7 @@ impl FontHost for HostFonts {
         families: Vec<String>,
     ) -> Option<Result<FontSources, ExclusiveFontsError>> {
         self.0
-            .ask(|table| table.install_only_fonts, &(faces, families))
+            .ask(|table| table.upper.install_only_fonts, &(faces, families))
             .flatten()
     }
 }
@@ -553,7 +669,7 @@ impl FontHost for HostFonts {
 /// # Safety
 ///
 /// `table` must be a host's [`ServedServices::table`], and the host must keep that [`ServedServices`] until it has unloaded this copy. Call it after the guest's `loaded` entry has run, so what it installs is released before the library is unmapped.
-pub unsafe fn install_host_services(table: HostServices) -> Option<Arc<dyn FontHost>> {
+pub unsafe fn install_host_services(table: HostServices<UpperTable>) -> Option<Arc<dyn FontHost>> {
     let host = Arc::new(Host(table));
     if table.clipboard_text.is_some() {
         crate::set_clipboard(Arc::new(HostClipboard(host.clone())));
@@ -561,31 +677,22 @@ pub unsafe fn install_host_services(table: HostServices) -> Option<Arc<dyn FontH
     if table.open_uri.is_some() {
         crate::set_uri_opener(Arc::new(HostUriOpener(host.clone())));
     }
-    if table.open_file.is_some() {
+    if table.upper.open_file.is_some() {
         crate::set_file_dialogs(Arc::new(HostFileDialogs(host.clone())));
     }
     if table.stored_preference.is_some() {
         crate::set_preference_store(Arc::new(HostPreferenceStore(host.clone())));
     }
-    if let Some(dirs) = host
-        .ask::<Option<AppDirs>>(|table| table.app_paths, &())
-        .flatten()
-    {
+    if let Some(dirs) = host.ask(|table| table.upper.app_paths, &()).flatten() {
         app_paths::install(dirs.name.clone(), Arc::new(dirs));
     }
     if let Some(convention) = host.ask(|table| table.keyboard_convention, &()) {
         platform_core::set_keyboard_convention(convention);
     }
-    if let Some(format) = host
-        .ask::<Option<LocationFormat>>(|table| table.location_format, &())
-        .flatten()
-    {
+    if let Some(format) = host.ask(|table| table.location_format, &()).flatten() {
         platform_core::set_location_format(format);
     }
-    if let Some(base) = host
-        .ask::<Option<String>>(|table| table.asset_base, &())
-        .flatten()
-    {
+    if let Some(base) = host.ask(|table| table.asset_base, &()).flatten() {
         platform_core::set_asset_base(&base);
     }
     if let Some(grid) = host.ask(|table| table.layout_grid, &()) {
@@ -602,15 +709,16 @@ pub unsafe fn install_host_services(table: HostServices) -> Option<Arc<dyn FontH
     if table.wake_loop.is_some() {
         let waker = host.clone();
         platform_core::set_loop_waker(Arc::new(move || {
-            waker.ask::<()>(|table| table.wake_loop, &());
+            waker.ask(|table| table.wake_loop, &());
         }));
     }
     table
-        .font_sources
+        .upper
+        .install_fonts
         .is_some()
         .then(|| Arc::new(HostFonts(host)) as Arc<dyn FontHost>)
 }
 
 #[cfg(test)]
-#[path = "guest_test.rs"]
+#[path = "guest.test.rs"]
 mod tests;

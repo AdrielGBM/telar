@@ -133,7 +133,7 @@ impl Painter<'_> {
         }
         // The shadow is dropped rather than approximated. A terminal has no sub-cell falloff, so the only thing to draw is a hard band of colour offset from the box — which reads as a second box.
         if let Some(fill) = &style.fill {
-            let paint = mapped(fill, self.matrix(), self.scale());
+            let paint = mapped(fill, self.matrix());
             let shape = (!style.radius.is_zero())
                 .then(|| renderer_core::transform_clip_rect(self.matrix(), rect));
             for row in cells.row0..cells.row1 {
@@ -149,7 +149,7 @@ impl Painter<'_> {
             }
         }
         if let Some((paint, widths)) = style.painted_border() {
-            let paint = mapped(&paint, self.matrix(), self.scale());
+            let paint = mapped(&paint, self.matrix());
             if !self.mark(cells, style, &paint) {
                 self.border(cells, widths, &paint, style.radius);
             }
@@ -260,7 +260,7 @@ impl Painter<'_> {
     }
 
     pub(crate) fn line(&mut self, p1: Point, p2: Point, style: &Stroke) {
-        let paint = mapped(&style.paint, self.matrix(), self.scale());
+        let paint = mapped(&style.paint, self.matrix());
         let t = geometry_core::Transform::from_array(self.matrix());
         let a = t.apply(p1);
         let b = t.apply(p2);
@@ -294,11 +294,11 @@ impl Painter<'_> {
             return;
         }
         if let Some(fill) = &style.fill {
-            let paint = mapped(fill, self.matrix(), self.scale());
+            let paint = mapped(fill, self.matrix());
             self.fill_polygons(&polygons, &paint, style.fill_rule);
         }
         if let Some(stroke) = &style.stroke {
-            let paint = mapped(&stroke.paint, self.matrix(), self.scale());
+            let paint = mapped(&stroke.paint, self.matrix());
             let run = Run::of(stroke);
             for polygon in &polygons {
                 for pair in polygon.windows(2) {
@@ -536,7 +536,7 @@ impl Painter<'_> {
             (false, true) => '─',
             (false, false) => return,
         };
-        let paint = mapped(fill, self.matrix(), self.scale());
+        let paint = mapped(fill, self.matrix());
         for row in cells.row0..cells.row1 {
             for col in cells.col0..cells.col1 {
                 if !self.clipped_in(col, row) {

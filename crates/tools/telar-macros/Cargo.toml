@@ -27,4 +27,4 @@ syn = { workspace = true }
 
 [[test]]
 name = "props"
-path = "src/props_test.rs"
+path = "src/props.test.rs"

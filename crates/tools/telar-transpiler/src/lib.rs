@@ -55,9 +55,9 @@ pub use package::{
 pub use preview::PREVIEW_OPTION_KEYS;
 #[cfg(feature = "transpile")]
 pub use registry::{
-    AttrSpec, ROLE_VALUES, ValueKind, attr_doc, attr_spec, builtin_tag_doc, builtin_tags,
-    color_attr_keys, color_keywords, component_instance_attrs, is_builtin_tag,
-    is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, role_values, role_variant,
+    AttrSpec, ROLE_VALUES, SLOT_ATTR, STATE_STYLE_KEYS, ValueKind, attr_doc, attr_spec,
+    builtin_tag_doc, builtin_tags, color_attr_keys, color_keywords, component_instance_attrs,
+    is_builtin_tag, is_control_flow_keyword, keyword_color_rgba, role_values, role_variant,
     tag_attr_keys, tag_attr_specs, value_kind,
 };
 #[cfg(feature = "transpile")]
@@ -71,5 +71,5 @@ pub use tag_errors::{GeneratedSite, generated_site, tag_columns, tag_error_messa
 pub use theme::resolve_theme_type;
 
 #[cfg(all(test, feature = "transpile"))]
-#[path = "lib_test.rs"]
+#[path = "lib.test.rs"]
 mod tests;

@@ -1,6 +1,6 @@
 //! The `[view]` and preview zones, re-emitted from the AST at four spaces a level.
 
-use crate::{Attr, Element, Preview, PreviewsMeta, StyleProp, Value, ViewNode};
+use crate::{ArgKind, Attr, Element, Preview, PreviewsMeta, StyleProp, Value, ViewNode};
 
 use super::INDENT;
 use super::logic::format_rust_zone;
@@ -189,16 +189,19 @@ pub(super) fn format_previews_meta(meta: &PreviewsMeta) -> String {
     }
 }
 
-/// Re-emits a `[preview "Name" args(…) key:value flag …]` section: the header, its body formatted like a `[view]` tree, and its `[play]` zone.
+/// Re-emits a `[preview "Name" args(…) values(…) key:value flag …]` section: the header, its body formatted like a `[view]` tree, and its `[play]` zone.
 pub(super) fn format_preview_section(preview: &Preview) -> String {
     let mut header = format!("[preview \"{}\"", escape_rsx_string(&preview.name));
-    if !preview.args.is_empty() {
-        let args: Vec<String> = preview
+    for (key, kind) in [("args", ArgKind::Signal), ("values", ArgKind::Value)] {
+        let declared: Vec<String> = preview
             .args
             .iter()
+            .filter(|arg| arg.kind == kind)
             .map(|arg| format_key_value(&arg.name, &arg.default))
             .collect();
-        header.push_str(&format!(" args({})", args.join(" ")));
+        if !declared.is_empty() {
+            header.push_str(&format!(" {key}({})", declared.join(" ")));
+        }
     }
     push_options(&mut header, &preview.options);
     header.push(']');

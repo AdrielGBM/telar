@@ -98,7 +98,7 @@ impl WorkshopChannel {
         let (taken, requests) = mpsc::channel();
         remove_on_interrupt(&file);
         let channel = Self { requests, file };
-        std::fs::write(&channel.file, format!("{port}\n")).ok()?;
+        telar_project::write_if_changed_atomic(&channel.file, &format!("{port}\n")).ok()?;
         std::thread::Builder::new()
             .name("telar-workshop-channel".to_string())
             .spawn(move || {
@@ -177,7 +177,7 @@ impl ServerClaim {
             && std::fs::create_dir_all(dir).is_ok()
         {
             let line = starting_server_line(std::process::id());
-            let _ = std::fs::write(file, format!("{line}\n"));
+            let _ = telar_project::write_if_changed_atomic(file, &format!("{line}\n"));
         }
         Ok(Self {
             file: file.to_path_buf(),
@@ -204,7 +204,7 @@ impl ServerClaim {
         for path in stale {
             let _ = std::fs::remove_file(path);
         }
-        let _ = std::fs::write(&self.file, format!("{address}\n"));
+        let _ = telar_project::write_if_changed_atomic(&self.file, &format!("{address}\n"));
     }
 }
 
@@ -275,7 +275,7 @@ fn answers(address: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "workshop_channel_test.rs"]
+#[path = "workshop_channel.test.rs"]
 mod tests;
 
 /// A child forked while a lock is held keeps it until it execs, so a test that expects a lock to be free again takes the read side and every test that starts a process takes the write side.

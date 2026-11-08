@@ -177,9 +177,13 @@ pub fn premultiply_rgba(pixels: &mut [u8]) {
         ]);
         let bias = u32x4::splat(128);
         let shift = u32x4::splat(8);
-        let r_new = ((r * a) + bias) >> shift;
-        let g_new = ((g * a) + bias) >> shift;
-        let b_new = ((b * a) + bias) >> shift;
+        let scale = |channel: u32x4| {
+            let product = channel * a + bias;
+            (product + (product >> shift)) >> shift
+        };
+        let r_new = scale(r);
+        let g_new = scale(g);
+        let b_new = scale(b);
         let ra = r_new.to_array();
         let ga = g_new.to_array();
         let ba = b_new.to_array();
@@ -198,12 +202,17 @@ pub fn premultiply_rgba(pixels: &mut [u8]) {
     }
     for chunk in rest.as_chunks_mut::<4>().0 {
         let a = chunk[3] as u32;
-        chunk[0] = ((chunk[0] as u32 * a + 128) >> 8) as u8;
-        chunk[1] = ((chunk[1] as u32 * a + 128) >> 8) as u8;
-        chunk[2] = ((chunk[2] as u32 * a + 128) >> 8) as u8;
+        for channel in &mut chunk[..3] {
+            *channel = scale_by_alpha(*channel as u32, a);
+        }
     }
 }
 
+fn scale_by_alpha(channel: u32, alpha: u32) -> u8 {
+    let product = channel * alpha + 128;
+    ((product + (product >> 8)) >> 8) as u8
+}
+
 #[cfg(test)]
-#[path = "image_test.rs"]
+#[path = "image.test.rs"]
 mod tests;

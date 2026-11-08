@@ -82,5 +82,5 @@ unsafe extern "C" fn release_redraw(data: *const c_void) {
 }
 
 #[cfg(test)]
-#[path = "waker_test.rs"]
+#[path = "waker.test.rs"]
 mod tests;

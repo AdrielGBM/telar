@@ -236,11 +236,11 @@ fn hash_gradient(g: &Gradient, h: &mut FxHasher) {
             h.write_u32(end.x.to_bits());
             h.write_u32(end.y.to_bits());
         }
-        GradientKind::Radial { center, radius } => {
+        GradientKind::Radial { transform } => {
             h.write_u8(1);
-            h.write_u32(center.x.to_bits());
-            h.write_u32(center.y.to_bits());
-            h.write_u32(radius.to_bits());
+            for entry in transform.to_array() {
+                h.write_u32(entry.to_bits());
+            }
         }
     }
     let active = g.stops.active();
@@ -304,5 +304,5 @@ fn hash_border_radius(r: &BorderRadius, h: &mut FxHasher) {
 }
 
 #[cfg(test)]
-#[path = "style_pool_test.rs"]
+#[path = "style_pool.test.rs"]
 mod tests;

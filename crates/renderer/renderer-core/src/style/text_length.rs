@@ -64,5 +64,5 @@ impl From<f32> for TextLength {
 }
 
 #[cfg(test)]
-#[path = "text_length_test.rs"]
+#[path = "text_length.test.rs"]
 mod tests;

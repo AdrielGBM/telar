@@ -1,0 +1,336 @@
+use super::*;
+use geometry_core::Rect;
+use renderer_core::{RectStyle, Shadow, ShapeStyle};
+use std::sync::Arc;
+
+fn red_square(size: f32) -> Vec<DrawCommand> {
+    vec![DrawCommand::Rect {
+        rect: Rect::new(0.0, 0.0, size, size),
+        style: Arc::new(RectStyle::default().with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))),
+    }]
+}
+
+#[test]
+fn it_draws_the_commands_it_is_given() {
+    let pixels = rasterize(&red_square(8.0), 8, 8, 1.0, None).expect("pixels");
+    assert_eq!(pixels.len(), 8 * 8 * 4);
+    let first = &pixels[0..4];
+    assert_eq!(
+        (first[0], first[3]),
+        (255, 255),
+        "an opaque red square must reach the buffer"
+    );
+}
+
+// `None` is documented as fully transparent, which is what a drag icon needs: the compositor blends it, so a black background would be a black box following the cursor.
+fn transparent_corner(pixels: &[u8]) -> u8 {
+    pixels[pixels.len() - 1]
+}
+
+#[test]
+fn an_unset_clear_colour_leaves_the_background_transparent() {
+    let pixels = rasterize(&red_square(4.0), 16, 16, 1.0, None).expect("pixels");
+    assert_eq!(
+        transparent_corner(&pixels),
+        0,
+        "the area the commands did not cover stays clear"
+    );
+}
+
+#[test]
+fn an_empty_size_is_none_rather_than_a_failure() {
+    assert!(
+        rasterize(&red_square(4.0), 0, 8, 1.0, None).is_none(),
+        "a zero width has no pixels to rasterise"
+    );
+    assert!(
+        rasterize(&red_square(4.0), 8, 0, 1.0, None).is_none(),
+        "and neither has a zero height"
+    );
+}
+
+// The renderer is cached per thread and resized as needed, so a second call at a different size must produce a buffer for that size.
+#[test]
+fn a_cached_renderer_still_resizes_between_calls() {
+    let small = rasterize(&red_square(4.0), 8, 8, 1.0, None).expect("small");
+    let large = rasterize(&red_square(4.0), 32, 24, 1.0, None).expect("large");
+    assert_eq!(small.len(), 8 * 8 * 4);
+    assert_eq!(large.len(), 32 * 24 * 4);
+}
+
+const RED: [u8; 4] = [220, 40, 40, 255];
+const GREEN: [u8; 4] = [40, 200, 60, 255];
+const BLUE: [u8; 4] = [40, 60, 220, 255];
+const YELLOW: [u8; 4] = [230, 200, 40, 255];
+const BLACK: [u8; 4] = [0, 0, 0, 255];
+
+fn pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
+    let i = ((y * width + x) * 4) as usize;
+    [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
+}
+
+fn picture(pixels: &[[u8; 4]], width: u32, height: u32) -> Arc<crate::ImageData> {
+    Arc::new(crate::ImageData::from_premultiplied(
+        pixels.concat(),
+        width,
+        height,
+    ))
+}
+
+fn image(data: Arc<crate::ImageData>, rect: Rect, fill: crate::ImageFill) -> DrawCommand {
+    DrawCommand::Image {
+        data,
+        rect,
+        raster: crate::Raster::Pixel,
+        fill,
+    }
+}
+
+#[test]
+fn a_tile_repeats_the_picture_at_its_scaled_size_from_the_rect_origin() {
+    let quadrants = picture(&[RED, GREEN, BLUE, YELLOW], 2, 2);
+    let commands = [image(
+        quadrants,
+        Rect::new(3.0, 2.0, 32.0, 24.0),
+        crate::ImageFill::Tile { scale: 4.0 },
+    )];
+    let pixels = rasterize(&commands, 40, 30, 1.0, Some(Color::BLACK)).expect("pixels");
+    for y in 2..26 {
+        for x in 3..35 {
+            let (u, v) = ((x - 3) % 8, (y - 2) % 8);
+            let expected = match (u < 4, v < 4) {
+                (true, true) => RED,
+                (false, true) => GREEN,
+                (true, false) => BLUE,
+                (false, false) => YELLOW,
+            };
+            assert_eq!(
+                pixel(&pixels, 40, x, y),
+                expected,
+                "at ({x}, {y}): an 8 px period anchored at the rect's corner"
+            );
+        }
+    }
+    assert_eq!(pixel(&pixels, 40, 2, 2), BLACK, "nothing left of the rect");
+    assert_eq!(pixel(&pixels, 40, 35, 25), BLACK, "nothing right of it");
+}
+
+#[test]
+fn a_nine_slice_keeps_its_corners_and_stretches_its_edges() {
+    // 4×4: a 1 px frame of red corners and green edges around a blue middle.
+    let (r, g, b) = (RED, GREEN, BLUE);
+    let framed = picture(&[r, g, g, r, g, b, b, g, g, b, b, g, r, g, g, r], 4, 4);
+    let slice = crate::ImageSlice::new(crate::Insets::all(1.0)).with_scale(3.0);
+    let commands = [image(
+        framed,
+        Rect::new(2.0, 2.0, 30.0, 20.0),
+        crate::ImageFill::Slice(slice),
+    )];
+    let pixels = rasterize(&commands, 34, 24, 1.0, Some(Color::BLACK)).expect("pixels");
+    let at = |x: u32, y: u32| pixel(&pixels, 34, 2 + x, 2 + y);
+    for (x, y) in [(0, 0), (2, 2), (27, 0), (29, 2), (0, 17), (29, 19)] {
+        assert_eq!(at(x, y), RED, "({x}, {y}) is inside a 3 px corner");
+    }
+    for (x, y) in [(3, 0), (26, 2), (0, 3), (2, 16), (29, 10), (15, 19)] {
+        assert_eq!(
+            at(x, y),
+            GREEN,
+            "({x}, {y}) is on an edge, stretched along it"
+        );
+    }
+    for (x, y) in [(3, 3), (26, 16), (15, 10)] {
+        assert_eq!(at(x, y), BLUE, "({x}, {y}) is in the middle");
+    }
+}
+
+#[test]
+fn a_blended_layer_lands_the_formula_on_known_pixels() {
+    let gray = Color::from_rgb_u8(128, 128, 128);
+    let red = Color::from_rgb_u8(255, 0, 0);
+    let cases = [
+        (crate::BlendMode::Multiply, [128, 0, 0]),
+        (crate::BlendMode::Screen, [255, 128, 128]),
+        (crate::BlendMode::Difference, [127, 128, 128]),
+        (crate::BlendMode::Plus, [255, 128, 128]),
+    ];
+    for (blend, expected) in cases {
+        let commands = [
+            DrawCommand::Rect {
+                rect: Rect::new(0.0, 0.0, 16.0, 16.0),
+                style: Arc::new(RectStyle::default().with_fill(gray)),
+            },
+            DrawCommand::PushLayer {
+                opacity: 1.0,
+                backdrop_blur: 0.0,
+                blend,
+                mask: renderer_core::LayerMask::None,
+            },
+            DrawCommand::Rect {
+                rect: Rect::new(4.0, 4.0, 8.0, 8.0),
+                style: Arc::new(RectStyle::default().with_fill(red)),
+            },
+            DrawCommand::PopLayer,
+        ];
+        let pixels = rasterize(&commands, 16, 16, 1.0, Some(Color::BLACK)).expect("pixels");
+        let got = pixel(&pixels, 16, 8, 8);
+        for channel in 0..3 {
+            assert!(
+                got[channel].abs_diff(expected[channel]) <= 1,
+                "{blend:?}: expected {expected:?}, got {got:?}"
+            );
+        }
+        assert_eq!(
+            pixel(&pixels, 16, 1, 1)[..3],
+            [128, 128, 128],
+            "{blend:?}: the backdrop outside the layer is untouched"
+        );
+    }
+}
+
+fn shadowed_card(x: f32, shadow_color: Color) -> Vec<DrawCommand> {
+    vec![DrawCommand::Rect {
+        rect: Rect::new(x, 60.0, 200.0, 200.0),
+        style: Arc::new(
+            RectStyle::default()
+                .with_fill(Color::WHITE)
+                .with_shadow(Shadow {
+                    color: shadow_color,
+                    blur_radius: 40.0,
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                    spread: 0.0,
+                }),
+        ),
+    }]
+}
+
+fn on_a_fresh_thread<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::spawn(work).join().expect("render thread")
+}
+
+fn red_excess(pixels: &[u8]) -> u64 {
+    pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|px| u64::from(px[0].saturating_sub(px[2])))
+        .sum()
+}
+
+#[test]
+fn a_large_shadow_is_in_the_first_render() {
+    let pixels = on_a_fresh_thread(|| {
+        let commands = shadowed_card(60.0, Color::rgba(1.0, 0.0, 0.0, 1.0));
+        rasterize(&commands, 320, 320, 1.0, Some(Color::BLACK)).expect("pixels")
+    });
+    assert!(
+        red_excess(&pixels) > 0,
+        "a shadow past the background-blur threshold must be blurred before the first picture is read"
+    );
+}
+
+#[test]
+fn a_shadow_does_not_leak_into_an_unrelated_frame() {
+    on_a_fresh_thread(|| {
+        let red = shadowed_card(60.0, Color::rgba(1.0, 0.0, 0.0, 1.0));
+        let green = shadowed_card(40.0, Color::rgba(0.0, 1.0, 0.0, 1.0));
+        rasterize(&red, 320, 320, 1.0, Some(Color::BLACK)).expect("red");
+        let after_red = rasterize(&green, 320, 320, 1.0, Some(Color::BLACK)).expect("green");
+        let fresh = on_a_fresh_thread(move || {
+            rasterize(&green, 320, 320, 1.0, Some(Color::BLACK)).expect("green")
+        });
+        assert_eq!(after_red, fresh);
+        assert_eq!(red_excess(&after_red), 0, "the red shadow must not remain");
+    });
+}
+
+#[test]
+fn consecutive_frames_are_each_a_full_redraw() {
+    on_a_fresh_thread(|| {
+        let a = shadowed_card(60.0, Color::rgba(1.0, 0.0, 0.0, 1.0));
+        let b = red_square(8.0);
+        rasterize(&a, 320, 320, 1.0, Some(Color::BLACK)).expect("a");
+        let after_a = rasterize(&b, 320, 320, 1.0, Some(Color::BLACK)).expect("b");
+        let fresh_b =
+            on_a_fresh_thread(move || rasterize(&b, 320, 320, 1.0, Some(Color::BLACK)).expect("b"));
+        assert_eq!(after_a, fresh_b);
+    });
+}
+
+#[test]
+fn an_empty_frame_after_a_drawn_one_is_blank() {
+    on_a_fresh_thread(|| {
+        rasterize(&red_square(8.0), 16, 16, 1.0, None).expect("drawn");
+        let blank = rasterize(&[], 16, 16, 1.0, None).expect("blank");
+        assert!(blank.iter().all(|byte| *byte == 0));
+    });
+}
+
+/// A frame painted over the one before it, damage and all, comes out as the same frame painted from scratch: the check answers nothing for a square that moves and grows.
+#[test]
+fn frames_painted_over_each_other_match_the_same_frames_painted_whole() {
+    let frames = vec![red_square(10.0), red_square(20.0), red_square(14.0)];
+    assert_eq!(
+        check_partial_redraw(&frames, 32, 32, Some(Color::rgba(1.0, 1.0, 1.0, 1.0))),
+        Ok(())
+    );
+}
+
+#[test]
+fn a_zero_size_redraw_check_is_an_error_not_a_pass() {
+    let frames = vec![red_square(4.0)];
+    assert_eq!(
+        check_partial_redraw(&frames, 0, 32, None),
+        Err(RedrawCheckError::Raster(RasterError::EmptySize {
+            width: 0,
+            height: 32,
+        }))
+    );
+}
+
+#[test]
+fn a_redraw_check_over_no_frames_passes() {
+    assert_eq!(check_partial_redraw(&[], 32, 32, None), Ok(()));
+}
+
+#[cfg(feature = "hardware")]
+#[test]
+fn a_zero_size_gpu_redraw_check_is_an_error_even_without_an_adapter() {
+    let frames = vec![red_square(4.0)];
+    assert_eq!(
+        check_partial_redraw_on_gpu(&frames, 32, 0, 1.0, None),
+        Err(RedrawCheckError::Raster(RasterError::EmptySize {
+            width: 32,
+            height: 0,
+        }))
+    );
+}
+
+#[cfg(feature = "hardware")]
+#[test]
+fn a_gpu_redraw_check_passes_or_skips_when_there_is_no_adapter() {
+    use crate::testing::skip_without_gpu;
+    let frames = vec![red_square(10.0), red_square(20.0), red_square(14.0)];
+    match check_partial_redraw_on_gpu(&frames, 32, 32, 1.0, Some(Color::rgba(1.0, 1.0, 1.0, 1.0))) {
+        Ok(GpuRedrawCheck::Passed) => {}
+        Ok(GpuRedrawCheck::NoAdapter) => {
+            skip_without_gpu("the GPU redraw check", RendererError::NoAdapter)
+        }
+        other => panic!("the GPU redraw check must pass or skip, got {other:?}"),
+    }
+}
+
+#[test]
+fn differing_pixels_are_boxed_where_they_differ() {
+    let width = 4;
+    let a = vec![0u8; 4 * 4 * 4];
+    let mut b = a.clone();
+    for (x, y) in [(1, 1), (2, 3)] {
+        b[(y * width + x) * 4] = 200;
+    }
+    assert_eq!(
+        differing_box(&a, &b, width as u32),
+        Some(Rect::new(1.0, 1.0, 2.0, 3.0))
+    );
+    assert_eq!(differing_box(&a, &a, width as u32), None);
+}

@@ -64,5 +64,5 @@ impl ComponentList {
 }
 
 #[cfg(test)]
-#[path = "tree_test.rs"]
+#[path = "tree.test.rs"]
 mod tests;

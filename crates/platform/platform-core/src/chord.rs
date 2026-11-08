@@ -16,6 +16,14 @@ pub enum KeyboardConvention {
 }
 
 impl KeyboardConvention {
+    /// What stands between the keys of a chord written out: `+` in `Ctrl+Shift+Z`, nothing in `⇧⌘Z`.
+    pub const fn separator(self) -> &'static str {
+        match self {
+            Self::Mac => "",
+            Self::Pc => "+",
+        }
+    }
+
     /// The convention of the operating system this was compiled for.
     pub const fn native() -> Self {
         if cfg!(any(target_os = "macos", target_os = "ios")) {
@@ -223,11 +231,7 @@ impl Chord {
 
     /// The chord as `convention` writes it: `Ctrl+Shift+Z`, or `⇧⌘Z` on a Mac.
     pub fn text(&self, convention: KeyboardConvention) -> String {
-        let separator = match convention {
-            KeyboardConvention::Mac => "",
-            KeyboardConvention::Pc => "+",
-        };
-        self.keys(convention).join(separator)
+        self.keys(convention).join(convention.separator())
     }
 
     /// The chord in `aria-keyshortcuts` syntax: modifiers first, each spelled as UI Events names its key (`Control`, `Meta`), so a Mac gets `Meta+Shift+Z` where a PC gets `Control+Shift+Z`.
@@ -580,5 +584,5 @@ fn fold(key: Key) -> Key {
 }
 
 #[cfg(test)]
-#[path = "chord_test.rs"]
+#[path = "chord.test.rs"]
 mod tests;

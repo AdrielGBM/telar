@@ -123,7 +123,8 @@ pub(crate) fn problems(entries: &[PreludeEntry]) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn is_plain_identifier(segment: &str) -> bool {
+/// Whether `segment` is an identifier Rust reads as a name and nothing else: ASCII, not `_` alone, and no keyword.
+pub fn is_plain_identifier(segment: &str) -> bool {
     let mut chars = segment.chars();
     let starts_well = chars
         .next()
@@ -131,7 +132,12 @@ pub(crate) fn is_plain_identifier(segment: &str) -> bool {
     starts_well
         && segment != "_"
         && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
-        && !KEYWORDS.contains(&segment)
+        && !is_keyword(segment)
+}
+
+/// Whether `word` is a Rust strict or reserved keyword.
+pub(crate) fn is_keyword(word: &str) -> bool {
+    KEYWORDS.contains(&word)
 }
 
 /// Rust's strict and reserved keywords, across editions. `crate`, `self` and `super` are among them on purpose: the package's own items are already in scope, and the key exists to name other crates.
@@ -144,5 +150,5 @@ const KEYWORDS: &[&str] = &[
 ];
 
 #[cfg(test)]
-#[path = "prelude_test.rs"]
+#[path = "prelude.test.rs"]
 mod tests;

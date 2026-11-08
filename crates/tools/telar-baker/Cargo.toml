@@ -21,30 +21,31 @@ icons-core = { workspace = true, features = ["http"] }
 renderer-assets = { workspace = true, features = ["bake"] }
 telar-parser = { workspace = true }
 telar-project = { workspace = true }
-telar-transpiler = { workspace = true, features = ["transpile"] }
 
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-toml = { workspace = true }
 
 [dev-dependencies]
 # Only to ask which formats it decodes, for the test that holds `ASSET_KINDS` to it. `default-features = false`
 # because the answer must be whatever `renderer-assets` turned on, which cargo unifies into this same build —
 # naming the formats again here would be a second list to keep in step, which is the bug the test exists to catch.
 image = { workspace = true }
+proc-macro2 = { workspace = true }
+syn = { workspace = true }
+toml = { workspace = true }
 
 [[test]]
 name = "formats"
-path = "src/formats_test.rs"
+path = "src/formats.test.rs"
 
 [[test]]
 name = "icon_bake"
-path = "src/icon_bake_test.rs"
+path = "src/icon_bake.test.rs"
 
 [[test]]
 name = "library_icons"
-path = "src/library_icons_test.rs"
+path = "src/library_icons.test.rs"
 
 [[test]]
 name = "rust_icons"
-path = "src/rust_icons_test.rs"
+path = "src/rust_icons.test.rs"

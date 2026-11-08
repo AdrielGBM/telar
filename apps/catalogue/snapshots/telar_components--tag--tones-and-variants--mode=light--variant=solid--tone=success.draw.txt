@@ -1,0 +1,22 @@
+frame 120x48 lang=en
+element group
+  rect 0,0 120x48 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 42,12 36x24 fill=#2eb073ff border=1 border-color=#00000000 radius=6
+          element group
+            element group
+              matrix 1,0,0,1,50,12
+                text 0,5 20.8x14.28 "Tag" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+              end
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end

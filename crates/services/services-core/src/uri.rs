@@ -68,12 +68,38 @@ pub fn launch(uri: &Uri) -> std::io::Result<()> {
     command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    let mut child = command.spawn()?;
-    if let Err(error) = reactive_local::threads::spawn("telar-launcher", move || child.wait()) {
+        .stderr(std::process::Stdio::piped());
+    let child = command.spawn()?;
+    let uri = uri.clone();
+    if let Err(error) = reactive_local::threads::spawn("telar-launcher", move || reap(child, &uri))
+    {
         tracing::warn!(%error, "the launcher started, but no thread is left to reap it when it exits");
     }
     Ok(())
+}
+
+#[cfg(feature = "system-opener")]
+const STDERR_EXCERPT_BYTES: u64 = 512;
+
+#[cfg(feature = "system-opener")]
+fn reap(mut child: std::process::Child, uri: &Uri) {
+    use std::io::Read;
+
+    let mut excerpt = Vec::new();
+    if let Some(mut stderr) = child.stderr.take() {
+        let _ = (&mut stderr)
+            .take(STDERR_EXCERPT_BYTES)
+            .read_to_end(&mut excerpt);
+        let _ = std::io::copy(&mut stderr, &mut std::io::sink());
+    }
+    match child.wait() {
+        Ok(status) if status.success() => {}
+        Ok(status) => {
+            let stderr = String::from_utf8_lossy(&excerpt);
+            tracing::warn!(%uri, %status, stderr = ?stderr.trim(), "the system launcher could not open the URI");
+        }
+        Err(error) => tracing::warn!(%uri, %error, "the system launcher's exit could not be read"),
+    }
 }
 
 #[cfg(all(feature = "system-opener", target_os = "windows"))]
@@ -101,5 +127,5 @@ fn launcher(uri: &str) -> std::process::Command {
 }
 
 #[cfg(test)]
-#[path = "uri_test.rs"]
+#[path = "uri.test.rs"]
 mod tests;

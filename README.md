@@ -1,6 +1,6 @@
 # Telar
 
-[![CI](https://github.com/AdrielGBM/telar/actions/workflows/CI.yml/badge.svg)](https://github.com/AdrielGBM/telar/actions/workflows/CI.yml)
+[![CI](https://github.com/AdrielGBM/telar/actions/workflows/ci.yaml/badge.svg)](https://github.com/AdrielGBM/telar/actions/workflows/ci.yaml)
 [![crates.io](https://img.shields.io/crates/v/telar.svg)](https://crates.io/crates/telar)
 [![docs.rs](https://img.shields.io/docsrs/telar)](https://docs.rs/telar)
 [![license](https://img.shields.io/crates/l/telar.svg)](#license)
@@ -9,7 +9,7 @@ A modular Rust UI framework with its own template language, reactive signals and
 
 Telar draws every pixel itself — there is no webview and no native widget toolkit underneath. Components are written in `.rsx`, an indentation-based template language that compiles to plain Rust at build time, so what ships is a single binary with no runtime interpreter.
 
-> **Early days.** Telar is at `0.2.2`. The APIs work and are exercised by the apps in this repo, but they will keep moving before `1.0`.
+> **Early days.** Telar is at `0.2.3`. The APIs work and are exercised by the apps in this repo, but they will keep moving before `1.0`.
 
 ## A component
 
@@ -103,7 +103,7 @@ cargo telar preview    # open the component workshop on every [preview], hot-rel
 cargo telar preview <ID>         # open the workshop on one preview, or move the open one there
 cargo telar preview --png out/   # render each one, and each matrix cell, to a PNG instead, with no window
 cargo telar test       # build, play, a11y-check and snapshot every preview and matrix cell, headlessly
-cargo telar test --update-snapshots   # write the goldens under previews/__snapshots__ that are missing or changed
+cargo telar test --update-snapshots   # write the goldens under snapshots/ that are missing or changed
 cargo telar check      # type-check, with .rsx errors on the lines you wrote
 cargo telar build --format deb   # appimage | deb | dmg | nsis | apk | dir
 cargo telar doctor     # check the toolchain
@@ -139,7 +139,7 @@ col gap:8 pad:(space::lg() * 2.0) align:center
 ```
 
 A quoted value is text, as a `text`'s content is: `{expr}` interpolates and `{{`/`}}` is a brace, whether it is the
-content, a `label:` or a component's prop (`button label:"Open {name}"`). A closure that formats it borrows what it
+content, an `a11y_label:` or a component's prop (`button label:"Open {name}"`). A closure that formats it borrows what it
 reads, and copies in a `[logic]` binding — or the field of `props` it reads — that another part of the view still
 needs, so `text "{props.detail}"` and `text "{project()}"` need no re-binding first. What an `if let` or a `match`
 arm binds is copied into the closures under it, so `if let Some(place) = &location` can be read by a `text` below.
@@ -163,11 +163,16 @@ reads changes — `pad:$theme.gutter` follows a theme switch, and so does `pad:g
 or arithmetic on constants spelled as constants are, `gap:(GRID * 2.0)` — costs nothing to keep. A component's prop
 follows what it reads the same way: a `$` read, a `use_…()` hook read through (`color:(use_workbench_tokens().accent)`)
 or a signal's `.get()` hands the prop a `Reactive` that re-reads it, and a plain value, or a hook's handle passed on,
-is handed over as it is. The `$` is `.get()` sugar; it does not decide anything.
+is handed over as it is. The `$` is `.get()` sugar; it does not decide anything. A closure in the
+value reads where it runs: one handed to a keeper (`Reactive::of`, `Rc::new`, `memo`, a constructor such as `Some`)
+reads when it is called and leaves the prop as it is, one std runs on the spot (`.map`, `std::array::from_fn`) reads
+here, and one that reads state handed to any other callee is a compile error asking which, since a `.rsx` cannot see
+into the callee: `tweened(later(move || $x))` when it keeps the closure to call later, `sampled(now(move || $x))` when it
+calls it there. `later` and `now` compile to nothing.
 
 ### Components are Rust paths
 
-A `.rsx` file is a module, and its component is the `pub fn` named after the file. Import what you call:
+A `.rsx` file is a module, and its component is the `pub fn` named after the file. Because it is a Rust module, the name has to be an identifier (letters, digits and `_`, no hyphen, no leading digit, no keyword): `my-card.rsx` is a build error naming `my_card.rsx`, never mapped for you. Import what you call:
 
 ```rsx
 [logic]
@@ -226,7 +231,8 @@ row @rule align:center
 ```
 
 A `.rsx` with classes and no `[view]` — `src/styles.rsx` above — is a module of them rather than a component, and a
-directory's `mod.rsx` may hold the classes its modules share. A class is a bundle of attributes written onto each
+directory's `mod.rsx` may hold the classes its modules share. Any other `.rsx` with no `[view]` is a build error: a
+component needs one, and a file of previews alone is named `<name>.preview.rsx`. A class is a bundle of attributes written onto each
 element that names it, so its values are Rust read where it is used, the way a `macro_rules!` macro's paths are: a
 shared class names what it reads by a path any file can reach, or each file that uses it imports that name. A class
 no `[style]` declares or imports is an error on the element naming it, and so is an import of a module that is not
@@ -246,7 +252,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Keyboard** — each focusable control declares the keys it keeps, so a browser build shares Tab and scrolling with the host page instead of fighting it for them. → [docs/keyboard.md](docs/keyboard.md)
 - **Internationalization** — translation catalogs baked at build time; `t!` validates keys and arguments at compile time. Full CLDR plural rules and locale-aware number and date formatting are in the plugin [`telar-i18n`](plugins/telar-i18n).
 - **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, behind the same drawing vocabulary. `desktop` and `android` bring both, and `backend = "auto"` picks per machine.
-- **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest — in the plugin [`telar-components`](plugins/telar-components): add it with the groups you draw (`overlays`, `chrome`, `advanced`) and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
+- **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest — in the plugin [`telar-components`](plugins/telar-components): add it, with `icons` to draw icons through `telar-icons`, and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
 - **Navigation** — a reactive page stack with animated transitions, or one stack per tab, that follows the app's address — in the plugin [`telar-navigate`](plugins/telar-navigate): add it and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
 - **Location** — one address per app on every target: browser history with scroll restoration, `--location` deep links remembered between runs, Android `ACTION_VIEW` and the back button. → [docs/location.md](docs/location.md)
 - **Surface title** — the window, tab, recents label or terminal title is derived from the app's title, the current route's title and the locale, and follows all three. → [docs/surface-title.md](docs/surface-title.md)
@@ -279,7 +285,7 @@ You depend on one:
 
 ```toml
 [dependencies]
-telar = "0.2.2"
+telar = "0.2.3"
 ```
 
 Everything behind it — the reactive graph, the layout engine, the renderers, the platform backends, the `.rsx` pipeline — is a separate `telar-*` crate. They are published because Cargo requires every dependency of a published crate to be published too, not because an application names them; the split is what lets a terminal build skip a GPU renderer. Reach for one directly only if you are writing a frontend or a tool against Telar's internals.
@@ -292,7 +298,7 @@ Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 
 | Plugin | What it adds |
 | --- | --- |
-| [`telar-components`](plugins/telar-components) | The widget catalogue. No default features; groups `overlays`, `chrome` and `advanced` |
+| [`telar-components`](plugins/telar-components) | The widget catalogue, every widget in every build. No default features; `icons` draws icon ids through `telar-icons` |
 | [`telar-navigate`](plugins/telar-navigate) | The page stack: `Navigator`, the host that animates between pages, per-tab stacks |
 | [`telar-watch`](plugins/telar-watch) | Filesystem watching delivered on the UI thread: `watch_path` |
 | [`telar-dynamic`](plugins/telar-dynamic) | Decoders and transports for assets that arrive at run time, one feature each |
@@ -304,10 +310,10 @@ Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 
 **The layout rule.** `plugins/` holds every crate built on top of the facade, including what the tooling adds on its own, such as the devtools overlay `cargo telar dev` turns on and the workshop `cargo telar preview` opens. `crates/` holds `telar`, the kernel crates behind it and host-side tooling (`crates/tools/`); a crate a `telar` feature pulls in and compiles into the target is core, even when it is opt-in. Nothing under `crates/` depends on `plugins/`, which `.github/scripts/check-layering.sh` enforces in CI.
 
-**Adding one.** Add the crate, name the feature groups you draw, and, for a plugin that ships `.rsx` tags, list it in `telar.toml` so every `.rsx` file sees them without a `use`:
+**Adding one.** Add the crate, name the features whose dependencies you want, and, for a plugin that ships `.rsx` tags, list it in `telar.toml` so every `.rsx` file sees them without a `use`:
 
 ```sh
-cargo add telar-components --features overlays
+cargo add telar-components --features icons
 cargo add telar-navigate
 ```
 

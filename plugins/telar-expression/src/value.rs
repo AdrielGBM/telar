@@ -177,6 +177,3 @@ pub fn format_number(value: f64) -> String {
         text
     }
 }
-
-/// The longest text an expression may build, in bytes. Building past it is an evaluation error, since `replace` multiplies a text's length and nesting it would otherwise exhaust memory.
-pub const MAX_TEXT_BYTES: usize = 1 << 20;

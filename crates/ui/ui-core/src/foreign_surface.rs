@@ -293,5 +293,5 @@ pub(crate) fn target(key: u64, id: u64) -> Option<(Rc<dyn ForeignSurface>, u64)>
 }
 
 #[cfg(test)]
-#[path = "foreign_surface_test.rs"]
+#[path = "foreign_surface.test.rs"]
 mod tests;

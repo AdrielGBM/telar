@@ -1,0 +1,124 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element button
+            rect 333,284 134x32 fill=#4261edff radius=10
+            element group
+              matrix 1,0,0,1,345,284
+                text 0,8 110x16.8 "Open the palette" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+              end
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end
+element group
+  rect 0,0 800x600 fill=#00000080
+  element dialog
+    rect 120,96 560x172 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
+    element group
+      rect 128,104 544x32 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+      element group
+        matrix 1,0,0,1,140,104
+          clip 0,0 520x32
+            text 0,8 520x16.8 "zoom" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
+            rect 36.58,8 1.5x16.8 fill=#171a2eff
+          end
+        end
+      end
+    end
+    element listbox
+      clip 128,144 544x108
+        matrix 1,0,0,1,128,144
+          element group
+            element group
+              element group
+                element group
+                  matrix 1,0,0,1,8,20
+                    text 0,0 28x14.28 "View" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                  end
+                end
+              end
+            end
+            element option
+              rect 0,36 544x36 fill=#00000014 radius=6
+              element group
+                clip 8,36 469x36
+                  matrix 1,0,0,1,8,36
+                    text 0,10 469.2x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en span=0..4[weight=600 color=#4261edff]
+                  end
+                end
+              end
+              element keyboardinput
+                element group
+                  element group
+                    element group
+                      rect 485,45 28x18 fill=#171a2e14 border=1 border-color=#00000000 radius=6
+                      element group
+                        matrix 1,0,0,1,489,47
+                          text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
+                      end
+                    end
+                    element group
+                      rect 515,45 21x18 fill=#171a2e14 border=1 border-color=#00000000 radius=6
+                      element group
+                        matrix 1,0,0,1,521,47
+                          text 0,0 8x14.28 "=" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element option
+              rect 0,72 544x36 radius=6
+              element group
+                clip 8,72 469x36
+                  matrix 1,0,0,1,8,72
+                    text 0,10 469.2x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en span=0..4[weight=600 color=#4261edff]
+                  end
+                end
+              end
+              element keyboardinput
+                element group
+                  element group
+                    element group
+                      rect 485,81 28x18 fill=#171a2e14 border=1 border-color=#00000000 radius=6
+                      element group
+                        matrix 1,0,0,1,489,83
+                          text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
+                      end
+                    end
+                    element group
+                      rect 515,81 21x18 fill=#171a2e14 border=1 border-color=#00000000 radius=6
+                      element group
+                        matrix 1,0,0,1,523,83
+                          text 0,0 5.48x14.28 "-" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+    element group
+      element group
+      end
+    end
+  end
+end

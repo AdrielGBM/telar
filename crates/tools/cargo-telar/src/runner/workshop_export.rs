@@ -92,5 +92,5 @@ fn list_previews(common: &CommonArgs) -> Result<Vec<ListedPreview>, String> {
 }
 
 #[cfg(test)]
-#[path = "workshop_export_test.rs"]
+#[path = "workshop_export.test.rs"]
 mod tests;

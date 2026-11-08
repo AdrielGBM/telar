@@ -304,5 +304,5 @@ pub fn follow_system(light: impl Into<String>, dark: impl Into<String>) {
 }
 
 #[cfg(test)]
-#[path = "mode_test.rs"]
+#[path = "mode.test.rs"]
 mod tests;

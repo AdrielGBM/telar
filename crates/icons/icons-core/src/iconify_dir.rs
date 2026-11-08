@@ -112,5 +112,5 @@ impl IconSource for IconifyDir {
 }
 
 #[cfg(test)]
-#[path = "iconify_dir_test.rs"]
+#[path = "iconify_dir.test.rs"]
 mod tests;

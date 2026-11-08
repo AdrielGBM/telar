@@ -172,5 +172,5 @@ impl fmt::Display for Errors {
 impl std::error::Error for Errors {}
 
 #[cfg(test)]
-#[path = "error_test.rs"]
+#[path = "error.test.rs"]
 mod tests;

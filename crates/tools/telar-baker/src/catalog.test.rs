@@ -1,0 +1,313 @@
+use super::*;
+
+#[test]
+fn bakes_catalog_from_disk() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_bake_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(
+        root.join("locales/en.toml"),
+        "title = \"Settings\"\n[battery]\nremaining = \"{time} remaining\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("locales/es.toml"),
+        "title = \"Ajustes\"\n[battery]\nremaining = \"quedan {time}\"\n",
+    )
+    .unwrap();
+
+    let model = parse_catalog(&root).unwrap().unwrap();
+    assert_eq!(model.locales, vec!["en", "es"]);
+    assert_eq!(model.default_locale, "en");
+    assert!(
+        model.contains_key("battery.remaining"),
+        "the parsed model is missing a key: {model:?}"
+    );
+    assert_eq!(model.arg_names("battery.remaining").unwrap(), vec!["time"]);
+
+    let src = to_source(&model);
+    assert!(src.contains("default_locale: \"en\""), "{src}");
+    assert!(src.contains("Entry { key: \"battery.remaining\""), "{src}");
+    assert!(src.contains("Message::Plain(\"Ajustes\")"), "{src}");
+    assert!(src.contains("Part::Arg(\"time\")"), "{src}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn merges_per_module_files_in_a_locale_dir() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_multi_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales/en")).unwrap();
+    std::fs::write(
+        root.join("locales/en/settings.toml"),
+        "[settings]\ntitle = \"Settings\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("locales/en/battery.toml"),
+        "[battery]\nfull = \"Full\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("locales/es.toml"),
+        "[settings]\ntitle = \"Ajustes\"\n[battery]\nfull = \"Llena\"\n",
+    )
+    .unwrap();
+
+    let model = parse_catalog(&root).unwrap().unwrap();
+    assert_eq!(model.locales, vec!["en", "es"]);
+    assert!(
+        model.contains_key("settings.title"),
+        "a per-module file was dropped in the merge: {model:?}"
+    );
+    assert!(
+        model.contains_key("battery.full"),
+        "the other module was dropped in the merge: {model:?}"
+    );
+    assert!(
+        catalog_files(&root).unwrap().len() == 3,
+        "every module file in the locale dir counts: {:?}",
+        catalog_files(&root).unwrap()
+    );
+
+    std::fs::write(
+        root.join("locales/en/dup.toml"),
+        "[settings]\ntitle = \"Oops\"\n",
+    )
+    .unwrap();
+    let err = parse_catalog(&root).unwrap_err();
+    assert!(err.contains("duplicate key `settings.title`"), "{err}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn discovers_co_located_module_catalogs() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_colo_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src/modules/battery/i18n")).unwrap();
+    std::fs::create_dir_all(root.join("src/modules/settings/i18n")).unwrap();
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(
+        root.join("src/modules/battery/i18n/en.toml"),
+        "[battery]\nfull = \"Full\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/modules/battery/i18n/es.toml"),
+        "[battery]\nfull = \"Llena\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/modules/settings/i18n/en.toml"),
+        "[settings]\ntitle = \"Settings\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("locales/en.toml"), "[common]\non = \"On\"\n").unwrap();
+
+    let model = parse_catalog(&root).unwrap().unwrap();
+    assert_eq!(model.locales, vec!["en", "es"]);
+    assert!(
+        model.contains_key("battery.full"),
+        "a co-located module catalog was missed: {model:?}"
+    );
+    assert!(
+        model.contains_key("settings.title"),
+        "the other one was missed too: {model:?}"
+    );
+    assert!(
+        model.contains_key("common.on"),
+        "project-wide locales/ still merges alongside the scan"
+    );
+
+    std::fs::write(root.join("locales/es.toml"), "[common]\non = \"Sí\"\n").unwrap();
+    std::fs::write(
+        root.join("telar.toml"),
+        "[telar.i18n]\nscan = \"translations\"\ndefault = \"es\"\n",
+    )
+    .unwrap();
+    let model2 = parse_catalog(&root).unwrap().unwrap();
+    assert!(
+        !model2.contains_key("battery.full"),
+        "the renamed scan dir no longer matches i18n/"
+    );
+    assert_eq!(model2.default_locale, "es");
+    assert!(
+        model2.contains_key("common.on"),
+        "the project-wide root is unaffected by the scan name"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn no_locales_dir_is_none() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_none_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    assert!(
+        parse_catalog(&root).unwrap().is_none(),
+        "no locales dir means no catalog, not an empty one"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_telar_toml_that_does_not_load_is_an_error_rather_than_the_default_catalog() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_broken_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        "[telar.i18n]\nrot = \"strings\"\n",
+    )
+    .unwrap();
+
+    let error = parse_catalog(&root).expect_err("a misspelled key does not mean `locales/`");
+    assert!(error.contains("rot"), "{error}");
+    assert!(catalog_files(&root).is_err());
+    let error = bake_catalog(&root, "test", "0.0.0")
+        .expect_err("a bake against the default directories would write the wrong catalog");
+    assert!(error.to_string().contains("rot"), "{error}");
+    assert!(
+        !root.join(".telar").exists(),
+        "nothing is baked from a manifest that does not load"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_catalog_that_does_not_parse_is_an_error_naming_it_and_keeps_the_previous_artifact() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_unparsed_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
+    let baked = bake_catalog(&root, "test", "0.0.0").unwrap().unwrap();
+    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
+    let artifact =
+        std::fs::read_to_string(root.join(".telar").join(CATALOG_SOURCE_FILENAME)).unwrap();
+
+    std::fs::write(root.join("locales/es.toml"), "title = \"Ajustes\n").unwrap();
+    let report = bake_catalog(&root, "test", "0.0.0").unwrap().unwrap();
+
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert!(
+        report.errors[0].contains(&root.join("locales").join("es.toml").display().to_string()),
+        "{:?}",
+        report.errors
+    );
+    assert!(!report.changed);
+    assert_eq!(
+        std::fs::read_to_string(root.join(".telar").join(CATALOG_SOURCE_FILENAME)).unwrap(),
+        artifact
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[cfg(all(unix, not(target_vendor = "apple")))]
+fn non_utf8_file_name() -> std::ffi::OsString {
+    use std::os::unix::ffi::OsStrExt;
+    std::ffi::OsStr::from_bytes(b"caf\xe9.toml").to_owned()
+}
+
+#[cfg(windows)]
+fn non_utf8_file_name() -> std::ffi::OsString {
+    use std::os::windows::ffi::OsStringExt;
+    let lone_surrogate = 0xd800;
+    let name: Vec<u16> = "caf"
+        .encode_utf16()
+        .chain([lone_surrogate])
+        .chain(".toml".encode_utf16())
+        .collect();
+    std::ffi::OsString::from_wide(&name)
+}
+
+// Apple's file systems refuse a file name that is not valid UTF-8, so there the file this test needs cannot exist.
+#[cfg(not(target_vendor = "apple"))]
+#[test]
+fn a_catalog_file_named_in_non_utf8_leaves_the_others_tracked_and_is_reported() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_non_utf8_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales/es")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
+    std::fs::write(
+        root.join("locales/es").join(non_utf8_file_name()),
+        "title = \"Ajustes\"\n",
+    )
+    .unwrap();
+
+    let report = bake_catalog(&root, "test", "0.0.0").unwrap().unwrap();
+    let index = read_catalog_index(&root.join(".telar")).unwrap().unwrap();
+    let tracked: Vec<&str> = index.sources.iter().map(|s| s.path.as_str()).collect();
+
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(tracked, ["locales/en.toml"]);
+    assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+    assert!(report.warnings[0].contains("not valid UTF-8"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_malformed_catalog_has_no_keys_and_a_missing_one_neither() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_keys_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+
+    assert!(catalog_keys(&root).is_empty());
+
+    std::fs::write(root.join("locales/en.toml"), "title = \"Home\"\n").unwrap();
+    assert!(catalog_keys(&root).contains("title"));
+
+    std::fs::write(root.join("locales/en.toml"), "title = [\n").unwrap();
+    assert!(catalog_keys(&root).is_empty());
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn string_literals(stream: proc_macro2::TokenStream, found: &mut Vec<String>) {
+    for tree in stream {
+        match tree {
+            proc_macro2::TokenTree::Group(group) => string_literals(group.stream(), found),
+            proc_macro2::TokenTree::Literal(literal) => found.push(literal.to_string()),
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn text_direction_controls_in_a_catalog_bake_to_rust_that_compiles_and_reads_back_the_same() {
+    let reversed = "Order \u{202E}lanif\u{202C} placed";
+    let isolated = "\u{2066}{name}\u{2069} and \u{2067}\u{2068}x\u{2069}";
+    let english = format!("plain = \"{reversed}\"\nformatted = \"{isolated}\"\n");
+    let model = CatalogModel::from_sources(&[("en", &english, "en.toml")], Some("en")).unwrap();
+
+    let source = to_source(&model);
+    syn::parse_file(&source).unwrap();
+    let mut literals = Vec::new();
+    string_literals(source.parse().unwrap(), &mut literals);
+    let values: Vec<String> = literals
+        .iter()
+        .filter_map(|token| syn::parse_str::<syn::LitStr>(token).ok())
+        .map(|literal| literal.value())
+        .collect();
+
+    let direction_controls = ['\u{202A}'..='\u{202E}', '\u{2066}'..='\u{2069}'];
+    for token in &literals {
+        assert!(
+            !token
+                .chars()
+                .any(|c| direction_controls.iter().any(|range| range.contains(&c))),
+            "a literal carries a text direction control unescaped, which rustc refuses: {token}"
+        );
+    }
+    assert!(values.iter().any(|value| value == reversed), "{values:?}");
+    assert!(values.iter().any(|value| value == "\u{2066}"), "{values:?}");
+    assert!(
+        values
+            .iter()
+            .any(|value| value == "\u{2069} and \u{2067}\u{2068}x\u{2069}"),
+        "{values:?}"
+    );
+}

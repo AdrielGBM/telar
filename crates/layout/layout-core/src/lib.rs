@@ -1,11 +1,10 @@
 //! Flexbox and grid layout over a taffy tree, addressed by node id.
 //!
-//! Styles are written logically — `start`/`end` rather than left/right — and resolved against the active [`Direction`] when the tree is computed, so one build serves LTR and RTL.
+//! Styles are written logically — `start`/`end` rather than left/right — and resolved against the active [`Direction`](i18n_core::Direction) when the tree is computed, so one build serves LTR and RTL.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod css;
-mod direction;
 mod engine;
 mod error;
 mod sticky;
@@ -13,7 +12,6 @@ mod style;
 mod track;
 
 pub use css::Css;
-pub use direction::Direction;
 pub use engine::{Displaced, LayoutEngine, MeasureFn, MeasureInput, NodeId, StickyAnchor, Walked};
 pub use error::LayoutError;
 pub use style::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle, Margin, SizeDimension};

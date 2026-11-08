@@ -18,6 +18,7 @@ type TimerId = u64;
 
 enum Clock {
     Running { due: Instant },
+    Unreachable,
     Paused { left: Duration },
 }
 
@@ -39,12 +40,19 @@ impl TimerRegistry {
         Instant::now() + self.advanced
     }
 
+    fn clock_after(&self, wait: Duration) -> Clock {
+        match self.now().checked_add(wait) {
+            Some(due) => Clock::Running { due },
+            None => Clock::Unreachable,
+        }
+    }
+
     fn earliest(&self) -> Option<Instant> {
         self.pending
             .values()
             .filter_map(|timer| match timer.clock {
                 Clock::Running { due } => Some(due),
-                Clock::Paused { .. } => None,
+                Clock::Paused { .. } | Clock::Unreachable => None,
             })
             .min()
     }
@@ -69,12 +77,20 @@ impl Timer {
         TIMERS.with(|t| {
             let mut registry = t.borrow_mut();
             let now = registry.now();
-            if let Some(timer) = registry.pending.get_mut(&self.id)
-                && let Clock::Running { due } = timer.clock
-            {
-                timer.clock = Clock::Paused {
-                    left: due.saturating_duration_since(now),
-                };
+            if let Some(timer) = registry.pending.get_mut(&self.id) {
+                match timer.clock {
+                    Clock::Running { due } => {
+                        timer.clock = Clock::Paused {
+                            left: due.saturating_duration_since(now),
+                        };
+                    }
+                    Clock::Unreachable => {
+                        timer.clock = Clock::Paused {
+                            left: Duration::MAX,
+                        };
+                    }
+                    Clock::Paused { .. } => {}
+                }
             }
         });
     }
@@ -83,16 +99,22 @@ impl Timer {
     pub fn resume(&self) {
         let is_earliest = TIMERS.with(|t| {
             let mut registry = t.borrow_mut();
-            let now = registry.now();
-            let Some(timer) = registry.pending.get_mut(&self.id) else {
+            let Some(&PendingTimer {
+                clock: Clock::Paused { left },
+                ..
+            }) = registry.pending.get(&self.id)
+            else {
                 return false;
             };
-            let Clock::Paused { left } = timer.clock else {
-                return false;
+            let clock = registry.clock_after(left);
+            let due = match clock {
+                Clock::Running { due } => Some(due),
+                _ => None,
             };
-            let due = now + left;
-            timer.clock = Clock::Running { due };
-            registry.earliest() == Some(due)
+            if let Some(timer) = registry.pending.get_mut(&self.id) {
+                timer.clock = clock;
+            }
+            due.is_some() && registry.earliest() == due
         });
         if is_earliest {
             crate::task::wake_loop();
@@ -142,12 +164,15 @@ pub fn run_after(delay: Duration, callback: impl FnOnce() + 'static) -> Timer {
         let mut registry = t.borrow_mut();
         let id = registry.next_id;
         registry.next_id += 1;
-        let due = registry.now() + delay;
-        let is_earliest = registry.earliest().is_none_or(|earliest| due < earliest);
+        let clock = registry.clock_after(delay);
+        let is_earliest = match clock {
+            Clock::Running { due } => registry.earliest().is_none_or(|earliest| due < earliest),
+            _ => false,
+        };
         registry.pending.insert(
             id,
             PendingTimer {
-                clock: Clock::Running { due },
+                clock,
                 callback: Box::new(callback),
                 surface: current_surface(),
             },
@@ -192,7 +217,7 @@ pub fn fire_timers() {
                 let mut registry = t.borrow_mut();
                 match registry.pending.get(&id)?.clock {
                     Clock::Running { .. } => registry.pending.remove(&id),
-                    Clock::Paused { .. } => None,
+                    Clock::Paused { .. } | Clock::Unreachable => None,
                 }
             });
             let Some(timer) = timer else {
@@ -261,5 +286,5 @@ fn pending_timer_count() -> usize {
 }
 
 #[cfg(test)]
-#[path = "timer_test.rs"]
+#[path = "timer.test.rs"]
 mod tests;

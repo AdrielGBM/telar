@@ -15,34 +15,11 @@ use crate::fonts::FontDeclaration;
 use crate::icons::{IconMode, IconsSection};
 use crate::prelude::PreludeEntry;
 use crate::previews::PreviewsSection;
+use crate::protocol::{FullscreenMode, RendererBackend, WindowPosition};
 use crate::web::{OgImage, ThemeColor, WebHost};
 
 /// The file this describes, in the package root.
 pub const MANIFEST_FILENAME: &str = "telar.toml";
-
-/// Which renderer the built application selects at startup.
-///
-/// The *config* vocabulary. A CLI flag offering the same three words is a different thing with the same spelling — it is parsed by a different library, and it can be given where no manifest exists.
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase", deny_unknown_fields)]
-pub enum RendererBackend {
-    /// Hardware, falling back to software where there is no adapter.
-    #[default]
-    Auto,
-    Hardware,
-    Software,
-}
-
-impl RendererBackend {
-    /// The spelling the runtime re-parses out of `TELAR_RENDERER_BACKEND`.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Auto => "auto",
-            Self::Hardware => "hardware",
-            Self::Software => "software",
-        }
-    }
-}
 
 /// The dev-session settings: the window `cargo telar dev` opens, and whether it draws the overlay.
 #[derive(Deserialize, Debug, Clone, Default, PartialEq)]
@@ -64,10 +41,8 @@ pub struct WindowSection {
     pub decorations: Option<bool>,
     pub resizable: Option<bool>,
     pub transparent: Option<bool>,
-    /// `"disabled"`, `"borderless"` or `"exclusive"`.
-    pub fullscreen: Option<String>,
-    /// `"centered"`, or `"<x>,<y>"`.
-    pub position: Option<String>,
+    pub fullscreen: Option<FullscreenMode>,
+    pub position: Option<WindowPosition>,
 }
 
 /// Where translation catalogs are discovered. Both sources may be active at once; either name set to `""` disables it.
@@ -232,17 +207,30 @@ pub struct TelarManifest {
 pub enum ManifestError {
     /// The file is there and does not parse, or names something the schema has no place for. The message is serde's, which names the key and the line.
     Invalid { path: PathBuf, message: String },
+    /// The file exists and could not be read as text: a directory, a file that is not UTF-8, one the process may not open.
+    Unreadable {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 }
 
 impl std::fmt::Display for ManifestError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Invalid { path, message } => write!(f, "{}: {message}", path.display()),
+            Self::Unreadable { path, source } => write!(f, "{}: {source}", path.display()),
         }
     }
 }
 
-impl std::error::Error for ManifestError {}
+impl std::error::Error for ManifestError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Invalid { .. } => None,
+            Self::Unreadable { source, .. } => Some(source),
+        }
+    }
+}
 
 impl TelarManifest {
     /// Reads `<package_root>/telar.toml`, over the workspace root's if there is one.
@@ -306,8 +294,10 @@ impl TelarManifest {
 
     fn read(dir: &Path) -> Result<Option<Self>, ManifestError> {
         let path = dir.join(MANIFEST_FILENAME);
-        let Ok(content) = std::fs::read_to_string(&path) else {
-            return Ok(None);
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(source) => return Err(ManifestError::Unreadable { path, source }),
         };
         let manifest: Self = toml::from_str(&content).map_err(|e| ManifestError::Invalid {
             path: path.clone(),
@@ -411,6 +401,14 @@ impl TelarSection {
         }
     }
 
+    /// How far the modules discovered in this package reach: a library keeps its own to itself, an application exposes them to its benches and integration tests.
+    pub fn module_visibility(&self) -> crate::ModuleVisibility {
+        match self.library {
+            true => crate::ModuleVisibility::Crate,
+            false => crate::ModuleVisibility::Public,
+        }
+    }
+
     /// The crates this package's `.rsx` glob-imports, in the order declared.
     pub fn prelude(&self) -> &[PreludeEntry] {
         self.prelude.as_deref().unwrap_or_default()
@@ -447,5 +445,5 @@ impl TelarSection {
 }
 
 #[cfg(test)]
-#[path = "manifest_test.rs"]
+#[path = "manifest.test.rs"]
 mod tests;

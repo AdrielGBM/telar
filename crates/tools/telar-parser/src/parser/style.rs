@@ -202,7 +202,7 @@ fn import_name(text: &str) -> Option<StyleImportName> {
 
 /// `#` is reserved for hex colors in `.rsx`, so any `#`-prefixed value must be a well-formed hex. Catches typos (`#zzz`, `#12`) at parse time instead of silently rendering them as black. `pub(super)` because `view::parse_element_header` validates attribute values with it too.
 pub(super) fn check_hex_value(value: &str, line: usize) -> Result<(), ParseError> {
-    if value.starts_with('#') && crate::parse_hex(value).is_none() {
+    if value.starts_with('#') && geometry_core::parse_hex(value).is_none() {
         return Err(ParseError {
             message: format!(
                 "invalid hex color `{value}`: expected #rgb, #rgba, #rrggbb or #rrggbbaa"

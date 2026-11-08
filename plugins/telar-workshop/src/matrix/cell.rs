@@ -9,11 +9,13 @@ use telar::preview::{Globals, MatrixCell, Play, PreviewEntry};
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, ColorScheme, Container,
     Direction, LayoutError, LayoutItem, LayoutStyle, Lazy, Memo, PointerButton, Reactive,
-    ReactiveList, RectStyle, RelayoutHook, Role, RwSignal, ShapeStyle, Size, Slots,
-    StyledContainer, SurfaceFrame, Text, ViewRange, box_item, children, effect, memo, on_cleanup,
-    pointer_position, scroll_progress, signal, use_theme_tokens,
+    ReactiveList, RectStyle, RelayoutHook, Role, RwSignal, ShapeStyle, Size, StyledContainer,
+    SurfaceFrame, Text, ViewRange, box_item, children, effect, memo, on_cleanup, pointer_position,
+    scroll_progress, signal, use_theme_tokens,
 };
-use telar_components::{BadgeProps, ItemProps, TooltipProps, badge, item, tooltip};
+use telar_components::{
+    ItemProps, MenuPlace, TagProps, TooltipProps, item, menu_layer, tag, tooltip,
+};
 use telar_devtools::{
     WORKBENCH_GRID, WORKBENCH_RADIUS, inspection_marks, use_workbench_tokens, workbench_mono,
     workbench_muted,
@@ -23,7 +25,6 @@ use super::open_cell;
 use super::plan::cell_label;
 use crate::canvas::inspected::PreviewOnly;
 use crate::guarded::guarded;
-use crate::more_menu::{Asked, menu_layer};
 use crate::settings::CanvasSettings;
 use crate::settle::run_when_sized;
 use crate::state::WorkshopState;
@@ -120,9 +121,6 @@ pub(crate) fn seed(
     }
     if let Some(direction) = settings.direction {
         globals.direction().set(Some(direction));
-    }
-    if let Some(size) = settings.control_size {
-        globals.control_size().set(Some(size));
     }
     if let Some(high) = settings.high_contrast {
         globals.high_contrast().set(Some(high));
@@ -239,16 +237,14 @@ pub(super) fn cell(
             box_item(slot),
         ],
     )?
-    .role(Role::Group)
+    .role(Role::Article)
     .a11y_label(move || label.clone())
     .on_press(focus_this.clone())
     .on_alt_press(move |button| {
         if button == PointerButton::Secondary {
             focus_this();
-            menu.open.set(Some(Asked {
-                at: pointer_position().unwrap_or_default(),
-                around: None,
-            }));
+            menu.open
+                .set(Some(MenuPlace::At(pointer_position().unwrap_or_default())));
         }
     });
     let column = Container::new(
@@ -259,7 +255,7 @@ pub(super) fn cell(
 }
 
 struct CellMenu {
-    open: RwSignal<Option<Asked>>,
+    open: RwSignal<Option<MenuPlace>>,
     layer: Box<dyn LayoutItem>,
 }
 
@@ -269,27 +265,18 @@ fn cell_menu(
     entry: PreviewEntry,
     cell: MatrixCell,
 ) -> Result<CellMenu, LayoutError> {
-    let open = signal(None::<Asked>);
+    let open = signal(None::<MenuPlace>);
     let state = state.clone();
-    let rows = Rc::new(move || {
+    let rows = Children::one(move || {
         let (state, cell) = (state.clone(), cell.clone());
-        Children::new(move || {
-            let (state, cell) = (state.clone(), cell.clone());
-            let mut slots = Slots::new();
-            slots.push(
-                None,
-                item(
-                    ItemProps::props()
-                        .label(strings::reactive(OPEN_IN_CANVAS))
-                        .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
-            Ok(slots)
-        })
+        item(
+            ItemProps::props()
+                .label(strings::reactive(OPEN_IN_CANVAS))
+                .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
+                .build(),
+        )
     });
-    let layer = menu_layer(open, rows)?;
+    let layer = menu_layer(open, |place| *place, move |_| rows.clone())?;
     Ok(CellMenu { open, layer })
 }
 
@@ -327,13 +314,10 @@ fn badges(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErro
         |status: &Status| format!("{status:?}"),
         |status| {
             let tone = status.tone();
-            badge(
-                BadgeProps::props()
-                    .label(Reactive::of(move || status.text()))
-                    .color(Reactive::of(move || tone_color(tone)))
-                    .build(),
-                Children::default(),
-            )
+            tag(TagProps::props()
+                .label(Reactive::of(move || status.text()))
+                .tone(Reactive::of(move || tone_color(tone)))
+                .build())
         },
     )?;
     Ok(box_item(row))
@@ -354,18 +338,19 @@ fn details(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErr
         |detail: &String| detail.clone(),
         |detail| {
             let line = detail.clone();
-            let text = Text::declaring(
-                move || line.clone(),
-                LayoutStyle::new().max_width(CELL_WIDTH),
-                |text| workbench_muted(workbench_mono(text)).with_clamp(1, true),
-            )?;
-            let mut slots = Slots::new();
-            slots.push(None, box_item(text));
             tooltip(
                 TooltipProps::props()
                     .text(Reactive::of(move || detail.clone()))
+                    .children(Children::new(move || {
+                        let line = line.clone();
+                        let text = Text::declaring(
+                            move || line.clone(),
+                            LayoutStyle::new().max_width(CELL_WIDTH),
+                            |text| workbench_muted(workbench_mono(text)).with_clamp(1, true),
+                        )?;
+                        Ok(vec![box_item(text)])
+                    }))
                     .build(),
-                Children::from(slots),
             )
         },
     )?;
@@ -474,7 +459,7 @@ fn run_checks(play: &mut Play, plays: bool) -> Vec<Status> {
 fn follow_while_focused(
     state: &WorkshopState,
     focused: Memo<bool>,
-    canvas: Rc<telar::SurfaceCanvas>,
+    canvas: Rc<telar::NestedCanvas>,
 ) {
     let inspection = state.inspection();
     let following: Rc<RefCell<Option<RelayoutHook>>> = Rc::default();

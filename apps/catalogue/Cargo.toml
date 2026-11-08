@@ -34,7 +34,7 @@ tooling = [
 
 [dependencies]
 telar = { workspace = true, features = ["runtime"] }
-telar-components = { workspace = true, features = ["advanced", "chrome", "overlays", "workbench"] }
+telar-components = { workspace = true, features = ["icons"] }
 telar-devtools = { workspace = true, optional = true }
 telar-navigate = { workspace = true }
 telar-workshop = { workspace = true, optional = true }

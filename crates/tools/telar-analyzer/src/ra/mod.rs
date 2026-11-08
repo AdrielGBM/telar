@@ -8,7 +8,7 @@ use std::time::Duration;
 use lsp_types::{InlayHintKind, Range};
 use serde_json::Value;
 
-use crate::inner::Inner;
+use crate::inner::{Inner, RequestError};
 use crate::rpc::OutgoingSender;
 
 mod exports;
@@ -30,6 +30,23 @@ pub struct DefinitionTarget {
 pub struct RefTarget {
     pub path: PathBuf,
     pub range: Range,
+}
+
+/// Why rust-analyzer could not say where a symbol is used.
+#[derive(Debug)]
+pub enum ReferencesError {
+    Request(RequestError),
+    /// It answered, but resolved no symbol at the position asked about.
+    NoSymbol,
+}
+
+impl std::fmt::Display for ReferencesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Request(error) => error.fmt(f),
+            Self::NoSymbol => f.write_str("rust-analyzer resolved no symbol there"),
+        }
+    }
 }
 
 /// One inlay hint, anchored in generated-file coordinates. The backend reverse-maps it onto the `.rsx` and keeps only `[logic]`-origin hints.
@@ -55,13 +72,16 @@ impl Analyzer {
         editor_caps: Value,
         outgoing: OutgoingSender,
     ) -> anyhow::Result<Self> {
-        Ok(Self {
-            inner: Inner::start(root, options, editor_caps, outgoing)?,
-        })
+        Inner::start(root, options, editor_caps, outgoing).map(Self::from)
     }
 
     pub fn capabilities(&self) -> &Value {
         self.inner.capabilities()
+    }
+
+    /// Whether the rust-analyzer session behind this is over.
+    pub fn ended(&self) -> bool {
+        self.inner.ended()
     }
 
     pub fn pass_request(&self, id: Value, method: &str, params: Value) {
@@ -74,5 +94,11 @@ impl Analyzer {
 
     pub fn relay_reply(&self, id: i32, result: Option<Value>, error: Option<Value>) {
         self.inner.relay_reply(id, result, error);
+    }
+}
+
+impl From<Inner> for Analyzer {
+    fn from(inner: Inner) -> Self {
+        Self { inner }
     }
 }

@@ -2,7 +2,10 @@
 //!
 //! A link crosses as text and is parsed again on arrival, so the host's own URI policy is the one that decides: a link to a scheme the host refuses arrives as no link at all, and the box that carried it still arrives and still draws. That is [`take_link`]'s whole difference from an ordinary option.
 
-use wire_core::{Reader, Wire, WireError, Writer, wire_enum, wire_struct};
+use wire_core::{
+    Reader, Shaped, Wire, WireError, Writer, fold, fold_fields, fold_shape, shape_named, wire_enum,
+    wire_struct,
+};
 
 use crate::{
     ConsumedKeys, CurrentKind, Destination, Focusable, HasPopup, Location, Modal, NumericValue,
@@ -58,6 +61,7 @@ wire_enum!(Role {
     Status = 45,
     Log = 46,
     Label = 47,
+    KeyboardInput = 48,
 });
 wire_enum!(Orientation {
     Horizontal = 0,
@@ -85,6 +89,16 @@ wire_struct!(SetPosition {
 });
 wire_struct!(Modal { layer, opened_from });
 wire_struct!(Focusable { tab_stop, consumes });
+
+impl Shaped for Location {
+    const SHAPE: u64 = fold_shape(
+        fold_shape(
+            fold_shape(shape_named("Location"), <Vec<String>>::SHAPE),
+            <Option<String>>::SHAPE,
+        ),
+        <Vec<(String, String)>>::SHAPE,
+    );
+}
 
 impl Wire for Location {
     fn put(&self, w: &mut Writer) {
@@ -119,6 +133,10 @@ impl Wire for Location {
 }
 
 /// Parsed again on arrival, so a URI whose scheme the reading side's policy refuses is refused as bytes that are no URI.
+impl Shaped for Uri {
+    const SHAPE: u64 = fold_shape(shape_named("Uri"), String::SHAPE);
+}
+
 impl Wire for Uri {
     fn put(&self, w: &mut Writer) {
         w.str(self.as_str());
@@ -128,6 +146,10 @@ impl Wire for Uri {
     }
 }
 
+impl Shaped for RouteAddress {
+    const SHAPE: u64 = fold_shape(shape_named("RouteAddress"), String::SHAPE);
+}
+
 impl Wire for RouteAddress {
     fn put(&self, w: &mut Writer) {
         w.str(self.as_str());
@@ -135,6 +157,10 @@ impl Wire for RouteAddress {
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         RouteAddress::parse(r.str()?).map_err(|_| WireError::Invalid("a route address"))
     }
+}
+
+impl Shaped for ConsumedKeys {
+    const SHAPE: u64 = fold_shape(shape_named("ConsumedKeys"), u16::SHAPE);
 }
 
 impl Wire for ConsumedKeys {
@@ -150,6 +176,18 @@ const ROUTE: u8 = 0;
 const ANCHOR: u8 = 1;
 const LOCALE: u8 = 2;
 const EXTERNAL: u8 = 3;
+
+/// What [`put_link`] spells a link as: whether there is one, then its kind's tag and what that kind carries.
+pub const LINK_SHAPE: u64 = {
+    let hash = fold(shape_named("link"), &[ROUTE]);
+    let hash = fold_shape(hash, Location::SHAPE);
+    let hash = fold(hash, &[ANCHOR]);
+    let hash = fold_shape(hash, <std::sync::Arc<str>>::SHAPE);
+    let hash = fold(hash, &[LOCALE]);
+    let hash = fold_shape(hash, <std::sync::Arc<str>>::SHAPE);
+    let hash = fold(hash, &[EXTERNAL]);
+    fold_shape(hash, Uri::SHAPE)
+};
 
 /// Spells a box's link, read back by [`take_link`].
 pub fn put_link(w: &mut Writer, link: Option<&Destination>) {
@@ -199,6 +237,38 @@ pub fn take_link(r: &mut Reader<'_>) -> Result<Option<Destination>, WireError> {
             });
         }
     })
+}
+
+impl Shaped for Semantics {
+    const SHAPE: u64 = {
+        let hash = fold_fields!(shape_named("Semantics"), Semantics { role, label });
+        let hash = fold_shape(fold(hash, b"link"), LINK_SHAPE);
+        fold_fields!(
+            hash,
+            Semantics {
+                focused,
+                toggled,
+                disabled,
+                click_through,
+                focusable,
+                lang,
+                hidden,
+                anchor,
+                current,
+                value,
+                orientation,
+                expanded,
+                position,
+                active_descendant,
+                controls,
+                has_popup,
+                keyboard_shortcut,
+                sort,
+                multiselectable,
+                modal,
+            }
+        )
+    };
 }
 
 impl Wire for Semantics {
@@ -257,5 +327,5 @@ impl Wire for Semantics {
 }
 
 #[cfg(test)]
-#[path = "wire_test.rs"]
+#[path = "wire.test.rs"]
 mod tests;

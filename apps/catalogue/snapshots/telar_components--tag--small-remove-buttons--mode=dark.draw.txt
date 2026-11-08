@@ -1,0 +1,94 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 320,288 84x24 fill=#7394ffff border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,328,288
+                  text 0,5 44x14.28 "Frame 1" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                end
+              end
+            end
+            element group
+              element group
+                element group
+                  rect 379,288 24x24
+                  element button
+                    rect 379,288 24x24 border=2 border-color=#7394ffff radius=10
+                    element group
+                      rect 385,294 12x12
+                      element group
+                        matrix 1,0,0,1,385,294
+                          path M9,3 L3,9 M3,3 L9,9 stroke=1 stroke-color=#0d0f1fff cap=round join=round
+                        end
+                      end
+                    end
+                  end
+                end
+                element group
+                  element group
+                  end
+                end
+              end
+            end
+          end
+          element group
+            rect 411,288 68x24 fill=#7394ffff border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,419,288
+                  text 0,5 28.31x14.28 "Logo" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+                end
+              end
+            end
+            element group
+              element group
+                element group
+                  rect 455,288 24x24
+                  element button
+                    rect 455,288 24x24 fill=#ffffff0d radius=10
+                    element group
+                      rect 461,294 12x12
+                      element group
+                        matrix 1,0,0,1,461,294
+                          path M9,3 L3,9 M3,3 L9,9 stroke=1 stroke-color=#0d0f1fff cap=round join=round
+                        end
+                      end
+                    end
+                  end
+                end
+                element group
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+matrix 1,0,0,1,455,316
+  element group
+    rect 0,0 88x18 fill=#ebedf5ff radius=9
+    element group
+      element group
+        matrix 1,0,0,1,6,3
+          text 0,0 67.2x12.5 "Remove Logo" size=10.41 family=sans-serif weight=400 color=#1c1f29ff wrap=none lang=en
+        end
+      end
+      element group
+        element group
+        end
+      end
+    end
+    element group
+      element group
+      end
+    end
+  end
+end

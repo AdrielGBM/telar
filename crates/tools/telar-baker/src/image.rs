@@ -30,5 +30,5 @@ impl Baker for ImageBaker {
 }
 
 #[cfg(test)]
-#[path = "image_test.rs"]
+#[path = "image.test.rs"]
 mod tests;

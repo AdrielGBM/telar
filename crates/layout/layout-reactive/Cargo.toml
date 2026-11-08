@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }
+i18n-core = { workspace = true }
 layout-core = { workspace = true }
 reactive-core = { workspace = true }
 

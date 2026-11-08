@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use super::BuildFlavour;
 use crate::PreludeEntry;
 
-/// Bumped whenever the generated Rust changes shape in a way an older `telar-macros` cannot wire — a different output path convention, a preview const that is named differently, (at 2) previews being emitted only for the flavours that ask, (at 3) a `*.previews.rsx` emitting its previews in a module of its own, (at 4) every flavour emitting its previews, which retired the flavours that alone did, (at 5) a baked asset being read with `get` from the `released_static!` its module declares since asset format 6, or (at 6) a preview entry naming its package through `PreviewEntry::package`. Any mismatch is refused with the command that rewrites it, as an artifact that no longer answers for its sources is.
-pub const BUILD_ARTIFACT_FORMAT: u32 = 6;
+/// Bumped whenever the generated Rust changes shape in a way an older `telar-macros` cannot wire — a different output path convention, a preview const that is named differently, (at 2) previews being emitted only for the flavours that ask, (at 3) a `*.preview.rsx` emitting its previews in a module of its own, (at 4) every flavour emitting its previews, which retired the flavours that alone did, (at 5) a baked asset being read with `get` from the `released_static!` its module declares since asset format 6, (at 6) a preview entry naming its package through `PreviewEntry::package`, (at 7) a component taking one `props` argument, its children handed in as `Children::new` props in place of a second `Children` argument, (at 8) a bare word compiled to a value of `telar::kw` and the language set through `.lang`, or (at 9) a keyless reactive or `virtual` loop handing each row a signal of its item, built through `VirtualList::positional` and `VirtualList::measured_positional` for a virtual one. Any mismatch is refused with the command that rewrites it, as an artifact that no longer answers for its sources is.
+pub const BUILD_ARTIFACT_FORMAT: u32 = 9;
 
 /// One `.rsx` the artifact was written from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,7 +82,7 @@ impl BuildIndex {
             return false;
         }
         sources.iter().all(|path| {
-            let Some(relative) = relative_source(path, src_dir) else {
+            let Some(relative) = crate::relative_slashed(path, src_dir) else {
                 return false;
             };
             let Some(entry) = listed.get(relative.as_str()) else {
@@ -108,21 +108,9 @@ impl BuildIndex {
 
     /// The entry for a `.rsx`, by its path under `src_dir`.
     pub fn entry_for(&self, rsx_path: &Path, src_dir: &Path) -> Option<&BuildEntry> {
-        let relative = relative_source(rsx_path, src_dir)?;
+        let relative = crate::relative_slashed(rsx_path, src_dir)?;
         self.entries.iter().find(|entry| entry.source == relative)
     }
-}
-
-/// The `source` key for a `.rsx`: its path under `src_dir`, always `/`-separated.
-pub fn relative_source(rsx_path: &Path, src_dir: &Path) -> Option<String> {
-    let relative = rsx_path.strip_prefix(src_dir).ok()?;
-    Some(
-        relative
-            .components()
-            .map(|part| part.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
-    )
 }
 
 /// Reads `<package_dir>/.telar/<flavour>.json`, or `None` when nothing has transpiled this package yet.

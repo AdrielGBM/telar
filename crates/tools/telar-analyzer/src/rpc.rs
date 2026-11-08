@@ -20,33 +20,65 @@ where
     writer.flush().await
 }
 
-/// Reads one `Content-Length`-framed JSON-RPC message, returning an error when the stream closes.
-pub async fn read_message<R>(reader: &mut BufReader<R>) -> tokio::io::Result<Value>
+/// The largest body a frame may announce; a corrupt length must not become a gigabyte allocation.
+const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
+
+/// Why no message could be read. Every variant but [`FrameError::Closed`] leaves the stream at an unknown offset, so the session cannot go on.
+#[derive(Debug, thiserror::Error)]
+pub enum FrameError {
+    #[error("the stream closed")]
+    Closed,
+    #[error("a frame header has no Content-Length")]
+    MissingContentLength,
+    #[error("Content-Length `{0}` is not a number")]
+    InvalidContentLength(String),
+    #[error("Content-Length {length} exceeds the {MAX_BODY_BYTES} byte limit")]
+    TooLarge { length: usize },
+    #[error("the frame body is not JSON: {0}")]
+    InvalidBody(#[source] serde_json::Error),
+    #[error("reading the stream failed: {0}")]
+    Io(#[from] tokio::io::Error),
+}
+
+/// Reads one `Content-Length`-framed JSON-RPC message; [`FrameError::Closed`] when the stream ends between frames.
+pub async fn read_message<R>(reader: &mut BufReader<R>) -> Result<Value, FrameError>
 where
     R: AsyncRead + Unpin,
 {
-    let mut content_length = 0usize;
+    let mut content_length = None;
+    let mut first_line = true;
     loop {
         let mut line = String::new();
-        let bytes_read = reader.read_line(&mut line).await?;
-        if bytes_read == 0 {
-            return Err(tokio::io::Error::new(
-                tokio::io::ErrorKind::UnexpectedEof,
-                "stream closed",
-            ));
+        if reader.read_line(&mut line).await? == 0 {
+            return Err(match first_line {
+                true => FrameError::Closed,
+                false => tokio::io::Error::from(tokio::io::ErrorKind::UnexpectedEof).into(),
+            });
         }
+        first_line = false;
         let trimmed = line.trim();
         if trimmed.is_empty() {
             break;
         }
         if let Some(value) = trimmed.strip_prefix("Content-Length: ") {
-            content_length = value.parse().unwrap_or(0);
+            let length = value
+                .parse()
+                .map_err(|_| FrameError::InvalidContentLength(value.to_owned()))?;
+            content_length = Some(length);
         }
     }
-    let mut body = vec![0u8; content_length];
+    let length = content_length.ok_or(FrameError::MissingContentLength)?;
+    if length > MAX_BODY_BYTES {
+        return Err(FrameError::TooLarge { length });
+    }
+    let mut body = vec![0u8; length];
     reader.read_exact(&mut body).await?;
-    serde_json::from_slice(&body)
-        .map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::InvalidData, e))
+    serde_json::from_slice(&body).map_err(FrameError::InvalidBody)
+}
+
+/// The JSON-RPC error for a well-formed request that could not be carried out, with the reason the editor shows.
+pub fn request_failed(message: &str) -> Value {
+    json!({ "code": lsp_types::error_codes::REQUEST_FAILED, "message": message })
 }
 
 /// Sends server→client messages (responses, notifications, requests) onto a channel that the stdout writer task drains, so handlers never touch stdout directly and writes never interleave.
@@ -95,3 +127,7 @@ impl OutgoingSender {
         self.send(json!({ "jsonrpc": "2.0", "method": method, "params": params }));
     }
 }
+
+#[cfg(test)]
+#[path = "rpc.test.rs"]
+mod tests;

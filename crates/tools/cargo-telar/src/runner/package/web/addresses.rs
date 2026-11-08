@@ -77,5 +77,5 @@ fn described(page: &Page, site: &Site, location: Option<&PageLocation>, pages: &
 }
 
 #[cfg(test)]
-#[path = "addresses_test.rs"]
+#[path = "addresses.test.rs"]
 mod tests;

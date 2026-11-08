@@ -363,5 +363,5 @@ pub fn declared_signals(source: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "occurrences_test.rs"]
+#[path = "occurrences.test.rs"]
 mod tests;

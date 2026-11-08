@@ -38,5 +38,5 @@ pub fn consumes(keys: ConsumedKeys, key: &Key) -> bool {
 }
 
 #[cfg(test)]
-#[path = "consumed_keys_test.rs"]
+#[path = "consumed_keys.test.rs"]
 mod tests;

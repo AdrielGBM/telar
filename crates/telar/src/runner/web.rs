@@ -2,10 +2,11 @@
 
 use std::sync::Arc;
 
-use platform_web::{WebClipboard, WebPlatform, WebPlatformConfig};
+use platform_web::{PageNames, WebClipboard, WebPlatform, WebPlatformConfig};
 #[cfg(feature = "web")]
 use renderer_web::{WebGpuRendererFactory, canvas_in};
 use services_core::{AppPathsProvider, NoPaths};
+use telar_project::{ASSETS_META_NAME, HOST_ELEMENT_ID, PageRenderer, RENDERER_SETTING};
 
 use crate::app::App;
 use crate::app_config::AppConfig;
@@ -49,20 +50,32 @@ impl WebRenderer {
         if self != Self::Auto {
             return self;
         }
-        match platform_web::page_setting(host, "renderer")
-            .as_deref()
-            .map(str::trim)
-        {
-            Some("dom" | "document") => Self::Document,
-            Some("canvas" | "gpu" | "webgpu") => Self::Canvas,
-            Some(other) if !other.is_empty() && other != "auto" => {
+        let Some(setting) = platform_web::page_setting(host, RENDERER_SETTING) else {
+            return Self::Auto;
+        };
+        let setting = setting.trim();
+        if setting.is_empty() {
+            return Self::Auto;
+        }
+        match PageRenderer::parse(setting) {
+            Ok(PageRenderer::Auto) => Self::Auto,
+            Ok(PageRenderer::Canvas) => Self::Canvas,
+            Ok(PageRenderer::Dom) => Self::Document,
+            Err(error) => {
                 tracing::warn!(
-                    "`{other}` is not a renderer this build has; the choice is `dom`, `canvas` or `auto`"
+                    "the page's {RENDERER_SETTING} setting is not one this build reads: {error}"
                 );
                 Self::Auto
             }
-            _ => Self::Auto,
         }
+    }
+}
+
+/// The names the page `cargo telar` packages gives what the app looks up in it.
+fn page_names() -> PageNames {
+    PageNames {
+        host_id: Some(HOST_ELEMENT_ID),
+        assets_meta: Some(ASSETS_META_NAME),
     }
 }
 
@@ -79,7 +92,7 @@ pub fn run_web_app_with_name<A: App>(
     // Owned, because the choice below is made after a promise settles and this call has long returned.
     let app_name = app_name.to_string();
 
-    let host = match platform_web::host_element(options.host.as_deref()) {
+    let host = match platform_web::host_element(options.host.as_deref(), page_names().host_id) {
         Ok(host) => host,
         Err(e) => {
             tracing::error!("telar could not find the element to mount on: {e}");
@@ -133,14 +146,14 @@ reactive_core::dropless_thread_local! {
 }
 
 /// Keeps `<html lang>`/`<html dir>` matching the active locale, so switching locale relabels the whole
-/// document the way `follow_locale_direction` relabels the layout — the same rule, `layout_core::Direction::for_locale`, applied to the page's own root rather than to a widget's.
+/// document the way `follow_locale_direction` relabels the layout — the same rule, `i18n_core::Direction::for_locale`, applied to the page's own root rather than to a widget's.
 fn follow_locale_language() {
     let effect = reactive_core::effect(|| {
         let locale = i18n_core::use_locale();
         let lang = locale
             .as_deref()
             .unwrap_or_else(|| i18n_core::default_locale());
-        let is_rtl = layout_core::Direction::for_locale(lang).is_rtl();
+        let is_rtl = i18n_core::Direction::for_locale(lang).is_rtl();
         platform_web::set_document_language(lang, is_rtl);
     });
     FOLLOW_LANGUAGE.with(|f| *f.borrow_mut() = Some(effect));
@@ -171,6 +184,7 @@ fn start<A: App>(
         owns_context_menu: options.owns_context_menu.unwrap_or(!document),
         owns_keyboard: !document,
         location: options.location,
+        page: page_names(),
     };
     let platform = WebPlatform::with_host(host.clone(), platform_config);
 
@@ -199,7 +213,7 @@ fn start<A: App>(
                     return;
                 }
             };
-            renderer_web::load_page_fonts();
+            renderer_web::load_page_fonts(telar_project::FONT_FAMILY_ATTRIBUTE);
             crate::runner::run_with_platform_and_renderer::<_, _, A, ()>(
                 platform,
                 WebGpuRendererFactory::new(canvas),

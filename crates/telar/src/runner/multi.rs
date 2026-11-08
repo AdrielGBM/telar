@@ -8,15 +8,15 @@ use services_core::AppPathsProvider;
 
 use crate::app::App;
 use crate::app_config::AppConfig;
-use crate::config;
-use crate::prefs::UserPrefs;
 
+use super::boot::{StoredChoices, SurfaceBoot, split_config};
 use super::font_config::FontSetup;
-use super::handler::build_app_handler;
 
 /// Drive **N** independent rsx apps on a [`MultiSurfacePlatform`] backend — one reactive tree per surface, the shape a multi-window app or a desktop shell (a bar/OSD/notification per monitor) needs.
 ///
-/// Each surface `(id, config)` gets a fresh app from `app_factory(id)` and a paths provider from `paths_factory(id)`; the backend builds and drives that surface's handler. On the headless and out-of-tree backends each surface runs on its own thread, so it gets a fully isolated reactive/theme/overlay/focus world with no cross-talk. Blocks until all surfaces close.
+/// Each surface `(id, config)` gets a fresh app from `app_factory(id)` and a paths provider from `paths_factory(id)`; the backend builds and drives that surface's handler, on the thread that drives it. Each surface gets a fully isolated reactive/theme/overlay/focus world with no cross-talk. Blocks until all surfaces close.
+///
+/// The app's directories and preference store are the process's: the first surface built installs them under `app_name`, and every later one, on any thread, shares them.
 ///
 /// This is the multi-surface analogue of [`crate::run_with_platform`]. It always uses the no-op dev overlay (`()`): the per-window devtools overlay is a single-surface concern.
 pub fn run_multi_with_platform<P, A, PF, AF>(
@@ -33,88 +33,54 @@ where
     PF: Fn(SurfaceId) -> Arc<dyn AppPathsProvider> + 'static,
     AF: Fn(SurfaceId) -> A + 'static,
 {
-    // Split into the `WindowConfig` the platform needs and the fonts the handler factory needs, keyed by `SurfaceId` and shared read-only across the surface threads.
     let mut window_configs = Vec::with_capacity(surfaces.len());
-    let mut fonts: HashMap<SurfaceId, FontSetup> = HashMap::new();
-    let mut titles: HashMap<SurfaceId, String> = HashMap::new();
-    for (id, cfg) in surfaces {
-        let AppConfig {
-            window,
-            fonts: faces,
-            font_family,
-        } = cfg;
+    let mut opened: HashMap<SurfaceId, (FontSetup, String)> = HashMap::new();
+    for (id, config) in surfaces {
+        let (window, fonts) = split_config(config);
         let window = window.titled_or(app_name);
-        titles.insert(id, window.title.clone());
+        opened.insert(id, (fonts, window.title.clone()));
         window_configs.push((id, window));
-        fonts.insert(
-            id,
-            FontSetup {
-                faces,
-                family: font_family,
-            },
-        );
     }
-    let fonts = Arc::new(fonts);
-    let titles = Arc::new(titles);
     let app_name = app_name.to_owned();
     platform_core::set_keyboard_convention(platform.keyboard_convention());
 
     platform.run_surfaces(window_configs, move |id| {
-        let app = app_factory(id);
-        let paths = paths_factory(id);
-        let prefs = UserPrefs::load(&app_name, paths.as_ref());
-        let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
-        let fonts = fonts.get(&id).cloned().unwrap_or_default();
-        let mut handler = build_app_handler::<P::Window, ()>(
-            Box::new(crate::app_runtime::LocalApp(app)),
-            paths,
-            fonts,
-            backend,
-            prefs,
-            app_name.clone(),
+        let (fonts, title) = opened
+            .get(&id)
+            .cloned()
+            .unwrap_or_else(|| (FontSetup::default(), app_name.clone()));
+        let boot = SurfaceBoot::new(&app_name, paths_factory(id), fonts, StoredChoices::Now);
+        let mut handler = boot.handler::<P::Window, ()>(
+            Box::new(crate::app_runtime::LocalApp(app_factory(id))),
+            &title,
             super::host::SurfaceRenderer::builtin(),
         );
         // Every surface shares this UI thread and the one reactive runtime, so each needs its own `Surface` world. Built here, on the thread that drives the handler.
         handler.surface = Some(ui_core::Surface::new());
-        handler.title = titles
-            .get(&id)
-            .map(|title| super::state::WindowTitle::opened_as(title));
         handler
     })
 }
 
-/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`AppRuntime`](crate::AppRuntime), boxed so a multi-surface backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s factory produces — a handler carrying its own `ui_core::Surface` world — but for surfaces opened at runtime (via a `SurfaceHost`), so the backend can enqueue the handler into its single UI-thread loop instead of spawning a thread. Builds no renderer and touches no thread-local reactive state; the loop drives it.
+/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`AppRuntime`](crate::AppRuntime), boxed so a multi-surface backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s factory produces — a handler carrying its own `ui_core::Surface` world, booted the same way — but for surfaces opened at runtime (as `open_window` opens one), so the backend can enqueue the handler into its single UI-thread loop instead of spawning a thread. Builds no renderer; call it on the thread that drives the handler, whose reactive runtime it brings the app's stored choices back into.
+///
+/// `config` is the surface's own: its window's title, falling back to `app_name`, and the faces and family it sets text in. The rest of its window is the backend's to apply.
 ///
 /// Takes a runtime rather than an [`App`] because a secondary surface is not always a tree in this process: the dev host opens one for a dylib-backed application, whose runtime is the far side of an FFI boundary. Wrap a plain application in [`LocalApp`](crate::LocalApp).
 pub fn build_surface_handler<W, A>(
     app: A,
     paths: Arc<dyn AppPathsProvider>,
     app_name: &str,
-    fonts: AppConfig,
+    config: AppConfig,
 ) -> Box<dyn EventHandler<W>>
 where
     W: super::host::SurfaceWindow,
     A: crate::app_runtime::AppRuntime,
 {
-    let prefs = UserPrefs::load(app_name, paths.as_ref());
-    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
-    // A surface opened at runtime carries its own font configuration like any other. It used to be handed none, which was survivable only while a process-wide global named the family behind its back.
-    let AppConfig {
-        window: _,
-        fonts: faces,
-        font_family,
-    } = fonts;
-    let fonts = FontSetup {
-        faces,
-        family: font_family,
-    };
-    let mut handler = build_app_handler::<W, ()>(
+    let (window, fonts) = split_config(config);
+    let boot = SurfaceBoot::new(app_name, paths, fonts, StoredChoices::Now);
+    let mut handler = boot.handler::<W, ()>(
         Box::new(app),
-        paths,
-        fonts,
-        backend,
-        prefs,
-        app_name.to_string(),
+        &window.titled_or(app_name).title,
         super::host::SurfaceRenderer::builtin(),
     );
     handler.surface = Some(ui_core::Surface::new());

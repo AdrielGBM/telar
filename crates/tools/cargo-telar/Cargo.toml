@@ -12,7 +12,8 @@ repository = { workspace = true }
 
 [dependencies]
 i18n-core = { workspace = true, features = ["runtime-catalog"] }
-layout-core = { workspace = true }
+renderer-core = { workspace = true }
+renderer-dom = { workspace = true }
 telar-baker = { workspace = true }
 telar-diagnostics = { workspace = true }
 telar-parser = { workspace = true }
@@ -28,20 +29,35 @@ getrandom = "0.3.4"
 notify = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tempfile = "3.27.0"
+tempfile = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]
+geometry-core = { workspace = true }
+test-process = { workspace = true }
+
 ureq = { workspace = true }
 
 [[test]]
 name = "rsx_library"
-path = "src/rsx_library_test.rs"
+path = "src/rsx_library.test.rs"
 
 [[test]]
 name = "workshop_export"
-path = "src/workshop_export_test.rs"
+path = "src/workshop_export.test.rs"
 
 [[test]]
 name = "workshop_audit"
-path = "src/workshop_audit_test.rs"
+path = "src/workshop_audit.test.rs"
+
+[[test]]
+name = "library_previews"
+path = "src/library_previews.test.rs"
+
+[[test]]
+name = "bake"
+path = "src/bake.test.rs"
+
+[[test]]
+name = "artifact_paths"
+path = "src/artifact_paths.test.rs"

@@ -194,5 +194,5 @@ fn reset() {
 }
 
 #[cfg(test)]
-#[path = "overlay_dispatch_test.rs"]
+#[path = "overlay_dispatch.test.rs"]
 mod tests;

@@ -51,5 +51,5 @@ pub fn fit_rect(intrinsic: (f32, f32), container: Rect, fit: ObjectFit) -> (Rect
 }
 
 #[cfg(test)]
-#[path = "object_fit_test.rs"]
+#[path = "object_fit.test.rs"]
 mod tests;

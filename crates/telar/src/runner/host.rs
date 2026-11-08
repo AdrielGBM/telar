@@ -12,8 +12,7 @@ use std::sync::mpsc::{Receiver, SyncSender};
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 use renderer_core::{DrawCommand, RenderBackend, RendererError, RendererFactory};
-
-use crate::config::RendererBackend;
+use telar_project::protocol::RendererBackend;
 
 use super::frame_thread::{RenderMsg, spawn_render_thread};
 
@@ -51,7 +50,7 @@ pub(super) struct SurfaceRenderer<W> {
 }
 
 impl<W: SurfaceWindow> SurfaceRenderer<W> {
-    /// The renderers Telar ships, picked by [`RendererBackend`] and the user's prefs.
+    /// The renderers Telar ships, picked by [`RendererBackend`] and the one the user switched to.
     pub(super) fn builtin() -> Self {
         Self {
             host: Box::new(BuiltinHost::new()),

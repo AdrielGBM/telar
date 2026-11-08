@@ -6,10 +6,11 @@
 //!
 //! Each region is an area: a framed surface over the backdrop, set a gap apart from its neighbours and from the window's edges. The gap between two areas is the splitter that resizes them.
 
+use telar::ControlSize;
 use telar::{
     Accessible, Children, Clip, ClippedItem, Color, Container, Key, LayoutError, LayoutItem,
     LayoutStyle, Movable, Reactive, ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension,
-    Slots, StyledContainer, box_item, effect, use_theme_tokens,
+    StyledContainer, box_item, effect, use_theme_tokens,
 };
 use telar_components::{
     DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, metrics,
@@ -73,7 +74,7 @@ fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     });
     let regions = Regions::new(state)?;
     let building = state.clone();
-    let gap = metrics::gap_sm();
+    let gap = metrics::gap_sm(ControlSize::Regular);
     let body = ReactiveList::with_style(
         workbench_fill().padding_horizontal(gap).padding_bottom(gap),
         move || vec![arrangement.get().sidebar_in_drawer()],
@@ -113,6 +114,7 @@ fn beside_sidebar(
     state: &WorkshopState,
     regions: &Regions,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let (building, regions) = (state.clone(), regions.clone());
     split_pane(
         SplitPaneProps::props()
             .size(state.sidebar_width())
@@ -122,8 +124,12 @@ fn beside_sidebar(
             .divider(false)
             .label(Reactive::of(|| strings::text(RESIZE_SIDEBAR)))
             .region(SplitRegion::new(Role::Main, strings::reactive(WORKSPACE)))
+            .first(Children::one({
+                let regions = regions.clone();
+                move || sidebar_pane(&regions)
+            }))
+            .second(Children::one(move || workspace(&building, &regions)))
             .build(),
-        panes([sidebar_pane(regions)?, workspace(state, regions)?]),
     )
 }
 
@@ -147,11 +153,6 @@ fn under_drawer(
         .peek()
         .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
     let sidebar = regions.sidebar.clone();
-    let sidebar = Children::new(move || {
-        let mut slots = Slots::new();
-        slots.push(None, place(&sidebar)?);
-        Ok(slots)
-    });
     let drawer = drawer(
         DrawerProps::props()
             .open(state.sidebar_drawer())
@@ -160,8 +161,8 @@ fn under_drawer(
             .color(Reactive::of(|| -> Color {
                 use_workbench_tokens().sidebar_background
             }))
+            .children(Children::one(move || place(&sidebar)))
             .build(),
-        sidebar,
     )?;
     let workspace = Container::new(
         workbench_fill(),
@@ -199,6 +200,7 @@ fn split_workspace(
         ),
         PanelPosition::Right => (SplitDirection::Row, 0.0),
     };
+    let regions = regions.clone();
     split_pane(
         SplitPaneProps::props()
             .direction(direction)
@@ -210,8 +212,12 @@ fn split_workspace(
             .collapsed_size(folded_to)
             .divider(false)
             .label(Reactive::of(|| strings::text(RESIZE_PANELS)))
+            .first(Children::one({
+                let regions = regions.clone();
+                move || place(&regions.canvas)
+            }))
+            .second(Children::one(move || place(&regions.panels)))
             .build(),
-        panes([place(&regions.canvas)?, place(&regions.panels)?]),
     )
 }
 
@@ -272,14 +278,6 @@ fn area(
     )
 }
 
-fn panes(items: [Box<dyn LayoutItem>; 2]) -> Children {
-    let mut slots = Slots::new();
-    for item in items {
-        slots.push(None, item);
-    }
-    Children::from(slots)
-}
-
 #[cfg(test)]
-#[path = "shell_test.rs"]
+#[path = "shell.test.rs"]
 mod tests;

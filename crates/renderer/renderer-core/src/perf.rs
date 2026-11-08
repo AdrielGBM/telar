@@ -265,5 +265,5 @@ pub fn tick() {
 }
 
 #[cfg(test)]
-#[path = "perf_test.rs"]
+#[path = "perf.test.rs"]
 mod tests;

@@ -17,7 +17,8 @@ mod site_cell;
 mod surface;
 
 pub(crate) use effects::{
-    force_run_effect, register_effect, register_memo_effect, reschedule_memo, run_effect, untracked,
+    force_run_effect, pull_pending_memo, register_effect, register_memo_effect, reschedule_memo,
+    run_effect, untracked,
 };
 pub use flush::{OpenBatch, after_settle, batch, reset_runtime, set_flush_notify};
 pub(crate) use owner::OwnerKey;
@@ -240,5 +241,5 @@ fn deregister_flush_notify(id: u64) {
 }
 
 #[cfg(test)]
-#[path = "runtime_test.rs"]
+#[path = "runtime.test.rs"]
 mod tests;
