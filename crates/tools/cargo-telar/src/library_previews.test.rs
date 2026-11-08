@@ -1,4 +1,4 @@
-//! `cargo telar test -p <library>` finds the previews test `rsx_modules!` emits wherever the macro is called: here from a nested `mod.rs`, which puts the test under a module path of its own.
+//! `cargo telar test -p <library>` finds the previews test `rsx_modules!` emits wherever the macro is called: from a nested `mod.rs`, which puts the test under a module path of its own, and from several modules at once, which run the previews and write the report once.
 //!
 //! It compiles telar with its previews into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`. Every cargo it starts runs offline, so the registry has to hold what `Cargo.lock` names first (`cargo fetch`).
 
@@ -10,14 +10,55 @@ use telar_project::protocol::{TEST_OUT_DIR, TEST_REPORT_FILE};
 #[test]
 #[ignore = "builds telar with its previews: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`"]
 fn a_library_placing_its_rsx_from_a_nested_mod_rs_has_its_previews_tested() {
+    let run = test_library("nested-previews", &[("src/ui/mod.rs", RSX_MODULES)]);
+    assert_eq!(
+        run.preview_ids,
+        ["nested_previews--badge--plain"],
+        "{}",
+        run.shown
+    );
+}
+
+#[test]
+#[ignore = "builds telar with its previews: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`"]
+fn a_library_calling_rsx_modules_from_several_modules_runs_its_previews_once() {
+    let run = test_library(
+        "several-calls",
+        &[
+            ("src/lib.rs", "telar::rsx_modules!();\nmod ui;\n"),
+            ("src/ui/mod.rs", RSX_MODULES),
+        ],
+    );
+    assert_eq!(
+        run.preview_ids,
+        ["several_calls--badge--plain"],
+        "{}",
+        run.shown
+    );
+    assert_eq!(
+        run.shown.matches("running 1 preview(s)").count(),
+        1,
+        "{}",
+        run.shown
+    );
+}
+
+const RSX_MODULES: &str = "telar::rsx_modules!();\n";
+
+struct LibraryRun {
+    preview_ids: Vec<String>,
+    shown: String,
+}
+
+fn test_library(name: &str, sources: &[(&str, &str)]) -> LibraryRun {
     let repo = repo_root();
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("library-previews");
-    let target_dir = work.join("target");
-    let library = work.join("nested-previews");
+    let target_dir = work.join(format!("target-{name}"));
+    let library = work.join(name);
     if library.exists() {
         std::fs::remove_dir_all(&library).expect("remove the previous run");
     }
-    write_library(&library, &repo);
+    write_library(&library, &repo, name, sources);
 
     let output = Command::new(env!("CARGO_BIN_EXE_cargo-telar"))
         .args(["test", "--no-snapshots"])
@@ -43,13 +84,13 @@ fn a_library_placing_its_rsx_from_a_nested_mod_rs_has_its_previews_tested() {
             panic!("the run wrote no {}: {e}\n{shown}", report_path.display())
         }))
         .expect("the report is JSON");
-    let ids: Vec<&str> = report["test"]["previews"]
+    let preview_ids = report["test"]["previews"]
         .as_array()
         .expect("the report lists its previews")
         .iter()
-        .filter_map(|preview| preview["id"].as_str())
+        .filter_map(|preview| preview["id"].as_str().map(str::to_string))
         .collect();
-    assert_eq!(ids, ["nested_previews--badge--plain"], "{shown}");
+    LibraryRun { preview_ids, shown }
 }
 
 fn repo_root() -> PathBuf {
@@ -60,10 +101,10 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn write_library(dir: &Path, repo: &Path) {
+fn write_library(dir: &Path, repo: &Path, name: &str, sources: &[(&str, &str)]) {
     let manifest = format!(
         r#"[package]
-name = "nested-previews"
+name = "{name}"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -75,13 +116,16 @@ telar = {{ path = {telar}, default-features = false, features = ["runtime", "sha
 "#,
         telar = toml::Value::String(repo.join("crates/telar").display().to_string()),
     );
-    let files = [
+    let mut files = vec![
         ("Cargo.toml", manifest.as_str()),
         ("telar.toml", "[telar]\nlibrary = true\n"),
         ("src/lib.rs", "mod ui;\n"),
-        ("src/ui/mod.rs", "telar::rsx_modules!();\n"),
         ("src/ui/badge.rsx", BADGE_RSX),
     ];
+    for (path, contents) in sources {
+        files.retain(|(existing, _)| existing != path);
+        files.push((path, contents));
+    }
     for (relative, contents) in files {
         let path = dir.join(relative);
         std::fs::create_dir_all(path.parent().expect("a file has a parent"))

@@ -946,6 +946,8 @@ fn wire_package(
 /// In a `[telar] library` built with its previews, it also emits `#[test] fn __telar_library_previews()`, which tests every preview the way an application binary does under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary.
 #[proc_macro]
 pub fn rsx_modules(input: TokenStream) -> TokenStream {
+///
+/// A crate may call it from several modules, each emitting that test; every one lists the whole crate's previews, so only the first to run tests them and writes the report.
     let theme_type_str = if input.is_empty() {
         None
     } else {

@@ -1219,6 +1219,11 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "EMPTY",
         "the app's own placeholder for an icon with nothing to draw yet",
     ),
+    (
+        "crates/telar/src/preview/test_run/run.rs",
+        "LIBRARY_RUN_STARTED",
+        "the test binary's once-per-process guard for library previews, which a guest never runs",
+    ),
 ];
 
 /// The crates a guest is built from, each its own workspace root.

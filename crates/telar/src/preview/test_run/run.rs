@@ -1,6 +1,7 @@
 //! The run itself: each preview and each cell of its matrix built and laid out on a canvas of its own, played, checked for accessibility and compared against its snapshots, on a host that lays text out the way the application's window does.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppConfig;
 use crate::preview::a11y::Severity;
@@ -101,9 +102,16 @@ pub fn run_previews(
     run
 }
 
+static LIBRARY_RUN_STARTED: AtomicBool = AtomicBool::new(false);
+
 /// Runs [`run_previews`] with the options `cargo telar test` set, and fails the test calling it when a preview fails: what `rsx_modules!` emits as a library's `#[test] fn __telar_library_previews()`, since a library has no binary to run.
+///
+/// A crate invokes `rsx_modules!` once per module that places its own `.rsx`, and every invocation lists the whole crate's previews, so the first test to get here runs them and writes the one `report.json`; the others have nothing left to run.
 #[doc(hidden)]
 pub fn __test_library(entries: Vec<PreviewEntry>, config: AppConfig) {
+    if LIBRARY_RUN_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
     let options = TestOptions::from_env().unwrap_or_else(|error| panic!("{error}"));
     if config.fonts.is_empty() && !crate::runner::previews_measure_in_cells() {
         // Under `cargo test` this shares a process with the library's own tests, so it sets text in their test face rather than loading the platform's over it; a process that already loaded the platform's keeps them.

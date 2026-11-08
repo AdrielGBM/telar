@@ -351,7 +351,9 @@ a run that wrote none, or whose `--report` copy could not be written, fails even
 
 A library has no binary to run. `rsx_modules!` gives it a unit test, `__telar_library_previews`, in preview
 builds, wherever in the crate the macro is called, and `cargo telar test -p <library>` runs it through
-`cargo test`. The first-party components are tested this way through `apps/catalogue`:
+`cargo test`. A crate calls `rsx_modules!` once for each module that places its own `.rsx`, so it may carry several
+of these tests; each lists every preview of the crate, and the first to run tests them and writes the one
+`report.json`, while the others return at once. The first-party components are tested this way through `apps/catalogue`:
 `cargo telar test -p catalogue`.
 
 ### Auditing the exported workshop
