@@ -7,7 +7,9 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use telar_project::{BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFlavour, BuildIndex, relative_source};
+use telar_project::{
+    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFlavour, BuildIndex, relative_slashed,
+};
 
 use crate::codegen::{TranspileInput, TranspiledSource, transpile};
 use crate::error::TranspileError;
@@ -95,7 +97,7 @@ impl PackageError {
     pub fn to_build_failure(&self, src_dir: &Path) -> telar_project::BuildFailure {
         let path = self.path();
         telar_project::BuildFailure {
-            source: relative_source(path, src_dir).unwrap_or_default(),
+            source: relative_slashed(path, src_dir).unwrap_or_default(),
             hash: std::fs::read(path)
                 .map(|bytes| telar_project::content_hash(&bytes))
                 .unwrap_or_default(),
@@ -179,7 +181,10 @@ fn generate(
             false => std::fs::read_to_string(path).ok(),
         },
     );
-    let package_path = package_relative_path(rsx_path, options.src_dir);
+    let package_path = options
+        .src_dir
+        .parent()
+        .and_then(|package| relative_slashed(rsx_path, package));
     let input = TranspileInput {
         document,
         source,
@@ -196,14 +201,6 @@ fn generate(
         true => crate::codegen::preview_file(input),
         false => transpile(input),
     }
-}
-
-/// `rsx_path` relative to the package root that holds `src_dir`, `/`-separated whatever the host's separator, or `None` when it lies outside that package.
-#[cfg(feature = "transpile")]
-fn package_relative_path(rsx_path: &Path, src_dir: &Path) -> Option<String> {
-    let relative = rsx_path.strip_prefix(src_dir.parent()?).ok()?;
-    let parts: Option<Vec<&str>> = relative.iter().map(|part| part.to_str()).collect();
-    Some(parts?.join("/"))
 }
 
 #[cfg(feature = "transpile")]
@@ -304,7 +301,7 @@ pub fn build_index(
             .iter()
             .filter_map(|file| {
                 Some(BuildEntry {
-                    source: relative_source(&file.rsx_path, src_dir)?,
+                    source: relative_slashed(&file.rsx_path, src_dir)?,
                     hash: file.source_hash.clone(),
                     output_hash: telar_project::content_hash(file.source.rust_code.as_bytes()),
                     previews: !file.source.preview_names.is_empty(),

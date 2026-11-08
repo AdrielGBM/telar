@@ -205,3 +205,31 @@ fn a_catalog_that_does_not_parse_is_an_error_naming_it_and_keeps_the_previous_ar
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[cfg(unix)]
+#[test]
+fn a_catalog_file_named_in_non_utf8_leaves_the_others_tracked_and_is_reported() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    let root = std::env::temp_dir().join(format!("rsx_i18n_non_utf8_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales/es")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
+    std::fs::write(
+        root.join("locales/es")
+            .join(OsStr::from_bytes(b"caf\xe9.toml")),
+        "title = \"Ajustes\"\n",
+    )
+    .unwrap();
+
+    let report = bake_catalog(&root, "test", "0.0.0").unwrap().unwrap();
+    let index = read_catalog_index(&root.join(".telar")).unwrap().unwrap();
+    let tracked: Vec<&str> = index.sources.iter().map(|s| s.path.as_str()).collect();
+
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(tracked, ["locales/en.toml"]);
+    assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+    assert!(report.warnings[0].contains("not valid UTF-8"));
+    let _ = std::fs::remove_dir_all(&root);
+}

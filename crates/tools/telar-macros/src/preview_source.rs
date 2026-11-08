@@ -97,9 +97,7 @@ pub fn file_of(tokens: TokenStream) -> TokenStream2 {
 /// `file`'s path within the package being compiled, with `/` between its parts.
 fn within_package(file: &Path) -> Option<String> {
     let package = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR")?);
-    let relative = file.strip_prefix(&package).ok()?;
-    let parts: Option<Vec<&str>> = relative.iter().map(|part| part.to_str()).collect();
-    Some(parts?.join("/"))
+    telar_project::relative_slashed(file, &package)
 }
 
 #[cfg(test)]

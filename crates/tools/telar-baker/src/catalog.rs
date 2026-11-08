@@ -72,11 +72,13 @@ pub fn bake_catalog(
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
         };
-        let relative = path
-            .strip_prefix(package_dir)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let Some(relative) = telar_project::relative_slashed(&path, package_dir) else {
+            report.warnings.push(format!(
+                "catalog: {} has a name that is not valid UTF-8, so a change to it will not mark the baked catalog stale",
+                path.display()
+            ));
+            continue;
+        };
         source_files.push(CatalogSourceFile {
             path: relative,
             hash: content_hash(&bytes),

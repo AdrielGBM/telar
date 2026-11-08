@@ -482,9 +482,7 @@ impl TreeWalk<'_> {
 }
 
 fn shown_from(package_dir: &Path, path: &Path) -> String {
-    path.strip_prefix(package_dir)
-        .map(slash_separated)
-        .unwrap_or_else(|_| path.to_string_lossy().into_owned())
+    crate::relative_slashed(path, package_dir).unwrap_or_else(|| path.display().to_string())
 }
 
 /// Why the entry cannot be a module, when its name is no plain identifier: left out it would vanish without a word, and declared, rustc would only suggest `r#type`. `None` for what discovery skips by design: a `.rs` or a directory of them named with no identifier, which only a `#[path]` reaches, and a directory holding no module at all.
@@ -661,13 +659,6 @@ pub(crate) fn relative_path(from_dir: &Path, to: &Path) -> String {
                 .iter()
                 .map(|part| part.as_os_str().to_string_lossy().into_owned()),
         )
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
-fn slash_separated(path: &Path) -> String {
-    path.components()
-        .map(|part| part.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("/")
 }

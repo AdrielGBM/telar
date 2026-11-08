@@ -26,6 +26,7 @@ mod prerender;
 mod previews;
 pub mod protocol;
 mod rust_source;
+mod relative;
 mod theme;
 pub mod theme_tokens;
 mod vocabulary;
@@ -41,8 +42,7 @@ pub use assets::{
 };
 pub use build::{
     BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildFlavour, BuildIndex, clear_build_failure,
-    generated_dir, read_build_failure, read_build_index, relative_source, write_build_failure,
-    write_build_index,
+    generated_dir, read_build_failure, read_build_index, write_build_failure, write_build_index,
 };
 pub use cargo_manifest::{CargoManifest, TargetKind};
 pub use catalog::{
@@ -69,7 +69,6 @@ pub use icons::{
 };
 pub use library::{
     ICONS_LIBRARY_RECORD_FILENAME, library_files, library_include, library_include_covers,
-    relative_slashed,
 };
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,
@@ -98,3 +97,4 @@ pub use previews::{
 pub use theme::{normalize_theme_path, theme_type_in_config};
 pub use vocabulary::{VOCABULARY, VocabularyAxis, vocabulary_axis, vocabulary_axis_of};
 pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};
+pub use relative::relative_slashed;

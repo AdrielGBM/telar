@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 pub use artifact::{
     BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildIndex, clear_build_failure,
-    read_build_failure, read_build_index, relative_source, write_build_failure, write_build_index,
+    read_build_failure, read_build_index, write_build_failure, write_build_index,
 };
 
 /// Which shape a package's `.rsx` is compiled into: hot-reloadable or not.

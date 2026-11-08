@@ -82,7 +82,7 @@ impl BuildIndex {
             return false;
         }
         sources.iter().all(|path| {
-            let Some(relative) = relative_source(path, src_dir) else {
+            let Some(relative) = crate::relative_slashed(path, src_dir) else {
                 return false;
             };
             let Some(entry) = listed.get(relative.as_str()) else {
@@ -108,21 +108,9 @@ impl BuildIndex {
 
     /// The entry for a `.rsx`, by its path under `src_dir`.
     pub fn entry_for(&self, rsx_path: &Path, src_dir: &Path) -> Option<&BuildEntry> {
-        let relative = relative_source(rsx_path, src_dir)?;
+        let relative = crate::relative_slashed(rsx_path, src_dir)?;
         self.entries.iter().find(|entry| entry.source == relative)
     }
-}
-
-/// The `source` key for a `.rsx`: its path under `src_dir`, always `/`-separated.
-pub fn relative_source(rsx_path: &Path, src_dir: &Path) -> Option<String> {
-    let relative = rsx_path.strip_prefix(src_dir).ok()?;
-    Some(
-        relative
-            .components()
-            .map(|part| part.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
-    )
 }
 
 /// Reads `<package_dir>/.telar/<flavour>.json`, or `None` when nothing has transpiled this package yet.

@@ -122,7 +122,12 @@ pub(crate) fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
 pub(crate) fn copy_public(from: &Path, to: &Path, reserved: &[&str]) -> Result<usize, String> {
     let files = files_under(from)?;
     for file in &files {
-        let relative = relative_url_path(from, file);
+        let relative = telar_project::relative_slashed(file, from).ok_or_else(|| {
+            format!(
+                "{} has a name that is not valid UTF-8, so no URL can reach it; rename it",
+                file.display()
+            )
+        })?;
         if reserved.contains(&relative.as_str()) {
             return Err(format!(
                 "{} would replace the `{relative}` the build writes itself; remove it from the public directory",
@@ -156,16 +161,6 @@ pub(crate) fn files_under(dir: &Path) -> Result<Vec<PathBuf>, String> {
     }
     files.sort();
     Ok(files)
-}
-
-/// `file` relative to `root`, with `/` between components whatever the platform uses.
-fn relative_url_path(root: &Path, file: &Path) -> String {
-    file.strip_prefix(root)
-        .unwrap_or(file)
-        .components()
-        .map(|part| part.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/")
 }
 
 /// Below this a compressed copy saves nothing worth a second file on disk and a second lookup at request time.
