@@ -21,9 +21,10 @@ use telar::{
     StyledContainer, Text, TextWrap, box_item, children, effect, memo, modifiers, on_cleanup,
     pointer_position, signal, track_layout,
 };
+use telar_components::{MenuPlace, menu_layer};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill};
 
-use crate::more_menu::{Asked, menu_layer, more_button};
+use crate::more_menu::more_button;
 use crate::state::WorkshopState;
 use crate::strings::MORE_TOOLS;
 use crate::{canvas_toolbar, interactions};
@@ -241,16 +242,13 @@ fn acting_on(
     tools: &Rc<canvas_toolbar::HeaderTools>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let tools = Rc::clone(tools);
-    let open = signal(None::<Asked>);
+    let open = signal(None::<MenuPlace>);
     let settings = state.canvas_settings();
     let turned = Rc::new(Cell::new(0.0_f32));
     let stage = StyledContainer::new(fill(), |_| RectStyle::default(), vec![stage])?
         .on_alt_press(move |button| {
             if button == PointerButton::Secondary {
-                open.set(Some(Asked {
-                    at: pointer_position().unwrap_or_default(),
-                    around: None,
-                }));
+                open.set(Some(MenuPlace::At(pointer_position().unwrap_or_default())));
             }
         })
         .on_scroll(move |_, dy| {
@@ -273,7 +271,10 @@ fn acting_on(
         });
     Ok(box_item(Container::new(
         fill(),
-        vec![box_item(stage), menu_layer(open, tools.menu_rows(true))?],
+        vec![
+            box_item(stage),
+            menu_layer(open, |place| *place, move |_| tools.menu_rows(true))?,
+        ],
     )?))
 }
 

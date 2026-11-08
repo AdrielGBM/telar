@@ -15,8 +15,8 @@ use telar::{
     use_theme_tokens,
 };
 use telar_components::{
-    SearchFieldProps, TrailingBuilder, TreeContext, TreeNode, TreeViewProps, search_field,
-    tree_view,
+    MenuPlace, SearchFieldProps, TrailingBuilder, TreeContext, TreeNode, TreeViewProps,
+    search_field, tree_view,
 };
 use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, workbench_muted};
 
@@ -51,8 +51,7 @@ pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
         if button == PointerButton::Secondary {
             asked.set(Some(context::Asked {
                 node: None,
-                at: pointer_position().unwrap_or_default(),
-                around: None,
+                place: MenuPlace::At(pointer_position().unwrap_or_default()),
             }));
         }
     });

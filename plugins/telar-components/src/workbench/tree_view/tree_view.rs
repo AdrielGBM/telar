@@ -14,7 +14,7 @@ use telar::{
     memo, signal,
 };
 
-use crate::overlays::menu::menu::{focused_rect, is_context_menu_key};
+use crate::overlays::menu::menu::{MenuPlace, focused_rect, is_context_menu_key};
 use crate::shared::rows::{BuiltRows, RowPlaces, RowState, cursor_row_paint};
 use crate::shared;
 use crate::shared::type_ahead::TypeAhead;
@@ -174,6 +174,15 @@ pub struct TreeContext {
     pub node: TreeNode,
     pub at: (f32, f32),
     pub around: Option<Rect>,
+}
+
+impl TreeContext {
+    pub fn place(&self) -> MenuPlace {
+        match self.around {
+            Some(under) => MenuPlace::Under(under),
+            None => MenuPlace::At(self.at),
+        }
+    }
 }
 
 pub type ContextHandler = Rc<dyn Fn(TreeContext)>;

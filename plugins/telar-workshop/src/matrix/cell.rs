@@ -13,7 +13,9 @@ use telar::{
     SurfaceFrame, Text, ViewRange, box_item, children, effect, memo, on_cleanup, pointer_position,
     scroll_progress, signal, use_theme_tokens,
 };
-use telar_components::{ItemProps, TagProps, TooltipProps, item, tag, tooltip};
+use telar_components::{
+    ItemProps, MenuPlace, TagProps, TooltipProps, item, menu_layer, tag, tooltip,
+};
 use telar_devtools::{
     WORKBENCH_GRID, WORKBENCH_RADIUS, inspection_marks, use_workbench_tokens, workbench_mono,
     workbench_muted,
@@ -23,7 +25,6 @@ use super::open_cell;
 use super::plan::cell_label;
 use crate::canvas::inspected::PreviewOnly;
 use crate::guarded::guarded;
-use crate::more_menu::{Asked, menu_layer};
 use crate::settings::CanvasSettings;
 use crate::settle::run_when_sized;
 use crate::state::WorkshopState;
@@ -242,10 +243,8 @@ pub(super) fn cell(
     .on_alt_press(move |button| {
         if button == PointerButton::Secondary {
             focus_this();
-            menu.open.set(Some(Asked {
-                at: pointer_position().unwrap_or_default(),
-                around: None,
-            }));
+            menu.open
+                .set(Some(MenuPlace::At(pointer_position().unwrap_or_default())));
         }
     });
     let column = Container::new(
@@ -256,7 +255,7 @@ pub(super) fn cell(
 }
 
 struct CellMenu {
-    open: RwSignal<Option<Asked>>,
+    open: RwSignal<Option<MenuPlace>>,
     layer: Box<dyn LayoutItem>,
 }
 
@@ -266,7 +265,7 @@ fn cell_menu(
     entry: PreviewEntry,
     cell: MatrixCell,
 ) -> Result<CellMenu, LayoutError> {
-    let open = signal(None::<Asked>);
+    let open = signal(None::<MenuPlace>);
     let state = state.clone();
     let rows = Children::one(move || {
         let (state, cell) = (state.clone(), cell.clone());
@@ -277,7 +276,7 @@ fn cell_menu(
                 .build(),
         )
     });
-    let layer = menu_layer(open, rows)?;
+    let layer = menu_layer(open, |place| *place, move |_| rows.clone())?;
     Ok(CellMenu { open, layer })
 }
 

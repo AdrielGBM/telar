@@ -96,8 +96,8 @@ pub use overlays::command_palette::command_palette::{
 pub use overlays::command_palette::fuzzy::{FuzzyMatch, fuzzy_match};
 pub use overlays::drawer::drawer::{DrawerProps, DrawerTokens, drawer};
 pub use overlays::menu::menu::{
-    ContextMenuProps, MenuProps, MenuTokens, MenuTriggerTokens, context_menu, focused_rect,
-    is_context_menu_key, menu,
+    ContextMenuProps, MenuPlace, MenuProps, MenuTokens, MenuTriggerTokens, context_menu,
+    focused_rect, is_context_menu_key, menu, menu_layer,
 };
 pub use overlays::menu::menu_panel::{SubmenuProps, submenu};
 pub use overlays::modal::modal::{ModalProps, ModalTokens, modal};

@@ -1,14 +1,13 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{
-    Children, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, ReactiveList, Rect,
-    Role, RwSignal, box_item, children,
-};
+use telar::{Children, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, RwSignal, children};
 
 use crate::inputs::button::button::{ButtonProps, button};
 use crate::layout::list::list::{ItemProps, SeparatorProps, item, separator};
-use crate::overlays::menu::menu::{ContextMenuProps, context_menu, focused_rect, is_context_menu_key};
+use crate::overlays::menu::menu::{
+    ContextMenuProps, MenuPlace, context_menu, focused_rect, is_context_menu_key, menu_layer,
+};
 use crate::overlays::menu::menu_panel::{SubmenuProps, submenu};
 
 fn rows() -> Children {
@@ -42,53 +41,19 @@ fn rows() -> Children {
     })
 }
 
-/// A context menu shown while `shown` holds, opened where `place` says.
-fn shown_at(
-    shown: impl Fn() -> bool + 'static,
-    place: impl Fn() -> Place + 'static,
-    close: Rc<dyn Fn()>,
-) -> Result<ReactiveList, LayoutError> {
-    ReactiveList::new(
-        move || vec![shown()],
-        |shown: &bool| *shown,
-        move |shown| -> Result<Box<dyn LayoutItem>, LayoutError> {
-            if !shown {
-                return Ok(box_item(Container::new(LayoutStyle::new(), vec![])?));
-            }
-            let props = ContextMenuProps::props().on_close(close.clone());
-            let props = match place() {
-                Place::Point(x, y) => props.at((x, y)),
-                Place::Around(rect) => props.around(rect),
-            };
-            context_menu(props.children(rows()).build())
-        },
-        0.0,
-    )
-}
-
-#[derive(Clone, Copy)]
-enum Place {
-    Point(f32, f32),
-    Around(Rect),
-}
-
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
-        preview!(context_menu: ContextMenuProps, "Open", |p| {
-            let open = p.signal("open", true);
+        preview!(context_menu: ContextMenuProps, "Open", |_p| {
+            let open = telar::signal(Some(MenuPlace::At((24.0, 64.0))));
             let reopen = button(
                 ButtonProps::props()
                     .label("Show the menu")
-                    .on_press(Rc::new(move || open.set(true)))
+                    .on_press(Rc::new(move || open.set(Some(MenuPlace::At((24.0, 64.0))))))
                     .build(),
             )?;
             Ok::<_, LayoutError>(Container::column(children![
                 reopen,
-                shown_at(
-                    move || open.get(),
-                    || Place::Point(24.0, 64.0),
-                    Rc::new(move || open.set(false)),
-                )?,
+                menu_layer(open, |place| *place, |_| rows())?,
             ])?)
         })
         .title("Overlays/Context menu")
@@ -105,7 +70,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_text("Cut")
         }),
         preview!(context_menu: ContextMenuProps, "From the keyboard", |_p| {
-            let shown: RwSignal<Option<Rect>> = telar::signal(None);
+            let shown: RwSignal<Option<MenuPlace>> = telar::signal(None);
             let target = button(
                 ButtonProps::props()
                     .label("Document")
@@ -120,17 +85,13 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             .on_key(move |key: &Key| {
                 let asked = is_context_menu_key(key) && shown.peek().is_none();
                 if let (true, Some(rect)) = (asked, focused_rect()) {
-                    shown.set(Some(rect));
+                    shown.set(Some(MenuPlace::Under(rect)));
                 }
                 asked
             });
             Ok::<_, LayoutError>(Container::column(children![
                 asks,
-                shown_at(
-                    move || shown.get().is_some(),
-                    move || Place::Around(shown.peek().unwrap_or_default()),
-                    Rc::new(move || shown.set(None)),
-                )?,
+                menu_layer(shown, |place| *place, |_| rows())?,
             ])?)
         })
         .title("Overlays/Context menu")

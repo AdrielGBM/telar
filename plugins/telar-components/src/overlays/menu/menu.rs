@@ -5,8 +5,9 @@
 use std::rc::Rc;
 
 use telar::{
-    Anchoring, Children, Color, ConsumedKeys, HasPopup, Key, LayoutError, LayoutItem, NamedKey,
-    Placement, Props, Reactive, Rect, RwSignal, SurfaceAmendment, box_item, effect,
+    Anchoring, Children, Color, ConsumedKeys, Container, HasPopup, Key, LayoutError, LayoutItem,
+    LayoutStyle, NamedKey, Placement, Props, Reactive, ReactiveList, Rect, RwSignal,
+    SurfaceAmendment, box_item, effect,
     focus::{self, FocusId, Role},
     memo, signal, track_layout,
 };
@@ -411,6 +412,40 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
     )?;
     let keys = built.keys.clone();
     Ok(box_item(menu_panel::overlay(built, on_close, Some(keys))?))
+}
+
+/// Where a context menu was asked for: at a point, as a secondary press asks, or under a box, as the keyboard or a button does.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MenuPlace {
+    At((f32, f32)),
+    Under(Rect),
+}
+
+/// A context menu mounted while `asked` holds a value, and gone once `asked` is `None` again: `place` says where it opens and `rows` what it holds for the value asked.
+///
+/// Whatever closes the menu — a row picked, Escape, a press elsewhere — sets `asked` back to `None`, and the keyboard returns to what held it before. While it stays open, a new value does not rebuild it.
+pub fn menu_layer<T: Clone + 'static>(
+    asked: RwSignal<Option<T>>,
+    place: impl Fn(&T) -> MenuPlace + 'static,
+    rows: impl Fn(&T) -> Children + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let layer = ReactiveList::new(
+        move || vec![asked.with(Option::is_some)],
+        |shown: &bool| *shown,
+        move |shown| {
+            let Some(value) = asked.peek().filter(|_| shown) else {
+                return Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?));
+            };
+            let props = ContextMenuProps::props().on_close(Rc::new(move || asked.set(None)));
+            let props = match place(&value) {
+                MenuPlace::At(point) => props.at(point),
+                MenuPlace::Under(control) => props.around(control),
+            };
+            context_menu(props.children(rows(&value)).build())
+        },
+        0.0,
+    )?;
+    Ok(box_item(layer))
 }
 
 /// Whether `key` asks for the context menu of whatever the keyboard is on: the context-menu key, or Shift+F10 on a keyboard without one.

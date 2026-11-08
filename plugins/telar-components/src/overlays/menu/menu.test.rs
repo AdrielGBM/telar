@@ -1186,3 +1186,93 @@ fn a_row_comes_and_goes_with_what_it_acts_on_while_the_menu_is_open() {
         "the hidden rule and row are passed over"
     );
 }
+
+type Labels = &'static [&'static str];
+
+struct Layered {
+    tree: ComponentList,
+    asked: RwSignal<Option<(MenuPlace, Labels)>>,
+    holder: telar::focus::FocusId,
+}
+
+fn layered() -> Layered {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let asked = telar::signal(None::<(MenuPlace, Labels)>);
+    let holder = crate::inputs::button::button::button(
+        crate::inputs::button::button::ButtonProps::props()
+            .label("Document")
+            .on_press(Rc::new(|| {}))
+            .build(),
+    )
+    .unwrap();
+    let layer = menu_layer(asked, |(place, _)| *place, |(_, labels)| rows(labels)).unwrap();
+    let column = telar::Container::column(telar::children![holder, layer]).unwrap();
+    compute_layout(
+        column.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(box_item(column));
+    settle(&tree);
+    telar::focus::focus_next();
+    let holder = telar::focus::current().expect("the button is a stop");
+    Layered {
+        tree,
+        asked,
+        holder,
+    }
+}
+
+fn shown_rows() -> usize {
+    telar::focus::exposed()
+        .iter()
+        .filter(|row| row.role == telar::focus::Role::MenuItem)
+        .count()
+}
+
+/// The menu is there while something was asked for and holds what was asked for, whether at a point or under a box.
+#[test]
+fn a_menu_layer_shows_the_rows_of_what_was_asked() {
+    let mounted = layered();
+    assert_eq!(shown_rows(), 0, "nothing asked, nothing shown");
+
+    mounted
+        .asked
+        .set(Some((MenuPlace::At((20.0, 20.0)), &["Cut", "Copy"])));
+    settle(&mounted.tree);
+    assert_eq!(shown_rows(), 2);
+
+    mounted.asked.set(None);
+    settle(&mounted.tree);
+    assert_eq!(shown_rows(), 0);
+
+    let under = Rect::new(10.0, 10.0, 80.0, 24.0);
+    mounted
+        .asked
+        .set(Some((MenuPlace::Under(under), &["Rename", "Copy", "Paste"])));
+    settle(&mounted.tree);
+    assert_eq!(shown_rows(), 3);
+}
+
+/// Escape and a pick both end the ask, and the keyboard goes back to what held it.
+#[test]
+fn escape_and_a_pick_close_a_menu_layer_and_return_the_keyboard() {
+    let mut mounted = layered();
+    for key in [NamedKey::Escape, NamedKey::Enter] {
+        mounted
+            .asked
+            .set(Some((MenuPlace::At((20.0, 20.0)), &["Cut", "Copy"])));
+        settle(&mounted.tree);
+        assert_eq!(shown_rows(), 2);
+        assert_ne!(telar::focus::current(), Some(mounted.holder));
+
+        route(&mut mounted.tree, &named(NamedKey::ArrowDown));
+        route(&mut mounted.tree, &named(key.clone()));
+        settle(&mounted.tree);
+        assert_eq!(mounted.asked.get(), None, "{key:?} ends the ask");
+        assert_eq!(shown_rows(), 0, "{key:?} takes the menu away");
+        assert_eq!(telar::focus::current(), Some(mounted.holder), "{key:?}");
+    }
+}

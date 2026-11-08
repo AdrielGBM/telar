@@ -4,13 +4,9 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use telar::{
-    Children, Container, LayoutError, LayoutItem, LayoutStyle, ReactiveList, Rect, RwSignal,
-    box_item,
-};
+use telar::{Children, LayoutError, LayoutItem, RwSignal};
 use telar_components::{
-    ContextMenuProps, ItemProps, SeparatorProps, TreeContext, TreeNode, context_menu, item,
-    separator,
+    ItemProps, MenuPlace, SeparatorProps, TreeContext, TreeNode, item, menu_layer, separator,
 };
 
 use super::model;
@@ -25,16 +21,14 @@ use crate::strings::{
 #[derive(Clone)]
 pub(super) struct Asked {
     pub(super) node: Option<TreeNode>,
-    pub(super) at: (f32, f32),
-    pub(super) around: Option<Rect>,
+    pub(super) place: MenuPlace,
 }
 
 impl From<TreeContext> for Asked {
     fn from(context: TreeContext) -> Self {
         Self {
+            place: context.place(),
             node: Some(context.node),
-            at: context.at,
-            around: context.around,
         }
     }
 }
@@ -150,25 +144,11 @@ pub(super) fn context_layer(
     asked: RwSignal<Option<Asked>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let state = state.clone();
-    let layer = ReactiveList::new(
-        move || vec![asked.with(Option::is_some)],
-        |shown: &bool| *shown,
-        move |shown| {
-            let Some(asked_for) = asked.peek().filter(|_| shown) else {
-                return Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?));
-            };
-            let props = ContextMenuProps::props()
-                .on_close(Rc::new(move || asked.set(None)))
-                .at(asked_for.at);
-            let props = match asked_for.around {
-                Some(around) => props.around(around),
-                None => props,
-            };
-            context_menu(props.children(rows(&state, asked_for.node)).build())
-        },
-        0.0,
-    )?;
-    Ok(box_item(layer))
+    menu_layer(
+        asked,
+        |asked| asked.place,
+        move |asked| rows(&state, asked.node.clone()),
+    )
 }
 
 fn rows(state: &WorkshopState, node: Option<TreeNode>) -> Children {
