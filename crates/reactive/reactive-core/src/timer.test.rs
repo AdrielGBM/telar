@@ -245,3 +245,41 @@ fn a_disposed_surfaces_timer_never_fires() {
     assert_eq!(fired.get(), 0);
     assert!(!timer.is_pending(), "its callback is dropped once due");
 }
+
+#[test]
+fn a_delay_too_long_to_reach_never_comes_due_and_the_loop_does_not_wait_for_it() {
+    let (fired, done) = counter();
+    let timer = run_after(Duration::MAX, done);
+
+    assert!(timer.is_pending());
+    assert_eq!(until_next_timer(), None);
+    pass(DELAY * 4);
+    assert_eq!(fired.get(), 0);
+    assert!(timer.is_pending());
+}
+
+#[test]
+fn a_timer_that_never_comes_due_does_not_hide_one_that_does() {
+    let (never, never_done) = counter();
+    let (soon, soon_done) = counter();
+    let _unreachable = run_after(Duration::MAX, never_done);
+    let _reachable = run_after(DELAY, soon_done);
+
+    assert!(until_next_timer().is_some());
+    pass(DELAY);
+    assert_eq!((never.get(), soon.get()), (0, 1));
+}
+
+#[test]
+fn pausing_and_resuming_a_wait_too_long_to_reach_does_not_panic_or_fire() {
+    let (fired, done) = counter();
+    let timer = run_after(Duration::MAX, done);
+
+    timer.pause();
+    assert!(timer.is_paused());
+    timer.resume();
+    assert!(!timer.is_paused());
+    assert_eq!(until_next_timer(), None);
+    pass(DELAY);
+    assert_eq!(fired.get(), 0);
+}
