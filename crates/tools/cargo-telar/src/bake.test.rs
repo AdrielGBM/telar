@@ -29,6 +29,34 @@ fn bake(dir: &Path) -> Output {
 }
 
 #[test]
+fn a_referenced_asset_that_is_missing_fails_the_bake_and_names_the_path() {
+    let root = package("missing_asset");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("src/view.rsx"),
+        "[view]\ncol\n    img src:\"missing.png\"\n",
+    )
+    .unwrap();
+
+    let failed = bake(&root);
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(!failed.status.success(), "{stderr}");
+    assert!(stderr.contains("`missing.png`"), "{stderr}");
+    assert!(
+        stderr.contains(
+            &root
+                .join("assets")
+                .join("missing.png")
+                .display()
+                .to_string()
+        ),
+        "{stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn a_catalog_that_does_not_parse_fails_the_bake_and_names_the_file() {
     let root = package("broken_catalog");
     let baked = bake(&root);

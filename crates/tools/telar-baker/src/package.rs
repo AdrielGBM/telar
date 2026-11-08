@@ -18,14 +18,14 @@ use crate::icons::{Recording, read_icon_record, resolve_with};
 use crate::ids::{IdRef, collect_id_refs};
 use crate::macro_ids::{collect_macro_ids, rust_files};
 
-/// What baking one package turned up. Warnings and errors are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer. A warning is not fatal: a package with one missing asset still bakes the rest.
+/// What baking one package turned up. Warnings and errors are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer. A warning is not fatal: a package with one warning still bakes the rest.
 #[derive(Debug, Clone, Default)]
 pub struct BakeReport {
     pub baked: usize,
     /// Whether the index differs from what was already on disk. `false` means nothing was rewritten, which is what keeps a bake from retriggering rustc or the editor's file watcher.
     pub changed: bool,
     pub warnings: Vec<String>,
-    /// What a build must not go on from: a `telar.toml` that does not parse, an id that has to be baked and is not a literal, one no source has, a set the licence policy refuses, an asset whose bytes do not decode, an artifact that cannot be written. Everything else is still baked, so an editor keeps answering for the rest.
+    /// What a build must not go on from: a `telar.toml` that does not parse, an id that has to be baked and is not a literal, one no source has, a set the licence policy refuses, a referenced asset that is missing or whose bytes do not decode, an artifact that cannot be written. Everything else is still baked, so an editor keeps answering for the rest.
     pub errors: Vec<String>,
 }
 
@@ -138,7 +138,7 @@ pub fn bake_package_with(
         let bytes = match std::fs::read(&file_path) {
             Ok(bytes) => bytes,
             Err(e) => {
-                report.warnings.push(format!(
+                report.errors.push(format!(
                     "cannot bake {} asset `{path}`: not found at {} ({e})",
                     kind.label,
                     file_path.display()

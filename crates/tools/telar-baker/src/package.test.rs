@@ -92,7 +92,7 @@ fn bakes_only_the_assets_a_document_actually_references() {
 }
 
 #[test]
-fn a_missing_asset_file_is_skipped_with_a_warning_not_a_panic() {
+fn a_missing_asset_file_is_an_error_naming_the_reference_and_its_expected_path() {
     let root = temp_dir("bake_missing");
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::create_dir_all(root.join("assets")).unwrap();
@@ -104,11 +104,18 @@ fn a_missing_asset_file_is_skipped_with_a_warning_not_a_panic() {
 
     let report = bake_package(&root, "p", "1.0.0").expect("the package has .rsx");
     assert_eq!(report.baked, 0);
-    assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    let expected_path = root.join("assets").join("missing.png");
     assert!(
-        report.warnings[0].contains("missing.png"),
+        report.errors[0].contains("`missing.png`"),
         "{:?}",
-        report.warnings
+        report.errors
+    );
+    assert!(
+        report.errors[0].contains(&expected_path.display().to_string()),
+        "{:?}",
+        report.errors
     );
 
     let index = telar_project::read_index(&root.join(".telar")).unwrap();
