@@ -47,3 +47,28 @@ fn other_setting_areas_are_not_the_locale() {
     assert!(!names_locale_settings(&wide("intlx")));
     assert!(!names_locale_settings(&[]));
 }
+
+#[test]
+fn the_high_contrast_and_animation_actions_are_relevant_whatever_the_area() {
+    assert!(is_relevant_setting_change(0x0043, || wide("")));
+    assert!(is_relevant_setting_change(0x1043, || wide("Policy")));
+}
+
+#[test]
+fn the_locale_area_is_relevant_whatever_the_action() {
+    assert!(is_relevant_setting_change(0, || wide("intl")));
+    assert!(is_relevant_setting_change(0x2000, || wide("INTL")));
+}
+
+#[test]
+fn another_action_in_another_area_is_not_relevant() {
+    assert!(!is_relevant_setting_change(0, || wide("ImmersiveColorSet")));
+    assert!(!is_relevant_setting_change(0, Vec::new));
+}
+
+#[test]
+fn the_area_is_not_read_when_the_action_decides() {
+    assert!(is_relevant_setting_change(0x0043, || unreachable!(
+        "the area is only read when the action is not enough"
+    )));
+}

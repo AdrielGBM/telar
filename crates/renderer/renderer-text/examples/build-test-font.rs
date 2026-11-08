@@ -1,4 +1,4 @@
-//! Regenerates `test-fonts/` from Inter 4.1: Telar Test, and the copies of it that declare another ascent and descent. `cargo run -p telar-renderer-text --example build-test-font -- "$(nix build nixpkgs#inter --no-link --print-out-paths)/share/fonts/truetype/InterVariable.ttf"`
+//! Regenerates `test-fonts/` from Inter 4.1: Telar Test, the copies of it that declare another ascent and descent, and the copy that paints the letter L as a COLR v1 glyph. `cargo run -p telar-renderer-text --example build-test-font -- "$(nix build nixpkgs#inter --no-link --print-out-paths)/share/fonts/truetype/InterVariable.ttf"`
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -10,12 +10,16 @@ use write_fonts::read::collections::IntSet;
 use write_fonts::read::tables::glyf::Glyph;
 use write_fonts::read::tables::{glyf::Glyf, loca::Loca};
 use write_fonts::read::{FontRef, TableProvider};
+use write_fonts::tables::colr::{
+    BaseGlyphList, BaseGlyphPaint, Colr, Paint, PaintGlyph, PaintSolid,
+};
+use write_fonts::tables::cpal::{ColorRecord, Cpal};
 use write_fonts::tables::head::Head;
 use write_fonts::tables::hhea::Hhea;
 use write_fonts::tables::maxp::Maxp;
 use write_fonts::tables::name::{Name, NameRecord};
 use write_fonts::tables::os2::Os2;
-use write_fonts::types::{GlyphId, NameId, Tag};
+use write_fonts::types::{F2Dot14, GlyphId, GlyphId16, NameId, Tag};
 
 const MICROSOFT_PLATFORM: u16 = 3;
 const UNICODE_BMP_ENCODING: u16 = 1;
@@ -56,21 +60,32 @@ fn subset(source: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     Ok(subset_font(&font, &plan)?)
 }
 
-/// A face the example writes: Telar Test itself, or a copy of it that declares another ascent and descent, for tests of where a line sits in its box whatever a face declares.
+/// A face the example writes: Telar Test itself, a copy of it that declares another ascent and descent, for tests of where a line sits in its box whatever a face declares, or a copy that paints the letter L as a COLR v1 colour glyph.
 struct Face {
     file: &'static str,
     family: &'static str,
     postscript: &'static str,
     /// The ascender and descender declared in place of Inter's, in font units.
     vertical: Option<(i16, i16)>,
+    /// Whether the letter L is a COLR v1 glyph painted in `COLOR_GLYPH_PAINT` at `COLOR_GLYPH_ALPHA`.
+    colored: bool,
 }
 
-const FACES: [Face; 3] = [
+const COLOR_GLYPH_PAINT: ColorRecord = ColorRecord {
+    red: 255,
+    green: 0,
+    blue: 0,
+    alpha: 255,
+};
+const COLOR_GLYPH_ALPHA: f32 = 0.5;
+
+const FACES: [Face; 4] = [
     Face {
         file: "TelarTest.ttf",
         family: "Telar Test",
         postscript: "TelarTest",
         vertical: None,
+        colored: false,
     },
     // Room above the capitals for stacked accents, as a platform's UI face reserves, so a line centred on what it declares hangs its descenders below a 1.2 em line box.
     Face {
@@ -78,6 +93,7 @@ const FACES: [Face; 3] = [
         family: "Telar Test High Ascent",
         postscript: "TelarTestHighAscent",
         vertical: Some((2560, -494)),
+        colored: false,
     },
     // A descent so deep that a line centred on what it declares lifts its ascenders above a 1.2 em line box.
     Face {
@@ -85,6 +101,14 @@ const FACES: [Face; 3] = [
         family: "Telar Test Deep Descent",
         postscript: "TelarTestDeepDescent",
         vertical: Some((1984, -2048)),
+        colored: false,
+    },
+    Face {
+        file: "TelarTestColor.ttf",
+        family: "Telar Test Color",
+        postscript: "TelarTestColor",
+        vertical: None,
+        colored: true,
     },
 ];
 
@@ -106,6 +130,8 @@ fn rename(subset: &[u8], face: &Face) -> Result<Vec<u8>, Box<dyn Error>> {
     } = face;
     let altered = if face.vertical.is_some() {
         ", with its declared ascent and descent changed"
+    } else if face.colored {
+        ", with the letter L painted as a COLR v1 colour glyph"
     } else {
         ""
     };
@@ -147,6 +173,9 @@ fn rename(subset: &[u8], face: &Face) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut builder = FontBuilder::new();
     builder.add_table(&name)?;
     add_recomputed_metrics(&font, &mut builder, face.vertical)?;
+    if face.colored {
+        add_color_tables(&font, &mut builder)?;
+    }
     builder.copy_missing_tables(font);
     Ok(builder.build())
 }
@@ -272,5 +301,33 @@ fn add_recomputed_metrics(
         .add_table(&hhea)?
         .add_table(&maxp)?
         .add_table(&os2)?;
+    Ok(())
+}
+
+fn add_color_tables(font: &FontRef, builder: &mut FontBuilder) -> Result<(), Box<dyn Error>> {
+    let letter = font
+        .cmap()?
+        .map_codepoint('L')
+        .ok_or("the subset has no letter L")?;
+    let glyph = GlyphId16::try_from(letter)?;
+    let paint: Paint = PaintGlyph::new(
+        PaintSolid::new(0, F2Dot14::from_f32(COLOR_GLYPH_ALPHA)).into(),
+        glyph,
+    )
+    .into();
+    let mut colr = Colr::default();
+    colr.base_glyph_list.set(BaseGlyphList::new(
+        1,
+        vec![BaseGlyphPaint::new(glyph, paint)],
+    ));
+    let mut cpal = Cpal {
+        num_palette_entries: 1,
+        num_palettes: 1,
+        num_color_records: 1,
+        color_record_indices: vec![0],
+        ..Default::default()
+    };
+    cpal.color_records_array.set(vec![COLOR_GLYPH_PAINT]);
+    builder.add_table(&colr)?.add_table(&cpal)?;
     Ok(())
 }

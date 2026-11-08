@@ -8,12 +8,11 @@ use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, MSG, RegisterClassW,
-    SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, SPI_SETCLIENTAREAANIMATION,
-    SPI_SETHIGHCONTRAST, SystemParametersInfoW, TranslateMessage, WM_SETTINGCHANGE, WNDCLASSW,
-    WS_OVERLAPPED,
+    SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, SystemParametersInfoW, TranslateMessage,
+    WM_SETTINGCHANGE, WNDCLASSW, WS_OVERLAPPED,
 };
 
-use super::wide::{names_locale_settings, split_multi_sz};
+use super::wide::{is_relevant_setting_change, split_multi_sz};
 
 /// "Show animations in Windows" switched off is the user asking for less motion.
 pub fn reduced_motion() -> Option<bool> {
@@ -132,12 +131,7 @@ unsafe extern "system" fn listener_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     let relevant = match message {
-        WM_SETTINGCHANGE => {
-            matches!(
-                wparam as u32,
-                SPI_SETCLIENTAREAANIMATION | SPI_SETHIGHCONTRAST
-            ) || unsafe { names_locale_settings(&area(lparam)) }
-        }
+        WM_SETTINGCHANGE => is_relevant_setting_change(wparam as u32, || unsafe { area(lparam) }),
         _ => false,
     };
     if relevant {
