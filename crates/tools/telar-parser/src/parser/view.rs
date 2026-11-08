@@ -1,5 +1,6 @@
 //! `[view]` section: the indentation-based element tree (elements, `if`/`for`/`let` nodes).
 
+use super::header::Tokens;
 use super::style::check_hex_value;
 use super::{Parser, split_once_colon};
 use crate::ast::*;
@@ -284,48 +285,48 @@ const FOR_USAGE: &str = "expected `for <pattern> in <expr> [key <expr>] [gap:<ex
 /// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr, virtual clause)`: on the first ` in ` keyword, then an optional trailing `virtual …` clause, then an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional ` key <expr>` clause (identity for reconciliation; without it a reactive list keys each row on its index). `gap` is the last token once `virtual` is gone, so it's peeled off before the `key` search.
 fn split_for_in(rest: &str) -> Result<ForHeader, String> {
     let malformed = || format!("{FOR_USAGE}, got `for {rest}`");
-    let tokens: Vec<&str> = rest.split_whitespace().collect();
+    let tokens = Tokens::of(rest);
     let in_idx = tokens
-        .iter()
-        .position(|&t| t == "in")
+        .position(0..tokens.len(), "in")
         .ok_or_else(malformed)?;
     if in_idx == 0 || in_idx + 1 >= tokens.len() {
         return Err(malformed());
     }
-    let pattern = tokens[..in_idx].join(" ");
-    let mut after_in: Vec<&str> = tokens[in_idx + 1..].to_vec();
+    let pattern = tokens.slice(0..in_idx).to_string();
+    let after_in = in_idx + 1;
+    let mut end = tokens.len();
 
-    let virtual_clause = match after_in
-        .iter()
-        .position(|&t| t == "virtual")
-        .filter(|at| *at > 0)
+    let virtual_clause = match tokens
+        .position(after_in..end, "virtual")
+        .filter(|at| *at > after_in)
     {
         Some(at) => {
-            let clause = parse_virtual_clause(&after_in[at + 1..])
+            let options: Vec<&str> = (at + 1..end).map(|i| tokens.get(i)).collect();
+            let clause = parse_virtual_clause(&options)
                 .map_err(|why| format!("`virtual` clause: {why}; {FOR_USAGE}, got `for {rest}`"))?;
-            after_in.truncate(at);
+            end = at;
             Some(clause)
         }
         None => None,
     };
 
-    let gap_expr = match (
-        after_in.len(),
-        after_in.last().and_then(|t| split_once_colon(t)),
-    ) {
-        (len, Some((name, value))) if len > 1 && name == "gap" => {
-            let value = value.to_string();
-            after_in.pop();
-            Some(value)
+    let gap_expr = match split_once_colon(tokens.get(end - 1)) {
+        Some(("gap", value)) if end - after_in > 1 => {
+            end -= 1;
+            Some(value.to_string())
         }
         _ => None,
     };
 
-    let (iterable, key_expr) = match after_in.iter().position(|&t| t == "key") {
-        Some(ki) if ki > 0 && ki + 1 < after_in.len() => {
-            (after_in[..ki].join(" "), Some(after_in[ki + 1..].join(" ")))
-        }
-        _ => (after_in.join(" "), None),
+    let (iterable, key_expr) = match tokens
+        .position(after_in..end, "key")
+        .filter(|ki| *ki > after_in && ki + 1 < end)
+    {
+        Some(ki) => (
+            tokens.slice(after_in..ki).to_string(),
+            Some(tokens.slice(ki + 1..end).to_string()),
+        ),
+        None => (tokens.slice(after_in..end).to_string(), None),
     };
     Ok(ForHeader {
         pattern,
@@ -376,21 +377,26 @@ struct ForHeader {
 
 /// Splits `<scrutinee> [as <name>] [key <expr>]` into its three parts. `key` is peeled first so an `as` inside the key expression cannot be mistaken for the binding.
 fn split_match_header(rest: &str) -> Option<(String, Option<String>, Option<String>)> {
-    let tokens: Vec<&str> = rest.split_whitespace().collect();
+    let tokens = Tokens::of(rest);
     if tokens.is_empty() {
         return None;
     }
-    let (head, key_expr) = match tokens.iter().position(|&t| t == "key") {
-        Some(at) if at > 0 && at + 1 < tokens.len() => {
-            (&tokens[..at], Some(tokens[at + 1..].join(" ")))
-        }
-        _ => (&tokens[..], None),
+    let (head_end, key_expr) = match tokens
+        .position(0..tokens.len(), "key")
+        .filter(|at| *at > 0 && at + 1 < tokens.len())
+    {
+        Some(at) => (at, Some(tokens.slice(at + 1..tokens.len()).to_string())),
+        None => (tokens.len(), None),
     };
-    let (scrutinee, binding) = match head.iter().position(|&t| t == "as") {
-        Some(at) if at > 0 && at + 1 == head.len() - 1 => {
-            (head[..at].join(" "), Some(head[at + 1].to_string()))
-        }
-        _ => (head.join(" "), None),
+    let (scrutinee, binding) = match tokens
+        .position(0..head_end, "as")
+        .filter(|at| *at > 0 && at + 2 == head_end)
+    {
+        Some(at) => (
+            tokens.slice(0..at).to_string(),
+            Some(tokens.get(at + 1).to_string()),
+        ),
+        None => (tokens.slice(0..head_end).to_string(), None),
     };
     (!scrutinee.is_empty()).then_some((scrutinee, binding, key_expr))
 }
@@ -806,3 +812,7 @@ fn is_directive(key: &str) -> bool {
             | "drag_button"
     )
 }
+
+#[cfg(test)]
+#[path = "view.header.test.rs"]
+mod header_tests;
