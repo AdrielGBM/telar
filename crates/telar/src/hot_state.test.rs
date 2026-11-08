@@ -210,3 +210,100 @@ mod owned {
         assert_eq!(hot_signal("own::shared", 0i32).peek(), 2);
     }
 }
+
+#[derive(Clone, Default)]
+struct WarningCount(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl WarningCount {
+    fn capture<R>(&self, run: impl FnOnce() -> R) -> R {
+        tracing::subscriber::with_default(self.clone(), run)
+    }
+
+    fn messages(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl tracing::Subscriber for WarningCount {
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+    fn event(&self, event: &tracing::Event<'_>) {
+        struct Message(String);
+        impl tracing::field::Visit for Message {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    self.0 = format!("{value:?}");
+                }
+            }
+        }
+        let mut message = Message(String::new());
+        event.record(&mut message);
+        if *event.metadata().level() == tracing::Level::WARN {
+            self.0.lock().unwrap().push(message.0);
+        }
+    }
+
+    fn enter(&self, _: &tracing::span::Id) {}
+
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+#[test]
+fn an_unserializable_value_warns_once_and_leaves_the_other_keys() {
+    let warnings = WarningCount::default();
+    let blob = warnings.capture(|| {
+        let ok = hot_signal("t4::ok", 5i32);
+        ok.set(6);
+        hot_signal(
+            "t4::grid",
+            HashMap::from([((1i32, 2i32), String::from("v"))]),
+        );
+        hot_snapshot_json();
+        hot_snapshot_json()
+    });
+    let map: HashMap<String, String> = serde_json::from_str(&blob).unwrap();
+    assert_eq!(map.get("t4::ok").map(String::as_str), Some("6"));
+    assert!(!map.contains_key("t4::grid"));
+    let messages = warnings.messages();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(messages[0].contains("t4::grid"), "{messages:?}");
+    assert!(messages[0].contains("key must be a string"), "{messages:?}");
+}
+
+#[test]
+fn an_undeserializable_value_warns_once_and_leaves_the_other_keys() {
+    let warnings = WarningCount::default();
+    let (bad, bad_again, good) = warnings.capture(|| {
+        hot_restore_json("{\"t5::bad\": \"null\", \"t5::good\": \"8\"}");
+        let bad = hot_signal("t5::bad", 1.5f64);
+        let good = hot_signal("t5::good", 0i32);
+        hot_restore_json("{\"t5::bad\": \"null\"}");
+        let bad_again = hot_signal("t5::bad", 2.5f64);
+        (bad, bad_again, good)
+    });
+    assert_eq!(bad.peek(), 1.5);
+    assert_eq!(bad_again.peek(), 2.5);
+    assert_eq!(good.peek(), 8);
+    let messages = warnings.messages();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(messages[0].contains("t5::bad"), "{messages:?}");
+}
+
+#[test]
+fn the_locale_survives_snapshot_restore() {
+    i18n_core::set_locale("es");
+    let blob = hot_snapshot_json();
+    i18n_core::set_locale("en");
+    hot_restore_json(&blob);
+    assert_eq!(i18n_core::current_locale().as_deref(), Some("es"));
+}

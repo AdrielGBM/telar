@@ -1,6 +1,6 @@
 //! Hot-reload state preservation: a dylib-local registry of serializable signals. The host asks the outgoing dylib for a JSON snapshot (through its `snapshot` entry), hands it to the incoming dylib (through its `restore` entry), and `hot_signal` consumes the restored values as components remount. A prerendered page carries the same snapshot, and the browser that takes it over restores it the same way.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use reactive_core::RwSignal;
 use serde::Serialize;
@@ -23,6 +23,37 @@ reactive_core::dropless_thread_local! {
     static REGISTRY: released Registry = Registry::default();
     // Carried over from the previous dylib or the prerendered page being taken over, consumed by `hot_signal` on mount.
     static PENDING: released HashMap<String, String> = HashMap::new();
+    static WARNED: released HashSet<(Side, String)> = HashSet::new();
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Side {
+    #[cfg(any(feature = "dev", feature = "prerender"))]
+    Serialize,
+    Deserialize,
+}
+
+fn warn_once(side: Side, key: &str, error: &serde_json::Error) {
+    let first = WARNED.with(|w| w.borrow_mut().insert((side, key.to_string())));
+    if !first {
+        return;
+    }
+    match side {
+        #[cfg(any(feature = "dev", feature = "prerender"))]
+        Side::Serialize => tracing::warn!(
+            "hot signal `{key}` cannot be serialized, so it resets on every reload: {error}"
+        ),
+        Side::Deserialize => tracing::warn!(
+            "hot signal `{key}` cannot be restored, so it starts from its initial value: {error}"
+        ),
+    }
+}
+
+#[cfg(any(feature = "dev", feature = "prerender"))]
+fn encode<T: Serialize>(key: &str, value: &T) -> Option<String> {
+    serde_json::to_string(value)
+        .inspect_err(|error| warn_once(Side::Serialize, key, error))
+        .ok()
 }
 
 /// As [`reactive_core::signal`], but keyed: the value is captured in the hot-reload snapshot and restored across dylib swaps in `cargo telar dev`. If two instances share a key, the last one mounted wins the snapshot and both restore to the same value. The signal belongs to the component that made it and is freed with it; its last value is kept for the snapshot when that owner is disposed.
@@ -32,7 +63,11 @@ where
 {
     let restored = PENDING
         .with(|p| p.borrow_mut().remove(key))
-        .and_then(|raw| serde_json::from_str::<T>(&raw).ok());
+        .and_then(|raw| {
+            serde_json::from_str::<T>(&raw)
+                .inspect_err(|error| warn_once(Side::Deserialize, key, error))
+                .ok()
+        });
     let sig = reactive_core::signal(restored.unwrap_or(init));
     // A page being taken over only reads values back; snapshotting is for the two builds that write them.
     #[cfg(any(feature = "dev", feature = "prerender"))]
@@ -42,6 +77,7 @@ where
 
 #[cfg(any(feature = "dev", feature = "prerender"))]
 fn register<T: Serialize + Clone + 'static>(key: &str, sig: RwSignal<T>) {
+    let reader_key = key.to_string();
     let instance = REGISTRY.with(|r| {
         let mut registry = r.borrow_mut();
         registry.next_instance += 1;
@@ -50,14 +86,14 @@ fn register<T: Serialize + Clone + 'static>(key: &str, sig: RwSignal<T>) {
             key.to_string(),
             (
                 instance,
-                Box::new(move || sig.try_get().and_then(|v| serde_json::to_string(&v).ok())),
+                Box::new(move || sig.try_get().and_then(|v| encode(&reader_key, &v))),
             ),
         );
         instance
     });
     let key = key.to_string();
     reactive_core::on_cleanup(move || {
-        let Some(value) = sig.try_get().and_then(|v| serde_json::to_string(&v).ok()) else {
+        let Some(value) = sig.try_get().and_then(|v| encode(&key, &v)) else {
             return;
         };
         REGISTRY.with(|r| {
@@ -81,6 +117,7 @@ const THEME_MODE_KEY: &str = "@telar/theme.mode";
 const SCHEME_PREFERENCE_KEY: &str = "@telar/theme.scheme";
 const REDUCED_MOTION_OVERRIDE_KEY: &str = "@telar/motion.reduced";
 const HIGH_CONTRAST_OVERRIDE_KEY: &str = "@telar/contrast.high";
+const LOCALE_KEY: &str = "@telar/i18n.locale";
 
 /// Serializes every registered hot signal into a JSON map. Runs inside the outgoing dylib through its `snapshot` entry, while the old tree (and thus its signals) is still alive.
 #[cfg(any(feature = "dev", feature = "prerender"))]
@@ -114,6 +151,9 @@ pub fn hot_snapshot_json() -> String {
     if let Some(high) = preferences_core::high_contrast_override() {
         map.insert(HIGH_CONTRAST_OVERRIDE_KEY.to_string(), high.to_string());
     }
+    if let Some(locale) = i18n_core::current_locale() {
+        map.insert(LOCALE_KEY.to_string(), locale);
+    }
     serde_json::to_string(&map).unwrap_or_default()
 }
 
@@ -146,6 +186,9 @@ pub(crate) fn restore(map: impl IntoIterator<Item = (String, String)>) {
         .and_then(|word| word.parse().ok())
     {
         preferences_core::set_high_contrast_override(Some(high));
+    }
+    if let Some(locale) = map.remove(LOCALE_KEY) {
+        i18n_core::set_locale(locale);
     }
     if let Some(mode) = map.remove(THEME_MODE_KEY) {
         theme_core::set_mode(mode);
