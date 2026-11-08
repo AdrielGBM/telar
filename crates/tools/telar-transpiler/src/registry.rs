@@ -1219,3 +1219,7 @@ fn starts_uppercase(segment: &str) -> bool {
 #[cfg(test)]
 #[path = "registry.closure.test.rs"]
 mod closure_tests;
+
+#[cfg(test)]
+#[path = "registry.blend.test.rs"]
+mod blend_tests;

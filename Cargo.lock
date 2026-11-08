@@ -6507,6 +6507,7 @@ dependencies = [
  "syn 3.0.5",
  "telar-parser",
  "telar-project",
+ "telar-renderer-core",
  "telar-semantics-core",
  "thiserror 2.0.20",
  "toml",

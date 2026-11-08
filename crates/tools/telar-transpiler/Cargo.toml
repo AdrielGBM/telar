@@ -28,6 +28,9 @@ syn = { workspace = true, features = ["visit"] }
 thiserror = { workspace = true, optional = true }
 toml = { workspace = true }
 
+[dev-dependencies]
+renderer-core = { workspace = true }
+
 [[test]]
 name = "golden"
 path = "src/golden.test.rs"
