@@ -202,10 +202,8 @@ impl SnapshotPaths {
 const OUT_SUFFIXES: [&str; 4] = [".png", ".draw.txt", ".diff.png", ".draw.diff"];
 
 fn write(path: &Path, bytes: &[u8]) -> Result<(), SnapshotError> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|error| SnapshotError::io(dir, error))?;
-    }
-    std::fs::write(path, bytes).map_err(|error| SnapshotError::io(path, error))
+    services_core::write_file_atomically(path, bytes)
+        .map_err(|error| SnapshotError::io(path, error))
 }
 
 /// Why a snapshot could not be captured, compared, written or accepted.

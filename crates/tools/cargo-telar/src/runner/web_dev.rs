@@ -221,7 +221,7 @@ fn inject_reload_poll(dist: &Path) -> Result<(), String> {
     if html.contains(RELOAD_MARKER) {
         return Ok(());
     }
-    std::fs::write(&page, with_reload_poll(&html))
+    telar_project::write_if_changed_atomic(&page, &with_reload_poll(&html))
         .map_err(|e| format!("could not write {}: {e}", page.display()))
 }
 

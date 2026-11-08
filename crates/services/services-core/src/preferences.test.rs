@@ -81,3 +81,34 @@ fn concurrent_writers_never_share_a_temporary_file() {
         1
     );
 }
+
+#[test]
+fn a_write_that_cannot_be_put_in_place_keeps_what_was_there_and_leaves_no_temporary_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let occupied = dir.path().join("occupied");
+    std::fs::create_dir(&occupied).unwrap();
+    std::fs::write(occupied.join("kept"), "kept").unwrap();
+
+    assert!(write_file_atomically(&occupied, b"replacement").is_err());
+
+    assert_eq!(
+        std::fs::read_to_string(occupied.join("kept")).unwrap(),
+        "kept"
+    );
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_written_file_is_as_readable_as_one_written_in_place() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let in_place = dir.path().join("in-place");
+    std::fs::write(&in_place, "").unwrap();
+    let replaced = dir.path().join("replaced");
+
+    write_file_atomically(&replaced, b"").unwrap();
+
+    let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode();
+    assert_eq!(mode(&replaced), mode(&in_place));
+}

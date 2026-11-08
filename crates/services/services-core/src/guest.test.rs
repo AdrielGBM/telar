@@ -510,11 +510,6 @@ const BRIDGED: &[(&str, &str, &[&str])] = &[
 /// The stores a guest's copy keeps for itself, by file and name, and why the host's has nothing to hand it.
 const GUEST_OWN: &[(&str, &str, &str)] = &[
     (
-        "crates/services/services-core/src/preferences.rs",
-        "WRITES",
-        "a counter naming this copy's temporary files",
-    ),
-    (
         "crates/platform/platform-core/src/event_sink.rs",
         "EVENT_SINK",
         "it feeds the loop of the platform that installed it, and a guest runs none: what it reports back crosses through its own exports",

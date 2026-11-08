@@ -2,6 +2,7 @@
 //!
 //! `cargo-telar` (the dev/build CLI) and `telar-analyzer` (the LSP) both anchor file discovery — generated `.telar/` output, theme scanning — to the same directory. The upward walk and the marker definitions live here so the two tools cannot diverge on where a project starts.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// Walks up from `start` (or its parent directory if `start` is a file), returning the first ancestor directory for which `matches` returns true.
@@ -150,14 +151,27 @@ pub fn write_if_changed_atomic(path: &Path, content: &str) -> std::io::Result<()
     {
         return Ok(());
     }
-    let tmp_name = format!(
-        "{}.tmp-{}",
-        path.file_name().and_then(|n| n.to_str()).unwrap_or("out"),
-        std::process::id()
-    );
-    let tmp_path = path.with_file_name(tmp_name);
-    std::fs::write(&tmp_path, content)?;
-    std::fs::rename(&tmp_path, path)
+    let mut file = file_beside(path.parent().unwrap_or(Path::new("")))?;
+    file.write_all(content.as_bytes())?;
+    file.persist(path)?;
+    Ok(())
+}
+
+fn file_beside(dir: &Path) -> std::io::Result<tempfile::NamedTempFile> {
+    with_umask_mode(tempfile::Builder::new()).tempfile_in(dir)
+}
+
+// A temporary file is created owner-only, while a generated file is expected to be readable as one written in place would be: whatever the umask allows.
+#[cfg(unix)]
+fn with_umask_mode<'a, 'b>(mut builder: tempfile::Builder<'a, 'b>) -> tempfile::Builder<'a, 'b> {
+    use std::os::unix::fs::PermissionsExt;
+    builder.permissions(std::fs::Permissions::from_mode(0o666));
+    builder
+}
+
+#[cfg(not(unix))]
+fn with_umask_mode<'a, 'b>(builder: tempfile::Builder<'a, 'b>) -> tempfile::Builder<'a, 'b> {
+    builder
 }
 
 #[cfg(test)]

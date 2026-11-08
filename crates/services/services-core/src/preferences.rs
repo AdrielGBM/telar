@@ -1,9 +1,8 @@
 //! What a person chose, kept between runs: a colour scheme, a language, whatever the application declares.
 
 use std::collections::{BTreeMap, HashMap};
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Where preferences are kept, as text under keys the application and Telar name.
@@ -64,22 +63,29 @@ impl PreferenceStore for MemoryStore {
 
 /// Writes `contents` to `path` through a file of its own beside it renamed over it, so a run that dies mid-write leaves the previous file rather than half of one, and two writers never share the file they write through.
 pub fn write_file_atomically(path: &Path, contents: &[u8]) -> std::io::Result<()> {
-    static WRITES: AtomicU64 = AtomicU64::new(0);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut name = path.file_name().unwrap_or_default().to_owned();
-    name.push(format!(
-        ".{}.{}.tmp",
-        std::process::id(),
-        WRITES.fetch_add(1, Ordering::Relaxed)
-    ));
-    let beside = path.with_file_name(name);
-    let written = std::fs::write(&beside, contents).and_then(|()| std::fs::rename(&beside, path));
-    if written.is_err() {
-        let _ = std::fs::remove_file(&beside);
-    }
-    written
+    let dir = path.parent().unwrap_or(Path::new(""));
+    std::fs::create_dir_all(dir)?;
+    let mut file = file_beside(dir)?;
+    file.write_all(contents)?;
+    file.persist(path)?;
+    Ok(())
+}
+
+fn file_beside(dir: &Path) -> std::io::Result<tempfile::NamedTempFile> {
+    with_umask_mode(tempfile::Builder::new()).tempfile_in(dir)
+}
+
+// A temporary file is created owner-only, while the file it replaces is expected to be readable as one written in place would be: whatever the umask allows.
+#[cfg(unix)]
+fn with_umask_mode<'a, 'b>(mut builder: tempfile::Builder<'a, 'b>) -> tempfile::Builder<'a, 'b> {
+    use std::os::unix::fs::PermissionsExt;
+    builder.permissions(std::fs::Permissions::from_mode(0o666));
+    builder
+}
+
+#[cfg(not(unix))]
+fn with_umask_mode<'a, 'b>(builder: tempfile::Builder<'a, 'b>) -> tempfile::Builder<'a, 'b> {
+    builder
 }
 
 /// The text of the file at `path`, or `None` where there is no such file. Any other failure, an unreadable or non-text file, is an `Err`: a caller that saves over the file afterwards must not, since what it could not read it cannot have kept.

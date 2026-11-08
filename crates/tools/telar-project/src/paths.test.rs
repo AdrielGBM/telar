@@ -156,3 +156,34 @@ fn a_lone_package_with_no_workspace_table_is_its_own_member() {
     assert_eq!(workspace_member_dirs(&root), vec![root.clone()]);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_write_that_cannot_be_put_in_place_keeps_what_was_there_and_leaves_no_temporary_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let occupied = dir.path().join("occupied");
+    std::fs::create_dir(&occupied).unwrap();
+    std::fs::write(occupied.join("kept"), "kept").unwrap();
+
+    assert!(write_if_changed_atomic(&occupied, "replacement").is_err());
+
+    assert_eq!(
+        std::fs::read_to_string(occupied.join("kept")).unwrap(),
+        "kept"
+    );
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_generated_file_is_as_readable_as_one_written_in_place() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let in_place = dir.path().join("in-place");
+    std::fs::write(&in_place, "").unwrap();
+    let generated = dir.path().join("generated");
+
+    write_if_changed_atomic(&generated, "generated").unwrap();
+
+    let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode();
+    assert_eq!(mode(&generated), mode(&in_place));
+}

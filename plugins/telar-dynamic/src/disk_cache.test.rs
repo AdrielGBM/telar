@@ -71,3 +71,20 @@ fn two_formats_with_the_same_id_land_in_different_files() {
     let image = cache.path(&AssetKey::new("image", "logo"));
     assert_ne!(svg, image);
 }
+
+#[test]
+fn a_replaced_entry_reads_whole_and_leaves_nothing_else_beside_it() {
+    let root = tempfile::tempdir().unwrap();
+    let cache = DiskCache::new(root.path());
+    let key = AssetKey::new("svg", "logo");
+
+    cache.put(&key, b"<svg>first</svg>");
+    cache.put(&key, b"<svg>second</svg>");
+
+    assert_eq!(cache.get(&key).as_deref(), Some(&b"<svg>second</svg>"[..]));
+    let entries: Vec<_> = std::fs::read_dir(cache.path(&key).parent().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(entries, [cache.path(&key)]);
+}

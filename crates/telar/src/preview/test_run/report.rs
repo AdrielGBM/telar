@@ -293,14 +293,9 @@ impl TestReport {
     }
 
     pub fn write(&self, path: &Path) -> io::Result<()> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
         let json = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
-        // Renamed into place whole, so a reader watching the report, as the workshop does, never reads one half written.
-        let partial = path.with_extension("json.partial");
-        std::fs::write(&partial, json)?;
-        std::fs::rename(&partial, path)
+        // Atomically, so a reader watching the report, as the workshop does, never reads one half written.
+        services_core::write_file_atomically(path, json.as_bytes())
     }
 
     /// [`SnapshotReport::accept`], with the cell the snapshot `id` is of reported as a run that wrote its goldens reports it, and the run counted again.

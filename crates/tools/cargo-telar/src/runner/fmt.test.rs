@@ -64,3 +64,26 @@ fn only_the_sources_cargo_compiles_are_collected() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[cfg(unix)]
+#[test]
+fn formatting_through_a_symlink_rewrites_the_file_it_names_and_keeps_its_mode() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("page.rsx");
+    std::fs::write(&source, "before").unwrap();
+    std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o640)).unwrap();
+    let link = dir.path().join("link.rsx");
+    std::os::unix::fs::symlink(&source, &link).unwrap();
+
+    replace_contents(&link, "after").unwrap();
+
+    assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
+    assert_eq!(std::fs::read_link(&link).unwrap(), source);
+    assert_eq!(std::fs::read_to_string(&source).unwrap(), "after");
+    assert_eq!(
+        std::fs::metadata(&source).unwrap().permissions().mode() & 0o777,
+        0o640
+    );
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+}

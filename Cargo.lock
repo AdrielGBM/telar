@@ -5973,6 +5973,7 @@ dependencies = [
  "sha2",
  "telar",
  "telar-dynamic",
+ "tempfile",
  "tracing",
  "ureq",
  "wasm-bindgen",
@@ -6251,6 +6252,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telar-icons-core",
+ "tempfile",
  "toml",
 ]
 
@@ -6360,6 +6362,7 @@ dependencies = [
  "telar-renderer-hardware",
  "telar-renderer-software",
  "telar-renderer-text",
+ "tempfile",
  "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -6485,6 +6488,7 @@ dependencies = [
  "telar-renderer-core",
  "telar-semantics-core",
  "telar-wire-core",
+ "tempfile",
  "thiserror 2.0.20",
  "toml",
  "tracing",

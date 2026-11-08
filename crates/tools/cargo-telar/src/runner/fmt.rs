@@ -148,9 +148,24 @@ fn format_file(path: &Path, check: bool) -> Result<bool, String> {
         return Ok(false);
     }
     if !check {
-        std::fs::write(path, &formatted).map_err(|e| e.to_string())?;
+        replace_contents(path, &formatted).map_err(|e| e.to_string())?;
     }
     Ok(true)
+}
+
+/// Replaces the contents of the file `path` leads to, all at once: a write that fails leaves the source as it was, a symlink stays a symlink to the file it named, and the file keeps its permissions.
+fn replace_contents(path: &Path, contents: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let target = std::fs::canonicalize(path)?;
+    let permissions = std::fs::metadata(&target)?.permissions();
+    let dir = target
+        .parent()
+        .expect("a canonical path to a file has a parent");
+    let mut file = tempfile::NamedTempFile::new_in(dir)?;
+    file.write_all(contents.as_bytes())?;
+    file.as_file().set_permissions(permissions)?;
+    file.persist(&target)?;
+    Ok(())
 }
 
 fn display(path: &Path) -> String {
