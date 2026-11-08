@@ -32,6 +32,7 @@ unsafe fn try_set_frame_rate(window: *mut std::ffi::c_void, fps: f32) {
 // AChoreographer is API 24+ (Android 7.0). Resolved at runtime via dlsym to avoid hard-linking failures on older NDK stubs or OEM variants.
 #[cfg(target_os = "android")]
 mod choreographer {
+    use std::ffi::c_long;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -42,7 +43,7 @@ mod choreographer {
     }
 
     pub type FrameCallbackFn =
-        unsafe extern "C" fn(frame_time_ns: i64, data: *mut core::ffi::c_void);
+        unsafe extern "C" fn(frame_time_ns: c_long, data: *mut core::ffi::c_void);
 
     // Resolve AChoreographer_getInstance at runtime; returns null on pre-API-24 devices.
     unsafe fn instance_fn() -> Option<unsafe extern "C" fn() -> *mut AChoreographer> {
@@ -102,7 +103,7 @@ mod choreographer {
     }
 
     // The frame callback: wakes the event loop via the proxy pointer stored in `data`, then clears the pending flag so about_to_wait can re-register on the next animation request.
-    pub unsafe extern "C" fn frame_callback(_frame_time_ns: i64, data: *mut core::ffi::c_void) {
+    pub unsafe extern "C" fn frame_callback(_frame_time_ns: c_long, data: *mut core::ffi::c_void) {
         let cb_data = unsafe { &*(data as *const VsyncCallbackData) };
         // Clear pending first so about_to_wait sees the frame was delivered.
         cb_data.is_pending.store(false, Ordering::Release);

@@ -1,24 +1,24 @@
 //! Android ADPF: reporting each frame's real work duration so the scheduler can size the clocks for it.
 
-use std::ffi::{c_long, c_void};
+use std::ffi::{c_int, c_void};
 
 mod ffi {
-    use std::ffi::c_long;
+    use std::ffi::{c_int, c_void};
 
     #[link(name = "android")]
     unsafe extern "C" {
-        pub fn APerformanceHint_getManager() -> *mut std::ffi::c_void;
+        pub fn APerformanceHint_getManager() -> *mut c_void;
         pub fn APerformanceHint_createSession(
-            manager: *mut std::ffi::c_void,
+            manager: *mut c_void,
             thread_ids: *const i32,
             size: usize,
-            initial_target_work_duration_ns: c_long,
-        ) -> *mut std::ffi::c_void;
+            initial_target_work_duration_ns: i64,
+        ) -> *mut c_void;
         pub fn APerformanceHint_reportActualWorkDuration(
-            session: *mut std::ffi::c_void,
-            actual_duration_ns: c_long,
-        );
-        pub fn APerformanceHint_closeSession(session: *mut std::ffi::c_void);
+            session: *mut c_void,
+            actual_duration_ns: i64,
+        ) -> c_int;
+        pub fn APerformanceHint_closeSession(session: *mut c_void);
     }
 }
 
@@ -37,7 +37,7 @@ impl AdpfSession {
                 return None;
             }
             let tid = tid.unwrap_or_else(|| libc::syscall(libc::SYS_gettid) as i32);
-            let s = ffi::APerformanceHint_createSession(manager, &tid, 1, target_ns as c_long);
+            let s = ffi::APerformanceHint_createSession(manager, &tid, 1, target_ns);
             if s.is_null() {
                 return None;
             }
@@ -47,8 +47,10 @@ impl AdpfSession {
     }
 
     pub fn report(&self, dur_ns: i64) {
-        unsafe {
-            ffi::APerformanceHint_reportActualWorkDuration(self.session, dur_ns as c_long);
+        let status: c_int =
+            unsafe { ffi::APerformanceHint_reportActualWorkDuration(self.session, dur_ns) };
+        if status != 0 {
+            tracing::warn!(status, "could not report the frame's work duration");
         }
     }
 }
