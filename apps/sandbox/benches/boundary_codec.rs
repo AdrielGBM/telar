@@ -1,83 +1,21 @@
-//! What carrying a frame across the guest boundary as bytes costs, next to what building that frame costs.
-//!
-//! The guest encodes each frame into a buffer it owns and the host decodes it into commands of its own (see `renderer_core::wire`). Two frames alternate, as a hover does, so `steady` is what consecutive frames pay once their shared payloads are interned; `cold` resets the encoder every frame, which is what the first frame and a frame whose payloads are all new pay. `build` is the frame the guest makes, and `clone` what crossing by value costs today.
-
 use std::hint::black_box;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use platform_core::PointerSource;
-use renderer_core::wire::{FrameDecoder, FrameEncoder};
 use renderer_core::{
     Color, DrawCommand, Element, ElementId, RectStyle, Role, Semantics, ShapeStyle, TextStyle,
 };
 use telar::{App, Component, Event, Rect, RenderNode, RwSignal, signal};
 
+#[path = "../../catalogue/benches/support/codec_harness.rs"]
+mod codec_harness;
+
+use codec_harness::{bench_codec, report};
+
 const WINDOW_W: u32 = 1200;
 const WINDOW_H: u32 = 900;
 const SYNTHETIC_ROWS: usize = 5000;
-
-#[derive(Default)]
-struct Codec {
-    encoder: FrameEncoder,
-    frame: Vec<u8>,
-    decoder: FrameDecoder,
-    out: Vec<DrawCommand>,
-}
-
-impl Codec {
-    fn run(&mut self, iters: u64, frames: &[Vec<DrawCommand>; 2], cold: bool) -> [Duration; 2] {
-        let mut spent = [Duration::ZERO; 2];
-        for iter in 0..iters {
-            if cold {
-                self.encoder.reset();
-            }
-            let start = Instant::now();
-            let encoded = black_box(self.encoder.encode(&frames[iter as usize % 2]));
-            spent[0] += start.elapsed();
-            // Copied outside the timings: the decoder reads the frame while it asks the encoder for pixels, as a host does across the boundary.
-            self.frame.clear();
-            self.frame.extend_from_slice(encoded);
-            let start = Instant::now();
-            self.decoder
-                .decode(&self.frame, &mut self.out, |id| {
-                    self.encoder.pixels(id).map(<[u8]>::to_vec)
-                })
-                .expect("the frame decodes");
-            spent[1] += start.elapsed();
-            black_box(&self.out);
-        }
-        spent
-    }
-}
-
-fn bench_codec(c: &mut Criterion, name: &str, frames: &[Vec<DrawCommand>; 2]) {
-    report(name, frames);
-    let mut group = c.benchmark_group(format!("boundary/{name}"));
-    group.bench_function("clone", |b| b.iter(|| black_box(frames[0].clone())));
-    for (label, cold) in [("steady", false), ("cold", true)] {
-        let mut codec = Codec::default();
-        group.bench_function(format!("encode_{label}"), |b| {
-            b.iter_custom(|iters| codec.run(iters, frames, cold)[0])
-        });
-        let mut codec = Codec::default();
-        group.bench_function(format!("decode_{label}"), |b| {
-            b.iter_custom(|iters| codec.run(iters, frames, cold)[1])
-        });
-    }
-    group.finish();
-}
-
-fn report(name: &str, frames: &[Vec<DrawCommand>; 2]) {
-    let mut encoder = FrameEncoder::new();
-    let cold = encoder.encode(&frames[0]).len();
-    let steady = encoder.encode(&frames[1]).len();
-    eprintln!(
-        "\n--- {name}: {} commands, {cold} bytes cold, {steady} bytes steady ---\n",
-        frames[0].len()
-    );
-}
 
 fn hover(y: f64) -> Event {
     Event::PointerMoved {
@@ -102,7 +40,9 @@ fn bench_sandbox(c: &mut Criterion) {
     let frames = [frame_at(453.0), frame_at(489.0)];
     assert_ne!(frames[0], frames[1], "the hover changes the frame");
 
-    let mut group = c.benchmark_group("boundary/sandbox_1200x900");
+    let name = format!("sandbox_{WINDOW_W}x{WINDOW_H}");
+    report(&name, &frames);
+    let mut group = c.benchmark_group(format!("boundary/{name}"));
     group.bench_function("build", |b| {
         let mut toggle = false;
         b.iter(|| {
@@ -111,11 +51,11 @@ fn bench_sandbox(c: &mut Criterion) {
             black_box(tree.commands().len());
         });
     });
+    bench_codec(&mut group, &frames);
     group.finish();
-    bench_codec(c, "sandbox_1200x900", &frames);
 }
 
-/// Every row a box with its own label around a rect and a run of text in a style of its own, all rebuilt on each tick: nothing a frame draws is shared with the frame before, so every payload crosses again.
+/// Each row is rebuilt on every tick with new payloads, so no payload is shared with the previous frame and every one crosses again.
 struct Synthetic {
     tick: RwSignal<u32>,
 }
@@ -157,9 +97,10 @@ fn bench_synthetic(c: &mut Criterion) {
         tick.set(at);
         tree.commands().clone()
     };
-    let frames = [frame_at(1), frame_at(2)];
+    let frames: [Vec<DrawCommand>; 2] = [frame_at(1), frame_at(2)];
 
     let name = format!("synthetic_{SYNTHETIC_ROWS}_rows");
+    report(&name, &frames);
     let mut group = c.benchmark_group(format!("boundary/{name}"));
     group.bench_function("build", |b| {
         let mut at = 2;
@@ -169,8 +110,8 @@ fn bench_synthetic(c: &mut Criterion) {
             black_box(tree.commands().len());
         });
     });
+    bench_codec(&mut group, &frames);
     group.finish();
-    bench_codec(c, &name, &frames);
 }
 
 criterion_group!(benches, bench_sandbox, bench_synthetic);
