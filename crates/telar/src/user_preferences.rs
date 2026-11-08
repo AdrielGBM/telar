@@ -53,11 +53,6 @@ pub(crate) fn store_backend(backend: RendererBackend) {
     services_core::store_preference(BACKEND_KEY, Some(backend.as_str()));
 }
 
-#[cfg(test)]
-pub(crate) fn forget_backend() {
-    services_core::store_preference(BACKEND_KEY, None);
-}
-
 pub(crate) fn stored_history() -> Vec<String> {
     services_core::stored_preference(HISTORY_KEY)
         .map(|text| text.lines().map(str::to_owned).collect())

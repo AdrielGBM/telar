@@ -34,6 +34,8 @@ toml = { workspace = true }
 geometry-core = { workspace = true }
 ureq = { workspace = true }
 
+test-process = { workspace = true }
+
 [[test]]
 name = "rsx_library"
 path = "src/rsx_library.test.rs"

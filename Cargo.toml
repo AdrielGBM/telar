@@ -35,6 +35,7 @@ members = [
     "crates/semantics/semantics-core",
     "crates/services/services-core",
     "crates/telar",
+    "crates/testing/test-process",
     "crates/tools/cargo-telar",
     "crates/tools/telar-analyzer",
     "crates/tools/telar-baker",
@@ -104,6 +105,7 @@ default-members = [
     "crates/icons/icons-core",
     "plugins/telar-icons",
     "plugins/telar-workshop",
+    "crates/testing/test-process",
 ]
 
 [workspace.package]
@@ -164,6 +166,8 @@ telar-parser = { path = "crates/tools/telar-parser", version = "0.2.3" }
 telar-project = { path = "crates/tools/telar-project", version = "0.2.3" }
 telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.2.3", default-features = false }
 telar-workshop = { path = "plugins/telar-workshop", version = "0.2.3" }
+# No version, so publishing a crate drops this dev-dependency instead of looking for a crate that is never published.
+test-process = { package = "telar-test-process", path = "crates/testing/test-process" }
 theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.2.3" }
 ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.2.3" }
 ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.2.3" }

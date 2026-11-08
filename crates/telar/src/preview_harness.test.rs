@@ -1,8 +1,6 @@
 //! `cargo telar test` rendering a component that contains text.
 //!
-//! The harness exits the process when it is done, so the test runs it in a child: this same binary, started again with `TELAR_TEST` set, which is how `cargo telar test` reaches the app it builds. A fresh process is also what makes the test honest — a measurer or a face installed by an earlier test in the same process would hide the harness not installing them. The face is declared in the config and checked while the preview is built, which is how `[[telar.fonts]]` reaches the shaper.
-
-use std::process::Command;
+//! The harness exits the process when it is done, so each test runs it in a process of its own: this same binary, started again on that one test, as `cargo telar test` starts the app it builds. A fresh process is also what makes the test honest — a measurer or a face installed by an earlier test in the same process would hide the harness not installing them. The face is declared in the config and checked while the preview is built, which is how `[[telar.fonts]]` reaches the shaper.
 
 use std::path::PathBuf;
 
@@ -15,11 +13,25 @@ use telar::{
 use telar_project::protocol::{
     TEST_A11Y_VAR, TEST_PACKAGE_DIR_VAR, TEST_PREVIEW_VAR, TEST_SNAPSHOTS_VAR, TEST_TARGET_DIR_VAR,
 };
+use test_process::OwnProcess;
 
-const CHILD_MARKER: &str = "TELAR_PREVIEW_HARNESS_CHILD";
 const DECLARED_FAMILY: &str = "Preview Harness Face";
 const DECLARED_FACE: &[u8] =
     include_bytes!("../../renderer/renderer-text/test-fonts/TelarTest.ttf");
+
+/// Runs the test `own` names in its own process, where the harness exits on its own, and answers whether the harness passed there and what the process printed.
+fn harness_in(own: &OwnProcess) -> (bool, String) {
+    let output = own
+        .command()
+        .output()
+        .expect("start the test's own process");
+    let printed = format!(
+        "{}\n--- stderr\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    (output.status.success(), printed)
+}
 
 fn labelled(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     assert!(
@@ -42,7 +54,11 @@ fn labelled(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 #[test]
 fn a_preview_with_text_renders_without_an_installed_measurer() {
-    if std::env::var_os(CHILD_MARKER).is_some() {
+    let own = OwnProcess::new(
+        module_path!(),
+        "a_preview_with_text_renders_without_an_installed_measurer",
+    );
+    if own.is_current() {
         let entry = PreviewEntry::new(
             "harness--labelled--default",
             "labelled",
@@ -54,24 +70,12 @@ fn a_preview_with_text_renders_without_an_installed_measurer() {
         try_run_test(vec![entry], config);
     }
 
-    let output = Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "a_preview_with_text_renders_without_an_installed_measurer",
-            "--nocapture",
-        ])
-        .env(CHILD_MARKER, "1")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let (passed, printed) = harness_in(&own);
     assert!(
-        output.status.success() && stdout.contains("1 passed, 0 failed"),
-        "the harness failed a preview with text:\n{stdout}\n{}",
-        String::from_utf8_lossy(&output.stderr)
+        passed && printed.contains("1 passed, 0 failed"),
+        "the harness failed a preview with text:\n{printed}"
     );
 }
-
-const DUPLICATE_MARKER: &str = "TELAR_PREVIEW_HARNESS_DUPLICATE_CHILD";
 
 fn plain(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(Box::new(telar::Container::new(
@@ -82,7 +86,8 @@ fn plain(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 #[test]
 fn previews_that_share_an_id_fail_the_run() {
-    if std::env::var_os(DUPLICATE_MARKER).is_some() {
+    let own = OwnProcess::new(module_path!(), "previews_that_share_an_id_fail_the_run");
+    if own.is_current() {
         let entries = vec![
             PreviewEntry::new("harness--plain--twice", "plain", "Twice", plain)
                 .location("/a.rs", 1),
@@ -92,27 +97,19 @@ fn previews_that_share_an_id_fail_the_run() {
         try_run_test(entries, AppConfig::default());
     }
 
-    let output = Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "previews_that_share_an_id_fail_the_run",
-            "--nocapture",
-        ])
-        .env(DUPLICATE_MARKER, "1")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(!output.status.success(), "{stdout}");
+    let (passed, printed) = harness_in(&own);
+    assert!(!passed, "{printed}");
     assert!(
-        stdout.contains(
+        printed.contains(
             "FAIL  preview id `harness--plain--twice` names 2 previews (/a.rs:1, /b.rs:2)"
         ),
-        "{stdout}"
+        "{printed}"
     );
-    assert!(stdout.contains("2 passed, 1 failed"), "{stdout}");
+    assert!(printed.contains("2 passed, 1 failed"), "{printed}");
 }
 
-const RUN_MARKER: &str = "TELAR_PREVIEW_HARNESS_RUN_CHILD";
+const RUN_TEST: &str = "a_test_run_checks_each_preview_and_cell";
+const RUN_SET_VAR: &str = "TELAR_PREVIEW_HARNESS_RUN_SET";
 
 fn badge(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label = Text::new(
@@ -172,10 +169,11 @@ fn run_entries(set: &str) -> Vec<PreviewEntry> {
     }
 }
 
-/// The child the tests below start, testing the preview set `RUN_MARKER` names; run on its own it tests nothing.
+/// The process the tests below start, testing the preview set `RUN_SET_VAR` names; anywhere else it tests nothing.
 #[test]
 fn a_test_run_checks_each_preview_and_cell() {
-    if let Ok(set) = std::env::var(RUN_MARKER) {
+    if OwnProcess::new(module_path!(), RUN_TEST).is_current() {
+        let set = std::env::var(RUN_SET_VAR).expect("the preview set");
         let config = AppConfig::default()
             .with_fonts([FontAsset::embedded(DECLARED_FACE).named(DECLARED_FAMILY)]);
         try_run_test(run_entries(&set), config);
@@ -208,22 +206,16 @@ impl Run {
         self.target().join("telar-snapshots").join("report.json")
     }
 
-    /// Runs the preview `set` in a child, as `cargo telar test` would with `vars`, and answers whether it passed and what it printed.
+    /// Runs the preview `set` in its own process, as `cargo telar test` would with `vars`, and answers whether it passed and what it printed.
     fn test(&self, set: &str, vars: &[(&str, &str)]) -> (bool, String) {
-        let output = Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "a_test_run_checks_each_preview_and_cell",
-                "--nocapture",
-            ])
-            .env(RUN_MARKER, set)
+        let mut own = OwnProcess::new(module_path!(), RUN_TEST);
+        own.env(RUN_SET_VAR, set)
             .env(TEST_PACKAGE_DIR_VAR, self.package())
-            .env(TEST_TARGET_DIR_VAR, self.target())
-            .envs(vars.iter().copied())
-            .output()
-            .unwrap();
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        (output.status.success(), stdout)
+            .env(TEST_TARGET_DIR_VAR, self.target());
+        for (key, value) in vars {
+            own.env(key, value);
+        }
+        harness_in(&own)
     }
 }
 

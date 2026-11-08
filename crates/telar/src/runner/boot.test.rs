@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 
 use platform_core::SurfaceId;
 use platform_headless::{HeadlessPlatform, HeadlessWindow};
 use services_core::{MemoryStore, NoPaths, PreferenceStore};
+use test_process::OwnProcess;
 use theme_core::SchemePreference;
 
 use super::*;
@@ -51,7 +51,9 @@ fn in_own_process(test: &str, check: fn(&Path)) {
 
 /// Runs each of `stages` in a process of its own, one after another over the same config root: what one boot kept is what the next finds.
 fn in_own_processes(test: &str, stages: &[fn(&Path)]) {
-    if let Some(root) = std::env::var_os(ROOT) {
+    let mut own = OwnProcess::new(module_path!(), test);
+    if own.is_current() {
+        let root = std::env::var_os(ROOT).expect("the config root");
         let stage: usize = std::env::var(STAGE)
             .expect("the stage")
             .parse()
@@ -66,22 +68,9 @@ fn in_own_processes(test: &str, stages: &[fn(&Path)]) {
         format!("{SCHEME_KEY}\tdark\n"),
     )
     .expect("keep a scheme");
-    let module = module_path!()
-        .split_once("::")
-        .map_or(module_path!(), |(_, path)| path);
+    own.env(ROOT, &root);
     for stage in 0..stages.len() {
-        let output = Command::new(std::env::current_exe().expect("the test binary"))
-            .args([&format!("{module}::{test}"), "--exact", "--nocapture"])
-            .env(ROOT, &root)
-            .env(STAGE, stage.to_string())
-            .output()
-            .expect("start the test's own process");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            output.status.success() && stdout.contains("1 passed"),
-            "{stdout}\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        own.env(STAGE, stage.to_string()).passes();
     }
     let _ = std::fs::remove_dir_all(&root);
 }

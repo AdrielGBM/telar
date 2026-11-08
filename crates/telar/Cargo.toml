@@ -256,7 +256,13 @@ shaper = ["runtime", "dep:renderer-text"]
 
 ## The wgpu renderer. `platform-headless` rides along because `TextureUi` names `HeadlessWindow` as its
 ## offscreen marker.
-hardware = ["runtime", "shaper", "dep:renderer-cache", "dep:renderer-hardware", "dep:platform-headless"]
+hardware = [
+    "runtime",
+    "shaper",
+    "dep:renderer-cache",
+    "dep:renderer-hardware",
+    "dep:platform-headless",
+]
 
 ## The CPU rasterizer, on `tiny-skia`.
 software = ["runtime", "dep:renderer-software", "dep:renderer-cache", "shaper"]
@@ -341,6 +347,7 @@ renderer-record = { workspace = true }
 # ships in every binary. Nothing here covers an asset transport any more: `src/http_assets.test.rs` moved to
 # `telar-dynamic` along with the transport it exercises.
 telar = { path = ".", features = ["font-faces", "testing", "prerender", "previews"] }
+test-process = { workspace = true }
 
 tiny-skia = { workspace = true }
 

@@ -68,6 +68,13 @@ fn every_internal_dependency_asks_for_the_version_this_workspace_publishes() {
         let Some(spec) = spec.as_table().filter(|spec| spec.contains_key("path")) else {
             continue;
         };
+        let member = spec
+            .get("path")
+            .and_then(toml::Value::as_str)
+            .expect("a path dependency's path is a string");
+        if !crate_publishes(&root.join(member)) {
+            continue;
+        }
         match spec.get("version").and_then(toml::Value::as_str) {
             Some(version) if version == published => {}
             // Not a nitpick: a path dependency with no version is stripped of its path on publish and left with nothing, which cargo refuses — so this crate could not be released at all.
@@ -87,6 +94,16 @@ fn every_internal_dependency_asks_for_the_version_this_workspace_publishes() {
         "a path dependency with no version cannot be published, because publishing strips the path:\n  {}",
         unversioned.join("\n  ")
     );
+}
+
+/// `publish = false` keeps a crate off the registry, so nothing it depends on is ever resolved there and it needs no version.
+fn crate_publishes(dir: &Path) -> bool {
+    let manifest = crate::CargoManifest::read(dir).expect("a path dependency has a manifest");
+    let publish = manifest
+        .table()
+        .get("package")
+        .and_then(|package| package.get("publish"));
+    publish.and_then(toml::Value::as_bool) != Some(false)
 }
 
 #[test]

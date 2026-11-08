@@ -57,9 +57,6 @@ mod launcher_report {
         }
     }
 
-    const CHILD: &str = "TELAR_URI_LAUNCHER_LOG_TEST_CHILD";
-    const TEST: &str = "a_launcher_that_fails_is_reported_with_its_status_and_stderr";
-
     fn launched(script: &str) -> std::process::Child {
         std::process::Command::new("sh")
             .args(["-c", script])
@@ -70,44 +67,32 @@ mod launcher_report {
 
     #[test]
     fn a_launcher_that_fails_is_reported_with_its_status_and_stderr() {
-        if std::env::var_os(CHILD).is_none() {
-            let module = module_path!();
-            let module = module.split_once("::").map_or(module, |(_, path)| path);
-            let name = format!("{module}::{TEST}");
-            let output =
-                std::process::Command::new(std::env::current_exe().expect("the test binary"))
-                    .args([name.as_str(), "--exact", "--nocapture"])
-                    .env(CHILD, "1")
-                    .output()
-                    .expect("start the test's own process");
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            assert!(
-                output.status.success() && stdout.contains("1 passed"),
-                "{stdout}\n{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            return;
-        }
-        let captured = Captured::default();
-        tracing::subscriber::set_global_default(
-            tracing_subscriber::fmt()
-                .with_writer(captured.clone())
-                .with_ansi(false)
-                .finish(),
+        test_process::OwnProcess::new(
+            module_path!(),
+            "a_launcher_that_fails_is_reported_with_its_status_and_stderr",
         )
-        .expect("the process has no other subscriber");
-        let uri = Uri::parse("https://example.com/").unwrap();
+        .run(|| {
+            let captured = Captured::default();
+            tracing::subscriber::set_global_default(
+                tracing_subscriber::fmt()
+                    .with_writer(captured.clone())
+                    .with_ansi(false)
+                    .finish(),
+            )
+            .expect("the process has no other subscriber");
+            let uri = Uri::parse("https://example.com/").unwrap();
 
-        reap(launched("exit 0"), &uri);
-        assert!(captured.0.lock().unwrap().is_empty());
+            reap(launched("exit 0"), &uri);
+            assert!(captured.0.lock().unwrap().is_empty());
 
-        reap(
-            launched("echo no handler >&2; printf '\\033[31m' >&2; exit 3"),
-            &uri,
-        );
-        let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
-        assert!(log.contains("exit status: 3"), "{log}");
-        assert!(log.contains("no handler"), "{log}");
-        assert!(!log.contains('\u{1b}'), "{log:?}");
+            reap(
+                launched("echo no handler >&2; printf '\\033[31m' >&2; exit 3"),
+                &uri,
+            );
+            let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+            assert!(log.contains("exit status: 3"), "{log}");
+            assert!(log.contains("no handler"), "{log}");
+            assert!(!log.contains('\u{1b}'), "{log:?}");
+        });
     }
 }

@@ -97,39 +97,25 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Captured {
     }
 }
 
-const CHILD: &str = "TELAR_DESTINATION_LOG_TEST_CHILD";
-
 #[test]
 fn a_refused_external_uri_is_logged_without_raw_control_characters() {
-    if std::env::var_os(CHILD).is_none() {
-        let module = module_path!();
-        let module = module.split_once("::").map_or(module, |(_, path)| path);
-        let name =
-            format!("{module}::a_refused_external_uri_is_logged_without_raw_control_characters");
-        let output = std::process::Command::new(std::env::current_exe().expect("the test binary"))
-            .args([name.as_str(), "--exact", "--nocapture"])
-            .env(CHILD, "1")
-            .output()
-            .expect("start the test's own process");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            output.status.success() && stdout.contains("1 passed"),
-            "{stdout}\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return;
-    }
-    let captured = Captured::default();
-    tracing::subscriber::set_global_default(
-        tracing_subscriber::fmt()
-            .with_writer(captured.clone())
-            .with_ansi(false)
-            .finish(),
+    test_process::OwnProcess::new(
+        module_path!(),
+        "a_refused_external_uri_is_logged_without_raw_control_characters",
     )
-    .expect("the process has no other subscriber");
-    let destination = external("https://example.com/\u{1b}[31m").into_destination();
-    assert_eq!(destination, None);
-    let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
-    assert!(log.contains("refused"), "{log}");
-    assert!(!log.contains('\u{1b}'), "{log:?}");
+    .run(|| {
+        let captured = Captured::default();
+        tracing::subscriber::set_global_default(
+            tracing_subscriber::fmt()
+                .with_writer(captured.clone())
+                .with_ansi(false)
+                .finish(),
+        )
+        .expect("the process has no other subscriber");
+        let destination = external("https://example.com/\u{1b}[31m").into_destination();
+        assert_eq!(destination, None);
+        let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+        assert!(log.contains("refused"), "{log}");
+        assert!(!log.contains('\u{1b}'), "{log:?}");
+    });
 }

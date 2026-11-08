@@ -855,6 +855,7 @@ dependencies = [
  "telar-i18n-core",
  "telar-parser",
  "telar-project",
+ "telar-test-process",
  "telar-transpiler",
  "tempfile",
  "toml",
@@ -5878,6 +5879,7 @@ dependencies = [
  "telar-renderer-tui",
  "telar-renderer-web",
  "telar-services-core",
+ "telar-test-process",
  "telar-theme-core",
  "telar-ui-core",
  "telar-ui-tree",
@@ -6154,6 +6156,7 @@ dependencies = [
  "telar-geometry-core",
  "telar-reactive-local",
  "telar-semantics-core",
+ "telar-test-process",
  "telar-wire-core",
  "thiserror 2.0.20",
  "tracing",
@@ -6488,6 +6491,7 @@ dependencies = [
  "telar-reactive-local",
  "telar-renderer-core",
  "telar-semantics-core",
+ "telar-test-process",
  "telar-wire-core",
  "tempfile",
  "thiserror 2.0.20",
@@ -6495,6 +6499,10 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "telar-test-process"
+version = "0.2.3"
 
 [[package]]
 name = "telar-theme-core"

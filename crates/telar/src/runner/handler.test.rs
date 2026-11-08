@@ -6,6 +6,7 @@ use crate::app::App;
 use crate::app_runtime::LocalApp;
 use crate::runner::host::RenderChannels;
 use platform_headless::HeadlessWindow;
+use test_process::OwnProcess;
 
 /// An app whose content never changes — a shell's frame ring, a wallpaper, a static diagram. Its tree's own generation is fixed for the life of the tree, which is what makes the collision below reachable.
 struct Unchanging;
@@ -2305,149 +2306,164 @@ fn lose_the_thread(
     run_a_pass(handler, window);
 }
 
-static STORED_BACKEND: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-struct StoredBackend {
-    _exclusive: std::sync::MutexGuard<'static, ()>,
-}
-
-impl Drop for StoredBackend {
-    fn drop(&mut self) {
-        crate::user_preferences::forget_backend();
-    }
-}
-
-fn handler_on(backend: RendererBackend) -> (StoredBackend, AppHandler<HeadlessWindow, ()>) {
-    let store = StoredBackend {
-        _exclusive: STORED_BACKEND.lock().unwrap_or_else(|e| e.into_inner()),
-    };
+fn handler_on(backend: RendererBackend) -> AppHandler<HeadlessWindow, ()> {
     let mut handler = handler();
     handler.backend = backend;
     crate::user_preferences::store_backend(backend);
     handler.tree = Some(handler.app.mount());
-    (store, handler)
+    handler
 }
 
 #[test]
 fn a_thread_that_keeps_dying_is_replaced_by_software_and_then_given_up_on() {
-    let window = HeadlessWindow::new(120, 80);
-    let started = Rc::new(Cell::new(0));
-    let retired = Rc::new(Cell::new(0));
-    let (_store, mut handler) = handler_on(RendererBackend::Hardware);
+    OwnProcess::new(
+        module_path!(),
+        "a_thread_that_keeps_dying_is_replaced_by_software_and_then_given_up_on",
+    )
+    .run(|| {
+        let window = HeadlessWindow::new(120, 80);
+        let started = Rc::new(Cell::new(0));
+        let retired = Rc::new(Cell::new(0));
+        let mut handler = handler_on(RendererBackend::Hardware);
 
-    for _ in 0..3 {
+        for _ in 0..3 {
+            lose_the_thread(&mut handler, &window, &started, &retired);
+        }
+        assert_eq!(
+            started.get(),
+            3,
+            "the first three losses restart as configured"
+        );
+        assert!(matches!(handler.backend, RendererBackend::Hardware));
+
         lose_the_thread(&mut handler, &window, &started, &retired);
-    }
-    assert_eq!(
-        started.get(),
-        3,
-        "the first three losses restart as configured"
-    );
-    assert!(matches!(handler.backend, RendererBackend::Hardware));
+        assert_eq!(started.get(), 4);
+        assert!(
+            matches!(handler.backend, RendererBackend::Software),
+            "the fourth loss in a row restarts on software"
+        );
 
-    lose_the_thread(&mut handler, &window, &started, &retired);
-    assert_eq!(started.get(), 4);
-    assert!(
-        matches!(handler.backend, RendererBackend::Software),
-        "the fourth loss in a row restarts on software"
-    );
+        for _ in 0..3 {
+            lose_the_thread(&mut handler, &window, &started, &retired);
+        }
+        assert_eq!(started.get(), 7, "software gets its own three restarts");
 
-    for _ in 0..3 {
         lose_the_thread(&mut handler, &window, &started, &retired);
-    }
-    assert_eq!(started.get(), 7, "software gets its own three restarts");
-
-    lose_the_thread(&mut handler, &window, &started, &retired);
-    assert_eq!(
-        started.get(),
-        7,
-        "software failing again stops the restarts"
-    );
-    assert!(handler.recovery.abandoned());
-    assert_eq!(
-        handler.frame_is_due(web_time::Instant::now()),
-        None,
-        "an abandoned window stops submitting frames"
-    );
+        assert_eq!(
+            started.get(),
+            7,
+            "software failing again stops the restarts"
+        );
+        assert!(handler.recovery.abandoned());
+        assert_eq!(
+            handler.frame_is_due(web_time::Instant::now()),
+            None,
+            "an abandoned window stops submitting frames"
+        );
+    });
 }
 
 #[test]
 fn software_that_dies_from_the_start_is_given_up_on_without_a_switch() {
-    let window = HeadlessWindow::new(120, 80);
-    let started = Rc::new(Cell::new(0));
-    let retired = Rc::new(Cell::new(0));
-    let (_store, mut handler) = handler_on(RendererBackend::Software);
+    OwnProcess::new(
+        module_path!(),
+        "software_that_dies_from_the_start_is_given_up_on_without_a_switch",
+    )
+    .run(|| {
+        let window = HeadlessWindow::new(120, 80);
+        let started = Rc::new(Cell::new(0));
+        let retired = Rc::new(Cell::new(0));
+        let mut handler = handler_on(RendererBackend::Software);
 
-    for _ in 0..4 {
-        lose_the_thread(&mut handler, &window, &started, &retired);
-    }
-    assert_eq!(started.get(), 3);
-    assert!(handler.recovery.abandoned());
+        for _ in 0..4 {
+            lose_the_thread(&mut handler, &window, &started, &retired);
+        }
+        assert_eq!(started.get(), 3);
+        assert!(handler.recovery.abandoned());
+    });
 }
 
 #[test]
 fn a_thread_that_survives_two_frames_resets_the_count() {
-    let window = HeadlessWindow::new(120, 80);
-    let started = Rc::new(Cell::new(0));
-    let retired = Rc::new(Cell::new(0));
-    let (_store, mut handler) = handler_on(RendererBackend::Hardware);
+    OwnProcess::new(
+        module_path!(),
+        "a_thread_that_survives_two_frames_resets_the_count",
+    )
+    .run(|| {
+        let window = HeadlessWindow::new(120, 80);
+        let started = Rc::new(Cell::new(0));
+        let retired = Rc::new(Cell::new(0));
+        let mut handler = handler_on(RendererBackend::Hardware);
 
-    for _ in 0..3 {
-        lose_the_thread(&mut handler, &window, &started, &retired);
-    }
-    handler.recovery.frame_accepted();
-    handler.recovery.frame_accepted();
+        for _ in 0..3 {
+            lose_the_thread(&mut handler, &window, &started, &retired);
+        }
+        handler.recovery.frame_accepted();
+        handler.recovery.frame_accepted();
 
-    for _ in 0..3 {
-        lose_the_thread(&mut handler, &window, &started, &retired);
-    }
-    assert!(
-        matches!(handler.backend, RendererBackend::Hardware),
-        "a healthy stretch in between keeps the configured backend"
-    );
-    assert!(!handler.recovery.software_forced());
+        for _ in 0..3 {
+            lose_the_thread(&mut handler, &window, &started, &retired);
+        }
+        assert!(
+            matches!(handler.backend, RendererBackend::Hardware),
+            "a healthy stretch in between keeps the configured backend"
+        );
+        assert!(!handler.recovery.software_forced());
+    });
 }
 
 #[test]
 fn one_accepted_frame_before_the_thread_dies_again_does_not_reset_the_count() {
-    let window = HeadlessWindow::new(120, 80);
-    let started = Rc::new(Cell::new(0));
-    let retired = Rc::new(Cell::new(0));
-    let (_store, mut handler) = handler_on(RendererBackend::Hardware);
+    OwnProcess::new(
+        module_path!(),
+        "one_accepted_frame_before_the_thread_dies_again_does_not_reset_the_count",
+    )
+    .run(|| {
+        let window = HeadlessWindow::new(120, 80);
+        let started = Rc::new(Cell::new(0));
+        let retired = Rc::new(Cell::new(0));
+        let mut handler = handler_on(RendererBackend::Hardware);
 
-    for _ in 0..3 {
+        for _ in 0..3 {
+            lose_the_thread(&mut handler, &window, &started, &retired);
+            handler.recovery.frame_accepted();
+        }
         lose_the_thread(&mut handler, &window, &started, &retired);
-        handler.recovery.frame_accepted();
-    }
-    lose_the_thread(&mut handler, &window, &started, &retired);
-    assert!(handler.recovery.software_forced());
+        assert!(handler.recovery.software_forced());
+    });
 }
 
 #[test]
 fn choosing_a_backend_by_hand_gives_it_a_fresh_set_of_restarts() {
-    let window = HeadlessWindow::new(120, 80);
-    let started = Rc::new(Cell::new(0));
-    let retired = Rc::new(Cell::new(0));
-    let (_store, mut handler) = handler_on(RendererBackend::Hardware);
+    OwnProcess::new(
+        module_path!(),
+        "choosing_a_backend_by_hand_gives_it_a_fresh_set_of_restarts",
+    )
+    .run(|| {
+        let window = HeadlessWindow::new(120, 80);
+        let started = Rc::new(Cell::new(0));
+        let retired = Rc::new(Cell::new(0));
+        let mut handler = handler_on(RendererBackend::Hardware);
 
-    for _ in 0..4 {
-        lose_the_thread(&mut handler, &window, &started, &retired);
-    }
-    assert!(handler.recovery.software_forced());
-    for _ in 0..4 {
-        lose_the_thread(&mut handler, &window, &started, &retired);
-    }
-    assert!(handler.recovery.abandoned());
+        for _ in 0..4 {
+            lose_the_thread(&mut handler, &window, &started, &retired);
+        }
+        assert!(handler.recovery.software_forced());
+        for _ in 0..4 {
+            lose_the_thread(&mut handler, &window, &started, &retired);
+        }
+        assert!(handler.recovery.abandoned());
 
-    handler.renderer_host = dead_host(&started, &retired);
-    crate::user_preferences::store_backend(RendererBackend::Software);
-    handler.apply_dev_action(DevAction::ToggleBackend, &window);
+        handler.renderer_host = dead_host(&started, &retired);
+        crate::user_preferences::store_backend(RendererBackend::Software);
+        handler.apply_dev_action(DevAction::ToggleBackend, &window);
 
-    assert!(!handler.recovery.abandoned());
-    assert!(!handler.recovery.software_forced());
-    assert!(
-        matches!(handler.backend, RendererBackend::Hardware),
-        "the choice is honored rather than kept on the forced software"
-    );
-    assert!(handler.frame_is_due(web_time::Instant::now()).is_some());
+        assert!(!handler.recovery.abandoned());
+        assert!(!handler.recovery.software_forced());
+        assert!(
+            matches!(handler.backend, RendererBackend::Hardware),
+            "the choice is honored rather than kept on the forced software"
+        );
+        assert!(handler.frame_is_due(web_time::Instant::now()).is_some());
+    });
 }

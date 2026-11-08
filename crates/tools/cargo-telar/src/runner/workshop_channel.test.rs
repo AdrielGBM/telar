@@ -1,6 +1,7 @@
 use super::super::interrupt::removes_on_interrupt;
 use super::*;
 use telar_project::protocol::{workshop_channel_file, workshop_server_file};
+use test_process::OwnProcess;
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
@@ -246,14 +247,16 @@ fn a_session_that_ends_removes_its_server_file_and_frees_the_workshop() {
 }
 
 const HELD_FILE_VAR: &str = "TELAR_TEST_HELD_SERVER_FILE";
+const HOLDER: &str = "hold_a_server_file_until_interrupted";
 
 /// Not a test of its own: the process [`an_interrupted_session_removes_its_server_file`] interrupts, which claims the file it is given and waits.
 #[test]
 #[ignore = "run by an_interrupted_session_removes_its_server_file"]
 fn hold_a_server_file_until_interrupted() {
-    let Some(file) = std::env::var_os(HELD_FILE_VAR) else {
+    if !OwnProcess::new(module_path!(), HOLDER).is_current() {
         return;
-    };
+    }
+    let file = std::env::var_os(HELD_FILE_VAR).expect("the file to hold");
     let _claim = ServerClaim::claim(Path::new(&file)).expect("an unclaimed file");
     loop {
         std::thread::sleep(Duration::from_secs(1));
@@ -267,14 +270,10 @@ fn an_interrupted_session_removes_its_server_file() {
         let spawning = CHILD_PROCESSES.write().unwrap();
         let dir = scratch(&format!("interrupted-{signal}"));
         let file = workshop_server_file(&dir, "demo");
-        let mut session = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "runner::workshop_channel::tests::hold_a_server_file_until_interrupted",
-                "--ignored",
-                "--test-threads=1",
-            ])
+        let mut session = OwnProcess::new(module_path!(), HOLDER)
             .env(HELD_FILE_VAR, &file)
+            .command()
+            .arg("--test-threads=1")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
