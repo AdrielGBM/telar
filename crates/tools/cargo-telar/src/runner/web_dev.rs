@@ -531,10 +531,11 @@ fn resolve(root: &Path, base: &str, target: &str) -> Option<PathBuf> {
         return None;
     }
     let relative = under_base.trim_start_matches('/');
-    let escapes = relative
+    let contained = relative
         .split('/')
-        .any(|part| part == ".." || part.contains([':', '\\', '\0']));
-    if escapes {
+        .filter(|part| !part.is_empty())
+        .all(telar_project::is_contained_segment);
+    if !contained {
         return None;
     }
     let file = root.join(relative);

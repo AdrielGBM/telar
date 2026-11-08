@@ -5,7 +5,7 @@
 //! [`PrerenderState`] is the half the client reads back. It goes into the page as `<script type="application/json" id="telar-state">`, and holds every input the page was built from that the client could not otherwise know to be the same.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +20,16 @@ pub const STATE_VERSION: u32 = 1;
 
 /// The surface a page is built for when the project names none in `[telar.web.prerender]`.
 pub const DEFAULT_SURFACE: (u32, u32) = (1280, 800);
+
+/// Whether `segment` names one entry inside whatever directory it is joined to, on every platform: a single plain name, never a separator, a drive or UNC prefix, `.` or `..`.
+pub fn is_contained_segment(segment: &str) -> bool {
+    let mut components = Path::new(segment).components();
+    let single_name = matches!(
+        (components.next(), components.next()),
+        (Some(Component::Normal(_)), None)
+    );
+    single_name && !segment.contains([':', '/', '\\', '\0'])
+}
 
 /// One page to build.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -76,11 +86,7 @@ impl PageLocation {
     pub fn file(&self) -> Option<PathBuf> {
         let mut path = PathBuf::new();
         for segment in self.locale.iter().chain(&self.segments) {
-            let plain = !segment.is_empty()
-                && segment != "."
-                && segment != ".."
-                && !segment.contains(['/', '\\', '\0']);
-            if !plain {
+            if !is_contained_segment(segment) {
                 return None;
             }
             path.push(segment);

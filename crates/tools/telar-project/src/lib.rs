@@ -87,6 +87,7 @@ pub use prelude::{
 pub use prerender::{
     DEFAULT_SURFACE, PRERENDER_ENV, PageLocation, PageRequest, Preferences, PrerenderRequest,
     PrerenderState, PrerenderedPage, STATE_ELEMENT_ID, STATE_VERSION, Surface,
+    is_contained_segment,
 };
 pub use previews::{
     MATRIX_GLOBAL_AXES, MatrixAxes, MatrixAxis, MatrixDirection, MatrixValue, PreviewsInclude,

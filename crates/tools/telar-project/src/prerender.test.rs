@@ -26,9 +26,25 @@ fn a_page_is_the_index_of_the_directory_its_address_names() {
 
 #[test]
 fn a_segment_no_path_can_hold_has_no_file() {
-    for segment in ["", ".", "..", "a/b", "a\\b"] {
+    for segment in [
+        "",
+        ".",
+        "..",
+        "a/b",
+        "a\\b",
+        "C:",
+        "c:foo",
+        "\\\\server",
+        "a\0b",
+    ] {
         assert_eq!(at(&[segment], None).file(), None, "{segment:?}");
     }
+}
+
+#[test]
+fn a_bad_segment_anywhere_in_the_address_leaves_the_page_without_a_file() {
+    assert_eq!(at(&["acts", "C:"], Some("en")).file(), None);
+    assert_eq!(at(&["acts"], Some("c:foo")).file(), None);
 }
 
 #[test]
