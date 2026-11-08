@@ -1,13 +1,15 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use geometry_core::{Insets, Rect};
 use wire_core::{Wire, WireError, decode, encode};
 
 use crate::{
     AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation, ColorScheme, CurrentKind,
-    Cursor, Event, FullscreenMode, HasPopup, HistoryStep, HistoryUpdate, Ime, Key,
-    KeyboardConvention, Location, ModifiersState, NamedKey, NumericValue, Orientation,
+    Cursor, DragActions, DragData, DragIcon, DragOutcome, DropAction, DropAnswer, DroppedData,
+    Event, FullscreenMode, HasPopup, HistoryStep, HistoryUpdate, Ime, Key, KeyboardConvention,
+    Location, MimeType, ModifiersState, NamedKey, NumericValue, Orientation, OutgoingDrag,
     PointerButton, PointerSource, ResizeEdge, Role, ScrollDelta, SetPosition, SortDirection,
     SystemPreferences, TextInput, WindowCommand, WindowConfig, WindowPosition,
 };
@@ -154,7 +156,49 @@ fn every_event() -> Vec<Event> {
             preferences: preferences(),
         },
         Event::LocationChanged { history: history() },
+        Event::DragOver {
+            x: 12.5,
+            y: 40.0,
+            offer: outgoing_drag().offer(),
+        },
+        Event::DragLeft,
+        Event::Dropped {
+            x: 3.0,
+            y: 4.0,
+            data: DroppedData {
+                mime: MimeType::TEXT_PLAIN_UTF8,
+                bytes: Arc::from(b"p\xc3\xa1rrafo".as_slice()),
+                action: DropAction::Copy,
+            },
+        },
+        Event::DragEnded {
+            outcome: DragOutcome::NotStarted,
+        },
+        Event::DragEnded {
+            outcome: DragOutcome::Cancelled,
+        },
+        Event::DragEnded {
+            outcome: DragOutcome::Dropped(DropAction::Move),
+        },
     ]
+}
+
+fn outgoing_drag() -> OutgoingDrag {
+    OutgoingDrag::new(
+        DragData::new()
+            .with(
+                MimeType::from_static("application/x-token"),
+                b"\x01\x02".as_slice(),
+            )
+            .with_text("p\u{e1}rrafo"),
+        DragActions::CopyOrMove,
+    )
+    .with_icon(
+        DragIcon::new(vec![0u8, 1, 2, 3], 1, 1)
+            .unwrap()
+            .at_scale(2)
+            .held_at(-1, 3),
+    )
 }
 
 #[test]
@@ -165,12 +209,12 @@ fn every_event_round_trips() {
         tags.insert(encode(&event)[0]);
         round_trip(event);
     }
-    assert_eq!(tags.len(), 25);
+    assert_eq!(tags.len(), 29);
     assert_eq!(
-        decode::<Event>(&[25]),
+        decode::<Event>(&[29]),
         Err(WireError::Tag {
             of: "Event",
-            tag: 25
+            tag: 29
         })
     );
 }
@@ -220,6 +264,15 @@ fn every_window_command() -> Vec<WindowCommand> {
             history: history(),
         }),
     ];
+    commands.extend([
+        WindowCommand::StartDrag(outgoing_drag()),
+        WindowCommand::StartDrag(OutgoingDrag::new(DragData::new(), DragActions::Move)),
+        WindowCommand::AcceptDrop(DropAnswer {
+            mime: MimeType::TEXT_MARKDOWN,
+            action: DropAction::Copy,
+        }),
+        WindowCommand::ShowDragIcon(false),
+    ]);
     commands.extend(ResizeEdge::ALL.map(WindowCommand::DragResize));
     commands
 }
@@ -591,4 +644,20 @@ fn raw_handles_cross_as_themselves_or_as_none() {
         decode::<RawHandles>(&encode(&phone)),
         Ok(RawHandles::default())
     );
+}
+
+#[test]
+fn a_mime_type_that_is_not_type_slash_subtype_does_not_decode() {
+    let mut w = wire_core::Writer::new();
+    w.str("plain");
+    assert_eq!(
+        decode::<MimeType>(&w.into_vec()),
+        Err(WireError::Invalid("MIME type"))
+    );
+}
+
+#[test]
+fn every_drag_outcome_and_action_has_a_tag_of_its_own() {
+    every_tag_decodes_to_a_value_of_its_own::<DropAction>(2, "DropAction");
+    every_tag_decodes_to_a_value_of_its_own::<DragActions>(3, "DragActions");
 }

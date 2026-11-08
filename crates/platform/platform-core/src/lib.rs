@@ -15,6 +15,7 @@ pub mod chord;
 pub mod consumed_keys;
 pub mod destination;
 pub mod dom_code;
+pub mod drag_drop;
 pub mod error;
 pub mod event;
 pub mod event_sink;
@@ -48,6 +49,10 @@ pub use destination::{
     UriError, address_of, allow_uri_scheme, anchor, external, in_locale, is_uri_scheme_allowed,
 };
 pub use dom_code::unmodified_key_of_code;
+pub use drag_drop::{
+    DragActions, DragData, DragIcon, DragOffer, DragOutcome, DropAction, DropAnswer, DroppedData,
+    MimeType, MimeTypeError, OutgoingDrag, Representation,
+};
 pub use error::PlatformError;
 pub use event::{
     Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta, TAP_SLOP,

@@ -22,6 +22,7 @@ mod cursor;
 pub mod dismiss;
 mod disposal;
 mod drag;
+mod drag_drop;
 mod element;
 mod error_boundary;
 mod fixed_layer;
@@ -120,6 +121,7 @@ pub use dismiss::{
 };
 pub use disposal::OwnedBuild;
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
+pub use drag_drop::DropTarget;
 pub use error_boundary::{BuildFailure, ErrorBoundary};
 pub use fixed_layer::FixedLayer;
 pub use foreign_surface::{ForeignBoundary, ForeignSurface};

@@ -7,7 +7,9 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod platform;
+mod seat;
 mod window;
 
 pub use platform::{FrameSink, HeadlessPlatform, SurfaceFrameSink};
+pub use seat::{HeadlessSeat, PointerStep};
 pub use window::{HeadlessWindow, TitleSink};

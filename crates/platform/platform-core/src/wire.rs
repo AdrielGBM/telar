@@ -17,9 +17,11 @@ use wire_core::{
 use crate::guest::RawHandles;
 use crate::{
     AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation, ColorScheme, Cursor,
+    DragActions, DragData, DragIcon, DragOffer, DragOutcome, DropAction, DropAnswer, DroppedData,
     Event, FullscreenMode, HistoryStep, HistoryUpdate, Ime, Key, KeyboardConvention,
-    LocationFormat, ModifiersState, NamedKey, PointerButton, PointerSource, ResizeEdge,
-    ScrollDelta, SystemPreferences, TextInput, WindowCommand, WindowConfig, WindowPosition,
+    LocationFormat, MimeType, ModifiersState, NamedKey, OutgoingDrag, PointerButton, PointerSource,
+    Representation, ResizeEdge, ScrollDelta, SystemPreferences, TextInput, WindowCommand,
+    WindowConfig, WindowPosition,
 };
 
 wire_enum!(NamedKey {
@@ -160,6 +162,59 @@ wire_enum!(Event {
     SafeAreaChanged { insets } = 22,
     SystemPreferencesChanged { preferences } = 23,
     LocationChanged { history } = 24,
+    DragOver { x, y, offer } = 25,
+    DragLeft = 26,
+    Dropped { x, y, data } = 27,
+    DragEnded { outcome } = 28,
+});
+
+impl Shaped for MimeType {
+    const SHAPE: u64 = fold_shape(shape_named("MimeType"), String::SHAPE);
+}
+
+impl Wire for MimeType {
+    fn put(&self, w: &mut Writer) {
+        w.str(self.as_str());
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        MimeType::parse(r.str()?).map_err(|_| WireError::Invalid("MIME type"))
+    }
+}
+
+wire_struct!(Representation { mime, bytes });
+wire_struct!(DragData { representations });
+wire_enum!(DropAction {
+    Copy = 0,
+    Move = 1
+});
+wire_enum!(DragActions {
+    Copy = 0,
+    Move = 1,
+    CopyOrMove = 2
+});
+wire_struct!(DragOffer { types, actions });
+wire_struct!(DropAnswer { mime, action });
+wire_struct!(DroppedData {
+    mime,
+    bytes,
+    action
+});
+wire_enum!(DragOutcome {
+    NotStarted = 0,
+    Cancelled = 1,
+    Dropped(action) = 2
+});
+wire_struct!(DragIcon {
+    rgba,
+    width,
+    height,
+    scale,
+    hotspot
+});
+wire_struct!(OutgoingDrag {
+    data,
+    actions,
+    icon
 });
 
 wire_enum!(Cursor {
@@ -207,6 +262,9 @@ wire_enum!(WindowCommand {
     Focus = 8,
     SetCursor(cursor) = 9,
     Navigate(update) = 10,
+    StartDrag(drag) = 11,
+    AcceptDrop(answer) = 12,
+    ShowDragIcon(shown) = 13,
 });
 
 wire_enum!(FullscreenMode {

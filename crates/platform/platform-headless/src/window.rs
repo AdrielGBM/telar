@@ -3,10 +3,12 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use platform_core::{Cursor, TextInput, Window};
+use platform_core::{Cursor, DropAnswer, OutgoingDrag, SurfaceId, TextInput, Window};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
+
+use crate::HeadlessSeat;
 
 /// Every title a [`HeadlessWindow`] was given, oldest first. Shared, because the window is made inside a run that yields nothing back: a caller hands one in with [`HeadlessPlatform::record_titles_into`](crate::HeadlessPlatform::record_titles_into) and reads it after the run returns.
 pub type TitleSink = Arc<Mutex<Vec<String>>>;
@@ -29,6 +31,7 @@ struct Inner {
     maximized: AtomicBool,
     decorated: AtomicBool,
     text_input: Mutex<Option<TextInput>>,
+    seat: Mutex<Option<(HeadlessSeat, SurfaceId)>>,
 }
 
 impl HeadlessWindow {
@@ -50,6 +53,7 @@ impl HeadlessWindow {
                 maximized: AtomicBool::new(false),
                 decorated: AtomicBool::new(true),
                 text_input: Mutex::new(None),
+                seat: Mutex::new(None),
             }),
         }
     }
@@ -78,6 +82,15 @@ impl HeadlessWindow {
     /// The field an input method would compose into, as [`Window::set_text_input`] last said: where its caret is, or `None` for no field.
     pub fn text_input(&self) -> Option<TextInput> {
         *lock(&self.inner.text_input)
+    }
+
+    /// Puts this window on `seat` as `surface`, which is how the seat's script names it.
+    pub fn attach_to(&self, seat: HeadlessSeat, surface: SurfaceId) {
+        *lock(&self.inner.seat) = Some((seat, surface));
+    }
+
+    pub(crate) fn seat(&self) -> Option<(HeadlessSeat, SurfaceId)> {
+        lock(&self.inner.seat).clone()
     }
 
     /// The pointer shape last requested through [`Window::set_cursor`], so a test can see what a real window would show.
@@ -144,6 +157,20 @@ impl Window for HeadlessWindow {
     }
     fn is_offscreen(&self) -> bool {
         true
+    }
+    fn start_drag(&self, drag: OutgoingDrag) -> bool {
+        self.seat()
+            .is_some_and(|(seat, surface)| seat.start_drag(surface, drag))
+    }
+    fn answer_drag(&self, answer: Option<DropAnswer>) {
+        if let Some((seat, surface)) = self.seat() {
+            seat.answer_drag(surface, answer);
+        }
+    }
+    fn show_drag_icon(&self, shown: bool) {
+        if let Some((seat, _)) = self.seat() {
+            seat.show_drag_icon(shown);
+        }
     }
 }
 

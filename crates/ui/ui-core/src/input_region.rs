@@ -852,9 +852,11 @@ pub(crate) fn withhold(event: &Event, route: impl FnOnce(&Event) -> EventResult)
     match event {
         Event::PointerPressed { .. }
         | Event::Scrolled { .. }
+        | Event::Dropped { .. }
         | Event::KeyPressed { .. }
         | Event::KeyReleased { .. } => EventResult::Ignored,
         Event::PointerMoved { .. } => route(&Event::CursorLeft),
+        Event::DragOver { .. } => route(&Event::DragLeft),
         _ => route(event),
     }
 }

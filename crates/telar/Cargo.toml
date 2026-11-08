@@ -389,6 +389,10 @@ path = "src/guest_contract.test.rs"
 required-features = ["dev", "shaper"]
 
 [[test]]
+name = "headless_drag_drop"
+path = "src/headless_drag_drop.test.rs"
+
+[[test]]
 name = "headless_multi_surface"
 path = "src/headless_multi_surface.test.rs"
 

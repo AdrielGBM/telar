@@ -6228,7 +6228,10 @@ name = "telar-platform-winit"
 version = "0.2.3"
 dependencies = [
  "raw-window-handle",
+ "rustix 1.1.4",
  "telar-platform-core",
+ "wayland-backend",
+ "wayland-client",
  "winit",
 ]
 

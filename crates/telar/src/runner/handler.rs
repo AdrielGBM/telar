@@ -199,8 +199,9 @@ struct FramePass {
 #[derive(Default)]
 struct AppliedCommands {
     any: bool,
-    /// A move or a resize handed the pointer stroke under way to the window system.
+    /// A move, a resize or a drag handed the pointer stroke under way to the window system.
     took_stroke: bool,
+    drop_answer: Option<platform_core::DropAnswer>,
 }
 
 /// The release the stroke `event` belongs to will now never deliver, as if the pointer had let go where it stood.
@@ -237,6 +238,7 @@ where
     /// Drains and applies the window-management commands a handler enqueued — from a title-bar control during event dispatch, or from `on_frame` (e.g. raising this window on a routed handoff). Routed through the App bridge so the dylib-backed `HotApp` drains the dylib's own queue.
     fn apply_window_commands(&mut self, window: &W) -> AppliedCommands {
         let mut applied = AppliedCommands::default();
+        let mut refused_drags = 0;
         for cmd in self.app.drain_window_commands() {
             applied.any = true;
             match cmd {
@@ -268,7 +270,23 @@ where
                         self.env.save_prefs();
                     }
                 }
+                WindowCommand::StartDrag(drag) => {
+                    if window.start_drag(drag) {
+                        applied.took_stroke = true;
+                    } else {
+                        refused_drags += 1;
+                    }
+                }
+                WindowCommand::AcceptDrop(answer) => applied.drop_answer = Some(answer),
+                WindowCommand::ShowDragIcon(shown) => window.show_drag_icon(shown),
             }
+        }
+        for _ in 0..refused_drags {
+            self.dispatch_to_app(&Event::DragEnded {
+                outcome: platform_core::DragOutcome::NotStarted,
+            });
+            let after = self.apply_window_commands(window);
+            applied.took_stroke |= after.took_stroke;
         }
         applied
     }
@@ -1133,12 +1151,19 @@ where
         if let Some(action) = overlay.action {
             self.apply_dev_action(action, window);
         }
+        let hovering = matches!(event, Event::DragOver { .. });
         if overlay.consumed {
+            if hovering {
+                window.answer_drag(None);
+            }
             return;
         }
         let handled = self.dispatch_to_app(&event);
         // Drag must run inside the pointer-press dispatch it originated from, so this sits right after the walk.
         let applied = self.apply_window_commands(window);
+        if hovering {
+            window.answer_drag(applied.drop_answer.clone());
+        }
         // The window system now owns the stroke and keeps its release, which would leave the gesture that handed it over running into the next time the pointer moves.
         if applied.took_stroke
             && let Some(release) = release_of_taken_stroke(&event)

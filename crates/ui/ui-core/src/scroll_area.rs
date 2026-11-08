@@ -347,7 +347,7 @@ fn handle_scroll_event(core: &mut ScrollCore, event: &Event, viewport: Rect) -> 
         pointer_coords(event).is_some_and(|(x, y)| !viewport.contains(x as f32, y as f32));
     let captured = matches!(
         event,
-        Event::PointerMoved { .. } | Event::PointerReleased { .. }
+        Event::PointerMoved { .. } | Event::PointerReleased { .. } | Event::DragOver { .. }
     );
     let event = match captured {
         true => event,

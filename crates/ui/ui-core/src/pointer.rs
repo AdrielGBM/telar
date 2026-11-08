@@ -130,6 +130,8 @@ pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
         Event::PointerPressed { x, y, .. } => Some((*x, *y)),
         Event::PointerReleased { x, y, .. } => Some((*x, *y)),
         Event::Scrolled { x, y, .. } => Some((*x, *y)),
+        Event::DragOver { x, y, .. } => Some((*x, *y)),
+        Event::Dropped { x, y, .. } => Some((*x, *y)),
         _ => None,
     }
 }
@@ -198,6 +200,22 @@ pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
                 y: local_y,
             })
         }
+        Event::DragOver { x, y, offer } => {
+            let (local_x, local_y) = apply(*x, *y);
+            Some(Event::DragOver {
+                x: local_x,
+                y: local_y,
+                offer: offer.clone(),
+            })
+        }
+        Event::Dropped { x, y, data } => {
+            let (local_x, local_y) = apply(*x, *y);
+            Some(Event::Dropped {
+                x: local_x,
+                y: local_y,
+                data: data.clone(),
+            })
+        }
         _ => None,
     }
 }
@@ -227,7 +245,7 @@ pub(crate) fn dispatch_container_event(
     // Moves and releases broadcast to every child regardless of position, so a widget that armed a press inside its bounds still gets the release once the pointer has left (pointer capture). Each handler is guarded by its own armed state, so this never double-fires. Hit-testing below applies to presses and the wheel.
     if matches!(
         event,
-        Event::PointerMoved { .. } | Event::PointerReleased { .. }
+        Event::PointerMoved { .. } | Event::PointerReleased { .. } | Event::DragOver { .. }
     ) {
         // The others still get the move too, for gestures already running, but under the occlusion mark.
         let stacking = Stacking::of(children);

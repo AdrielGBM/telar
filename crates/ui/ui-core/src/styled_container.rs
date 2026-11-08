@@ -6,8 +6,8 @@ use crate::transform_origin::{TransformOrigin, box_transform_about};
 use geometry_core::{Insets, Rect};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
-    ConsumedKeys, Cursor, Destination, Event, IntoDestination, Key, NamedKey, NumericValue,
-    Orientation, PointerButton, PointerSource,
+    ConsumedKeys, Cursor, Destination, DragOutcome, DroppedData, Event, IntoDestination, Key,
+    NamedKey, NumericValue, Orientation, OutgoingDrag, PointerButton, PointerSource,
 };
 use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
 use renderer_core::{BlendMode, Border, Declared, RectStyle};
@@ -188,6 +188,8 @@ pub struct StyledContainer {
     dyn_host: Option<DynHost>,
     press: PressGesture,
     drag: DragGesture,
+    drag_source: Option<crate::drag_drop::DragSource>,
+    drop_zone: Option<crate::drag_drop::DropZone>,
     pointer: PointerHooks,
     // A GLOBAL shortcut handler, not focused text input: key events carry no pointer position, so they are broadcast to every widget.
     on_key: Option<KeyTable>,
@@ -244,6 +246,8 @@ impl StyledContainer {
             dyn_host,
             press: PressGesture::default(),
             drag: DragGesture::default(),
+            drag_source: None,
+            drop_zone: None,
             pointer: PointerHooks::default(),
             on_key: None,
             focusable: Focusable::default(),
@@ -379,7 +383,14 @@ impl StyledContainer {
         source: &PointerSource,
     ) -> EventResult {
         self.press.track_move(event);
-        let dragged = self.drag.moved(event, rect) == EventResult::Handled;
+        let sourced = self
+            .drag_source
+            .as_mut()
+            .is_some_and(|source| source.moved(event));
+        if sourced {
+            self.press.cancel();
+        }
+        let dragged = self.drag.moved(event, rect) == EventResult::Handled || sourced;
         // A stroke past its drag threshold has committed to being a drag, so it is no longer a tap. Only for a box that set one: without a threshold both have always fired, and a slider taking a press keeps that.
         if self.drag.has_threshold() && self.drag.has_started() {
             self.press.cancel();
@@ -445,6 +456,9 @@ impl StyledContainer {
             if self.drag.is_set() && !claimed {
                 self.drag.press(event, rect, hit);
             }
+            if !claimed && let Some(source) = &mut self.drag_source {
+                source.press(event, hit);
+            }
             return EventResult::Handled;
         }
         if primary && hit.contains(x as f32, y as f32) {
@@ -463,7 +477,12 @@ impl StyledContainer {
         let dragged = !claimed
             && self.drag.is_set()
             && self.drag.press(event, rect, hit) == EventResult::Handled;
-        if tapped || dragged || focused || swallows {
+        let sourced = !claimed
+            && self
+                .drag_source
+                .as_mut()
+                .is_some_and(|source| source.press(event, hit));
+        if tapped || dragged || sourced || focused || swallows {
             EventResult::Handled
         } else {
             EventResult::Ignored
@@ -484,6 +503,9 @@ impl StyledContainer {
         }
         if primary {
             self.set_active(false);
+            if let Some(source) = &mut self.drag_source {
+                source.disarm();
+            }
         }
         if self.dispatch_children(event) == EventResult::Handled {
             self.press.cancel();
@@ -508,6 +530,8 @@ impl StyledContainer {
     fn is_passive(&self) -> bool {
         !self.press.is_set()
             && !self.drag.is_set()
+            && self.drag_source.is_none()
+            && self.drop_zone.is_none()
             && !self.state.repaints_on_pointer()
             && !self.pointer.is_set()
             && self.on_key.is_none()
@@ -1051,6 +1075,28 @@ impl StyledContainer {
         self
     }
 
+    /// Starts an OS drag carrying what `payload` answers once a press here travels past a tap's slop, and tells `on_ended` how it ended; a `None` payload lets the stroke go undragged.
+    pub fn drag_source(
+        mut self,
+        payload: impl Fn() -> Option<OutgoingDrag> + 'static,
+        on_ended: impl Fn(DragOutcome) + 'static,
+    ) -> Self {
+        self.drag_source = Some(crate::drag_drop::DragSource::new(payload, on_ended));
+        self.mark_interactive();
+        self
+    }
+
+    /// Takes drops of the types `target` accepts. `on_hover` hears where a drag it would take hovers, in this box's coordinates, and `None` once none does; `on_drop` gets what arrived and where. The innermost target under the pointer that accepts an offered type is the one that takes it.
+    pub fn drop_target(
+        mut self,
+        target: crate::DropTarget,
+        on_hover: impl Fn(Option<(f32, f32)>) + 'static,
+        on_drop: impl Fn(&DroppedData, f32, f32) + 'static,
+    ) -> Self {
+        self.drop_zone = Some(crate::drag_drop::DropZone::new(target, on_hover, on_drop));
+        self
+    }
+
     fn mark_interactive(&mut self) {
         debug_assert_ne!(
             self.input,
@@ -1327,6 +1373,46 @@ impl StyledContainer {
             Event::PointerReleased { button, .. } => {
                 self.on_pointer_released(event, rect, hit, button)
             }
+            Event::DragOver { x, y, offer } => {
+                let child = self.dispatch_children(event);
+                let Some(zone) = &mut self.drop_zone else {
+                    return child;
+                };
+                let inside = child != EventResult::Handled
+                    && hit.contains(*x as f32, *y as f32)
+                    && !crate::pointer::pointer_occluded();
+                let local = inside.then_some((*x as f32 - rect.x, *y as f32 - rect.y));
+                if zone.over(offer, local) {
+                    EventResult::Handled
+                } else {
+                    child
+                }
+            }
+            Event::Dropped { x, y, data } => {
+                let child = self.dispatch_children(event);
+                let Some(zone) = &mut self.drop_zone else {
+                    return child;
+                };
+                let inside = child != EventResult::Handled && hit.contains(*x as f32, *y as f32);
+                let local = inside.then_some((*x as f32 - rect.x, *y as f32 - rect.y));
+                if zone.dropped(data, local) {
+                    EventResult::Handled
+                } else {
+                    child
+                }
+            }
+            Event::DragLeft => {
+                if let Some(zone) = &mut self.drop_zone {
+                    zone.left();
+                }
+                self.dispatch_children(event)
+            }
+            Event::DragEnded { outcome } => {
+                if let Some(source) = &mut self.drag_source {
+                    source.ended(*outcome);
+                }
+                self.dispatch_children(event)
+            }
             // A drag is measured from the press, so ending it at the window border would cut an orbit short. What leaving does invalidate is containment.
             Event::CursorLeft => {
                 self.end_containment();
@@ -1336,6 +1422,9 @@ impl StyledContainer {
             Event::FocusChanged { is_focused: false } => {
                 self.end_containment();
                 self.drag.abort();
+                if let Some(source) = &mut self.drag_source {
+                    source.disarm();
+                }
                 self.dispatch_children(event)
             }
             // Children get first refusal; only then does an `on_scroll` box under the wheel consume it.

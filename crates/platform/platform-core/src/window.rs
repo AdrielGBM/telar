@@ -173,6 +173,16 @@ pub trait Window {
         None
     }
 
+    /// Starts an OS drag from the stroke under way; `false` where none began, which the runner reports as [`DragOutcome::NotStarted`](crate::DragOutcome::NotStarted).
+    fn start_drag(&self, _drag: crate::OutgoingDrag) -> bool {
+        false
+    }
+
+    /// What this window takes a drop under at the point the drag last hovered; `None` refuses.
+    fn answer_drag(&self, _answer: Option<crate::DropAnswer>) {}
+
+    fn show_drag_icon(&self, _shown: bool) {}
+
     /// Whether this window renders to an offscreen target with no on-screen surface (its raw handles are unavailable). A handler must build a windowless renderer for it — a windowed renderer would fail to create a surface. Defaults to `false` (an on-screen window).
     fn is_offscreen(&self) -> bool {
         false
