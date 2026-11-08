@@ -1,10 +1,7 @@
 //! The `[logic]` zone: statement-level Rust wrapped into a synthetic item so `rustfmt` will take it, then unwrapped again.
 
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-
 use super::INDENT;
+use super::rustfmt::rustfmt_stdin;
 
 /// Synthetic wrapper used to make the statement-level `[logic]` zone a valid Rust item for `rustfmt`.
 pub(super) const WRAPPER_FN: &str = "__rsx_fmt_logic_wrapper";
@@ -32,7 +29,7 @@ pub(super) fn run_rustfmt_on_logic(logic: &str) -> Option<String> {
     }
 
     let wrapped = format!("fn {WRAPPER_FN}() {{\n{logic}\n}}\n");
-    let formatted = run_rustfmt(&wrapped)?;
+    let formatted = rustfmt_stdin(&wrapped).ok()?;
     unwrap_logic(&formatted)
 }
 
@@ -63,49 +60,4 @@ pub(super) fn unwrap_logic(formatted: &str) -> Option<String> {
         .collect();
 
     Some(body.join("\n").trim_end().to_string())
-}
-
-pub(super) fn run_rustfmt(input: &str) -> Option<String> {
-    let rustfmt = find_rustfmt()?;
-    let mut child = Command::new(rustfmt)
-        .arg("--edition")
-        .arg("2024")
-        .arg("--emit")
-        .arg("stdout")
-        .arg("--quiet")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-
-    {
-        let mut stdin = child.stdin.take()?;
-        stdin.write_all(input.as_bytes()).ok()?;
-    }
-
-    let output = child.wait_with_output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    String::from_utf8(output.stdout).ok()
-}
-
-pub(super) fn find_rustfmt() -> Option<PathBuf> {
-    let exe = format!("rustfmt{}", std::env::consts::EXE_SUFFIX);
-
-    let path_env = std::env::var("PATH").unwrap_or_default();
-    let sep = if cfg!(windows) { ';' } else { ':' };
-    for dir in path_env.split(sep) {
-        let candidate = Path::new(dir).join(&exe);
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
-
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()?;
-    let cargo_bin = Path::new(&home).join(".cargo").join("bin").join(&exe);
-    cargo_bin.exists().then_some(cargo_bin)
 }

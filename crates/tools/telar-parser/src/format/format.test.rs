@@ -1,4 +1,4 @@
-use super::logic::find_rustfmt;
+use super::rustfmt::find_rustfmt;
 use super::*;
 
 #[test]

@@ -3,7 +3,6 @@
 //! Two formatters behind one command, because a Telar project is two languages. `.rsx` goes through [`telar_parser::format`], the same function the language server serves `textDocument/formatting` from, so a file formatted from a terminal and one formatted on save come out identical. `.rs` goes to `rustfmt`, one file at a time — which is the whole reason this command exists, since `cargo fmt` walks the module tree from the crate root and a telar crate declares that tree from a macro `cargo fmt` cannot expand.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use super::cli::FmtArgs;
 
@@ -143,7 +142,7 @@ fn format_file(path: &Path, check: bool) -> Result<bool, String> {
             Some(formatted) => formatted,
             None => return Ok(false),
         },
-        _ => rustfmt(&source)?,
+        _ => telar_parser::format::rustfmt_stdin(&source)?,
     };
     if formatted == source {
         return Ok(false);
@@ -152,30 +151,6 @@ fn format_file(path: &Path, check: bool) -> Result<bool, String> {
         std::fs::write(path, &formatted).map_err(|e| e.to_string())?;
     }
     Ok(true)
-}
-
-/// Runs `rustfmt` over one file's text. Through stdin rather than by path so `--check` never writes, and so a file rustfmt rejects leaves the original untouched instead of half-formatted.
-fn rustfmt(source: &str) -> Result<String, String> {
-    use std::io::Write;
-
-    let mut child = Command::new("rustfmt")
-        .args(["--edition", "2024", "--emit", "stdout", "--quiet"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("could not run rustfmt: {e}"))?;
-    child
-        .stdin
-        .take()
-        .ok_or("rustfmt took no stdin")?
-        .write_all(source.as_bytes())
-        .map_err(|e| e.to_string())?;
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
-    }
-    String::from_utf8(out.stdout).map_err(|e| e.to_string())
 }
 
 fn display(path: &Path) -> String {
