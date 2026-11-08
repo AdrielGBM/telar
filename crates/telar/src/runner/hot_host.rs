@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use platform_core::Platform;
 use platform_desktop::{DesktopPathsProvider, WinitWindow};
+use telar_project::protocol::HOT_PORT_VAR;
 
 use crate::app_runtime::AppRuntime;
 
@@ -33,7 +34,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
 ) {
     let platform = super::desktop::start_desktop();
     let Ok(port) = hot_port.parse::<u16>() else {
-        tracing::error!("invalid TELAR_HOT_PORT value: {hot_port}");
+        tracing::error!("invalid {HOT_PORT_VAR} value: {hot_port}");
         std::process::exit(1);
     };
     platform_core::set_keyboard_convention(platform.keyboard_convention());

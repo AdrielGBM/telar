@@ -5,9 +5,11 @@
 use std::fmt;
 
 use i18n_core::Direction;
-use telar_project::FontDeclaration;
+use telar_project::{
+    ASSETS_META_NAME, FONT_FAMILY_ATTRIBUTE, FontDeclaration, PageRenderer, STATE_ELEMENT_ID,
+};
 
-use super::fonts::{FAMILY_ATTRIBUTE, font_face};
+use super::fonts::font_face;
 use crate::runner::cli::WebRenderer;
 
 /// The page a project gets when it brings no template of its own.
@@ -220,11 +222,11 @@ pub(crate) struct Page {
     pub(crate) host: Vec<(String, String)>,
     /// `%telar.bootstrap%`.
     pub(crate) bootstrap: Bootstrap,
-    /// `%telar.renderer%`, what `data-telar-renderer` says; `None` writes `auto`.
+    /// `%telar.renderer%`, what the host element's renderer setting says; `None` writes [`PageRenderer::Auto`].
     pub(crate) renderer: Option<WebRenderer>,
     /// `%telar.prerendered%`, inserted verbatim inside the host element.
     pub(crate) prerendered: String,
-    /// `%telar.state%`, the `telar-state` script when there is state to carry.
+    /// `%telar.state%`, the [`STATE_ELEMENT_ID`] script when there is state to carry.
     pub(crate) state: Option<serde_json::Value>,
     /// What every URL the page writes for an output file starts with: the path the site is served under, so a page at any depth, and one served at any address, reaches the same files.
     pub(crate) base: String,
@@ -323,7 +325,9 @@ impl Page {
             Marker::Title => escape(&self.title),
             Marker::Renderer => self
                 .renderer
-                .map_or("auto", WebRenderer::as_str)
+                .map(PageRenderer::from)
+                .unwrap_or_default()
+                .as_str()
                 .to_string(),
             Marker::Host => self
                 .host
@@ -344,7 +348,7 @@ impl Page {
                 .as_ref()
                 .map(|state| {
                     format!(
-                        "<script type=\"application/json\" id=\"telar-state\">{}</script>",
+                        "<script type=\"application/json\" id=\"{STATE_ELEMENT_ID}\">{}</script>",
                         script_json(state)
                     )
                 })
@@ -360,7 +364,7 @@ impl Page {
                 let media_type = font.preload.as_ref()?;
                 Some(
                     HeadTag::font_preload(self.url(&font.path), media_type.clone())
-                        .attr(FAMILY_ATTRIBUTE, font.declaration.family.clone()),
+                        .attr(FONT_FAMILY_ATTRIBUTE, font.declaration.family.clone()),
                 )
             })
             .collect();
@@ -384,7 +388,7 @@ impl Page {
         let glue = self.url(&self.bootstrap.glue);
         let module = self.url(&self.bootstrap.module);
         let preloads = lines(&[
-            HeadTag::meta("telar-assets", self.base.clone()),
+            HeadTag::meta(ASSETS_META_NAME, self.base.clone()),
             HeadTag::link("modulepreload", glue.clone()),
             HeadTag::link("preload", module)
                 .attr("as", "fetch")

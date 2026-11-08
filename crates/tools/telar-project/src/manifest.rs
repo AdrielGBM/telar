@@ -15,34 +15,11 @@ use crate::fonts::FontDeclaration;
 use crate::icons::{IconMode, IconsSection};
 use crate::prelude::PreludeEntry;
 use crate::previews::PreviewsSection;
+use crate::protocol::{FullscreenMode, RendererBackend, WindowPosition};
 use crate::web::{OgImage, ThemeColor, WebHost};
 
 /// The file this describes, in the package root.
 pub const MANIFEST_FILENAME: &str = "telar.toml";
-
-/// Which renderer the built application selects at startup.
-///
-/// The *config* vocabulary. A CLI flag offering the same three words is a different thing with the same spelling — it is parsed by a different library, and it can be given where no manifest exists.
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase", deny_unknown_fields)]
-pub enum RendererBackend {
-    /// Hardware, falling back to software where there is no adapter.
-    #[default]
-    Auto,
-    Hardware,
-    Software,
-}
-
-impl RendererBackend {
-    /// The spelling the runtime re-parses out of `TELAR_RENDERER_BACKEND`.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Auto => "auto",
-            Self::Hardware => "hardware",
-            Self::Software => "software",
-        }
-    }
-}
 
 /// The dev-session settings: the window `cargo telar dev` opens, and whether it draws the overlay.
 #[derive(Deserialize, Debug, Clone, Default, PartialEq)]
@@ -64,10 +41,8 @@ pub struct WindowSection {
     pub decorations: Option<bool>,
     pub resizable: Option<bool>,
     pub transparent: Option<bool>,
-    /// `"disabled"`, `"borderless"` or `"exclusive"`.
-    pub fullscreen: Option<String>,
-    /// `"centered"`, or `"<x>,<y>"`.
-    pub position: Option<String>,
+    pub fullscreen: Option<FullscreenMode>,
+    pub position: Option<WindowPosition>,
 }
 
 /// Where translation catalogs are discovered. Both sources may be active at once; either name set to `""` disables it.

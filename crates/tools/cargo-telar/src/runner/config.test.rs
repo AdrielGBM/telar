@@ -1,3 +1,5 @@
+use telar_project::protocol::{FullscreenMode, WindowPosition};
+
 use super::*;
 
 #[test]
@@ -8,7 +10,7 @@ fn telar_toml_overrides_manifest_field_by_field() {
             window: Some(WindowSection {
                 width: Some(800),
                 height: Some(600),
-                fullscreen: Some("disabled".to_string()),
+                fullscreen: Some(FullscreenMode::Disabled),
                 ..Default::default()
             }),
             devtools: Some(true),
@@ -20,7 +22,7 @@ fn telar_toml_overrides_manifest_field_by_field() {
         dev: DevSection {
             window: Some(WindowSection {
                 width: Some(1024),
-                position: Some("10,20".to_string()),
+                position: Some(WindowPosition::At { x: 10, y: 20 }),
                 ..Default::default()
             }),
             devtools: None,
@@ -37,8 +39,8 @@ fn telar_toml_overrides_manifest_field_by_field() {
     let window = merged.dev.window.unwrap();
     assert_eq!(window.width, Some(1024)); // telar.toml wins
     assert_eq!(window.height, Some(600)); // falls back to manifest
-    assert_eq!(window.position.as_deref(), Some("10,20")); // only in telar.toml
-    assert_eq!(window.fullscreen.as_deref(), Some("disabled")); // only in manifest
+    assert_eq!(window.position, Some(WindowPosition::At { x: 10, y: 20 })); // only in telar.toml
+    assert_eq!(window.fullscreen, Some(FullscreenMode::Disabled)); // only in manifest
 }
 
 #[test]

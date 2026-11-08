@@ -1,6 +1,7 @@
 //! The command-line surface: subcommands, flags and what each one dispatches to.
 
 use clap::{Parser, Subcommand, ValueEnum};
+use telar_project::PageRenderer;
 
 use crate::runner::config::BackendArg;
 
@@ -318,12 +319,12 @@ pub(crate) enum WebRenderer {
     Dom,
 }
 
-impl WebRenderer {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Auto => "auto",
-            Self::Canvas => "canvas",
-            Self::Dom => "dom",
+impl From<WebRenderer> for PageRenderer {
+    fn from(renderer: WebRenderer) -> Self {
+        match renderer {
+            WebRenderer::Auto => Self::Auto,
+            WebRenderer::Canvas => Self::Canvas,
+            WebRenderer::Dom => Self::Dom,
         }
     }
 }

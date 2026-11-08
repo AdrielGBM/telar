@@ -11,8 +11,9 @@ use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use telar_project::protocol::{
-    BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotOutcome, HotReply,
-    TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR, escape_lines,
+    BUILD_ERROR_PREFIX, DEVTOOLS_VAR, HOT_LIB_VAR, HOT_PORT_VAR, HOT_RELOAD_PREFIX,
+    HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotOutcome, HotReply, PREVIEW_VAR, RENDERER_BACKEND_VAR,
+    TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR, dev_window_env, encode_flag, escape_lines,
 };
 use telar_project::{
     ASSET_KINDS, DEVTOOLS_PACKAGE, ManifestError, TelarManifest, WORKSHOP_PACKAGE,
@@ -21,8 +22,8 @@ use telar_project::{
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::artifacts::{self, build_with_diagnostics, with_json_messages};
 use super::config::{
-    ResolvedPackage, TelarSection, WindowSection, backend_as_str, missing_devtools_note,
-    resolve_package, split_android_flag, warn_if_tooling_unlocked,
+    ResolvedPackage, TelarSection, missing_devtools_note, resolve_package, split_android_flag,
+    warn_if_tooling_unlocked,
 };
 use super::workshop_channel::WorkshopChannel;
 
@@ -42,45 +43,6 @@ fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
     }
     with_json_messages(&mut lib_build_args);
     lib_build_args
-}
-
-fn apply_dev_window_env(envs: &mut Vec<(String, String)>, window: &WindowSection) {
-    if let Some(title) = &window.title {
-        envs.push(("TELAR_DEV_WINDOW_TITLE".to_string(), title.clone()));
-    }
-    if let Some(width) = window.width {
-        envs.push(("TELAR_DEV_WINDOW_WIDTH".to_string(), width.to_string()));
-    }
-    if let Some(height) = window.height {
-        envs.push(("TELAR_DEV_WINDOW_HEIGHT".to_string(), height.to_string()));
-    }
-    if let Some(decorations) = window.decorations {
-        envs.push((
-            "TELAR_DEV_WINDOW_DECORATIONS".to_string(),
-            if decorations { "1" } else { "0" }.to_string(),
-        ));
-    }
-    if let Some(resizable) = window.resizable {
-        envs.push((
-            "TELAR_DEV_WINDOW_RESIZABLE".to_string(),
-            if resizable { "1" } else { "0" }.to_string(),
-        ));
-    }
-    if let Some(transparent) = window.transparent {
-        envs.push((
-            "TELAR_DEV_WINDOW_TRANSPARENT".to_string(),
-            if transparent { "1" } else { "0" }.to_string(),
-        ));
-    }
-    if let Some(fullscreen) = &window.fullscreen {
-        envs.push((
-            "TELAR_DEV_WINDOW_FULLSCREEN".to_string(),
-            fullscreen.clone(),
-        ));
-    }
-    if let Some(position) = &window.position {
-        envs.push(("TELAR_DEV_WINDOW_POSITION".to_string(), position.clone()));
-    }
 }
 
 fn is_asset_extension(ext: &str) -> bool {
@@ -667,8 +629,8 @@ fn watch_and_hot_reload(
     eprintln!("[cargo-telar] Starting with hot reload...");
     let mut child = Command::new(&bin_path)
         .args(&args)
-        .env("TELAR_HOT_LIB", lib_path.to_str().unwrap_or_default())
-        .env("TELAR_HOT_PORT", channel.port.to_string())
+        .env(HOT_LIB_VAR, lib_path.to_str().unwrap_or_default())
+        .env(HOT_PORT_VAR, channel.port.to_string())
         .env(HOT_TOKEN_VAR, &channel.token)
         .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
         .spawn()
@@ -917,7 +879,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         .collect();
     let tooling: Vec<&str> = tooling_features.iter().map(String::as_str).collect();
     let features = with_tooling(mode.features(), &tooling);
-    let backend_value = backend_as_str(config.backend.unwrap_or_default());
+    let backend_value = config.backend.unwrap_or_default().as_str();
     let is_preview = mode.is_preview();
 
     if android {
@@ -940,12 +902,9 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         std::process::exit(0);
     }
 
-    let mut launch_envs = vec![(
-        "TELAR_RENDERER_BACKEND".to_string(),
-        backend_value.to_string(),
-    )];
+    let mut launch_envs = vec![(RENDERER_BACKEND_VAR.to_string(), backend_value.to_string())];
     if is_preview {
-        launch_envs.push(("TELAR_PREVIEW".to_string(), "1".to_string()));
+        launch_envs.push((PREVIEW_VAR.to_string(), encode_flag(true).to_string()));
         launch_envs.push((
             WORKSPACE_DIR_VAR.to_string(),
             resolved.workspace_root.display().to_string(),
@@ -958,10 +917,14 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         ));
     }
     if config.dev.devtools == Some(false) {
-        launch_envs.push(("TELAR_DEVTOOLS".to_string(), "0".to_string()));
+        launch_envs.push((DEVTOOLS_VAR.to_string(), encode_flag(false).to_string()));
     }
     if let Some(window) = &config.dev.window {
-        apply_dev_window_env(&mut launch_envs, window);
+        launch_envs.extend(
+            dev_window_env(window)
+                .into_iter()
+                .map(|(var, value)| (var.to_string(), value)),
+        );
     }
 
     let mut cargo_args = vec!["run".to_string()];
@@ -1019,7 +982,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
             build_cmd
                 .args(&build_args)
                 // `telar`'s backend is resolved with `option_env!` and so is a tracked build input: omitting it would compile a different backend than the hot rebuilds.
-                .env("TELAR_RENDERER_BACKEND", backend_value);
+                .env(RENDERER_BACKEND_VAR, backend_value);
             let (succeeded, report) = build_with_diagnostics(&mut build_cmd);
             succeeded.then_some(report)
         };

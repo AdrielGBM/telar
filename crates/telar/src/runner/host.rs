@@ -12,8 +12,7 @@ use std::sync::mpsc::{Receiver, SyncSender};
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 use renderer_core::{DrawCommand, RenderBackend, RendererError, RendererFactory};
-
-use crate::config::RendererBackend;
+use telar_project::protocol::RendererBackend;
 
 use super::frame_thread::{RenderMsg, spawn_render_thread};
 

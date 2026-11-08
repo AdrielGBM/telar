@@ -45,7 +45,7 @@ impl LocationBinding {
         not(target_arch = "wasm32")
     ))]
     pub(crate) fn for_window(source: Box<dyn LocationSource>) -> Self {
-        match std::env::var_os("TELAR_PREVIEW") {
+        match std::env::var_os(telar_project::protocol::PREVIEW_VAR) {
             Some(_) => Self::new(source),
             None => Self::remembered(source),
         }

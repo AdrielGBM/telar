@@ -12,6 +12,9 @@ use telar::{
     AppConfig, Color, Direction, FontAsset, LayoutError, LayoutItem, LayoutStyle, RectStyle,
     StyledContainer, Text, TextStyle, box_item, font_families, font_family_available, try_run_test,
 };
+use telar_project::protocol::{
+    TEST_A11Y_VAR, TEST_PACKAGE_DIR_VAR, TEST_PREVIEW_VAR, TEST_SNAPSHOTS_VAR, TEST_TARGET_DIR_VAR,
+};
 
 const CHILD_MARKER: &str = "TELAR_PREVIEW_HARNESS_CHILD";
 const DECLARED_FAMILY: &str = "Preview Harness Face";
@@ -214,8 +217,8 @@ impl Run {
                 "--nocapture",
             ])
             .env(RUN_MARKER, set)
-            .env("TELAR_TEST_PACKAGE_DIR", self.package())
-            .env("TELAR_TEST_TARGET_DIR", self.target())
+            .env(TEST_PACKAGE_DIR_VAR, self.package())
+            .env(TEST_TARGET_DIR_VAR, self.target())
             .envs(vars.iter().copied())
             .output()
             .unwrap();
@@ -233,11 +236,11 @@ impl Drop for Run {
 #[test]
 fn snapshots_are_written_on_update_then_matched_cell_by_cell() {
     let run = Run::new("snapshots");
-    let (passed, stdout) = run.test("badge", &[("TELAR_TEST_SNAPSHOTS", "compare")]);
+    let (passed, stdout) = run.test("badge", &[(TEST_SNAPSHOTS_VAR, "compare")]);
     assert!(!passed, "a preview with no golden fails:\n{stdout}");
     assert!(stdout.contains("--update-snapshots"), "{stdout}");
 
-    let (passed, stdout) = run.test("badge", &[("TELAR_TEST_SNAPSHOTS", "update")]);
+    let (passed, stdout) = run.test("badge", &[(TEST_SNAPSHOTS_VAR, "update")]);
     assert!(passed, "{stdout}");
     let goldens = run.package().join("snapshots");
     for id in [
@@ -249,7 +252,7 @@ fn snapshots_are_written_on_update_then_matched_cell_by_cell() {
         assert!(goldens.join(format!("{id}.draw.txt")).is_file(), "{id}");
     }
 
-    let (passed, stdout) = run.test("badge", &[("TELAR_TEST_SNAPSHOTS", "compare")]);
+    let (passed, stdout) = run.test("badge", &[(TEST_SNAPSHOTS_VAR, "compare")]);
     assert!(passed, "{stdout}");
     assert!(
         stdout.contains("ok    harness--badge--default--dir=rtl  (")
@@ -289,12 +292,12 @@ fn a_failing_play_fails_its_preview_and_the_run() {
 #[test]
 fn a_filter_narrows_the_run_to_the_ids_it_matches() {
     let run = Run::new("filter");
-    let (passed, stdout) = run.test("failing", &[("TELAR_TEST_PREVIEW", "*--dir=rtl")]);
+    let (passed, stdout) = run.test("failing", &[(TEST_PREVIEW_VAR, "*--dir=rtl")]);
     assert!(passed, "{stdout}");
     assert!(stdout.contains("1 passed, 0 failed"), "{stdout}");
     assert!(!stdout.contains("harness--badge--lost"), "{stdout}");
 
-    let (passed, stdout) = run.test("failing", &[("TELAR_TEST_PREVIEW", "nothing--*")]);
+    let (passed, stdout) = run.test("failing", &[(TEST_PREVIEW_VAR, "nothing--*")]);
     assert!(!passed, "{stdout}");
     assert!(
         stdout.contains("no preview or matrix cell id matches `nothing--*`"),
@@ -310,11 +313,11 @@ fn accessibility_errors_warn_unless_asked_to_fail() {
     assert!(stdout.contains("warn  harness--faint--default"), "{stdout}");
     assert!(stdout.contains("contrast"), "{stdout}");
 
-    let (passed, stdout) = run.test("faint", &[("TELAR_TEST_A11Y", "error")]);
+    let (passed, stdout) = run.test("faint", &[(TEST_A11Y_VAR, "error")]);
     assert!(!passed, "{stdout}");
     assert!(stdout.contains("FAIL  harness--faint--default"), "{stdout}");
 
-    let (passed, stdout) = run.test("faint", &[("TELAR_TEST_A11Y", "off")]);
+    let (passed, stdout) = run.test("faint", &[(TEST_A11Y_VAR, "off")]);
     assert!(passed, "{stdout}");
     assert!(stdout.contains("ok    harness--faint--default"), "{stdout}");
 }

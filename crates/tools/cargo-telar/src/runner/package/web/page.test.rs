@@ -1,3 +1,5 @@
+use telar_project::{HOST_ELEMENT_ID, RENDERER_SETTING};
+
 use super::*;
 
 fn page() -> Page {
@@ -116,6 +118,28 @@ fn every_fed_marker_lands_where_the_template_puts_it() {
             r#"<script type="application/json" id="telar-state">{"locale":"es"}</script>"#
         )
     );
+}
+
+#[test]
+fn the_built_in_page_names_everything_the_app_looks_up_as_the_app_spells_it() {
+    let mut page = page();
+    page.renderer = Some(WebRenderer::Dom);
+    page.fonts.push(face("fonts/a-0123.woff2", true));
+    page.state = Some(serde_json::json!({ "locale": "es" }));
+
+    let html = page.render(DEFAULT_TEMPLATE).unwrap();
+    for name in [
+        format!(r#"<div id="{HOST_ELEMENT_ID}" "#),
+        format!(
+            r#" data-telar-{RENDERER_SETTING}="{}""#,
+            PageRenderer::Dom.as_str()
+        ),
+        format!(r#"<meta name="{ASSETS_META_NAME}" content="/" />"#),
+        format!(r#" {FONT_FAMILY_ATTRIBUTE}="A" />"#),
+        format!(r#"<script type="application/json" id="{STATE_ELEMENT_ID}">"#),
+    ] {
+        assert!(html.contains(&name), "the page writes {name}:\n{html}");
+    }
 }
 
 #[test]

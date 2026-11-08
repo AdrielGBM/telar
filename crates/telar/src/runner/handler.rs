@@ -5,11 +5,12 @@ use reactive_core::{FlushNotifyHandle, set_flush_notify};
 use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
 use std::sync::Arc;
+use telar_project::protocol::RendererBackend;
 use ui_core::EventResult;
 use ui_tree::{DevAction, DevOverlay};
 
 use crate::app_runtime::AppRuntime;
-use crate::config::{self, RendererBackend};
+use crate::config;
 use crate::user_preferences;
 
 use super::COMMAND_BUF_POOL_CAP;
@@ -115,7 +116,7 @@ pub(super) fn build_app_handler<W, D>(
     app: Box<dyn AppRuntime>,
     paths: Arc<dyn AppPathsProvider>,
     fonts: super::font_config::FontSetup,
-    backend: crate::config::RendererBackend,
+    backend: RendererBackend,
     app_name: String,
     renderer: SurfaceRenderer<W>,
 ) -> AppHandler<W, D>
@@ -1018,7 +1019,7 @@ where
             Recovery::RestartOnSoftware => {
                 tracing::error!(
                     "the render thread keeps dying on the {} renderer, switching to software",
-                    self.renderer_label()
+                    self.backend.as_str()
                 );
             }
             Recovery::GiveUp => {
@@ -1031,14 +1032,6 @@ where
         self.pending_restart = true;
         self.apply_pending_restart(window);
         window.request_redraw();
-    }
-
-    fn renderer_label(&self) -> &'static str {
-        match self.backend {
-            RendererBackend::Software => "software",
-            RendererBackend::Hardware => "hardware",
-            RendererBackend::Auto => "auto",
-        }
     }
 
     /// Hands the frame to the render thread, or rasterises it inline when this surface has no thread of its own. Returns whether a renderer took it.

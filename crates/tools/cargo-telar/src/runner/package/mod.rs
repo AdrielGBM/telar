@@ -3,10 +3,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use telar_project::protocol::RENDERER_BACKEND_VAR;
+
 use super::artifacts::{self, build_with_diagnostics, with_json_messages};
-use super::config::{
-    ResolvedPackage, TelarSection, backend_as_str, resolve_package, split_android_flag,
-};
+use super::config::{ResolvedPackage, TelarSection, resolve_package, split_android_flag};
 
 mod appimage;
 mod deb;
@@ -63,15 +63,13 @@ fn run_bundler_tool(
 // Returns the built binary path alongside the resolved package: workspace root plus the manifest fields the bundlers read.
 fn run_release_build(cargo_args: Vec<String>, config: TelarSection) -> (PathBuf, ResolvedPackage) {
     let (_android, rest) = split_android_flag(cargo_args);
-    let backend_value = backend_as_str(config.backend.unwrap_or_default());
 
     let build_args = release_build_args(&rest);
     eprintln!("[cargo-telar] Building release binary...");
-    let (succeeded, report) = build_with_diagnostics(
-        Command::new("cargo")
-            .args(&build_args)
-            .env("TELAR_RENDERER_BACKEND", backend_value),
-    );
+    let (succeeded, report) = build_with_diagnostics(Command::new("cargo").args(&build_args).env(
+        RENDERER_BACKEND_VAR,
+        config.backend.unwrap_or_default().as_str(),
+    ));
     if !succeeded {
         std::process::exit(1);
     }

@@ -287,10 +287,12 @@ pub fn app(input: TokenStream) -> TokenStream {
                 )
             }
         });
+        let hot_lib_var = telar_project::protocol::HOT_LIB_VAR;
+        let hot_port_var = telar_project::protocol::HOT_PORT_VAR;
         quote! {
             if let (::std::result::Result::Ok(lib_path), ::std::result::Result::Ok(hot_port)) = (
-                ::std::env::var("TELAR_HOT_LIB"),
-                ::std::env::var("TELAR_HOT_PORT"),
+                ::std::env::var(#hot_lib_var),
+                ::std::env::var(#hot_port_var),
             ) {
                 #setup
                 #run_host
@@ -944,10 +946,10 @@ fn wire_package(
 /// In an application crate it also installs the catalog the crate baked as the binary loads, unless one is installed already, so the one `app!` installs wins over it; a `[telar] library` never installs its own.
 ///
 /// In a `[telar] library` built with its previews, it also emits `#[test] fn __telar_library_previews()`, which tests every preview the way an application binary does under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary.
-#[proc_macro]
-pub fn rsx_modules(input: TokenStream) -> TokenStream {
 ///
 /// A crate may call it from several modules, each emitting that test; every one lists the whole crate's previews, so only the first to run tests them and writes the report.
+#[proc_macro]
+pub fn rsx_modules(input: TokenStream) -> TokenStream {
     let theme_type_str = if input.is_empty() {
         None
     } else {

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use platform_core::{Event, EventHandler, Ime, Key, Platform, WindowConfig};
-use platform_web::{WebPlatform, WebPlatformConfig, WebWindow};
+use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use renderer_core::{DrawCommand, Element, ElementId, Focusable, RenderBackend, Role, Semantics};
 use telar_renderer_dom::DomRenderer;
 use wasm_bindgen::JsCast;
@@ -76,6 +76,7 @@ fn mount() {
         owns_context_menu: false,
         owns_keyboard: false,
         location: None,
+        page: PageNames::default(),
     };
     WebPlatform::with_host(host.clone(), config)
         .run(WindowConfig::default(), Recorder)

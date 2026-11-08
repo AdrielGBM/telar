@@ -14,13 +14,10 @@ pub fn document() -> web_sys::Document {
     window().document().expect("a document")
 }
 
-/// The id the generated page gives the element it means the app to fill.
-const DEFAULT_HOST: &str = "telar-root";
-
 /// The element the app fills, from a CSS selector.
 ///
-/// With no selector: the element the page set aside, and `<body>` where there is none — an app that says nothing wants the page to *be* the app. Preferring the element matters more than it looks: a backend that writes the document owns everything inside its host, so mounting on `<body>` by default would clear the page's own markup out from under it. A selector that matches nothing is an error rather than a silent fallback — it is a typo in the app's own markup, and quietly mounting somewhere else is the kind of thing nobody notices until the layout is wrong.
-pub fn host(selector: Option<&str>) -> Result<web_sys::HtmlElement, String> {
+/// With no selector: the element whose id is `host_id`, the one the page set aside, and `<body>` where there is none — an app that says nothing wants the page to *be* the app. Preferring the element matters more than it looks: a backend that writes the document owns everything inside its host, so mounting on `<body>` by default would clear the page's own markup out from under it. A selector that matches nothing is an error rather than a silent fallback — it is a typo in the app's own markup, and quietly mounting somewhere else is the kind of thing nobody notices until the layout is wrong.
+pub fn host(selector: Option<&str>, host_id: Option<&str>) -> Result<web_sys::HtmlElement, String> {
     let document = document();
     match selector {
         Some(selector) => document
@@ -29,8 +26,8 @@ pub fn host(selector: Option<&str>) -> Result<web_sys::HtmlElement, String> {
             .ok_or_else(|| format!("no element matches `{selector}`"))?
             .dyn_into::<web_sys::HtmlElement>()
             .map_err(|_| format!("`{selector}` matched something that is not an HTML element")),
-        None => document
-            .get_element_by_id(DEFAULT_HOST)
+        None => host_id
+            .and_then(|id| document.get_element_by_id(id))
             .and_then(|element| element.dyn_into::<web_sys::HtmlElement>().ok())
             .or_else(|| document.body())
             .ok_or_else(|| "the document has no body".to_string()),
@@ -114,19 +111,19 @@ pub fn safe_area_insets() -> geometry_core::Insets {
     )
 }
 
-/// The meta tag a packaged page names the directory of its files with, relative to the page.
-pub const ASSETS_META: &str = "telar-assets";
-
-/// Where the build's files live: the page's `telar-assets` meta resolved against the address the page was opened at, or that address's directory for a page without one.
+/// Where the build's files live: the page's meta tag named `meta_name` resolved against the address the page was opened at, or that address's directory for a page without one.
 ///
 /// Written from the site's root (`/images/`) when it is on the page's own origin, which is how a prerendered page writes the addresses of the files it links, so a document taken over carries the same `src` it was served with. A base on another origin keeps its full address.
-pub fn asset_base() -> Option<String> {
+pub fn asset_base(meta_name: Option<&str>) -> Option<String> {
     let document = document();
     let page = document.base_uri().ok().flatten()?;
-    let relative = document
-        .query_selector(&format!("meta[name=\"{ASSETS_META}\"]"))
-        .ok()
-        .flatten()
+    let relative = meta_name
+        .and_then(|name| {
+            document
+                .query_selector(&format!("meta[name=\"{name}\"]"))
+                .ok()
+                .flatten()
+        })
         .and_then(|meta| meta.get_attribute("content"))
         .unwrap_or_else(|| "./".to_string());
     let base = web_sys::Url::new_with_base(&relative, &page).ok()?;

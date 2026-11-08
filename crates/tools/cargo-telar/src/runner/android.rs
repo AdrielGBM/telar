@@ -3,9 +3,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use telar_project::protocol::RENDERER_BACKEND_VAR;
+
 use super::config::{
-    TelarSection, backend_as_str, default_app_id, read_package_manifest, resolve_package,
-    split_android_flag,
+    TelarSection, default_app_id, read_package_manifest, resolve_package, split_android_flag,
 };
 use super::package::{apk_notice_path, copy_icon_notice, dist_dir};
 
@@ -95,10 +96,11 @@ fn load_dotenv(cmd: &mut Command) -> Result<(), String> {
 
 pub(crate) fn make_android_cmd(cargo_args: Vec<String>, config: TelarSection) -> Command {
     let ndk_root = resolve_ndk_root();
-    let backend_value = backend_as_str(config.backend.unwrap_or_default());
     let mut cmd = Command::new("cargo");
-    cmd.args(cargo_args)
-        .env("TELAR_RENDERER_BACKEND", backend_value);
+    cmd.args(cargo_args).env(
+        RENDERER_BACKEND_VAR,
+        config.backend.unwrap_or_default().as_str(),
+    );
     if let Some(ndk) = ndk_root {
         cmd.env("ANDROID_NDK_ROOT", ndk);
     }

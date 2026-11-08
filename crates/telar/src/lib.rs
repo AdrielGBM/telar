@@ -15,7 +15,8 @@
 
 mod macros;
 
-pub mod config;
+#[cfg(feature = "runtime")]
+mod config;
 
 mod licenses;
 
@@ -70,7 +71,7 @@ pub mod user_preferences;
 #[cfg(feature = "runtime")]
 pub mod window;
 
-pub use config::RendererBackend;
+pub use telar_project::protocol::RendererBackend;
 
 #[cfg(feature = "runtime")]
 pub mod inspect;

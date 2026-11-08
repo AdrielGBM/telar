@@ -274,3 +274,107 @@ fn a_line_that_is_no_reply_is_not_read_as_one() {
     assert_eq!(HotReply::parse("loaded:/t/libapp.so\tmore"), None);
     assert_eq!(HotReply::parse("hot:/t/libapp.so"), None);
 }
+
+#[test]
+fn every_renderer_backend_reads_back_from_its_own_spelling() {
+    for backend in RendererBackend::ALL {
+        assert_eq!(RendererBackend::parse(backend.as_str()), Ok(backend));
+    }
+}
+
+#[test]
+fn an_unknown_renderer_backend_is_refused_with_the_choices() {
+    let error = RendererBackend::parse("gpu").expect_err("not a backend");
+    assert_eq!(
+        error.to_string(),
+        "unknown value `gpu`, expected `auto`, `hardware` or `software`"
+    );
+}
+
+#[test]
+fn the_renderer_backend_var_names_the_same_variable_as_its_literal() {
+    assert_eq!(RENDERER_BACKEND_VAR, crate::renderer_backend_var!());
+}
+
+fn read_back(window: &WindowSection) -> Result<WindowSection, EnvError> {
+    let env = dev_window_env(window);
+    dev_window_from_env(|name| {
+        env.iter()
+            .find(|(var, _)| *var == name)
+            .map(|(_, value)| value.clone())
+    })
+}
+
+#[test]
+fn a_dev_window_with_every_key_set_reads_back_from_its_env_vars() {
+    let window = WindowSection {
+        title: Some("dev, with a comma".to_string()),
+        width: Some(1024),
+        height: Some(0),
+        decorations: Some(false),
+        resizable: Some(true),
+        transparent: Some(false),
+        fullscreen: Some(FullscreenMode::Borderless),
+        position: Some(WindowPosition::At { x: -10, y: 20 }),
+    };
+    assert_eq!(read_back(&window), Ok(window));
+}
+
+#[test]
+fn a_dev_window_with_no_key_set_sets_no_env_var() {
+    assert_eq!(dev_window_env(&WindowSection::default()), Vec::new());
+    assert_eq!(
+        read_back(&WindowSection::default()),
+        Ok(WindowSection::default())
+    );
+}
+
+#[test]
+fn every_fullscreen_mode_reads_back_from_its_env_var() {
+    for mode in FullscreenMode::ALL {
+        let window = WindowSection {
+            fullscreen: Some(mode),
+            ..WindowSection::default()
+        };
+        assert_eq!(read_back(&window), Ok(window));
+    }
+}
+
+#[test]
+fn every_kind_of_window_position_reads_back_from_its_env_var() {
+    for position in [
+        WindowPosition::Centered,
+        WindowPosition::At { x: 0, y: 0 },
+        WindowPosition::At {
+            x: i32::MIN,
+            y: i32::MAX,
+        },
+    ] {
+        let window = WindowSection {
+            position: Some(position),
+            ..WindowSection::default()
+        };
+        assert_eq!(read_back(&window), Ok(window));
+    }
+}
+
+#[test]
+fn an_unreadable_dev_window_var_is_an_error_naming_the_var_and_the_choices() {
+    for (var, value, expected) in [
+        (
+            DEV_WINDOW_FULLSCREEN_VAR,
+            "Borderless",
+            "`disabled`, `borderless` or `exclusive`",
+        ),
+        (DEV_WINDOW_POSITION_VAR, "10 20", "`centered` or `<x>,<y>`"),
+        (DEV_WINDOW_RESIZABLE_VAR, "yes", "`1` or `0`"),
+        (DEV_WINDOW_WIDTH_VAR, "-1", "a whole number of pixels"),
+    ] {
+        let error = dev_window_from_env(|name| (name == var).then(|| value.to_string()))
+            .expect_err("an unreadable value is refused, not dropped");
+        assert_eq!(
+            error.to_string(),
+            format!("{var}: unknown value `{value}`, expected {expected}")
+        );
+    }
+}

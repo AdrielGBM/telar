@@ -52,7 +52,8 @@ fn tui_selected() -> bool {
     if !has_window && !has_page {
         return true;
     }
-    std::env::var("TELAR_TARGET").is_ok_and(|target| target.eq_ignore_ascii_case("tui"))
+    std::env::var(telar_project::protocol::TARGET_VAR)
+        .is_ok_and(|target| target.eq_ignore_ascii_case(telar_project::protocol::TERMINAL_TARGET))
 }
 
 #[allow(

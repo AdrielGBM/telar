@@ -87,13 +87,7 @@ headless = ["runtime", "software", "dep:platform-headless"]
 ## runs once per location and locale, writing each as the document the browser would first show, with the
 ## inputs it was built from for the client to start from. The packager turns it on for that build; an
 ## application never names it. See `docs/prerender.md`.
-prerender = [
-    "runtime",
-    "shaper",
-    "dep:renderer-dom",
-    "dep:serde_json",
-    "dep:telar-project",
-]
+prerender = ["runtime", "shaper", "dep:renderer-dom", "dep:serde_json"]
 #! ## Capabilities
 #!
 #! Optional runtime pieces, each off unless named. Every one of them is a dependency an application that
@@ -186,7 +180,6 @@ dev = [
     "platform-core/dylib",
     "dep:libloading",
     "dep:serde_json",
-    "dep:telar-project",
     "dep:wire-core",
 ]
 
@@ -213,7 +206,7 @@ hot-reload = ["dev", "desktop-bare", "telar-macros/hot-reload"]
 ## because laying text out needs a measurer and nothing else in the build is guaranteed to bring one; a
 ## terminal build still measures in cells. It carries `testing` too, because a preview's play drives its canvas with the same events a test does.
 ## And `serde_json`, which `telar-project` already links, so a review panel can read a test run's `report.json` and accept a snapshot without the rasterizer.
-previews = ["runtime", "shaper", "testing", "dep:telar-project", "dep:serde_json"]
+previews = ["runtime", "shaper", "testing", "dep:serde_json"]
 
 ## The preview host that shows those blocks: in a window, or, in a `wasm32` build, on the page it mounts on, which it then does in place of starting the app. Injected by `cargo telar preview`, `--target web` included.
 preview = ["previews", "desktop-bare"]
@@ -300,7 +293,8 @@ renderer-text = { workspace = true, optional = true }
 renderer-tui = { workspace = true, optional = true }
 services-core = { workspace = true }
 telar-macros = { workspace = true }
-telar-project = { workspace = true, optional = true }
+# Always on: the launch and page names the runtime reads are spelled there once, for `cargo telar` to write.
+telar-project = { workspace = true }
 theme-core = { workspace = true, optional = true }
 ui-core = { workspace = true, optional = true }
 ui-tree = { workspace = true, optional = true }

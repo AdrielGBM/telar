@@ -48,7 +48,8 @@ where
     S: FnOnce(Vec<PreviewEntry>) -> A,
     A: crate::App + 'static,
 {
-    if !cfg!(target_arch = "wasm32") && std::env::var("TELAR_PREVIEW").is_err() {
+    if !cfg!(target_arch = "wasm32") && std::env::var(telar_project::protocol::PREVIEW_VAR).is_err()
+    {
         return false;
     }
     setup();
@@ -76,7 +77,7 @@ impl Request {
             return None;
         }
         #[cfg(feature = "preview-headless")]
-        if let Ok(out_dir) = std::env::var("TELAR_PREVIEW_PNG") {
+        if let Ok(out_dir) = std::env::var(telar_project::protocol::PREVIEW_PNG_VAR) {
             return Some(Self::Png(out_dir));
         }
         let set = |var: &str| std::env::var(var).is_ok();

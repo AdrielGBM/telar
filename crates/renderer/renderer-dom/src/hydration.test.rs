@@ -9,7 +9,7 @@ use geometry_core::Rect;
 use platform_core::{
     Destination, Event, EventHandler, Key, Location, NamedKey, Platform, WindowConfig,
 };
-use platform_web::{WebPlatform, WebPlatformConfig, WebWindow};
+use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use renderer_core::{
     Color, Declared, DrawCommand, Element, ElementId, Focusable, RectStyle, RenderBackend, Role,
     Semantics, Span, TextStyle,
@@ -75,6 +75,7 @@ fn host() -> web_sys::HtmlElement {
         owns_context_menu: false,
         owns_keyboard: false,
         location: None,
+        page: PageNames::default(),
     };
     WebPlatform::with_host(host.clone(), config)
         .run(WindowConfig::default(), Recorder)

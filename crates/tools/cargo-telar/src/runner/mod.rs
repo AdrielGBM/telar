@@ -5,8 +5,8 @@ use std::process::Command;
 
 use clap::Parser;
 use telar_project::protocol::{
-    PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, PREVIEW_LIST_VAR, workshop_channel_file,
-    workshop_server_file,
+    PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, PREVIEW_LIST_VAR, PREVIEW_PNG_VAR, TARGET_VAR,
+    TERMINAL_TARGET, workshop_channel_file, workshop_server_file,
 };
 
 mod android;
@@ -239,7 +239,7 @@ fn run_preview_cmd(args: PreviewArgs, workshop: HeldWorkshop) {
             &common,
             release,
             "preview-headless",
-            "TELAR_PREVIEW_PNG",
+            PREVIEW_PNG_VAR,
             &dir.display().to_string(),
         );
     }
@@ -547,7 +547,7 @@ fn select_frontend(
     };
     if terminal {
         // SAFETY: single-threaded at this point — set before any child is spawned or any thread started.
-        unsafe { std::env::set_var("TELAR_TARGET", "tui") };
+        unsafe { std::env::set_var(TARGET_VAR, TERMINAL_TARGET) };
     }
     terminal
 }

@@ -6,14 +6,15 @@ use std::path::{Path, PathBuf};
 use clap::ValueEnum;
 use serde::Deserialize;
 
-use telar_project::{CargoManifest, ManifestError, RendererBackend, TelarManifest};
+use telar_project::protocol::RendererBackend;
+use telar_project::{CargoManifest, ManifestError, TelarManifest};
 pub(crate) use telar_project::{DevSection, TelarSection, WindowSection};
 
 use super::cargo_args::selected_package;
 
 /// The three words the `--backend` flag takes.
 ///
-/// A CLI vocabulary, not a config one: [`telar_project::RendererBackend`] is the same three words parsed by serde out of `telar.toml`, and this is what clap parses out of an argument. They convert; they are not one type because `ValueEnum` cannot be derived for a type from another crate.
+/// A CLI vocabulary, not a config one: [`RendererBackend`] is the same three words parsed by serde out of `telar.toml`, and this is what clap parses out of an argument. They convert; they are not one type because `ValueEnum` cannot be derived for a type from another crate.
 #[derive(Clone, Copy, ValueEnum)]
 pub(crate) enum BackendArg {
     Auto,
@@ -729,14 +730,6 @@ fn merge_config(base: TelarSection, over: TelarSection) -> TelarSection {
         dev: merge_dev(base.dev, over.dev),
         // Everything else is read from the package's own `telar.toml` by whoever needs it, never from `[package.metadata.telar]`, so a merge would only invent a precedence nothing reads.
         ..over
-    }
-}
-
-pub(crate) fn backend_as_str(backend: RendererBackend) -> &'static str {
-    match backend {
-        RendererBackend::Auto => "auto",
-        RendererBackend::Hardware => "hardware",
-        RendererBackend::Software => "software",
     }
 }
 

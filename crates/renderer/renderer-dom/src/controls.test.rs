@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use geometry_core::Size;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, EventHandler, Platform, Role, WindowConfig};
-use platform_web::{WebPlatform, WebPlatformConfig, WebWindow};
+use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, RenderBackend, TextStyle};
 use telar_renderer_dom::{CanvasTextMetrics, DomRenderer};
@@ -141,6 +141,7 @@ fn mount() {
         owns_context_menu: false,
         owns_keyboard: false,
         location: None,
+        page: PageNames::default(),
     };
     WebPlatform::with_host(host, config)
         .run(WindowConfig::default(), Forward)

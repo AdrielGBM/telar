@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use platform_core::ColorScheme;
-use telar_project::{Preferences, PrerenderState, STATE_ELEMENT_ID, STATE_VERSION, Surface};
+use telar_project::{Preferences, PrerenderState, STATE_VERSION, Surface};
 
 use super::Hydration;
 
@@ -11,8 +11,6 @@ const READ_BY_THE_BROWSER: &str =
 
 #[test]
 fn the_client_reads_the_format_the_packager_writes() {
-    assert_eq!(super::STATE_VERSION, STATE_VERSION);
-    assert_eq!(super::STATE_ELEMENT_ID, STATE_ELEMENT_ID);
     let written = PrerenderState {
         version: STATE_VERSION,
         location: Some("/es/proyectos".to_string()),

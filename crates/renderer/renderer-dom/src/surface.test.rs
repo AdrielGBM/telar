@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use platform_core::{Destination, Event, EventHandler, Location, Platform, WindowConfig};
-use platform_web::{WebPlatform, WebPlatformConfig, WebWindow};
+use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use renderer_core::{
     BorderRadius, Color, DrawCommand, Element, ElementId, Focusable, RectStyle, RenderBackend,
     Role, Semantics,
@@ -78,6 +78,7 @@ fn mount() {
         owns_context_menu: false,
         owns_keyboard: false,
         location: None,
+        page: PageNames::default(),
     };
     WebPlatform::with_host(host.clone(), config)
         .run(WindowConfig::default(), Recorder)

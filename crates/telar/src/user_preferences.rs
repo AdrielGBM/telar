@@ -3,9 +3,8 @@
 use std::cell::Cell;
 use std::sync::Once;
 
+use telar_project::protocol::RendererBackend;
 use theme_core::SchemePreference;
-
-use crate::config::RendererBackend;
 
 /// The key the colour scheme a person chose is kept under.
 pub const SCHEME_KEY: &str = "telar.scheme";
@@ -46,7 +45,8 @@ pub(crate) fn install_store(app_name: &str) {
 }
 
 pub(crate) fn stored_backend() -> Option<RendererBackend> {
-    services_core::stored_preference(BACKEND_KEY).and_then(|word| RendererBackend::parse(&word))
+    services_core::stored_preference(BACKEND_KEY)
+        .and_then(|word| RendererBackend::parse(&word).ok())
 }
 
 pub(crate) fn store_backend(backend: RendererBackend) {

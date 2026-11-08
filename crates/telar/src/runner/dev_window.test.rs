@@ -50,3 +50,40 @@ fn a_window_nobody_titled_is_named_after_the_package() {
         "my-app"
     );
 }
+
+#[cfg(feature = "hot-reload")]
+#[test]
+fn the_window_cargo_telar_dev_encodes_is_the_window_the_app_opens() {
+    use telar_project::WindowSection;
+    use telar_project::protocol::{
+        FullscreenMode, WindowPosition, dev_window_env, dev_window_from_env,
+    };
+
+    let section = WindowSection {
+        title: Some("dev".to_string()),
+        width: Some(640),
+        height: Some(480),
+        decorations: Some(false),
+        resizable: Some(false),
+        transparent: Some(true),
+        fullscreen: Some(FullscreenMode::Borderless),
+        position: Some(WindowPosition::At { x: 10, y: -20 }),
+    };
+    let env = dev_window_env(&section);
+    let overrides = dev_window_from_env(|name| {
+        env.iter()
+            .find(|(var, _)| *var == name)
+            .map(|(_, value)| value.clone())
+    })
+    .expect("what cargo telar dev writes reads back");
+
+    let mut window = platform_core::WindowConfig::default();
+    super::apply(overrides, &mut window);
+    assert_eq!(window.title, "dev");
+    assert_eq!((window.width, window.height), (640, 480));
+    assert!(!window.has_decorations);
+    assert!(!window.is_resizable);
+    assert!(window.is_transparent);
+    assert_eq!(window.fullscreen, platform_core::FullscreenMode::Borderless);
+    assert_eq!(window.position, platform_core::WindowPosition::At(10, -20));
+}

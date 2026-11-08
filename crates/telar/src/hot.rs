@@ -497,7 +497,7 @@ impl HotReplies {
     }
 }
 
-/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via `TELAR_HOT_PORT`, and its secret via [`HOT_TOKEN_VAR`]), forwards line-delimited hot events and writes back what is sent through [`HotLink::replies`]. TCP instead of a unix socket so the same code path works on non-Unix hosts.
+/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via [`HOT_PORT_VAR`](telar_project::protocol::HOT_PORT_VAR), and its secret via [`HOT_TOKEN_VAR`]), forwards line-delimited hot events and writes back what is sent through [`HotLink::replies`]. TCP instead of a unix socket so the same code path works on non-Unix hosts.
 #[cfg(feature = "desktop-bare")]
 pub(crate) fn listen_hot_reload(port: u16) -> HotLink {
     use std::io::BufRead;

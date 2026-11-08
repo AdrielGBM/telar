@@ -12,6 +12,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use clap::ValueEnum;
+
 use crate::runner::cli::{InitArgs, NewArgs, Target, WebRenderer};
 use crate::runner::config::WEB_PROFILE_TOML;
 
@@ -169,9 +171,12 @@ fn finish(path: &Path, crate_name: &str, target: Target, renderer: Option<WebRen
     let dev = match (target, renderer) {
         (Target::Desktop, _) => "cargo telar dev".to_string(),
         (Target::Web, Some(renderer)) => {
+            let renderer = renderer
+                .to_possible_value()
+                .expect("every renderer is a value of the flag");
             format!(
                 "cargo telar dev --target web --renderer {}",
-                renderer.as_str()
+                renderer.get_name()
             )
         }
         (other, _) => format!("cargo telar dev --target {}", target_name(other)),

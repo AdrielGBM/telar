@@ -20,13 +20,14 @@ mod library;
 mod manifest;
 pub mod naming;
 mod orphan_tests;
+mod page;
 mod paths;
 mod prelude;
 mod prerender;
 mod previews;
 pub mod protocol;
-mod rust_source;
 mod relative;
+mod rust_source;
 mod theme;
 pub mod theme_tokens;
 mod vocabulary;
@@ -71,10 +72,13 @@ pub use library::{
     ICONS_LIBRARY_RECORD_FILENAME, library_files, library_include, library_include_covers,
 };
 pub use manifest::{
-    DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,
-    TelarManifest, TelarSection, WebSection, WindowSection,
+    DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, TelarManifest,
+    TelarSection, WebSection, WindowSection,
 };
 pub use orphan_tests::orphan_test_warnings;
+pub use page::{
+    ASSETS_META_NAME, FONT_FAMILY_ATTRIBUTE, HOST_ELEMENT_ID, PageRenderer, RENDERER_SETTING,
+};
 pub use paths::{
     cargo_metadata, find_ancestor_dir, find_package_root, find_target_dir, find_telar_root,
     find_workspace_root, resolve_telar_version, telar_version_in, workspace_member_dirs,
@@ -95,7 +99,7 @@ pub use previews::{
     Viewport, is_preview_name, preview_hosts, previews_include_declarations,
     previews_include_problems,
 };
+pub use relative::relative_slashed;
 pub use theme::{normalize_theme_path, theme_type_in_config};
 pub use vocabulary::{VOCABULARY, VocabularyAxis, vocabulary_axis, vocabulary_axis_of};
 pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};
-pub use relative::relative_slashed;

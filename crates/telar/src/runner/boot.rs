@@ -4,11 +4,12 @@ use std::sync::Arc;
 
 use platform_core::{Window, WindowConfig};
 use services_core::AppPathsProvider;
+use telar_project::protocol::RendererBackend;
 use ui_tree::DevOverlay;
 
 use crate::app_config::AppConfig;
 use crate::app_runtime::AppRuntime;
-use crate::config::{self, RendererBackend};
+use crate::config;
 
 use super::font_config::FontSetup;
 use super::handler::{AppHandler, build_app_handler};

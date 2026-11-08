@@ -3,18 +3,15 @@
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
-/// What a font preload carries to name the family its face answers to. The web packaging writes it on every face `[[telar.fonts]]` declares.
-pub const FAMILY_ATTRIBUTE: &str = "data-telar-family";
-
-/// Fetches every face the page preloads for this app and adds each to the shaper's database as it lands.
+/// Fetches every face the page preloads for this app, each preload naming its family in `family_attribute`, and adds each to the shaper's database as it lands.
 ///
 /// A canvas cannot use an `@font-face`: its glyphs are shaped from bytes, and the browser never hands a loaded face's bytes to the page. So the faces are fetched again — from the cache the preload already filled, since both are anonymous CORS requests for the same URL. Nothing waits for them: the app starts drawing in the faces it has, and each one that lands re-measures and redraws once.
-pub fn load_page_fonts() {
+pub fn load_page_fonts(family_attribute: &str) {
     let Some(document) = crate::dom_window().document() else {
         return;
     };
     let Ok(links) =
-        document.query_selector_all(&format!("link[rel~=preload][as=font][{FAMILY_ATTRIBUTE}]"))
+        document.query_selector_all(&format!("link[rel~=preload][as=font][{family_attribute}]"))
     else {
         return;
     };
@@ -25,7 +22,7 @@ pub fn load_page_fonts() {
         else {
             continue;
         };
-        let family = link.get_attribute(FAMILY_ATTRIBUTE).unwrap_or_default();
+        let family = link.get_attribute(family_attribute).unwrap_or_default();
         let href = link.href();
         wasm_bindgen_futures::spawn_local(async move {
             match fetch_bytes(&href).await {

@@ -73,7 +73,8 @@ fn resolved_window<A: crate::app::App + ?Sized>(
     all(feature = "android-bare", target_os = "android")
 ))]
 pub(crate) fn overlay_disabled() -> bool {
-    std::env::var("TELAR_DEVTOOLS").as_deref() == Ok("0")
+    std::env::var(telar_project::protocol::DEVTOOLS_VAR)
+        .is_ok_and(|value| telar_project::protocol::decode_flag(&value) == Ok(false))
 }
 
 const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);

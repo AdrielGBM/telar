@@ -85,11 +85,52 @@ fn a_misspelled_key_is_an_error_that_names_it() {
     }
 }
 
-/// A value of the right shape but the wrong word is caught too, so `backend = "gpu"` is not silently `auto`.
+/// A value of the right shape but the wrong word is caught too, so `backend = "gpu"` is not silently `auto` and `fullscreen = "Borderless"` is not silently windowed.
 #[test]
-fn an_unknown_backend_is_refused_rather_than_defaulted() {
-    let root = package("backend", Some("[telar]\nbackend = \"gpu\"\n"));
-    assert!(TelarManifest::load(&root).is_err());
+fn an_unknown_value_is_refused_naming_its_key_and_the_values_it_takes() {
+    for (label, manifest, key, expected) in [
+        (
+            "backend",
+            "[telar]\nbackend = \"gpu\"\n",
+            "backend",
+            "`auto`, `hardware` or `software`",
+        ),
+        (
+            "fullscreen",
+            "[telar.dev.window]\nfullscreen = \"Borderless\"\n",
+            "fullscreen",
+            "`disabled`, `borderless` or `exclusive`",
+        ),
+        (
+            "position",
+            "[telar.dev.window]\nposition = \"10 20\"\n",
+            "position",
+            "`centered` or `<x>,<y>`",
+        ),
+    ] {
+        let root = package(&format!("unknown_{label}"), Some(manifest));
+        let text = TelarManifest::load(&root)
+            .expect_err(&format!("an unknown {label} has to be an error"))
+            .to_string();
+        assert!(text.contains(key), "names `{key}`: {text}");
+        assert!(text.contains(expected), "names {expected}: {text}");
+    }
+}
+
+#[test]
+fn the_dev_window_reads_its_fullscreen_mode_and_position() {
+    let root = package(
+        "window_values",
+        Some("[telar.dev.window]\nfullscreen = \"exclusive\"\nposition = \"10, -20\"\n"),
+    );
+    let window = TelarManifest::load(&root)
+        .expect("both values parse")
+        .telar
+        .dev
+        .window
+        .expect("the window table is there");
+    assert_eq!(window.fullscreen, Some(FullscreenMode::Exclusive));
+    assert_eq!(window.position, Some(WindowPosition::At { x: 10, y: -20 }));
 }
 
 /// The pre-`[telar.i18n]` spellings still answer, so a project written against the old keys keeps working.

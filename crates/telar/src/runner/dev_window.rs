@@ -28,50 +28,58 @@ pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
 
 #[cfg(feature = "hot-reload")]
 pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_TITLE") {
-        config.title = v;
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_WIDTH")
-        && let Ok(n) = v.parse()
-    {
-        config.width = n;
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_HEIGHT")
-        && let Ok(n) = v.parse()
-    {
-        config.height = n;
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_DECORATIONS") {
-        config.has_decorations = v == "1";
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_RESIZABLE") {
-        config.is_resizable = v == "1";
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_TRANSPARENT") {
-        config.is_transparent = v == "1";
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_FULLSCREEN") {
-        config.fullscreen = match v.as_str() {
-            "borderless" => platform_core::FullscreenMode::Borderless,
-            "exclusive" => platform_core::FullscreenMode::Exclusive,
-            _ => platform_core::FullscreenMode::Disabled,
-        };
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_POSITION") {
-        config.position = parse_dev_window_position(&v);
-    }
+    let overrides = telar_project::protocol::dev_window_from_env(|var| std::env::var(var).ok())
+        .unwrap_or_else(|error| {
+            panic!("`cargo telar dev` passed a window override this build cannot read: {error}")
+        });
+    apply(overrides, config);
 }
 
-// "centered" (or empty/invalid) → Centered; "<x>,<y>" → absolute coordinates.
 #[cfg(feature = "hot-reload")]
-fn parse_dev_window_position(value: &str) -> platform_core::WindowPosition {
-    let value = value.trim();
-    if let Some((x, y)) = value.split_once(',')
-        && let (Ok(x), Ok(y)) = (x.trim().parse::<i32>(), y.trim().parse::<i32>())
-    {
-        return platform_core::WindowPosition::At(x, y);
+fn apply(overrides: telar_project::WindowSection, config: &mut platform_core::WindowConfig) {
+    use telar_project::protocol::{FullscreenMode, WindowPosition};
+
+    let telar_project::WindowSection {
+        title,
+        width,
+        height,
+        decorations,
+        resizable,
+        transparent,
+        fullscreen,
+        position,
+    } = overrides;
+    if let Some(title) = title {
+        config.title = title;
     }
-    platform_core::WindowPosition::Centered
+    if let Some(width) = width {
+        config.width = width;
+    }
+    if let Some(height) = height {
+        config.height = height;
+    }
+    if let Some(decorations) = decorations {
+        config.has_decorations = decorations;
+    }
+    if let Some(resizable) = resizable {
+        config.is_resizable = resizable;
+    }
+    if let Some(transparent) = transparent {
+        config.is_transparent = transparent;
+    }
+    if let Some(fullscreen) = fullscreen {
+        config.fullscreen = match fullscreen {
+            FullscreenMode::Disabled => platform_core::FullscreenMode::Disabled,
+            FullscreenMode::Borderless => platform_core::FullscreenMode::Borderless,
+            FullscreenMode::Exclusive => platform_core::FullscreenMode::Exclusive,
+        };
+    }
+    if let Some(position) = position {
+        config.position = match position {
+            WindowPosition::Centered => platform_core::WindowPosition::Centered,
+            WindowPosition::At { x, y } => platform_core::WindowPosition::At(x, y),
+        };
+    }
 }
 
 #[cfg(test)]

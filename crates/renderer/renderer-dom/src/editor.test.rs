@@ -12,7 +12,7 @@ use layout_core::LayoutStyle;
 use platform_core::{
     Event, EventHandler, Ime, Key, ModifiersState, NamedKey, Platform, WindowConfig,
 };
-use platform_web::{WebPlatform, WebPlatformConfig, WebWindow};
+use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, DrawCommand, RenderBackend, TextStyle};
 use telar_renderer_dom::{CanvasTextMetrics, DomRenderer, ID_ATTRIBUTE};
@@ -402,6 +402,7 @@ fn listen_on(host: &web_sys::HtmlElement) {
         owns_context_menu: false,
         owns_keyboard: false,
         location: None,
+        page: PageNames::default(),
     };
     WebPlatform::with_host(host.clone(), config)
         .run(WindowConfig::default(), Recorder)

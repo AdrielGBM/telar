@@ -9,9 +9,6 @@ use super::assets::Assets;
 use super::media::media_type;
 use super::page::{Page, PageFont};
 
-/// What a preload carries to name the family its face answers to, which is how a canvas build finds the faces to fetch into its shaper. Read by `renderer_web::FAMILY_ATTRIBUTE`, which must spell it the same.
-pub(crate) const FAMILY_ATTRIBUTE: &str = "data-telar-family";
-
 /// Where the faces go in the output, under their own names before hashing.
 const FONTS_DIR: &str = "fonts";
 
