@@ -273,3 +273,36 @@ fn a_reader_still_pending_when_its_memo_deepens_waits_for_the_new_depth() {
     assert_eq!(*computed.borrow(), [2, 4]);
     drop(scope);
 }
+
+#[test]
+fn a_memo_that_switches_to_a_pending_deeper_memo_computes_once_with_its_fresh_value() {
+    let scope = owner_scope();
+    let deep = signal(false);
+    let source = signal(1i32);
+    let side = signal(0i32);
+    let first = memo(move || source.get());
+    let second = memo(move || first.get());
+    let third = memo(move || second.get() + side.get());
+    let computed = Rc::new(RefCell::new(Vec::new()));
+    let log = Rc::clone(&computed);
+    let picked = memo(move || {
+        logged(
+            &log,
+            if deep.get() {
+                third.get()
+            } else {
+                source.get()
+            },
+        )
+    });
+    computed.borrow_mut().clear();
+
+    batch(|| {
+        deep.set(true);
+        side.set(5);
+    });
+
+    assert_eq!(picked.get(), 6);
+    assert_eq!(*computed.borrow(), [6]);
+    drop(scope);
+}
