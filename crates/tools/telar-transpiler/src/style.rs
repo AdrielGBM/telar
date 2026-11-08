@@ -536,9 +536,9 @@ pub fn format_f32(n: f32) -> String {
     }
 }
 
-/// Builds a `Color::rgba(...)` const expression from a hex string, at any length [`telar_parser::parse_hex`] accepts. Anything else falls back to opaque black, which the parser has already rejected before a value reaches here.
+/// Builds a `Color::rgba(...)` const expression from a hex string, at any length [`geometry_core::parse_hex`] accepts. Anything else falls back to opaque black, which the parser has already rejected before a value reaches here.
 pub fn hex_to_color_expr(hex: &str) -> String {
-    let [r, g, b, a] = telar_parser::parse_hex(hex).unwrap_or([0, 0, 0, 255]);
+    let [r, g, b, a] = geometry_core::parse_hex(hex).unwrap_or([0, 0, 0, 255]);
     format!("Color::rgba({r}.0 / 255.0, {g}.0 / 255.0, {b}.0 / 255.0, {a}.0 / 255.0)")
 }
 

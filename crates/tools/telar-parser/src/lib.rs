@@ -27,13 +27,11 @@
 pub mod format;
 
 mod ast;
-mod color;
 mod error;
 mod lexer;
 mod parser;
 
 pub use ast::*;
-pub use color::parse_hex;
 pub use error::ParseError;
 pub use lexer::{
     Section, find_section_at, header_section, is_preview_header, is_previews_header,

@@ -5908,6 +5908,7 @@ dependencies = [
  "serde_json",
  "telar-baker",
  "telar-diagnostics",
+ "telar-geometry-core",
  "telar-parser",
  "telar-project",
  "telar-transpiler",
@@ -6121,6 +6122,7 @@ dependencies = [
 name = "telar-parser"
 version = "0.2.3"
 dependencies = [
+ "telar-geometry-core",
  "thiserror 2.0.20",
 ]
 
@@ -6508,6 +6510,7 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 3.0.5",
+ "telar-geometry-core",
  "telar-parser",
  "telar-project",
  "telar-renderer-core",

@@ -473,7 +473,7 @@ fn arg_default_expr(arg: &ArgDecl) -> String {
         Value::Flag => "true".to_string(),
         Value::Expr(text) | Value::Directive(text) => {
             let text = text.trim();
-            if text.starts_with('#') && telar_parser::parse_hex(text).is_some() {
+            if text.starts_with('#') && geometry_core::parse_hex(text).is_some() {
                 return hex_to_color_expr(text);
             }
             format!("{}{text}", expr_marker(arg.default_start, text.len()))
@@ -508,7 +508,7 @@ fn literal_expr(text: &str) -> Option<Literal> {
         return Some(Literal::Number);
     }
     if text.starts_with('#') {
-        return telar_parser::parse_hex(text).map(|_| Literal::Color);
+        return geometry_core::parse_hex(text).map(|_| Literal::Color);
     }
     let mut segments = text.split("::");
     let is_path = segments.clone().count() > 1 && segments.all(is_ident);
@@ -533,7 +533,7 @@ fn arg_value_text(value: &Value, numbers: Numbers) -> Option<String> {
     match literal_expr(text)? {
         Literal::Bool => Some(text.to_string()),
         Literal::Color => {
-            let [r, g, b, a] = telar_parser::parse_hex(text)?;
+            let [r, g, b, a] = geometry_core::parse_hex(text)?;
             Some(match a {
                 255 => format!("#{r:02x}{g:02x}{b:02x}"),
                 _ => format!("#{r:02x}{g:02x}{b:02x}{a:02x}"),
@@ -764,7 +764,7 @@ impl Options {
                 self.viewport = Some((size.width as f32, size.height as f32));
             }
             "bg" => {
-                if telar_parser::parse_hex(text).is_none() || !text.starts_with('#') {
+                if geometry_core::parse_hex(text).is_none() || !text.starts_with('#') {
                     return Err(format!(
                         "`bg:{text}` is not a colour: write it in hex, like bg:#202020"
                     ));
@@ -1101,7 +1101,7 @@ fn is_arg_value_text(text: &str) -> bool {
     match text {
         "true" | "false" | "none" => true,
         _ if text.starts_with('"') => text.len() > 1 && text.ends_with('"'),
-        _ if text.starts_with('#') => telar_parser::parse_hex(text).is_some(),
+        _ if text.starts_with('#') => geometry_core::parse_hex(text).is_some(),
         _ if text.starts_with(|c: char| c.is_ascii_digit() || c == '-' || c == '+') => {
             is_arg_number(text)
         }

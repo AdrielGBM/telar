@@ -80,38 +80,9 @@ impl Color {
         (lightness, c, h, self.a)
     }
 
-    /// Parses `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`, with or without the `#`.
-    ///
-    /// Those four lengths are the `.rsx` hex table (`telar_parser::parse_hex`), stated there and repeated here because geometry cannot depend on a tools crate. The two must accept the same set: a colour that parses at runtime and not in the DSL is a colour the author cannot write.
+    /// Parses `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`, with or without the `#`; see [`parse_hex`].
     pub fn from_hex(hex: &str) -> Option<Self> {
-        let hex = hex.strip_prefix('#').unwrap_or(hex);
-        // Byte-slice indexing below assumes single-byte chars.
-        if !hex.is_ascii() {
-            return None;
-        }
-        let byte = |s: &str| u8::from_str_radix(s, 16).ok();
-        let (r, g, b, a) = match hex.len() {
-            3 => (
-                byte(&hex[0..1])? * 17,
-                byte(&hex[1..2])? * 17,
-                byte(&hex[2..3])? * 17,
-                255,
-            ),
-            4 => (
-                byte(&hex[0..1])? * 17,
-                byte(&hex[1..2])? * 17,
-                byte(&hex[2..3])? * 17,
-                byte(&hex[3..4])? * 17,
-            ),
-            6 => (byte(&hex[0..2])?, byte(&hex[2..4])?, byte(&hex[4..6])?, 255),
-            8 => (
-                byte(&hex[0..2])?,
-                byte(&hex[2..4])?,
-                byte(&hex[4..6])?,
-                byte(&hex[6..8])?,
-            ),
-            _ => return None,
-        };
+        let [r, g, b, a] = parse_hex(hex)?;
         Some(Self::from_rgba_u8(r, g, b, a))
     }
 
@@ -236,6 +207,26 @@ fn mix_hue(h1: f32, c1: f32, h2: f32, c2: f32, t: f32) -> f32 {
             }
             (h1 + delta * t).rem_euclid(360.0)
         }
+    }
+}
+
+/// Parses a hex colour body, with or without its `#`, into RGBA bytes.
+///
+/// Every byte must be a hex digit and the length must be 3, 4, 6 or 8 (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`); a short digit expands by `* 17`, so `#f` reads as `0xff`. This is the single statement of what a hex colour is, shared by the `.rsx` toolchain and [`Color::from_hex`].
+pub fn parse_hex(hex: &str) -> Option<[u8; 4]> {
+    let digits = hex.strip_prefix('#').unwrap_or(hex).as_bytes();
+    let values = digits
+        .iter()
+        .map(|&b| (b as char).to_digit(16).map(|d| d as u8))
+        .collect::<Option<Vec<u8>>>()?;
+    match values[..] {
+        [r, g, b] => Some([r * 17, g * 17, b * 17, 255]),
+        [r, g, b, a] => Some([r * 17, g * 17, b * 17, a * 17]),
+        [r1, r0, g1, g0, b1, b0] => Some([r1 << 4 | r0, g1 << 4 | g0, b1 << 4 | b0, 255]),
+        [r1, r0, g1, g0, b1, b0, a1, a0] => {
+            Some([r1 << 4 | r0, g1 << 4 | g0, b1 << 4 | b0, a1 << 4 | a0])
+        }
+        _ => None,
     }
 }
 

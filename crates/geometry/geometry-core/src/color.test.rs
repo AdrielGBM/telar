@@ -307,3 +307,60 @@ fn mix_achromatic_endpoint_carries_the_other_hue() {
         "hue {hue} != red hue {red_hue}"
     );
 }
+
+#[test]
+fn parse_hex_accepts_every_length_and_case() {
+    let cases: [(&str, [u8; 4]); 12] = [
+        ("#f80", [255, 136, 0, 255]),
+        ("f80", [255, 136, 0, 255]),
+        ("#F80", [255, 136, 0, 255]),
+        ("#f808", [255, 136, 0, 136]),
+        ("f808", [255, 136, 0, 136]),
+        ("#ff8800", [255, 136, 0, 255]),
+        ("ff8800", [255, 136, 0, 255]),
+        ("#FF8800", [255, 136, 0, 255]),
+        ("#fF8800", [255, 136, 0, 255]),
+        ("#ff880080", [255, 136, 0, 128]),
+        ("ff880080", [255, 136, 0, 128]),
+        ("#FF880080", [255, 136, 0, 128]),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(parse_hex(input), Some(expected), "{input}");
+    }
+}
+
+#[test]
+fn parse_hex_rejects_what_is_not_a_colour() {
+    let cases = [
+        "",
+        "#",
+        "#f",
+        "#ff",
+        "#fffff",
+        "#fffffff",
+        "#fffffffff",
+        "#zzz",
+        "#gggggg",
+        "#+f+f+f",
+        "+f+f+f",
+        "+ff+ff",
+        "#-f-f-f",
+        "-1-1-1",
+        "#f f f",
+        " fff",
+        "fff ",
+        "#fff\n",
+        "#áéí",
+        "#ééé",
+        "##fff",
+        "0x fff",
+    ];
+    for input in cases {
+        assert_eq!(parse_hex(input), None, "{input:?}");
+    }
+}
+
+#[test]
+fn from_hex_rejects_a_sign_in_a_digit() {
+    assert!(Color::from_hex("#+f+f+f").is_none());
+}
