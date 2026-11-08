@@ -158,7 +158,7 @@ pub use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 #[cfg(feature = "runtime")]
 pub use runner::font_config::FontSetup;
 #[cfg(feature = "runtime")]
-pub use tree::{Frame, HotTree, LocalTree, UiTree};
+pub use tree::{Frame, LocalTree, UiTree};
 #[cfg(feature = "runtime")]
 pub use ui_tree::{BuildOutcome, DevAction, DevOverlay, OverlayResponse};
 // What `DevOverlay::set_app_stop` is handed, so an overlay outside this crate can say why the app stopped.
@@ -335,10 +335,7 @@ pub use preferences_core::{
 #[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
 #[cfg(feature = "runtime")]
-pub use surface::{
-    SurfaceContent, SurfaceControl, SurfaceHost, SurfaceToken, open_surface, set_surface_host,
-    surface_content,
-};
+pub use surface::{SurfaceControl, SurfaceToken};
 #[cfg(feature = "runtime")]
 pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]

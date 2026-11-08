@@ -21,7 +21,6 @@ icons-core = { workspace = true, features = ["http"] }
 renderer-assets = { workspace = true, features = ["bake"] }
 telar-parser = { workspace = true }
 telar-project = { workspace = true }
-telar-transpiler = { workspace = true, features = ["transpile"] }
 
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

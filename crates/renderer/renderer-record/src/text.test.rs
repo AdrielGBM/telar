@@ -124,22 +124,6 @@ fn a_path_writes_its_verbs_and_a_line_its_stroke() {
 }
 
 #[test]
-fn a_recorded_frame_opens_with_its_size_and_clear_colour() {
-    let frame = RecordedFrame {
-        width: 320,
-        height: 240,
-        scale_factor: 2.0,
-        generation: 3,
-        clear: Some(Color::WHITE),
-        commands: vec![rect_command(0.0, 0.0, RectStyle::default())],
-    };
-    assert_eq!(
-        frame.to_text(),
-        "frame 320x240 clear=#ffffffff\nrect 0,0 80x32\n"
-    );
-}
-
-#[test]
 fn an_element_laid_out_by_its_parent_names_only_its_role() {
     let element = Element::new(
         ElementId(7),

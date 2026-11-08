@@ -885,11 +885,6 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "the binding this copy's own setup makes, replaced when the setup re-runs",
     ),
     (
-        "crates/telar/src/surface.rs",
-        "SURFACE_HOSTS",
-        "the app's own surface hosts by placement type",
-    ),
-    (
         "crates/telar/src/raster.rs",
         "RASTERIZER",
         "this copy's own rasterizer, freed through thread exit",

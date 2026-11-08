@@ -133,8 +133,9 @@ impl I18nConfig {
     }
 }
 
-/// The locale files that feed the catalog, sorted — used to emit `include_str!` rerun triggers so editing a translation re-bakes, exactly like editing a `.rsx` file.
-pub fn catalog_files(package_root: &Path) -> Result<Vec<PathBuf>, ManifestError> {
+/// The locale files that feed the catalog, sorted: the files [`bake_catalog`] records as the index's `sources`, which the macro turns into rerun triggers.
+#[cfg(test)]
+fn catalog_files(package_root: &Path) -> Result<Vec<PathBuf>, ManifestError> {
     let config = I18nConfig::load(package_root)?;
     Ok(catalog_sources(package_root, &config)
         .into_iter()

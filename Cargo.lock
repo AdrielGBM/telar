@@ -5928,7 +5928,6 @@ dependencies = [
  "telar-parser",
  "telar-project",
  "telar-renderer-assets",
- "telar-transpiler",
  "toml",
 ]
 

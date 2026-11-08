@@ -10,8 +10,6 @@ use renderer_core::{
     TextWrap,
 };
 
-use crate::RecordedFrame;
-
 /// `commands` as text, one line per command, each a keyword and then `key=value` fields.
 ///
 /// Written for a line diff to read: geometry is rounded to hundredths of a pixel and colours resolved to `#rrggbbaa`, so float noise below what a screen shows never moves a line; a field at its default is left out, so a line names only what was set; and what a clip, matrix, layer or element encloses is indented one step under it, closed by an `end` line. An element names its role, its label where it has one, and its rect where the frame gives it one. Nothing that changes from run to run is written — no ids, no pointers, no image content hashes — so the same tree always gives the same text.
@@ -32,19 +30,6 @@ pub fn draw_text(commands: &[DrawCommand]) -> String {
         }
     }
     out
-}
-
-impl RecordedFrame {
-    /// The frame as [`draw_text`] writes it, under a `frame` line with its size and the colour it was cleared to.
-    pub fn to_text(&self) -> String {
-        let mut out = format!("frame {}x{}", self.width, self.height);
-        if let Some(clear) = self.clear {
-            let _ = write!(out, " clear={}", color(clear));
-        }
-        out.push('\n');
-        out.push_str(&draw_text(&self.commands));
-        out
-    }
 }
 
 fn opens(command: &DrawCommand) -> bool {

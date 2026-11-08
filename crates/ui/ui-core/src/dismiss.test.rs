@@ -11,10 +11,13 @@ fn reset() {
 fn dismisses_the_most_recently_opened_first() {
     reset();
     let log = Rc::new(RefCell::new(Vec::new()));
-    for name in ["dialog", "drawer"] {
-        let log = log.clone();
-        register_dismiss(Rc::new(move || log.borrow_mut().push(name)));
-    }
+    let _open: Vec<DismissRegistration> = ["dialog", "drawer"]
+        .into_iter()
+        .map(|name| {
+            let log = log.clone();
+            DismissRegistration::new(Rc::new(move || log.borrow_mut().push(name)))
+        })
+        .collect();
     assert_eq!(dismiss_depth(), 2);
 
     assert!(dismiss_top(), "the newest entry is the one that goes first");
@@ -27,19 +30,19 @@ fn dismisses_the_most_recently_opened_first() {
 }
 
 #[test]
-fn withdrawing_out_of_order_skips_that_entry() {
+fn dropping_a_registration_below_the_top_withdraws_only_it() {
     reset();
     let hit = Rc::new(Cell::new(0));
     let first = {
         let hit = hit.clone();
-        register_dismiss(Rc::new(move || hit.set(hit.get() + 1)))
+        DismissRegistration::new(Rc::new(move || hit.set(hit.get() + 1)))
     };
     let log = Rc::new(RefCell::new(Vec::new()));
-    {
+    let _top = {
         let log = log.clone();
-        register_dismiss(Rc::new(move || log.borrow_mut().push("top")));
-    }
-    unregister_dismiss(first);
+        DismissRegistration::new(Rc::new(move || log.borrow_mut().push("top")))
+    };
+    drop(first);
     assert_eq!(dismiss_depth(), 1);
 
     assert!(dismiss_top(), "the top entry still dismisses normally");
@@ -58,10 +61,10 @@ fn escape_dismisses_only_past_a_focused_field() {
     reset();
     crate::focus::clear();
     let closed = Rc::new(Cell::new(false));
-    {
+    let _dialog = {
         let closed = closed.clone();
-        register_dismiss(Rc::new(move || closed.set(true)));
-    }
+        DismissRegistration::new(Rc::new(move || closed.set(true)))
+    };
     let esc = Event::KeyPressed {
         key: Key::Named(NamedKey::Escape),
         modifiers: ModifiersState::default(),
@@ -84,21 +87,18 @@ fn escape_dismisses_only_past_a_focused_field() {
 }
 
 #[test]
-fn a_handler_that_reenters_the_stack_is_safe() {
+fn a_handler_that_drops_its_own_registration_is_safe() {
     reset();
-    let id = Rc::new(Cell::new(None::<DismissId>));
-    let inner = id.clone();
-    let handle = register_dismiss(Rc::new(move || {
-        if let Some(i) = inner.get() {
-            unregister_dismiss(i);
-        }
-    }));
-    id.set(Some(handle));
+    let held = Rc::new(RefCell::new(None::<DismissRegistration>));
+    let inner = held.clone();
+    let registration = DismissRegistration::new(Rc::new(move || drop(inner.borrow_mut().take())));
+    *held.borrow_mut() = Some(registration);
     assert!(
         dismiss_top(),
-        "a handler that pushes while unwinding must not corrupt the stack"
+        "a handler that withdraws its own entry while it runs must not corrupt the stack"
     );
     assert_eq!(dismiss_depth(), 0);
+    assert!(held.borrow().is_none());
 }
 
 mod transactions {

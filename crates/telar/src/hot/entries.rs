@@ -12,7 +12,7 @@ use renderer_core::wire::{DrawList, Pixels};
 use ui_tree::SegmentNodeInfo;
 
 use super::guest::{self, GuestApp};
-use crate::tree::HotTree;
+use crate::tree::hot::HotTree;
 
 platform_core::entry_table! {
     /// Every entry of a hot-reload library after its lifecycle, each the guest's function of the same name in [`guest`] but `create`, which the `app!` macro writes, and the `report` of what a mounted tree tells the host about the window it fills: named for the method of the host's it serves, those on a mounted tree prefixed `tree_`. Each returns a `CallOutcome` and writes what it answers through the pointers it is handed.

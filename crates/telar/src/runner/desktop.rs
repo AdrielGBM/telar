@@ -91,7 +91,7 @@ impl SurfaceControl for WinitSurfaceControl {
     }
 }
 
-/// Opens a **full `App`** in its own top-level window on the already-running single-thread multi-surface runner — the app is moved in (so it may be `!Send`, e.g. hold `Rc` state), keeps the one shared reactive runtime, and gets its own `Surface` world and `on_frame` driven. Unlike `open_surface` (which hosts a content closure), this hosts a real `App`, so a caller can move a live sub-app (a detached tab, with its state and background work) into a window. Returns a token; dropping it, or the window's own close, tears the window down. Only meaningful while [`run_app_windowed`] is running.
+/// Opens a **full `App`** in its own top-level window on the already-running single-thread multi-surface runner — the app is moved in (so it may be `!Send`, e.g. hold `Rc` state), keeps the one shared reactive runtime, and gets its own `Surface` world and `on_frame` driven. It hosts a real `App`, so a caller can move a live sub-app (a detached tab, with its state and background work) into a window. Returns a token; dropping it, or the window's own close, tears the window down. Only meaningful while [`run_app_windowed`] is running.
 ///
 /// `config` is the window's, as [`run_app_windowed`] takes one: the app's own [`App::window_config`] wins over its window, whose title falls back to the running app's name, and its faces and family are what the window sets text in. The window is the running app's, so it keeps that app's directories and preferences.
 ///

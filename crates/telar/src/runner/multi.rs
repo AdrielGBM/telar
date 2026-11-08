@@ -61,7 +61,7 @@ where
     })
 }
 
-/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`AppRuntime`](crate::AppRuntime), boxed so a multi-surface backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s factory produces — a handler carrying its own `ui_core::Surface` world, booted the same way — but for surfaces opened at runtime (via a `SurfaceHost`), so the backend can enqueue the handler into its single UI-thread loop instead of spawning a thread. Builds no renderer; call it on the thread that drives the handler, whose reactive runtime it brings the app's stored choices back into.
+/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`AppRuntime`](crate::AppRuntime), boxed so a multi-surface backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s factory produces — a handler carrying its own `ui_core::Surface` world, booted the same way — but for surfaces opened at runtime (as `open_window` opens one), so the backend can enqueue the handler into its single UI-thread loop instead of spawning a thread. Builds no renderer; call it on the thread that drives the handler, whose reactive runtime it brings the app's stored choices back into.
 ///
 /// `config` is the surface's own: its window's title, falling back to `app_name`, and the faces and family it sets text in. The rest of its window is the backend's to apply.
 ///

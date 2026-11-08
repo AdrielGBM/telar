@@ -113,14 +113,6 @@ impl StyleImportName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-/// A `[style]` property's value, as written.
-pub enum StyleValue {
-    Hex(String),
-    Number(f32),
-    Raw(String),
-}
-
 /// A style class, e.g. `@card` followed by indented property pairs, or an inline `@badge: ...`.
 #[derive(Debug, Clone)]
 pub struct StyleClass {

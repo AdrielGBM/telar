@@ -20,7 +20,8 @@ use services_core::guest::GuestLibrary;
 use ui_core::{ForeignBoundary, ForeignSurface, GuestSurface};
 use wire_core::encode;
 
-use crate::tree::{Frame, HotTree, UiTree};
+use crate::tree::hot::HotTree;
+use crate::tree::{Frame, UiTree};
 use guest::GuestApp;
 
 /// One loaded guest and the surface of the tree whose frame was read last, the window's. Shared by the [`HotApp`] and every tree it mounted, and the library with the surface of each, so the guest is unloaded only once the last of them lets go, whichever that is.

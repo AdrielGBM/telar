@@ -17,7 +17,7 @@ use services_core::guest::UpperTable;
 use ui_tree::SegmentNodeInfo;
 
 use crate::app::App;
-use crate::tree::HotTree;
+use crate::tree::hot::HotTree;
 
 /// What a hot-reload library exports, as the `app!` macro writes it: its [`HotEntries`](crate::hot::HotEntries), whose `create` builds the app `make` returns, and the [`HOT_CONTRACT`](crate::hot::HOT_CONTRACT) its host checks before reading them.
 #[doc(hidden)]

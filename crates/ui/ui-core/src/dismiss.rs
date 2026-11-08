@@ -12,7 +12,7 @@ use crate::surface_context::HomeSurface;
 
 /// Identifies one registration, so a closing overlay can withdraw exactly its own entry.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct DismissId(u64);
+pub(crate) struct DismissId(u64);
 
 struct Entry {
     id: DismissId,
@@ -66,13 +66,8 @@ fn push(within: Option<NodeId>, dismiss: Rc<dyn Fn()>, confirm: Option<Rc<dyn Fn
     id
 }
 
-/// Registers an open overlay as the new top of the active surface's dismiss stack, returning the handle to withdraw it with.
-pub fn register_dismiss(dismiss: Rc<dyn Fn()>) -> DismissId {
-    push(None, dismiss, None)
-}
-
 /// Withdraws a registration from the active surface's stack, whether or not it is still the top. A no-op for an id already withdrawn.
-pub fn unregister_dismiss(id: DismissId) {
+pub(crate) fn unregister_dismiss(id: DismissId) {
     with_stack(|s| s.entries.retain(|e| e.id != id));
     publish_depth();
 }
@@ -84,6 +79,7 @@ pub struct DismissRegistration {
 }
 
 impl DismissRegistration {
+    /// Registers an open overlay as the new top of the active surface's dismiss stack.
     pub fn new(dismiss: Rc<dyn Fn()>) -> Self {
         Self::registered(push(None, dismiss, None))
     }

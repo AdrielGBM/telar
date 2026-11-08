@@ -13,7 +13,7 @@ fn a_format_no_app_build_decodes_still_bakes() {
     assert!(baked.contains("let image = ImageData::new("), "{baked}");
 }
 
-/// The registry's extension list is what a file watcher asks "is that file an asset", and it is written out by hand in `telar-transpiler`, which cannot link `image` to ask. So the agreement is checked here instead: a format the CLI decodes but the registry does not name is one whose edits raise no event, which is how `.webp` went unnoticed.
+/// The registry's extension list is what a file watcher asks "is that file an asset", and it is written out by hand in `telar-project`, which cannot link `image` to ask. So the agreement is checked here instead: a format the CLI decodes but the registry does not name is one whose edits raise no event, which is how `.webp` went unnoticed.
 #[test]
 fn the_registry_lists_every_readable_format() {
     let kind = telar_project::asset_kind_for_id("image").expect("the image kind is registered");

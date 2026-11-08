@@ -57,11 +57,6 @@ pub fn style_function_name(class: &str) -> String {
     format!("style_{}", to_snake_case(class))
 }
 
-/// Generated color/number constant name: `card-border` -> `COLOR_CARD_BORDER`.
-pub fn constant_name(prefix: &str, name: &str) -> String {
-    format!("{prefix}{}", to_snake_case(name).to_ascii_uppercase())
-}
-
 /// Generated preview entries const name for a file stem: `card` -> `CARD_PREVIEW_ENTRIES`. This must match the name emitted by the transpiler in the generated `.rs` file.
 pub fn preview_entries_const_name(stem: &str) -> String {
     format!(

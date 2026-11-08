@@ -273,8 +273,9 @@ pub fn is_component_instance_attr(key: &str) -> bool {
     COMPONENT_INSTANCE_ATTRS.iter().any(|spec| spec.key == key)
 }
 
-/// The layout keys, spelling only. Completion and the emitter's unknown-attribute check read the same table [`value_kind`] does.
-pub fn layout_attr_keys() -> Vec<&'static str> {
+/// The keys of the layout table that [`value_kind`], completion and the unknown-attribute check all read, for a test to hold the emitter to that one vocabulary.
+#[cfg(test)]
+fn layout_attr_keys() -> Vec<&'static str> {
     LAYOUT_ATTRS.iter().map(|spec| spec.key).collect()
 }
 

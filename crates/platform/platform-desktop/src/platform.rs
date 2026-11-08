@@ -405,7 +405,7 @@ reactive_local::dropless_thread_local! {
         const { std::mem::ManuallyDrop::new(std::cell::RefCell::new(Vec::new())) };
 }
 
-/// Requests a new top-level window rendering `handler`, created on the next event-loop iteration by the running multi-surface runner (which shares this thread and the one reactive runtime). Returns a flag the caller flips to close the surface. rsx's winit `SurfaceHost` uses this to implement `open_surface` without a per-surface thread. If no multi-surface runner is running, the request simply sits undrained.
+/// Requests a new top-level window rendering `handler`, created on the next event-loop iteration by the running multi-surface runner (which shares this thread and the one reactive runtime). Returns a flag the caller flips to close the surface. telar's `open_window` uses this to open a window without a per-surface thread. If no multi-surface runner is running, the request simply sits undrained.
 pub fn request_dynamic_surface(
     config: WindowConfig,
     handler: Box<dyn EventHandler<WinitWindow>>,
@@ -435,7 +435,7 @@ struct SurfaceRunner {
     touch: TouchDrag,
     keys: KeyPairing<PhysicalKey>,
     pace: Option<std::time::Duration>,
-    // `None` for a statically declared surface; `Some` for one opened via `open_surface`.
+    // `None` for a statically declared surface; `Some` for one opened at runtime through `request_dynamic_surface`.
     close_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
     // A dynamically opened window defers `on_resume` until its first event, when the compositor has given it its real size: rendering before that would size the surface and the layout differently.
     resumed: bool,
@@ -751,7 +751,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                 surface.resumed = true;
                 // Fall through to dispatch this `Resized`: it carries the authoritative size, which relays the layout out even if `window.inner_size()` lagged it.
             } else {
-                // Exiting the whole loop is `about_to_wait`'s job, which runs after pending `open_surface` requests are spawned, so a just-removed last surface cannot kill a window being born.
+                // Exiting the whole loop is `about_to_wait`'s job, which runs after pending `request_dynamic_surface` requests are spawned, so a just-removed last surface cannot kill a window being born.
                 if let Some(removed) = self.surfaces.remove(&id) {
                     self.forget_on_seat(id);
                     let _gpu = renderer_core::gpu_sync::lifecycle_guard();
