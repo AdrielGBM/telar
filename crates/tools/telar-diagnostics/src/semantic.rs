@@ -1,4 +1,4 @@
-//! The checks past parsing: unknown attributes, unreachable branches and missing catalogue keys.
+//! The checks past parsing: undefined style classes, captures a closure takes without its sigil, and i18n keys the catalog does not define.
 
 use std::collections::HashSet;
 
@@ -6,9 +6,16 @@ use telar_parser::{Element, RsxDocument, ViewNode};
 
 use crate::{Diagnostic, Span};
 
-/// A filesystem-free view of the project's baked i18n catalog, used to validate `t"key"` markup against the keys the catalog actually defines. Built by the analyzer's `ProjectInfo` from `parse_catalog`, so this crate never touches disk. `None` when the project has no catalog (i18n unused).
+/// A filesystem-free view of the project's baked i18n catalog, used to validate `t"key"` markup against the keys the catalog actually defines. The keys come from the caller, so this crate never touches disk.
 pub struct CatalogView<'a> {
     pub keys: &'a HashSet<String>,
+}
+
+impl<'a> CatalogView<'a> {
+    /// `None` when `keys` is empty: a project that never opted into i18n gets no key diagnostics rather than one per `t"…"`.
+    pub fn of(keys: &'a HashSet<String>) -> Option<Self> {
+        (!keys.is_empty()).then_some(Self { keys })
+    }
 }
 
 /// Everything the per-node checks read, gathered once. Passed by reference through the walk so adding a check does not mean threading another positional argument through every recursion site.
@@ -37,32 +44,26 @@ pub fn semantic_diagnostics<'a>(
         catalog,
     };
 
-    check_nodes(&doc.view.nodes, &ctx, false, &mut diagnostics);
+    check_nodes(&doc.view.nodes, &ctx, &mut diagnostics);
     diagnostics.extend(unsigiled_captures(doc));
 
     diagnostics
 }
 
-fn check_nodes(nodes: &[ViewNode], ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<Diagnostic>) {
+fn check_nodes(nodes: &[ViewNode], ctx: &Ctx, diagnostics: &mut Vec<Diagnostic>) {
     for node in nodes {
         match node {
-            ViewNode::Element(el) => check_element(el, ctx, reactive, diagnostics),
+            ViewNode::Element(el) => check_element(el, ctx, diagnostics),
             ViewNode::IfBlock(b) => {
-                // The same test the transpiler makes: a `$signal` in the condition is what turns this into a rebuilding region.
-                let reactive = reactive || b.condition.contains('$');
-                check_nodes(&b.then_branch, ctx, reactive, diagnostics);
+                check_nodes(&b.then_branch, ctx, diagnostics);
                 if let Some(else_b) = &b.else_branch {
-                    check_nodes(else_b, ctx, reactive, diagnostics);
+                    check_nodes(else_b, ctx, diagnostics);
                 }
             }
-            ViewNode::ForBlock(b) => {
-                let reactive = reactive || b.iterable.trim_start().starts_with('$');
-                check_nodes(&b.body, ctx, reactive, diagnostics);
-            }
+            ViewNode::ForBlock(b) => check_nodes(&b.body, ctx, diagnostics),
             ViewNode::MatchBlock(b) => {
-                let reactive = reactive || b.scrutinee.contains('$');
                 for arm in &b.arms {
-                    check_nodes(&arm.body, ctx, reactive, diagnostics);
+                    check_nodes(&arm.body, ctx, diagnostics);
                 }
             }
             ViewNode::LetStmt(_) | ViewNode::Comment(_) => {}
@@ -70,7 +71,7 @@ fn check_nodes(nodes: &[ViewNode], ctx: &Ctx, reactive: bool, diagnostics: &mut 
     }
 }
 
-fn check_element(el: &Element, ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<Diagnostic>) {
+fn check_element(el: &Element, ctx: &Ctx, diagnostics: &mut Vec<Diagnostic>) {
     let span = Span::line(el.line);
 
     for class in &el.classes {
@@ -84,8 +85,7 @@ fn check_element(el: &Element, ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<
 
     check_i18n_keys(el, ctx, &span, diagnostics);
 
-    // Reactivity is inherited: a plain `row` nested inside a reactive branch is rebuilt with it.
-    check_nodes(&el.children, ctx, reactive, diagnostics);
+    check_nodes(&el.children, ctx, diagnostics);
 }
 
 /// Flags a `t"key"` — as element content (`text t"nav.title"`) or as an attribute value (`btn label:t"buttons.save"`) — whose key the catalog does not define.

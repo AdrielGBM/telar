@@ -70,3 +70,31 @@ fn a_name_the_build_refuses_is_reported_on_the_first_line_of_the_file() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_package_is_checked_against_its_catalog_and_its_style_classes() {
+    let root = package("semantic", "");
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Home\"\n").unwrap();
+    let source = "[view]\n    column @missing\n        text t\"nope\"\n";
+    let rsx = root.join("src/home.rsx");
+    std::fs::write(&rsx, source).unwrap();
+
+    let project = ProjectInfo::load(&rsx).unwrap().unwrap();
+    let document = telar_parser::parse(source).unwrap();
+    let messages: Vec<String> =
+        telar_diagnostics::semantic_diagnostics(&document, project.catalog_view().as_ref(), &[])
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        messages.iter().any(|m| m.contains("`@missing`")),
+        "{messages:?}"
+    );
+    assert!(
+        messages.iter().any(|m| m.contains("`nope`")),
+        "{messages:?}"
+    );
+}

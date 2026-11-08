@@ -141,3 +141,11 @@ fn a_project_without_a_catalog_gets_no_key_diagnostics() {
     );
     assert!(semantic_diagnostics(&doc, None, &[]).is_empty());
 }
+
+#[test]
+fn a_catalog_without_keys_is_no_catalog() {
+    let none = HashSet::new();
+    assert!(CatalogView::of(&none).is_none());
+    let keys = catalog_keys();
+    assert!(CatalogView::of(&keys).is_some());
+}

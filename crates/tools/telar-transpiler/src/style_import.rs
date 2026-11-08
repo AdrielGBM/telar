@@ -29,6 +29,13 @@ pub struct ResolvedImports {
 }
 
 impl ResolvedImports {
+    pub fn class_names(&self) -> Vec<&str> {
+        self.classes
+            .iter()
+            .map(|imported| imported.class.name.as_str())
+            .collect()
+    }
+
     pub fn class_list(&self) -> Vec<StyleClass> {
         self.classes
             .iter()

@@ -233,3 +233,20 @@ fn a_catalog_file_named_in_non_utf8_leaves_the_others_tracked_and_is_reported() 
     assert!(report.warnings[0].contains("not valid UTF-8"));
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_malformed_catalog_has_no_keys_and_a_missing_one_neither() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_keys_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+
+    assert!(catalog_keys(&root).is_empty());
+
+    std::fs::write(root.join("locales/en.toml"), "title = \"Home\"\n").unwrap();
+    assert!(catalog_keys(&root).contains("title"));
+
+    std::fs::write(root.join("locales/en.toml"), "title = [\n").unwrap();
+    assert!(catalog_keys(&root).is_empty());
+
+    let _ = std::fs::remove_dir_all(&root);
+}

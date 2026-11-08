@@ -4,6 +4,7 @@
 //!
 //! The model and the TOML grammar are `i18n-core`'s, shared with the runtime loader an app without any `.rsx` file uses. What is baker-only is here: discovery, serialization, and the index that lets `t!` validate a key without any of this being linked into the macro.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use i18n_core::PluralCategory;
@@ -201,6 +202,15 @@ pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, String
         &catalog_sources(package_root, &config),
         config.default.as_deref(),
     )
+}
+
+/// Every key the catalog of `package_root` defines, or empty when it has none. A malformed catalog reads as empty: the bake reports that, and refusing to run the other checks over it would hide a class error behind a translation one.
+pub fn catalog_keys(package_root: &Path) -> HashSet<String> {
+    parse_catalog(package_root)
+        .ok()
+        .flatten()
+        .map(|catalog| catalog.keys().cloned().collect())
+        .unwrap_or_default()
 }
 
 fn parse_sources(

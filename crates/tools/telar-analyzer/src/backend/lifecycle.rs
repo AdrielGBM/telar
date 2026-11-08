@@ -150,13 +150,11 @@ impl Backend {
                 .as_deref()
                 .map(|path| store.style_imports(path, &parsed.document))
                 .unwrap_or_default();
-            let names: Vec<&str> = imported
-                .classes
-                .iter()
-                .map(|class| class.class.name.as_str())
-                .collect();
-            let mut semantic =
-                semantic_diagnostics(&parsed.document, catalog_view.as_ref(), &names);
+            let mut semantic = semantic_diagnostics(
+                &parsed.document,
+                catalog_view.as_ref(),
+                &imported.class_names(),
+            );
             semantic.extend(bake_diagnostics);
             semantic.extend(manifest_error.as_ref().map(manifest_diagnostic));
             if let Some(rsx_path) = file_path.as_deref() {
