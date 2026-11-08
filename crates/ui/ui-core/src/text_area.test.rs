@@ -715,6 +715,79 @@ fn a_selection_across_wrapped_rows_paints_one_band_on_each() {
     }
 }
 
+fn advance(run: &str) -> f32 {
+    crate::text_metrics::measure_text(run, None, 1.0e6, &TextStyle::new(14.0, Color::BLACK)).0
+}
+
+/// Each row of `wrapping` is a line drawn at the left of the box: a caret put at its start, a press at its left edge, a move down onto it and a selection across it all land on that row.
+fn assert_rows_are_the_lines_drawn(wrapping: &mut Wrapping) {
+    let lines = wrapping.lines();
+    assert!((wrapping.height() - lines.len() as f32 * line_h()).abs() < 0.5);
+    for row in 0..lines.len() {
+        let start = lines.row(row).start;
+        let top = row as f32 * line_h();
+        wrapping.area.editor.caret.set(start);
+        wrapping.area.editor.affinity.set(Affinity::Downstream);
+        let caret = caret_rect(&wrapping.area);
+        assert_eq!(caret.y, top, "row {row} is drawn on its own line");
+        assert!(caret.x < 0.5, "row {row} starts at the left: {caret:?}");
+        wrapping.click(0.5, top + line_h() * 0.5);
+        assert_eq!(
+            wrapping.area.editor.caret.get(),
+            start,
+            "a press on row {row}"
+        );
+        if row + 1 < lines.len() {
+            wrapping.press(Key::Named(NamedKey::ArrowDown));
+            assert_eq!(wrapping.area.editor.caret.get(), lines.row(row + 1).start);
+            assert_eq!(caret_rect(&wrapping.area).y, top + line_h());
+        }
+    }
+    wrapping.area.on_event(&chord(Key::Char('a')));
+    let bands: Vec<Rect> = drawn(&wrapping.area)
+        .0
+        .into_iter()
+        .filter(|rect| rect.width != CARET_WIDTH)
+        .collect();
+    assert_eq!(bands.len(), lines.len());
+    for (row, band) in bands.iter().enumerate() {
+        assert_eq!(band.y, row as f32 * line_h());
+        assert!(
+            band.x < 0.5,
+            "the band on row {row} starts at the left: {band:?}"
+        );
+    }
+}
+
+#[test]
+fn rows_wrapped_in_a_run_of_spaces_are_the_lines_drawn() {
+    let text = "abc abc      abc abc      abc";
+    let mut wrapping = Wrapping::new(text, advance("abc abc") + 1.0);
+    let wrap = wrapping.lines().row(1).start;
+    let spaces = "abc abc".len()..="abc abc      ".len();
+    assert!(
+        spaces.contains(&wrap),
+        "the row wraps at {wrap}, outside the run of spaces"
+    );
+    assert_rows_are_the_lines_drawn(&mut wrapping);
+}
+
+#[test]
+fn a_joined_emoji_a_row_wraps_before_starts_the_line_drawn_below_and_is_stepped_over_whole() {
+    let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+    let text = format!("abc abc{family}abc abc");
+    let mut wrapping = Wrapping::new(&text, advance("abc abc") + advance(family) / 2.0);
+    let wrap = "abc abc".len();
+    assert_eq!(wrapping.lines().row(1).start, wrap);
+    assert_rows_are_the_lines_drawn(&mut wrapping);
+    wrapping.area.editor.anchor.set(None);
+    wrapping.area.editor.caret.set(wrap);
+    wrapping.area.editor.affinity.set(Affinity::Downstream);
+    wrapping.press(Key::Named(NamedKey::ArrowRight));
+    assert_eq!(wrapping.area.editor.caret.get(), wrap + family.len());
+    assert_eq!(caret_rect(&wrapping.area).y, line_h());
+}
+
 #[test]
 fn the_caret_on_a_wrapped_row_stays_in_view_of_the_scroll_the_area_sits_in() {
     reset_layout_runtime();

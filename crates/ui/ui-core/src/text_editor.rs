@@ -642,7 +642,7 @@ impl Editor {
     /// The run a press selects at `hit`, by `granularity`.
     fn run_at(&self, text: &str, hit: Hit, granularity: Granularity) -> (usize, usize) {
         let range = match granularity {
-            Granularity::Char => hit.at..hit.at,
+            Granularity::Cluster => hit.at..hit.at,
             Granularity::Word => word_at(text, hit.under),
             Granularity::Line => match self.shape.lines {
                 Lines::Single => 0..text.len(),
@@ -665,7 +665,8 @@ impl Editor {
         let area = self.leaf.rect.get();
         let placed = self.placed(&text, &style);
         let hit = placed.hit(x - area.x, y - area.y);
-        let extending = granularity == Granularity::Char && crate::keyboard::modifiers().is_shift;
+        let extending =
+            granularity == Granularity::Cluster && crate::keyboard::modifiers().is_shift;
         let origin = match extending {
             true => {
                 let from = self
@@ -678,7 +679,7 @@ impl Editor {
         };
         let (anchor, caret, affinity) = match extending {
             true => (origin.0, hit.at, hit.affinity),
-            false if granularity == Granularity::Char => (hit.at, hit.at, hit.affinity),
+            false if granularity == Granularity::Cluster => (hit.at, hit.at, hit.affinity),
             false => (origin.0, origin.1, run_end_affinity(&placed, origin.1)),
         };
         self.select(anchor, caret, affinity);
@@ -703,7 +704,7 @@ impl Editor {
             false => (start, high.max(end)),
         };
         let affinity = match drag.granularity {
-            Granularity::Char => hit.affinity,
+            Granularity::Cluster => hit.affinity,
             _ => run_end_affinity(&placed, caret),
         };
         self.select(anchor, caret, affinity);

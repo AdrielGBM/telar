@@ -10,6 +10,14 @@ fn metrics() -> CellMetrics {
     CellMetrics::new(CellSize::default())
 }
 
+fn line_starts(text: &str, max_width: f32, style: &TextStyle) -> Vec<usize> {
+    metrics()
+        .laid_lines(text, None, max_width, style)
+        .into_iter()
+        .map(|line| line.range.start)
+        .collect()
+}
+
 #[test]
 fn a_measured_box_lands_on_cell_boundaries() {
     let (w, h) = metrics().measure("hello", None, 1000.0, &style());
@@ -76,28 +84,19 @@ fn a_paragraph_that_draws_nothing_has_no_ink() {
 }
 
 #[test]
-fn line_starts_are_where_the_painter_breaks_each_line() {
+fn laid_lines_begin_where_the_painter_breaks_each_line() {
     let text = "the quick brown fox";
-    assert_eq!(
-        metrics().line_starts(text, None, 10.0 * 8.0, &style()),
-        vec![0, 10]
-    );
-    assert_eq!(
-        metrics().line_starts("abcdefgh", None, 3.0 * 8.0, &style()),
-        vec![0, 3, 6]
-    );
-    assert_eq!(
-        metrics().line_starts("ab\ncd", None, 1.0e6, &style()),
-        vec![0, 3]
-    );
+    assert_eq!(line_starts(text, 10.0 * 8.0, &style()), vec![0, 10]);
+    assert_eq!(line_starts("abcdefgh", 3.0 * 8.0, &style()), vec![0, 3, 6]);
+    assert_eq!(line_starts("ab\ncd", 1.0e6, &style()), vec![0, 3]);
 }
 
 #[test]
-fn line_starts_ignore_the_clamp() {
+fn laid_lines_ignore_the_clamp() {
     let mut s = style();
     s.clamp = Clamp::lines(1, true);
     assert_eq!(
-        metrics().line_starts("the quick brown fox", None, 10.0 * 8.0, &s),
+        line_starts("the quick brown fox", 10.0 * 8.0, &s),
         vec![0, 10]
     );
 }

@@ -96,10 +96,10 @@ pub(crate) fn line_at(text: &str, under: usize) -> Range<usize> {
     start..end
 }
 
-/// How a press extends what it selected as the pointer is dragged on: by letters, by words or by lines.
+/// How a press extends what it selected as the pointer is dragged on: by grapheme clusters, by words or by lines.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Granularity {
-    Char,
+    Cluster,
     Word,
     Line,
 }
@@ -108,7 +108,7 @@ impl Granularity {
     /// The press that is the `count`th in a row: one positions, two take a word, three a line.
     pub(crate) fn of_clicks(count: u8) -> Self {
         match count {
-            0 | 1 => Self::Char,
+            0 | 1 => Self::Cluster,
             2 => Self::Word,
             _ => Self::Line,
         }

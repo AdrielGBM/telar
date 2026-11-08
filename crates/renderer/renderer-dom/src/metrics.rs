@@ -293,25 +293,6 @@ impl TextMetrics for CanvasTextMetrics {
         ink(&case_text(text, None, style).text, max_width, style)
     }
 
-    fn line_starts(
-        &self,
-        text: &str,
-        spans: Option<&[Span]>,
-        max_width: f32,
-        style: &TextStyle,
-    ) -> Vec<usize> {
-        let cased = case_text(text, spans, style);
-        let mut starts: Vec<usize> =
-            crate::wrap::line_starts(&cased.text, column(max_width, style), |run| {
-                width_of(run, style)
-            })
-            .into_iter()
-            .map(|shown| cased.source_index(shown))
-            .collect();
-        starts.dedup();
-        starts
-    }
-
     /// The browser's wrap and `text-align` inside the box, each cluster measured as the prefix of its line it ends, so kerning across it counts. Placed in the order written: the measurer has no bidi of its own, so right-to-left runs the browser reorders are not reordered here.
     fn laid_lines(
         &self,
@@ -322,14 +303,9 @@ impl TextMetrics for CanvasTextMetrics {
     ) -> Vec<TextLine> {
         let cased = case_text(text, spans, style);
         let shown: &str = &cased.text;
-        let mut starts = Vec::new();
-        crate::wrap::each_line(
-            shown,
-            column(max_width, style),
-            |run| width_of(run, style),
-            |line| starts.push(line.as_ptr() as usize - shown.as_ptr() as usize),
-        );
-        if starts.is_empty() || shown.ends_with('\n') {
+        let mut starts =
+            crate::wrap::line_starts(shown, column(max_width, style), |run| width_of(run, style));
+        if shown.ends_with('\n') {
             starts.push(shown.len());
         }
         // A line runs on to where the next begins or its paragraph ends, so the spaces the wrap trimmed off it are still clusters a caret can stand after.

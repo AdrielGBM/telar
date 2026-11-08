@@ -101,12 +101,15 @@ fn the_browser_breaks_a_wrapped_text_area_where_its_caret_does() {
         .expect("a valid selector")
         .expect("the area is in the document");
     let text = text_node(element.as_ref(), PARAGRAPH).expect("the area draws its text");
-    let starts = renderer_core::text_line_starts(
+    let starts: Vec<usize> = renderer_core::text_laid_lines(
         PARAGRAPH,
         None,
         WIDTH,
         &style().with_text_wrap(TextWrap::Wrap),
-    );
+    )
+    .into_iter()
+    .map(|line| line.range.start)
+    .collect();
     assert!(starts.len() >= 3, "{starts:?}");
     let line = ui_core::line_box(&style());
     let area_height = ui_core::track_layout(area_node)

@@ -59,9 +59,16 @@ impl RowCache {
                 Rc::clone(&laid.drawn),
             );
         }
-        let lines = Rc::new(VisualLines::of(text, style, width));
+        let (lines, drawn) = match width {
+            Some(width) => {
+                let drawn: Rc<[TextLine]> = lay_out(text, style, mask, width).into();
+                (VisualLines::drawn(text, &drawn), Some((width, drawn)))
+            }
+            None => (VisualLines::unwrapped(text), None),
+        };
+        let lines = Rc::new(lines);
         let widest = Rc::new(OnceCell::new());
-        let drawn = Drawn::default();
+        let drawn: Drawn = Rc::new(RefCell::new(drawn));
         *self.0.borrow_mut() = Some(Laid {
             text: text.to_string(),
             width,
@@ -206,33 +213,9 @@ impl<'a> Placed<'a> {
         {
             return Rc::clone(lines);
         }
-        let lines: Rc<[TextLine]> = self.lay_out(width).into();
+        let lines: Rc<[TextLine]> = lay_out(self.text, &self.style, self.mask, width).into();
         *self.drawn.borrow_mut() = Some((width, Rc::clone(&lines)));
         lines
-    }
-
-    fn lay_out(&self, width: f32) -> Vec<TextLine> {
-        let Some(bullet) = self.mask else {
-            return crate::text_metrics::laid_lines(self.text, width, &self.style);
-        };
-        let bounds: Vec<usize> = self
-            .text
-            .grapheme_indices(true)
-            .map(|(at, _)| at)
-            .chain(std::iter::once(self.text.len()))
-            .collect();
-        let step = bullet.len_utf8();
-        let written = |shown: usize| bounds[(shown / step).min(bounds.len() - 1)];
-        crate::text_metrics::laid_lines(&masked(self.text, bullet), width, &self.style)
-            .into_iter()
-            .map(|mut line| {
-                line.range = written(line.range.start)..written(line.range.end);
-                for cluster in &mut line.clusters {
-                    cluster.bytes = written(cluster.bytes.start)..written(cluster.bytes.end);
-                }
-                line
-            })
-            .collect()
     }
 
     /// The x of byte `at` on `row` before any scroll, held inside the box a wrapped row is drawn in, which the space a row broke on hangs past.
@@ -375,6 +358,30 @@ impl<'a> Placed<'a> {
         }
         bands
     }
+}
+
+/// The lines `text` is drawn in at `width`, each grapheme cluster shown as `mask` where there is one, in the bytes of `text`.
+fn lay_out(text: &str, style: &TextStyle, mask: Option<char>, width: f32) -> Vec<TextLine> {
+    let Some(bullet) = mask else {
+        return crate::text_metrics::laid_lines(text, width, style);
+    };
+    let bounds: Vec<usize> = text
+        .grapheme_indices(true)
+        .map(|(at, _)| at)
+        .chain(std::iter::once(text.len()))
+        .collect();
+    let step = bullet.len_utf8();
+    let written = |shown: usize| bounds[(shown / step).min(bounds.len() - 1)];
+    crate::text_metrics::laid_lines(&masked(text, bullet), width, style)
+        .into_iter()
+        .map(|mut line| {
+            line.range = written(line.range.start)..written(line.range.end);
+            for cluster in &mut line.clusters {
+                cluster.bytes = written(cluster.bytes.start)..written(cluster.bytes.end);
+            }
+            line
+        })
+        .collect()
 }
 
 /// The drawn line `row` of `rows` is: the one that starts where it does.
