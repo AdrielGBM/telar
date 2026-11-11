@@ -330,6 +330,8 @@ impl LayoutEngine {
             return;
         }
         self.forget(node);
+        // Taffy's `remove` leaves the node's context in its slot, so the measure and all it captured would outlive the node.
+        let _ = self.tree.set_node_context(node, None);
         let _ = self.tree.remove(node);
     }
 

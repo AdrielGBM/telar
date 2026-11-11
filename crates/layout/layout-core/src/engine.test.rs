@@ -21,6 +21,25 @@ fn freeing_a_node_twice_is_a_no_op() {
     assert!(engine.mark_dirty(node).is_err(), "and it stays gone");
 }
 
+/// A measure holds whatever its widget reads its content from, and taffy's own `remove` leaves a node's context in its slot until another node takes it, so a freed text kept everything it captured alive for as long as the tree lived.
+#[test]
+fn freeing_a_measured_leaf_drops_its_measure() {
+    let captured = std::rc::Rc::new(());
+    let measure: MeasureFn = {
+        let captured = std::rc::Rc::clone(&captured);
+        Box::new(move |_| {
+            let _ = &captured;
+            (10.0, 10.0)
+        })
+    };
+    let mut engine = LayoutEngine::new();
+    let node = engine
+        .new_measured_leaf(LayoutStyle::new(), measure)
+        .unwrap();
+    engine.remove(node);
+    assert_eq!(std::rc::Rc::strong_count(&captured), 1);
+}
+
 /// Every mutator answers for a freed node instead of taking the process down with it.
 ///
 /// Taffy indexes its slot map directly — `style()` included, so there is nothing to guard with but our own record — and a widget can outlive its node by design: a `Segment` holds it so a re-render mid-dispatch can still flatten it, so an effect it owns may fire once after the node is gone. These all return `Result`; an error is what the signature already promised.
