@@ -72,6 +72,13 @@ impl Caret {
         self.at.peek()
     }
 
+    /// The selected byte range, low end first, or `None` when nothing is selected: what an edit at the caret replaces. Reactive.
+    pub fn selection(&self) -> Option<std::ops::Range<usize>> {
+        let at = self.at.get();
+        let anchor = self.anchor.get()?;
+        (anchor != at).then(|| anchor.min(at)..anchor.max(at))
+    }
+
     /// Moves it to `at`, dropping the selection: what a completion inserted at the caret leaves behind.
     pub fn set(&self, at: usize) {
         self.anchor.set(None);

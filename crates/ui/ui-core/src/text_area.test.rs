@@ -901,3 +901,16 @@ fn a_composition_that_runs_past_the_edge_wraps_and_grows_the_area() {
     wrapping.area.on_event(&ime(Ime::preedit("", None)));
     assert!((wrapping.height() - one).abs() < 0.5, "and shrinks back");
 }
+
+/// What decides between editing at the caret and replacing a selection: the selection read from outside, gone once the caret is moved.
+#[test]
+fn the_selection_is_read_from_outside() {
+    let (mut area, _value) = focused("hello");
+    let caret = area.caret();
+    assert_eq!(caret.selection(), None);
+    area.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    area.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    assert_eq!(caret.selection(), Some(3..5));
+    caret.set(1);
+    assert_eq!(caret.selection(), None);
+}
