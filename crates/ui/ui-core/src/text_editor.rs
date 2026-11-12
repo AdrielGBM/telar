@@ -9,8 +9,8 @@ use std::rc::Rc;
 use geometry_core::{BorderRadius, Rect};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
 use platform_core::{
-    Event, Ime, Key, KeyboardConvention, ModifiersState, NamedKey, PointerButton, PointerSource,
-    TextInput, keyboard_convention,
+    ConsumedKeys, Event, Ime, Key, KeyboardConvention, ModifiersState, NamedKey, PointerButton,
+    PointerSource, TextInput, keyboard_convention,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, LineHeight, RectStyle, Semantics, ShapeStyle, TextStyle, TextWrap};
@@ -39,7 +39,7 @@ pub(crate) const UNDERLINE_THICKNESS: f32 = 2.0;
 /// How wide an [`Underline`] of no characters is drawn: a mark where something was expected and nothing was written.
 pub(crate) const POINT_MARK: f32 = 6.0;
 
-/// Inserted by the Tab key in an editor of several lines (soft tabs).
+/// Inserted by Tab in an area that [indents](TabKey::Indents) (soft tabs).
 const TAB_INSERT: &str = "    ";
 
 /// What hears an editor's keys before it does, and answers whether it took one.
@@ -86,10 +86,22 @@ impl Caret {
     }
 }
 
-/// How many lines an editor holds, which decides what Enter, Tab and the vertical arrows do and how the box is sized.
+/// What Tab does in a [`TextArea`](crate::TextArea).
+///
+/// Tab moving on keeps a keyboard user from being trapped in a field of several lines (WCAG 2.1.2, No Keyboard Trap), and it is what a text box of several lines does by default on the platforms Telar runs on. An area that indents, a code editor's, keeps unmodified Tab and leaves Shift+Tab to step back; Ctrl+Tab and Ctrl+Shift+Tab move on and back from it, as from the platforms' own text views that take Tab, and Escape hands the keyboard back as from any field.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TabKey {
+    /// Tab moves focus to the next control and Shift+Tab to the previous one, as in a field of one line.
+    #[default]
+    MovesFocus,
+    /// Tab inserts four spaces; Shift+Tab moves focus back, and Ctrl+Tab and Ctrl+Shift+Tab move it on and back.
+    Indents,
+}
+
+/// How many lines an editor holds, which decides what Enter and the vertical arrows do and how the box is sized.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Lines {
-    /// One line that never wraps: Enter submits, Tab moves on, and a line longer than the box scrolls sideways under it.
+    /// One line that never wraps: Enter submits, and a line longer than the box scrolls sideways under it.
     Single,
     /// Several: Enter breaks the line, the box is as tall as the rows the text is drawn in, and the scroll it sits in follows the caret.
     Multi,
@@ -178,6 +190,7 @@ pub(crate) struct Editor {
     pub(crate) on_submit: Option<Box<dyn Fn()>>,
     pub(crate) on_cancel: Option<Box<dyn Fn()>>,
     pub(crate) on_key: Option<Box<KeyHandler>>,
+    pub(crate) tab_key: TabKey,
     pub(crate) underlines: Option<Box<dyn Fn() -> Vec<Underline>>>,
     _remeasure: Option<Effect>,
     _blinking: Effect,
@@ -293,6 +306,7 @@ impl Editor {
             on_submit: None,
             on_cancel: None,
             on_key: None,
+            tab_key: TabKey::MovesFocus,
             underlines: None,
             _remeasure: remeasure,
             _blinking: effect(move || {
@@ -410,6 +424,11 @@ impl Editor {
         }
     }
 
+    /// Whether Tab pressed with `mods` types the indent rather than moving focus.
+    fn indents_on(&self, mods: &ModifiersState) -> bool {
+        self.tab_key == TabKey::Indents && !mods.is_shift && !mods.is_ctrl
+    }
+
     /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the key was consumed.
     ///
     /// Home and End, and Command with the horizontal arrows on a Mac, go to the ends of the row on screen; the primary modifier with Home or End, and Command with the vertical arrows on a Mac, go to the ends of the text.
@@ -485,15 +504,12 @@ impl Editor {
                 }
                 return EventResult::Handled;
             }
-            Key::Named(NamedKey::Tab) if multi => {
+            Key::Named(NamedKey::Tab) if self.indents_on(mods) => {
                 caret = replace(&mut text, caret, TAB_INSERT);
                 edited = true;
             }
             Key::Named(NamedKey::Tab) => {
-                match mods.is_shift {
-                    true => focus::focus_prev(),
-                    false => focus::focus_next(),
-                }
+                focus::step_towards(mods.is_shift);
                 return EventResult::Handled;
             }
             Key::Named(NamedKey::Backspace) => {
@@ -788,8 +804,12 @@ impl Editor {
             Lines::Single => renderer_core::Role::TextInput,
             Lines::Multi => renderer_core::Role::MultilineTextInput,
         };
+        let consumes = match self.tab_key {
+            TabKey::MovesFocus => role.consumed_keys(),
+            TabKey::Indents => role.consumed_keys() | ConsumedKeys::TAB,
+        };
         let mut semantics = Semantics::of(role);
-        focus::describe(self.id, &mut semantics, None);
+        focus::describe(self.id, &mut semantics, Some(consumes));
         semantics
     }
 

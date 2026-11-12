@@ -11,9 +11,9 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::focus::{self, FocusId};
 use crate::layout_item::LeafWidget;
 use crate::layout_leaf::LayoutLeaf;
-use crate::text_editor::{Caret, Editor, Lines, Underline};
+use crate::text_editor::{Caret, Editor, Lines, TabKey, Underline};
 
-/// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input), and the same editor underneath: the caret, the selection, the presses, drags, double- and triple-clicks that make one, the clipboard and an input method's composition behave alike in both. A base primitive: unstyled (wrap it in a `box` for a border/background). Enter breaks the line, Backspace/Delete join lines, the arrows move in all four directions, Home/End go to the ends of the row and Tab inserts spaces; a triple-click takes the line it lands in.
+/// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input), and the same editor underneath: the caret, the selection, the presses, drags, double- and triple-clicks that make one, the clipboard and an input method's composition behave alike in both. A base primitive: unstyled (wrap it in a `box` for a border/background). Enter breaks the line, Backspace/Delete join lines, the arrows move in all four directions and Home/End go to the ends of the row; a triple-click takes the line it lands in. Tab and Shift+Tab move focus on and back, as from a field of one line, unless [`tab_key`](Self::tab_key) makes the area indent.
 ///
 /// By default only `\n` breaks a line, and one longer than the box is cut at its edge and scrolls sideways under it, which is what a code editor and a line-number gutter beside it expect. [`text_wrap`](Self::text_wrap) with [`TextWrap::Wrap`] breaks lines at the area's width instead, between words and inside a word too long for a row, as a paragraph and an HTML `<textarea>` do; the caret then moves by the rows on screen. Its measured height grows with the rows it is drawn in, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor whose view follows the caret.
 pub struct TextArea {
@@ -59,6 +59,12 @@ impl TextArea {
     /// Runs when Escape is pressed while focused, just before the area hands the keyboard back. See [`Input::on_cancel`](crate::Input::on_cancel).
     pub fn on_cancel(mut self, f: impl Fn() + 'static) -> Self {
         self.editor.on_cancel = Some(Box::new(f));
+        self
+    }
+
+    /// What Tab does here: [`TabKey::MovesFocus`] (the default) moves focus on, as from any field, and [`TabKey::Indents`] types the indent, for an area whose text is indented, a code editor's; Ctrl+Tab then moves focus on from it. See `docs/keyboard.md`.
+    pub fn tab_key(mut self, tab: TabKey) -> Self {
+        self.editor.tab_key = tab;
         self
     }
 

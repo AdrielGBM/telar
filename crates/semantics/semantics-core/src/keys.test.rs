@@ -6,7 +6,7 @@ fn a_set_survives_being_written_down_and_read_back() {
         ConsumedKeys::EMPTY,
         ConsumedKeys::TAB,
         ConsumedKeys::SCROLLING,
-        Role::MultilineTextInput.consumed_keys(),
+        Role::MultilineTextInput.consumed_keys() | ConsumedKeys::TAB,
         ConsumedKeys::ACTIVATION | ConsumedKeys::ARROW_DOWN,
     ] {
         assert_eq!(ConsumedKeys::from_names(&keys.to_names()), keys);
@@ -28,12 +28,12 @@ fn an_empty_set_is_written_as_nothing() {
 }
 
 #[test]
-fn only_the_multiline_editor_keeps_tab() {
+fn no_role_keeps_tab() {
     let keeping_tab: Vec<Role> = ALL_ROLES
         .into_iter()
         .filter(|role| role.consumed_keys().contains(ConsumedKeys::TAB))
         .collect();
-    assert_eq!(keeping_tab, vec![Role::MultilineTextInput]);
+    assert_eq!(keeping_tab, Vec::<Role>::new());
 }
 
 #[test]

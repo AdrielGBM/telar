@@ -914,3 +914,146 @@ fn the_selection_is_read_from_outside() {
     caret.set(1);
     assert_eq!(caret.selection(), None);
 }
+
+fn with(k: Key, modifiers: ModifiersState) -> Event {
+    Event::KeyPressed {
+        key: k,
+        modifiers,
+        unmodified: None,
+    }
+}
+
+const SHIFT: ModifiersState = ModifiersState {
+    is_shift: true,
+    is_ctrl: false,
+    is_alt: false,
+    is_meta: false,
+};
+
+const CTRL: ModifiersState = ModifiersState {
+    is_shift: false,
+    is_ctrl: true,
+    is_alt: false,
+    is_meta: false,
+};
+
+/// A form of a field, an area that Tab does `tab` in, and a field after it, the area focused.
+struct Form {
+    before: crate::Input,
+    area: TextArea,
+    after: crate::Input,
+    value: RwSignal<String>,
+}
+
+fn form(tab: TabKey) -> Form {
+    reset_layout_runtime();
+    let style = || TextStyle::new(14.0, Color::BLACK);
+    let before = crate::Input::new(signal(String::new()), LayoutStyle::new(), style).unwrap();
+    let value = signal("one".to_string());
+    let area = TextArea::new(value, LayoutStyle::new().width(400.0), style)
+        .unwrap()
+        .tab_key(tab);
+    let after = crate::Input::new(signal(String::new()), LayoutStyle::new(), style).unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(400.0).height(400.0),
+        &[
+            before.layout_node(),
+            area.layout_node(),
+            after.layout_node(),
+        ],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    area.request_focus();
+    Form {
+        before,
+        area,
+        after,
+        value,
+    }
+}
+
+fn focused_role() -> Option<renderer_core::Role> {
+    let current = focus::current()?;
+    focus::tab_order()
+        .into_iter()
+        .find(|stop| stop.id == current)
+        .map(|stop| stop.role)
+}
+
+fn keeps_tab(area: &TextArea) -> bool {
+    area.editor.semantics().focusable.is_some_and(|focusable| {
+        focusable
+            .consumes
+            .contains(platform_core::ConsumedKeys::TAB)
+    })
+}
+
+#[test]
+fn tab_moves_focus_on_from_an_area_and_types_nothing() {
+    let mut form = form(TabKey::MovesFocus);
+    assert_eq!(
+        focused_role(),
+        Some(renderer_core::Role::MultilineTextInput)
+    );
+    form.area.on_event(&key(Key::Named(NamedKey::Tab)));
+    assert!(focus::is_focused(form.after.focus_id()));
+    assert_eq!(form.value.get(), "one");
+    focus::clear();
+}
+
+#[test]
+fn shift_tab_moves_focus_back_from_an_area() {
+    let mut form = form(TabKey::MovesFocus);
+    form.area.on_event(&with(Key::Named(NamedKey::Tab), SHIFT));
+    assert!(focus::is_focused(form.before.focus_id()));
+    assert_eq!(form.value.get(), "one");
+    focus::clear();
+}
+
+#[test]
+fn an_area_that_indents_types_tab_and_ctrl_tab_moves_on() {
+    let mut form = form(TabKey::Indents);
+    form.area.caret().set(0);
+    form.area.on_event(&key(Key::Named(NamedKey::Tab)));
+    assert_eq!(form.value.get(), "    one");
+    assert!(form.area.focused());
+    form.area.on_event(&with(Key::Named(NamedKey::Tab), CTRL));
+    assert!(focus::is_focused(form.after.focus_id()));
+    assert_eq!(form.value.get(), "    one");
+    focus::clear();
+}
+
+#[test]
+fn an_area_that_indents_steps_back_on_shift_tab_and_ctrl_shift_tab() {
+    for modifiers in [
+        SHIFT,
+        ModifiersState {
+            is_ctrl: true,
+            ..SHIFT
+        },
+    ] {
+        let mut form = form(TabKey::Indents);
+        form.area
+            .on_event(&with(Key::Named(NamedKey::Tab), modifiers));
+        assert!(focus::is_focused(form.before.focus_id()), "{modifiers:?}");
+        assert_eq!(form.value.get(), "one");
+        focus::clear();
+    }
+}
+
+/// What a host that walks its own Tab order reads: an area keeps Tab from it only when it types Tab.
+#[test]
+fn only_an_area_that_indents_keeps_tab_from_the_host() {
+    let form_moving = form(TabKey::MovesFocus);
+    assert!(!keeps_tab(&form_moving.area));
+    focus::clear();
+    let form_indenting = form(TabKey::Indents);
+    assert!(keeps_tab(&form_indenting.area));
+    focus::clear();
+}

@@ -129,7 +129,7 @@ impl std::ops::BitOr for ConsumedKeys {
 impl Role {
     /// The keys a focused, enabled control of this role keeps, as Telar's own controls of that role use them.
     ///
-    /// A widget whose keys depend on its state — a dropdown that only walks rows while open — declares its own set instead; this is the answer for the ones that said nothing. Tab is kept only by the multi-line editor, which types it: every other control leaves it to move focus.
+    /// A widget whose keys depend on its state — a dropdown that only walks rows while open — declares its own set instead; this is the answer for the ones that said nothing. No role keeps Tab, so it moves focus out of every control: a multi-line editor that types it declares it for itself.
     pub fn consumed_keys(&self) -> ConsumedKeys {
         use ConsumedKeys as K;
         match self {
@@ -153,9 +153,8 @@ impl Role {
                 K::ARROWS | K::EDGES | K::PAGING | K::ENTER | K::SPACE
             }
             Self::SpinButton => K::ARROWS | K::ENTER,
-            Self::TextInput => K::ARROWS | K::EDGES | K::SPACE | K::ENTER | K::BACKSPACE,
-            Self::MultilineTextInput => {
-                K::ARROWS | K::EDGES | K::SPACE | K::ENTER | K::BACKSPACE | K::TAB
+            Self::TextInput | Self::MultilineTextInput => {
+                K::ARROWS | K::EDGES | K::SPACE | K::ENTER | K::BACKSPACE
             }
             Self::ScrollArea => K::SCROLLING,
             Self::Group

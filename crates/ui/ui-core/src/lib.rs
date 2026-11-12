@@ -190,7 +190,7 @@ pub use svg::Svg;
 pub use text::{Text, TextRun};
 pub use text_area::TextArea;
 pub use text_edit::DOUBLE_CLICK;
-pub use text_editor::{Caret, Underline};
+pub use text_editor::{Caret, TabKey, Underline};
 pub use text_input::text_input;
 pub use theme_provider::{ScopeProvider, follow_theme, provide_theme};
 pub use transform_origin::{TransformOrigin, box_transform_about};

@@ -23,7 +23,7 @@ Each role has a default, `Role::consumed_keys()`:
 | status, log | nothing |
 | spin button | the arrows, Enter |
 | text field | the arrows, Home/End, Space, Enter, Backspace |
-| multi-line editor | a text field's keys, and Tab (it types one) |
+| multi-line editor | a text field's keys; Tab too when it indents (see [Tab in a field of several lines](#tab-in-a-field-of-several-lines)) |
 | scroll area | everything that scrolls; a plain one only the keys for the axes it overflows (see [Scroll areas](#scroll-areas)) |
 | everything else | nothing |
 
@@ -193,8 +193,9 @@ that calls it.
 ## Editing text
 
 `Input` and `TextArea` are one editor underneath, so they edit alike: `Input` is the editor of one line, where
-Enter runs `on_submit` and Tab moves on, and `TextArea` the editor of several, where Enter breaks the line, Tab
-inserts spaces and the vertical arrows move by the rows on screen. In both, a press puts the caret beside the
+Enter runs `on_submit`, and `TextArea` the editor of several, where Enter breaks the line and the vertical
+arrows move by the rows on screen. In both, Tab moves focus on and Shift+Tab back, unless the area indents
+(below). In both, a press puts the caret beside the
 letter under it, a drag selects from there (on a mouse; a finger drags the page), a double-click takes a word,
 a triple-click takes the line in `TextArea` and the whole value in `Input`, and Shift with a press extends the
 selection. A drag after a double- or triple-click goes on by whole words or lines. `Shift` with the arrows,
@@ -204,6 +205,29 @@ A line never wraps in `Input`, nor in a `TextArea` without `TextWrap::Wrap`: one
 the box's edges and scrolls sideways under it to keep the caret in view, as a horizontal wheel or swipe over it
 does too, and a field the keyboard leaves shows the start of its value again. A `TextArea` in a scroll area
 brings the caret's row into view of it as the caret moves, rows typed past the bottom of the view included.
+
+### Tab in a field of several lines
+
+A field that kept Tab for itself would trap a keyboard user: nothing after it could be reached without a
+pointer (WCAG 2.1.2, No Keyboard Trap). So every `TextArea` leaves Tab to move focus by default
+(`TabKey::MovesFocus`), as a text box of several lines does by default on the platforms Telar runs on, and it
+does not declare Tab among its keys, so a browser walks past it natively on web-dom.
+
+An area whose text is indented, a code editor's, opts in with `.tab_key(TabKey::Indents)`:
+
+| Key | In an area that indents |
+| --- | --- |
+| Tab | inserts four spaces |
+| Shift+Tab | moves focus back |
+| Ctrl+Tab | moves focus on |
+| Ctrl+Shift+Tab | moves focus back |
+| Escape | hands the keyboard back, as in any field |
+
+Ctrl+Tab is the way out the platforms' own text views that take Tab offer, Control-Tab on a Mac included, and
+Ctrl is read on every platform rather than the primary modifier. Such an area declares Tab among its keys. A
+browser keeps Ctrl+Tab for switching its own tabs and never delivers it to a page, so on the web the way out
+of an area that indents is Shift+Tab or Escape. An application with an area that indents says how to leave it
+where a person learns its keys.
 
 ## Input methods
 
