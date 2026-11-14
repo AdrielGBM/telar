@@ -22,7 +22,7 @@ pub use paths::SystemPaths;
 pub use paths::{AppPathsProvider, NoPaths};
 pub use preferences::{
     FileStore, MemoryStore, PreferenceStore, preference_store, read_if_present,
-    set_preference_store, store_preference, stored_preference, write_file_atomically,
+    set_preference_store, store_preference, stored_preference,
 };
 #[cfg(feature = "di")]
 pub use registry::ServiceError;

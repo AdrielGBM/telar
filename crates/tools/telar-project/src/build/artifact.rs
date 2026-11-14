@@ -140,24 +140,31 @@ pub fn write_build_index(
 /// The macro carries no transpiler, so when the index no longer answers it can only say that, not why. Without this record the reason lived and died in the CLI's stderr, and a build started any other way (a plain `cargo build`, the editor's own check) was told to re-run a command that would fail again.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildFailure {
-    /// Path to the `.rsx` that failed, relative to the package's `src/`, with `/` separators. Empty when the failure belongs to no source.
-    pub source: String,
-    /// Content hash of that `.rsx` when it failed; empty when it could not be read. How a failure the author has since fixed is told apart from one still standing.
-    pub hash: String,
+    /// The `.rsx` the failure was recorded against, or `None` when it belongs to no source a path under `src/` can name, so no edit can be seen to have fixed it.
+    pub source: Option<FailedSource>,
     /// The error exactly as the compiler would print it, location included.
     pub message: String,
+}
+
+/// The `.rsx` a [`BuildFailure`] was recorded against, as it was when it failed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FailedSource {
+    /// Relative to the package's `src/`, with `/` separators.
+    pub path: String,
+    /// Content hash of the file when it failed, or `None` when it could not be read. How a failure the author has since fixed is told apart from one still standing.
+    pub hash: Option<String>,
 }
 
 impl BuildFailure {
     /// Whether the source this was recorded against is still byte-identical, so the message still describes what the build would hit.
     pub fn still_applies(&self, src_dir: &Path) -> bool {
-        if self.source.is_empty() {
+        let Some(source) = &self.source else {
             return true;
-        }
-        let current = std::fs::read(src_dir.join(&self.source))
-            .map(|bytes| crate::content_hash(&bytes))
-            .unwrap_or_default();
-        current == self.hash
+        };
+        let current = std::fs::read(src_dir.join(&source.path))
+            .ok()
+            .map(|bytes| crate::content_hash(&bytes));
+        current == source.hash
     }
 }
 
@@ -176,7 +183,7 @@ pub fn write_build_failure(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(failure).expect("BuildFailure holds only strings");
+    let json = serde_json::to_string_pretty(failure).expect("a BuildFailure holds only text");
     crate::write_if_changed_atomic(&path, &format!("{json}\n"))
 }
 

@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::non_utf8_name;
 
 #[test]
 fn joins_the_components_under_the_base() {
@@ -29,31 +30,32 @@ fn keeps_a_backslash_in_a_unix_file_name() {
     );
 }
 
-#[cfg(unix)]
-fn non_utf8_name() -> std::ffi::OsString {
-    use std::os::unix::ffi::OsStrExt;
-    std::ffi::OsStr::from_bytes(b"caf\xe9.rsx").to_owned()
-}
-
-#[cfg(windows)]
-fn non_utf8_name() -> std::ffi::OsString {
-    use std::os::windows::ffi::OsStringExt;
-    let lone_surrogate = 0xd800;
-    let name: Vec<u16> = "caf"
-        .encode_utf16()
-        .chain([lone_surrogate])
-        .chain(".rsx".encode_utf16())
-        .collect();
-    std::ffi::OsString::from_wide(&name)
-}
-
 #[test]
 fn refuses_a_component_that_is_not_utf8() {
     let base = Path::new("/pkg/src");
-    let name = non_utf8_name();
+    let name = non_utf8_name(".rsx");
     assert_eq!(relative_slashed(&base.join(&name), base), None);
     assert_eq!(
         relative_slashed(&base.join(&name).join("x.rsx"), base),
         None
     );
+}
+
+#[test]
+fn names_every_component_of_a_utf8_path() {
+    assert_eq!(
+        utf8_components(Path::new("ui/forms/field.rsx")),
+        Ok(vec!["ui", "forms", "field.rsx"])
+    );
+}
+
+#[test]
+fn a_path_that_is_not_utf8_is_refused_naming_where_it_stops_being_utf8() {
+    let name = non_utf8_name("");
+    let path = Path::new("ui").join(&name).join("field.rsx");
+
+    let error = utf8_components(&path).unwrap_err();
+
+    assert_eq!(error.path, Path::new("ui").join(&name));
+    assert!(error.to_string().contains("not named in UTF-8"), "{error}");
 }

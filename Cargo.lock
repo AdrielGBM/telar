@@ -851,6 +851,7 @@ dependencies = [
  "serde_json",
  "telar-baker",
  "telar-diagnostics",
+ "telar-fs-atomic",
  "telar-geometry-core",
  "telar-i18n-core",
  "telar-parser",
@@ -5855,6 +5856,7 @@ dependencies = [
  "similar",
  "telar",
  "telar-embed",
+ "telar-fs-atomic",
  "telar-geometry-core",
  "telar-i18n-core",
  "telar-icons-core",
@@ -6016,6 +6018,14 @@ version = "0.2.3"
 dependencies = [
  "document-features",
  "telar",
+]
+
+[[package]]
+name = "telar-fs-atomic"
+version = "0.2.3"
+dependencies = [
+ "tempfile",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6259,8 +6269,8 @@ version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
+ "telar-fs-atomic",
  "telar-icons-core",
- "tempfile",
  "toml",
 ]
 
@@ -6363,6 +6373,7 @@ dependencies = [
  "pollster",
  "raw-window-handle",
  "rustc-hash 2.1.3",
+ "telar-fs-atomic",
  "telar-geometry-core",
  "telar-platform-headless",
  "telar-reactive-local",
@@ -6371,7 +6382,6 @@ dependencies = [
  "telar-renderer-hardware",
  "telar-renderer-software",
  "telar-renderer-text",
- "tempfile",
  "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -6490,6 +6500,7 @@ dependencies = [
  "dirs 7.0.0",
  "rustc-hash 2.1.3",
  "serde_json",
+ "telar-fs-atomic",
  "telar-geometry-core",
  "telar-platform-core",
  "telar-reactive-core",
@@ -6498,7 +6509,6 @@ dependencies = [
  "telar-semantics-core",
  "telar-test-process",
  "telar-wire-core",
- "tempfile",
  "thiserror 2.0.20",
  "toml",
  "tracing",

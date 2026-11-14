@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use telar_parser::{Preview, RsxDocument, Section, is_preview_header, section_opened_by};
 use telar_project::naming::{preview_id_suffix, preview_slug};
 use telar_project::protocol::{package_workshop_files, preview_location};
-use telar_project::{ManifestError, preview_hosts};
+use telar_project::{ManifestError, NotUtf8Path, preview_hosts};
 
 /// The request answering [`preview_at`] for a text document position, `null` outside a preview.
 pub const PREVIEW_AT: &str = "telar/previewAt";
@@ -30,6 +30,26 @@ pub struct PreviewHost {
     pub workshops: Vec<Workshop>,
 }
 
+/// Why a `.rsx` inside a package has no [`PreviewHost`].
+#[derive(Debug)]
+pub enum PreviewHostError {
+    /// A `telar.toml` deciding which workshops list the package does not load.
+    Manifest(ManifestError),
+    /// The file's name is not UTF-8, so no component is generated under it to have previews.
+    Unnamed(NotUtf8Path),
+}
+
+impl std::fmt::Display for PreviewHostError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Manifest(error) => error.fmt(f),
+            Self::Unnamed(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for PreviewHostError {}
+
 /// A package whose workshop lists a preview, and the files its running workshops are reached through: the window's channel, and the page's server, which names its address.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,19 +71,23 @@ impl Workshop {
 }
 
 impl PreviewHost {
-    /// The host of the `.rsx` at `rsx_path`: `None` outside a package, `Err` when a `telar.toml` deciding which workshops list it does not load. A `*.preview.rsx` previews the component it is named after, so its ids are that component's.
-    pub fn discover(rsx_path: &Path) -> Option<Result<Self, ManifestError>> {
+    /// The host of the `.rsx` at `rsx_path`: `None` outside a package, `Err` when its name has no component or a `telar.toml` deciding which workshops list it does not load. A `*.preview.rsx` previews the component it is named after, so its ids are that component's.
+    pub fn discover(rsx_path: &Path) -> Option<Result<Self, PreviewHostError>> {
         let package_root = telar_project::find_package_root(rsx_path)?;
         let crate_name = crate::project::crate_name(&package_root)?;
+        let component = match telar_project::component_name(rsx_path) {
+            Ok(component) => component,
+            Err(e) => return Some(Err(PreviewHostError::Unnamed(e))),
+        };
         let hosts = match preview_hosts(&package_root, &crate_name) {
             Ok(hosts) => hosts,
-            Err(e) => return Some(Err(e)),
+            Err(e) => return Some(Err(PreviewHostError::Manifest(e))),
         };
         Some(Ok(Self {
             workshops: hosts.iter().filter_map(|dir| Workshop::of(dir)).collect(),
             package_root,
             crate_name,
-            component: telar_project::component_name(rsx_path),
+            component,
         }))
     }
 

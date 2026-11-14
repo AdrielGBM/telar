@@ -804,16 +804,25 @@ fn wire_package(
 
         if file.previews {
             // The const lives inside the file's own module now, so it is named by its path rather than reached by a bare name the crate root used to re-export.
-            let module: Vec<Ident> = file
-                .rel_out
-                .parent()
-                .into_iter()
-                .flat_map(Path::components)
-                .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                .chain([telar_project::module_name(&file.rsx_path)])
-                .map(|segment| Ident::new(&segment, Span::call_site()))
+            let refuse = |error: telar_project::NotUtf8Path| {
+                let msg = format!("rsx: {error}");
+                quote! { compile_error!(#msg); }
+            };
+            let names = telar_project::utf8_components(&file.rel_out).map_err(|error| {
+                refuse(telar_project::NotUtf8Path {
+                    path: src_dir.join(error.path),
+                })
+            })?;
+            let module_name = telar_project::module_name(&file.rsx_path).map_err(refuse)?;
+            let component_name = telar_project::component_name(&file.rsx_path).map_err(refuse)?;
+            let dirs = names.split_last().map_or(&[][..], |(_, dirs)| dirs);
+            let module: Vec<Ident> = dirs
+                .iter()
+                .copied()
+                .chain([module_name.as_str()])
+                .map(|segment| Ident::new(segment, Span::call_site()))
                 .collect();
-            let name = preview_const_ident(&telar_project::component_name(&file.rsx_path));
+            let name = preview_const_ident(&component_name);
             preview_const_idents.push(quote! { crate::#(#module)::*::#name });
         }
     }

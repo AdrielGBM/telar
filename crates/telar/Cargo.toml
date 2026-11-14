@@ -276,6 +276,7 @@ desktop-bare = ["runtime", "dep:platform-desktop", "dep:tracing-subscriber"]
 android-bare = ["runtime", "dep:platform-android"]
 
 [dependencies]
+fs-atomic = { workspace = true }
 geometry-core = { workspace = true, optional = true }
 i18n-core = { workspace = true }
 icons-core = { workspace = true, optional = true }

@@ -282,6 +282,7 @@ pub fn install_default_text_metrics() {
 #[doc(hidden)]
 pub use renderer_text::fonts::install_face as install_font_face;
 
+pub use fs_atomic::write_atomically;
 #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
 pub use platform_web::{PageHidden, WebStorage};
 #[cfg(any(feature = "software", feature = "hardware", feature = "async-assets"))]

@@ -9,4 +9,7 @@ pub enum TranspileError {
     Parse(#[from] ParseError),
     #[error("rsx codegen error: {0}")]
     Codegen(String),
+    /// The file's name has no spelling in the Rust it would be generated as.
+    #[error("{0}")]
+    Unnamed(#[from] telar_project::NotUtf8Path),
 }

@@ -131,14 +131,20 @@ fn wire_as(
     )
 }
 
+fn oops_source() -> telar_project::FailedSource {
+    telar_project::FailedSource {
+        path: "home.rsx".to_string(),
+        hash: Some(telar_project::content_hash(b"[view]\ntext \"oops\n")),
+    }
+}
+
 /// The macro has no transpiler, so the reason the CLI could not produce the artifact is the only thing that can tell the author what is wrong with their markup — "re-run the command" is a loop when the command is what failed.
 #[test]
 fn a_recorded_transpile_error_is_what_the_build_reports() {
     let root = package("reports");
     std::fs::write(root.join("src/home.rsx"), "[view]\ntext \"oops\n").unwrap();
     let failure = telar_project::BuildFailure {
-        source: "home.rsx".to_string(),
-        hash: telar_project::content_hash(b"[view]\ntext \"oops\n"),
+        source: Some(oops_source()),
         message: "src/home.rsx:2: unterminated string literal".to_string(),
     };
     telar_project::write_build_failure(&root, telar_project::BuildFlavour::Plain, &failure)
@@ -160,8 +166,7 @@ fn a_record_for_an_edited_source_is_not_reported() {
     let root = package("edited");
     std::fs::write(root.join("src/home.rsx"), "[view]\ntext \"fixed\"\n").unwrap();
     let failure = telar_project::BuildFailure {
-        source: "home.rsx".to_string(),
-        hash: telar_project::content_hash(b"[view]\ntext \"oops\n"),
+        source: Some(oops_source()),
         message: "src/home.rsx:2: unterminated string literal".to_string(),
     };
     telar_project::write_build_failure(&root, telar_project::BuildFlavour::Plain, &failure)

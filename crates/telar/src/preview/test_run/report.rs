@@ -295,7 +295,7 @@ impl TestReport {
     pub fn write(&self, path: &Path) -> io::Result<()> {
         let json = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
         // Atomically, so a reader watching the report, as the workshop does, never reads one half written.
-        services_core::write_file_atomically(path, json.as_bytes())
+        fs_atomic::write_atomically(path, json.as_bytes())
     }
 
     /// [`SnapshotReport::accept`], with the cell the snapshot `id` is of reported as a run that wrote its goldens reports it, and the run counted again.

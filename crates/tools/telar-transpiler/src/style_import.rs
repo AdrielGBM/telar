@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use telar_parser::{StyleClass, StyleImport, StyleImportItems, StyleSection};
+use telar_project::NotUtf8Path;
 
 /// A class brought in by a `use`, under the name the importing file writes it as.
 #[derive(Debug, Clone)]
@@ -45,6 +46,21 @@ impl ResolvedImports {
 
     /// Every import refused, for a file transpiled with no package to look the modules up in.
     pub fn unresolvable(section: &StyleSection) -> Self {
+        Self::all_refused(section, |module| {
+            format!(
+                "`use {module}` names a module of the package, and this file is transpiled outside one"
+            )
+        })
+    }
+
+    /// Every import refused, for a file whose own module path cannot be spelled, which is what `self` and `super` start from.
+    fn unnamed(section: &StyleSection, error: &NotUtf8Path) -> Self {
+        Self::all_refused(section, |module| {
+            format!("`use {module}` is looked up from this file's module, and {error}")
+        })
+    }
+
+    fn all_refused(section: &StyleSection, why: impl Fn(&str) -> String) -> Self {
         Self {
             classes: Vec::new(),
             errors: section
@@ -52,10 +68,7 @@ impl ResolvedImports {
                 .iter()
                 .map(|import| ImportError {
                     line: import.line,
-                    message: format!(
-                        "`use {}` names a module of the package, and this file is transpiled outside one",
-                        import.module.join("::")
-                    ),
+                    message: why(&import.module.join("::")),
                 })
                 .collect(),
         }
@@ -73,8 +86,10 @@ pub fn resolve_style_imports(
     if section.imports.is_empty() {
         return resolved;
     }
-    let Some(current) = module_path(rsx_path, src_dir) else {
-        return ResolvedImports::unresolvable(section);
+    let current = match module_path(rsx_path, src_dir) {
+        Some(Ok(current)) => current,
+        Some(Err(error)) => return ResolvedImports::unnamed(section, &error),
+        None => return ResolvedImports::unresolvable(section),
     };
     for import in &section.imports {
         match resolve_one(import, &current, src_dir, read) {
@@ -166,18 +181,26 @@ fn resolve_one(
     }
 }
 
-/// The module path of the `.rsx` at `path` under `src_dir`: its directories and its stem, a `mod.rsx` being its directory's module and a `checkbox.preview.rsx` the `checkbox_preview` beside `checkbox`.
-fn module_path(path: &Path, src_dir: &Path) -> Option<Vec<String>> {
+/// The module path of the `.rsx` at `path` under `src_dir`: its directories and its stem, a `mod.rsx` being its directory's module and a `checkbox.preview.rsx` the `checkbox_preview` beside `checkbox`. `None` for a file outside `src_dir`.
+fn module_path(path: &Path, src_dir: &Path) -> Option<Result<Vec<String>, NotUtf8Path>> {
     let relative = path.strip_prefix(src_dir).ok()?;
-    let mut segments: Vec<String> = relative
-        .parent()?
-        .iter()
-        .map(|part| part.to_string_lossy().into_owned())
-        .collect();
+    let names = match telar_project::utf8_components(relative) {
+        Ok(names) => names,
+        Err(error) => {
+            return Some(Err(NotUtf8Path {
+                path: src_dir.join(error.path),
+            }));
+        }
+    };
+    let (_, dirs) = names.split_last()?;
+    let mut segments: Vec<String> = dirs.iter().map(|name| name.to_string()).collect();
     if !telar_project::is_module_root(path) {
-        segments.push(telar_project::module_name(path));
+        match telar_project::module_name(path) {
+            Ok(module) => segments.push(module),
+            Err(error) => return Some(Err(error)),
+        }
     }
-    Some(segments)
+    Some(Ok(segments))
 }
 
 fn target_module(path: &[String], current: &[String]) -> Option<Vec<String>> {

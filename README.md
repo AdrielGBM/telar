@@ -353,6 +353,7 @@ Keep every plugin on the same version as `telar`: two copies of the kernel resol
 | [`telar-i18n-core`](crates/i18n/i18n-core) · [`telar-services-core`](crates/services/services-core) | i18n runtime, platform paths and DI |
 | [`telar-reactive-local`](crates/reactive/reactive-local) | Per-surface thread-local slots, split out so `platform-core` need not link the reactive runtime |
 | [`telar-icons-core`](crates/icons/icons-core) | Iconify ids, sets, sources and licence policy, shared by `telar-icons` and the baker |
+| [`telar-fs-atomic`](crates/fs/fs-atomic) | Replacing a file's contents all at once, shared by the runtime, the renderers and the tools |
 
 The plugins are in the table above; `plugins/telar-rsx-fixture` is an unpublished test fixture, a `[telar] library` the test suite packages, unpacks read-only and compiles as a dependency.
 

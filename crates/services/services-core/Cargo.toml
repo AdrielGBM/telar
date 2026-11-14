@@ -21,6 +21,7 @@ system-paths = ["dep:dirs"]
 system-opener = []
 
 [dependencies]
+fs-atomic = { workspace = true }
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
 reactive-core = { workspace = true }
@@ -31,7 +32,6 @@ wire-core = { workspace = true }
 
 dirs = { version = "7.0.0", optional = true }
 rustc-hash = { workspace = true, optional = true }
-tempfile = { workspace = true }
 thiserror = { workspace = true, optional = true }
 tracing = { workspace = true }
 

@@ -34,6 +34,8 @@ mod style;
 mod style_import;
 #[cfg(feature = "transpile")]
 mod tag_errors;
+#[cfg(all(test, feature = "transpile"))]
+mod test_support;
 mod theme;
 #[cfg(feature = "transpile")]
 mod theme_access;

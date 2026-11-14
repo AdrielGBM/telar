@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{PackageError, PackageOptions, transpile_package, write_package};
 use telar_project::{BuildFlavour, generated_dir};
@@ -192,7 +192,10 @@ fn a_failure_record_holds_only_while_its_source_is_unchanged() {
 
     let error = transpile_package(&options(&src_dir, BuildFlavour::Plain)).unwrap_err();
     let failure = error.to_build_failure(&src_dir);
-    assert_eq!(failure.source, "broken.rsx");
+    assert_eq!(
+        failure.source.as_ref().map(|source| source.path.as_str()),
+        Some("broken.rsx")
+    );
     assert_eq!(failure.message, error.to_string());
     assert!(failure.still_applies(&src_dir));
 
@@ -202,13 +205,30 @@ fn a_failure_record_holds_only_while_its_source_is_unchanged() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// No edit under `src/` can be seen to fix a failure in a file outside it, so the record keeps saying why the build fails.
+#[test]
+fn a_failure_outside_the_sources_names_no_source_and_always_applies() {
+    let src_dir = Path::new("/pkg/src");
+    let error = PackageError::Read {
+        path: PathBuf::from("/elsewhere/shared.rsx"),
+        source: std::io::Error::from(std::io::ErrorKind::NotFound),
+    };
+
+    let failure = error.to_build_failure(src_dir);
+
+    assert_eq!(failure.source, None);
+    assert!(failure.still_applies(src_dir));
+}
+
 /// A failure that outlives its cause would be the macro blaming a file for an error it no longer has.
 #[test]
 fn a_recorded_failure_is_forgotten_when_cleared() {
     let root = package("clear");
     let failure = telar_project::BuildFailure {
-        source: "a.rsx".to_string(),
-        hash: "h".to_string(),
+        source: Some(telar_project::FailedSource {
+            path: "a.rsx".to_string(),
+            hash: Some("h".to_string()),
+        }),
         message: "boom".to_string(),
     };
     telar_project::write_build_failure(&root, BuildFlavour::Plain, &failure).unwrap();
@@ -405,4 +425,23 @@ fn an_imported_class_styles_the_importer() {
     );
 
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Rust source is UTF-8, so a file whose name is not has no component to be generated as.
+#[test]
+fn a_file_named_not_in_utf8_is_refused_naming_it() {
+    let src_dir = Path::new("/pkg/src");
+    let rsx = src_dir.join(crate::test_support::non_utf8_name(".rsx"));
+
+    let error = crate::transpile_buffer(
+        &rsx,
+        "[view]\ncol\n",
+        &options(src_dir, BuildFlavour::Plain),
+    )
+    .unwrap_err();
+
+    assert!(
+        matches!(&error, crate::TranspileError::Unnamed(unnamed) if unnamed.path == rsx),
+        "{error}"
+    );
 }

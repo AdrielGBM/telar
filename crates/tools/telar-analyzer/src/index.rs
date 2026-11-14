@@ -168,7 +168,7 @@ fn index_source(path: &Path, source: &str) -> Option<IndexedFile> {
 
     Some(IndexedFile {
         uri,
-        component: telar_project::component_name(path),
+        component: telar_project::component_name(path).ok()?,
         previews_only: telar_project::is_preview_file(path),
         container,
         classes,

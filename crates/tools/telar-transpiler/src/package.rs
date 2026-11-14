@@ -97,10 +97,12 @@ impl PackageError {
     pub fn to_build_failure(&self, src_dir: &Path) -> telar_project::BuildFailure {
         let path = self.path();
         telar_project::BuildFailure {
-            source: relative_slashed(path, src_dir).unwrap_or_default(),
-            hash: std::fs::read(path)
-                .map(|bytes| telar_project::content_hash(&bytes))
-                .unwrap_or_default(),
+            source: relative_slashed(path, src_dir).map(|relative| telar_project::FailedSource {
+                path: relative,
+                hash: std::fs::read(path)
+                    .ok()
+                    .map(|bytes| telar_project::content_hash(&bytes)),
+            }),
             message: self.to_string(),
         }
     }
@@ -188,7 +190,7 @@ fn generate(
     let input = TranspileInput {
         document,
         source,
-        component_name: &telar_project::component_name(rsx_path),
+        component_name: &telar_project::component_name(rsx_path)?,
         theme_type: options.theme_type,
         assets: options.assets,
         prelude: options.prelude,

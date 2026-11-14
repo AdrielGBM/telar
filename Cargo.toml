@@ -5,6 +5,7 @@ members = [
     "apps/landing",
     "apps/sandbox",
     "crates/embed/telar-embed",
+    "crates/fs/fs-atomic",
     "crates/geometry/geometry-core",
     "crates/i18n/i18n-core",
     "crates/i18n/i18n-fixture",
@@ -97,6 +98,7 @@ default-members = [
     "plugins/telar-devtools",
     "plugins/telar-dynamic",
     "crates/embed/telar-embed",
+    "crates/fs/fs-atomic",
     "crates/preferences/preferences-core",
     "plugins/telar-expression",
     "plugins/telar-navigate",
@@ -120,6 +122,7 @@ authors = ["Adriel Barrientos M. <adrielgbm@gmail.com>"]
 [workspace.dependencies]
 # Internal crates first, then a blank line, then everything external; alphabetical within each group.
 # Every crate publishes as `telar-*`; the keys keep the short internal names so `use ui_core::…` and `dep:ui-core` feature syntax stay unchanged.
+fs-atomic = { package = "telar-fs-atomic", path = "crates/fs/fs-atomic", version = "0.2.3" }
 geometry-core = { package = "telar-geometry-core", path = "crates/geometry/geometry-core", version = "0.2.3" }
 i18n-core = { package = "telar-i18n-core", path = "crates/i18n/i18n-core", version = "0.2.3" }
 icons-core = { package = "telar-icons-core", path = "crates/icons/icons-core", version = "0.2.3" }
@@ -218,6 +221,7 @@ web-sys = "0.3"
 # std's Instant aborts on wasm32-unknown-unknown; this is the same type on every other target.
 web-time = "1.1.0"
 wide = "1.4"
+windows-sys = "0.61"
 # Only `rwh_06` is common to every backend, so each platform crate names the windowing systems it actually talks to: an Android build has no business compiling X11 and Wayland.
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 

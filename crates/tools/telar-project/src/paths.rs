@@ -2,7 +2,6 @@
 //!
 //! `cargo-telar` (the dev/build CLI) and `telar-analyzer` (the LSP) both anchor file discovery — generated `.telar/` output, theme scanning — to the same directory. The upward walk and the marker definitions live here so the two tools cannot diverge on where a project starts.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// Walks up from `start` (or its parent directory if `start` is a file), returning the first ancestor directory for which `matches` returns true.
@@ -143,7 +142,7 @@ fn is_workspace_root_dir(dir: &Path) -> bool {
     crate::CargoManifest::read(dir).is_some_and(|manifest| manifest.is_workspace())
 }
 
-/// Writes `content` to `path`, but only when it differs, and via a same-directory temp file plus rename. Both artifacts under `.telar/` need both guarantees: an unchanged write would retrigger rustc and the editor's file watcher for nothing, and a half-written file is something a concurrent reader can observe — the analyzer and the CLI legitimately race to bake the same package.
+/// Writes `content` to `path`, but only when it differs, and through [`fs_atomic::write_atomically`]. Both artifacts under `.telar/` need both guarantees: an unchanged write would retrigger rustc and the editor's file watcher for nothing, and a half-written file is something a concurrent reader can observe — the analyzer and the CLI legitimately race to bake the same package.
 pub fn write_if_changed_atomic(path: &Path, content: &str) -> std::io::Result<()> {
     if std::fs::read_to_string(path)
         .map(|existing| existing == content)
@@ -151,34 +150,7 @@ pub fn write_if_changed_atomic(path: &Path, content: &str) -> std::io::Result<()
     {
         return Ok(());
     }
-    let mut file = file_beside(path.parent().unwrap_or(Path::new("")))?;
-    file.write_all(content.as_bytes())?;
-    rename_over(file.into_temp_path(), path)
-}
-
-// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
-fn rename_over(temp: tempfile::TempPath, path: &Path) -> std::io::Result<()> {
-    let temp = temp.keep()?;
-    std::fs::rename(&temp, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&temp);
-    })
-}
-
-fn file_beside(dir: &Path) -> std::io::Result<tempfile::NamedTempFile> {
-    with_umask_mode(tempfile::Builder::new()).tempfile_in(dir)
-}
-
-// A temporary file is created owner-only, while a generated file is expected to be readable as one written in place would be: whatever the umask allows.
-#[cfg(unix)]
-fn with_umask_mode<'a, 'b>(mut builder: tempfile::Builder<'a, 'b>) -> tempfile::Builder<'a, 'b> {
-    use std::os::unix::fs::PermissionsExt;
-    builder.permissions(std::fs::Permissions::from_mode(0o666));
-    builder
-}
-
-#[cfg(not(unix))]
-fn with_umask_mode<'a, 'b>(builder: tempfile::Builder<'a, 'b>) -> tempfile::Builder<'a, 'b> {
-    builder
+    fs_atomic::write_atomically(path, content.as_bytes())
 }
 
 #[cfg(test)]

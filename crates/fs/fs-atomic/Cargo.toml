@@ -1,0 +1,21 @@
+[package]
+name = "telar-fs-atomic"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Replaces a file's contents all at once for Telar's runtime and tools: a reader finds the previous contents or the new ones, never part of either."
+keywords = ["telar", "file", "atomic", "write"]
+categories = ["filesystem"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+tempfile = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Wdk_Storage_FileSystem",
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }

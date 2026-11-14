@@ -5,7 +5,7 @@ mod artifact;
 use std::path::{Path, PathBuf};
 
 pub use artifact::{
-    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildIndex, clear_build_failure,
+    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildIndex, FailedSource, clear_build_failure,
     read_build_failure, read_build_index, write_build_failure, write_build_index,
 };
 

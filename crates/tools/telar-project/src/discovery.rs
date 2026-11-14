@@ -174,20 +174,26 @@ pub(crate) fn discover_rust_modules(
     generated_dir: &Path,
     visibility: ModuleVisibility,
 ) -> SiteWalk {
-    let prefix = from_dir
-        .strip_prefix(src_dir)
-        .unwrap_or(Path::new(""))
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("__");
+    let package_dir = src_dir.parent().unwrap_or(src_dir);
+    let site = from_dir.strip_prefix(src_dir).unwrap_or(Path::new(""));
+    let prefix = match crate::utf8_components(site) {
+        Ok(names) => names.join("__"),
+        Err(error) => {
+            let message = not_utf8_message(package_dir, &src_dir.join(error.path));
+            return SiteWalk {
+                declarations: format!("compile_error!({message:?});\n"),
+                files: Vec::new(),
+                problems: vec![message],
+            };
+        }
+    };
     let mut reserved = hand_written_modules(from_dir);
     if from_dir == src_dir {
         // `src/bin/` is cargo's: every file in it is a crate root of its own. Declared as a module here, each binary's `fn main` would be compiled into the library that declared it.
         reserved.insert("bin".to_owned());
     }
     let mut walk = TreeWalk {
-        package_dir: src_dir.parent().unwrap_or(src_dir),
+        package_dir,
         modtree_dir: generated_dir.join(MODULE_TREE_DIR),
         generated_dir,
         visibility,
@@ -278,20 +284,23 @@ impl TreeWalk<'_> {
         paths.sort();
         for path in paths {
             let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+                if holds_markup(&path) {
+                    self.refuse(crate::NotUtf8Path { path }, out);
+                }
                 continue;
             };
             if file_name.starts_with('.') {
                 continue;
             }
-            if !hand_written.contains(&file_stem(&path))
+            if !hand_written.contains(stem_of(file_name))
                 && let Some(message) = unusable_module_name(self.package_dir, &path, file_name)
             {
                 self.report(message, out);
                 continue;
             }
-            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let module = module_name(&path);
-            let name = match is_preview_file(&path) {
+            let stem = stem_of(file_name);
+            let module = module_of(file_name);
+            let name = match names_preview_file(file_name) {
                 true => module.as_str(),
                 false => stem,
             };
@@ -324,7 +333,7 @@ impl TreeWalk<'_> {
                         self.report(message, out);
                     }
                     if declared_here {
-                        out.push_str(&self.mod_decl(name, &mod_rs, holder, dir));
+                        self.declare(name, &mod_rs, holder, dir, out);
                     }
                 } else if let Some(owner) = module_file_beside(&path) {
                     // The directory is the module of the file beside it, which declares what is in it; declaring it here as well would be a second module of one name.
@@ -351,7 +360,7 @@ impl TreeWalk<'_> {
                     let gen_holder = self.modtree_dir.clone();
                     let mut body = String::new();
                     self.emit_children(&path, &flat, &gen_holder, &HashSet::new(), &mut body);
-                    out.push_str(&self.mod_decl(name, &gen_file, holder, dir));
+                    self.declare(name, &gen_file, holder, dir, out);
                     self.files.push(ModuleTreeFile {
                         path: gen_file,
                         content: body,
@@ -359,7 +368,7 @@ impl TreeWalk<'_> {
                 }
             } else if is_rust_module_file(&path) {
                 if declared_here {
-                    out.push_str(&self.mod_decl(name, &path, holder, dir));
+                    self.declare(name, &path, holder, dir, out);
                 }
             } else if is_module_root(&path) {
                 // Its own directory's module, declared by the parent and generated with the children included; as a sibling here it would be `pub mod mod;`.
@@ -367,12 +376,13 @@ impl TreeWalk<'_> {
                 self.report(message, out);
             } else if declared_here && path.extension().and_then(|e| e.to_str()) == Some("rsx") {
                 // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
-                out.push_str(&self.mod_decl(
+                self.declare(
                     name,
                     &rsx_output(self.generated_dir, flat_prefix, stem),
                     holder,
                     dir,
-                ));
+                    out,
+                );
             }
         }
     }
@@ -416,35 +426,43 @@ impl TreeWalk<'_> {
                     let _ = writeln!(body, "compile_error!({message:?});");
                 }
                 // `include!` rather than a `#[path] mod`, because the two files are one module: the `mod.rsx` holds what only a module's own file can hold, and this holds the Rust the author kept in `mod.rs`.
-                None => {
-                    let _ = writeln!(
-                        body,
-                        "include!({:?});",
-                        relative_path(&children_holder, &mod_rs)
-                    );
-                }
+                None => match relative_path(&children_holder, &mod_rs) {
+                    Ok(path) => {
+                        let _ = writeln!(body, "include!({path:?});");
+                    }
+                    Err(error) => self.refuse(error, &mut body),
+                },
             }
         }
         self.files.push(ModuleTreeFile {
             path: children_file,
             content: body,
         });
-        out.push_str(&self.mod_decl(name, &module_file, holder, dir.parent().unwrap_or(dir)));
+        self.declare(name, &module_file, holder, dir.parent().unwrap_or(dir), out);
     }
 
-    /// A module declaration of `dir`'s module pinned to `file` by a `#[path]` relative to `holder`, the directory of the file the declaration is written into. `{:?}` renders the path as an escaped Rust string literal.
+    /// Writes to `out` a module declaration of `dir`'s module pinned to `file` by a `#[path]` relative to `holder`, the directory of the file the declaration is written into, or reports why no `#[path]` can name `file`. `{:?}` renders the path as an escaped Rust string literal.
     ///
     /// A file named as its directory, `kbd/kbd.rsx`, is how a component keeps a directory of its own, since the component takes its file's name: the module named as the one holding it is the layout, not the slip clippy's `module_inception` looks for.
-    fn mod_decl(&self, name: &str, file: &Path, holder: &Path, dir: &Path) -> String {
+    fn declare(&mut self, name: &str, file: &Path, holder: &Path, dir: &Path, out: &mut String) {
+        let path = match relative_path(holder, file) {
+            Ok(path) => path,
+            Err(error) => return self.refuse(error, out),
+        };
         let inception = match dir.file_name().and_then(|n| n.to_str()) == Some(name) {
             true => "#[allow(clippy::module_inception)] ",
             false => "",
         };
-        format!(
-            "{inception}#[path = {:?}] {} mod {name};\n",
-            relative_path(holder, file),
+        let _ = writeln!(
+            out,
+            "{inception}#[path = {path:?}] {} mod {name};",
             self.visibility.keyword()
-        )
+        );
+    }
+
+    fn refuse(&mut self, error: crate::NotUtf8Path, out: &mut String) {
+        let message = not_utf8_message(self.package_dir, &error.path);
+        self.report(message, out);
     }
 
     /// Writes `message` where the build reads it, as a `compile_error!` in the file being produced, and keeps it for the CLI to report before any build does.
@@ -484,6 +502,20 @@ fn shown_from(package_dir: &Path, path: &Path) -> String {
     crate::relative_slashed(path, package_dir).unwrap_or_else(|| path.display().to_string())
 }
 
+/// Why the tree cannot name `path`, said from the package root like every other diagnostic of the tree.
+fn not_utf8_message(package_dir: &Path, path: &Path) -> String {
+    let path = path.strip_prefix(package_dir).unwrap_or(path).to_path_buf();
+    crate::NotUtf8Path { path }.to_string()
+}
+
+/// Whether `path` is a `.rsx` or a directory holding one, outside the dot-directories discovery never enters: a module the tree has to declare.
+fn holds_markup(path: &Path) -> bool {
+    let hidden = path
+        .file_name()
+        .is_some_and(|name| name.as_encoded_bytes().starts_with(b"."));
+    !hidden && (path.extension().is_some_and(|e| e == "rsx") || path.is_dir() && dir_has_rsx(path))
+}
+
 /// Why the entry cannot be a module, when its name is no plain identifier: left out it would vanish without a word, and declared, rustc would only suggest `r#type`. `None` for what discovery skips by design: a `.rs` or a directory of them named with no identifier, which only a `#[path]` reaches, and a directory holding no module at all.
 fn unusable_module_name(package_dir: &Path, path: &Path, file_name: &str) -> Option<String> {
     let (base, subject) = if path.is_dir() {
@@ -498,9 +530,12 @@ fn unusable_module_name(package_dir: &Path, path: &Path, file_name: &str) -> Opt
             return None;
         }
     } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") && !is_module_root(path) {
-        (component_name(path), "is a `.rsx`, which is a Rust module")
-    } else if is_rust_module_file(path) && is_keyword_in_every_edition(&file_stem(path)) {
-        (file_stem(path), "is a Rust module")
+        (
+            component_of(file_name).to_owned(),
+            "is a `.rsx`, which is a Rust module",
+        )
+    } else if is_rust_module_file(path) && is_keyword_in_every_edition(stem_of(file_name)) {
+        (stem_of(file_name).to_owned(), "is a Rust module")
     } else {
         return None;
     };
@@ -563,10 +598,19 @@ pub fn rsx_module_name_problems(rsx_path: &Path, package_dir: &Path) -> Vec<Stri
     let Ok(relative) = rsx_path.strip_prefix(package_dir.join("src")) else {
         return Vec::new();
     };
-    let names: Vec<&str> = relative.iter().filter_map(|part| part.to_str()).collect();
-    if names.iter().any(|name| name.starts_with('.')) {
+    if relative
+        .iter()
+        .any(|part| part.as_encoded_bytes().starts_with(b"."))
+    {
         return Vec::new();
     }
+    let names = match crate::utf8_components(relative) {
+        Ok(names) => names,
+        Err(error) => {
+            let path = package_dir.join("src").join(error.path);
+            return vec![not_utf8_message(package_dir, &path)];
+        }
+    };
     let mut problems = Vec::new();
     let mut dir = package_dir.join("src");
     for name in &names[..names.len().saturating_sub(1)] {
@@ -581,7 +625,7 @@ pub fn rsx_module_name_problems(rsx_path: &Path, package_dir: &Path) -> Vec<Stri
         problems.push(problem);
         return problems;
     }
-    let module = module_name(rsx_path);
+    let module = module_of(file_name);
     problems.extend(doubled_file_message(package_dir, rsx_path, &module));
     problems.extend(doubled_directory_message(
         package_dir,
@@ -644,22 +688,23 @@ pub fn prune_stale_generated(output_dir: &Path, written: &HashSet<PathBuf>) {
     }
 }
 
-/// `to` relative to `from_dir`, `/`-separated whatever the platform, as rustc reads a `#[path]` or an `include!` in a file in `from_dir`. Absolute only when the two share no root at all, which is two drives on Windows.
-pub(crate) fn relative_path(from_dir: &Path, to: &Path) -> String {
+/// `to` relative to `from_dir`, `/`-separated whatever the platform, as rustc reads a `#[path]` or an `include!` in a file in `from_dir`. Absolute only when the two share no root at all, which is two drives on Windows. Refused when a component it has to spell is not valid UTF-8.
+pub(crate) fn relative_path(from_dir: &Path, to: &Path) -> Result<String, crate::NotUtf8Path> {
     let from: Vec<Component> = from_dir.components().collect();
     let target: Vec<Component> = to.components().collect();
     let common = from.iter().zip(&target).take_while(|(a, b)| a == b).count();
     if common == 0 && to.is_absolute() {
-        return to.to_string_lossy().into_owned();
+        return crate::relative::utf8_path(to).map(str::to_owned);
     }
-    std::iter::repeat_n("..".to_string(), from.len() - common)
-        .chain(
-            target[common..]
-                .iter()
-                .map(|part| part.as_os_str().to_string_lossy().into_owned()),
-        )
+    let shared: PathBuf = target[..common].iter().collect();
+    let rest: PathBuf = target[common..].iter().collect();
+    let names = crate::utf8_components(&rest).map_err(|error| crate::NotUtf8Path {
+        path: shared.join(error.path),
+    })?;
+    Ok(std::iter::repeat_n("..", from.len() - common)
+        .chain(names)
         .collect::<Vec<_>>()
-        .join("/")
+        .join("/"))
 }
 
 /// A `.rs` file that is a declarable module: not a crate root, not a `mod.rs` (the latter is the module root of its own directory, not a sibling child), and named by an identifier.
@@ -712,7 +757,7 @@ fn unplaced_rsx(dir: &Path) -> Vec<PathBuf> {
         .filter(|path| {
             !path
                 .file_name()
-                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+                .is_some_and(|n| n.as_encoded_bytes().starts_with(b"."))
         })
         .flat_map(|path| {
             if path.is_dir() {
@@ -769,29 +814,44 @@ fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
 /// The name the component in `path` is generated under: its file stem. A preview file names the component it previews, so `checkbox.preview.rsx` is `checkbox`, and its previews get the ids and the entry table a `[preview]` in `checkbox.rsx` would.
 ///
 /// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules, which is what a path-flattened name existed to work around. One function rather than each caller taking the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and they silently drifted apart when the flattening went.
-pub fn component_name(path: &Path) -> String {
-    let stem = file_stem(path);
-    match is_preview_file(path) {
-        true => stem
-            .strip_suffix(PREVIEW_STEM_SUFFIX)
-            .unwrap_or(&stem)
-            .to_string(),
+pub fn component_name(path: &Path) -> Result<String, crate::NotUtf8Path> {
+    Ok(component_of(utf8_file_name(path)?).to_owned())
+}
+
+/// The module the `.rsx` at `path` is declared as, where its file sits: its stem, or for a preview file, whose stem is no identifier, the component's name and `_preview`, so `checkbox.preview.rsx` is `checkbox_preview` beside `checkbox`.
+pub fn module_name(path: &Path) -> Result<String, crate::NotUtf8Path> {
+    Ok(module_of(utf8_file_name(path)?))
+}
+
+fn component_of(file_name: &str) -> &str {
+    let stem = stem_of(file_name);
+    match names_preview_file(file_name) {
+        true => stem.strip_suffix(PREVIEW_STEM_SUFFIX).unwrap_or(stem),
         false => stem,
     }
 }
 
-/// The module the `.rsx` at `path` is declared as, where its file sits: its stem, or for a preview file, whose stem is no identifier, the component's name and `_preview`, so `checkbox.preview.rsx` is `checkbox_preview` beside `checkbox`.
-pub fn module_name(path: &Path) -> String {
-    match is_preview_file(path) {
-        true => format!("{}_preview", component_name(path)),
-        false => file_stem(path),
+fn module_of(file_name: &str) -> String {
+    match names_preview_file(file_name) {
+        true => format!("{}_preview", component_of(file_name)),
+        false => stem_of(file_name).to_owned(),
     }
 }
 
-fn file_stem(path: &Path) -> String {
-    path.file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_default()
+/// The last component of `path` as text; empty for a path that ends in none, such as `..`.
+fn utf8_file_name(path: &Path) -> Result<&str, crate::NotUtf8Path> {
+    let name = path.file_name().unwrap_or_default();
+    name.to_str().ok_or_else(|| crate::NotUtf8Path {
+        path: path.to_path_buf(),
+    })
+}
+
+/// The file name without its last extension, as [`Path::file_stem`] answers for a name already known to be text.
+fn stem_of(file_name: &str) -> &str {
+    match file_name.rsplit_once('.') {
+        Some((stem, _)) if !stem.is_empty() => stem,
+        _ => file_name,
+    }
 }
 
 /// Derives the output `.rs` path (relative to the output root) for a `.rsx` file by mirroring its location under `src_dir`, so files in different directories never collide (e.g. `src/components/button.rsx` -> `components/button.rs`). Used for the transpiler's `.telar/build/` output. Returns `None` for files outside `src_dir`: those are never transpiled, so they have no place in the build tree — and flattening their absolute path would escape the output root entirely.
@@ -864,7 +924,7 @@ fn collect_placement_sites(dir: &Path, out: &mut Vec<PathBuf>) {
         if !path.is_dir()
             || path
                 .file_name()
-                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+                .is_some_and(|n| n.as_encoded_bytes().starts_with(b"."))
         {
             continue;
         }
@@ -923,7 +983,7 @@ pub fn prune_stale_sites(src_dir: &Path, sites: &HashSet<PathBuf>) {
         if path.is_dir()
             && !path
                 .file_name()
-                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+                .is_some_and(|n| n.as_encoded_bytes().starts_with(b"."))
         {
             prune_stale_sites(&path, sites);
         }
@@ -954,9 +1014,11 @@ const PREVIEW_STEM_SUFFIX: &str = ".preview";
 pub fn is_preview_file(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
-        .is_some_and(|name| {
-            name.len() > PREVIEW_FILE_SUFFIX.len() && name.ends_with(PREVIEW_FILE_SUFFIX)
-        })
+        .is_some_and(names_preview_file)
+}
+
+fn names_preview_file(file_name: &str) -> bool {
+    file_name.len() > PREVIEW_FILE_SUFFIX.len() && file_name.ends_with(PREVIEW_FILE_SUFFIX)
 }
 
 /// The first `//!` or `#![…]` of a file that is about to be `include!`d, which rustc refuses there (`E0753`, and "an inner attribute is not permitted in this context"). Reported before the include is written, so the message names the file and the move instead of landing on generated code.

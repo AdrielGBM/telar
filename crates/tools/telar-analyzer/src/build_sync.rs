@@ -92,7 +92,8 @@ fn transpile_target(
     )
     .map_err(|error| match error {
         telar_transpiler::TranspileError::Codegen(message) => NoTarget::Refused(message),
-        telar_transpiler::TranspileError::Parse(_) => NoTarget::Unavailable,
+        telar_transpiler::TranspileError::Parse(_)
+        | telar_transpiler::TranspileError::Unnamed(_) => NoTarget::Unavailable,
     })?;
     let out_path = telar_project::generated_dir(root, BuildFlavour::Plain).join(&rel);
     Ok(GeneratedTarget {

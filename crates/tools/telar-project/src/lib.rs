@@ -28,6 +28,8 @@ mod previews;
 pub mod protocol;
 mod relative;
 mod rust_source;
+#[cfg(test)]
+mod test_support;
 mod theme;
 pub mod theme_tokens;
 mod vocabulary;
@@ -42,8 +44,9 @@ pub use assets::{
     write_generated,
 };
 pub use build::{
-    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildFlavour, BuildIndex, clear_build_failure,
-    generated_dir, read_build_failure, read_build_index, write_build_failure, write_build_index,
+    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildFlavour, BuildIndex, FailedSource,
+    clear_build_failure, generated_dir, read_build_failure, read_build_index, write_build_failure,
+    write_build_index,
 };
 pub use cargo_manifest::{CargoManifest, TargetKind};
 pub use catalog::{
@@ -99,7 +102,7 @@ pub use previews::{
     Viewport, is_preview_name, preview_hosts, previews_include_declarations,
     previews_include_problems,
 };
-pub use relative::relative_slashed;
+pub use relative::{NotUtf8Path, relative_slashed, utf8_components};
 pub use theme::{normalize_theme_path, theme_type_in_config};
 pub use vocabulary::{VOCABULARY, VocabularyAxis, vocabulary_axis, vocabulary_axis_of};
 pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};

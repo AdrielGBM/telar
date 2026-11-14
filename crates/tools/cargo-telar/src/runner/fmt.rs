@@ -148,31 +148,9 @@ fn format_file(path: &Path, check: bool) -> Result<bool, String> {
         return Ok(false);
     }
     if !check {
-        replace_contents(path, &formatted).map_err(|e| e.to_string())?;
+        fs_atomic::write_atomically(path, formatted.as_bytes()).map_err(|e| e.to_string())?;
     }
     Ok(true)
-}
-
-/// Replaces the contents of the file `path` leads to, all at once: a write that fails leaves the source as it was, a symlink stays a symlink to the file it named, and the file keeps its permissions.
-fn replace_contents(path: &Path, contents: &str) -> std::io::Result<()> {
-    use std::io::Write;
-    let target = std::fs::canonicalize(path)?;
-    let permissions = std::fs::metadata(&target)?.permissions();
-    let dir = target
-        .parent()
-        .expect("a canonical path to a file has a parent");
-    let mut file = tempfile::NamedTempFile::new_in(dir)?;
-    file.write_all(contents.as_bytes())?;
-    file.as_file().set_permissions(permissions)?;
-    rename_over(file.into_temp_path(), &target)
-}
-
-// Renamed by `std::fs::rename` rather than the temporary file's own persist: on Windows only the former replaces a file another handle has open, a reader or a concurrent writer's rename, where the latter is denied access.
-fn rename_over(temp: tempfile::TempPath, path: &Path) -> std::io::Result<()> {
-    let temp = temp.keep()?;
-    std::fs::rename(&temp, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&temp);
-    })
 }
 
 fn display(path: &Path) -> String {

@@ -202,8 +202,7 @@ impl SnapshotPaths {
 const OUT_SUFFIXES: [&str; 4] = [".png", ".draw.txt", ".diff.png", ".draw.diff"];
 
 fn write(path: &Path, bytes: &[u8]) -> Result<(), SnapshotError> {
-    services_core::write_file_atomically(path, bytes)
-        .map_err(|error| SnapshotError::io(path, error))
+    fs_atomic::write_atomically(path, bytes).map_err(|error| SnapshotError::io(path, error))
 }
 
 /// Why a snapshot could not be captured, compared, written or accepted.

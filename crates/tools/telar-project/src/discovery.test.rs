@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::non_utf8_name;
 
 fn content<'a>(files: &'a [ModuleTreeFile], path: &Path) -> &'a str {
     files
@@ -581,18 +582,18 @@ fn a_relative_path_climbs_to_the_common_ancestor() {
         ),
     ] {
         assert_eq!(
-            relative_path(&package.join(from), &package.join(to)),
-            expected,
+            relative_path(&package.join(from), &package.join(to)).as_deref(),
+            Ok(expected),
             "{from} -> {to}"
         );
     }
     assert_eq!(
-        relative_path(Path::new("a/b"), Path::new("a/c.rs")),
-        "../c.rs"
+        relative_path(Path::new("a/b"), Path::new("a/c.rs")).as_deref(),
+        Ok("../c.rs")
     );
     assert_eq!(
-        relative_path(Path::new("a"), Path::new("b/c.rs")),
-        "../b/c.rs"
+        relative_path(Path::new("a"), Path::new("b/c.rs")).as_deref(),
+        Ok("../b/c.rs")
     );
 }
 
@@ -894,10 +895,16 @@ fn a_preview_file_is_declared_as_a_module_beside_the_component_it_previews() {
     assert!(!is_preview_file(Path::new("src/.preview.rsx")));
     assert!(!is_preview_file(Path::new("src/previews.rsx")));
     let previews = Path::new("src/forms/checkbox.preview.rsx");
-    assert_eq!(component_name(previews), "checkbox");
-    assert_eq!(module_name(previews), "checkbox_preview");
-    assert_eq!(module_name(Path::new("src/forms/checkbox.rsx")), "checkbox");
-    assert_eq!(component_name(Path::new("src/previews.rsx")), "previews");
+    assert_eq!(component_name(previews).as_deref(), Ok("checkbox"));
+    assert_eq!(module_name(previews).as_deref(), Ok("checkbox_preview"));
+    assert_eq!(
+        module_name(Path::new("src/forms/checkbox.rsx")).as_deref(),
+        Ok("checkbox")
+    );
+    assert_eq!(
+        component_name(Path::new("src/previews.rsx")).as_deref(),
+        Ok("previews")
+    );
 
     let root = std::env::temp_dir().join(format!("rsx_preview_file_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
@@ -1328,5 +1335,115 @@ fn an_open_file_with_a_good_name_hears_nothing() {
     ] {
         let problems = name_problems_of(&files, open, "good");
         assert!(problems.is_empty(), "{open}: {problems:?}");
+    }
+}
+
+#[test]
+fn a_relative_path_that_has_to_spell_a_name_not_in_utf8_is_refused_naming_it() {
+    let package = Path::new("/pkg");
+    let outside = package.join(non_utf8_name(""));
+
+    let refused = relative_path(&package.join("src/.telar"), &outside.join("build/home.rs"));
+
+    assert_eq!(refused, Err(crate::NotUtf8Path { path: outside }));
+}
+
+#[test]
+fn a_name_not_in_utf8_that_the_relative_path_climbs_past_is_never_spelled() {
+    let package = Path::new("/").join(non_utf8_name(""));
+
+    assert_eq!(
+        relative_path(&package.join("src/.telar"), &package.join("src/util.rs")).as_deref(),
+        Ok("../util.rs")
+    );
+}
+
+#[test]
+fn a_placement_site_named_not_in_utf8_is_reported_instead_of_declared() {
+    let src = Path::new("/pkg/src");
+    let site = src.join(non_utf8_name(""));
+
+    let walk = discover_rust_modules(
+        src,
+        &site,
+        &src.join(".telar/build"),
+        ModuleVisibility::Public,
+    );
+
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0].contains("not named in UTF-8"),
+        "{:?}",
+        walk.problems
+    );
+    assert!(
+        walk.declarations.starts_with("compile_error!("),
+        "{}",
+        walk.declarations
+    );
+    assert!(walk.files.is_empty());
+}
+
+#[test]
+fn an_editor_is_told_a_rsx_named_not_in_utf8_cannot_be_a_module() {
+    let package = Path::new("/pkg");
+    let rsx = package.join("src").join(non_utf8_name(".rsx"));
+
+    let problems = rsx_module_name_problems(&rsx, package);
+
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("not named in UTF-8"), "{problems:?}");
+}
+
+// Apple's file systems refuse a file name that is not valid UTF-8, so there the file this test needs cannot exist.
+#[cfg(not(target_vendor = "apple"))]
+#[test]
+fn a_rsx_named_not_in_utf8_is_reported_rather_than_left_out() {
+    let root = std::env::temp_dir().join(format!("rsx_non_utf8_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("home.rsx"), "[view]\n").unwrap();
+    std::fs::write(root.join(non_utf8_name(".rsx")), "[view]\n").unwrap();
+
+    let walk = discover_rust_modules(&root, &root, &root.join("build"), ModuleVisibility::Public);
+
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0].contains("not named in UTF-8"),
+        "{:?}",
+        walk.problems
+    );
+    assert!(
+        walk.declarations.contains("pub mod home;"),
+        "{}",
+        walk.declarations
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_component_or_module_named_not_in_utf8_is_refused_naming_its_file() {
+    let rsx = Path::new("src").join(non_utf8_name(".preview.rsx"));
+
+    assert_eq!(
+        component_name(&rsx),
+        Err(crate::NotUtf8Path { path: rsx.clone() })
+    );
+    assert_eq!(module_name(&rsx), Err(crate::NotUtf8Path { path: rsx }));
+}
+
+#[test]
+fn a_name_keeps_every_dot_but_its_last_extension_as_the_file_system_does() {
+    for (file, component) in [
+        ("card.rsx", "card"),
+        ("card.v2.rsx", "card.v2"),
+        (".rsx", ".rsx"),
+        ("card", "card"),
+    ] {
+        assert_eq!(
+            component_name(Path::new(file)).as_deref(),
+            Ok(component),
+            "{file}"
+        );
     }
 }

@@ -11,6 +11,7 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+fs-atomic = { workspace = true }
 i18n-core = { workspace = true, features = ["runtime-catalog"] }
 renderer-core = { workspace = true }
 renderer-dom = { workspace = true }

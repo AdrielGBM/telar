@@ -105,3 +105,23 @@ fn a_file_outside_a_package_refuses_every_import() {
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].line, 2);
 }
+
+#[test]
+fn a_file_whose_module_path_is_not_utf8_refuses_every_import_saying_why() {
+    let src_dir = Path::new("/pkg/src");
+    let importer = src_dir
+        .join(crate::test_support::non_utf8_name(""))
+        .join("page.rsx");
+    let document = telar_parser::parse("[style]\nuse super::styles::mono;\n[view]\ncol\n").unwrap();
+
+    let resolved = resolve_style_imports(&importer, src_dir, &document.style, &|_| None);
+
+    assert!(resolved.classes.is_empty());
+    assert_eq!(resolved.errors.len(), 1);
+    assert_eq!(resolved.errors[0].line, 2);
+    assert!(
+        resolved.errors[0].message.contains("not named in UTF-8"),
+        "{}",
+        resolved.errors[0].message
+    );
+}

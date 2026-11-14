@@ -23,7 +23,10 @@ fn a_refused_source_is_recorded_for_the_macro_to_report() {
     for flavour in BuildFlavour::ALL {
         let failure = telar_project::read_build_failure(&root, flavour)
             .unwrap_or_else(|| panic!("{flavour:?} left no failure"));
-        assert_eq!(failure.source, "broken.rsx");
+        assert_eq!(
+            failure.source.as_ref().map(|source| source.path.as_str()),
+            Some("broken.rsx")
+        );
         assert!(
             failure
                 .message
