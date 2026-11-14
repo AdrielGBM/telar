@@ -2,6 +2,8 @@
 //!
 //! Separate from the measurer that uses it because only *how wide a run is* needs a browser. Where the line breaks is arithmetic, and arithmetic that walks byte offsets through a string is worth being able to run on a machine that has no canvas.
 
+use unicode_segmentation::UnicodeSegmentation;
+
 /// The widest line `text` wraps to at `max_width`, and how many lines that is.
 ///
 /// `width_of` measures one run in whatever the caller considers the current style. An infinite `max_width` wraps nothing, which is what text that must stay on one line asks for.
@@ -39,7 +41,7 @@ pub fn each_line<'a>(
         let opportunities = break_opportunities(hard);
         let mut line_start = 0usize;
         let mut last_break: Option<usize> = None;
-        for (offset, c) in hard.char_indices() {
+        for (offset, cluster) in hard.grapheme_indices(true) {
             // A break moves the line's start past the whitespace it broke on, which is ahead of where this walk still is. What it skipped belongs to the line already measured — and slicing from a start that is past the cursor is not a short line, it is a panic.
             if offset < line_start {
                 continue;
@@ -48,14 +50,15 @@ pub fn each_line<'a>(
                 last_break = Some(offset);
             }
             // Trailing space does not count towards the fit. A space at a break hangs past the edge rather than pushing the word after it onto the next line, which is what every text engine does and what a document does with `pre-wrap` — measuring it broke one word early, and a paragraph came out a line taller than the page it was drawn on.
-            let candidate = &hard[line_start..offset + c.len_utf8()];
+            let candidate = &hard[line_start..offset + cluster.len()];
             if width_of(candidate.trim_end()) <= max_width {
                 continue;
             }
             let cut = match last_break {
                 Some(at) if at > line_start => at,
-                // A word wider than the column breaks inside itself, as `overflow-wrap` does.
-                _ => offset.max(line_start + c.len_utf8()),
+                // A word wider than the column breaks between its grapheme clusters, as `overflow-wrap` does, and a cluster wider than the column overflows its line whole.
+                _ if offset > line_start => offset,
+                _ => offset + cluster.len(),
             };
             on_line(hard[line_start..cut].trim_end());
             line_start = hard[cut..]

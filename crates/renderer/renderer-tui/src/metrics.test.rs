@@ -144,3 +144,17 @@ fn laid_lines_are_placed_as_the_painter_aligns_them_and_a_final_break_opens_a_li
 fn the_default_config_uses_the_shared_default_cell() {
     assert_eq!(crate::TuiConfig::default().cell, CellSize::default());
 }
+
+#[test]
+fn a_cluster_wider_than_the_box_overflows_its_line_whole() {
+    let family = "\u{1f469}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+    let text = format!("a{family}b");
+    let lines = metrics().laid_lines(&text, None, 8.0, &style());
+    let ranges: Vec<&str> = lines.iter().map(|line| &text[line.range.clone()]).collect();
+    assert_eq!(ranges, vec!["a", family, "b"]);
+    assert_eq!(lines[1].clusters.len(), 1);
+    assert!(
+        lines[1].clusters[0].width > 8.0,
+        "the cluster is wider than the box it overflows"
+    );
+}

@@ -326,6 +326,10 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
             "pre-wrap"
         },
     );
+    if style.text_wrap == renderer_core::TextWrap::Wrap {
+        // `break-word` rather than `anywhere`: both break a word wider than the box between grapheme clusters as the measurers do, but `anywhere` also shrinks the min-content width to one cluster where the measurers keep the widest word.
+        declare(out, "overflow-wrap", "break-word");
+    }
     if let Some(max) = style.clamp.max_lines() {
         // The only cross-browser line clamp there is, and it needs all four declarations to work.
         declare(out, "display", "-webkit-box");

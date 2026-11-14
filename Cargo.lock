@@ -6344,6 +6344,7 @@ dependencies = [
  "telar-ui-tree",
  "tracing",
  "unicode-linebreak",
+ "unicode-segmentation",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",

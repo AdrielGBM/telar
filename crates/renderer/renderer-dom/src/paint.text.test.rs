@@ -23,6 +23,14 @@ fn text_that_must_not_wrap_still_keeps_its_spaces() {
     let css = css_of(&style);
     assert!(css.contains("white-space:pre;"), "{css}");
     assert!(!css.contains("pre-wrap"), "{css}");
+    assert!(!css.contains("overflow-wrap"), "{css}");
+}
+
+/// A word wider than its box breaks between grapheme clusters, as the measurers break it, instead of running past the edge they measured.
+#[test]
+fn a_word_wider_than_its_box_breaks_inside_itself() {
+    let css = css_of(&TextStyle::new(12.0, Color::BLACK));
+    assert!(css.contains("overflow-wrap:break-word;"), "{css}");
 }
 
 /// `color` takes a colour, so a gradient written there was dropped and the glyphs came out in whatever they had inherited — the page's black, under a dark theme as much as a light one.

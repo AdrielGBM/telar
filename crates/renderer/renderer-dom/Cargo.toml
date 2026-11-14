@@ -19,6 +19,7 @@ renderer-core = { workspace = true }
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
 unicode-linebreak = "0.1.5"
+unicode-segmentation = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }

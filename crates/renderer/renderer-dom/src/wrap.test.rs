@@ -129,3 +129,12 @@ fn a_line_breaks_between_kana_where_a_browser_does() {
 fn the_narrowest_column_for_kana_is_one_character() {
     assert_eq!(widest_word("きょうは ab", monospace), 20.0);
 }
+
+#[test]
+fn a_cluster_wider_than_the_column_overflows_its_line_whole() {
+    let text = "ae\u{301}\u{301}\u{301}b";
+    let mut lines = Vec::new();
+    each_line(text, 20.0, monospace, |line| lines.push(line));
+    assert_eq!(lines, ["a", "e\u{301}\u{301}\u{301}", "b"]);
+    assert_eq!(line_starts(text, 20.0, monospace), vec![0, 1, 8]);
+}
