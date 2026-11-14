@@ -42,6 +42,7 @@ pub trait Terminal {
     fn enable_raw_mode(&mut self) -> io::Result<()>;
     fn disable_raw_mode(&mut self) -> io::Result<()>;
     fn supports_keyboard_enhancement(&mut self) -> bool;
+    fn reports_key_releases_natively(&self) -> bool;
     fn queue(&mut self, command: impl Command) -> io::Result<()>;
     fn flush(&mut self) -> io::Result<()>;
 }
@@ -59,6 +60,10 @@ impl Terminal for CrosstermTerminal {
 
     fn supports_keyboard_enhancement(&mut self) -> bool {
         crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false)
+    }
+
+    fn reports_key_releases_natively(&self) -> bool {
+        cfg!(windows)
     }
 
     fn queue(&mut self, command: impl Command) -> io::Result<()> {
@@ -117,9 +122,10 @@ impl<'a, T: Terminal> Session<'a, T> {
         terminal.flush()
     }
 
-    /// Whether the terminal reports key releases. A backend that assumes it does on a terminal that does not leaves every key stuck down.
+    /// Whether the terminal reports key releases. A backend that assumes it does on a terminal that does not leaves every key stuck down, and one that assumes it does not sees every release twice.
     pub fn reports_key_releases(&self) -> bool {
-        self.entered.keyboard_enhanced.load(Ordering::SeqCst)
+        self.terminal.reports_key_releases_natively()
+            || self.entered.keyboard_enhanced.load(Ordering::SeqCst)
     }
 }
 

@@ -15,6 +15,7 @@ struct RecordingTerminal {
     written: Arc<Mutex<String>>,
     raw: Arc<AtomicBool>,
     keyboard_enhancement: bool,
+    native_key_releases: bool,
     refusal: Refusal,
 }
 
@@ -22,6 +23,13 @@ impl RecordingTerminal {
     fn with_keyboard_enhancement() -> Self {
         Self {
             keyboard_enhancement: true,
+            ..Self::default()
+        }
+    }
+
+    fn with_native_key_releases() -> Self {
+        Self {
+            native_key_releases: true,
             ..Self::default()
         }
     }
@@ -63,6 +71,10 @@ impl Terminal for RecordingTerminal {
 
     fn supports_keyboard_enhancement(&mut self) -> bool {
         self.keyboard_enhancement
+    }
+
+    fn reports_key_releases_natively(&self) -> bool {
+        self.native_key_releases
     }
 
     fn queue(&mut self, command: impl Command) -> io::Result<()> {
@@ -113,6 +125,23 @@ fn leaving_pops_keyboard_enhancement_first_when_it_was_pushed() {
     drop(session);
 
     assert_eq!(terminal.take(), format!("\x1b[<1u{UNDO_MOUSE}{UNDO_REST}"));
+}
+
+#[test]
+fn a_terminal_that_reports_releases_natively_needs_no_keyboard_enhancement_for_them() {
+    let entered = Entered::new();
+    let terminal = RecordingTerminal::with_native_key_releases();
+    let session = Session::enter_with(&entered, terminal, true).unwrap();
+
+    assert!(session.reports_key_releases());
+}
+
+#[test]
+fn a_terminal_with_neither_native_releases_nor_keyboard_enhancement_reports_none() {
+    let entered = Entered::new();
+    let session = Session::enter_with(&entered, RecordingTerminal::default(), true).unwrap();
+
+    assert!(!session.reports_key_releases());
 }
 
 #[test]
