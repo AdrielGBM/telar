@@ -189,6 +189,74 @@ fn a_package_inherits_the_workspace_manifest_key_by_key() {
 }
 
 #[test]
+fn a_package_dev_window_overrides_the_workspace_window_key_by_key() {
+    let root = std::env::temp_dir().join(format!("telar_inherit_window_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let package_root = root.join("crates/ui");
+    std::fs::create_dir_all(&package_root).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    std::fs::write(
+        root.join(MANIFEST_FILENAME),
+        "[telar.dev]\ndevtools = true\n\n[telar.dev.window]\ntitle = \"shared\"\nwidth = 800\nheight = 600\nfullscreen = \"exclusive\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        package_root.join(MANIFEST_FILENAME),
+        "[telar.dev.window]\nwidth = 1024\nposition = \"10, 20\"\n",
+    )
+    .unwrap();
+
+    let dev = TelarManifest::load(&package_root)
+        .expect("both manifests parse")
+        .telar
+        .dev;
+    assert_eq!(dev.devtools, Some(true));
+    assert_eq!(
+        dev.window,
+        Some(WindowSection {
+            title: Some("shared".to_string()),
+            width: Some(1024),
+            height: Some(600),
+            fullscreen: Some(FullscreenMode::Exclusive),
+            position: Some(WindowPosition::At { x: 10, y: 20 }),
+            ..WindowSection::default()
+        })
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_telar_table_left_in_cargo_package_metadata_is_an_error_naming_telar_toml() {
+    let root = package("cargo_metadata", Some("[telar]\ntheme = \"app::Theme\"\n"));
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"app\"\n\n[package.metadata.telar]\nbackend = \"software\"\n",
+    )
+    .unwrap();
+
+    let error = TelarManifest::load(&root).unwrap_err().to_string();
+    assert!(error.contains("Cargo.toml"), "{error}");
+    assert!(error.contains("[package.metadata.telar]"), "{error}");
+    assert!(error.contains(MANIFEST_FILENAME), "{error}");
+}
+
+#[test]
+fn other_tools_cargo_package_metadata_is_left_alone() {
+    let root = package(
+        "cargo_other_metadata",
+        Some("[telar]\nbackend = \"software\"\n"),
+    );
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"app\"\n\n[package.metadata.android]\npackage = \"x\"\n",
+    )
+    .unwrap();
+
+    let telar = TelarManifest::load(&root).unwrap().telar;
+    assert_eq!(telar.backend, Some(RendererBackend::Software));
+}
+
+#[test]
 fn a_project_without_a_web_table_gets_the_web_defaults() {
     let root = package("web_defaults", Some("[telar]\nbackend = \"auto\"\n"));
     let web = TelarManifest::load(&root).unwrap().telar.web;

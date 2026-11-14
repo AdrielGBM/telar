@@ -45,6 +45,33 @@ pub struct WindowSection {
     pub position: Option<WindowPosition>,
 }
 
+impl DevSection {
+    fn over(self, base: Self) -> Self {
+        Self {
+            window: match (self.window, base.window) {
+                (Some(own), Some(base)) => Some(own.over(base)),
+                (own, base) => own.or(base),
+            },
+            devtools: self.devtools.or(base.devtools),
+        }
+    }
+}
+
+impl WindowSection {
+    fn over(self, base: Self) -> Self {
+        Self {
+            title: self.title.or(base.title),
+            width: self.width.or(base.width),
+            height: self.height.or(base.height),
+            decorations: self.decorations.or(base.decorations),
+            resizable: self.resizable.or(base.resizable),
+            transparent: self.transparent.or(base.transparent),
+            fullscreen: self.fullscreen.or(base.fullscreen),
+            position: self.position.or(base.position),
+        }
+    }
+}
+
 /// Where translation catalogs are discovered. Both sources may be active at once; either name set to `""` disables it.
 #[derive(Deserialize, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -239,8 +266,11 @@ impl TelarManifest {
     ///
     /// Settings are inherited key by key, so a workspace declares its theme, backend and catalogs once and a package overrides only what differs from its siblings. Every package of a workspace answering the same way is the common case, and saying it eight times is how the eight drift apart.
     ///
+    /// `telar.toml` is the only place a package is configured: a `[package.metadata.telar]` table left in its `Cargo.toml` is an error naming the file its keys belong in, since nothing reads that table and a backend set there would otherwise be dropped without a word.
+    ///
     /// A `[telar] library` inherits nothing: it ships its artifact transpiled against its own manifest, and once published there is no workspace above it, or there is an application's, when a copy is vendored into one. Either way the answer would differ from the one the artifact was written under.
     pub fn load(package_root: &Path) -> Result<Self, ManifestError> {
+        Self::refuse_package_metadata(package_root)?;
         let own = Self::read(package_root)?;
         let library = own.as_ref().is_some_and(|own| own.telar.library);
         let inherited = Self::workspace_dir(package_root, library)
@@ -283,6 +313,26 @@ impl TelarManifest {
             .map(|dir| dir.join(MANIFEST_FILENAME))
             .filter(|path| path.is_file())
             .collect()
+    }
+
+    fn refuse_package_metadata(package_root: &Path) -> Result<(), ManifestError> {
+        let declared = crate::CargoManifest::read(package_root).is_some_and(|cargo| {
+            cargo
+                .table()
+                .get("package")
+                .and_then(|package| package.get("metadata"))
+                .and_then(|metadata| metadata.get("telar"))
+                .is_some()
+        });
+        if !declared {
+            return Ok(());
+        }
+        Err(ManifestError::Invalid {
+            path: package_root.join(crate::cargo_manifest::CARGO_MANIFEST_FILENAME),
+            message: format!(
+                "`[package.metadata.telar]` is not read: telar is configured in `{MANIFEST_FILENAME}` beside this Cargo.toml. Move its keys under `[telar]` in `{MANIFEST_FILENAME}` and remove the table"
+            ),
+        })
     }
 
     fn workspace_dir(package_root: &Path, library: bool) -> Option<PathBuf> {
@@ -331,10 +381,7 @@ impl TelarSection {
             theme: self.theme.or(base.theme),
             prelude: self.prelude.or(base.prelude),
             library: self.library,
-            dev: DevSection {
-                window: self.dev.window.or(base.dev.window),
-                devtools: self.dev.devtools.or(base.dev.devtools),
-            },
+            dev: self.dev.over(base.dev),
             i18n: I18nSection {
                 root: self.i18n.root.or(base.i18n.root),
                 scan: self.i18n.scan.or(base.i18n.scan),
@@ -357,8 +404,8 @@ impl TelarSection {
             } else {
                 self.fonts
             },
-            // Whole rather than merged: a package naming any source of its own is declaring where all of its icons come from.
             previews: self.previews.over(base.previews),
+            // Whole rather than merged: a package naming any source of its own is declaring where all of its icons come from.
             icons: self.icons.or(base.icons),
             locales: self.locales.or(base.locales),
             default_locale: self.default_locale.or(base.default_locale),

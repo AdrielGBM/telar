@@ -1,4 +1,4 @@
-//! Reading a project's configuration: `telar.toml`, `[package.metadata.telar]` and the manifest fields the bundlers need.
+//! Reading a project's configuration: `telar.toml` and the manifest fields the bundlers need.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use clap::ValueEnum;
 use serde::Deserialize;
 
+pub(crate) use telar_project::TelarSection;
 use telar_project::protocol::RendererBackend;
-use telar_project::{CargoManifest, ManifestError, TelarManifest};
-pub(crate) use telar_project::{DevSection, TelarSection, WindowSection};
+use telar_project::{CargoManifest, TelarManifest};
 
 use super::cargo_args::selected_package;
 
@@ -656,36 +656,6 @@ pub(crate) fn default_app_id(name: &str) -> String {
     format!("com.example.{name}")
 }
 
-#[derive(Deserialize)]
-struct ManifestTelarOnly {
-    package: Option<PackageTelarOnly>,
-}
-#[derive(Deserialize)]
-struct PackageTelarOnly {
-    metadata: Option<MetadataTelarOnly>,
-}
-#[derive(Deserialize)]
-struct MetadataTelarOnly {
-    telar: Option<TelarSection>,
-}
-
-// Only `package.metadata.telar` is held to the telar schema; the rest of Cargo.toml is cargo's. Absent is `Ok(None)`, present but invalid is an error, as it is for telar.toml.
-pub(crate) fn read_manifest_telar(dir: &Path) -> Result<Option<TelarSection>, ManifestError> {
-    let Some(manifest) = CargoManifest::load(dir)? else {
-        return Ok(None);
-    };
-    let parsed = manifest
-        .view::<ManifestTelarOnly>()
-        .map_err(|e| ManifestError::Invalid {
-            path: dir.join("Cargo.toml"),
-            message: e.to_string(),
-        })?;
-    Ok(parsed
-        .package
-        .and_then(|p| p.metadata)
-        .and_then(|m| m.telar))
-}
-
 /// The `[profile.web]` entry `cargo telar new`/`init` writes for a web target, and what `doctor` and
 /// `build --target web` point at when a project is missing it. Kept as one string so the three call sites
 /// can never drift apart on what the fix is.
@@ -699,57 +669,14 @@ pub(crate) fn has_web_profile(workspace_root: &Path) -> bool {
     CargoManifest::read(workspace_root).is_some_and(|manifest| manifest.has_profile("web"))
 }
 
-// Lowest to highest: built-in defaults, `[package.metadata.telar]`, `telar.toml`. The CLI flags are layered on by each command.
-//
-// A key the schema does not recognise in either file is an error: a project that misspelled one has configured nothing, and carrying on would run a build the author did not ask for.
-pub(crate) fn try_load_config(dir: &Path) -> Result<TelarSection, ManifestError> {
-    let manifest = read_manifest_telar(dir)?.unwrap_or_default();
-    Ok(merge_config(manifest, TelarManifest::load(dir)?.telar))
-}
-
+// The CLI flags are layered on by each command. A configuration that cannot be read stops the run: a project that misspelled a key has configured nothing, and carrying on would run a build the author did not ask for.
 pub(crate) fn load_config(args: &[String]) -> TelarSection {
-    match try_load_config(&find_package_dir(args)) {
-        Ok(config) => config,
+    match TelarManifest::load(&find_package_dir(args)) {
+        Ok(manifest) => manifest.telar,
         Err(e) => {
             eprintln!("[cargo-telar] {e}");
             std::process::exit(2);
         }
-    }
-}
-
-fn merge_opt<T>(base: Option<T>, over: Option<T>, merge: impl FnOnce(T, T) -> T) -> Option<T> {
-    match (base, over) {
-        (Some(b), Some(o)) => Some(merge(b, o)),
-        (b, o) => o.or(b),
-    }
-}
-
-fn merge_window(base: WindowSection, over: WindowSection) -> WindowSection {
-    WindowSection {
-        title: over.title.or(base.title),
-        width: over.width.or(base.width),
-        height: over.height.or(base.height),
-        decorations: over.decorations.or(base.decorations),
-        resizable: over.resizable.or(base.resizable),
-        transparent: over.transparent.or(base.transparent),
-        fullscreen: over.fullscreen.or(base.fullscreen),
-        position: over.position.or(base.position),
-    }
-}
-
-fn merge_dev(base: DevSection, over: DevSection) -> DevSection {
-    DevSection {
-        window: merge_opt(base.window, over.window, merge_window),
-        devtools: over.devtools.or(base.devtools),
-    }
-}
-
-fn merge_config(base: TelarSection, over: TelarSection) -> TelarSection {
-    TelarSection {
-        backend: over.backend.or(base.backend),
-        dev: merge_dev(base.dev, over.dev),
-        // Everything else is read from the package's own `telar.toml` by whoever needs it, never from `[package.metadata.telar]`, so a merge would only invent a precedence nothing reads.
-        ..over
     }
 }
 

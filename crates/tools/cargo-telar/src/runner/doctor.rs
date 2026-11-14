@@ -3,11 +3,12 @@
 use std::process::Command;
 
 use telar_project::protocol::RendererBackend;
+use telar_project::{MANIFEST_FILENAME, TelarManifest, TelarSection};
 
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
 use super::config::{
     WEB_PROFILE_TOML, find_package_dir, has_web_profile, missing_devtools_note, missing_workshop,
-    moved_features_hint_for, read_manifest_telar, resolve_package, try_load_config,
+    moved_features_hint_for, resolve_package,
 };
 
 struct Doctor {
@@ -111,21 +112,22 @@ pub(crate) fn run_doctor_cmd() -> ! {
         None => doc.info("workspace root", "none (standalone package)"),
     }
     let package_dir = find_package_dir(&[]);
-    let config = try_load_config(&package_dir).unwrap_or_default();
-    let telar_toml = package_dir.join("telar.toml");
+    let telar_toml = package_dir.join(MANIFEST_FILENAME);
     if telar_toml.exists() {
-        doc.ok("telar.toml", &telar_toml.display().to_string());
+        doc.ok(MANIFEST_FILENAME, &telar_toml.display().to_string());
     } else {
-        doc.info("telar.toml", "not found (using defaults)");
+        doc.info(MANIFEST_FILENAME, "not found (using defaults)");
     }
-    match read_manifest_telar(&package_dir) {
-        Ok(Some(_)) => doc.info("[package.metadata.telar]", "present"),
-        Ok(None) => doc.info("[package.metadata.telar]", "not set"),
-        Err(e) => doc.fail("[package.metadata.telar]", &e.to_string()),
-    }
+    let config = match TelarManifest::load(&package_dir) {
+        Ok(manifest) => manifest.telar,
+        Err(e) => {
+            doc.fail("configuration", &e.to_string());
+            TelarSection::default()
+        }
+    };
     doc.info(
         "config precedence",
-        "CLI flags > telar.toml > [package.metadata.telar] > defaults",
+        "CLI flags > the package's telar.toml > the workspace's telar.toml > defaults",
     );
     match telar_project::prelude_problems(&package_dir) {
         Ok(problems) if !problems.is_empty() => {
@@ -150,7 +152,7 @@ pub(crate) fn run_doctor_cmd() -> ! {
             }
             _ => doc.info("[telar] prelude", "none"),
         },
-        Err(e) => doc.fail("telar.toml", &e.to_string()),
+        Err(_) => {}
     }
     if let Some(hint) = moved_features_hint_for(&package_dir) {
         doc.warn("moved telar features", &hint.replace('\n', "\n      "));
@@ -191,20 +193,16 @@ pub(crate) fn run_doctor_cmd() -> ! {
                 );
             }
         }
-        Ok(_) => match telar_project::TelarManifest::load(&package_dir) {
-            Ok(manifest) if !manifest.telar.previews.include().is_empty() => {
-                let entries: Vec<String> = manifest
-                    .telar
-                    .previews
-                    .include()
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect();
-                doc.ok("[telar.previews] include", &entries.join(", "));
-            }
-            _ => {}
-        },
-        Err(_) => {}
+        Ok(_) if !config.previews.include().is_empty() => {
+            let entries: Vec<String> = config
+                .previews
+                .include()
+                .iter()
+                .map(ToString::to_string)
+                .collect();
+            doc.ok("[telar.previews] include", &entries.join(", "));
+        }
+        Ok(_) | Err(_) => {}
     }
     if resolved.targets_web() {
         if has_web_profile(&resolved.workspace_root) {

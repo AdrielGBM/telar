@@ -61,3 +61,7 @@ path = "src/bake.test.rs"
 [[test]]
 name = "artifact_paths"
 path = "src/artifact_paths.test.rs"
+
+[[test]]
+name = "config_location"
+path = "src/config_location.test.rs"
