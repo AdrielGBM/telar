@@ -8,7 +8,7 @@ fn table(src: &str) -> toml::Table {
 
 fn flat(src: &str) -> BTreeMap<String, MessageModel> {
     let mut out = BTreeMap::new();
-    i18n_core::flatten(&table(src), String::new(), &mut out, "t.toml").unwrap();
+    i18n_core::flatten(&table(src), String::new(), &mut out).unwrap();
     out
 }
 

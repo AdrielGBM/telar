@@ -80,38 +80,40 @@ impl CatalogModel {
         self.entries.keys()
     }
 
-    /// Merges every `(locale, TOML, label)` into one catalog. `label` names the source in error messages — a file path for the baker, a locale tag for a caller that parsed a string it holds in memory.
+    /// Merges every `(locale, TOML, source)` into one catalog, `None` when there is no source. `source` is how the caller names where the TOML came from, a file path for the baker or a locale tag for a string held in memory, and comes back in the error.
     ///
     /// `default` is the fallback locale when the active one lacks a key; an unknown or absent one resolves to `en` if the catalog has it, else the first tag alphabetically. Defining one key twice for one locale is an error rather than a last-writer-wins: the two definitions came from different files, and which of them a user sees would otherwise depend on directory order.
     ///
     /// Locale tags, `default` among them, are kept with their subtags separated by `-` whichever separator they were written with, so `pt_BR.toml` and `pt-BR/` are one locale, `pt-BR`, and every copy of [`negotiate_locale`](crate::negotiate_locale) sees the tags in the one form a browser reports.
-    pub fn from_sources(
-        sources: &[(&str, &str, &str)],
+    pub fn from_sources<S: Clone>(
+        sources: &[(&str, &str, S)],
         default: Option<&str>,
-    ) -> Result<Self, String> {
+    ) -> Result<Option<Self>, CatalogError<S>> {
         let mut entries: BTreeMap<String, BTreeMap<String, MessageModel>> = BTreeMap::new();
         let mut locales: Vec<String> = Vec::new();
-        for (tag, content, label) in sources {
+        for (tag, content, source) in sources {
+            let in_source = |problem| CatalogError {
+                source: source.clone(),
+                problem,
+            };
             let tag = canonical_tag(tag);
             if !locales.contains(&tag) {
                 locales.push(tag.clone());
             }
             let table: toml::Table = content
                 .parse()
-                .map_err(|e| format!("parsing {label}: {e}"))?;
+                .map_err(|e: toml::de::Error| in_source(syntax_problem(content, &e)))?;
             let mut flat = BTreeMap::new();
-            flatten(&table, String::new(), &mut flat, label)?;
+            flatten(&table, String::new(), &mut flat).map_err(in_source)?;
             for (key, message) in flat {
                 let per_locale = entries.entry(key.clone()).or_default();
                 if per_locale.insert(tag.clone(), message).is_some() {
-                    return Err(format!(
-                        "{label}: duplicate key `{key}` for locale `{tag}` (already defined in another file)"
-                    ));
+                    return Err(in_source(SourceProblem::DuplicateKey { key, locale: tag }));
                 }
             }
         }
         if locales.is_empty() {
-            return Err("a catalog needs at least one locale".to_string());
+            return Ok(None);
         }
         locales.sort();
 
@@ -121,11 +123,11 @@ impl CatalogModel {
             .or_else(|| locales.iter().find(|l| *l == "en").cloned())
             .unwrap_or_else(|| locales[0].clone());
 
-        Ok(Self {
+        Ok(Some(Self {
             locales,
             default_locale,
             entries,
-        })
+        }))
     }
 
     /// The same catalog as `&'static` data, indistinguishable from a baked one at the point of use.
@@ -153,6 +155,89 @@ impl CatalogModel {
             default_locale: leak_str(&self.default_locale),
             entries: leak_slice(entries),
         }))
+    }
+}
+
+/// Why a catalog does not load, and which of the sources given to [`CatalogModel::from_sources`] it is in.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CatalogError<S> {
+    pub source: S,
+    pub problem: SourceProblem,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SourceProblem {
+    /// Not TOML. `line` is 1-based, where the parser could tell.
+    Syntax {
+        line: Option<usize>,
+        message: String,
+    },
+    PluralNotString {
+        key: String,
+        found: &'static str,
+    },
+    UnsupportedType {
+        key: String,
+        found: &'static str,
+    },
+    /// The key is defined for this locale in another source too.
+    DuplicateKey {
+        key: String,
+        locale: String,
+    },
+}
+
+impl SourceProblem {
+    pub fn line(&self) -> Option<usize> {
+        match self {
+            Self::Syntax { line, .. } => *line,
+            Self::PluralNotString { .. }
+            | Self::UnsupportedType { .. }
+            | Self::DuplicateKey { .. } => None,
+        }
+    }
+}
+
+impl std::fmt::Display for SourceProblem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Syntax { message, .. } => write!(f, "{message}"),
+            Self::PluralNotString { key, found } => {
+                write!(f, "plural `{key}` must be a string, found `{found}`")
+            }
+            Self::UnsupportedType { key, found } => write!(
+                f,
+                "key `{key}` has unsupported type `{found}` (translations must be strings)"
+            ),
+            Self::DuplicateKey { key, locale } => write!(
+                f,
+                "duplicate key `{key}` for locale `{locale}` (already defined in another file)"
+            ),
+        }
+    }
+}
+
+impl<S: std::fmt::Display> std::fmt::Display for CatalogError<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let source = &self.source;
+        match self.problem.line() {
+            Some(line) => write!(f, "parsing {source}, line {line}: {}", self.problem),
+            None if matches!(self.problem, SourceProblem::Syntax { .. }) => {
+                write!(f, "parsing {source}: {}", self.problem)
+            }
+            None => write!(f, "{source}: {}", self.problem),
+        }
+    }
+}
+
+fn syntax_problem(content: &str, error: &toml::de::Error) -> SourceProblem {
+    SourceProblem::Syntax {
+        line: error.span().map(|span| {
+            content
+                .get(..span.start)
+                .map_or(1, |before| before.matches('\n').count() + 1)
+        }),
+        message: error.message().to_string(),
     }
 }
 
@@ -201,8 +286,7 @@ pub fn flatten(
     table: &toml::Table,
     prefix: String,
     out: &mut BTreeMap<String, MessageModel>,
-    label: &str,
-) -> Result<(), String> {
+) -> Result<(), SourceProblem> {
     for (key, value) in table {
         let full = if prefix.is_empty() {
             key.clone()
@@ -214,16 +298,16 @@ pub fn flatten(
                 let mut branches = BTreeMap::new();
                 for (category, message) in inner {
                     let toml::Value::String(s) = message else {
-                        return Err(format!(
-                            "{label}: plural `{full}.{category}` must be a string, found `{}`",
-                            message.type_str()
-                        ));
+                        return Err(SourceProblem::PluralNotString {
+                            key: format!("{full}.{category}"),
+                            found: message.type_str(),
+                        });
                     };
                     branches.insert(category.clone(), parse_message(s));
                 }
                 out.insert(full, MessageModel::Plural(branches));
             }
-            toml::Value::Table(inner) => flatten(inner, full, out, label)?,
+            toml::Value::Table(inner) => flatten(inner, full, out)?,
             toml::Value::String(s) => {
                 out.insert(full, parse_message(s));
             }
@@ -231,10 +315,10 @@ pub fn flatten(
                 out.insert(full, MessageModel::Plain(value.to_string()));
             }
             other => {
-                return Err(format!(
-                    "{label}: key `{full}` has unsupported type `{}` (translations must be strings)",
-                    other.type_str()
-                ));
+                return Err(SourceProblem::UnsupportedType {
+                    key: full,
+                    found: other.type_str(),
+                });
             }
         }
     }
@@ -294,7 +378,10 @@ impl Catalog {
     ///
     /// The format is the one the baker reads: dotted or nested keys, `{name}` placeholders, a table of CLDR categories for a plural.
     pub fn from_toml(locale: &str, toml: &str) -> Result<&'static Catalog, String> {
-        Ok(CatalogModel::from_sources(&[(locale, toml, locale)], Some(locale))?.leak())
+        CatalogModel::from_sources(&[(locale, toml, locale)], Some(locale))
+            .map_err(|error| error.to_string())?
+            .map(|model| model.leak())
+            .ok_or_else(|| format!("no catalog for `{locale}`"))
     }
 
     /// A catalog loaded from a directory of `<locale>.toml` files — the `locales/` layout the transpiler bakes from, read at runtime instead.
@@ -319,15 +406,15 @@ impl Catalog {
                 .map_err(|e| format!("reading {}: {e}", path.display()))?;
             files.push((tag.to_string(), content, path.display().to_string()));
         }
-        if files.is_empty() {
-            return Err(format!("no <locale>.toml files in {}", dir.display()));
-        }
         files.sort();
         let sources: Vec<(&str, &str, &str)> = files
             .iter()
             .map(|(tag, content, label)| (tag.as_str(), content.as_str(), label.as_str()))
             .collect();
-        Ok(CatalogModel::from_sources(&sources, default)?.leak())
+        CatalogModel::from_sources(&sources, default)
+            .map_err(|error| error.to_string())?
+            .map(|model| model.leak())
+            .ok_or_else(|| format!("no <locale>.toml files in {}", dir.display()))
     }
 }
 

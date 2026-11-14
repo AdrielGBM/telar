@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
 
-use telar_baker::BakeReport;
+use telar_baker::{BakeReport, Origin};
 use telar_diagnostics::{Severity, Span};
 use telar_parser::{RsxDocument, ViewNode};
 use telar_project::{
@@ -225,7 +225,7 @@ impl Bakes {
                     };
                     let report = Arc::new(report);
                     for (file, content) in hashed {
-                        if report.errors.is_empty() {
+                        if !report.problems.has_errors() {
                             failed.remove(&file);
                         } else {
                             failed.insert(
@@ -250,7 +250,7 @@ impl Bakes {
         }
         distinct
             .iter()
-            .flat_map(|report| report_diagnostics(report, &package_dir, rsx_path, &references))
+            .flat_map(|report| report_diagnostics(report, rsx_path, &references))
             .collect()
     }
 }
@@ -284,7 +284,7 @@ fn collect_references(nodes: &[ViewNode], source: &str, out: &mut Vec<AssetRefer
                                 .map_or(el.line, |before| before.matches('\n').count() + 1);
                             out.push(AssetReference {
                                 kind,
-                                path: path.to_string(),
+                                path: path.replace('\\', "/"),
                                 line,
                             });
                         }
@@ -309,50 +309,34 @@ fn collect_references(nodes: &[ViewNode], source: &str, out: &mut Vec<AssetRefer
     }
 }
 
+/// Each problem on the lines of this buffer it came from: a line of this file, every `src:"…"` naming the asset, or the first line for one with the package as a whole. A problem from another file is left to that file's buffer.
 fn report_diagnostics(
     report: &BakeReport,
-    package_dir: &Path,
     rsx_path: &Path,
     references: &[AssetReference],
 ) -> Vec<telar_diagnostics::Diagnostic> {
-    let own_file = rsx_path
-        .strip_prefix(package_dir)
-        .unwrap_or(rsx_path)
-        .display()
-        .to_string();
-    let errors = report
-        .errors
-        .iter()
-        .map(|message| (Severity::Error, message));
-    let warnings = report
-        .warnings
-        .iter()
-        .map(|message| (Severity::Warning, message));
     let mut out = Vec::new();
-    for (severity, message) in errors.chain(warnings) {
-        let lines: Vec<usize> = match located_at(message) {
-            Some((file, line)) if file == own_file => vec![line],
-            Some(_) => Vec::new(),
-            None => {
-                let named: Vec<usize> = references
-                    .iter()
-                    .filter(|reference| message.contains(&format!("`{}`", reference.path)))
-                    .map(|reference| reference.line)
-                    .collect();
-                if named.is_empty() { vec![1] } else { named }
-            }
+    for problem in &report.problems {
+        let lines: Vec<usize> = match problem.origin() {
+            Some(Origin::Line(line)) if problem.file == rsx_path => vec![line],
+            Some(Origin::Line(_)) => Vec::new(),
+            Some(Origin::Asset(asset)) => references
+                .iter()
+                .filter(|reference| reference.path == asset.path)
+                .map(|reference| reference.line)
+                .collect(),
+            None => vec![1],
         };
+        let severity = match problem.severity() {
+            telar_baker::Severity::Error => Severity::Error,
+            telar_baker::Severity::Warning => Severity::Warning,
+        };
+        let message = problem.to_string();
         out.extend(lines.into_iter().map(|line| {
             telar_diagnostics::Diagnostic::new(severity, message.clone(), Span::line(line))
         }));
     }
     out
-}
-
-fn located_at(message: &str) -> Option<(&str, usize)> {
-    let (location, _) = message.split_once(": ")?;
-    let (file, line) = location.rsplit_once(':')?;
-    Some((file, line.parse().ok()?))
 }
 
 /// Leaves the generated file if nothing has produced one yet, and returns the build path with the buffer's map. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/`, its `telar.toml` does not load, or transpilation fails, so IntelliSense keeps working against the last parseable state.

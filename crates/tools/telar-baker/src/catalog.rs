@@ -15,14 +15,15 @@ use telar_project::{
     read_catalog_index, write_if_changed_atomic,
 };
 
+use crate::problem::{BakeProblem, ProblemKind, Problems};
+
 /// What baking one package's catalog turned up, mirroring [`super::BakeReport`].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct CatalogReport {
     pub keys: usize,
     pub changed: bool,
-    pub warnings: Vec<String>,
-    /// What a build must not go on from: a catalog file that does not parse, or an artifact that cannot be written. Either leaves the previous catalog in place, which would otherwise ship as if it were this one.
-    pub errors: Vec<String>,
+    /// An error leaves the previous catalog in place, which would otherwise ship as if it were this one.
+    pub problems: Problems,
 }
 
 /// Bakes `package_dir`'s translation catalog, writing `<package_dir>/.telar/i18n.{json,rs}`. `None` when the package has neither `.rsx` files nor locale files, so a crate with no stake in either never grows a `.telar/`.
@@ -44,8 +45,8 @@ pub fn bake_catalog(
     let mut report = CatalogReport::default();
     let model = match parse_sources(&sources, config.default.as_deref()) {
         Ok(model) => model,
-        Err(e) => {
-            report.errors.push(format!("catalog: {e}"));
+        Err(problem) => {
+            report.problems.push(problem);
             return Ok(Some(report));
         }
     };
@@ -74,10 +75,9 @@ pub fn bake_catalog(
             continue;
         };
         let Some(relative) = telar_project::relative_slashed(&path, package_dir) else {
-            report.warnings.push(format!(
-                "catalog: {} has a name that is not valid UTF-8, so a change to it will not mark the baked catalog stale",
-                path.display()
-            ));
+            report
+                .problems
+                .push(BakeProblem::new(ProblemKind::CatalogNameNotUtf8, &path));
             continue;
         };
         source_files.push(CatalogSourceFile {
@@ -110,9 +110,12 @@ pub fn bake_catalog(
             )
         })
     {
-        report
-            .errors
-            .push(format!("could not write {}: {e}", telar_dir.display()));
+        report.problems.push(BakeProblem::new(
+            ProblemKind::ArtifactUnwritable {
+                error: e.to_string(),
+            },
+            &telar_dir,
+        ));
         report.changed = false;
     }
     Ok(Some(report))
@@ -196,8 +199,13 @@ fn discover_root_dir(root: &Path, sources: &mut Vec<(String, PathBuf)>) {
 }
 
 /// Parses the catalog for `package_root`. Returns `Ok(None)` when no translation files are found (i18n unused), and `Err` for a malformed catalog (bad TOML, non-string message, a key defined twice for one locale) or a `telar.toml` that does not load.
-pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, String> {
-    let config = I18nConfig::load(package_root).map_err(|e| e.to_string())?;
+pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, BakeProblem> {
+    let config = I18nConfig::load(package_root).map_err(|error| {
+        BakeProblem::new(
+            ProblemKind::Manifest(error),
+            package_root.join(telar_project::MANIFEST_FILENAME),
+        )
+    })?;
     parse_sources(
         &catalog_sources(package_root, &config),
         config.default.as_deref(),
@@ -216,23 +224,32 @@ pub fn catalog_keys(package_root: &Path) -> HashSet<String> {
 fn parse_sources(
     sources: &[(String, PathBuf)],
     default: Option<&str>,
-) -> Result<Option<CatalogModel>, String> {
-    if sources.is_empty() {
-        return Ok(None);
-    }
-
-    let mut files: Vec<(String, String, String)> = Vec::new();
+) -> Result<Option<CatalogModel>, BakeProblem> {
+    let mut files: Vec<(&str, String, &Path)> = Vec::new();
     for (tag, path) in sources {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| format!("reading {}: {e}", path.display()))?;
-        files.push((tag.clone(), content, path.display().to_string()));
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            BakeProblem::new(
+                ProblemKind::CatalogUnreadable {
+                    error: e.to_string(),
+                },
+                path,
+            )
+        })?;
+        files.push((tag.as_str(), content, path));
     }
-    let borrowed: Vec<(&str, &str, &str)> = files
+    let borrowed: Vec<(&str, &str, &Path)> = files
         .iter()
-        .map(|(tag, content, label)| (tag.as_str(), content.as_str(), label.as_str()))
+        .map(|(tag, content, path)| (*tag, content.as_str(), *path))
         .collect();
 
-    CatalogModel::from_sources(&borrowed, default).map(Some)
+    CatalogModel::from_sources(&borrowed, default).map_err(|error| {
+        BakeProblem::new(
+            ProblemKind::CatalogInvalid {
+                problem: error.problem,
+            },
+            error.source,
+        )
+    })
 }
 
 /// Serializes the catalog to a Rust source module. Types are referenced through the `telar::i18n` facade so the generated file compiles with the same `rsx` dependency every generated `.rsx` file has.

@@ -1,4 +1,5 @@
 use super::*;
+use crate::problem::Severity;
 use std::path::PathBuf;
 
 const ICON_SVG: &[u8] = include_bytes!("../fixtures/icon.svg");
@@ -73,7 +74,12 @@ fn bakes_only_the_assets_a_document_actually_references() {
     let report = bake_package(&root, "test-producer", "9.9.9").expect("the package has .rsx");
     assert_eq!(report.baked, 2);
     assert!(report.changed, "a first bake is always a change");
-    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    assert_eq!(
+        report.problems.warnings().count(),
+        0,
+        "{:?}",
+        report.problems
+    );
 
     let index = telar_project::read_index(&root.join(".telar"))
         .unwrap()
@@ -104,19 +110,22 @@ fn a_missing_asset_file_is_an_error_naming_the_reference_and_its_expected_path()
 
     let report = bake_package(&root, "p", "1.0.0").expect("the package has .rsx");
     assert_eq!(report.baked, 0);
-    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
-    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
-    let expected_path = root.join("assets").join("missing.png");
-    assert!(
-        report.errors[0].contains("`missing.png`"),
+    assert_eq!(
+        report.problems.warnings().count(),
+        0,
         "{:?}",
-        report.errors
+        report.problems
     );
-    assert!(
-        report.errors[0].contains(&expected_path.display().to_string()),
-        "{:?}",
-        report.errors
-    );
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
+    let ProblemKind::AssetMissing { asset, .. } = &problem.kind else {
+        panic!("a missing asset expected: {problem:?}");
+    };
+    assert_eq!(asset.path, "missing.png");
+    assert_eq!(asset.kind.id, "image");
+    assert_eq!(problem.file, root.join("assets").join("missing.png"));
+    assert_eq!(problem.severity(), Severity::Error);
 
     let index = telar_project::read_index(&root.join(".telar")).unwrap();
     assert!(
@@ -157,12 +166,14 @@ fn an_asset_that_does_not_decode_is_an_error_naming_it_while_the_rest_still_bake
     .unwrap();
 
     let report = bake_package(&root, "p", "1.0.0").expect("the package has .rsx");
-    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
-    assert!(
-        report.errors[0].contains("`broken.png`"),
-        "{:?}",
-        report.errors
-    );
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
+    let ProblemKind::AssetUndecodable { asset, .. } = &problem.kind else {
+        panic!("an undecodable asset expected: {problem:?}");
+    };
+    assert_eq!(asset.path, "broken.png");
+    assert_eq!(problem.file, root.join("assets").join("broken.png"));
     let index = telar_project::read_index(&root.join(".telar"))
         .unwrap()
         .expect("the assets that decode are still baked");

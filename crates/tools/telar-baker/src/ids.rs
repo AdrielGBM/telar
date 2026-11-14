@@ -24,14 +24,6 @@ pub struct IdRef {
     pub line: usize,
 }
 
-impl IdRef {
-    /// `file:line`, relative to `package_dir` where it can be.
-    pub fn location(&self, package_dir: &Path) -> String {
-        let file = self.file.strip_prefix(package_dir).unwrap_or(&self.file);
-        format!("{}:{}", file.display(), self.line)
-    }
-}
-
 /// Every prop of `kinds` that `doc`'s view and previews write, and every `tag!("id")` its Rust names one by — in its logic zone, its `[play]` zones and the expressions its view writes — where `tag` is the kind's component. `file` is where `doc` was read from, and `source` its text.
 pub fn collect_id_refs(
     doc: &RsxDocument,

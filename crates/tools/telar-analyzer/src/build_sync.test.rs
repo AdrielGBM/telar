@@ -291,3 +291,117 @@ fn changed_bytes_are_baked_again_and_a_fixed_asset_reports_nothing() {
     assert!(root.join(".telar/assets.json").is_file());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+const BAKES_EVERY_ICON: &str = "[telar.icons]\nmode = \"baked\"\nsvg = \"icons\"\n";
+
+fn diagnostics_of(rsx: &Path, source: &str) -> Vec<telar_diagnostics::Diagnostic> {
+    std::fs::write(rsx, source).unwrap();
+    let document = telar_parser::parse(source).unwrap();
+    Bakes::editor().bake_if_unanswered(rsx, source, &document)
+}
+
+#[test]
+fn a_problem_on_a_line_of_this_file_is_reported_there_and_one_in_another_file_is_not() {
+    let root = unbaked_crate("located");
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        BAKES_EVERY_ICON,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/other.rsx"),
+        "[logic]\nlet other = signal(String::from(\"demo:home\"));\n\n[view]\nicon name:$other\n",
+    )
+    .unwrap();
+    let source = "[logic]\nlet which = signal(String::from(\"demo:home\"));\n\n[view]\ncol\n    svg src:\"badge.svg\"\n    icon name:$which\n";
+
+    let diagnostics = diagnostics_of(&root.join("src/view.rsx"), source);
+
+    let [diagnostic] = diagnostics.as_slice() else {
+        panic!("only this file's problem expected: {diagnostics:?}");
+    };
+    assert_eq!(diagnostic.span.line, 7);
+    assert!(matches!(diagnostic.severity, Severity::Error));
+    assert!(
+        diagnostic.message.starts_with("`name:$which` — "),
+        "{}",
+        diagnostic.message
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn an_asset_problem_is_reported_on_every_line_naming_the_asset_and_nowhere_else() {
+    let root = unbaked_crate("asset_lines");
+    std::fs::write(root.join("assets/broken.svg"), BROKEN_SVG).unwrap();
+    std::fs::write(
+        root.join("src/other.rsx"),
+        "[view]\nsvg src:\"broken.svg\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("assets/cracked.svg"), BROKEN_SVG).unwrap();
+    let source = "[view]\ncol\n    svg src:\"cracked.svg\"\n    svg src:\"badge.svg\"\n    svg src:\"cracked.svg\"\n";
+
+    let diagnostics = diagnostics_of(&root.join("src/view.rsx"), source);
+
+    let lines: Vec<usize> = diagnostics.iter().map(|d| d.span.line).collect();
+    assert_eq!(lines, vec![3, 5], "{diagnostics:?}");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|d| d.message.contains("`cracked.svg`")),
+        "{diagnostics:?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_problem_with_the_package_as_a_whole_is_reported_on_the_first_line_as_its_severity() {
+    let root = unbaked_crate("package_wide");
+    std::fs::create_dir_all(root.join(".telar")).unwrap();
+    std::fs::write(root.join(".telar/icons.json"), "{ not json").unwrap();
+    let source = "[view]\ncol\n    svg src:\"badge.svg\"\n";
+
+    let diagnostics = diagnostics_of(&root.join("src/view.rsx"), source);
+
+    let [diagnostic] = diagnostics.as_slice() else {
+        panic!("one problem expected: {diagnostics:?}");
+    };
+    assert_eq!(diagnostic.span.line, 1);
+    assert!(matches!(diagnostic.severity, Severity::Warning));
+    assert!(
+        diagnostic.message.contains("icons.json"),
+        "{}",
+        diagnostic.message
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_licence_problem_with_an_icon_set_is_reported_on_the_first_line_drawing_from_it() {
+    let root = unbaked_crate("licence");
+    let iconify = Path::new(env!("CARGO_MANIFEST_DIR")).join("../telar-baker/fixtures/iconify");
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        format!(
+            "[telar.icons]\nmode = \"baked\"\niconify = {:?}\n",
+            iconify.display().to_string()
+        ),
+    )
+    .unwrap();
+    let source = "[view]\ncol\n    svg src:\"badge.svg\"\n    icon name:\"attrib:dot\"\n    icon name:\"attrib:dot\"\n";
+
+    let diagnostics = diagnostics_of(&root.join("src/view.rsx"), source);
+
+    let [diagnostic] = diagnostics.as_slice() else {
+        panic!("one problem expected: {diagnostics:?}");
+    };
+    assert_eq!(diagnostic.span.line, 4);
+    assert!(matches!(diagnostic.severity, Severity::Warning));
+    assert!(
+        diagnostic.message.contains("CC-BY-4.0"),
+        "{}",
+        diagnostic.message
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

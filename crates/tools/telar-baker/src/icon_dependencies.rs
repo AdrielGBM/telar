@@ -7,9 +7,12 @@ use std::path::{Path, PathBuf};
 
 use icons_core::{LicensePolicy, Verdict};
 use serde::{Deserialize, Serialize};
-use telar_project::{ICONS_LIBRARY_RECORD_FILENAME, TelarManifest};
+use telar_project::{
+    ICONS_LIBRARY_RECORD_FILENAME, MANIFEST_FILENAME, ManifestError, TelarManifest,
+};
 
 use crate::icons::{IconRecord, RecordedSet, read_icon_record};
+use crate::problem::{BakeProblem, ProblemKind, Problems};
 
 const LIBRARY_RECORD_FORMAT: u32 = 1;
 
@@ -159,8 +162,8 @@ struct Node {
 }
 
 impl DependencyGraph {
-    /// The graph `metadata`, the output of `cargo metadata --format-version 1` with its resolve, describes.
-    pub fn from_metadata(metadata: &serde_json::Value) -> Self {
+    /// The graph `metadata`, the output of `cargo metadata --format-version 1` with its resolve, describes. A crate whose `telar.toml` cannot be read is an error naming the file, since whether it is a library decides where its icons are read from.
+    pub fn from_metadata(metadata: &serde_json::Value) -> Result<Self, BakeProblem> {
         let mut graph = Self::default();
         let mut by_id: HashMap<&str, usize> = HashMap::new();
         for package in metadata["packages"].as_array().into_iter().flatten() {
@@ -179,7 +182,9 @@ impl DependencyGraph {
             graph.nodes.push(Node {
                 name: name.to_string(),
                 dir: dir.to_path_buf(),
-                library: is_library(dir),
+                library: is_library(dir).map_err(|error| {
+                    BakeProblem::new(ProblemKind::Manifest(error), dir.join(MANIFEST_FILENAME))
+                })?,
                 local: package["source"].is_null(),
                 deps: Vec::new(),
             });
@@ -206,7 +211,7 @@ impl DependencyGraph {
                 .filter_map(|dep| by_id.get(dep["pkg"].as_str()?).copied())
                 .collect();
         }
-        graph
+        Ok(graph)
     }
 
     /// Every crate the package at `package_dir` is built with, at any depth, that can carry baked icons, sorted by name. `None` when the graph does not hold the package.
@@ -274,24 +279,26 @@ impl DependencyGraph {
     }
 }
 
-fn is_library(dir: &Path) -> bool {
-    dir.join(telar_project::MANIFEST_FILENAME).is_file()
-        && TelarManifest::load(dir).is_ok_and(|manifest| manifest.telar.library)
+fn is_library(dir: &Path) -> Result<bool, ManifestError> {
+    if !dir.join(MANIFEST_FILENAME).is_file() {
+        return Ok(false);
+    }
+    Ok(TelarManifest::load(dir)?.telar.library)
 }
 
 fn canonical(dir: &Path) -> PathBuf {
     dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf())
 }
 
-/// The icons of the crates a package is built with, each judged against the package's `policy`: read from `dependencies` when the caller could ask cargo for them, and otherwise the ones `previous` recorded, so a bake that cannot ask, such as the editor's, leaves the notice as the last full bake wrote it.
+/// The icons of the crates a package is built with, each judged against the package's `policy`, which `manifest` holds: read from `dependencies` when the caller could ask cargo for them, and otherwise the ones `previous` recorded, so a bake that cannot ask, such as the editor's, leaves the notice as the last full bake wrote it.
 ///
 /// A set the policy refuses is an error, since those icons are already baked into a crate the package cannot rebake, and are kept in the record because they still ship.
 pub(crate) fn dependency_icons(
     previous: Option<&IconRecord>,
     dependencies: Option<&[IconDependency]>,
     policy: &LicensePolicy,
-    warnings: &mut Vec<String>,
-    errors: &mut Vec<String>,
+    manifest: &Path,
+    problems: &mut Problems,
 ) -> BTreeMap<String, CrateIcons> {
     let icons = match dependencies {
         None => previous
@@ -306,15 +313,13 @@ pub(crate) fn dependency_icons(
                         .or_default()
                         .absorb(found),
                     Ok(None) => {}
-                    Err(problem) => warnings.push(format!(
-                        "the icons `{}` draws are left out of this package's licence notice: in {}, {problem}. {}",
-                        dependency.name,
-                        dependency.dir.display(),
-                        if dependency.library {
-                            "A library has to be packaged with a `cargo telar` that ships its icon record"
-                        } else {
-                            "Bake it again to rewrite its record"
-                        }
+                    Err(problem) => problems.push(BakeProblem::new(
+                        ProblemKind::DependencyIconsUnread {
+                            dependency: dependency.name.clone(),
+                            library: dependency.library,
+                            problem,
+                        },
+                        &dependency.dir,
                     )),
                 }
             }
@@ -323,17 +328,20 @@ pub(crate) fn dependency_icons(
     };
     for (name, crate_icons) in &icons {
         for (prefix, set) in &crate_icons.sets {
-            let verdict = policy.judge(prefix, set.info.as_ref(), set.own);
-            let attributed = |message: String| {
-                format!(
-                    "`{name}`, which this package is built with, ships icons this package's licence policy has not accepted: {message}"
-                )
+            let kind = match policy.judge(prefix, set.info.as_ref(), set.own) {
+                Verdict::Accepted => continue,
+                Verdict::Warn(message) => ProblemKind::DependencyIconSetUnlisted {
+                    dependency: name.clone(),
+                    set: prefix.clone(),
+                    message,
+                },
+                Verdict::Fail(message) => ProblemKind::DependencyIconSetRefused {
+                    dependency: name.clone(),
+                    set: prefix.clone(),
+                    message,
+                },
             };
-            match verdict {
-                Verdict::Accepted => {}
-                Verdict::Warn(message) => warnings.push(attributed(message)),
-                Verdict::Fail(message) => errors.push(attributed(message)),
-            }
+            problems.push(BakeProblem::new(kind, manifest));
         }
     }
     icons

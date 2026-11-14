@@ -57,7 +57,7 @@ fn a_referenced_asset_that_is_missing_fails_the_bake_and_names_the_path() {
 }
 
 #[test]
-fn a_catalog_that_does_not_parse_fails_the_bake_and_names_the_file() {
+fn a_catalog_that_does_not_parse_fails_the_bake_and_names_the_file_and_line() {
     let root = package("broken_catalog");
     let baked = bake(&root);
     assert!(
@@ -72,7 +72,10 @@ fn a_catalog_that_does_not_parse_fails_the_bake_and_names_the_file() {
     assert!(!failed.status.success(), "{stderr}");
     assert!(stderr.contains("error"), "{stderr}");
     assert!(
-        stderr.contains(&root.join("locales").join("es.toml").display().to_string()),
+        stderr.contains(&format!(
+            "{}:1: catalog: ",
+            std::path::Path::new("locales").join("es.toml").display()
+        )),
         "{stderr}"
     );
 

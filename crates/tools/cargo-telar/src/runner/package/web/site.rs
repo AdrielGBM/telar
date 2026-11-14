@@ -271,9 +271,11 @@ fn og_locale(tag: &str) -> String {
 
 /// The description under `key` in every locale of the project's catalog, each a plain message: a page is described before any argument could be given.
 fn translated(key: &str, package_root: &Path) -> Result<Description, String> {
-    let model = telar_baker::parse_catalog(package_root)?.ok_or_else(|| {
-        format!("`[telar.web] description = \"{key}\"` names a catalog key, but the project has no catalog")
-    })?;
+    let model = telar_baker::parse_catalog(package_root)
+        .map_err(|problem| crate::runner::bake::render(&problem, package_root))?
+        .ok_or_else(|| {
+            format!("`[telar.web] description = \"{key}\"` names a catalog key, but the project has no catalog")
+        })?;
     let per_locale = model.entries.get(key).ok_or_else(|| {
         format!("`[telar.web] description = \"{key}\"` is not a key of the project's catalog")
     })?;

@@ -1,4 +1,6 @@
 use super::*;
+use crate::problem::{Origin, Severity};
+use i18n_core::SourceProblem;
 
 #[test]
 fn bakes_catalog_from_disk() {
@@ -76,8 +78,17 @@ fn merges_per_module_files_in_a_locale_dir() {
         "[settings]\ntitle = \"Oops\"\n",
     )
     .unwrap();
-    let err = parse_catalog(&root).unwrap_err();
-    assert!(err.contains("duplicate key `settings.title`"), "{err}");
+    let problem = parse_catalog(&root).unwrap_err();
+    assert!(
+        matches!(
+            &problem.kind,
+            ProblemKind::CatalogInvalid {
+                problem: SourceProblem::DuplicateKey { key, locale },
+            } if key == "settings.title" && locale == "en"
+        ),
+        "{problem:?}"
+    );
+    assert_eq!(problem.file, root.join("locales/en/settings.toml"));
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -165,8 +176,12 @@ fn a_telar_toml_that_does_not_load_is_an_error_rather_than_the_default_catalog()
     )
     .unwrap();
 
-    let error = parse_catalog(&root).expect_err("a misspelled key does not mean `locales/`");
-    assert!(error.contains("rot"), "{error}");
+    let problem = parse_catalog(&root).expect_err("a misspelled key does not mean `locales/`");
+    assert!(
+        matches!(problem.kind, ProblemKind::Manifest(_)),
+        "{problem:?}"
+    );
+    assert!(problem.to_string().contains("rot"), "{problem}");
     assert!(catalog_files(&root).is_err());
     let error = bake_catalog(&root, "test", "0.0.0")
         .expect_err("a bake against the default directories would write the wrong catalog");
@@ -185,19 +200,28 @@ fn a_catalog_that_does_not_parse_is_an_error_naming_it_and_keeps_the_previous_ar
     std::fs::create_dir_all(root.join("locales")).unwrap();
     std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
     let baked = bake_catalog(&root, "test", "0.0.0").unwrap().unwrap();
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
+    assert!(baked.problems.is_empty(), "{:?}", baked.problems);
     let artifact =
         std::fs::read_to_string(root.join(".telar").join(CATALOG_SOURCE_FILENAME)).unwrap();
 
     std::fs::write(root.join("locales/es.toml"), "title = \"Ajustes\n").unwrap();
     let report = bake_catalog(&root, "test", "0.0.0").unwrap().unwrap();
 
-    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
     assert!(
-        report.errors[0].contains(&root.join("locales").join("es.toml").display().to_string()),
-        "{:?}",
-        report.errors
+        matches!(
+            &problem.kind,
+            ProblemKind::CatalogInvalid {
+                problem: SourceProblem::Syntax { line: Some(1), .. },
+            }
+        ),
+        "{problem:?}"
     );
+    assert_eq!(problem.file, root.join("locales").join("es.toml"));
+    assert!(matches!(problem.origin(), Some(Origin::Line(1))));
+    assert_eq!(problem.severity(), Severity::Error);
     assert!(!report.changed);
     assert_eq!(
         std::fs::read_to_string(root.join(".telar").join(CATALOG_SOURCE_FILENAME)).unwrap(),
@@ -242,10 +266,21 @@ fn a_catalog_file_named_in_non_utf8_leaves_the_others_tracked_and_is_reported() 
     let index = read_catalog_index(&root.join(".telar")).unwrap().unwrap();
     let tracked: Vec<&str> = index.sources.iter().map(|s| s.path.as_str()).collect();
 
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     assert_eq!(tracked, ["locales/en.toml"]);
-    assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
-    assert!(report.warnings[0].contains("not valid UTF-8"));
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
+    assert!(
+        matches!(problem.kind, ProblemKind::CatalogNameNotUtf8),
+        "{problem:?}"
+    );
+    assert_eq!(
+        problem.file,
+        root.join("locales/es").join(non_utf8_file_name())
+    );
+    assert_eq!(problem.severity(), Severity::Warning);
+    assert!(problem.to_string().contains("not valid UTF-8"), "{problem}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -281,7 +316,9 @@ fn text_direction_controls_in_a_catalog_bake_to_rust_that_compiles_and_reads_bac
     let reversed = "Order \u{202E}lanif\u{202C} placed";
     let isolated = "\u{2066}{name}\u{2069} and \u{2067}\u{2068}x\u{2069}";
     let english = format!("plain = \"{reversed}\"\nformatted = \"{isolated}\"\n");
-    let model = CatalogModel::from_sources(&[("en", &english, "en.toml")], Some("en")).unwrap();
+    let model = CatalogModel::from_sources(&[("en", &english, "en.toml")], Some("en"))
+        .unwrap()
+        .unwrap();
 
     let source = to_source(&model);
     syn::parse_file(&source).unwrap();

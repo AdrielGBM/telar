@@ -29,6 +29,7 @@ mod ids;
 mod image;
 mod macro_ids;
 mod package;
+mod problem;
 mod svg;
 mod web_image;
 
@@ -37,6 +38,7 @@ pub use icon_dependencies::{CrateIcons, DependencyGraph, IconDependency, read_li
 pub use icons::{ICONS_RECORD_FILENAME, IconRecord, RecordedIcon, RecordedSet, read_icon_record};
 pub use ids::{IdRef, collect_id_refs};
 pub use package::{BakeReport, bake_package, bake_package_with, collect_asset_refs};
+pub use problem::{AssetRef, BakeProblem, Origin, ProblemKind, Problems, Severity};
 pub use telar_project::ICONS_NOTICE_FILENAME;
 pub use web_image::{WEB_IMAGES_DIR, WebImage, WebImageFile, web_image};
 

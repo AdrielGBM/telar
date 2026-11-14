@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use telar_baker::{ICONS_NOTICE_FILENAME, bake_package, read_icon_record};
+use telar_baker::{ICONS_NOTICE_FILENAME, ProblemKind, bake_package, read_icon_record};
 use telar_project::{AssetContext, TelarManifest, read_index, static_name_for_path};
 
 const VERSION: &str = "0.2.1";
@@ -41,10 +41,6 @@ fn package_with(name: &str, mode: &str, extra: &str, view: &str) -> PathBuf {
     root
 }
 
-fn app_rsx() -> String {
-    Path::new("src").join("app.rsx").display().to_string()
-}
-
 fn baked_icons(root: &Path) -> Vec<String> {
     read_index(&root.join(".telar"))
         .unwrap()
@@ -64,8 +60,13 @@ fn only_the_icons_the_view_names_are_baked() {
         "[view]\ncol\n    icon name:\"demo:home\"\n    if true\n        icon name:\"demo:house\" size:32\n    icon name:\"demo:home\"\n",
     );
     let report = bake_package(&root, "test", VERSION).expect("the package has .rsx");
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
-    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
+    assert_eq!(
+        report.problems.warnings().count(),
+        0,
+        "{:?}",
+        report.problems
+    );
 
     assert_eq!(baked_icons(&root), vec!["demo:home", "demo:house"]);
     let source = std::fs::read_to_string(root.join(".telar/assets.rs")).unwrap();
@@ -111,11 +112,17 @@ fn a_computed_id_is_an_error_naming_runtime_mode() {
         "[logic]\nlet which = signal(String::from(\"demo:home\"));\n\n[view]\ncol\n    icon name:\"demo:gear\"\n    icon name:$which\n",
     );
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
-    let error = &report.errors[0];
-    assert!(error.starts_with(&format!("{}:", app_rsx())), "{error}");
-    assert!(error.contains("name:$which"), "{error}");
-    assert!(error.contains("mode = \"runtime\""), "{error}");
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
+    assert!(
+        matches!(&problem.kind, ProblemKind::IdNotLiteral { line: 7, prop, written, .. } if prop == "name" && written == "$which"),
+        "{problem:?}"
+    );
+    assert_eq!(problem.file, root.join("src").join("app.rsx"));
+    let message = problem.to_string();
+    assert!(message.contains("name:$which"), "{message}");
+    assert!(message.contains("mode = \"runtime\""), "{message}");
     assert_eq!(
         baked_icons(&root),
         vec!["demo:gear"],
@@ -132,7 +139,7 @@ fn a_literal_id_given_to_a_component_that_carries_icons_is_baked() {
         "[logic]\nlet which = signal(String::new());\n\n[view]\ncol\n    icon_button icon:\"demo:home\" label:\"Home\"\n    icon_button icon:$which label:\"Which\"\n    icon_button icon:icon!(\"demo:gear\") label:\"Gear\"\n\n[preview \"Starred\"]\nicon_button icon:\"demo:star\" label:\"Star\"\n",
     );
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     assert_eq!(
         baked_icons(&root),
         vec!["demo:gear", "demo:home", "demo:star"]
@@ -147,7 +154,7 @@ fn a_computed_id_is_left_for_the_runtime_when_only_literals_are_baked() {
         "[logic]\nlet which = signal(String::new());\n\n[view]\ncol\n    icon name:\"demo:gear\"\n    icon name:$which\n",
     );
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     assert_eq!(baked_icons(&root), vec!["demo:gear"]);
 }
 
@@ -161,7 +168,7 @@ fn runtime_mode_bakes_nothing_and_ships_no_notice() {
     )
     .unwrap();
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     assert!(baked_icons(&root).is_empty());
     assert_eq!(read_icon_record(&root), Ok(None));
     assert!(!root.join(".telar").join(ICONS_NOTICE_FILENAME).exists());
@@ -176,7 +183,7 @@ fn a_bare_name_bakes_under_the_default_sets_id_and_resolves_from_the_rsx() {
         "[view]\ncol\n    icon name:\"home\"\n    icon name:\"demo:star\"\n",
     );
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     assert_eq!(baked_icons(&root), vec!["demo:home", "demo:star"]);
 
     let assets = asset_context(&root);
@@ -193,10 +200,14 @@ fn a_bare_name_without_a_default_set_fails_the_bake_on_its_line() {
         "[view]\ncol\n    icon name:\"demo:star\"\n    icon name:\"home\"\n",
     );
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
-    let error = &report.errors[0];
-    assert!(error.starts_with(&format!("{}:4:", app_rsx())), "{error}");
-    assert!(error.contains("default_set"), "{error}");
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
+    assert!(
+        matches!(&problem.kind, ProblemKind::IconIdInvalid { line: 4, reason } if reason.contains("default_set")),
+        "{problem:?}"
+    );
+    assert_eq!(problem.file, root.join("src").join("app.rsx"));
     assert_eq!(baked_icons(&root), vec!["demo:star"]);
 }
 
@@ -208,7 +219,7 @@ fn the_tint_decision_is_carried_into_the_artifact() {
         "[view]\ncol\n    icon name:\"demo:home\"\n    icon name:\"brand:acme\"\n",
     );
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     let monochrome: Vec<(String, bool)> = read_index(&root.join(".telar"))
         .unwrap()
         .unwrap()
@@ -249,10 +260,12 @@ fn a_manifest_that_does_not_parse_fails_the_bake_instead_of_baking_with_defaults
         "[view]\ncol\n    icon name:\"demo:home\"\n",
     );
     let report = bake_package(&root, "test", VERSION).expect("a broken manifest is reported");
-    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
     assert!(
-        report.errors[0].contains("telar.toml"),
-        "{}",
-        report.errors[0]
+        matches!(problem.kind, ProblemKind::Manifest(_)),
+        "{problem:?}"
     );
+    assert_eq!(problem.file, root.join("telar.toml"));
 }

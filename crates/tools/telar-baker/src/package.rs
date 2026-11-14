@@ -9,24 +9,23 @@ use std::path::Path;
 
 use telar_parser::{RsxDocument, ViewNode};
 use telar_project::{
-    ASSET_KINDS, AssetContext, AssetIndex, AssetKind, BakedAsset, IconsSection, IdBaking,
-    TelarManifest, asset_kind_for_tag,
+    ASSET_KINDS, AssetIndex, AssetKind, BakedAsset, IconsSection, IdBaking, TelarManifest,
+    asset_kind_for_tag,
 };
 
 use crate::icon_dependencies::IconDependency;
 use crate::icons::{Recording, read_icon_record, resolve_with};
 use crate::ids::{IdRef, collect_id_refs};
 use crate::macro_ids::{collect_macro_ids, rust_files};
+use crate::problem::{AssetRef, BakeProblem, ProblemKind, Problems};
 
-/// What baking one package turned up. Warnings and errors are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer. A warning is not fatal: a package with one warning still bakes the rest.
-#[derive(Debug, Clone, Default)]
+/// What baking one package turned up. Problems are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, a buffer's diagnostics for the analyzer.
+#[derive(Debug, Default)]
 pub struct BakeReport {
     pub baked: usize,
     /// Whether the index differs from what was already on disk. `false` means nothing was rewritten, which is what keeps a bake from retriggering rustc or the editor's file watcher.
     pub changed: bool,
-    pub warnings: Vec<String>,
-    /// What a build must not go on from: a `telar.toml` that does not parse, an id that has to be baked and is not a literal, one no source has, a set the licence policy refuses, a referenced asset that is missing or whose bytes do not decode, an artifact that cannot be written. Everything else is still baked, so an editor keeps answering for the rest.
-    pub errors: Vec<String>,
+    pub problems: Problems,
 }
 
 /// Bakes every asset `package_dir`'s `.rsx` files reference, writing `<package_dir>/.telar/assets.{json,rs}`. `None` when the package holds no `.rsx`, names no id from its Rust, has no artifact to empty and ships no icon of the crates it is built with, so a crate with nothing to bake never grows a `.telar/`.
@@ -53,10 +52,12 @@ pub fn bake_package_with(
     let manifest = match TelarManifest::load(package_dir) {
         Ok(manifest) => manifest,
         Err(e) => {
-            return Some(BakeReport {
-                errors: vec![e.to_string()],
-                ..BakeReport::default()
-            });
+            let mut report = BakeReport::default();
+            report.problems.push(BakeProblem::new(
+                ProblemKind::Manifest(e),
+                package_dir.join(telar_project::MANIFEST_FILENAME),
+            ));
+            return Some(report);
         }
     };
     let recording = Recording {
@@ -91,15 +92,11 @@ pub fn bake_package_with(
             &[],
             recording,
         );
-        if icons.warnings.is_empty()
-            && icons.errors.is_empty()
-            && matches!(read_icon_record(package_dir), Ok(None))
-        {
+        if icons.problems.is_empty() && matches!(read_icon_record(package_dir), Ok(None)) {
             return None;
         }
         return Some(BakeReport {
-            warnings: icons.warnings,
-            errors: icons.errors,
+            problems: icons.problems,
             ..BakeReport::default()
         });
     }
@@ -138,20 +135,24 @@ pub fn bake_package_with(
         let bytes = match std::fs::read(&file_path) {
             Ok(bytes) => bytes,
             Err(e) => {
-                report.errors.push(format!(
-                    "cannot bake {} asset `{path}`: not found at {} ({e})",
-                    kind.label,
-                    file_path.display()
+                report.problems.push(BakeProblem::new(
+                    ProblemKind::AssetMissing {
+                        asset: AssetRef { kind, path },
+                        error: e.to_string(),
+                    },
+                    file_path,
                 ));
                 continue;
             }
         };
         match bake_one(kind, path.clone(), bytes, false, &previous) {
             Ok(asset) => baked.push(asset),
-            Err(e) => report.errors.push(format!(
-                "cannot bake {} asset `{path}` from {}: {e}",
-                kind.label,
-                file_path.display()
+            Err(reason) => report.problems.push(BakeProblem::new(
+                ProblemKind::AssetUndecodable {
+                    asset: AssetRef { kind, path },
+                    reason,
+                },
+                file_path,
             )),
         }
     }
@@ -162,14 +163,15 @@ pub fn bake_package_with(
                 .iter()
                 .filter(|reference| reference.kind.id == kind.id && reference.literal.is_none())
             {
-                let message =
-                    AssetContext::dynamic_id_message(kind, &reference.tag, &reference.prop);
-                report.errors.push(format!(
-                    "{}: `{}:{}` — {}",
-                    reference.location(package_dir),
-                    reference.prop,
-                    reference.written,
-                    message.trim_start_matches("rsx: ")
+                report.problems.push(BakeProblem::new(
+                    ProblemKind::IdNotLiteral {
+                        line: reference.line,
+                        kind,
+                        tag: reference.tag.clone(),
+                        prop: reference.prop.clone(),
+                        written: reference.written.clone(),
+                    },
+                    &reference.file,
                 ));
             }
         }
@@ -190,24 +192,30 @@ pub fn bake_package_with(
         &icon_refs,
         recording,
     );
-    report.warnings.extend(icons.warnings);
-    report.errors.extend(icons.errors);
+    report.problems.extend(icons.problems);
     let icon_kind =
         telar_project::asset_kind_for_id("icon").expect("icon is a registered asset kind");
     for icon in icons.icons {
         let id = icon.id.to_string();
         match bake_one(icon_kind, id.clone(), icon.svg, icon.monochrome, &previous) {
             Ok(asset) => baked.push(asset),
-            Err(e) => report.errors.push(format!("cannot bake icon `{id}`: {e}")),
+            Err(reason) => report.problems.push(BakeProblem::new(
+                ProblemKind::IconUndecodable {
+                    line: icon.line,
+                    id,
+                    reason,
+                },
+                icon.file,
+            )),
         }
     }
 
     let generated = match telar_project::generate_assets(&baked, producer, telar_version) {
         Ok(generated) => generated,
-        Err(e) => {
-            report.errors.push(format!(
-                "could not bake assets for {}: {e}",
-                package_dir.display()
+        Err(reason) => {
+            report.problems.push(BakeProblem::new(
+                ProblemKind::ArtifactUngenerated { reason },
+                package_dir,
             ));
             return Some(report);
         }
@@ -216,9 +224,12 @@ pub fn bake_package_with(
     report.changed = previous_index.as_ref() != Some(&generated.index);
     report.baked = generated.index.entries.len();
     if let Err(e) = telar_project::write_generated(&telar_dir, &generated) {
-        report
-            .errors
-            .push(format!("could not write {}: {e}", telar_dir.display()));
+        report.problems.push(BakeProblem::new(
+            ProblemKind::ArtifactUnwritable {
+                error: e.to_string(),
+            },
+            &telar_dir,
+        ));
         report.changed = false;
     }
     Some(report)

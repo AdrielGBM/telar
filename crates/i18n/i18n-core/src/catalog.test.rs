@@ -3,7 +3,7 @@ use super::*;
 fn flat(src: &str) -> BTreeMap<String, MessageModel> {
     let mut out = BTreeMap::new();
     let table: toml::Table = src.parse().unwrap();
-    flatten(&table, String::new(), &mut out, "t.toml").unwrap();
+    flatten(&table, String::new(), &mut out).unwrap();
     out
 }
 
@@ -94,6 +94,7 @@ fn a_leaked_catalog_answers_like_a_baked_one() {
         None,
     )
     .unwrap()
+    .unwrap()
     .leak();
 
     assert_eq!(catalog.locales, ["en", "es"]);
@@ -126,6 +127,7 @@ fn a_plural_table_survives_the_round_trip() {
         None,
     )
     .unwrap()
+    .unwrap()
     .leak();
     let message = catalog.message("items", "en").unwrap();
     assert_eq!(
@@ -152,7 +154,56 @@ fn one_key_defined_twice_for_one_locale_is_an_error() {
         None,
     )
     .unwrap_err();
-    assert!(err.contains("duplicate key `title`"), "{err}");
+    assert_eq!(
+        err,
+        CatalogError {
+            source: "b.toml",
+            problem: SourceProblem::DuplicateKey {
+                key: "title".to_string(),
+                locale: "en".to_string(),
+            },
+        }
+    );
+}
+
+#[test]
+fn toml_that_does_not_parse_names_its_source_and_line() {
+    let err = CatalogModel::from_sources(
+        &[
+            ("en", "title = \"Settings\"\n", "en.toml"),
+            ("es", "title = \"Ajustes\"\nsave = \"Guardar\n", "es.toml"),
+        ],
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(err.source, "es.toml");
+    assert_eq!(err.problem.line(), Some(2), "{err}");
+    assert!(
+        err.to_string().starts_with("parsing es.toml, line 2: "),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_value_that_is_no_message_names_its_key() {
+    let err = CatalogModel::from_sources(&[("en", "[menu]\nitems = [1, 2]\n", "en.toml")], None)
+        .unwrap_err();
+    assert_eq!(
+        err.problem,
+        SourceProblem::UnsupportedType {
+            key: "menu.items".to_string(),
+            found: "array",
+        }
+    );
+}
+
+#[test]
+fn no_source_is_no_catalog() {
+    let sources: [(&str, &str, &str); 0] = [];
+    assert!(matches!(
+        CatalogModel::from_sources(&sources, None),
+        Ok(None)
+    ));
 }
 
 #[test]
@@ -186,6 +237,7 @@ fn locale_tags_are_read_with_hyphens_whichever_separator_they_were_written_with(
         ],
         Some("pt_BR"),
     )
+    .unwrap()
     .unwrap();
     assert_eq!(catalog.locales, ["pt-BR", "sr-Cyrl"]);
     assert_eq!(catalog.default_locale, "pt-BR");
@@ -201,7 +253,10 @@ fn one_key_in_both_spellings_of_a_locale_is_defined_twice() {
         None,
     )
     .unwrap_err();
-    assert!(err.contains("for locale `pt-BR`"), "{err}");
+    assert!(
+        matches!(&err.problem, SourceProblem::DuplicateKey { locale, .. } if locale == "pt-BR"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -213,6 +268,7 @@ fn a_locale_set_with_underscores_finds_the_catalog_written_with_them() {
         ],
         Some("en"),
     )
+    .unwrap()
     .unwrap()
     .leak();
     crate::set_locale("pt_BR");

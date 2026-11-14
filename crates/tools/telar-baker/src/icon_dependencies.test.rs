@@ -3,6 +3,7 @@ use serde_json::json;
 
 use super::*;
 use crate::icons::RecordedIcon;
+use crate::problem::Severity;
 
 fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
@@ -69,7 +70,7 @@ fn graph(root: &Path) -> (DependencyGraph, PathBuf, PathBuf) {
             { "id": "test-lib", "deps": [] },
         ] },
     });
-    (DependencyGraph::from_metadata(&metadata), app, ui)
+    (DependencyGraph::from_metadata(&metadata).unwrap(), app, ui)
 }
 
 #[test]
@@ -91,6 +92,34 @@ fn the_crates_that_can_carry_icons_are_found_at_any_depth_through_normal_depende
         ]
     );
     assert!(graph.icon_dependencies(&root.join("elsewhere")).is_none());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_dependency_whose_telar_toml_cannot_be_read_is_an_error_naming_the_file() {
+    let root = temp_dir("unreadable");
+    let app = crate_dir(&root, "app", false);
+    let broken = crate_dir(&root, "broken", false);
+    std::fs::write(broken.join("telar.toml"), "[telar]\nlibary = true\n").unwrap();
+    let metadata = json!({
+        "packages": [
+            package("app", "app", &app, false),
+            package("broken", "broken", &broken, true),
+        ],
+        "resolve": { "nodes": [
+            { "id": "app", "deps": [dep("broken", &[None])] },
+            { "id": "broken", "deps": [] },
+        ] },
+    });
+
+    let problem = DependencyGraph::from_metadata(&metadata).unwrap_err();
+    assert!(
+        matches!(problem.kind, ProblemKind::Manifest(_)),
+        "{problem:?}"
+    );
+    assert_eq!(problem.file, broken.join("telar.toml"));
+    assert_eq!(problem.severity(), Severity::Error);
+    assert!(problem.to_string().contains("libary"), "{problem}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -170,42 +199,58 @@ fn a_dependencys_icons_are_its_own_and_judged_by_the_packages_policy() {
             library: false,
         },
     ];
-    let mut warnings = Vec::new();
-    let mut errors = Vec::new();
+    let mut problems = Problems::default();
     let icons = dependency_icons(
         None,
         Some(&dependencies),
         &LicensePolicy::default(),
-        &mut warnings,
-        &mut errors,
+        Path::new("telar.toml"),
+        &mut problems,
     );
     assert_eq!(icons.keys().collect::<Vec<_>>(), vec!["cards", "nav"]);
     assert_eq!(
         icons["cards"].icons,
         BTreeSet::from(["attrib:dot".to_string(), "attrib:ring".to_string()])
     );
-    assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    let [problem] = problems.as_slice() else {
+        panic!("one problem expected: {problems:?}");
+    };
+    let ProblemKind::DependencyIconSetUnlisted {
+        dependency,
+        set,
+        message,
+    } = &problem.kind
+    else {
+        panic!("an unlisted dependency set expected: {problem:?}");
+    };
+    assert_eq!((dependency.as_str(), set.as_str()), ("cards", "attrib"));
+    assert!(message.contains("CC-BY-4.0"), "{message}");
     assert!(
-        warnings[0].starts_with("`cards`, which this package is built with"),
-        "{}",
-        warnings[0]
+        problem
+            .to_string()
+            .starts_with("`cards`, which this package is built with"),
+        "{problem}"
     );
-    assert!(warnings[0].contains("CC-BY-4.0"), "{}", warnings[0]);
 
     let strict = LicensePolicy {
         allow: Vec::new(),
         unlisted: OnUnlisted::Fail,
     };
-    let (mut warnings, mut errors) = (Vec::new(), Vec::new());
+    let mut problems = Problems::default();
     let kept = dependency_icons(
         None,
         Some(&dependencies),
         &strict,
-        &mut warnings,
-        &mut errors,
+        Path::new("telar.toml"),
+        &mut problems,
     );
-    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(
+        matches!(
+            problems.as_slice(),
+            [problem] if matches!(&problem.kind, ProblemKind::DependencyIconSetRefused { dependency, .. } if dependency == "cards")
+        ),
+        "{problems:?}"
+    );
     assert!(
         kept.contains_key("cards"),
         "a refused dependency's icons still ship, so they stay in the notice"
@@ -215,18 +260,15 @@ fn a_dependencys_icons_are_its_own_and_judged_by_the_packages_policy() {
         allow: vec!["attrib".to_string()],
         unlisted: OnUnlisted::Fail,
     };
-    let (mut warnings, mut errors) = (Vec::new(), Vec::new());
+    let mut problems = Problems::default();
     dependency_icons(
         None,
         Some(&dependencies),
         &accepting,
-        &mut warnings,
-        &mut errors,
+        Path::new("telar.toml"),
+        &mut problems,
     );
-    assert!(
-        warnings.is_empty() && errors.is_empty(),
-        "{warnings:?} {errors:?}"
-    );
+    assert!(problems.is_empty(), "{problems:?}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -242,16 +284,22 @@ fn a_bake_that_does_not_know_the_dependencies_keeps_and_rejudges_the_recorded_on
         )]),
         ..IconRecord::default()
     };
-    let (mut warnings, mut errors) = (Vec::new(), Vec::new());
+    let mut problems = Problems::default();
     let kept = dependency_icons(
         Some(&previous),
         None,
         &LicensePolicy::default(),
-        &mut warnings,
-        &mut errors,
+        Path::new("telar.toml"),
+        &mut problems,
     );
     assert_eq!(kept, previous.dependencies);
-    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(
+        matches!(
+            problems.as_slice(),
+            [problem] if matches!(problem.kind, ProblemKind::DependencyIconSetUnlisted { .. })
+        ),
+        "{problems:?}"
+    );
 }
 
 #[test]
@@ -266,23 +314,31 @@ fn a_local_crate_whose_record_cannot_be_read_is_a_warning_naming_it() {
         library: false,
     }];
 
-    let (mut warnings, mut errors) = (Vec::new(), Vec::new());
+    let mut problems = Problems::default();
     let icons = dependency_icons(
         None,
         Some(&dependencies),
         &LicensePolicy::default(),
-        &mut warnings,
-        &mut errors,
+        Path::new("telar.toml"),
+        &mut problems,
     );
 
     assert!(icons.is_empty());
-    assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(warnings.len(), 1, "{warnings:?}");
-    assert!(
-        warnings[0].contains("`cards`") && warnings[0].contains("icons.json"),
-        "{}",
-        warnings[0]
-    );
-    assert!(!warnings[0].contains("library"), "{}", warnings[0]);
+    let [problem] = problems.as_slice() else {
+        panic!("one problem expected: {problems:?}");
+    };
+    let ProblemKind::DependencyIconsUnread {
+        dependency,
+        library: false,
+        problem: unread,
+    } = &problem.kind
+    else {
+        panic!("an unread dependency record expected: {problem:?}");
+    };
+    assert_eq!(dependency, "cards");
+    assert!(unread.contains("icons.json"), "{unread}");
+    assert_eq!(problem.file, dependencies[0].dir);
+    assert_eq!(problem.severity(), Severity::Warning);
+    assert!(!problem.to_string().contains("library"), "{problem}");
     let _ = std::fs::remove_dir_all(&root);
 }

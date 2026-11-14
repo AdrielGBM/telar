@@ -498,7 +498,7 @@ fn icon_library(name: &str) -> Member {
         "[view]\nicon name:\"demo:star\"\n",
     );
     let report = telar_baker::bake_package(&library.dir, "test", VERSION).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     library
 }
 

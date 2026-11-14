@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use telar_baker::{bake_package, read_library_icons};
+use telar_baker::{ProblemKind, bake_package, read_library_icons};
 use telar_project::{AssetContext, TelarManifest, asset_kind_for_id, read_index};
 
 const VERSION: &str = "0.2.1";
@@ -66,7 +66,7 @@ fn a_crate_with_no_rsx_bakes_the_icons_its_rust_names() {
         "#[test]\nfn draws() { let _ = icon!(\"demo:star\"); }\n",
     );
     let report = bake_package(&root, "test", VERSION).expect("the crate names icons");
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
 
     assert_eq!(baked_icons(&root), ["demo:home", "demo:star"]);
     let shipped = read_library_icons(&root)
@@ -92,7 +92,7 @@ fn a_bare_name_from_rust_is_baked_in_the_default_set() {
     let root = library("bare", "default_set = \"demo\"\n");
     write(&root, "src/lib.rs", "fn a() { icon!(\"gear\"); }\n");
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     assert_eq!(baked_icons(&root), ["demo:gear"]);
 }
 
@@ -105,14 +105,16 @@ fn an_id_no_source_has_fails_the_bake_on_its_line() {
         "fn a() {\n\n    icon!(\"demo:nope\");\n}\n",
     );
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
     assert!(
-        report.errors[0].starts_with(&format!(
-            "{}:3: no icon source has `demo:nope`",
-            Path::new("src").join("widgets").join("bar.rs").display()
-        )),
-        "{}",
-        report.errors[0]
+        matches!(&problem.kind, ProblemKind::IconNotFound { line: 3, id, .. } if id == "demo:nope"),
+        "{problem:?}"
+    );
+    assert_eq!(
+        problem.file,
+        root.join("src").join("widgets").join("bar.rs")
     );
 }
 
@@ -125,7 +127,7 @@ fn the_rust_an_rsx_writes_names_icons_too() {
         "[logic]\nfn gear() -> telar_icons::IconName {\n    icon!(\"demo:gear\")\n}\n\n[view]\ncol\n    let home = icon!(\"demo:home\")\n    icon_button icon:icon!(\"demo:star\") label:\"Star\"\n",
     );
     let report = bake_package(&root, "test", VERSION).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     assert_eq!(baked_icons(&root), ["demo:gear", "demo:home", "demo:star"]);
 }
 
@@ -138,7 +140,7 @@ fn a_crate_that_stops_naming_icons_empties_its_artifact() {
 
     write(&root, "src/lib.rs", "fn a() {}\n");
     let report = bake_package(&root, "test", VERSION).expect("the old artifact is rewritten");
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     assert!(baked_icons(&root).is_empty());
     assert_eq!(read_library_icons(&root), Ok(None));
 }

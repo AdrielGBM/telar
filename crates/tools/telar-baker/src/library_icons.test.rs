@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use telar_baker::{
-    ICONS_NOTICE_FILENAME, IconDependency, bake_package, bake_package_with, read_icon_record,
-    read_library_icons,
+    ICONS_NOTICE_FILENAME, IconDependency, ProblemKind, bake_package, bake_package_with,
+    read_icon_record, read_library_icons,
 };
 use telar_project::ICONS_LIBRARY_RECORD_FILENAME;
 
@@ -50,7 +50,7 @@ fn library(name: &str) -> PathBuf {
         "[view]\nrow\n    icon name:\"demo:star\"\n    icon name:\"attrib:dot\"\n",
     );
     let report = bake_package(&root, "test", VERSION).expect("the library has .rsx");
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
     root
 }
 
@@ -127,8 +127,13 @@ fn the_application_notice_lists_its_own_icons_then_each_librarys() {
         Some("[view]\nicon name:\"demo:home\"\n"),
     );
     let report = bake_package_with(&app, "test", VERSION, Some(&built_with(&library))).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
-    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
+    assert_eq!(
+        report.problems.warnings().count(),
+        0,
+        "{:?}",
+        report.problems
+    );
 
     let text = notice(&app);
     let (own, from_library) = text
@@ -152,7 +157,7 @@ fn the_application_notice_lists_its_own_icons_then_each_librarys() {
     );
 
     let again = bake_package(&app, "test", VERSION).unwrap();
-    assert!(again.errors.is_empty(), "{:?}", again.errors);
+    assert!(!again.problems.has_errors(), "{:?}", again.problems);
     assert_eq!(
         notice(&app),
         text,
@@ -165,18 +170,15 @@ fn the_applications_policy_judges_a_librarys_sets() {
     let library = library("policy");
     let warned = application("warned", "", Some("[view]\ntext \"hi\"\n"));
     let report = bake_package_with(&warned, "test", VERSION, Some(&built_with(&library))).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
-    assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
     assert!(
-        report.warnings[0].contains("`icon-lib`"),
-        "{}",
-        report.warnings[0]
+        matches!(&problem.kind, ProblemKind::DependencyIconSetUnlisted { dependency, set, .. } if dependency == "icon-lib" && set == "attrib"),
+        "{problem:?}"
     );
-    assert!(
-        report.warnings[0].contains("attrib"),
-        "{}",
-        report.warnings[0]
-    );
+    assert_eq!(problem.file, warned.join("telar.toml"));
 
     let refused = application(
         "refused",
@@ -184,11 +186,12 @@ fn the_applications_policy_judges_a_librarys_sets() {
         Some("[view]\ntext \"hi\"\n"),
     );
     let report = bake_package_with(&refused, "test", VERSION, Some(&built_with(&library))).unwrap();
-    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem expected: {:?}", report.problems);
+    };
     assert!(
-        report.errors[0].contains("`icon-lib`"),
-        "{}",
-        report.errors[0]
+        matches!(&problem.kind, ProblemKind::DependencyIconSetRefused { dependency, set, .. } if dependency == "icon-lib" && set == "attrib"),
+        "{problem:?}"
     );
 
     let accepted = application(
@@ -198,8 +201,13 @@ fn the_applications_policy_judges_a_librarys_sets() {
     );
     let report =
         bake_package_with(&accepted, "test", VERSION, Some(&built_with(&library))).unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
-    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    assert!(!report.problems.has_errors(), "{:?}", report.problems);
+    assert_eq!(
+        report.problems.warnings().count(),
+        0,
+        "{:?}",
+        report.problems
+    );
     assert!(
         notice(&accepted).starts_with("Icons in icon-lib"),
         "{}",
@@ -242,12 +250,12 @@ fn a_library_whose_record_does_not_answer_for_its_artifact_is_named() {
     let app = application("stale", "", Some("[view]\ntext \"hi\"\n"));
     let report = bake_package_with(&app, "test", VERSION, Some(&built_with(&library))).unwrap();
     assert!(
-        report
-            .warnings
-            .iter()
-            .any(|warning| warning.contains("left out of this package's licence notice")),
+        report.problems.iter().any(|problem| matches!(
+            &problem.kind,
+            ProblemKind::DependencyIconsUnread { dependency, library: true, .. } if dependency == "icon-lib"
+        ) && problem.file == library),
         "{:?}",
-        report.warnings
+        report.problems
     );
 }
 

@@ -14,6 +14,7 @@ pub use artifact::{
 pub use context::{AssetContext, BakedId};
 
 /// One kind of external asset a widget's `src:` attribute can resolve to.
+#[derive(Debug)]
 pub struct AssetKind {
     /// Short identifier for the kind, independent of any tag spelling.
     pub id: &'static str,

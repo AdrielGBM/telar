@@ -10,12 +10,13 @@ use icons_core::{
     SetInfo, SourcedIcon, Sources, SvgDir, Verdict,
 };
 use serde::{Deserialize, Serialize};
-use telar_project::{ICONS_NOTICE_FILENAME, IconsSection, UnlistedLicense};
+use telar_project::{ICONS_NOTICE_FILENAME, IconsSection, MANIFEST_FILENAME, UnlistedLicense};
 
 use crate::icon_dependencies::{
     CrateIcons, IconDependency, dependency_icons, write_library_record,
 };
 use crate::ids::IdRef;
+use crate::problem::{BakeProblem, ProblemKind, Problems};
 
 /// File name of the record, joined onto a package's `.telar/`.
 pub const ICONS_RECORD_FILENAME: &str = "icons.json";
@@ -26,16 +27,17 @@ const RECORD_FORMAT: u32 = 1;
 #[derive(Default)]
 pub(crate) struct ResolvedIcons {
     pub icons: Vec<BakedIcon>,
-    pub warnings: Vec<String>,
-    pub errors: Vec<String>,
+    pub problems: Problems,
 }
 
-/// One icon to bake: its id, its SVG document, and whether it takes the colour around it, decided from its set's `palette` and its markup by [`SourcedIcon::monochrome`].
+/// One icon to bake: its id, its SVG document, whether it takes the colour around it, decided from its set's `palette` and its markup by [`SourcedIcon::monochrome`], and the first reference that names it.
 #[derive(Debug, PartialEq)]
 pub(crate) struct BakedIcon {
     pub id: IconId,
     pub svg: Vec<u8>,
     pub monochrome: bool,
+    pub file: PathBuf,
+    pub line: usize,
 }
 
 /// What `.telar/icons.json` holds: where each baked icon came from and what its set says about itself.
@@ -106,17 +108,25 @@ pub(crate) fn resolve_with(
     let mut out = ResolvedIcons::default();
 
     let mut wanted: BTreeMap<IconId, &IdRef> = BTreeMap::new();
+    let mut first_in_set: BTreeMap<String, &IdRef> = BTreeMap::new();
     for reference in refs {
         let Some(literal) = &reference.literal else {
             continue;
         };
         match section.icon_id(literal) {
             Ok(id) => {
+                first_in_set
+                    .entry(id.prefix().to_string())
+                    .or_insert(reference);
                 wanted.entry(id).or_insert(reference);
             }
-            Err(error) => out
-                .errors
-                .push(format!("{}: {error}", reference.location(package_dir))),
+            Err(reason) => out.problems.push(BakeProblem::new(
+                ProblemKind::IconIdInvalid {
+                    line: reference.line,
+                    reason,
+                },
+                &reference.file,
+            )),
         }
     }
     let ids: Vec<IconId> = wanted.keys().cloned().collect();
@@ -133,9 +143,9 @@ pub(crate) fn resolve_with(
         .as_deref()
         .map(|base| HttpProvider::new(base.trim()));
     let previous = read_icon_record(package_dir).unwrap_or_else(|problem| {
-        out.warnings.push(format!(
-            "in {}, {problem}; this bake replaces it with only what it resolves itself",
-            package_dir.display()
+        out.problems.push(BakeProblem::new(
+            ProblemKind::IconRecordUnreadable { problem },
+            package_dir,
         ));
         None
     });
@@ -175,16 +185,24 @@ pub(crate) fn resolve_with(
     };
     let mut resolved: Vec<(IconId, SourcedIcon)> = Vec::new();
     for (id, answer) in ids.into_iter().zip(answers) {
-        let location = wanted[&id].location(package_dir);
-        match answer {
-            Ok(Some(icon)) => resolved.push((id, icon)),
-            Ok(None) => out.errors.push(format!(
-                "{location}: no icon source has `{id}`: it is in none of {described}"
-            )),
-            Err(error) => out
-                .errors
-                .push(format!("{location}: could not resolve `{id}`: {error}")),
-        }
+        let reference = wanted[&id];
+        let kind = match answer {
+            Ok(Some(icon)) => {
+                resolved.push((id, icon));
+                continue;
+            }
+            Ok(None) => ProblemKind::IconNotFound {
+                line: reference.line,
+                id: id.to_string(),
+                searched: described.clone(),
+            },
+            Err(error) => ProblemKind::IconUnresolvable {
+                line: reference.line,
+                id: id.to_string(),
+                reason: error.to_string(),
+            },
+        };
+        out.problems.push(BakeProblem::new(kind, &reference.file));
     }
 
     let policy = LicensePolicy {
@@ -204,15 +222,26 @@ pub(crate) fn resolve_with(
     }
     let mut refused: BTreeSet<String> = BTreeSet::new();
     for (prefix, set) in &sets {
-        match policy.judge(prefix, set.info.as_ref(), set.own) {
-            Verdict::Accepted => {}
-            Verdict::Warn(message) => out.warnings.push(message),
+        let reference = first_in_set[prefix];
+        let kind = match policy.judge(prefix, set.info.as_ref(), set.own) {
+            Verdict::Accepted => continue,
+            Verdict::Warn(message) => ProblemKind::IconSetUnlisted {
+                line: reference.line,
+                set: prefix.clone(),
+                message,
+            },
             Verdict::Fail(message) => {
-                out.errors.push(message);
                 refused.insert(prefix.clone());
+                ProblemKind::IconSetRefused {
+                    line: reference.line,
+                    set: prefix.clone(),
+                    message,
+                }
             }
-        }
+        };
+        out.problems.push(BakeProblem::new(kind, &reference.file));
     }
+    let manifest = package_dir.join(MANIFEST_FILENAME);
     resolved.retain(|(id, _)| !refused.contains(id.prefix()));
     sets.retain(|prefix, _| !refused.contains(prefix));
 
@@ -238,24 +267,31 @@ pub(crate) fn resolve_with(
             previous.as_ref(),
             recording.dependencies,
             &policy,
-            &mut out.warnings,
-            &mut out.errors,
+            &manifest,
+            &mut out.problems,
         ),
     };
     if let Err(e) = write_record(package_dir, &record, recording.library) {
-        out.warnings.push(format!(
-            "could not write the icon record in {}: {e}",
-            telar_dir.display()
+        out.problems.push(BakeProblem::new(
+            ProblemKind::IconRecordUnwritable {
+                error: e.to_string(),
+            },
+            &telar_dir,
         ));
     }
     prune_cache(&telar_dir, &from_provider);
 
     out.icons = resolved
         .into_iter()
-        .map(|(id, icon)| BakedIcon {
-            monochrome: icon.monochrome(),
-            svg: icon.svg.into_bytes(),
-            id,
+        .map(|(id, icon)| {
+            let reference = wanted[&id];
+            BakedIcon {
+                monochrome: icon.monochrome(),
+                svg: icon.svg.into_bytes(),
+                file: reference.file.clone(),
+                line: reference.line,
+                id,
+            }
         })
         .collect();
     out

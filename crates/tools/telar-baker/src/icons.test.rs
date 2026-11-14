@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use telar_project::{IconLicensesSection, asset_kind_for_id};
 
 use super::*;
+use crate::problem::Severity;
 
 const OWN_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="currentColor"/></svg>"#;
 
@@ -64,8 +65,7 @@ fn own_svgs_and_iconify_sets_resolve_and_are_recorded() {
             literal("demo:home", 3),
         ],
     );
-    assert!(resolved.errors.is_empty(), "{:?}", resolved.errors);
-    assert!(resolved.warnings.is_empty(), "{:?}", resolved.warnings);
+    assert!(resolved.problems.is_empty(), "{:?}", resolved.problems);
     assert_eq!(baked_ids(&resolved), vec!["app:logo", "demo:home"]);
 
     let record = read_icon_record(&root)
@@ -112,32 +112,31 @@ fn an_id_no_source_has_is_an_error_naming_the_sources() {
     let root = package("missing");
     let resolved = resolve(&root, &section(), &[literal("demo:nothing", 7)]);
     assert!(resolved.icons.is_empty());
-    let error = &resolved.errors[0];
-    assert!(error.starts_with("src/app.rsx:7:"), "{error}");
-    assert!(error.contains("`demo:nothing`"), "{error}");
-    assert!(error.contains("the SVG folder"), "{error}");
-    assert!(error.contains("the Iconify sets in"), "{error}");
+    let [problem] = resolved.problems.as_slice() else {
+        panic!("one problem expected: {:?}", resolved.problems);
+    };
+    let ProblemKind::IconNotFound { line, id, searched } = &problem.kind else {
+        panic!("an id no source has expected: {problem:?}");
+    };
+    assert_eq!((*line, id.as_str()), (7, "demo:nothing"));
+    assert_eq!(problem.file, Path::new("src/app.rsx"));
+    assert!(searched.contains("the SVG folder"), "{searched}");
+    assert!(searched.contains("the Iconify sets in"), "{searched}");
 }
 
 #[test]
 fn a_bare_name_without_a_default_set_is_an_error() {
     let root = package("invalid");
     let resolved = resolve(&root, &section(), &[literal("home", 4)]);
-    assert!(
-        resolved.errors[0].contains("src/app.rsx:4"),
-        "{:?}",
-        resolved.errors
-    );
-    assert!(
-        resolved.errors[0].contains("set:name"),
-        "{:?}",
-        resolved.errors
-    );
-    assert!(
-        resolved.errors[0].contains("[telar.icons] default_set"),
-        "{:?}",
-        resolved.errors
-    );
+    let [problem] = resolved.problems.as_slice() else {
+        panic!("one problem expected: {:?}", resolved.problems);
+    };
+    let ProblemKind::IconIdInvalid { line: 4, reason } = &problem.kind else {
+        panic!("an invalid id on line 4 expected: {problem:?}");
+    };
+    assert_eq!(problem.file, Path::new("src/app.rsx"));
+    assert!(reason.contains("set:name"), "{reason}");
+    assert!(reason.contains("[telar.icons] default_set"), "{reason}");
     assert!(resolved.icons.is_empty());
 }
 
@@ -157,7 +156,14 @@ fn a_bare_name_resolves_in_the_default_set_and_is_baked_under_its_full_id() {
             literal("app:logo", 3),
         ],
     );
-    assert!(resolved.errors.is_empty(), "{:?}", resolved.errors);
+    assert!(
+        resolved
+            .problems
+            .iter()
+            .all(|problem| problem.severity() == Severity::Warning),
+        "{:?}",
+        resolved.problems
+    );
     assert_eq!(baked_ids(&resolved), vec!["app:logo", "demo:home"]);
     assert_eq!(
         read_icon_record(&root)
@@ -193,7 +199,14 @@ fn the_sets_palette_decides_whether_an_icon_is_tinted() {
             literal("app:logo", 5),
         ],
     );
-    assert!(resolved.errors.is_empty(), "{:?}", resolved.errors);
+    assert!(
+        resolved
+            .problems
+            .iter()
+            .all(|problem| problem.severity() == Severity::Warning),
+        "{:?}",
+        resolved.problems
+    );
     assert!(
         !monochrome(&resolved, "brand:acme"),
         "a one-colour logo of a palette set keeps its colour"
@@ -226,11 +239,15 @@ fn an_attribution_set_warns_and_still_bakes() {
     let root = package("attrib_warn");
     let resolved = resolve(&root, &section(), &[literal("attrib:dot", 1)]);
     assert_eq!(baked_ids(&resolved), vec!["attrib:dot"]);
-    assert!(
-        resolved.warnings[0].contains("CC-BY-4.0"),
-        "{:?}",
-        resolved.warnings
-    );
+    let [problem] = resolved.problems.as_slice() else {
+        panic!("one problem expected: {:?}", resolved.problems);
+    };
+    let ProblemKind::IconSetUnlisted { line, set, message } = &problem.kind else {
+        panic!("an unlisted set expected: {problem:?}");
+    };
+    assert_eq!((*line, set.as_str()), (1, "attrib"));
+    assert!(message.contains("CC-BY-4.0"), "{message}");
+    assert_eq!(problem.file, Path::new("src/app.rsx"));
 }
 
 #[test]
@@ -246,14 +263,21 @@ fn a_refused_set_is_an_error_and_is_not_baked() {
     let resolved = resolve(
         &root,
         &strict,
-        &[literal("attrib:dot", 1), literal("demo:home", 2)],
+        &[
+            literal("demo:home", 1),
+            literal("attrib:dot", 3),
+            literal("attrib:dot", 4),
+        ],
     );
     assert_eq!(baked_ids(&resolved), vec!["demo:home"]);
-    assert!(
-        resolved.errors[0].contains("unlisted = \"fail\""),
-        "{:?}",
-        resolved.errors
-    );
+    let [problem] = resolved.problems.as_slice() else {
+        panic!("one problem expected: {:?}", resolved.problems);
+    };
+    let ProblemKind::IconSetRefused { line, set, message } = &problem.kind else {
+        panic!("a refused set expected: {problem:?}");
+    };
+    assert_eq!((*line, set.as_str()), (3, "attrib"));
+    assert!(message.contains("unlisted = \"fail\""), "{message}");
     let record = read_icon_record(&root).unwrap().unwrap();
     assert!(!record.sets.contains_key("attrib"));
 }
@@ -269,7 +293,7 @@ fn the_allowlist_accepts_an_attribution_set() {
         ..section()
     };
     let resolved = resolve(&root, &allowed, &[literal("attrib:dot", 1)]);
-    assert!(resolved.errors.is_empty() && resolved.warnings.is_empty());
+    assert!(resolved.problems.is_empty(), "{:?}", resolved.problems);
 }
 
 #[test]
@@ -312,13 +336,22 @@ fn a_provider_icon_already_fetched_is_reused_without_the_network() {
         ..IconsSection::default()
     };
     let resolved = resolve(&root, &from_provider, &[literal("remote:bell", 1)]);
-    assert!(resolved.errors.is_empty(), "{:?}", resolved.errors);
+    assert!(
+        resolved
+            .problems
+            .iter()
+            .all(|problem| problem.severity() == Severity::Warning),
+        "{:?}",
+        resolved.problems
+    );
     assert_eq!(
         resolved.icons,
         vec![BakedIcon {
             id,
             svg: OWN_SVG.as_bytes().to_vec(),
             monochrome: true,
+            file: PathBuf::from("src/app.rsx"),
+            line: 1,
         }]
     );
 }
@@ -369,12 +402,14 @@ fn a_bake_over_a_garbled_record_warns_and_replaces_it() {
 
     let resolved = resolve(&root, &section(), &[literal("app:logo", 1)]);
 
-    assert_eq!(resolved.warnings.len(), 1, "{:?}", resolved.warnings);
-    assert!(
-        resolved.warnings[0].contains(ICONS_RECORD_FILENAME),
-        "{:?}",
-        resolved.warnings
-    );
+    let [problem] = resolved.problems.as_slice() else {
+        panic!("one problem expected: {:?}", resolved.problems);
+    };
+    let ProblemKind::IconRecordUnreadable { problem: unread } = &problem.kind else {
+        panic!("an unreadable record expected: {problem:?}");
+    };
+    assert!(unread.contains(ICONS_RECORD_FILENAME), "{unread}");
+    assert_eq!(problem.severity(), Severity::Warning);
     let record = read_icon_record(&root)
         .expect("the bake rewrote the record")
         .expect("a record is written");

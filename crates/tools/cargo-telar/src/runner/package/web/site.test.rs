@@ -206,6 +206,23 @@ fn a_description_the_catalog_cannot_give_as_plain_text_is_an_error() {
 }
 
 #[test]
+fn a_description_from_a_catalog_that_does_not_parse_names_the_file_and_line() {
+    let root = package(
+        "description_unparsed",
+        &[("locales/en.toml", "[meta]\ndescription = \"A portfolio\n")],
+    );
+    let error = Site::new(&web("description = \"meta.description\""), &root, "demo").unwrap_err();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(
+        error.starts_with(&format!(
+            "{}:2: catalog: ",
+            Path::new("locales").join("en.toml").display()
+        )),
+        "{error}"
+    );
+}
+
+#[test]
 fn a_preview_picture_of_the_site_has_to_be_in_the_public_directory() {
     let root = package("og_image", &[("web/public/og/es.png", "png")]);
     let site = |image: &str| {

@@ -16,7 +16,10 @@ mod negotiate;
 mod plural;
 
 #[cfg(feature = "runtime-catalog")]
-pub use catalog::{CatalogModel, MessageModel, PartModel, flatten, is_plural_table, parse_message};
+pub use catalog::{
+    CatalogError, CatalogModel, MessageModel, PartModel, SourceProblem, flatten, is_plural_table,
+    parse_message,
+};
 pub use direction::Direction;
 pub use installed::{catalog, default_locale, set_catalog, set_catalog_if_unset, t};
 pub use locale::{
