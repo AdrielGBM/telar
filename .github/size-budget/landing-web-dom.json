@@ -6,14 +6,14 @@
   "gate": "brotli",
   "threshold_percent": 20,
   "baseline": {
-    "raw_bytes": 1303756,
-    "brotli_bytes": 425911,
-    "gzip_bytes": 540120
+    "raw_bytes": 1357371,
+    "brotli_bytes": 439134,
+    "gzip_bytes": 561525
   },
-  "recorded_at": "2026-10-25",
+  "recorded_at": "2026-11-14",
   "recorded_with": {
     "wasm_bindgen": "0.2.127",
-    "binaryen": "version_132"
+    "binaryen": "version_133"
   },
   "artifact": "asset-manifest.json[\"app_bg.wasm\"]"
 }
