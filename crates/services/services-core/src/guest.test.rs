@@ -807,32 +807,32 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     (
         "crates/preferences/preferences-core/src/lib.rs",
         "COLOR_SCHEME",
-        "the app's own reactive preference state",
+        "the system's value, which the host hands this copy's signal through the `set_system_preferences` entry on every change",
     ),
     (
         "crates/preferences/preferences-core/src/lib.rs",
         "REDUCED_MOTION",
-        "the app's own reactive preference state",
+        "the system's value, which the host hands this copy's signal through the `set_system_preferences` entry on every change",
     ),
     (
         "crates/preferences/preferences-core/src/lib.rs",
         "HIGH_CONTRAST",
-        "the app's own reactive preference state",
+        "the system's value, which the host hands this copy's signal through the `set_system_preferences` entry on every change",
     ),
     (
         "crates/preferences/preferences-core/src/lib.rs",
         "LOCALES",
-        "the app's own reactive preference state",
+        "the system's value, which the host hands this copy's signal through the `set_system_preferences` entry on every change",
     ),
     (
         "crates/preferences/preferences-core/src/lib.rs",
         "REDUCED_MOTION_OVERRIDE",
-        "the app's own reactive preference state",
+        "the app's own choice, set by code of this copy and kept between runs through the bridged preference store",
     ),
     (
         "crates/preferences/preferences-core/src/lib.rs",
         "contrast",
-        "the app's own reactive preference state",
+        "the high-contrast choice code of this copy makes for one of its own surfaces",
     ),
     (
         "crates/reactive/reactive-core/src/surface_scoped.rs",
@@ -882,7 +882,7 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     (
         "crates/telar/src/raster.rs",
         "RASTERIZER",
-        "this copy's own rasterizer, freed through thread exit",
+        "an off-screen software renderer cached per thread of this copy, which draws on no surface of the host's and is freed through thread exit",
     ),
     (
         "crates/telar/src/hot/guest.rs",
@@ -897,7 +897,7 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     (
         "crates/telar/src/licenses.rs",
         "ICON_LICENSES",
-        "the app's own declared icon licenses",
+        "the notice this image's own `app!` expansion compiles in and installs as it loads, which the host's would not carry",
     ),
     (
         "crates/telar/src/macros.rs",
@@ -922,17 +922,17 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     (
         "crates/telar/src/hot_state.rs",
         "REGISTRY",
-        "the app's own hot state",
+        "the signals of this copy's own components, which the host reads as a snapshot through the `hot_snapshot` entry before it unloads the copy",
     ),
     (
         "crates/telar/src/hot_state.rs",
         "PENDING",
-        "the app's own hot state",
+        "the values the host hands this copy through the `hot_restore` entry for its components to take as they mount",
     ),
     (
         "crates/telar/src/hot_state.rs",
         "WARNED",
-        "the app's own hot state",
+        "the keys this copy has already warned about",
     ),
     (
         "crates/ui/theme-core/src/mode.rs",
@@ -1187,7 +1187,7 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     (
         "crates/ui/ui-tree/src/wheel.rs",
         "SMOOTH",
-        "the app's own wheel smoothing choice",
+        "a choice of the runner of the surface: a guest runs under a windowed host, where the default holds",
     ),
     (
         "plugins/telar-components/src/overlays/toast/toast.rs",
