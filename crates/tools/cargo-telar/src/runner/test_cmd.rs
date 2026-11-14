@@ -1,4 +1,4 @@
-//! `cargo telar test`: every preview and matrix cell of a package, built, played, checked for accessibility and compared against its snapshots, by the app itself or, for a library, by the unit test `rsx_modules!` gives it.
+//! `cargo telar test`: every preview and matrix cell of a package, built, played, checked for accessibility and compared against its snapshots, by the app itself or, for a library, by the unit test `library_previews!` gives it.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -102,17 +102,24 @@ pub(super) fn run_test_cmd(args: TestArgs) -> ! {
     let status = command
         .status()
         .expect("[cargo-telar] failed to invoke cargo");
-    std::process::exit(exit_code(status.code(), &written, report.as_ref()));
+    std::process::exit(exit_code(
+        status.code(),
+        section.library,
+        &written,
+        report.as_ref(),
+    ));
 }
 
 /// How the command exits once cargo ended with `cargo_code`: with cargo's code when it failed, else with a failure when the run left no report at `written` or the copy `report` asks for could not be written, since cargo also succeeds when no preview test ran at all.
-fn exit_code(cargo_code: Option<i32>, written: &Path, report: Option<&ReportRequest>) -> i32 {
+fn exit_code(
+    cargo_code: Option<i32>,
+    library: bool,
+    written: &Path,
+    report: Option<&ReportRequest>,
+) -> i32 {
     let mut failed = cargo_code != Some(0);
     if !failed && !written.is_file() {
-        eprintln!(
-            "[cargo-telar] cargo succeeded, but the run wrote no report at {}: no preview was tested.",
-            written.display()
-        );
+        eprintln!("[cargo-telar] {}", no_report(library, written));
         failed = true;
     }
     if let Some(report) = report {
@@ -137,7 +144,21 @@ fn exit_code(cargo_code: Option<i32>, written: &Path, report: Option<&ReportRequ
     }
 }
 
-/// The cargo command that tests the package: running its binary, or, for a library, which has none, the one unit test `rsx_modules!` emits for it, matched by its name alone so the module the macro is called from does not matter.
+/// Why a run cargo calls a success wrote no report at `written`. The previews test of a library writes one whenever it runs and passes, so a library's run that wrote none found no test of that name to run: its crate never wrote `library_previews!`.
+fn no_report(library: bool, written: &Path) -> String {
+    match library {
+        true => format!(
+            "cargo succeeded, but no previews test ran: a `[telar] library` has its previews tested by the test `telar::library_previews!()` emits, so write `telar::library_previews!();` once at its crate root (no report at {}).",
+            written.display()
+        ),
+        false => format!(
+            "cargo succeeded, but the run wrote no report at {}: no preview was tested.",
+            written.display()
+        ),
+    }
+}
+
+/// The cargo command that tests the package: running its binary, or, for a library, which has none, the one unit test `library_previews!` emits for it, matched by its name alone so the module the macro is written in does not matter.
 fn invocation(library: bool, cargo_args: &[String]) -> Vec<String> {
     let mut args = vec![String::from(if library { "test" } else { "run" })];
     args.extend_from_slice(cargo_args);

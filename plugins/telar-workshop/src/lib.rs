@@ -13,6 +13,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 telar::rsx_modules!();
+telar::library_previews!();
 
 mod address;
 mod app;

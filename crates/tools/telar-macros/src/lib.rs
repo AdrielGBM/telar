@@ -1,4 +1,4 @@
-//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, plus the `Props`, `PreviewArg` and `ThemeTokens` derives, the `t!` catalogue lookup, the baked id behind a plugin's `icon!`, and the names and location behind `telar::preview::preview!`.
+//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, `library_previews!`, which tests a library's previews, plus the `Props`, `PreviewArg` and `ThemeTokens` derives, the `t!` catalogue lookup, the baked id behind a plugin's `icon!`, and the names and location behind `telar::preview::preview!`.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
@@ -220,7 +220,9 @@ pub fn app(input: TokenStream) -> TokenStream {
         Err(err) => return err.into(),
     };
 
-    let declared_fonts = match declared_fonts() {
+    let declared_fonts = match package_manifest()
+        .and_then(|(manifest_dir, manifest)| declared_fonts(&manifest_dir, &manifest))
+    {
         Ok(fonts) => fonts,
         Err(err) => return err.into(),
     };
@@ -570,10 +572,6 @@ struct TranspileOutput {
     flavour: telar_project::BuildFlavour,
     /// The crates `[telar.previews] include` names, as Rust names them.
     previews_include: Vec<Ident>,
-    /// Whether the package is a `[telar] library`, which has no binary for `cargo telar test` to start.
-    library: bool,
-    /// Whether that library is compiled for another package, which never builds its tests.
-    library_dependency: bool,
 }
 
 /// The package an expansion compiles: where it is, what cargo calls it, and how it is wired.
@@ -936,8 +934,6 @@ fn wire_package(
             .iter()
             .map(|entry| Ident::new(entry.crate_name(), Span::call_site()))
             .collect(),
-        library: manifest.telar.library,
-        library_dependency: package.wiring.library_dependency,
     })
 }
 
@@ -945,9 +941,7 @@ fn wire_package(
 ///
 /// In an application crate it also installs the catalog the crate baked as the binary loads, unless one is installed already, so the one `app!` installs wins over it; a `[telar] library` never installs its own.
 ///
-/// In a `[telar] library` built with its previews, it also emits `#[test] fn __telar_library_previews()`, which tests every preview the way an application binary does under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary.
-///
-/// A crate may call it from several modules, each emitting that test; every one lists the whole crate's previews, so only the first to run tests them and writes the report.
+/// A `[telar] library` tests its previews through [`library_previews!`], written once at its crate root.
 #[proc_macro]
 pub fn rsx_modules(input: TokenStream) -> TokenStream {
     let theme_type_str = if input.is_empty() {
@@ -964,28 +958,60 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         include_stmts,
         rerun_stmts,
         preview_const_idents,
-        library,
-        library_dependency,
         ..
     } = match transpile_project(Invocation::Modules, theme_type_str.as_deref()) {
         Ok(o) => o,
         Err(err) => return err.into(),
     };
     let preview_fn = previews_table(&preview_const_idents);
-    let previews_test = match library && !library_dependency {
-        true => match declared_fonts() {
-            Ok(fonts) => library_previews_test(fonts),
-            Err(err) => return err.into(),
-        },
-        false => quote! {},
-    };
     quote! {
         #rerun_stmts
         #include_stmts
         #preview_fn
-        #previews_test
     }
     .into()
+}
+
+/// Tests a `[telar] library`'s previews under `cargo test`, the way an application's binary tests its own under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary to start.
+///
+/// Write it once, at the crate root: `telar::library_previews!();`. In a build with previews it emits `#[cfg(test)] #[test] fn __telar_library_previews()`, which tests every preview `crate::telar_all_previews()` lists, the list an application including the library shows, against the faces the library's `telar.toml` declares. A package that is not a `[telar] library` is refused, since `cargo telar test` runs its binary instead.
+#[proc_macro]
+pub fn library_previews(input: TokenStream) -> TokenStream {
+    if !input.is_empty() {
+        return syn::Error::new_spanned(
+            TokenStream2::from(input),
+            "`library_previews!` takes no arguments",
+        )
+        .to_compile_error()
+        .into();
+    }
+    let expansion = package_manifest().and_then(|(manifest_dir, manifest)| {
+        library_previews_expansion(
+            &manifest_dir,
+            &manifest,
+            std::env::var_os("CARGO_PRIMARY_PACKAGE").is_some(),
+        )
+    });
+    match expansion {
+        Ok(tokens) | Err(tokens) => tokens.into(),
+    }
+}
+
+/// What `library_previews!` expands to in the package at `manifest_dir`, compiled as a package the command selected when `primary`; `Err` carries a `compile_error!` stream to emit.
+fn library_previews_expansion(
+    manifest_dir: &Path,
+    manifest: &telar_project::TelarManifest,
+    primary: bool,
+) -> Result<TokenStream2, TokenStream2> {
+    if !manifest.telar.library {
+        let msg = "rsx: `library_previews!` tests the previews of a `[telar] library`, and this package is an application, whose previews `cargo telar test` tests by running its binary: remove the call";
+        return Err(quote! { compile_error!(#msg); });
+    }
+    // A dependency never compiles its tests, and the faces it declares need not ship in its package.
+    if !primary {
+        return Ok(TokenStream2::new());
+    }
+    declared_fonts(manifest_dir, manifest).map(library_previews_test)
 }
 
 #[cfg(test)]
@@ -1019,8 +1045,6 @@ fn previews_table(consts: &[TokenStream2]) -> TokenStream2 {
 }
 
 /// The test `cargo telar test -p <library>` runs under `cargo test`: a library has no binary to start with `TELAR_TEST`, so its previews are tested from a unit test instead, against the faces it declares.
-///
-/// At the call site rather than in the hidden module, so `telar_all_previews` resolves to the one a crate with Rust previews defines beside the call.
 fn library_previews_test(fonts: TokenStream2) -> TokenStream2 {
     let name = Ident::new(
         telar_project::protocol::LIBRARY_TEST_NAME,
@@ -1032,7 +1056,7 @@ fn library_previews_test(fonts: TokenStream2) -> TokenStream2 {
             #[test]
             fn #name() {
                 ::telar::preview::test_run::__test_library(
-                    telar_all_previews(),
+                    crate::telar_all_previews(),
                     ::telar::AppConfig::default().with_fonts(#fonts),
                 );
             }
@@ -1092,10 +1116,8 @@ fn preview_shell(package: &str, workshop: Option<&Ident>) -> TokenStream2 {
     }
 }
 
-/// The faces `[[telar.fonts]]` declares, as the `Vec<FontAsset>` a shaper loads: embedded, so a binary finds its faces wherever it is run from, and `include_bytes!` is also what makes cargo rebuild when a face changes.
-///
-/// Empty where nothing shapes glyphs. A browser build gets its faces from the page — a document through `@font-face`, a canvas by fetching the ones the page preloads — so embedding them there would ship each twice; a terminal has no typeface to choose. A family declared only as WOFF is a compile error where text is shaped natively, since only a browser can unpack one.
-fn declared_fonts() -> Result<TokenStream2, TokenStream2> {
+/// The directory of the package being compiled and its `telar.toml`.
+fn package_manifest() -> Result<(PathBuf, telar_project::TelarManifest), TokenStream2> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set"); })?;
@@ -1103,9 +1125,19 @@ fn declared_fonts() -> Result<TokenStream2, TokenStream2> {
         let msg = format!("rsx: {e}");
         quote! { compile_error!(#msg); }
     })?;
+    Ok((manifest_dir, manifest))
+}
+
+/// The faces `[[telar.fonts]]` declares, as the `Vec<FontAsset>` a shaper loads: embedded, so a binary finds its faces wherever it is run from, and `include_bytes!` is also what makes cargo rebuild when a face changes.
+///
+/// Empty where nothing shapes glyphs. A browser build gets its faces from the page — a document through `@font-face`, a canvas by fetching the ones the page preloads — so embedding them there would ship each twice; a terminal has no typeface to choose. A family declared only as WOFF is a compile error where text is shaped natively, since only a browser can unpack one.
+fn declared_fonts(
+    manifest_dir: &Path,
+    manifest: &telar_project::TelarManifest,
+) -> Result<TokenStream2, TokenStream2> {
     let mut assets = Vec::new();
     for font in manifest.telar.fonts.iter().filter(|f| f.format().is_sfnt()) {
-        let path = font.path(&manifest_dir);
+        let path = font.path(manifest_dir);
         if !path.is_file() {
             let msg = format!(
                 "rsx: telar.toml declares the font {:?} at {}, which is not a file",

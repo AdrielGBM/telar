@@ -134,7 +134,7 @@ fn scaffold_files(
     ]
 }
 
-/// A `[telar] library`: a component, the macro that places it, and a manifest whose `include` already carries the artifact a dependency is compiled from — cargo leaves `.telar/` out of a package otherwise, and the crate it publishes compiles nowhere.
+/// A `[telar] library`: a component, the macro that places it, the one that tests its previews, and a manifest whose `include` already carries the artifact a dependency is compiled from — cargo leaves `.telar/` out of a package otherwise, and the crate it publishes compiles nowhere.
 fn library_files(crate_name: &str) -> Vec<(&'static str, String)> {
     vec![
         ("Cargo.toml", library_manifest(crate_name)),
@@ -378,7 +378,7 @@ library = true
 prelude = []
 "#;
 
-const LIBRARY_LIB_RS: &str = "telar::rsx_modules!();\n";
+const LIBRARY_LIB_RS: &str = "telar::rsx_modules!();\ntelar::library_previews!();\n";
 
 const BADGE_RSX: &str = r#"[logic]
 #[derive(Default)]

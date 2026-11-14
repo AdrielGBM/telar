@@ -349,12 +349,13 @@ failed, a panic while one is unmounted included.
 android` are refused: the run renders on the host. The run always writes `target/telar-snapshots/report.json`;
 a run that wrote none, or whose `--report` copy could not be written, fails even when cargo succeeded.
 
-A library has no binary to run. `rsx_modules!` gives it a unit test, `__telar_library_previews`, in preview
-builds, wherever in the crate the macro is called, and `cargo telar test -p <library>` runs it through
-`cargo test`. A crate calls `rsx_modules!` once for each module that places its own `.rsx`, so it may carry several
-of these tests; each lists every preview of the crate, and the first to run tests them and writes the one
-`report.json`, while the others return at once. The first-party components are tested this way through `apps/catalogue`:
-`cargo telar test -p catalogue`.
+A library has no binary to run. It writes `telar::library_previews!();` once, at its crate root, which gives it a
+unit test, `__telar_library_previews`, in preview builds, and `cargo telar test -p <library>` runs it through
+`cargo test`. The test checks every preview the crate root's `telar_all_previews()` lists, the same list an
+application that includes the library shows, however many modules place `.rsx` with `rsx_modules!`. A library
+without the macro has no such test, and the run fails saying what to write instead of passing with nothing
+tested; an application writing it is a compile error, since its binary tests its previews. The first-party
+components are also tested through `apps/catalogue`, an application that includes them: `cargo telar test -p catalogue`.
 
 ### Auditing the exported workshop
 

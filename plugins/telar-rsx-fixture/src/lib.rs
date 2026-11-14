@@ -3,6 +3,7 @@
 //! It is packaged, unpacked read-only and compiled as a dependency of a generated application by `crates/tools/cargo-telar/src/rsx_library.test.rs`, which is the proof that a library published this way builds without the CLI ever running on it.
 
 telar::rsx_modules!();
+telar::library_previews!();
 
 mod marker;
 mod tally;

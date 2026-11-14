@@ -21,6 +21,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 telar::rsx_modules!();
+telar::library_previews!();
 
 #[cfg(test)]
 #[path = "consistency.test.rs"]

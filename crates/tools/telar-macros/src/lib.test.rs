@@ -788,19 +788,56 @@ fn a_library_dependency_lists_its_rsx_previews() {
     );
 }
 
+fn library_previews(
+    name: &str,
+    telar_toml: &str,
+    primary: bool,
+) -> Result<proc_macro2::TokenStream, proc_macro2::TokenStream> {
+    let root = package(name);
+    std::fs::write(root.join(telar_project::MANIFEST_FILENAME), telar_toml).unwrap();
+    let manifest = telar_project::TelarManifest::load(&root).unwrap();
+    let expansion = super::library_previews_expansion(&root, &manifest, primary);
+    let _ = std::fs::remove_dir_all(&root);
+    expansion
+}
+
+/// The list the test runs is the one an application including the library shows, wherever in the crate the macro is written.
 #[test]
-fn a_library_tests_its_previews_from_a_unit_test_at_the_call_site() {
-    let fonts = quote::quote! { ::std::vec::Vec::new() };
-    let test = spaced(super::library_previews_test(fonts));
+fn a_library_tests_every_preview_its_crate_root_lists_from_one_unit_test() {
+    let test = spaced(
+        library_previews("library_previews", "[telar]\nlibrary = true\n", true)
+            .unwrap_or_else(|e| panic!("{e}")),
+    );
     assert!(test.starts_with(":: telar :: __previews !"), "{test}");
     assert!(
         test.contains("# [cfg (test)] # [test] fn __telar_library_previews ()"),
         "{test}"
     );
     assert!(
-        test.contains(":: telar :: preview :: test_run :: __test_library (telar_all_previews () , :: telar :: AppConfig :: default () . with_fonts (:: std :: vec :: Vec :: new ())"),
+        test.contains(":: telar :: preview :: test_run :: __test_library (crate :: telar_all_previews () , :: telar :: AppConfig :: default () . with_fonts ("),
         "{test}"
     );
+}
+
+#[test]
+fn a_library_compiled_for_another_package_carries_no_previews_test() {
+    let expansion = library_previews(
+        "library_previews_dependency",
+        "[telar]\nlibrary = true\n",
+        false,
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    assert!(expansion.is_empty(), "{expansion}");
+}
+
+/// An application's binary tests its previews, so a library's test written in one would be a second run nothing starts.
+#[test]
+fn an_application_writing_library_previews_is_refused_naming_the_macro() {
+    let error = library_previews("application_previews", "[telar]\n", true)
+        .expect_err("an application is refused")
+        .to_string();
+    assert!(error.contains("compile_error"), "{error}");
+    assert!(error.contains("`library_previews!`"), "{error}");
 }
 
 #[test]

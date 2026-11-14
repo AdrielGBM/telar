@@ -309,6 +309,18 @@ fn a_library_scaffold_includes_the_artifact_it_ships() {
     );
 }
 
+/// Without the macro `cargo telar test` has no test to run in a library, and refuses the run.
+#[test]
+fn a_library_scaffold_has_its_previews_tested() {
+    let files = library_files("my-kit");
+    let lib_rs = files
+        .iter()
+        .find(|(path, _)| *path == "src/lib.rs")
+        .map(|(_, content)| content.as_str())
+        .expect("a src/lib.rs is scaffolded");
+    assert_eq!(lib_rs.matches("telar::library_previews!();").count(), 1);
+}
+
 #[test]
 fn a_library_scaffold_declares_itself_a_library_and_transpiles() {
     let dir = temp_dir("library");

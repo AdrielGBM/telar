@@ -174,8 +174,27 @@ fn the_feature_a_test_run_injects_is_one_a_project_can_lock() {
 fn a_successful_cargo_run_that_wrote_no_report_fails() {
     let root = tempfile::tempdir().unwrap();
     assert_eq!(
-        exit_code(Some(0), &root.path().join("report.json"), None),
+        exit_code(Some(0), false, &root.path().join("report.json"), None),
         1
+    );
+    assert_eq!(
+        exit_code(Some(0), true, &root.path().join("report.json"), None),
+        1
+    );
+}
+
+/// A library that never wrote the macro compiles and passes `cargo test` with nothing run, so the failure has to say what to write.
+#[test]
+fn a_library_whose_run_wrote_no_report_is_told_to_write_library_previews() {
+    let written = Path::new("target/telar-snapshots/report.json");
+    let message = no_report(true, written);
+    assert!(
+        message.contains("`telar::library_previews!();`"),
+        "{message}"
+    );
+    assert!(
+        !no_report(false, written).contains("library_previews"),
+        "an application's run is tested by its binary"
     );
 }
 
@@ -184,9 +203,9 @@ fn a_run_that_wrote_its_report_exits_as_cargo_did() {
     let root = tempfile::tempdir().unwrap();
     let written = root.path().join("report.json");
     std::fs::write(&written, r#"{"test": {"previews": [], "errors": []}}"#).unwrap();
-    assert_eq!(exit_code(Some(0), &written, None), 0);
-    assert_eq!(exit_code(Some(101), &written, None), 101);
-    assert_eq!(exit_code(None, &written, None), 1);
+    assert_eq!(exit_code(Some(0), false, &written, None), 0);
+    assert_eq!(exit_code(Some(101), false, &written, None), 101);
+    assert_eq!(exit_code(None, false, &written, None), 1);
 }
 
 #[test]
@@ -198,12 +217,15 @@ fn a_report_copy_that_cannot_be_written_fails_the_run() {
         format: ReportFormat::Json,
         path: root.path().to_path_buf(),
     };
-    assert_eq!(exit_code(Some(0), &written, Some(&into_a_directory)), 1);
+    assert_eq!(
+        exit_code(Some(0), false, &written, Some(&into_a_directory)),
+        1
+    );
     let not_json = root.path().join("not-json.json");
     std::fs::write(&not_json, "{").unwrap();
     let junit = ReportRequest {
         format: ReportFormat::Junit,
         path: root.path().join("junit.xml"),
     };
-    assert_eq!(exit_code(Some(0), &not_json, Some(&junit)), 1);
+    assert_eq!(exit_code(Some(0), false, &not_json, Some(&junit)), 1);
 }

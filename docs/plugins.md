@@ -348,7 +348,7 @@ cargo telar new --lib my-plugin     # or `cargo telar init --lib`, into the curr
 my-plugin/
   Cargo.toml       # the `include` list and `telar = "=VERSION"`
   telar.toml       # [telar] library = true
-  src/lib.rs       # telar::rsx_modules!();
+  src/lib.rs       # telar::rsx_modules!(); telar::library_previews!();
   src/badge.rsx    # one component
 ```
 
@@ -384,6 +384,7 @@ it, or there is an application's. What it declares is all it is transpiled again
 
 ```rust
 telar::rsx_modules!();
+telar::library_previews!();
 
 pub use greeting_card::{GreetingCardProps, greeting_card};
 ```
@@ -486,7 +487,8 @@ include = ["my-plugin"]
 ```
 
 A `.rsx` library needs nothing else: its previews are in the Plain artifact it publishes, the only one a library
-has. `cargo telar test -p my-plugin` plays, accessibility-checks and snapshots them without an application. The
+has. With `telar::library_previews!();` written once at its crate root, `cargo telar test -p my-plugin` plays,
+accessibility-checks and snapshots them without an application; without it, the run fails naming the macro. The
 goldens stay in the library's own `snapshots/`, in the repository rather than the published
 package. See [docs/previews.md](previews.md) for writing previews.
 

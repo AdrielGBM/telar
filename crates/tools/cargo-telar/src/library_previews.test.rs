@@ -1,56 +1,67 @@
-//! `cargo telar test -p <library>` finds the previews test `rsx_modules!` emits wherever the macro is called: from a nested `mod.rs`, which puts the test under a module path of its own, and from several modules at once, which run the previews and write the report once.
+//! `cargo telar test -p <library>` runs the one previews test `library_previews!` emits, which tests every preview the crate root lists however many modules place `.rsx`, and refuses a library that never wrote the macro instead of passing with nothing tested.
 //!
 //! It compiles telar with its previews into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`. Every cargo it starts runs offline, so the registry has to hold what `Cargo.lock` names first (`cargo fetch`).
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 use telar_project::protocol::{TEST_OUT_DIR, TEST_REPORT_FILE};
 
 #[test]
 #[ignore = "builds telar with its previews: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`"]
-fn a_library_placing_its_rsx_from_a_nested_mod_rs_has_its_previews_tested() {
-    let run = test_library("nested-previews", &[("src/ui/mod.rs", RSX_MODULES)]);
-    assert_eq!(
-        run.preview_ids,
-        ["nested_previews--badge--plain"],
-        "{}",
-        run.shown
+fn a_library_placing_its_rsx_from_several_modules_has_every_preview_tested_once() {
+    let run = test_library(
+        "several-modules",
+        "telar::rsx_modules!();\ntelar::library_previews!();\nmod ui;\n",
     );
+    let shown = shown(&run.output);
+    assert!(
+        run.output.status.success(),
+        "cargo telar test failed with {}\n{shown}",
+        run.output.status
+    );
+    let report_path = run.target_dir.join(TEST_OUT_DIR).join(TEST_REPORT_FILE);
+    let report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap_or_else(|e| {
+            panic!("the run wrote no {}: {e}\n{shown}", report_path.display())
+        }))
+        .expect("the report is JSON");
+    let preview_ids: Vec<&str> = report["test"]["previews"]
+        .as_array()
+        .expect("the report lists its previews")
+        .iter()
+        .filter_map(|preview| preview["id"].as_str())
+        .collect();
+    assert_eq!(preview_ids, ["several_modules--badge--plain"], "{shown}");
+    assert_eq!(shown.matches("running 1 preview(s)").count(), 1, "{shown}");
 }
 
 #[test]
 #[ignore = "builds telar with its previews: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`"]
-fn a_library_calling_rsx_modules_from_several_modules_runs_its_previews_once() {
-    let run = test_library(
-        "several-calls",
-        &[
-            ("src/lib.rs", "telar::rsx_modules!();\nmod ui;\n"),
-            ("src/ui/mod.rs", RSX_MODULES),
-        ],
-    );
-    assert_eq!(
-        run.preview_ids,
-        ["several_calls--badge--plain"],
-        "{}",
-        run.shown
-    );
-    assert_eq!(
-        run.shown.matches("running 1 preview(s)").count(),
-        1,
-        "{}",
-        run.shown
+fn a_library_without_library_previews_fails_naming_the_macro() {
+    let run = test_library("without-macro", "telar::rsx_modules!();\nmod ui;\n");
+    let shown = shown(&run.output);
+    assert!(!run.output.status.success(), "{shown}");
+    assert!(
+        String::from_utf8_lossy(&run.output.stderr).contains("`telar::library_previews!();`"),
+        "{shown}"
     );
 }
-
-const RSX_MODULES: &str = "telar::rsx_modules!();\n";
 
 struct LibraryRun {
-    preview_ids: Vec<String>,
-    shown: String,
+    output: Output,
+    target_dir: PathBuf,
 }
 
-fn test_library(name: &str, sources: &[(&str, &str)]) -> LibraryRun {
+fn shown(output: &Output) -> String {
+    format!(
+        "--- stdout\n{}\n--- stderr\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+fn test_library(name: &str, lib_rs: &str) -> LibraryRun {
     let repo = repo_root();
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("library-previews");
     let target_dir = work.join(format!("target-{name}"));
@@ -58,7 +69,7 @@ fn test_library(name: &str, sources: &[(&str, &str)]) -> LibraryRun {
     if library.exists() {
         std::fs::remove_dir_all(&library).expect("remove the previous run");
     }
-    write_library(&library, &repo, name, sources);
+    write_library(&library, &repo, name, lib_rs);
 
     let output = Command::new(env!("CARGO_BIN_EXE_cargo-telar"))
         .args(["test", "--no-snapshots"])
@@ -67,30 +78,7 @@ fn test_library(name: &str, sources: &[(&str, &str)]) -> LibraryRun {
         .env("CARGO_NET_OFFLINE", "true")
         .output()
         .expect("could not start cargo-telar");
-    let shown = format!(
-        "--- stdout\n{}\n--- stderr\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        output.status.success(),
-        "cargo telar test failed with {}\n{shown}",
-        output.status
-    );
-
-    let report_path = target_dir.join(TEST_OUT_DIR).join(TEST_REPORT_FILE);
-    let report: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap_or_else(|e| {
-            panic!("the run wrote no {}: {e}\n{shown}", report_path.display())
-        }))
-        .expect("the report is JSON");
-    let preview_ids = report["test"]["previews"]
-        .as_array()
-        .expect("the report lists its previews")
-        .iter()
-        .filter_map(|preview| preview["id"].as_str().map(str::to_string))
-        .collect();
-    LibraryRun { preview_ids, shown }
+    LibraryRun { output, target_dir }
 }
 
 fn repo_root() -> PathBuf {
@@ -101,7 +89,7 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn write_library(dir: &Path, repo: &Path, name: &str, sources: &[(&str, &str)]) {
+fn write_library(dir: &Path, repo: &Path, name: &str, lib_rs: &str) {
     let manifest = format!(
         r#"[package]
 name = "{name}"
@@ -116,16 +104,13 @@ telar = {{ path = {telar}, default-features = false, features = ["runtime", "sha
 "#,
         telar = toml::Value::String(repo.join("crates/telar").display().to_string()),
     );
-    let mut files = vec![
+    let files = [
         ("Cargo.toml", manifest.as_str()),
         ("telar.toml", "[telar]\nlibrary = true\n"),
-        ("src/lib.rs", "mod ui;\n"),
+        ("src/lib.rs", lib_rs),
+        ("src/ui/mod.rs", "telar::rsx_modules!();\n"),
         ("src/ui/badge.rsx", BADGE_RSX),
     ];
-    for (path, contents) in sources {
-        files.retain(|(existing, _)| existing != path);
-        files.push((path, contents));
-    }
     for (relative, contents) in files {
         let path = dir.join(relative);
         std::fs::create_dir_all(path.parent().expect("a file has a parent"))
