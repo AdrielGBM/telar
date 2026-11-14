@@ -8,7 +8,7 @@ use super::*;
 fn runs_of(read: impl Fn() + 'static) -> Rc<Cell<u32>> {
     let runs = Rc::new(Cell::new(0));
     let counted = runs.clone();
-    let _ = effect(move || {
+    effect(move || {
         read();
         counted.set(counted.get() + 1);
     });

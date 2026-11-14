@@ -662,7 +662,7 @@ fn an_effect_that_drops_the_last_handle_to_its_surface_finishes_in_its_world() {
     let handle = surface.handle();
     let close = signal(false);
     let finished_inside = Rc::new(Cell::new(None));
-    let _effect = surface.with_entered(|| {
+    surface.with_entered(|| {
         let (node, _) = new_leaf(LayoutStyle::new()).unwrap();
         let holder = Rc::clone(&holder);
         let finished_inside = Rc::clone(&finished_inside);
@@ -672,7 +672,7 @@ fn an_effect_that_drops_the_last_handle_to_its_surface_finishes_in_its_world() {
             }
             drop(holder.borrow_mut().take());
             finished_inside.set(Some((current_surface(), track_layout(node).is_some())));
-        })
+        });
     });
     *holder.borrow_mut() = Some(surface);
 

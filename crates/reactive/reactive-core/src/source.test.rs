@@ -28,7 +28,7 @@ fn a_pair_recomputes_when_either_half_moves() {
     assert_eq!(label.get(), "11+");
 }
 
-/// The regression this exists for. Deriving through a signal written by an effect seeds correctly and then goes dead the moment the handle drops.
+/// The regression this exists for: deriving through a signal written by an effect seeded correctly and then went dead once the call that made it returned.
 #[test]
 fn a_derivation_outlives_the_call_that_made_it() {
     reset_runtime();

@@ -1,10 +1,10 @@
 //! [`accordion`]: a header that expands and collapses the body beneath it.
 
 use telar::{
-    AlignItems, BorderRadius, Children, Clip, ClippedItem, Color, Component, Container, Effect,
-    Event, EventResult, JustifyContent, LayoutError, LayoutItem, LayoutStyle, NodeId, Props,
-    Reactive, RectStyle, RenderNode, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text,
-    amend_surface, box_item, children, focus::Role, signal,
+    AlignItems, BorderRadius, Children, Clip, ClippedItem, Color, Container, JustifyContent,
+    LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, SurfaceAmendment, Text, amend_surface, box_item, children, focus::Role,
+    signal,
 };
 
 use crate::shared;
@@ -144,35 +144,9 @@ pub fn accordion(props: AccordionProps) -> Result<Box<dyn LayoutItem>, LayoutErr
 
     let root = Container::column(children![header, clipped_body])?;
 
-    let _effect = shared::displayed_while(body_node, move || open.get());
+    shared::displayed_while(body_node, move || open.get());
 
-    Ok(box_item(Accordion { root, _effect }))
-}
-
-/// Wraps the header+body column together with the display-toggling effect so it stays alive for the widget's lifetime — an `Effect` deregisters itself on drop, same as `ReactiveList`'s own `_effect` field.
-struct Accordion {
-    root: Container,
-    _effect: Effect,
-}
-
-impl LayoutItem for Accordion {
-    fn layout_node(&self) -> NodeId {
-        self.root.layout_node()
-    }
-}
-
-impl Component for Accordion {
-    fn view(&self) -> RenderNode {
-        self.root.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        self.root.on_event(event)
-    }
-
-    fn debug_name(&self) -> &'static str {
-        "Accordion"
-    }
+    Ok(box_item(root))
 }
 
 #[cfg(test)]

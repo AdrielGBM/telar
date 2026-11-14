@@ -146,7 +146,7 @@ fn the_primary_scroll_is_read_from_outside_the_page_and_followed() {
     let reads = Rc::new(Cell::new(0u32));
     let seen = reactive_core::signal(None::<NodeId>);
     let counted = reads.clone();
-    let _reader = reactive_core::effect(move || {
+    reactive_core::effect(move || {
         counted.set(counted.get() + 1);
         seen.set(crate::use_primary_scroll().map(|viewport| viewport.area()));
     });

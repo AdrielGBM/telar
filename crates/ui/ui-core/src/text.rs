@@ -7,7 +7,7 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
-use reactive_core::{Effect, effect};
+use reactive_core::effect;
 use renderer_core::{Span, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -36,8 +36,6 @@ pub struct Text {
     cap_band: CapBandCache,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
-    // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and a label that grew soft-wraps into a slot built for the old text.
-    _remeasure: Option<Effect>,
     pressed_run: Option<(usize, (f32, f32))>,
     link_cursor: Option<crate::cursor::CursorClaim>,
 }
@@ -323,7 +321,7 @@ impl Text {
         let dirty_style = Rc::clone(&declared);
         let dirty_fit = fitting;
         let measured = RefCell::new(Option::<Measured>::None);
-        let remeasure = effect(move || {
+        effect(move || {
             let next = (
                 (dirty_content)(),
                 (dirty_style)(),
@@ -356,7 +354,6 @@ impl Text {
             cap_band: CapBandCache::default(),
             style,
             leaf: LayoutLeaf { node, rect },
-            _remeasure: Some(remeasure),
             pressed_run: None,
             link_cursor: None,
         })

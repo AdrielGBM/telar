@@ -2890,7 +2890,7 @@ fn a_disabled_style_reaches_the_box() {
     assert!(code.contains(".disabled_style("), "{code}");
 }
 
-/// An effect bound in `[logic]` used to need the root widget to hold its handle, or it deregistered when the component function returned. It belongs to an owner now, so the wrapper that did the holding is gone — and so is the `compile_error!` that refused an effect nobody bound.
+/// An effect in `[logic]` belongs to the owner the component is built under, so the view keeps nothing for it: no wrapper holding it and no `compile_error!` for an effect nobody bound.
 #[test]
 fn an_effect_in_logic_needs_nothing_kept_for_it() {
     let src = "[logic]\nlet count = signal(0);\neffect(move || { let _ = count.get(); });\n\n[view]\ntext \"hi\"\n";

@@ -8,7 +8,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use motion_core::{Animated, Easing, Tween, tween};
 use platform_core::Event;
-use reactive_core::{Effect, ReadSignal, RwSignal, effect, on_cleanup, signal};
+use reactive_core::{ReadSignal, RwSignal, effect, on_cleanup, signal};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{mark_dirty, new_container, set_children, set_display, track_layout};
@@ -180,7 +180,7 @@ impl Mount {
 pub(crate) fn watch_exits(
     leaving: impl Fn() -> Vec<(u64, Mount)> + 'static,
     finished: impl Fn(Vec<u64>) + 'static,
-) -> Effect {
+) {
     effect(move || {
         let done: Vec<u64> = leaving()
             .into_iter()
@@ -190,7 +190,7 @@ pub(crate) fn watch_exits(
         if !done.is_empty() {
             finished(done);
         }
-    })
+    });
 }
 
 type Build = Rc<dyn Fn() -> Result<Box<dyn LayoutItem>, LayoutError>>;
@@ -206,8 +206,6 @@ pub struct Presence {
     rect: RwSignal<Rect>,
     state: Rc<RefCell<PresenceState>>,
     version: RwSignal<u64>,
-    _visible: Effect,
-    _exits: Effect,
 }
 
 impl Presence {
@@ -237,7 +235,7 @@ impl Presence {
         let shown = Rc::clone(&state);
         let initial = Cell::new(true);
         let serial = Serial::new();
-        let _visible = effect(move || {
+        effect(move || {
             let show = visible();
             let entering = !initial.replace(false);
             serial.run((show, entering), |(show, entering)| {
@@ -254,7 +252,7 @@ impl Presence {
 
         let watched = Rc::clone(&state);
         let removed = Rc::clone(&state);
-        let _exits = watch_exits(
+        watch_exits(
             move || {
                 mounted.get();
                 watched
@@ -277,8 +275,6 @@ impl Presence {
             rect,
             state,
             version,
-            _visible,
-            _exits,
         })
     }
 

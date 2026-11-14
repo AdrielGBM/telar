@@ -125,12 +125,12 @@ fn line() -> f32 {
     ScrollDelta::Lines { x: 0.0, y: 1.0 }.pixels().1
 }
 
-fn sized_by(height: RwSignal<f32>) -> (Container, reactive_core::Effect) {
+fn sized_by(height: RwSignal<f32>) -> Container {
     let tall = Container::new(LayoutStyle::new(), vec![]).unwrap();
-    let follows = style_follows(tall.layout_node(), move || {
+    style_follows(tall.layout_node(), move || {
         LayoutStyle::new().width(80.0).height(height.get())
     });
-    (column(vec![box_item(tall)]), follows)
+    column(vec![box_item(tall)])
 }
 
 #[test]
@@ -300,7 +300,7 @@ fn content_shrinking_to_fit_ends_the_stop_and_growing_back_brings_it_back() {
     focus::clear();
     let _document = AsADocument::new();
     let height = signal(1000.0);
-    let (content, _follows) = sized_by(height);
+    let content = sized_by(height);
     let (area, _) = area(content);
     let (tree, node) = mounted(area);
     assert!(the_stop(&tree, node).is_some_and(|stop| stop.tab_stop));
@@ -323,7 +323,7 @@ fn a_control_showing_inside_ends_the_stop() {
     let _document = AsADocument::new();
     let shown = signal(false);
     let inside = button(30.0);
-    let _follows = style_follows(inside.layout_node(), move || match shown.get() {
+    style_follows(inside.layout_node(), move || match shown.get() {
         true => LayoutStyle::new().width(80.0).height(30.0),
         false => LayoutStyle::new().display_none(),
     });
@@ -369,7 +369,7 @@ fn focus_on_the_area_keeps_it_a_stop_until_focus_moves_on() {
     focus::clear();
     let _document = AsADocument::new();
     let height = signal(1000.0);
-    let (content, _follows) = sized_by(height);
+    let content = sized_by(height);
     let (area, _) = area(content);
     let (tree, node) = mounted(area);
     focus::focus_next();

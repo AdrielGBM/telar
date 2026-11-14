@@ -439,10 +439,10 @@ fn reduced_motion_is_switched_for_the_whole_application() {
 fn high_contrast_is_switched_for_the_canvas_and_never_the_chrome() {
     set_high_contrast_override(None);
     let chrome = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-    let _chrome = {
+    {
         let chrome = chrome.clone();
-        effect(move || chrome.borrow_mut().push(use_high_contrast()))
-    };
+        effect(move || chrome.borrow_mut().push(use_high_contrast()));
+    }
     let mut workshop = Workshop::open(entries(contrast));
     assert!(workshop.draws("contrast None"));
 

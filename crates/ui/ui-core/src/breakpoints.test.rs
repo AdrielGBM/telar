@@ -39,7 +39,7 @@ fn a_followed_value_moves_only_across_a_threshold() {
     let runs = Rc::new(Cell::new(0));
     let seen = Rc::new(Cell::new(0));
     let (counted, read) = (runs.clone(), seen.clone());
-    let _reader = effect(move || {
+    effect(move || {
         read.set(followed.get());
         counted.set(counted.get() + 1);
     });
@@ -70,7 +70,7 @@ fn two_ranges_with_the_same_value_are_not_a_change() {
     let followed = breakpoint(8.0f32).at(500.0, 8.0).at(900.0, 16.0).follow();
     let runs = Rc::new(Cell::new(0));
     let counted = runs.clone();
-    let _reader = effect(move || {
+    effect(move || {
         followed.get();
         counted.set(counted.get() + 1);
     });

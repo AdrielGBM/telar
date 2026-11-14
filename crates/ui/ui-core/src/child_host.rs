@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use layout_core::{LayoutError, NodeId};
 use platform_core::Event;
-use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
+use reactive_core::{ReadSignal, RwSignal, effect, signal};
 use ui_tree::{EventResult, RenderNode};
 
 use crate::context::{container_is_row, set_children, set_leading_margin};
@@ -40,9 +40,9 @@ impl ChildSlot {
     }
 }
 
-/// A generic-erased reactive region. Captures `source`/`key`/`build` behind one closure that, given the shared host state and this slot's index, wires the reconcile [`Effect`]. Erasing here keeps [`HostState`] non-generic (a container can hold fragments over different item types). `gap` is the per-item spacing (`0.0` = none), applied as a main-axis leading margin so the region stays transparent.
+/// A generic-erased reactive region. Captures `source`/`key`/`build` behind one closure that, given the shared host state and this slot's index, wires the reconcile effect. Erasing here keeps [`HostState`] non-generic (a container can hold fragments over different item types). `gap` is the per-item spacing (`0.0` = none), applied as a main-axis leading margin so the region stays transparent.
 pub struct FragmentSpec {
-    install: Box<dyn FnOnce(Rc<RefCell<HostState>>, usize) -> Effect>,
+    install: Box<dyn FnOnce(Rc<RefCell<HostState>>, usize)>,
     gap: f32,
 }
 
@@ -123,17 +123,15 @@ where
     KeyFn: Fn(&Item, usize) -> u64 + 'static,
     Sync: Fn(&Item, u64) + 'static,
 {
-    let install = Box::new(
-        move |state: Rc<RefCell<HostState>>, index: usize| -> Effect {
-            let serial = Serial::new();
-            effect(move || {
-                let items = source();
-                serial.run(items, |items| {
-                    reconcile_slot(&state, index, items, &keyer, &build, &sync)
-                });
-            })
-        },
-    );
+    let install = Box::new(move |state: Rc<RefCell<HostState>>, index: usize| {
+        let serial = Serial::new();
+        effect(move || {
+            let items = source();
+            serial.run(items, |items| {
+                reconcile_slot(&state, index, items, &keyer, &build, &sync)
+            });
+        });
+    });
     ChildSlot::Dynamic(FragmentSpec { install, gap })
 }
 
@@ -250,11 +248,10 @@ fn reconcile_slot<Item, KeyFn, B, Sync>(
     version.update(|v| *v = v.wrapping_add(1));
 }
 
-/// The dynamic child store a container embeds when it holds at least one reactive fragment. Owns the slots and keeps the reconcile effects alive; the container delegates render/hit-test to it.
+/// The dynamic child store a container embeds when it holds at least one reactive fragment. Owns the slots, which the reconcile effects fill; the container delegates render/hit-test to it.
 pub(crate) struct DynHost {
     state: Rc<RefCell<HostState>>,
     version: RwSignal<u64>,
-    _effects: Vec<Effect>,
 }
 
 impl DynHost {
@@ -290,19 +287,14 @@ impl DynHost {
             }
         }
 
-        let effects: Vec<Effect> = specs
-            .into_iter()
-            .map(|(index, spec)| (spec.install)(state.clone(), index))
-            .collect();
+        for (index, spec) in specs {
+            (spec.install)(state.clone(), index);
+        }
 
         let nodes = flatten_nodes(&state.borrow().slots);
         let _ = set_children(node, &nodes);
 
-        Ok(Self {
-            state,
-            version,
-            _effects: effects,
-        })
+        Ok(Self { state, version })
     }
 
     /// The current children's render boundaries, in order. Subscribes to reconciles so the container's `view()` re-emits the new/reordered set.

@@ -959,7 +959,7 @@ fn an_animation_that_panics_mid_tick_leaves_later_flushes_working() {
     let count = reactive_core::signal(0);
     let seen = std::rc::Rc::new(std::cell::Cell::new(0));
     let into = std::rc::Rc::clone(&seen);
-    let _effect = reactive_core::effect(move || into.set(count.get()));
+    reactive_core::effect(move || into.set(count.get()));
     count.set(3);
     assert_eq!(
         seen.get(),

@@ -935,14 +935,14 @@ fn high_contrast_set_on_a_frame_reaches_only_the_readers_inside_it() {
             .unwrap(),
         )
     };
-    let _outside = {
+    {
         let outside = outside.clone();
         effect(move || {
             outside
                 .borrow_mut()
                 .push(preferences_core::use_high_contrast())
-        })
-    };
+        });
+    }
 
     canvas.set_high_contrast(Some(true));
     assert_eq!(canvas.high_contrast(), Some(true));

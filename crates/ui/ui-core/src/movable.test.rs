@@ -564,7 +564,7 @@ fn what_the_layout_tree_cascades_follows_the_outlet_and_is_resolved_again_on_a_m
     );
     let seen = Rc::new(Cell::new(0.0));
     let seeing = Rc::clone(&seen);
-    let _reading = effect(move || seeing.set(context(content).text.font_size));
+    effect(move || seeing.set(context(content).text.font_size));
     assert_eq!(seen.get(), 11.0);
 
     dispose_owner(small_scope);
@@ -739,7 +739,7 @@ fn a_fixed_layer_moved_out_of_a_hidden_outlet_is_drawn_and_counted_where_it_stan
     relayout_if_dirty();
     let covered = Rc::new(Cell::new((0.0, 0.0)));
     let seeing = Rc::clone(&covered);
-    let _margin = effect(move || seeing.set(crate::arrival_margin::covered_by_layers()));
+    effect(move || seeing.set(crate::arrival_margin::covered_by_layers()));
     assert!(!drawn(&tree, bar), "hidden with the outlet it stands in");
     assert_eq!(covered.get(), (0.0, 0.0), "and covers no edge");
 
@@ -784,7 +784,7 @@ fn an_overlay_opened_inside_is_hidden_while_its_subtree_is_and_back_when_it_is_s
     lay_out(node);
     let hidden = Rc::new(Cell::new(None));
     let seeing = Rc::clone(&hidden);
-    let _reading = effect(move || seeing.set(Some(crate::input_region::tracks_hidden(panel))));
+    effect(move || seeing.set(Some(crate::input_region::tracks_hidden(panel))));
     assert!(drawn(&tree, panel));
 
     place.set(Place::Hidden);
@@ -835,7 +835,7 @@ fn a_dialog_inside_a_parked_subtree_cannot_be_dismissed_until_it_is_shown_again(
         DismissRegistration::within(dialog, Rc::new(move || counting.set(counting.get() + 1)));
     let depth = Rc::new(Cell::new(usize::MAX));
     let reading = Rc::clone(&depth);
-    let _reading = effect(move || reading.set(crate::dismiss::use_dismiss_depth()));
+    effect(move || reading.set(crate::dismiss::use_dismiss_depth()));
     assert_eq!(depth.get(), 1);
 
     place.set(Place::Nowhere);

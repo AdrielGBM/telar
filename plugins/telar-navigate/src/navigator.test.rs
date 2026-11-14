@@ -166,7 +166,7 @@ fn current_is_reactive() {
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<Route>::new()));
     let s = seen.clone();
     let n = nav;
-    let _e = telar::effect(move || s.borrow_mut().push(n.current()));
+    telar::effect(move || s.borrow_mut().push(n.current()));
     nav.push(Route::Settings);
     nav.pop();
     assert_eq!(

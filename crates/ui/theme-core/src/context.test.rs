@@ -352,10 +352,10 @@ fn a_surface_in_the_dark_mode_resolves_dark_defaults_inside_a_light_app() {
 
     let canvas = crate::ModeContext::new();
     let seen = Rc::new(RefCell::new(Vec::new()));
-    let _reader = canvas.with_entered(|| {
+    canvas.with_entered(|| {
         crate::set_surface_mode(Some("dark"));
         let seen = Rc::clone(&seen);
-        reactive_core::effect(move || seen.borrow_mut().push(use_theme_tokens().ink().r > 0.5))
+        reactive_core::effect(move || seen.borrow_mut().push(use_theme_tokens().ink().r > 0.5));
     });
     assert!(
         use_theme_tokens().ink().r < 0.5,
@@ -394,7 +394,7 @@ fn a_surface_in_a_mode_registered_with_its_theme_resolves_that_theme_alone() {
 
     let canvas = crate::ModeContext::new();
     let seen = Rc::new(RefCell::new(Vec::new()));
-    let _reader = canvas.with_entered(|| {
+    canvas.with_entered(|| {
         crate::set_surface_mode(Some("red"));
         assert!(use_theme::<Red>().primary() == RED);
         assert_eq!(
@@ -403,7 +403,7 @@ fn a_surface_in_a_mode_registered_with_its_theme_resolves_that_theme_alone() {
             "a typed read walks past the mode's theme to the application's"
         );
         let seen = Rc::clone(&seen);
-        reactive_core::effect(move || seen.borrow_mut().push(use_theme_tokens().primary()))
+        reactive_core::effect(move || seen.borrow_mut().push(use_theme_tokens().primary()));
     });
     assert_eq!(
         use_theme_tokens().primary(),

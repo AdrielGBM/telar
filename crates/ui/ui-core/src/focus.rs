@@ -10,7 +10,7 @@ use platform_core::{
     Chord, ConsumedKeys, Event, Key, ModifiersState, NamedKey, NumericValue, Orientation,
     keyboard_convention,
 };
-use reactive_core::{Effect, RwSignal, effect, signal};
+use reactive_core::{RwSignal, effect, signal};
 use renderer_core::Focusable;
 use rustc_hash::FxHashSet;
 use ui_tree::EventResult;
@@ -129,7 +129,7 @@ struct FocusState {
     reach: RwSignal<u64>,
     // Bumped when an entry joins or leaves the order, so a scroll area re-reads whether a stop inside it takes its own away.
     roster: RwSignal<u64>,
-    guard: Option<Effect>,
+    guard_installed: bool,
     // The one request still waiting for its batch to settle, stamped so a request that lost to a later give, blur or request does not act when it is finally judged.
     deferred: Option<(u64, FocusId)>,
     requests: u64,
@@ -161,7 +161,7 @@ impl FocusState {
             text_entries: FxHashSet::default(),
             reach: signal(0),
             roster: signal(0),
-            guard: None,
+            guard_installed: false,
             deferred: None,
             requests: 0,
             keystroke: None,
@@ -349,10 +349,10 @@ fn drop_focus(id: FocusId) {
 }
 
 fn guard_focus() {
-    if with_focus_ref(|s| s.guard.is_some()) {
+    if with_focus_ref(|s| s.guard_installed) {
         return;
     }
-    let guard = reactive_core::in_surface_world(|| {
+    reactive_core::in_surface_world(|| {
         effect(|| {
             with_focus_ref(|s| s.reach).get();
             let Some(id) = focused_signal().get() else {
@@ -367,9 +367,9 @@ fn guard_focus() {
             if !crate::input_region::receives_input(node) {
                 drop_focus(id);
             }
-        })
+        });
     });
-    with_focus(|s| s.guard = Some(guard));
+    with_focus(|s| s.guard_installed = true);
 }
 
 pub(crate) fn reach_changed() {

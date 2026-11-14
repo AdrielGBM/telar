@@ -34,7 +34,7 @@ impl App for Responsive {
         .unwrap();
         let node = half.layout_node();
         let observed = self.0.clone();
-        let _ = effect(move || {
+        effect(move || {
             let width = track_layout(node).map_or(0.0, |rect| rect.get().width);
             let mut widths = observed.half_widths.borrow_mut();
             if widths.last() != Some(&width) {
@@ -44,7 +44,7 @@ impl App for Responsive {
 
         let layout = breakpoint("stacked").at(600.0, "side by side").follow();
         let observed = self.0.clone();
-        let _ = effect(move || observed.layouts.borrow_mut().push(layout.get()));
+        effect(move || observed.layouts.borrow_mut().push(layout.get()));
 
         let page = Container::new(
             LayoutStyle::new()

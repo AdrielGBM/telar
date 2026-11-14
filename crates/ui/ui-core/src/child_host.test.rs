@@ -417,7 +417,7 @@ fn an_effect_woken_by_a_fragment_build_may_change_the_same_fragment() {
     reset_layout_runtime();
     let items = signal(vec![1u32, 2]);
     let built = signal(0u32);
-    let _grow = reactive_core::effect(move || {
+    reactive_core::effect(move || {
         if built.get() == 2 {
             items.update(|v| {
                 if !v.contains(&3) {

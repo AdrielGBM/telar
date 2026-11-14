@@ -115,7 +115,7 @@ fn a_binding_notifies_onward_only_when_its_result_changes() {
     let bound = bind(Readings::compile("$a > 0"), readings.resolver());
     let runs = Rc::new(Cell::new(0));
     let counted = Rc::clone(&runs);
-    let _watch = telar::effect(move || {
+    telar::effect(move || {
         let _ = bound.get();
         counted.set(counted.get() + 1);
     });

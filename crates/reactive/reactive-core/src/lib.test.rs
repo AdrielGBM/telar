@@ -28,10 +28,10 @@ fn effect_runs_under_its_own_surface_context() {
 
     let trigger = signal(0i32);
     let read = trigger.read_only();
-    let _e = SurfaceHandle::from_raw(1).with_entered(|| {
+    SurfaceHandle::from_raw(1).with_entered(|| {
         effect(move || {
             read.get();
-        })
+        });
     });
 
     entered.borrow_mut().clear();
@@ -56,7 +56,7 @@ fn runtime_recovers_after_panic_in_batch() {
     let read = count.read_only();
     let seen: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
     let seen_c = Rc::clone(&seen);
-    let _e = effect(move || {
+    effect(move || {
         seen_c.borrow_mut().push(read.get());
     });
 
@@ -83,7 +83,7 @@ fn an_open_batch_an_unwind_drops_ends_without_flushing_and_later_writes_flush() 
     let count = signal(0i32);
     let seen = Rc::new(Cell::new(0));
     let into = Rc::clone(&seen);
-    let _e = effect(move || into.set(count.get()));
+    effect(move || into.set(count.get()));
 
     catch_unwind(AssertUnwindSafe(|| {
         let _held = OpenBatch::open();
@@ -110,7 +110,7 @@ fn an_open_batch_flushes_once_when_the_outermost_closes() {
     let count = signal(0i32);
     let runs = Rc::new(Cell::new(0));
     let counted = Rc::clone(&runs);
-    let _e = effect(move || {
+    effect(move || {
         count.get();
         counted.set(counted.get() + 1);
     });
@@ -139,14 +139,14 @@ fn an_effect_reruns_when_a_later_effect_in_the_same_flush_writes_its_source() {
     let read_trigger = trigger.read_only();
     let read_source = source.read_only();
     let seen_c = Rc::clone(&seen);
-    let _reader = effect(move || {
+    effect(move || {
         read_trigger.get();
         seen_c.borrow_mut().push(read_source.get());
     });
 
     let read_trigger = trigger.read_only();
     let write_source = source;
-    let _writer = effect(move || {
+    effect(move || {
         let v = read_trigger.get();
         if v > 0 {
             write_source.set(v);
@@ -207,7 +207,7 @@ fn bool_signal_toggle() {
 fn effect_runs_immediately() {
     let ran = Rc::new(RefCell::new(false));
     let ran_clone = Rc::clone(&ran);
-    let _e = effect(move || {
+    effect(move || {
         *ran_clone.borrow_mut() = true;
     });
     assert!(
@@ -223,7 +223,7 @@ fn effect_reruns_on_signal_change() {
     let log_clone = Rc::clone(&log);
 
     let read = count.read_only();
-    let _e = effect(move || {
+    effect(move || {
         log_clone.borrow_mut().push(read.get());
     });
 
@@ -252,7 +252,7 @@ fn effect_reruns_when_memo_changes() {
     let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
     let log_clone = Rc::clone(&log);
     let doubled_read = doubled;
-    let _e = effect(move || {
+    effect(move || {
         log_clone.borrow_mut().push(doubled_read.get());
     });
     assert_eq!(*log.borrow(), vec![0]);
@@ -271,7 +271,7 @@ fn effect_with_signal_and_memo_sources_reruns_on_memo_change() {
     let log_clone = Rc::clone(&log);
     let unrelated_read = unrelated.read_only();
     let doubled_read = doubled;
-    let _e = effect(move || {
+    effect(move || {
         unrelated_read.get();
         log_clone.borrow_mut().push(doubled_read.get());
     });
@@ -288,7 +288,7 @@ fn effect_reruns_when_memo_changes_inside_batch() {
     let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
     let log_clone = Rc::clone(&log);
     let doubled_read = doubled;
-    let _e = effect(move || {
+    effect(move || {
         log_clone.borrow_mut().push(doubled_read.get());
     });
     batch(|| count.set(3));
@@ -317,7 +317,7 @@ fn batch_fires_effect_once() {
 
     let a_read = a.read_only();
     let b_read = b.read_only();
-    let _e = effect(move || {
+    effect(move || {
         let _ = a_read.get() + b_read.get();
         *runs_clone.borrow_mut() += 1;
     });
@@ -394,7 +394,7 @@ fn a_memo_whose_value_did_not_change_wakes_nobody() {
     let parity = memo(move || read.get() % 2);
     let runs = Rc::new(RefCell::new(0usize));
     let r = runs.clone();
-    let _e = effect(move || {
+    effect(move || {
         parity.get();
         *r.borrow_mut() += 1;
     });

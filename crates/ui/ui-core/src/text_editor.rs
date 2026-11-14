@@ -12,7 +12,7 @@ use platform_core::{
     ConsumedKeys, Event, Ime, Key, KeyboardConvention, ModifiersState, NamedKey, PointerButton,
     PointerSource, TextInput, keyboard_convention,
 };
-use reactive_core::{Effect, RwSignal, effect, signal};
+use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{Color, LineHeight, RectStyle, Semantics, ShapeStyle, TextStyle, TextWrap};
 use ui_tree::{EventResult, RenderNode};
 
@@ -192,9 +192,6 @@ pub(crate) struct Editor {
     pub(crate) on_key: Option<Box<KeyHandler>>,
     pub(crate) tab_key: TabKey,
     pub(crate) underlines: Option<Box<dyn Fn() -> Vec<Underline>>>,
-    _remeasure: Option<Effect>,
-    _blinking: Effect,
-    _follow_caret: Effect,
     _input: InputHandle,
 }
 
@@ -258,9 +255,10 @@ impl Editor {
         };
         // As the kind that takes keys as text, so an app-level shortcut table stands aside while the caret is here.
         focus::register_with_role(id, focus::FocusKind::TextEntry, node, role);
-        let remeasure = (lines == Lines::Multi)
-            .then(|| remeasure(&shape, &style, node, rect, value, caret, composition));
-        let follow_caret = {
+        if lines == Lines::Multi {
+            remeasure(&shape, &style, node, rect, value, caret, composition);
+        }
+        {
             let (style, shape) = (Rc::clone(&style), Rc::clone(&shape));
             effect(move || {
                 follow(
@@ -276,8 +274,8 @@ impl Editor {
                         composition,
                     },
                 )
-            })
-        };
+            });
+        }
         let blink = Blink::new();
         let watching = blink.clone();
         let drawn_caret: Rc<Cell<Option<TextInput>>> = Rc::default();
@@ -287,6 +285,13 @@ impl Editor {
         });
         let mut input = InputHandle::new();
         input.answer(node, rect.read_only());
+        effect(move || {
+            let focused = focus::is_focused(id);
+            watching.follow(focused);
+            if !focused {
+                composition.settle(value, caret);
+            }
+        });
         Ok(Self {
             value,
             home: HomeSurface::here(),
@@ -308,15 +313,6 @@ impl Editor {
             on_key: None,
             tab_key: TabKey::MovesFocus,
             underlines: None,
-            _remeasure: remeasure,
-            _blinking: effect(move || {
-                let focused = focus::is_focused(id);
-                watching.follow(focused);
-                if !focused {
-                    composition.settle(value, caret);
-                }
-            }),
-            _follow_caret: follow_caret,
             _input: input,
         })
     }
@@ -1041,7 +1037,7 @@ fn remeasure(
     value: RwSignal<String>,
     caret: RwSignal<usize>,
     composition: Composition,
-) -> Effect {
+) {
     let (shape, style) = (Rc::clone(shape), Rc::clone(style));
     effect(move || {
         let style = style();
@@ -1059,7 +1055,7 @@ fn remeasure(
         }
         *shape.measured.borrow_mut() = Some((shown, width, style));
         mark_dirty(node).ok();
-    })
+    });
 }
 
 /// What the effect that keeps the caret in view reads.

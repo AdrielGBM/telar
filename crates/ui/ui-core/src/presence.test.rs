@@ -174,10 +174,10 @@ fn exits_in_flight_counts_an_exit_from_its_start_to_its_end() {
     let visible = signal(true);
     let _presence = Presence::new(move || visible.get(), fade(), leaf).unwrap();
     let seen: Rc<RefCell<Vec<usize>>> = Rc::default();
-    let _watch = {
+    {
         let seen = Rc::clone(&seen);
-        effect(move || seen.borrow_mut().push(exits_in_flight().get()))
-    };
+        effect(move || seen.borrow_mut().push(exits_in_flight().get()));
+    }
 
     visible.set(false);
     play(Instant::now(), MS + 50);

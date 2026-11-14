@@ -1242,7 +1242,7 @@ fn a_tracked_display_wakes_its_reader_when_the_node_is_hidden_or_shown() {
     let (node, _) = new_leaf(LayoutStyle::new()).unwrap();
     let seen = Rc::new(Cell::new(None));
     let wrote = seen.clone();
-    let _reader = reactive_core::effect(move || wrote.set(Some(track_display_none(node))));
+    reactive_core::effect(move || wrote.set(Some(track_display_none(node))));
     assert_eq!(seen.get(), Some(false));
 
     set_layout_style(node, LayoutStyle::new().shown(false)).unwrap();
@@ -1412,7 +1412,7 @@ fn a_tracked_parent_is_read_again_whenever_the_node_moves() {
     let seen = Rc::new(Cell::new(None));
     let runs = Rc::new(Cell::new(0));
     let (wrote, ran) = (seen.clone(), runs.clone());
-    let _reader = reactive_core::effect(move || {
+    reactive_core::effect(move || {
         ran.set(ran.get() + 1);
         wrote.set(track_parent(node));
     });

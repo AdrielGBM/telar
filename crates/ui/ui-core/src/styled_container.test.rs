@@ -2122,9 +2122,7 @@ fn pressable_publishes_rect_to_interactive_registry_and_withdraws_on_drop() {
     );
 }
 
-/// The span an effect belonging to a widget wants, and the two failures either side of it: dropped on the floor it runs once and stops, parked somewhere longer-lived it keeps firing at a node that is gone.
-///
-/// The widget used to hold the handle, which is why `keeping` existed. The owner holds it now, so the span is the scope the widget was *built* in rather than the widget value's own Rust lifetime — which is the same span for every widget a view produces, and unlike the handle it does not need a field.
+/// An effect registered beside a widget lives for the scope the widget was built in rather than the widget value's own lifetime: it keeps running after that scope closes, and stops when the scope is disposed, so it neither runs once and stops nor keeps firing at a node that is gone.
 #[test]
 fn an_effect_lives_exactly_as_long_as_the_scope_that_built_it() {
     crate::reset_layout_runtime();

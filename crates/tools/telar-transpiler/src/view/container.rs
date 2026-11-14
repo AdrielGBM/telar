@@ -319,7 +319,7 @@ impl ViewGen<'_> {
             "new"
         };
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
-        // `track_rect:$sig` needs the node, which exists only once the widget is built, so the effect is chained onto it with `keeping` rather than anything longer-lived.
+        // `track_rect:$sig` needs the node, which exists only once the widget is built, so its effect is emitted after the constructor.
         let track = self.track_rect_tail(el, &inner_pad);
         let bind = if track.is_empty() {
             ""
@@ -503,7 +503,7 @@ impl ViewGen<'_> {
 
     /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate` in degrees, `scale`/`scale_x`/`scale_y`, `translate_x`/`translate_y`), or an empty string when there are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal` reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure; every value is cast to `f32` so integer and float literals both type-check. `track_rect:$sig` — mirror this element's laid-out rect into `sig`, so a sibling can be positioned or painted from where this one ended up.
     ///
-    /// `track_layout` hands back the node's own rect signal; this copies it into the author's signal, which is what makes the value reachable from the rest of their `[view]` and `[logic]`. The mirroring effect is kept on the widget, so it stops when the widget goes rather than firing at a node that is gone.
+    /// `track_layout` hands back the node's own rect signal; this copies it into the author's signal, which is what makes the value reachable from the rest of their `[view]` and `[logic]`. The mirroring effect belongs to the owner the view is built in, so it stops when that view is disposed rather than firing at a node that is gone.
     ///
     /// The copy is guarded, which is the difference between a rect somebody can build on and one nothing can afford to read: a signal notifies on every write, so an unguarded mirror wakes each of its readers on every frame the layout runs, whether or not the rectangle moved.
     fn track_rect_tail(&self, el: &Element, pad: &str) -> String {

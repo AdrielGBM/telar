@@ -4,9 +4,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Component, Container, DismissRegistration, Effect, Event, EventResult, LayoutError, LayoutItem,
-    LayoutStyle, NodeId, Overlay, ReactiveList, Rect, RenderNode, RwSignal, Size, box_item,
-    children, effect, signal,
+    Container, DismissRegistration, LayoutError, LayoutItem, LayoutStyle, NodeId, Overlay,
+    ReactiveList, Rect, RwSignal, Size, box_item, children, effect, signal,
 };
 
 /// The dismiss handler the helper hands to each widget's scrim (and, for `modal`, its Close): shared so both affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.
@@ -42,31 +41,8 @@ impl Room {
     }
 }
 
-/// Carries the overlay subtree's effects alongside it, so the dismiss-stack registration and the focus handover live exactly as long as the overlay is mounted and are released with it.
-struct Dismissible {
-    inner: Box<dyn LayoutItem>,
-    _registration: Effect,
-    _focus: Effect,
-}
-
-impl Component for Dismissible {
-    fn view(&self) -> RenderNode {
-        self.inner.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        self.inner.on_event(event)
-    }
-}
-
-impl LayoutItem for Dismissible {
-    fn layout_node(&self) -> NodeId {
-        self.inner.layout_node()
-    }
-}
-
 /// Keeps the dismiss stack in step with `open`: on the transition into open the overlay becomes the stack's top, and on the way out it withdraws — including when it was closed by its own Close button rather than by a dismissal, which is why the entry is tracked by id instead of assumed to still be on top.
-fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: DismissFn) -> Effect {
+fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: DismissFn) {
     let registered: Cell<Option<DismissRegistration>> = Cell::new(None);
     effect(move || {
         if open.get() {
@@ -77,13 +53,13 @@ fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: DismissFn) -
         } else {
             drop(registered.take());
         }
-    })
+    });
 }
 
 /// Hands the keyboard to the dialog on open and gives it back on close.
 ///
 /// Both halves matter and only together: now that a modal traps focus, opening one without moving the keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on a widget the user can no longer see. Given back only from inside the dialog or from nowhere, so a dialog whose action moved the keyboard elsewhere leaves it there, and only to a widget that survived the dialog.
-fn track_focus_handover(open: RwSignal<bool>, content: telar::NodeId) -> Effect {
+fn track_focus_handover(open: RwSignal<bool>, content: telar::NodeId) {
     let previous: Cell<Option<telar::focus::Remembered>> = Cell::new(None);
     let was_open = Cell::new(false);
     effect(move || {
@@ -100,7 +76,7 @@ fn track_focus_handover(open: RwSignal<bool>, content: telar::NodeId) -> Effect 
         {
             back.restore();
         }
-    })
+    });
 }
 
 /// A 0-size collapsed node: the unbound/never-opened placeholder that registers no overlay and blocks nothing.
@@ -154,13 +130,9 @@ pub(crate) fn scrim_overlay(
             let open = open;
             let overlay =
                 Overlay::toggleable(LayoutStyle::column(), children![inner], move || open.get())?;
-            let registration = track_dismissible(open, overlay.layout_node(), dismiss.clone());
-            let focus_handover = track_focus_handover(open, overlay.content_node());
-            Ok(box_item(Dismissible {
-                inner: box_item(overlay),
-                _registration: registration,
-                _focus: focus_handover,
-            }))
+            track_dismissible(open, overlay.layout_node(), dismiss.clone());
+            track_focus_handover(open, overlay.content_node());
+            Ok(box_item(overlay))
         },
         0.0,
     )?;

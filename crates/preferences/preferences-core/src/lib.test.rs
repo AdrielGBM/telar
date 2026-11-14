@@ -26,20 +26,20 @@ fn a_snapshot_round_trips() {
     assert_eq!(system_preferences(), SystemPreferences::default());
 }
 
-fn count_runs(read: impl Fn() + 'static) -> (Rc<Cell<u32>>, reactive_core::Effect) {
+fn count_runs(read: impl Fn() + 'static) -> Rc<Cell<u32>> {
     let runs = Rc::new(Cell::new(0));
     let counter = runs.clone();
-    let effect = reactive_core::effect(move || {
+    reactive_core::effect(move || {
         read();
         counter.set(counter.get() + 1);
     });
-    (runs, effect)
+    runs
 }
 
 #[test]
 fn a_reader_of_one_field_ignores_the_others() {
     set_system_preferences(dark_spanish());
-    let (runs, _effect) = count_runs(|| {
+    let runs = count_runs(|| {
         use_reduced_motion();
     });
     assert_eq!(runs.get(), 1);
@@ -61,7 +61,7 @@ fn a_reader_of_one_field_ignores_the_others() {
 #[test]
 fn an_identical_snapshot_notifies_nobody() {
     set_system_preferences(dark_spanish());
-    let (runs, _effect) = count_runs(|| {
+    let runs = count_runs(|| {
         use_system_preferences();
     });
     set_system_preferences(dark_spanish());
@@ -71,7 +71,7 @@ fn an_identical_snapshot_notifies_nobody() {
 #[test]
 fn a_whole_snapshot_is_one_notification() {
     set_system_preferences(SystemPreferences::default());
-    let (runs, _effect) = count_runs(|| {
+    let runs = count_runs(|| {
         use_system_preferences();
     });
     set_system_preferences(dark_spanish());
@@ -84,7 +84,7 @@ fn a_whole_snapshot_is_one_notification() {
 #[test]
 fn the_frame_clock_read_answers_without_subscribing() {
     set_system_preferences(SystemPreferences::default());
-    let (runs, _effect) = count_runs(|| {
+    let runs = count_runs(|| {
         reduced_motion();
     });
     set_system_preferences(SystemPreferences {
@@ -148,7 +148,7 @@ fn the_system_snapshot_ignores_the_override() {
 #[test]
 fn a_reader_of_reduced_motion_hears_the_override() {
     set_system_preferences(reduced(Some(false)));
-    let (runs, _effect) = count_runs(|| {
+    let runs = count_runs(|| {
         use_reduced_motion();
     });
     set_reduced_motion_override(Some(true));
@@ -160,7 +160,7 @@ fn a_reader_of_reduced_motion_hears_the_override() {
 #[test]
 fn a_forced_value_is_not_disturbed_by_the_system() {
     set_reduced_motion_override(Some(true));
-    let (runs, _effect) = count_runs(|| {
+    let runs = count_runs(|| {
         use_reduced_motion();
     });
     set_system_preferences(reduced(Some(false)));
@@ -230,7 +230,7 @@ fn a_surface_high_contrast_shadows_the_application_and_the_system() {
 fn a_reader_of_high_contrast_hears_every_layer() {
     set_system_preferences(contrast(Some(false)));
     set_high_contrast_override(None);
-    let (runs, _effect) = count_runs(|| {
+    let runs = count_runs(|| {
         use_high_contrast();
     });
     set_system_preferences(contrast(Some(true)));

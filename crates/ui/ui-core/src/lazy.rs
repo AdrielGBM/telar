@@ -6,7 +6,7 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use reactive_core::{Effect, RwSignal, effect, signal};
+use reactive_core::{RwSignal, effect, signal};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{
@@ -36,7 +36,6 @@ pub struct Lazy {
     visible: Rc<dyn Fn() -> bool>,
     /// Bumped when the subtree is finally built, so `view()` (which reads it) re-emits with real children.
     version: RwSignal<u64>,
-    _effect: Effect,
 }
 
 impl Lazy {
@@ -60,7 +59,7 @@ impl Lazy {
         let eff_version = version;
         let eff_visible = Rc::clone(&visible);
         // Runs once now, which is what makes an initially-false block cost nothing, and again on every change.
-        let _effect = effect(move || {
+        effect(move || {
             let show = eff_visible();
             if show && realize(&eff_state) {
                 eff_version.update(|v| *v = v.wrapping_add(1));
@@ -75,7 +74,6 @@ impl Lazy {
             state,
             visible,
             version,
-            _effect,
         })
     }
 

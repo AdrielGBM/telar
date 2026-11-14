@@ -153,7 +153,7 @@ fn a_callback_may_schedule_another() {
 fn callbacks_run_in_one_batch() {
     let value = signal(0);
     let runs = Rc::new(Cell::new(0));
-    let _effect = effect({
+    effect({
         let runs = runs.clone();
         move || {
             value.get();

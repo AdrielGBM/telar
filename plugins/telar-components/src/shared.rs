@@ -293,14 +293,11 @@ pub(crate) fn control_text_size(size: ControlSize, node: telar::NodeId, ratio: f
 }
 
 /// Keeps `node` in layout only while `visible` holds, toggling its display rather than replacing its style, so a text leaf keeps the stretch it is optically centred by.
-pub(crate) fn displayed_while(
-    node: telar::NodeId,
-    visible: impl Fn() -> bool + 'static,
-) -> telar::Effect {
+pub(crate) fn displayed_while(node: telar::NodeId, visible: impl Fn() -> bool + 'static) {
     telar::effect(move || {
         telar::set_display(node, visible());
         let _ = telar::mark_dirty(node);
-    })
+    });
 }
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`. `color()` is evaluated once. Collapses the per-widget accent/track/surface/bubble resolvers into one shape.

@@ -10,7 +10,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use motion_core::Curve;
 use platform_core::Event;
-use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
+use reactive_core::{ReadSignal, RwSignal, effect, signal};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{new_container, set_children, track_layout};
@@ -55,9 +55,6 @@ pub struct ReactiveList {
     state: Rc<RefCell<ListState>>,
     // Bumped on every reconcile, so `view()` re-emits the new child group.
     version: RwSignal<u64>,
-    // Keeps the reconcile effect alive for the widget's lifetime.
-    _effect: Effect,
-    _exits: Option<Effect>,
 }
 
 impl ReactiveList {
@@ -70,7 +67,7 @@ impl ReactiveList {
     }
 
     /// Plays `transition` as rows arrive and leave: a removed row stays mounted, taking no input, until its exit finishes, and a key that returns mid-exit turns back as the same row.
-    pub fn with_transition(mut self, transition: Transition) -> Self {
+    pub fn with_transition(self, transition: Transition) -> Self {
         let started = signal(0u64);
         self.state.borrow_mut().exits = Some(ListExits {
             transition,
@@ -79,7 +76,7 @@ impl ReactiveList {
         let watched = Rc::clone(&self.state);
         let removed = Rc::clone(&self.state);
         let version = self.version;
-        self._exits = Some(watch_exits(
+        watch_exits(
             move || {
                 started.get();
                 let st = watched.borrow();
@@ -99,7 +96,7 @@ impl ReactiveList {
                     version.update(|v| *v = v.wrapping_add(1));
                 }
             },
-        ));
+        );
         self
     }
 
@@ -270,7 +267,7 @@ impl ReactiveList {
         let eff_state = Rc::clone(&state);
         let eff_version = version;
         let serial = Serial::new();
-        let _effect = effect(move || {
+        effect(move || {
             let items = source();
             serial.run(items, |items| {
                 reconcile(&eff_state, items, &keyer, &build, &sync)
@@ -283,8 +280,6 @@ impl ReactiveList {
             rect,
             state,
             version,
-            _effect,
-            _exits: None,
         })
     }
 }

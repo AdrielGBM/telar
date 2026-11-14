@@ -120,7 +120,7 @@ fn use_mode_is_reactive() {
     reset();
     let seen = Rc::new(RefCell::new(Vec::<Option<String>>::new()));
     let s = seen.clone();
-    let _e = reactive_core::effect(move || s.borrow_mut().push(use_mode()));
+    reactive_core::effect(move || s.borrow_mut().push(use_mode()));
     set_mode("a");
     set_mode("b");
     let got = seen.borrow().clone();
@@ -156,7 +156,7 @@ fn the_resolved_scheme_follows_the_preference_and_takes_an_unknown_system_as_lig
     reset();
     let seen = Rc::new(RefCell::new(Vec::new()));
     let s = seen.clone();
-    let _e = reactive_core::effect(move || s.borrow_mut().push(use_resolved_scheme()));
+    reactive_core::effect(move || s.borrow_mut().push(use_resolved_scheme()));
     scheme(Some(ColorScheme::Dark));
     set_scheme_preference(SchemePreference::Light);
     set_scheme_preference(SchemePreference::System);

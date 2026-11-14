@@ -66,10 +66,9 @@ impl LayoutItem for DropPage {
 
 impl NavPage for DropPage {}
 
-/// Holds an effect for as long as the page lives, so dropping the page must release it.
+/// A page built beside an effect, which belongs to the page's owner, so tearing the page down must release it.
 struct EffectPage {
     node: NodeId,
-    _held: Option<telar::Effect>,
 }
 
 impl Component for EffectPage {
@@ -390,14 +389,14 @@ fn transient_teardown_releases_the_pages_effects() {
         move |route: &u8| {
             let (node, _rect) = new_leaf(LayoutStyle::new())?;
             // Only the pushed page owns an effect, so the counter tracks exactly that page's lifetime.
-            let held = (*route == 1).then(|| {
+            if *route == 1 {
                 let (source, runs) = (source, runs.clone());
                 effect(move || {
                     source.get();
                     *runs.borrow_mut() += 1;
-                })
-            });
-            Ok(Box::new(EffectPage { node, _held: held }) as Box<dyn NavPage>)
+                });
+            }
+            Ok(Box::new(EffectPage { node }) as Box<dyn NavPage>)
         }
     };
     let mut host = NavHost::new(nav, factory).unwrap();
@@ -452,17 +451,17 @@ fn replacing_a_page_keeps_its_effects(nesting: Nesting) {
         move |route: &u8| {
             let (node, _rect) = new_leaf(LayoutStyle::new())?;
             // Every page owns one, so what the counter tracks is whichever page is up.
-            let held = {
+            {
                 let (source, runs) = (source, runs.clone());
                 let route = *route;
-                Some(effect(move || {
+                effect(move || {
                     source.get();
                     if route == 2 {
                         *runs.borrow_mut() += 1;
                     }
-                }))
-            };
-            Ok(Box::new(EffectPage { node, _held: held }) as Box<dyn NavPage>)
+                });
+            }
+            Ok(Box::new(EffectPage { node }) as Box<dyn NavPage>)
         }
     };
     let mut host = match nesting {
@@ -584,11 +583,11 @@ fn failing_factory(
     move |route: &u8| {
         if *route == 0 {
             let (node, _rect) = new_leaf(LayoutStyle::new())?;
-            return Ok(Box::new(EffectPage { node, _held: None }) as Box<dyn NavPage>);
+            return Ok(Box::new(EffectPage { node }) as Box<dyn NavPage>);
         }
         *builds.borrow_mut() += 1;
         let runs = runs.clone();
-        let _half_built = effect(move || {
+        effect(move || {
             source.get();
             *runs.borrow_mut() += 1;
         });

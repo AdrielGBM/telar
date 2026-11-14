@@ -261,7 +261,7 @@ pub fn use_resolved_scheme() -> ColorScheme {
 }
 
 reactive_core::dropless_thread_local! {
-    // An `Effect` handle is inert, so the effect gets a scope of its own that a re-call disposes; otherwise two followers would race to set the mode.
+    // An effect stops only with its owner, so it gets a scope of its own that a re-call disposes; otherwise two followers would race to set the mode.
     static FOLLOW: Cell<Option<reactive_core::OwnerId>> = const { Cell::new(None) };
 }
 

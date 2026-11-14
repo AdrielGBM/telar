@@ -21,7 +21,7 @@ fn restart_with_subscribed_effect_does_not_reentrantly_panic() {
     let seen = Rc::new(Cell::new(-1.0f32));
     let seen_c = Rc::clone(&seen);
     let kf_read = kf.clone();
-    let _e = reactive_core::effect(move || seen_c.set(kf_read.get()));
+    reactive_core::effect(move || seen_c.set(kf_read.get()));
     tick(base);
     tick(base + Duration::from_millis(200));
     assert!(kf.is_finished(), "200ms is past the only 100ms step");

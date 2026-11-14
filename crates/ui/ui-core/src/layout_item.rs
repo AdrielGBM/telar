@@ -529,12 +529,6 @@ impl Component for ClippedItem {
     }
 }
 
-/// Wraps a widget so that dropping the widget drops a set of [`Effect`](reactive_core::Effect)s with it.
-///
-/// An `Effect` deregisters on drop, so one bound to a `let` inside a function that returns a widget stops the moment that function returns — the closure runs exactly once and then never again, which reads as a working binding right up until the value it derives is expected to move. A widget that owns its effects (`Container::keeping`) solves that for itself, and this solves it for anything else: a leaf, a boxed component, whatever a `.rsx` happens to have at its root.
-///
-/// Unrelated to [`kept`](crate::kept), which keeps a *value* across rebuilds of a surface. This keeps a subscription alive for as long as a widget lives.
-///
 impl<T: LeafWidget + Component> LayoutItem for T {
     fn layout_node(&self) -> NodeId {
         self.layout_leaf().node

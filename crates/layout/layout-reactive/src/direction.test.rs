@@ -5,7 +5,7 @@ fn direction_is_reactive_and_starts_left_to_right() {
     set_direction(Direction::Ltr);
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let s = seen.clone();
-    let _e = reactive_core::effect(move || s.borrow_mut().push(use_direction()));
+    reactive_core::effect(move || s.borrow_mut().push(use_direction()));
     set_direction(Direction::Rtl);
     set_direction(Direction::Rtl);
     assert_eq!(
@@ -21,9 +21,9 @@ fn a_surface_override_shadows_the_thread_direction_until_cleared() {
     set_direction(Direction::Ltr);
     let surface = DirectionContext::new();
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-    let _e = surface.with_entered(|| {
+    surface.with_entered(|| {
         let s = seen.clone();
-        reactive_core::effect(move || s.borrow_mut().push(use_direction()))
+        reactive_core::effect(move || s.borrow_mut().push(use_direction()));
     });
     surface.with_entered(|| {
         set_surface_direction(Some(Direction::Rtl));

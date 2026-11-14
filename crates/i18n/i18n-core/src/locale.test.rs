@@ -9,7 +9,7 @@ fn use_locale_is_reactive() {
     reset();
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<Option<String>>::new()));
     let s = seen.clone();
-    let _e = reactive_core::effect(move || s.borrow_mut().push(use_locale()));
+    reactive_core::effect(move || s.borrow_mut().push(use_locale()));
     set_locale("en");
     set_locale("es");
     set_locale("es");

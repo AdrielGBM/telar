@@ -4,8 +4,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::{
-    Component, Effect, Event, EventResult, LayoutError, LayoutItem, LayoutLeaf, LayoutStyle,
-    NodeId, Rect, RenderNode, TextStyle, effect, line_box, mark_dirty, measure_text,
+    Component, Event, EventResult, LayoutError, LayoutItem, LayoutLeaf, LayoutStyle, NodeId, Rect,
+    RenderNode, TextStyle, effect, line_box, mark_dirty, measure_text,
 };
 
 /// A width so large the shaper never soft-wraps a line number.
@@ -17,8 +17,6 @@ pub struct LineGutter {
     line_count: Rc<dyn Fn() -> usize>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
-    // Re-measures when the numbers or anything in the style that takes room changes, so the gutter tracks the editor.
-    _remeasure: Effect,
 }
 
 impl LineGutter {
@@ -51,7 +49,7 @@ impl LineGutter {
             let width = measure_text(&widest.to_string(), None, NO_WRAP_WIDTH, &s).0;
             (width, n as f32 * line_box(&s))
         })?;
-        let remeasure = {
+        {
             let first_line = Rc::clone(&first_line);
             let line_count = Rc::clone(&line_count);
             let style = Rc::clone(&style);
@@ -70,14 +68,13 @@ impl LineGutter {
                 }
                 *measured.borrow_mut() = Some(next);
                 mark_dirty(node).ok();
-            })
-        };
+            });
+        }
         Ok(Self {
             first_line,
             line_count,
             style,
             leaf,
-            _remeasure: remeasure,
         })
     }
 }

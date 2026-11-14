@@ -7,7 +7,7 @@ use geometry_core::Point;
 use layout_core::NodeId;
 use motion_core::{Animated, Curve, Lerp};
 use platform_core::Event;
-use reactive_core::{Effect, effect, on_cleanup};
+use reactive_core::{effect, on_cleanup};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{remove_node, track_layout};
@@ -17,7 +17,6 @@ use crate::layout_item::{Child, LayoutItem, make_child};
 pub(crate) struct Flip {
     offset: Animated<Point>,
     out_of_flow: Rc<Cell<bool>>,
-    _watch: Effect,
     _input: InputHandle,
 }
 
@@ -28,7 +27,7 @@ impl Flip {
         let out_of_flow = Rc::new(Cell::new(false));
         let held_out = Rc::clone(&out_of_flow);
         let last = Cell::new(None);
-        let _watch = effect(move || {
+        effect(move || {
             if !offset.is_alive() {
                 return;
             }
@@ -64,7 +63,6 @@ impl Flip {
         Self {
             offset,
             out_of_flow,
-            _watch,
             _input: input,
         }
     }

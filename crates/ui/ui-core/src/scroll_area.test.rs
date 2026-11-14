@@ -165,7 +165,7 @@ fn a_viewport_command_run_from_an_effect_does_not_undo_the_users_own_scrolling()
     let watched = page.read_only();
     let commanded = viewport.clone();
     let followed = watched;
-    let _follow = effect(move || {
+    effect(move || {
         followed.get();
         commanded.scroll_to_top();
     });
@@ -187,7 +187,7 @@ fn a_viewport_command_run_from_an_effect_does_not_undo_the_users_own_scrolling()
     );
 
     let revealing = viewport.clone();
-    let _follow_row = effect(move || {
+    effect(move || {
         watched.get();
         revealing.reveal(row, 4.0);
     });

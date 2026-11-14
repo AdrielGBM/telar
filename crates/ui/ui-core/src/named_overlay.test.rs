@@ -48,7 +48,7 @@ fn the_state_is_reactive() {
     reset();
     let seen = Rc::new(RefCell::new(Vec::new()));
     let s = seen.clone();
-    let _e = reactive_core::effect(move || s.borrow_mut().push(state("banner").get()));
+    reactive_core::effect(move || s.borrow_mut().push(state("banner").get()));
     open("banner");
     close("banner");
     assert_eq!(*seen.borrow(), vec![false, true, false]);

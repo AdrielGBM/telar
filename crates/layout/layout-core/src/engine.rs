@@ -311,7 +311,7 @@ impl LayoutEngine {
 
     /// An error, rather than a panic, for a node that has been freed.
     ///
-    /// Every mutator goes through this because a widget can legitimately outlive its node: a `Segment` holds the widget so a re-render mid-dispatch can still flatten it, so an effect the widget owns may fire once after the list that held it dropped the node. Taffy indexes its slot map directly and would panic on that id — and these all return `Result` already, so the honest answer to "attach a node that is gone" is the error the signature promises. The read-only queries take the same view (`is_size_auto` and friends already fall back rather than fail).
+    /// Every mutator goes through this because a widget can legitimately outlive its node: a `Segment` holds the widget so a re-render mid-dispatch can still flatten it, so an effect registered with the widget may fire once after the list that held it dropped the node. Taffy indexes its slot map directly and would panic on that id — and these all return `Result` already, so the honest answer to "attach a node that is gone" is the error the signature promises. The read-only queries take the same view (`is_size_auto` and friends already fall back rather than fail).
     fn alive(&self, node: NodeId) -> Result<(), LayoutError> {
         if self.live.contains(&node) {
             Ok(())

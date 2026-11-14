@@ -6,7 +6,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use layout_core::NodeId;
-use reactive_core::{Effect, RwSignal, Transaction, effect, on_cleanup, signal};
+use reactive_core::{RwSignal, Transaction, effect, on_cleanup, signal};
 
 use crate::surface_context::HomeSurface;
 
@@ -193,10 +193,7 @@ fn shown_depth(hidden: impl Fn(NodeId) -> bool) -> usize {
 }
 
 /// Puts an overlay that edits a value on the dismiss stack with the one commit convention every popover shares: opening begins `transaction`, Escape/Back reverts and closes, and every other way of closing (Enter, an outside click, a Done button) closes and commits; joining a `transaction` already open elsewhere instead leaves closing to decide nothing. Call it under the owner the overlay lives in, in place of [`DismissRegistration`].
-pub fn register_transaction<T: Clone + 'static>(
-    open: RwSignal<bool>,
-    transaction: Transaction<T>,
-) -> Effect {
+pub fn register_transaction<T: Clone + 'static>(open: RwSignal<bool>, transaction: Transaction<T>) {
     register_transaction_in(None, open, transaction)
 }
 
@@ -205,7 +202,7 @@ pub fn register_transaction_within<T: Clone + 'static>(
     within: NodeId,
     open: RwSignal<bool>,
     transaction: Transaction<T>,
-) -> Effect {
+) {
     register_transaction_in(Some(within), open, transaction)
 }
 
@@ -213,7 +210,7 @@ fn register_transaction_in<T: Clone + 'static>(
     within: Option<NodeId>,
     open: RwSignal<bool>,
     transaction: Transaction<T>,
-) -> Effect {
+) {
     let holding = Rc::new(Cell::new(false));
     {
         let holding = holding.clone();
@@ -247,7 +244,7 @@ fn register_transaction_in<T: Clone + 'static>(
                 let _ = transaction.commit();
             }
         }
-    })
+    });
 }
 
 #[cfg(test)]

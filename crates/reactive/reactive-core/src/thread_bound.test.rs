@@ -3,12 +3,11 @@
 /// The handles are still `Copy` whatever they hold, which also proves the paths the compile-fail blocks below use resolve.
 ///
 /// ```
-/// use telar_reactive_core::{Effect, Memo, OwnerId, ReadSignal, RwSignal, SurfaceHandle};
+/// use telar_reactive_core::{Memo, OwnerId, ReadSignal, RwSignal, SurfaceHandle};
 /// fn assert_copy<T: Copy>() {}
 /// assert_copy::<ReadSignal<String>>();
 /// assert_copy::<RwSignal<String>>();
 /// assert_copy::<Memo<String>>();
-/// assert_copy::<Effect>();
 /// assert_copy::<OwnerId>();
 /// assert_copy::<SurfaceHandle>();
 /// ```
@@ -57,17 +56,6 @@ pub struct RwSignalIsThreadBound;
 /// assert_sync::<telar_reactive_core::Memo<i32>>();
 /// ```
 pub struct MemoIsThreadBound;
-
-/// ```compile_fail,E0277
-/// fn assert_send<T: Send>() {}
-/// assert_send::<telar_reactive_core::Effect>();
-/// ```
-///
-/// ```compile_fail,E0277
-/// fn assert_sync<T: Sync>() {}
-/// assert_sync::<telar_reactive_core::Effect>();
-/// ```
-pub struct EffectIsThreadBound;
 
 /// ```compile_fail,E0277
 /// fn assert_send<T: Send>() {}

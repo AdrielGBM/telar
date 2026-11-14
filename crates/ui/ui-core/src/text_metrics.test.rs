@@ -18,7 +18,7 @@ fn a_face_that_lands_runs_whatever_measured_text_again() {
     ]));
     let widths = Rc::new(RefCell::new(Vec::new()));
     let seen = Rc::clone(&widths);
-    let _measuring = effect(move || {
+    effect(move || {
         use_text_metrics_generation();
         seen.borrow_mut()
             .push(measure_text("Wide Words", None, 1.0e6, &style).0);

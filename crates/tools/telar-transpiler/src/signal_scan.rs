@@ -119,45 +119,6 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
     signals
 }
 
-/// Every identifier the logic zone binds to an `effect(…)`.
-///
-/// An `Effect` deregisters on drop, so one bound to a `let` here would stop the moment the component function returns — running exactly once and never again, with nothing to see in the source. The view generator hands these to the root widget so they live as long as the tree they belong to. An `effect(…)` that is never bound at all is already a loud `must_use` warning and needs nothing from this. Whether `expr` opens with a call to `effect`, however it is spelled — bare, `telar::effect`, or through any other path. The bare form was the only one recognised, so `let e = telar::effect(…)` — the spelling an application reaches for when it is not inside a `use telar::*` — was silently not kept alive.
-fn opens_an_effect(expr: &str) -> bool {
-    let expr = expr.trim_start();
-    let Some(head) = expr.split('(').next() else {
-        return false;
-    };
-    head.rsplit("::").next().map(str::trim) == Some("effect")
-}
-
-/// The `[logic]` bindings that hold an `Effect`, so the view can keep them alive past the function that made them. A handle that drops deregisters its effect, which runs once and then stops.
-pub fn scan_effects(logic_source: &str) -> Vec<String> {
-    let mut effects = Vec::new();
-    for raw in logic_source.lines() {
-        let Some(rest) = raw.trim().strip_prefix("let ") else {
-            continue;
-        };
-        let Some((binding, expr)) = rest.split_once('=') else {
-            continue;
-        };
-        if !opens_an_effect(expr) {
-            continue;
-        }
-        let name = binding
-            .trim()
-            .strip_prefix("mut ")
-            .unwrap_or(binding.trim())
-            .split(':')
-            .next()
-            .unwrap_or("")
-            .trim();
-        if is_ident(name) && !effects.contains(&name.to_string()) {
-            effects.push(name.to_string());
-        }
-    }
-    effects
-}
-
 /// Rewrites a `let NAME = signal(EXPR)` logic line into the keyed hot-reload form `let NAME = telar::hot_signal_auto!("<fn_name>::<NAME>", EXPR)` so `cargo telar dev` can snapshot and restore the value across dylib swaps. Returns `None` when the line is not a signal binding (memos are derived state and recompute from their sources, so they are left untouched).
 ///
 /// A type the author wrote — `let open: RwSignal<Option<Open>> = signal(None)` or `signal::<Option<Open>>(None)` — goes into the macro as `type …`. The macro chooses between a serde-backed and a plain signal by probing the initial value's type, and `None` alone is an `Option<_>` that the probe resolves to serde before the annotation ever reaches it.
@@ -229,7 +190,3 @@ fn signal_call(expr: &str) -> Option<(Option<&str>, &str)> {
 #[cfg(test)]
 #[path = "signal_scan.test.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "signal_scan.effect_scan.test.rs"]
-mod effect_scan_tests;

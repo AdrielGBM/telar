@@ -61,7 +61,7 @@ pub use registry::{
     tag_attr_keys, tag_attr_specs, value_kind,
 };
 #[cfg(feature = "transpile")]
-pub use signal_scan::{SignalInfo, scan_effects, scan_locals, scan_signals};
+pub use signal_scan::{SignalInfo, scan_locals, scan_signals};
 #[cfg(feature = "transpile")]
 pub use source_map::{ExprSpan, RsxSpan, SourceMap, nth_line};
 #[cfg(feature = "transpile")]

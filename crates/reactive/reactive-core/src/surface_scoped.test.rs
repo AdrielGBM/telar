@@ -17,23 +17,23 @@ crate::surface_scoped! {
     context NameContext;
 }
 
-fn record<T: 'static>(read: impl Fn() -> T + 'static) -> (Rc<RefCell<Vec<T>>>, crate::Effect) {
+fn record<T: 'static>(read: impl Fn() -> T + 'static) -> Rc<RefCell<Vec<T>>> {
     let seen = Rc::new(RefCell::new(Vec::new()));
     let sink = seen.clone();
-    let effect = crate::effect(move || sink.borrow_mut().push(read()));
-    (seen, effect)
+    crate::effect(move || sink.borrow_mut().push(read()));
+    seen
 }
 
 #[test]
 fn setting_the_value_already_there_reruns_nobody() {
     size().set(Size::Small);
-    let (seen, _effect) = record(|| size().get());
+    let seen = record(|| size().get());
     size().set(Size::Large);
     size().set(Size::Large);
     assert_eq!(*seen.borrow(), vec![Size::Small, Size::Large]);
 
     let surface = SizeContext::new();
-    let (surface_seen, _surface_effect) = surface.with_entered(|| record(|| size().surface()));
+    let surface_seen = surface.with_entered(|| record(|| size().surface()));
     surface.with_entered(|| {
         size().set_surface(Some(&Size::Small));
         size().set_surface(Some(&Size::Small));
@@ -46,7 +46,7 @@ fn setting_the_value_already_there_reruns_nobody() {
 fn an_override_shadows_the_thread_value_on_its_surface_alone() {
     size().set(Size::Small);
     let surface = SizeContext::new();
-    let (seen, _effect) = surface.with_entered(|| record(|| size().get()));
+    let seen = surface.with_entered(|| record(|| size().get()));
     surface.with_entered(|| {
         size().set_surface(Some(&Size::Large));
         assert_eq!(size().peek(), Size::Large);
@@ -87,7 +87,7 @@ fn an_override_shadows_the_thread_value_on_its_surface_alone() {
 fn an_owned_value_overrides_borrowed_and_resolves_into_the_threads_type() {
     name().set(None);
     let surface = NameContext::new();
-    let (seen, _effect) = surface.with_entered(|| record(|| name().get()));
+    let seen = surface.with_entered(|| record(|| name().get()));
     surface.with_entered(|| {
         name().set_surface(Some("surface"));
         name().set_surface(Some("surface"));

@@ -11,7 +11,7 @@ use motion_core::{Animated, Easing, tween};
 use platform_core::{
     ConsumedKeys, Event, Key, ModifiersState, NamedKey, PointerButton, ScrollDelta,
 };
-use reactive_core::{Effect, ReadSignal, RwSignal, Timer, effect, run_after, signal};
+use reactive_core::{ReadSignal, RwSignal, Timer, effect, run_after, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
@@ -392,8 +392,6 @@ pub(crate) struct ScrollCore {
     /// Whether a vertical turn of the wheel moves the content sideways while it has nowhere to go vertically. See [`LayoutScrollArea::wheel_sideways`].
     wheel_sideways: bool,
     bars: BarPresence,
-    /// Wakes [`bars`](Self::bars) whenever the offset moves, however it was moved.
-    _bars_follow: Effect,
     lane_hovered: bool,
 }
 
@@ -441,7 +439,7 @@ impl ScrollCore {
         let bars = BarPresence::new();
         let woken = bars.clone();
         let placed = Cell::new(false);
-        let bars_follow = effect(move || {
+        effect(move || {
             scroll_x.get();
             scroll_y.get();
             if placed.replace(true) {
@@ -465,7 +463,6 @@ impl ScrollCore {
             primary: false,
             wheel_sideways: false,
             bars,
-            _bars_follow: bars_follow,
             lane_hovered: false,
         }
     }
@@ -983,10 +980,6 @@ pub struct LayoutScrollArea {
     core: ScrollCore,
     // Needed because the content is placed as a root of its own, with no parent link to the viewport.
     _input: InputHandle,
-    // Keeps the offset inside the range the content and viewport currently allow.
-    _clamp_effect: Effect,
-    // Tells the content's sticky boxes what part of it the viewport shows, so a scroll moves them without a relayout.
-    _sticky_effect: Effect,
     arrival: RwSignal<Insets>,
     declared_arrival: RwSignal<Option<ArrivalRule>>,
     follows_arrival: bool,
@@ -1001,7 +994,6 @@ struct Host {
     presented: bool,
     ring: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     keys: Option<KeyRule>,
-    _focus_effect: Option<Effect>,
 }
 
 /// What a control scroll area does with a key pressed while it holds focus: whether it took it.
@@ -1085,7 +1077,7 @@ impl LayoutScrollArea {
         let viewport = leaf.rect;
 
         // Both things deciding where the end is move underneath the offset: the content's height and the viewport's. Clamped from an effect because neither is an input event — left to the next wheel tick, the transform pushes the content out of the clip and the viewport shows nothing until it is touched.
-        let clamp_effect = {
+        {
             let viewport = leaf.rect;
             let content_rect = content_rect_signal;
             let (scroll_x, scroll_y) = (scroll_x, scroll_y);
@@ -1108,11 +1100,11 @@ impl LayoutScrollArea {
                 if let Some((x, y)) = commanded.get() {
                     commanded.set(Some((x.min(max_x), y.min(max_y))));
                 }
-            })
-        };
+            });
+        }
 
         // The snapped offset, as the content is drawn at, so a sticky box on a quantised surface is pinned exactly where the viewport's edge is.
-        let sticky_effect = effect(move || {
+        effect(move || {
             let vp = viewport.get();
             if vp.width <= 0.0 || vp.height <= 0.0 {
                 return;
@@ -1151,8 +1143,6 @@ impl LayoutScrollArea {
                 commanded,
             ),
             _input: input,
-            _clamp_effect: clamp_effect,
-            _sticky_effect: sticky_effect,
             arrival,
             declared_arrival: signal(None),
             follows_arrival: false,
@@ -1172,7 +1162,6 @@ impl LayoutScrollArea {
                 presented: false,
                 ring: None,
                 keys: None,
-                _focus_effect: None,
             });
         }
         self
@@ -1226,18 +1215,18 @@ impl LayoutScrollArea {
     }
 
     /// Fire `f(true)`/`f(false)` when this control gains/loses keyboard focus. See [`StyledContainer::on_focus`](crate::StyledContainer::on_focus).
-    pub fn on_focus(mut self, f: impl Fn(bool) + 'static) -> Self {
-        let (Some(host), Some(id)) = (&mut self.host, self.focus) else {
+    pub fn on_focus(self, f: impl Fn(bool) + 'static) -> Self {
+        let (Some(_), Some(id)) = (&self.host, self.focus) else {
             return self;
         };
         let last = Rc::new(std::cell::Cell::new(focus::is_focused(id)));
-        host._focus_effect = Some(effect(move || {
+        effect(move || {
             let now = focus::is_focused(id);
             if now != last.get() {
                 last.set(now);
                 f(now);
             }
-        }));
+        });
         self
     }
 

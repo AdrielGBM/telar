@@ -140,15 +140,19 @@ async fn draws_as_document(wanted: WebRenderer) -> bool {
 }
 
 reactive_core::dropless_thread_local! {
-    // Replaced on re-call, since a hot reload re-runs the app's setup.
-    static FOLLOW_LANGUAGE: std::cell::RefCell<Option<reactive_core::Effect>> =
-        const { std::cell::RefCell::new(None) };
+    // An effect stops only with its owner, so the follower gets a scope of its own that a re-call disposes; a hot reload re-runs the app's setup.
+    static FOLLOW_LANGUAGE: std::cell::Cell<Option<reactive_core::OwnerId>> =
+        const { std::cell::Cell::new(None) };
 }
 
 /// Keeps `<html lang>`/`<html dir>` matching the active locale, so switching locale relabels the whole
 /// document the way `follow_locale_direction` relabels the layout — the same rule, `i18n_core::Direction::for_locale`, applied to the page's own root rather than to a widget's.
 fn follow_locale_language() {
-    let effect = reactive_core::effect(|| {
+    if let Some(previous) = FOLLOW_LANGUAGE.take() {
+        reactive_core::dispose_owner(previous);
+    }
+    let scope = reactive_core::detached(reactive_core::owner_scope);
+    reactive_core::effect(|| {
         let locale = i18n_core::use_locale();
         let lang = locale
             .as_deref()
@@ -156,7 +160,7 @@ fn follow_locale_language() {
         let is_rtl = i18n_core::Direction::for_locale(lang).is_rtl();
         platform_web::set_document_language(lang, is_rtl);
     });
-    FOLLOW_LANGUAGE.with(|f| *f.borrow_mut() = Some(effect));
+    FOLLOW_LANGUAGE.set(Some(scope.id()));
 }
 
 /// The inputs of the prerendered page the host was served with, for a document that takes it over. A canvas does not: it replaces the page once it has drawn.

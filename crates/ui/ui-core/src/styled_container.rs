@@ -9,7 +9,7 @@ use platform_core::{
     ConsumedKeys, Cursor, Destination, DragOutcome, DroppedData, Event, IntoDestination, Key,
     NamedKey, NumericValue, Orientation, OutgoingDrag, PointerButton, PointerSource,
 };
-use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
+use reactive_core::{Reactive, RwSignal, effect, signal};
 use renderer_core::{BlendMode, Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
@@ -64,11 +64,11 @@ pub(crate) fn text_follows(node: NodeId, text: RwSignal<crate::BoxText>) {
 
 /// Re-resolves `node`'s layout style whenever the reactive state `style` reads changes, and once now.
 ///
-/// The general form of [`StyledContainer::styled_by`], for a widget that is not a container — a text leaf sized off the theme's `font_size`, a slider thumb sized off its `spacing`. The returned [`Effect`] must be held for as long as the node lives, which for a leaf means its owning container `keeping` it.
-pub fn style_follows(node: NodeId, style: impl Fn() -> LayoutStyle + 'static) -> Effect {
+/// The general form of [`StyledContainer::styled_by`], for a widget that is not a container — a text leaf sized off the theme's `font_size`, a slider thumb sized off its `spacing`. It follows for as long as the owner it is called under lives.
+pub fn style_follows(node: NodeId, style: impl Fn() -> LayoutStyle + 'static) {
     effect(move || {
         let _ = crate::context::set_layout_style(node, style());
-    })
+    });
 }
 
 /// The states a box paints differently in, **in precedence order**: the first one engaged wins.
@@ -151,8 +151,6 @@ impl PointerHooks {
 struct Focusable {
     // When set, the box joins the tab order, takes focus on tap, and handles Tab while focused.
     id: Option<FocusId>,
-    // Dropping it with the box tears the subscription down.
-    _effect: Option<Effect>,
     // Whether Enter and Space fire the press the way a tap does. Set by `control`, because a control that answers a mouse and not a keyboard is the failure this path exists to make unspellable.
     activates: bool,
     // Registered when the box is given a `disabled` source; withdrawn on drop.
@@ -930,10 +928,6 @@ impl StyledContainer {
         self
     }
 
-    /// Give this widget ownership of an [`Effect`], so it runs for exactly as long as the widget exists.
-    ///
-    /// The reactive runtime scopes an effect to the *surface* it was registered on, which is the right span for a shell-wide subscription and far too coarse for one row of a list: the row goes, the effect stays, and it keeps firing at a node that is gone. Dropping the handle instead is the opposite failure — the effect deregisters, runs once, and stops, with nothing to say so. This is the third answer, and the one an effect that belongs to a widget wants.
-    ///
     /// Says what the text below this box looks like — see [`Container::declaring`](crate::Container::declaring).
     pub fn declaring(self, declared: impl Fn() -> Declared + 'static) -> Self {
         let node = self.node;
@@ -1193,13 +1187,13 @@ impl StyledContainer {
         focus::register_at(id, focus::FocusKind::Widget, self.node);
         // The first run seeds `last` and does not fire, so the callback sees only real transitions.
         let last = std::rc::Rc::new(std::cell::Cell::new(focus::is_focused(id)));
-        self.focusable._effect = Some(effect(move || {
+        effect(move || {
             let now = focus::is_focused(id);
             if now != last.get() {
                 last.set(now);
                 f(now);
             }
-        }));
+        });
         self.mark_interactive();
         self
     }
@@ -1486,8 +1480,6 @@ impl Drop for StyledContainer {
         if let Some(token) = self.link_token {
             crate::link::unregister_link(self.home, self.node, token);
         }
-        // Before releasing focus below, so `on_focus` does not fire during teardown.
-        self.focusable._effect.take();
         self.home.with_entered(|| {
             if let Some(id) = self.focusable.id {
                 focus::unregister(id);

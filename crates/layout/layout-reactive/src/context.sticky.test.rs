@@ -159,7 +159,7 @@ fn a_reader_of_the_declared_css_hears_a_switch_that_moves_nothing() {
     lay_out(root);
     let read = Rc::new(RefCell::new(Vec::new()));
     let reads = Rc::clone(&read);
-    let _reader = reactive_core::effect(move || {
+    reactive_core::effect(move || {
         let css = declared_css(bar_node).unwrap();
         reads
             .borrow_mut()
