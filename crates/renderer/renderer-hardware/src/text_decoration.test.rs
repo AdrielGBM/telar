@@ -30,6 +30,7 @@ fn gpu(commands: &[DrawCommand], what: &str) -> Option<Vec<u8>> {
         None,
         false,
         TextShaperConfig::default(),
+        renderer_core::DebugSettings::default(),
     )) {
         Ok(renderer) => renderer,
         Err(e) => {

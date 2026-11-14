@@ -43,7 +43,13 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     // Installed before the library loads, because the guest is handed the fonts, paths and store installed here.
     #[cfg(feature = "shaper")]
     super::font_config::install_window_fonts(&fonts, paths.as_ref());
-    let boot = SurfaceBoot::new(app_name, paths, fonts, StoredChoices::Now);
+    let boot = SurfaceBoot::new(
+        app_name,
+        paths,
+        fonts,
+        StoredChoices::Now,
+        super::debug_settings::process_debug_settings(),
+    );
     // SAFETY: the library is the one `cargo telar dev` built from this app against this telar and named to the host it started.
     let initial_app = match unsafe { crate::hot::load_hot_app(std::path::Path::new(lib_path)) } {
         Ok(app) => app,

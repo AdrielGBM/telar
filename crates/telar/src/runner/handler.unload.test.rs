@@ -29,6 +29,7 @@ fn run_a_session(library: &Path) {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "unload-test".to_string(),
         SurfaceRenderer::builtin(),
     );

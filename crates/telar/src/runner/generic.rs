@@ -99,7 +99,13 @@ where
         Some(_) => StoredChoices::AfterHydration,
         None => StoredChoices::Now,
     };
-    let boot = SurfaceBoot::new(app_name, paths, fonts, choices);
+    let boot = SurfaceBoot::new(
+        app_name,
+        paths,
+        fonts,
+        choices,
+        super::debug_settings::process_debug_settings(),
+    );
     let window = super::resolved_window(window, &app, app_name);
     let location = location.or_else(|| platform.location_source().map(LocationBinding::new));
     let mut handler = boot.handler::<P::Window, D>(

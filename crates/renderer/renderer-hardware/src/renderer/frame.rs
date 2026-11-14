@@ -215,9 +215,9 @@ struct Conditions {
     /// Whether this frame clears to the colour the previous one was drawn under. A new one lies beneath every pixel that frame left, so none of them can be kept.
     clear_kept: bool,
     frame_has_backdrop_blur: bool,
-    /// `TELAR_HW_DAMAGE`.
+    /// [`DebugSettings::damage_tracking`](renderer_core::DebugSettings::damage_tracking).
     damage_enabled: bool,
-    /// `TELAR_HW_SCROLL_BLIT`.
+    /// [`DebugSettings::scroll_blit`](renderer_core::DebugSettings::scroll_blit).
     scroll_enabled: bool,
 }
 
@@ -375,7 +375,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             && clear_color.is_some()
             && !frame_has_backdrop_blur
             && !frame_copies_target
-            && !hw_damage_with_clear_enabled()
+            && !self.debug.damage_tracking
             && !self.app_owned_target;
 
         if self.try_idle_blit(direct_to_surface, clear_color)? {
@@ -521,8 +521,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             clear_color,
             clear_kept: clear_color == self.prev_clear_color,
             frame_has_backdrop_blur,
-            damage_enabled: hw_damage_with_clear_enabled(),
-            scroll_enabled: hw_scroll_blit_enabled(),
+            damage_enabled: self.debug.damage_tracking,
+            scroll_enabled: self.debug.scroll_blit,
         });
         if self.prev_commands.is_empty() || !(reuse.damage_with_clear || reuse.damage_transparent) {
             return FramePlan::FULL;

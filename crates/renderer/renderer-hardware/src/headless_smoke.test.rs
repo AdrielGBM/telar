@@ -24,6 +24,7 @@ fn headless_renders_non_empty_frame() {
         None,
         false,
         TextShaperConfig::default(),
+        renderer_core::DebugSettings::default(),
     )) {
         Ok(r) => r,
         Err(e) => {
@@ -115,6 +116,7 @@ fn headless(w: u32, h: u32) -> Option<HardwareRenderer<HeadlessWindow>> {
         None,
         false,
         TextShaperConfig::default(),
+        renderer_core::DebugSettings::default(),
     )) {
         Ok(r) => Some(r),
         Err(e) => {
@@ -308,6 +310,7 @@ fn damage_prime_matches_full_repaint() {
             None,
             false,
             TextShaperConfig::default(),
+            renderer_core::DebugSettings::default(),
         ))
     };
 
@@ -386,6 +389,7 @@ fn damage_confines_translucent_layer_composite() {
             None,
             false,
             TextShaperConfig::default(),
+            renderer_core::DebugSettings::default(),
         ))
     };
 
@@ -469,6 +473,7 @@ fn damage_confines_opacity_layer() {
             None,
             false,
             TextShaperConfig::default(),
+            renderer_core::DebugSettings::default(),
         ))
     };
     let mut r1 = match make() {
@@ -629,6 +634,7 @@ fn the_dashboard_scene_paints_its_solid_fills_where_it_puts_them() {
         None,
         false,
         TextShaperConfig::default(),
+        renderer_core::DebugSettings::default(),
     )) {
         Ok(r) => r,
         Err(e) => {
@@ -693,6 +699,7 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
         None,
         false,
         TextShaperConfig::default(),
+        renderer_core::DebugSettings::default(),
     )) {
         Ok(r) => r,
         Err(e) => {
@@ -1036,6 +1043,7 @@ fn after_and_from_scratch(
             None,
             false,
             TextShaperConfig::default(),
+            renderer_core::DebugSettings::default(),
         ))
     };
     let mut incremental = match make() {

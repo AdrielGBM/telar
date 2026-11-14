@@ -278,6 +278,7 @@ fn new_gpu_renderer(
             None,
             false,
             renderer_text::TextShaperConfig::default(),
+            renderer_core::DebugSettings::default(),
         ),
     )
 }

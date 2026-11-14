@@ -227,6 +227,7 @@ fn boot_under(root: &Path) -> SurfaceBoot {
         Arc::new(Rooted(root.to_owned())),
         FontSetup::default(),
         StoredChoices::Now,
+        renderer_core::DebugSettings::default(),
     )
 }
 

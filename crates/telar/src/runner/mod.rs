@@ -3,6 +3,7 @@
 #[cfg(all(feature = "android-bare", target_os = "android"))]
 mod android;
 mod boot;
+mod debug_settings;
 #[cfg(all(
     feature = "desktop-bare",
     not(target_os = "android"),
@@ -21,6 +22,8 @@ mod dev_window;
 pub mod font_config;
 mod frame_thread;
 mod state;
+#[cfg(feature = "hardware")]
+pub(crate) use debug_settings::process_debug_settings;
 #[cfg(feature = "hardware")]
 pub(crate) use font_config::offscreen_hardware_font_config;
 mod entry;

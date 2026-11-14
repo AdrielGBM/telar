@@ -35,8 +35,8 @@ is stalling on the swapchain (common on mobile FIFO present).
 
 - **cargo + [criterion]** — micro-benchmarks of pure CPU functions (headless) and of a full headless
   hardware frame (`render_frame`, needs a GPU adapter).
-- **`renderer_core::perf`** — the durable in-app instrumentation, gated on the `TELAR_PERF` env var. Zero
-  cost when off (one relaxed-atomic load). Dumps one `tracing` line per ~second at 60 fps →
+- **`renderer_core::perf`** — the durable in-app instrumentation, gated on the perf flag below. Zero
+  cost when off (two relaxed-atomic loads). Dumps one `tracing` line per ~second at 60 fps →
   **stdout on desktop, logcat on Android**.
 - **`adb`** — install, launch, set flags, capture logcat, screenshots (from the Android SDK; provided by
   the parent-directory Nix flake's `androidSdk`).
@@ -54,10 +54,13 @@ is stalling on the swapchain (common on mobile FIFO present).
 | scroll-blit | `TELAR_HW_SCROLL_BLIT=0` disables | `debug.telar.scroll_blit {1,0}` | A/B the scroll-blit optimization |
 
 **Why the Android properties exist:** an Android app process does not inherit the `adb shell`
-environment, so the env vars above are unreachable on device. `run_android_app_with_name`
-(`crates/telar/src/runner/android.rs`) bridges the `debug.telar.<k>` system properties (settable without
-root via `adb shell setprop`) into the corresponding env vars at startup, before anything reads them.
-To add a new flag, add a `(prop, var)` pair to `bridge_debug_props_to_env`.
+environment, so the env vars above are unreachable on device. The runner reads every flag once as it
+boots into one `renderer_core::DebugSettings` (`crates/telar/src/runner/debug_settings.rs`): from the
+`debug.telar.<k>` system properties (settable without root via `adb shell setprop`) on Android, from the
+env vars everywhere else, and hands it to the renderers it builds. The flags are only read at boot, so
+relaunch the app after changing one. To add a flag, add a `DebugFlag` variant with its two names and a
+`DebugSettings` field (`crates/renderer/renderer-core/src/debug_settings.rs`). Every hardware renderer
+constructor takes them (windowed ones in `HardwareRendererConfig`); the criterion benches read them from the env vars.
 
 ---
 

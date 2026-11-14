@@ -150,6 +150,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
         let system_fonts = SystemFonts::from_provider(req.paths);
         let android = cfg!(target_os = "android");
         let transparent = req.transparent;
+        let debug = req.debug;
         self.pending = Some(BackgroundBuild::spawn(
             move || {
                 let font_config =
@@ -159,7 +160,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
                     cache_path.as_deref(),
                     android,
                     font_config,
-                    renderer_hardware::HardwareRendererConfig { transparent },
+                    renderer_hardware::HardwareRendererConfig { transparent, debug },
                 )
             },
             move || wake.request_redraw(),

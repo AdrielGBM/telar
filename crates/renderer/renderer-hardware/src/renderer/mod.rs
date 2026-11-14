@@ -138,6 +138,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     prev_commands: Vec<DrawCommand>,
     prev_clear_color: Option<Color>,
     frame_diff: renderer_core::dirty::FrameDiff,
+    debug: renderer_core::DebugSettings,
     // Initialised to `u64::MAX`, so the first frame never matches and always renders.
     prev_generation: u64,
     // Used by `render_frame` to decide the idle-blit fast path.
@@ -314,20 +315,6 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
     Ok(SHARED_GPU.get().expect("shared GPU just set"))
 }
 
-// Seeds the offscreen with the previous frame, the pixels inside a scrolled clip moved by its delta, so a scrolling frame redraws only the exposed band and what else changed. `TELAR_HW_SCROLL_BLIT=0` repaints the scrolled content in place instead.
-fn hw_scroll_blit_enabled() -> bool {
-    use std::sync::OnceLock;
-    static V: OnceLock<bool> = OnceLock::new();
-    *V.get_or_init(|| std::env::var("TELAR_HW_SCROLL_BLIT").as_deref() != Ok("0"))
-}
-
-// Generalises the scroll-blit prime to an arbitrary dirty rect, so a frame that changed only a small region repaints just the dirty scissor. `TELAR_HW_DAMAGE=0` forces a full re-render.
-fn hw_damage_with_clear_enabled() -> bool {
-    use std::sync::OnceLock;
-    static V: OnceLock<bool> = OnceLock::new();
-    *V.get_or_init(|| std::env::var("TELAR_HW_DAMAGE").as_deref() != Ok("0"))
-}
-
 /// What of the target a draw may touch: where its clip meets the frame's damage.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Visible {
@@ -488,6 +475,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             alpha_mode,
             cache_path,
             font_config,
+            config.debug,
         )
         .await
     }
@@ -508,6 +496,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         alpha_mode: wgpu::CompositeAlphaMode,
         cache_path: Option<&std::path::Path>,
         font_config: renderer_text::TextShaperConfig,
+        debug: renderer_core::DebugSettings,
     ) -> Result<Self, RendererError> {
         // Off the device, not the adapter: an adopted device may lack a feature its adapter advertises, and taking the immediates path against one is a validation error rather than a slow path.
         const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<BlurParams>() as u32;
@@ -764,6 +753,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             prev_commands: Vec::new(),
             prev_clear_color: None,
             frame_diff: Default::default(),
+            debug,
             prev_generation: u64::MAX,
             incoming_generation: 0,
             retained_blit_pipeline,
@@ -1095,13 +1085,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
 // Headless needs no window, so `W` is a pure phantom — kept generic so the caller picks any window type without this crate depending on it.
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
-    /// Build a windowless renderer that draws into an offscreen texture instead of a swapchain surface. Read the rendered frame back with [`HardwareRenderer::read_rgba`]. Same font/cache/config parameters as [`HardwareRenderer::new_async`] minus the window; `width`/`height` are the initial physical target size and are re-derived from `begin_frame` on the first frame.
+    /// Build a windowless renderer that draws into an offscreen texture instead of a swapchain surface. Read the rendered frame back with [`HardwareRenderer::read_rgba`]. Same font/cache parameters as [`HardwareRenderer::new_async`] minus the window, with `debug` in place of its config; `width`/`height` are the initial physical target size and are re-derived from `begin_frame` on the first frame.
     pub async fn new_headless(
         width: u32,
         height: u32,
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
+        debug: renderer_core::DebugSettings,
     ) -> Result<Self, RendererError> {
         // Rgba8Unorm is a mandatory renderable format and the windowed path's first choice, so `read_rgba` yields straight R, G, B, A bytes.
         let mut renderer = Self::new_offscreen(
@@ -1109,6 +1100,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             cache_path,
             vulkan_only,
             font_config,
+            debug,
         )
         .await?;
         // So `read_rgba` works even before the first `begin_frame`, which recreates it at the real frame size.
@@ -1129,6 +1121,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
+        debug: renderer_core::DebugSettings,
     ) -> Result<Self, RendererError> {
         let _gpu = renderer_core::gpu_sync::lifecycle_guard();
         pollster::block_on(Self::new_for_texture(
@@ -1136,6 +1129,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             cache_path,
             vulkan_only,
             font_config,
+            debug,
         ))
     }
 
@@ -1151,9 +1145,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
+        debug: renderer_core::DebugSettings,
     ) -> Result<Self, RendererError> {
         let mut renderer =
-            Self::new_offscreen(target.format(), cache_path, vulkan_only, font_config).await?;
+            Self::new_offscreen(target.format(), cache_path, vulkan_only, font_config, debug)
+                .await?;
         renderer.compose_into(target);
         Ok(renderer)
     }
@@ -1172,6 +1168,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
+        debug: renderer_core::DebugSettings,
     ) -> Result<Self, RendererError> {
         let backends = if vulkan_only {
             wgpu::Backends::VULKAN
@@ -1214,6 +1211,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             alpha_mode,
             cache_path,
             font_config,
+            debug,
         )
         .await
     }

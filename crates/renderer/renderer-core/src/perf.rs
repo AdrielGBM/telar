@@ -1,8 +1,7 @@
-//! Gated on the `TELAR_PERF` env var or a scoped [`capture`]; when neither is on, every entry point costs only a cached flag read plus one relaxed-atomic load, so it is safe to leave the instrumentation compiled into release builds.
+//! Gated on [`DebugSettings::perf`](crate::DebugSettings::perf), which the runner hands to [`set_dump`], or a scoped [`capture`]; when neither is on, every entry point costs only two relaxed-atomic loads, so it is safe to leave the instrumentation compiled into release builds.
 
 use std::cell::Cell;
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 use web_time::Instant;
 
@@ -91,7 +90,8 @@ impl Stats {
     }
 }
 
-static ENABLED: OnceLock<bool> = OnceLock::new();
+// Process-wide rather than handed to each renderer: every renderer and the frame loop record through these free functions, on whichever thread they run.
+static DUMP: AtomicBool = AtomicBool::new(false);
 static GLOBAL: Stats = Stats::new();
 static FRAMES: AtomicU64 = AtomicU64::new(0);
 static CAPTURES: AtomicUsize = AtomicUsize::new(0);
@@ -101,10 +101,14 @@ reactive_local::dropless_thread_local! {
     static CAPTURED: Stats = const { Stats::new() };
 }
 
-fn env_enabled() -> bool {
-    *ENABLED.get_or_init(
-        || matches!(std::env::var("TELAR_PERF").as_deref(), Ok(v) if !v.is_empty() && v != "0"),
-    )
+/// Turns the rolling dump [`tick`] logs on or off for the whole process. The runner calls it with its [`DebugSettings::perf`](crate::DebugSettings::perf) as it boots.
+pub fn set_dump(enabled: bool) {
+    DUMP.store(enabled, Ordering::Relaxed);
+}
+
+#[inline]
+fn dump_enabled() -> bool {
+    DUMP.load(Ordering::Relaxed)
 }
 
 fn capturing_here() -> bool {
@@ -113,14 +117,14 @@ fn capturing_here() -> bool {
 
 #[inline]
 fn enabled() -> bool {
-    env_enabled() || CAPTURES.load(Ordering::Relaxed) > 0
+    dump_enabled() || CAPTURES.load(Ordering::Relaxed) > 0
 }
 
-// A capturing thread records only into its capture, and every other thread only into the env-gated global, so a capture neither sees nor leaks another thread's frames.
+// A capturing thread records only into its capture, and every other thread only into the dumped global, so a capture neither sees nor leaks another thread's frames.
 fn with_sink(f: impl FnOnce(&Stats)) {
     if capturing_here() {
         CAPTURED.with(f);
-    } else if env_enabled() {
+    } else if dump_enabled() {
         f(&GLOBAL);
     }
 }
@@ -232,7 +236,7 @@ impl Snapshot {
     }
 }
 
-/// Runs `f` with instrumentation on for the calling thread only, returning what it recorded. Nothing recorded on other threads, or into the `TELAR_PERF` dump, reaches the snapshot, and nothing `f` records reaches the dump. Does not nest.
+/// Runs `f` with instrumentation on for the calling thread only, returning what it recorded. Nothing recorded on other threads, or into the rolling dump, reaches the snapshot, and nothing `f` records reaches the dump. Does not nest.
 pub fn capture<R>(f: impl FnOnce() -> R) -> (R, Snapshot) {
     struct Capturing;
     impl Drop for Capturing {
@@ -254,7 +258,7 @@ pub fn capture<R>(f: impl FnOnce() -> R) -> (R, Snapshot) {
 
 /// Advance the frame counter and, every `DUMP_EVERY` frames, log rolling avg/max per phase and reset the accumulators. Call once per frame from the thread that owns the frame loop.
 pub fn tick() {
-    if capturing_here() || !env_enabled() {
+    if capturing_here() || !dump_enabled() {
         return;
     }
     let f = FRAMES.fetch_add(1, Ordering::Relaxed) + 1;

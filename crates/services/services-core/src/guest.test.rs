@@ -586,8 +586,8 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     ),
     (
         "crates/renderer/renderer-core/src/perf.rs",
-        "ENABLED",
-        "each copy counts its own frame statistics",
+        "DUMP",
+        "the frame loop and window renderers that record into it are the host's; a guest draws only through a texture UI, which sets this copy from the same environment",
     ),
     (
         "crates/renderer/renderer-core/src/perf.rs",
@@ -873,6 +873,11 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "crates/telar/src/runner/web.rs",
         "FOLLOW_LANGUAGE",
         "the binding this copy's own setup makes, replaced when the setup re-runs",
+    ),
+    (
+        "crates/telar/src/runner/debug_settings.rs",
+        "SETTINGS",
+        "read from the process environment, which a guest's copy reads alike: hot reload runs only on the desktop, where that is the source",
     ),
     (
         "crates/telar/src/location_locale.rs",

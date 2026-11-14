@@ -30,7 +30,11 @@ pub struct WebGpuRenderer {
 
 impl WebGpuRenderer {
     /// Starts the device coming up and returns a renderer that is usable — and empty — immediately.
-    pub fn new(canvas: CanvasSurface, fonts: renderer_core::FontConfig, transparent: bool) -> Self {
+    pub fn new(
+        canvas: CanvasSurface,
+        fonts: renderer_core::FontConfig,
+        config: HardwareRendererConfig,
+    ) -> Self {
         let device = Rc::new(RefCell::new(Device::Building));
         let build_into = Rc::clone(&device);
         let build_on = canvas.clone();
@@ -52,7 +56,7 @@ impl WebGpuRenderer {
                 None,
                 false,
                 font_config,
-                HardwareRendererConfig { transparent },
+                config,
             )
             .await;
             *build_into.borrow_mut() = match built {
@@ -130,7 +134,10 @@ impl<W: 'static> RendererFactory<W> for WebGpuRendererFactory {
         Ok(BuiltRenderer::Inline(Box::new(WebGpuRenderer::new(
             self.canvas.clone(),
             build.fonts.clone(),
-            build.transparent,
+            HardwareRendererConfig {
+                transparent: build.transparent,
+                debug: build.debug,
+            },
         ))))
     }
 }

@@ -102,6 +102,7 @@ fn bench_render_frame(c: &mut Criterion) {
         None,
         false,
         TextShaperConfig::default(),
+        renderer_core::DebugSettings::read(|flag| std::env::var(flag.env_var()).ok()),
     )) {
         Ok(r) => r,
         Err(e) => {

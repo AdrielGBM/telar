@@ -42,6 +42,7 @@ where
         window_configs.push((id, window));
     }
     let app_name = app_name.to_owned();
+    let debug = super::debug_settings::process_debug_settings();
     platform_core::set_keyboard_convention(platform.keyboard_convention());
 
     platform.run_surfaces(window_configs, move |id| {
@@ -49,7 +50,13 @@ where
             .get(&id)
             .cloned()
             .unwrap_or_else(|| (FontSetup::default(), app_name.clone()));
-        let boot = SurfaceBoot::new(&app_name, paths_factory(id), fonts, StoredChoices::Now);
+        let boot = SurfaceBoot::new(
+            &app_name,
+            paths_factory(id),
+            fonts,
+            StoredChoices::Now,
+            debug,
+        );
         let mut handler = boot.handler::<P::Window, ()>(
             Box::new(crate::app_runtime::LocalApp(app_factory(id))),
             &title,
@@ -77,7 +84,13 @@ where
     A: crate::app_runtime::AppRuntime,
 {
     let (window, fonts) = split_config(config);
-    let boot = SurfaceBoot::new(app_name, paths, fonts, StoredChoices::Now);
+    let boot = SurfaceBoot::new(
+        app_name,
+        paths,
+        fonts,
+        StoredChoices::Now,
+        super::debug_settings::process_debug_settings(),
+    );
     let mut handler = boot.handler::<W, ()>(
         Box::new(app),
         &window.titled_or(app_name).title,

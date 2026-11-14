@@ -91,6 +91,7 @@ fn hardware(width: u32, height: u32) -> Option<HardwareRenderer<HeadlessWindow>>
         None,
         false,
         renderer_text::TextShaperConfig::default(),
+        renderer_core::DebugSettings::read(|flag| std::env::var(flag.env_var()).ok()),
     )) {
         Ok(r) => Some(r),
         Err(e) => {

@@ -117,6 +117,7 @@ pub(super) fn build_app_handler<W, D>(
     paths: Arc<dyn AppPathsProvider>,
     fonts: super::font_config::FontSetup,
     backend: RendererBackend,
+    debug: renderer_core::DebugSettings,
     app_name: String,
     renderer: SurfaceRenderer<W>,
 ) -> AppHandler<W, D>
@@ -146,7 +147,11 @@ where
         redraw_waker: None,
         scale_scratch: renderer_core::ScaleScratch::new(),
         dev: D::default(),
-        env: AppEnv { app_name, paths },
+        env: AppEnv {
+            app_name,
+            paths,
+            debug,
+        },
         fonts,
         _window: std::marker::PhantomData,
         command_buf_pool: Vec::new(),
@@ -686,6 +691,7 @@ where
             fonts: &self.fonts,
             paths: self.env.paths.as_ref(),
             app_name: &self.env.app_name,
+            debug: self.env.debug,
         };
         match self.renderer_host.start(window, &request) {
             RendererStart::Started { keepalive, label } => {
@@ -1210,6 +1216,7 @@ where
                 fonts: &self.fonts,
                 paths: self.env.paths.as_ref(),
                 app_name: &self.env.app_name,
+                debug: self.env.debug,
             };
             self.renderer = self.renderer_host.build_offscreen(window, &request);
             self.renderer.is_some()

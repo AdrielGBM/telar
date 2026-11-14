@@ -26,6 +26,7 @@ fn telar_composes_a_texture_the_application_filled() {
         None,
         false,
         TextShaperConfig::default(),
+        renderer_core::DebugSettings::default(),
     )) {
         Ok(r) => r,
         Err(e) => {

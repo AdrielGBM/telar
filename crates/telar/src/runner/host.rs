@@ -97,6 +97,7 @@ pub(super) struct RendererRequest<'a> {
     /// Names the shader-cache directory, which only the hardware build has.
     #[cfg_attr(not(feature = "hardware"), allow(dead_code))]
     pub(super) app_name: &'a str,
+    pub(super) debug: renderer_core::DebugSettings,
 }
 
 /// What came of asking a host to bring a renderer up.
@@ -204,6 +205,7 @@ where
             renderer_core::RendererBuild {
                 fonts: &fonts,
                 transparent: req.transparent,
+                debug: req.debug,
             },
         )
     }

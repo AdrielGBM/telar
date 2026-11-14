@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use platform_core::{Window, WindowConfig};
+use renderer_core::DebugSettings;
 use services_core::AppPathsProvider;
 use telar_project::protocol::RendererBackend;
 use ui_tree::DevOverlay;
@@ -53,21 +54,23 @@ pub(super) fn split_config(config: AppConfig) -> (WindowConfig, FontSetup) {
     )
 }
 
-/// An app installed for a surface, with the renderer backend it reopens with: what every entry point builds its handler from.
+/// An app installed for a surface, with the renderer backend it reopens with and the developer switches it runs under: what every entry point builds its handler from.
 pub(super) struct SurfaceBoot {
     app_name: String,
     paths: Arc<dyn AppPathsProvider>,
     backend: RendererBackend,
+    debug: DebugSettings,
     fonts: FontSetup,
 }
 
 impl SurfaceBoot {
-    /// Installs the app (see [`install_app`]) and reads the renderer backend kept in its preference store.
+    /// Installs the app (see [`install_app`]) and reads the renderer backend kept in its preference store; the surface runs under `debug`.
     pub(super) fn new(
         app_name: &str,
         paths: Arc<dyn AppPathsProvider>,
         fonts: FontSetup,
         choices: StoredChoices,
+        debug: DebugSettings,
     ) -> Self {
         install_app(app_name, paths.clone(), choices);
         let backend =
@@ -76,6 +79,7 @@ impl SurfaceBoot {
             app_name: app_name.to_owned(),
             paths,
             backend,
+            debug,
             fonts,
         }
     }
@@ -96,6 +100,7 @@ impl SurfaceBoot {
             self.paths,
             self.fonts,
             self.backend,
+            self.debug,
             self.app_name,
             renderer,
         );

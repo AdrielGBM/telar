@@ -103,6 +103,7 @@ impl TextureUi {
             None,
             false,
             crate::runner::offscreen_hardware_font_config(fonts),
+            crate::runner::process_debug_settings(),
         )?;
 
         let pixel_ratio = pixel_ratio.max(f32::MIN_POSITIVE);

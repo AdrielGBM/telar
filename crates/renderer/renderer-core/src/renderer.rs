@@ -123,6 +123,8 @@ pub struct RendererBuild<'a> {
     pub fonts: &'a FontConfig,
     /// Whether the app asked for a transparent surface. A renderer is *built* for one or the other.
     pub transparent: bool,
+    /// The developer switches this run was started with.
+    pub debug: crate::DebugSettings,
 }
 
 /// A renderer that has been built, and where it may be driven from.

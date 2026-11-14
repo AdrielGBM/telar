@@ -8,6 +8,7 @@ mod align;
 mod blend;
 mod command;
 pub mod culling;
+mod debug_settings;
 pub mod dirty;
 #[cfg(any(test, feature = "test-support"))]
 pub mod dirty_scenarios;
@@ -36,6 +37,7 @@ pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 pub use blend::BlendMode;
 pub use command::{DrawCommand, LayerMask};
 pub use culling::{FontMetrics, extend_bounds};
+pub use debug_settings::{DebugFlag, DebugSettings};
 #[doc(hidden)]
 pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, for_each_with_matrix, transform_clip_rect};

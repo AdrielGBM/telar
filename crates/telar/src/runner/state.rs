@@ -44,10 +44,11 @@ impl Default for FramePacer {
     }
 }
 
-/// Which application this is and where it keeps things: the name it is known by, and the directories the platform gave it.
+/// Which application this is, where it keeps things and how it was started: the name it is known by, the directories the platform gave it, and the developer switches its run was given.
 pub(super) struct AppEnv {
     pub(super) app_name: String,
     pub(super) paths: Arc<dyn AppPathsProvider>,
+    pub(super) debug: renderer_core::DebugSettings,
 }
 
 /// The window's title as the handler knows it: the one it was configured with, which is the app's part of every title it derives, and the one the platform shows now.

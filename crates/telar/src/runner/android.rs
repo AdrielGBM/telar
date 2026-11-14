@@ -7,25 +7,6 @@ use crate::app_config::AppConfig;
 use services_core::AppPathsProvider;
 use ui_tree::DevOverlay;
 
-// App processes do not inherit the adb shell environment, so the engine's env-var debug flags are unreachable. Bridged from `debug.telar.<k>` system properties, which need no root. Must run before any `OnceLock` reads them or the render thread spawns.
-#[cfg(feature = "runtime")]
-fn bridge_debug_props_to_env() {
-    for (prop, var) in [
-        ("debug.telar.perf", "TELAR_PERF"),
-        ("debug.telar.hw_damage", "TELAR_HW_DAMAGE"),
-        ("debug.telar.scroll_blit", "TELAR_HW_SCROLL_BLIT"),
-    ] {
-        if std::env::var_os(var).is_some() {
-            continue;
-        }
-        if let Some(v) = platform_android::read_sys_prop(prop) {
-            if !v.is_empty() {
-                unsafe { std::env::set_var(var, v) };
-            }
-        }
-    }
-}
-
 #[cfg(feature = "runtime")]
 /// Starts an application on the Android backend, with no overlay.
 pub fn run_android_app_with_name<A: App>(
@@ -45,7 +26,6 @@ pub fn run_android_app_with_devtools<A: App, D: DevOverlay>(
     app_name: &str,
     android_app: platform_android::AndroidApp,
 ) {
-    bridge_debug_props_to_env();
     if super::overlay_disabled() {
         run_android_with_overlay::<A, ()>(config, app, app_name, android_app);
     } else {

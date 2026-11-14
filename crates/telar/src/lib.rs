@@ -241,8 +241,8 @@ pub use renderer_core::{
 pub use geometry_core::{LayoutGrid, layout_grid, set_layout_grid};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    FontAsset, FontAxis, FontConfig, FontSource, FontWeight, RenderBackend, RendererBuild,
-    RendererFactory, TextMetrics, set_default_text_metrics, set_text_metrics,
+    DebugSettings, FontAsset, FontAxis, FontConfig, FontSource, FontWeight, RenderBackend,
+    RendererBuild, RendererFactory, TextMetrics, set_default_text_metrics, set_text_metrics,
 };
 
 /// Whether this build turns font files into glyphs itself.

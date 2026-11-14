@@ -30,6 +30,7 @@ fn handler() -> AppHandler<HeadlessWindow, ()> {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "generation-test".to_string(),
         SurfaceRenderer::builtin(),
     )
@@ -104,6 +105,7 @@ fn new_commands_never_go_out_under_the_previous_generation() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "generation-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -646,6 +648,7 @@ fn stateful_handler(app: Stateful, log: RendererLog) -> AppHandler<HeadlessWindo
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "presentation-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -805,6 +808,7 @@ fn the_window_shows_the_cursor_the_box_under_the_pointer_asks_for() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "cursor-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -879,6 +883,7 @@ fn a_box_hovered_under_an_overlay_hears_the_pointer_move_onto_it() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "covered-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -957,6 +962,7 @@ fn a_dropped_handler_drops_its_tree_inside_its_surface() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "drop-order-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -1101,6 +1107,7 @@ fn a_runtime_swapped_in_by_a_reload_is_handed_the_loop_wake() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "reload-waker-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -1157,6 +1164,7 @@ fn a_surface_opens_in_its_configured_family_and_follows_a_new_one() {
             family: Some("Telar Configured Face".to_string()),
         },
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "font-family-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -1235,6 +1243,7 @@ fn overlaid<D: DevOverlay>(app: Box<dyn AppRuntime>) -> AppHandler<HeadlessWindo
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "overlay-test".to_string(),
         SurfaceRenderer::builtin(),
     )
@@ -1587,6 +1596,7 @@ fn title_bar_handler() -> AppHandler<HeadlessWindow, ()> {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "title-bar-test".to_string(),
         SurfaceRenderer::builtin(),
     )
@@ -2036,6 +2046,7 @@ fn the_window_is_told_where_the_focused_field_has_its_caret() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "text-input-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -2060,6 +2071,7 @@ fn a_tree_that_goes_takes_the_input_method_from_its_field() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "text-input-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -2188,6 +2200,7 @@ fn unloading_handler(window: &HeadlessWindow) -> AppHandler<HeadlessWindow, Forg
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
         "unload-test".to_string(),
         SurfaceRenderer::builtin(),
     );
@@ -2466,4 +2479,45 @@ fn choosing_a_backend_by_hand_gives_it_a_fresh_set_of_restarts() {
         );
         assert!(handler.frame_is_due(web_time::Instant::now()).is_some());
     });
+}
+
+/// Notes the settings an installed renderer is built with, and builds one that records its frames.
+struct SettingsSeen {
+    seen: Rc<Cell<Option<renderer_core::DebugSettings>>>,
+    renderer: renderer_record::RecordingFactory,
+}
+
+impl renderer_core::RendererFactory<HeadlessWindow> for SettingsSeen {
+    fn build(
+        &self,
+        window: &HeadlessWindow,
+        build: renderer_core::RendererBuild<'_>,
+    ) -> Result<renderer_core::BuiltRenderer, renderer_core::RendererError> {
+        self.seen.set(Some(build.debug));
+        self.renderer.build(window, build)
+    }
+}
+
+#[test]
+fn a_renderer_is_built_with_the_debug_settings_its_surface_was_started_with() {
+    let settings = renderer_core::DebugSettings {
+        perf: false,
+        damage_tracking: false,
+        scroll_blit: false,
+    };
+    let seen = Rc::new(Cell::new(None));
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(Unchanging)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        settings,
+        "debug-settings-test".to_string(),
+        SurfaceRenderer::installed(SettingsSeen {
+            seen: Rc::clone(&seen),
+            renderer: renderer_record::RecordingFactory::new(renderer_record::Recording::new()),
+        }),
+    );
+    resume(&mut handler, &HeadlessWindow::new(120, 80));
+    assert_eq!(seen.get(), Some(settings));
 }

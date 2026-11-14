@@ -48,6 +48,7 @@ fn gpu(width: u32, height: u32, commands: &[DrawCommand], what: &str) -> Option<
         None,
         false,
         TextShaperConfig::default(),
+        renderer_core::DebugSettings::default(),
     )) {
         Ok(renderer) => renderer,
         Err(e) => {

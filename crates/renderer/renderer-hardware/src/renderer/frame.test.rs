@@ -151,7 +151,7 @@ fn a_single_sample_target_scrolls_though_it_cannot_be_primed() {
     };
     assert!(
         !Reuse::decide(no_blit).scroll,
-        "TELAR_HW_SCROLL_BLIT=0 still turns it off"
+        "a run with the scroll blit turned off never moves scrolled pixels"
     );
 }
 
