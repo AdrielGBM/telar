@@ -4,7 +4,8 @@
 
 use geometry_core::Rect;
 use renderer_core::{
-    Border, BorderRadius, Color, Gradient, GradientKind, Paint, RectStyle, Shadow, TextStyle,
+    Border, BorderRadius, Color, Gradient, GradientStops, Paint, RectStyle, ResolvedGradient,
+    Shadow, TextStyle,
 };
 
 /// Appends `property: value;`.
@@ -60,25 +61,38 @@ pub fn paint(p: &Paint) -> String {
 }
 
 fn gradient(g: &Gradient) -> String {
-    let stops: Vec<String> = g
-        .stops
-        .active()
-        .iter()
-        .map(|stop| format!("{} {}%", color(stop.color), round(stop.position * 100.0)))
-        .collect();
-    let stops = stops.join(",");
-    match g.kind {
+    let stops_css = |stops: &GradientStops| {
+        stops
+            .active()
+            .iter()
+            .map(|stop| format!("{} {}%", color(stop.color), round(stop.position * 100.0)))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    match g.resolve() {
+        ResolvedGradient::Solid(c) => color(c),
         // CSS measures the angle clockwise from up, where the vector is measured from the positive x axis with y growing downwards — hence the quarter turn and the sign.
-        GradientKind::Linear { start, end } => {
+        ResolvedGradient::Linear {
+            start, end, stops, ..
+        } => {
             let (dx, dy) = (end.x - start.x, end.y - start.y);
             let degrees = dx.atan2(-dy).to_degrees().rem_euclid(360.0);
-            format!("linear-gradient({}deg,{stops})", round(degrees))
+            format!(
+                "linear-gradient({}deg,{})",
+                round(degrees),
+                stops_css(&stops)
+            )
         }
         // CSS cannot turn a radial gradient, so a tilted ellipse becomes the upright one that fills the same bounding box.
-        GradientKind::Radial { transform: t } => format!(
-            "radial-gradient({} {} at center,{stops})",
+        ResolvedGradient::Radial {
+            transform: t,
+            stops,
+            ..
+        } => format!(
+            "radial-gradient({} {} at center,{})",
             px(t.a.hypot(t.c)),
-            px(t.b.hypot(t.d))
+            px(t.b.hypot(t.d)),
+            stops_css(&stops)
         ),
     }
 }

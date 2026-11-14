@@ -6,8 +6,8 @@
 
 use geometry_core::{Point, Rect, Transform};
 use renderer_core::{
-    BlendMode, BorderRadius, Gradient, GradientKind, ImageFill, LayerMask, Paint, PathData,
-    PathStyle, PathVerb, Raster, RectStyle, Stroke, TextStyle,
+    BlendMode, BorderRadius, Gradient, GradientStops, ImageFill, LayerMask, Paint, PathData,
+    PathStyle, PathVerb, Raster, RectStyle, ResolvedGradient, Stroke, TextStyle,
 };
 
 use crate::box_key::BoxKey;
@@ -510,30 +510,41 @@ fn moved(g: Gradient, dx: f32, dy: f32) -> Gradient {
 }
 
 fn gradient_def(id: &str, g: &Gradient) -> String {
-    let stops: String = g
-        .stops
-        .active()
-        .iter()
-        .map(|stop| {
-            format!(
-                "<stop offset=\"{}\" stop-color=\"{}\"/>",
-                round(stop.position),
-                color(stop.color)
-            )
-        })
-        .collect();
+    let stop_list = |stops: &GradientStops| -> String {
+        stops
+            .active()
+            .iter()
+            .map(|stop| {
+                format!(
+                    "<stop offset=\"{}\" stop-color=\"{}\"/>",
+                    round(stop.position),
+                    color(stop.color)
+                )
+            })
+            .collect()
+    };
     // User space, not the default object bounding box: the points are the ones the widget drew with.
-    match g.kind {
-        GradientKind::Linear { start, end } => format!(
-            "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">{stops}</linearGradient>",
+    match g.resolve() {
+        ResolvedGradient::Solid(c) => format!(
+            "<linearGradient id=\"{id}\"><stop offset=\"0\" stop-color=\"{}\"/></linearGradient>",
+            color(c)
+        ),
+        ResolvedGradient::Linear {
+            start, end, stops, ..
+        } => format!(
+            "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">{}</linearGradient>",
             round(start.x),
             round(start.y),
             round(end.x),
-            round(end.y)
+            round(end.y),
+            stop_list(&stops)
         ),
-        GradientKind::Radial { transform } => format!(
-            "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" cx=\"0\" cy=\"0\" r=\"1\" gradientTransform=\"matrix({})\">{stops}</radialGradient>",
-            transform.to_array().map(round).join(" ")
+        ResolvedGradient::Radial {
+            transform, stops, ..
+        } => format!(
+            "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" cx=\"0\" cy=\"0\" r=\"1\" gradientTransform=\"matrix({})\">{}</radialGradient>",
+            transform.to_array().map(round).join(" "),
+            stop_list(&stops)
         ),
     }
 }

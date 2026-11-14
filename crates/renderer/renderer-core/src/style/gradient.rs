@@ -83,6 +83,25 @@ impl GradientKind {
     }
 }
 
+const MIN_LINEAR_LENGTH_SQ: f32 = 0.0001;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+/// A gradient ready to paint: `ramp` takes a point's offset from `start` to its position along the stops, and `inverse` takes a point to the unit circle the radial's last stop lies on.
+pub enum ResolvedGradient {
+    Solid(Color),
+    Linear {
+        start: Point,
+        end: Point,
+        ramp: [f32; 2],
+        stops: GradientStops,
+    },
+    Radial {
+        transform: Transform,
+        inverse: Transform,
+        stops: GradientStops,
+    },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// A gradient paint: its stops and the shape they are laid along.
 pub struct Gradient {
@@ -116,6 +135,39 @@ impl Gradient {
         Self {
             kind: GradientKind::Radial { transform },
             stops: GradientStops::new(stops),
+        }
+    }
+
+    /// What a backend paints: the gradient with its geometry made usable, or the one colour it collapses to when it has no extent to lay stops along, which is its last stop as a gradient past its end paints.
+    pub fn resolve(&self) -> ResolvedGradient {
+        let stops = self.stops;
+        let last = stops
+            .active()
+            .last()
+            .map_or(Color::TRANSPARENT, |stop| stop.color);
+        match self.kind {
+            GradientKind::Linear { start, end } => {
+                let (dx, dy) = (end.x - start.x, end.y - start.y);
+                let len_sq = dx * dx + dy * dy;
+                if len_sq > MIN_LINEAR_LENGTH_SQ {
+                    ResolvedGradient::Linear {
+                        start,
+                        end,
+                        ramp: [dx / len_sq, dy / len_sq],
+                        stops,
+                    }
+                } else {
+                    ResolvedGradient::Solid(last)
+                }
+            }
+            GradientKind::Radial { transform } => match transform.invert() {
+                Some(inverse) => ResolvedGradient::Radial {
+                    transform,
+                    inverse,
+                    stops,
+                },
+                None => ResolvedGradient::Solid(last),
+            },
         }
     }
 

@@ -1297,3 +1297,104 @@ fn an_elliptical_radial_gradient_ramps_half_as_fast_across_as_down_on_the_gpu() 
         );
     }
 }
+
+#[test]
+fn a_radial_gradient_with_no_area_paints_its_last_stop_on_the_gpu() {
+    let fill = || {
+        Paint::Gradient(Gradient::radial(
+            Point::new(40.0, 20.0),
+            0.0,
+            &[(0.0, Color::RED), (1.0, Color::BLUE)],
+        ))
+    };
+    let outline = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(80.0, 0.0))
+        .line_to(Point::new(80.0, 40.0))
+        .line_to(Point::new(0.0, 40.0))
+        .close();
+    let scenes = [
+        (
+            "rect",
+            DrawCommand::Rect {
+                rect: Rect::new(0.0, 0.0, 80.0, 40.0),
+                style: Arc::new(RectStyle::default().with_fill(fill())),
+            },
+        ),
+        (
+            "path",
+            DrawCommand::Path {
+                data: Arc::new(outline),
+                style: Arc::new(PathStyle::default().with_fill(fill())),
+            },
+        ),
+    ];
+    for (what, command) in scenes {
+        let Some(mut renderer) = headless(80, 40) else {
+            return;
+        };
+        renderer.begin_frame(80, 40, 1.0, 1).expect("begin_frame");
+        renderer
+            .render_frame(&[command], Some(Color::BLACK))
+            .expect("render_frame");
+        let pixels = renderer.read_rgba().expect("read_rgba");
+        for (x, y) in [(10usize, 10usize), (40, 20), (75, 35)] {
+            let px = &pixels[(y * 80 + x) * 4..][..4];
+            assert!(
+                px[0] <= 2 && px[1] <= 2 && px[2] >= 253 && px[3] == 255,
+                "{what}: pixel ({x}, {y}) is {px:?}, expected the last stop"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_linear_gradient_with_no_length_paints_its_last_stop_on_the_gpu() {
+    let point = Point::new(40.0, 20.0);
+    let fill = || {
+        Paint::Gradient(Gradient::linear(
+            point,
+            point,
+            &[(0.0, Color::RED), (1.0, Color::BLUE)],
+        ))
+    };
+    let outline = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(80.0, 0.0))
+        .line_to(Point::new(80.0, 40.0))
+        .line_to(Point::new(0.0, 40.0))
+        .close();
+    let scenes = [
+        (
+            "rect",
+            DrawCommand::Rect {
+                rect: Rect::new(0.0, 0.0, 80.0, 40.0),
+                style: Arc::new(RectStyle::default().with_fill(fill())),
+            },
+        ),
+        (
+            "path",
+            DrawCommand::Path {
+                data: Arc::new(outline),
+                style: Arc::new(PathStyle::default().with_fill(fill())),
+            },
+        ),
+    ];
+    for (what, command) in scenes {
+        let Some(mut renderer) = headless(80, 40) else {
+            return;
+        };
+        renderer.begin_frame(80, 40, 1.0, 1).expect("begin_frame");
+        renderer
+            .render_frame(&[command], Some(Color::BLACK))
+            .expect("render_frame");
+        let pixels = renderer.read_rgba().expect("read_rgba");
+        for (x, y) in [(10usize, 10usize), (40, 20), (75, 35)] {
+            let px = &pixels[(y * 80 + x) * 4..][..4];
+            assert!(
+                px[0] <= 2 && px[1] <= 2 && px[2] >= 253 && px[3] == 255,
+                "{what}: pixel ({x}, {y}) is {px:?}, expected the last stop"
+            );
+        }
+    }
+}

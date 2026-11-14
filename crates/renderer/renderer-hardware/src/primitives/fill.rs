@@ -34,13 +34,31 @@ pub(crate) fn encode_fill_style<const N: usize>(
     fill: &renderer_core::Paint,
     matrix: [f32; 6],
 ) -> EncodedFill<N> {
-    let g = match fill {
+    let resolved = match fill {
         renderer_core::Paint::Solid(c) => return EncodedFill::solid(c.to_array()),
-        renderer_core::Paint::Gradient(g) => g,
+        renderer_core::Paint::Gradient(g) => g
+            .transformed(geometry_core::Transform::from_array(matrix))
+            .resolve(),
+    };
+    let (fill_type, grad_origin, grad_map, stops) = match resolved {
+        renderer_core::ResolvedGradient::Solid(c) => return EncodedFill::solid(c.to_array()),
+        renderer_core::ResolvedGradient::Linear {
+            start, ramp, stops, ..
+        } => (1, [start.x, start.y], [ramp[0], ramp[1], 0.0, 0.0], stops),
+        renderer_core::ResolvedGradient::Radial {
+            transform,
+            inverse,
+            stops,
+        } => (
+            2,
+            [transform.e, transform.f],
+            [inverse.a, inverse.c, inverse.b, inverse.d],
+            stops,
+        ),
     };
     let mut positions = [0.0f32; N];
     let mut colors = [[0.0f32; 4]; N];
-    let active = g.stops.active();
+    let active = stops.active();
     // The shader holds only N gradient slots, so clamp to avoid an out-of-bounds write when core carries more.
     debug_assert!(
         active.len() <= N,
@@ -50,27 +68,6 @@ pub(crate) fn encode_fill_style<const N: usize>(
         positions[i] = s.position;
         colors[i] = s.color.to_array();
     }
-    let (fill_type, grad_origin, grad_map) = match g
-        .kind
-        .transformed(geometry_core::Transform::from_array(matrix))
-    {
-        renderer_core::GradientKind::Linear { start, end } => {
-            let (dx, dy) = (end.x - start.x, end.y - start.y);
-            let len_sq = dx * dx + dy * dy;
-            let map = if len_sq > 0.0001 {
-                [dx / len_sq, dy / len_sq, 0.0, 0.0]
-            } else {
-                [0.0; 4]
-            };
-            (1, [start.x, start.y], map)
-        }
-        renderer_core::GradientKind::Radial { transform } => {
-            let map = transform.invert().map_or([0.0; 4], |inverse| {
-                [inverse.a, inverse.c, inverse.b, inverse.d]
-            });
-            (2, [transform.e, transform.f], map)
-        }
-    };
     EncodedFill {
         fill_type,
         fill_color: [0.0; 4],

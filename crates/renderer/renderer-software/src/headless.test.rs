@@ -637,3 +637,66 @@ fn an_elliptical_radial_gradient_ramps_half_as_fast_across_as_down() {
         "15px across ({near_across}) should still be far redder than 15px down ({down})"
     );
 }
+
+#[test]
+fn a_radial_gradient_with_no_area_paints_its_last_stop() {
+    let outline = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(80.0, 0.0))
+        .line_to(Point::new(80.0, 40.0))
+        .line_to(Point::new(0.0, 40.0))
+        .close();
+    let fill = Paint::Gradient(Gradient::radial(
+        Point::new(40.0, 20.0),
+        0.0,
+        &[(0.0, Color::RED), (1.0, Color::BLUE)],
+    ));
+    let cmds = [DrawCommand::Path {
+        data: Arc::new(outline),
+        style: Arc::new(PathStyle::default().with_fill(fill)),
+    }];
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        80,
+        40,
+        SoftwareRendererConfig::default(),
+    );
+    renderer.begin_frame(80, 40, 1.0, 0).unwrap();
+    renderer.render_frame(&cmds, Some(Color::BLACK)).unwrap();
+    let rgba = renderer.read_rgba().unwrap();
+    for (x, y) in [(10usize, 10usize), (40, 20), (75, 35)] {
+        let px = &rgba[(y * 80 + x) * 4..][..4];
+        assert_eq!(px, [0, 0, 255, 255], "pixel ({x}, {y})");
+    }
+}
+
+#[test]
+fn a_linear_gradient_with_no_length_paints_its_last_stop() {
+    let outline = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .line_to(Point::new(80.0, 0.0))
+        .line_to(Point::new(80.0, 40.0))
+        .line_to(Point::new(0.0, 40.0))
+        .close();
+    let point = Point::new(40.0, 20.0);
+    let fill = Paint::Gradient(Gradient::linear(
+        point,
+        point,
+        &[(0.0, Color::RED), (1.0, Color::BLUE)],
+    ));
+    let cmds = [DrawCommand::Path {
+        data: Arc::new(outline),
+        style: Arc::new(PathStyle::default().with_fill(fill)),
+    }];
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        80,
+        40,
+        SoftwareRendererConfig::default(),
+    );
+    renderer.begin_frame(80, 40, 1.0, 0).unwrap();
+    renderer.render_frame(&cmds, Some(Color::BLACK)).unwrap();
+    let rgba = renderer.read_rgba().unwrap();
+    for (x, y) in [(10usize, 10usize), (40, 20), (75, 35)] {
+        let px = &rgba[(y * 80 + x) * 4..][..4];
+        assert_eq!(px, [0, 0, 255, 255], "pixel ({x}, {y})");
+    }
+}

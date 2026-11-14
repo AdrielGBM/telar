@@ -23,7 +23,7 @@ pub use declared::{Declared, Span, link_at};
 pub use decoration::{DecorationLength, DecorationLine, DecorationMetric, TextDecoration};
 pub use font_fit::{FitWidth, FontFit};
 pub use font_settings::{FontFeatures, FontTag, FontVariations};
-pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops};
+pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops, ResolvedGradient};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};
 pub use shape::{Border, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
 pub use span_segments::{Segment, span_segments};

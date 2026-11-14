@@ -172,3 +172,32 @@ fn an_elliptical_radial_fill_keeps_both_radii() {
         "{css}"
     );
 }
+
+#[test]
+fn a_radial_fill_with_no_area_is_its_last_stop() {
+    let css = css_of(
+        &RectStyle::default().with_fill(Paint::Gradient(Gradient::radial(
+            Point::new(40.0, 20.0),
+            0.0,
+            &[(0.0, Color::RED), (1.0, Color::BLUE)],
+        ))),
+    );
+    assert!(css.contains(&color(Color::BLUE)), "{css}");
+    assert!(!css.contains("gradient"), "{css}");
+    assert!(!css.contains(&color(Color::RED)), "{css}");
+}
+
+#[test]
+fn a_linear_fill_with_no_length_is_its_last_stop() {
+    let point = Point::new(40.0, 20.0);
+    let css = css_of(
+        &RectStyle::default().with_fill(Paint::Gradient(Gradient::linear(
+            point,
+            point,
+            &[(0.0, Color::RED), (1.0, Color::BLUE)],
+        ))),
+    );
+    assert!(css.contains(&color(Color::BLUE)), "{css}");
+    assert!(!css.contains("gradient"), "{css}");
+    assert!(!css.contains(&color(Color::RED)), "{css}");
+}

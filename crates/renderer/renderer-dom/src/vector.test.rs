@@ -490,3 +490,48 @@ fn an_elliptical_radial_gradient_is_the_unit_circle_under_its_transform() {
     );
     assert!(out.contains("fill=\"url(#t7-1)\""), "{out}");
 }
+
+#[test]
+fn a_radial_fill_with_no_area_is_its_last_stop() {
+    let mut d = drawing();
+    d.path(
+        &PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(80.0, 40.0)),
+        &PathStyle::default().with_fill(Paint::Gradient(Gradient::radial(
+            Point::new(40.0, 20.0),
+            0.0,
+            &[(0.0, Color::RED), (1.0, Color::BLUE)],
+        ))),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains(&format!("stop-color=\"{}\"", color(Color::BLUE))),
+        "{out}"
+    );
+    assert!(!out.contains(&color(Color::RED)), "{out}");
+    assert!(!out.contains("radialGradient"), "{out}");
+}
+
+#[test]
+fn a_linear_fill_with_no_length_is_its_last_stop() {
+    let mut d = drawing();
+    let point = Point::new(40.0, 20.0);
+    d.path(
+        &PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(80.0, 40.0)),
+        &PathStyle::default().with_fill(Paint::Gradient(Gradient::linear(
+            point,
+            point,
+            &[(0.0, Color::RED), (1.0, Color::BLUE)],
+        ))),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains(&format!("stop-color=\"{}\"", color(Color::BLUE))),
+        "{out}"
+    );
+    assert!(!out.contains(&color(Color::RED)), "{out}");
+    assert!(!out.contains("x1="), "{out}");
+}

@@ -1,7 +1,7 @@
 //! Logical rects to cell rects, and what colour a paint is at a point.
 
 use geometry_core::{CellSize, Point, Rect, Transform};
-use renderer_core::{Color, Gradient, GradientKind, Paint};
+use renderer_core::{Color, Gradient, GradientStop, Paint, ResolvedGradient};
 
 /// A half-open rectangle of cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,27 +64,22 @@ pub fn sample(paint: &Paint, x: f32, y: f32) -> Color {
 }
 
 fn sample_gradient(g: &Gradient, x: f32, y: f32) -> Color {
-    let t = match g.kind {
-        GradientKind::Linear { start, end } => {
-            let dx = end.x - start.x;
-            let dy = end.y - start.y;
-            let len2 = dx * dx + dy * dy;
-            if len2 <= f32::EPSILON {
-                0.0
-            } else {
-                ((x - start.x) * dx + (y - start.y) * dy) / len2
-            }
+    match g.resolve() {
+        ResolvedGradient::Solid(color) => color,
+        ResolvedGradient::Linear {
+            start, ramp, stops, ..
+        } => {
+            let t = (x - start.x) * ramp[0] + (y - start.y) * ramp[1];
+            stop_at(stops.active(), t.clamp(0.0, 1.0))
         }
-        GradientKind::Radial { transform } => transform.invert().map_or(1.0, |inverse| {
+        ResolvedGradient::Radial { inverse, stops, .. } => {
             let unit = inverse.apply(Point::new(x, y));
-            unit.x.hypot(unit.y)
-        }),
-    };
-    stop_at(g, t.clamp(0.0, 1.0))
+            stop_at(stops.active(), unit.x.hypot(unit.y).clamp(0.0, 1.0))
+        }
+    }
 }
 
-fn stop_at(g: &Gradient, t: f32) -> Color {
-    let stops = g.stops.active();
+fn stop_at(stops: &[GradientStop], t: f32) -> Color {
     match stops {
         [] => Color::TRANSPARENT,
         [only] => only.color,

@@ -73,3 +73,66 @@ fn a_linear_gradient_carried_through_a_transform_moves_both_ends() {
         }
     );
 }
+
+fn degenerate_radial() -> Gradient {
+    Gradient::elliptical(
+        Transform {
+            a: 0.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+            e: 40.0,
+            f: 20.0,
+        },
+        &[(0.0, Color::RED), (1.0, Color::BLUE)],
+    )
+}
+
+#[test]
+fn a_radial_gradient_with_no_area_collapses_to_its_last_stop() {
+    assert_eq!(
+        degenerate_radial().resolve(),
+        ResolvedGradient::Solid(Color::BLUE)
+    );
+}
+
+#[test]
+fn a_radial_gradient_squashed_flat_by_a_transform_collapses_to_its_last_stop() {
+    let flat = Gradient::radial(
+        Point::new(0.0, 0.0),
+        10.0,
+        &[(0.0, Color::RED), (1.0, Color::BLUE)],
+    )
+    .transformed(Transform::scale_around(1.0, 0.0, 0.0, 0.0));
+    assert_eq!(flat.resolve(), ResolvedGradient::Solid(Color::BLUE));
+}
+
+#[test]
+fn a_gradient_with_an_area_does_not_collapse() {
+    let radial = Gradient::radial(
+        Point::new(0.0, 0.0),
+        10.0,
+        &[(0.0, Color::RED), (1.0, Color::BLUE)],
+    );
+    assert!(matches!(radial.resolve(), ResolvedGradient::Radial { .. }));
+}
+
+#[test]
+fn a_linear_gradient_with_no_length_collapses_to_its_last_stop() {
+    let point = Point::new(5.0, 5.0);
+    let g = Gradient::linear(point, point, &[(0.0, Color::RED), (1.0, Color::BLUE)]);
+    assert_eq!(g.resolve(), ResolvedGradient::Solid(Color::BLUE));
+}
+
+#[test]
+fn a_linear_gradient_with_length_resolves_to_a_ramp_that_reaches_one_at_its_end() {
+    let g = Gradient::linear(
+        Point::new(0.0, 0.0),
+        Point::new(10.0, 0.0),
+        &[(0.0, Color::RED), (1.0, Color::BLUE)],
+    );
+    let ResolvedGradient::Linear { ramp, .. } = g.resolve() else {
+        panic!("a linear gradient with length stays linear");
+    };
+    assert_eq!(ramp[0] * 10.0 + ramp[1] * 0.0, 1.0);
+}

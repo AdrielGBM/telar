@@ -39,6 +39,14 @@ pub(crate) fn to_skia_stroke(stroke: &renderer_core::Stroke) -> tiny_skia::Strok
     }
 }
 
+fn skia_stops(stops: &renderer_core::GradientStops) -> Vec<tiny_skia::GradientStop> {
+    stops
+        .active()
+        .iter()
+        .map(|s| tiny_skia::GradientStop::new(s.position, to_skia_color(s.color)))
+        .collect()
+}
+
 #[inline]
 pub(crate) fn fill_to_paint(fill: renderer_core::Paint) -> tiny_skia::Paint<'static> {
     let mut paint = tiny_skia::Paint {
@@ -49,49 +57,45 @@ pub(crate) fn fill_to_paint(fill: renderer_core::Paint) -> tiny_skia::Paint<'sta
         renderer_core::Paint::Solid(c) => {
             paint.set_color(to_skia_color(c));
         }
-        renderer_core::Paint::Gradient(g) => {
-            let mut skia_stops = Vec::with_capacity(8);
-            skia_stops.extend(
-                g.stops
-                    .active()
-                    .iter()
-                    .map(|s| tiny_skia::GradientStop::new(s.position, to_skia_color(s.color))),
-            );
-            match g.kind {
-                renderer_core::GradientKind::Linear { start, end } => {
-                    if let Some(shader) = tiny_skia::LinearGradient::new(
-                        tiny_skia::Point::from_xy(start.x, start.y),
-                        tiny_skia::Point::from_xy(end.x, end.y),
-                        skia_stops,
-                        tiny_skia::SpreadMode::Pad,
-                        tiny_skia::Transform::identity(),
-                    ) {
-                        paint.shader = shader;
-                    }
-                }
-                renderer_core::GradientKind::Radial { transform } => {
-                    let origin = tiny_skia::Point::zero();
-                    if let Some(shader) = tiny_skia::RadialGradient::new(
-                        origin,
-                        0.0,
-                        origin,
-                        1.0,
-                        skia_stops,
-                        tiny_skia::SpreadMode::Pad,
-                        tiny_skia::Transform::from_row(
-                            transform.a,
-                            transform.b,
-                            transform.c,
-                            transform.d,
-                            transform.e,
-                            transform.f,
-                        ),
-                    ) {
-                        paint.shader = shader;
-                    }
+        renderer_core::Paint::Gradient(g) => match g.resolve() {
+            renderer_core::ResolvedGradient::Solid(c) => paint.set_color(to_skia_color(c)),
+            renderer_core::ResolvedGradient::Linear {
+                start, end, stops, ..
+            } => {
+                if let Some(shader) = tiny_skia::LinearGradient::new(
+                    tiny_skia::Point::from_xy(start.x, start.y),
+                    tiny_skia::Point::from_xy(end.x, end.y),
+                    skia_stops(&stops),
+                    tiny_skia::SpreadMode::Pad,
+                    tiny_skia::Transform::identity(),
+                ) {
+                    paint.shader = shader;
                 }
             }
-        }
+            renderer_core::ResolvedGradient::Radial {
+                transform, stops, ..
+            } => {
+                let origin = tiny_skia::Point::zero();
+                if let Some(shader) = tiny_skia::RadialGradient::new(
+                    origin,
+                    0.0,
+                    origin,
+                    1.0,
+                    skia_stops(&stops),
+                    tiny_skia::SpreadMode::Pad,
+                    tiny_skia::Transform::from_row(
+                        transform.a,
+                        transform.b,
+                        transform.c,
+                        transform.d,
+                        transform.e,
+                        transform.f,
+                    ),
+                ) {
+                    paint.shader = shader;
+                }
+            }
+        },
     }
     paint
 }

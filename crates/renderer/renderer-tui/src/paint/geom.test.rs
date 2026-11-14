@@ -84,3 +84,27 @@ fn a_radial_stretched_wide_reaches_its_last_stop_further_across_than_down() {
     assert_eq!(sample(&stretched, 0.0, 15.0), Color::WHITE);
     assert_eq!(sample(&stretched, 25.0, 0.0), Color::WHITE);
 }
+
+#[test]
+fn a_radial_with_no_area_paints_its_last_stop_everywhere() {
+    let g = Gradient::radial(
+        Point::new(5.0, 5.0),
+        0.0,
+        &[(0.0, Color::RED), (1.0, Color::BLUE)],
+    );
+    let paint = Paint::Gradient(g);
+    assert_eq!(sample(&paint, 5.0, 5.0), Color::BLUE);
+    assert_eq!(sample(&paint, 40.0, 9.0), Color::BLUE);
+}
+
+#[test]
+fn a_linear_with_no_length_paints_its_last_stop_everywhere() {
+    let point = Point::new(5.0, 5.0);
+    let paint = Paint::Gradient(Gradient::linear(
+        point,
+        point,
+        &[(0.0, Color::RED), (1.0, Color::BLUE)],
+    ));
+    assert_eq!(sample(&paint, 5.0, 5.0), Color::BLUE);
+    assert_eq!(sample(&paint, 40.0, 9.0), Color::BLUE);
+}
