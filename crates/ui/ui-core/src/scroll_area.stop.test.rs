@@ -90,7 +90,10 @@ fn the_stop(tree: &ui_tree::ComponentList, node: NodeId) -> Option<renderer_core
 }
 
 fn stops() -> Vec<Role> {
-    focus::tab_order().iter().map(|stop| stop.role).collect()
+    focus::tab_order()
+        .iter()
+        .map(|stop| stop.role.clone())
+        .collect()
 }
 
 fn key(key: NamedKey, modifiers: ModifiersState) -> Event {

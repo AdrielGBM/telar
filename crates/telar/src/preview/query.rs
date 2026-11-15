@@ -20,7 +20,7 @@ enum Name {
     Containing(String),
 }
 
-/// The nodes with `role`: `by_role(Role::Button).named("Save")`.
+/// The nodes with `role`, a link wherever it goes (see [`Role::is_same_role`]): `by_role(Role::Button).named("Save")`.
 pub fn by_role(role: Role) -> Query {
     Query {
         role: Some(role),
@@ -66,7 +66,10 @@ impl Query {
 
     /// Whether `node` has the role and name this query asks for, whatever its `nth`.
     pub fn matches(&self, node: &AccessNode) -> bool {
-        let role = self.role.is_none_or(|role| node.role == role);
+        let role = self
+            .role
+            .as_ref()
+            .is_none_or(|role| node.role.is_same_role(role));
         let name = match &self.name {
             None => true,
             Some(Name::Exact(name)) => node.name.trim() == name.trim(),
@@ -87,7 +90,7 @@ impl Query {
 
 impl fmt::Display for Query {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let role = self.role.map_or("node", |role| role.as_str());
+        let role = self.role.as_ref().map_or("node", |role| role.as_str());
         f.write_str(role)?;
         match &self.name {
             None => {}

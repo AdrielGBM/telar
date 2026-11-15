@@ -585,7 +585,7 @@ fn the_settings_menu_holds_a_submenu_per_choice_and_the_switches() {
                 Role::MenuItem | Role::MenuItemCheckBox | Role::MenuItemRadio
             )
         })
-        .map(|node| (node.role, node.name.clone()))
+        .map(|node| (node.role.clone(), node.name.clone()))
         .collect();
     let expected = [
         (Role::MenuItem, "Mode System"),
@@ -599,11 +599,11 @@ fn the_settings_menu_holds_a_submenu_per_choice_and_the_switches() {
         rows,
         expected
             .iter()
-            .map(|(role, name)| (*role, name.to_string()))
+            .map(|(role, name)| (role.clone(), name.to_string()))
             .collect::<Vec<_>>()
     );
     for (role, name) in &expected[..4] {
-        let row = workshop.control(*role, name);
+        let row = workshop.control(role.clone(), name);
         assert_eq!(row.has_popup, Some(telar::HasPopup::Menu), "{name}");
         assert_eq!(row.expanded, Some(false), "{name}");
     }

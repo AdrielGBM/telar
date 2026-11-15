@@ -235,9 +235,9 @@ pub use renderer_core::{
     DecorationLine, DecorationMetric, DrawCommand, DrawState, FillRule, FitWidth, FontFamily,
     FontFeatures, FontFit, FontStyle, FontTag, FontVariations, ForcedColors, Gradient,
     GradientKind, GradientStop, GradientStops, HeadingLevel, ImageData, ImageDataError, ImageFill,
-    ImageSlice, LayerMask, LineCap, LineHeight, LineJoin, Paint, PathData, PathStyle, PathVerb,
-    Raster, RectStyle, RendererError, Role, Scale, Semantics, Shadow, ShapeStyle, Span, Stroke,
-    TextAlign, TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap,
+    ImageSlice, LayerMask, LineCap, LineHeight, LineJoin, Link, Paint, PathData, PathStyle,
+    PathVerb, Raster, RectStyle, RendererError, Role, Scale, Semantics, Shadow, ShapeStyle, Span,
+    Stroke, TextAlign, TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap,
     for_each_with_matrix, hash_draw_commands, transform_clip_rect,
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory`, whose `TextMetrics` says what "how wide is this string" means on the surface it draws.

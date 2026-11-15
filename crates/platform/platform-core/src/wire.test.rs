@@ -8,11 +8,11 @@ use wire_core::{Wire, WireError, decode, encode};
 
 use crate::{
     AccessAction, AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation,
-    ActionSupport, ColorScheme, CurrentKind, Cursor, DragActions, DragData, DragIcon, DragOutcome,
+    ActionSupport, ColorScheme, Cursor, Destination, DragActions, DragData, DragIcon, DragOutcome,
     DropAction, DropAnswer, DroppedData, Event, FullscreenMode, HasPopup, HistoryStep,
-    HistoryUpdate, Ime, Key, KeyboardConvention, Location, MimeType, ModifiersState, NamedKey,
-    NumericValue, Orientation, OutgoingDrag, PointerButton, PointerSource, ResizeEdge, Role,
-    ScrollDelta, SetPosition, SortDirection, SystemPreferences, TextInput, TextScale,
+    HistoryUpdate, Ime, Key, KeyboardConvention, Link, Location, MimeType, ModifiersState,
+    NamedKey, NumericValue, Orientation, OutgoingDrag, PointerButton, PointerSource, ResizeEdge,
+    Role, ScrollDelta, SetPosition, SortDirection, SystemPreferences, TextInput, TextScale,
     TextSelection, Toggle, Value, WindowCommand, WindowConfig, WindowPosition,
 };
 
@@ -397,8 +397,6 @@ fn node() -> AccessNode {
         required: true,
         readonly: true,
         lang: Some(semantics_core::locale_tag!("es")),
-        url: Some("/docs#intro".into()),
-        current: Some(CurrentKind::Location),
         orientation: Some(Orientation::Horizontal),
         expanded: Some(false),
         position: Some(SetPosition {
@@ -444,8 +442,6 @@ fn audit() -> AccessAudit {
                 required: false,
                 readonly: false,
                 lang: None,
-                url: None,
-                current: None,
                 orientation: None,
                 expanded: None,
                 position: None,
@@ -461,6 +457,13 @@ fn audit() -> AccessAudit {
                 supports: Default::default(),
             },
             node(),
+            AccessNode {
+                role: Role::Link(Link {
+                    destination: Some(Destination::anchor("intro")),
+                    current: true,
+                }),
+                ..node()
+            },
         ],
         violations: AccessRule::ALL
             .into_iter()

@@ -138,7 +138,7 @@ impl Mounted {
     }
 
     fn rect(&self, role: Role, name: &str) -> Rect {
-        self.node(role, name)
+        self.node(role.clone(), name)
             .unwrap_or_else(|| panic!("a {role:?} named `{name}`"))
             .rect
     }

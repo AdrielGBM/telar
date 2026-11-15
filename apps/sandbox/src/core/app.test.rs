@@ -93,9 +93,12 @@ fn current_links(tree: &telar::ComponentList) -> Vec<telar::Destination> {
     tree.commands()
         .iter()
         .filter_map(|command| match command {
-            telar::DrawCommand::PushElement { element } if element.semantics.current => {
-                element.semantics.link.clone()
-            }
+            telar::DrawCommand::PushElement { element } => element
+                .semantics
+                .role
+                .link()
+                .filter(|link| link.current)
+                .and_then(|link| link.destination.clone()),
             _ => None,
         })
         .collect()

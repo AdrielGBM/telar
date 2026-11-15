@@ -9,11 +9,11 @@ use std::sync::Arc;
 ///
 /// A box a primary press or the keyboard activates *is* a button whether or not anybody said so; one answering only an alt or a long press is not, or a reader would offer an activation that does nothing over the controls it wraps. The derivation is what keeps most of an interface meaningful without a word of markup. It stays a derivation and not a default, so a box that says it is a menu item is one, press or no press.
 pub(crate) fn role_of(
-    declared: Option<renderer_core::Role>,
+    declared: Option<&renderer_core::Role>,
     activates: bool,
 ) -> renderer_core::Role {
     match (declared, activates) {
-        (Some(role), _) => role,
+        (Some(role), _) => role.clone(),
         (None, true) => renderer_core::Role::Button,
         (None, false) => renderer_core::Role::Group,
     }
@@ -65,9 +65,10 @@ pub(crate) fn identity_linking(
 ) -> Arc<Element> {
     Arc::new(Element::new(
         ElementId(node.into()),
-        Semantics::group()
-            .linking_to(destination)
-            .marked_current(current),
+        Semantics::of(renderer_core::Role::Link(renderer_core::Link {
+            destination: Some(destination),
+            current,
+        })),
         "",
         Rect::default(),
     ))

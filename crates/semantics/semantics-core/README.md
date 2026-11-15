@@ -15,9 +15,9 @@ button), selected (a tab) or expanded (a disclosure). Its value is a `Value`, a 
 text; `description`, `invalid`, `required` and `readonly` say the rest of what a field is. A live region's urgency,
 `Live`, is its role's to say (`Role::live`): `status` and `log` are polite, `alert` assertive. See [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#controls-and-their-state).
 
-A link marked current is `Semantics::current`, and what it is the current one of (`CurrentKind`: a page, a
-location on the page, or plainly the current item) is its destination's to say, through
-`Destination::current_kind`. See [docs/links.md](https://github.com/AdrielGBM/telar/blob/main/docs/links.md#the-current-link).
+A link carries where it goes and whether it is current in its role, `Role::Link(Link)`, so nothing else can;
+what a current link is the current one of (`CurrentKind`: a page, a location on the page, or plainly the
+current item) is its destination's to say, through `Link::current_kind`. See [docs/links.md](https://github.com/AdrielGBM/telar/blob/main/docs/links.md#the-current-link).
 
 **Applications depend on the [`telar`](https://crates.io/crates/telar) facade, not on this crate.** Telar
 is split into small crates so a build carries only the target and the capabilities it named, and every one

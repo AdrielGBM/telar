@@ -721,7 +721,7 @@ fn inside_main(commands: &[telar::DrawCommand]) -> Vec<(String, bool)> {
                 if element.semantics.role == Role::Splitter {
                     drawn.push(("splitter".to_string(), open.contains(&Role::Main)));
                 }
-                open.push(element.semantics.role);
+                open.push(element.semantics.role.clone());
             }
             telar::DrawCommand::PopElement => {
                 open.pop();

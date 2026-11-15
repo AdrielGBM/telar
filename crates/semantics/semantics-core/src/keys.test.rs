@@ -1,5 +1,5 @@
 use super::*;
-use crate::HeadingLevel;
+use crate::{HeadingLevel, Link};
 
 #[test]
 fn a_set_survives_being_written_down_and_read_back() {
@@ -70,7 +70,10 @@ fn a_list_box_and_its_options_keep_what_a_menu_keeps() {
 
 #[test]
 fn a_link_leaves_its_keys_to_the_host_that_follows_it() {
-    assert_eq!(Role::Link.consumed_keys(), ConsumedKeys::EMPTY);
+    assert_eq!(
+        Role::Link(Link::default()).consumed_keys(),
+        ConsumedKeys::EMPTY
+    );
 }
 
 #[test]
@@ -109,7 +112,7 @@ fn what_is_only_read_keeps_nothing() {
 fn every_control_but_a_link_keeps_something() {
     for role in ALL_ROLES
         .into_iter()
-        .filter(|role| role.is_control() && *role != Role::Link)
+        .filter(|role| role.is_control() && role.link().is_none())
     {
         assert!(!role.consumed_keys().is_empty(), "{role:?}");
     }
@@ -133,7 +136,10 @@ const ALL_ROLES: [Role; 45] = [
     Role::Drawing,
     Role::Dialog,
     Role::Button,
-    Role::Link,
+    Role::Link(Link {
+        destination: None,
+        current: false,
+    }),
     Role::CheckBox,
     Role::RadioGroup,
     Role::Radio,

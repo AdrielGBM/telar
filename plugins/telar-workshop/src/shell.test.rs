@@ -132,12 +132,12 @@ impl<A: App> Workshop<A> {
         for command in commands.iter() {
             match command {
                 DrawCommand::PushElement { element } => {
-                    let role = element.semantics.role;
+                    let role = element.semantics.role.clone();
                     let name = reading
                         .get(NodeId::from(element.id.0))
                         .and_then(|box_reading| box_reading.name.as_deref());
                     let around: Vec<String> = open.iter().flatten().cloned().collect();
-                    if visit(role, name, &around) {
+                    if visit(role.clone(), name, &around) {
                         return;
                     }
                     open.push(role.is_region().then(|| landmark_name(role, name)));
@@ -151,7 +151,7 @@ impl<A: App> Workshop<A> {
     }
 
     fn region(&self, role: Role, name: &str) -> Rect {
-        self.find(role, name)
+        self.find(role.clone(), name)
             .unwrap_or_else(|| panic!("no {role:?} is announced as {name}"))
             .rect
     }

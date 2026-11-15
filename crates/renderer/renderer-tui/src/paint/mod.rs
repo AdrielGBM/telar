@@ -112,7 +112,12 @@ impl<'a> Painter<'a> {
             } => self.image(data, *rect, *raster),
             // Structure, for a backend whose output is a document. The commands inside are already where they belong; all a terminal takes from it is which glyphs an external link covers, which it marks with OSC 8.
             DrawCommand::PushElement { element } => {
-                let link = match &element.semantics.link {
+                let link = match element
+                    .semantics
+                    .role
+                    .link()
+                    .and_then(|link| link.destination.as_ref())
+                {
                     Some(Destination::External(uri)) => self.buf.link_id(uri.as_str()),
                     _ => self.link(),
                 };

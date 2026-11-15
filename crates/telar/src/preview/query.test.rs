@@ -17,8 +17,6 @@ fn node(role: Role, name: &str) -> AccessNode {
         required: false,
         readonly: false,
         lang: None,
-        url: None,
-        current: None,
         orientation: None,
         expanded: None,
         position: None,
@@ -40,7 +38,15 @@ fn a_role_query_names_the_whole_name_ignoring_the_space_around_it() {
     let query = by_role(Role::Button).named("Save");
     assert!(query.matches(&node(Role::Button, " Save ")));
     assert!(!query.matches(&node(Role::Button, "Save all")));
-    assert!(!query.matches(&node(Role::Link, "Save")));
+    assert!(!query.matches(&node(Role::Link(crate::Link::default()), "Save")));
+}
+
+#[test]
+fn a_link_query_finds_a_link_wherever_it_goes() {
+    let query = by_role(Role::Link(crate::Link::default())).named("About");
+    let to_about = crate::Link::to(crate::Destination::anchor("about"));
+    assert!(query.matches(&node(Role::Link(to_about), "About")));
+    assert!(!query.matches(&node(Role::Button, "About")));
 }
 
 #[test]

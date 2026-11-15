@@ -6,7 +6,7 @@ use crate::{LocaleTag, Location, Uri, UriError};
 
 /// Where a link goes, as the intent rather than as an address.
 ///
-/// Each target turns it into its own way of going there: a web page writes an `<a href>`, a desktop hands an external one to the system, a terminal marks it with OSC 8. The box carrying one is a [`Link`](crate::Role::Link) whatever else it said.
+/// Each target turns it into its own way of going there: a web page writes an `<a href>`, a desktop hands an external one to the system, a terminal marks it with OSC 8. A box carries one in its [`Role::Link`](crate::Role::Link), so only a link goes anywhere.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Destination {
     /// A place in this app, opened as a new entry of its history.

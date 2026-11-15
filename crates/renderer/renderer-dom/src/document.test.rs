@@ -397,30 +397,35 @@ fn current_attribute(semantics: Semantics) -> Option<String> {
 /// A route is the current page, an anchor the current location on it, and a language or an outside address just the current one; a link not marked, or one that goes nowhere, says nothing.
 #[test]
 fn a_current_link_says_what_it_is_the_current_one_of() {
-    let link = |destination: Destination| Semantics::group().linking_to(destination);
+    let link = |destination: Destination, current: bool| {
+        Semantics::of(Role::Link(Link {
+            destination: Some(destination),
+            current,
+        }))
+    };
     let route = Destination::Route(platform_core::Location::root().segment("about"));
     assert_eq!(
-        current_attribute(link(route).marked_current(true)).as_deref(),
+        current_attribute(link(route, true)).as_deref(),
         Some("page")
     );
     assert_eq!(
-        current_attribute(link(Destination::anchor("web")).marked_current(true)).as_deref(),
+        current_attribute(link(Destination::anchor("web"), true)).as_deref(),
         Some("location")
     );
     assert_eq!(
-        current_attribute(
-            link(Destination::Locale(platform_core::locale_tag!("en"))).marked_current(true)
-        )
+        current_attribute(link(
+            Destination::Locale(platform_core::locale_tag!("en")),
+            true
+        ))
         .as_deref(),
         Some("true")
     );
-    assert_eq!(current_attribute(link(Destination::anchor("web"))), None);
     assert_eq!(
-        current_attribute(
-            link(Destination::anchor("web"))
-                .marked_current(true)
-                .in_state(false, None, true)
-        ),
+        current_attribute(link(Destination::anchor("web"), false)),
+        None
+    );
+    assert_eq!(
+        current_attribute(link(Destination::anchor("web"), true).in_state(false, None, true)),
         None,
         "a disabled link is no `<a href>`, so it is the current one of nothing"
     );
@@ -653,7 +658,7 @@ fn the_workbench_roles_are_the_aria_roles_of_the_same_name() {
         (Role::ListBox, "listbox"),
         (Role::Option, "option"),
     ] {
-        assert_eq!(aria_role(role), Some(aria), "{role:?}");
+        assert_eq!(aria_role(&role), Some(aria), "{role:?}");
         assert_eq!(tag_of(&role), "div", "{role:?}");
     }
 }
@@ -1803,7 +1808,7 @@ fn an_item_writes_only_the_numbers_its_role_takes() {
         Role::Radio,
     ] {
         assert_eq!(
-            placed_attributes(role, third_of_forty),
+            placed_attributes(role.clone(), third_of_forty),
             place(None),
             "{role:?}"
         );
@@ -1817,7 +1822,11 @@ fn an_item_writes_only_the_numbers_its_role_takes() {
         Role::Heading(HeadingLevel::Two),
         Role::GridCell,
     ] {
-        assert_eq!(placed_attributes(role, third_of_forty), [], "{role:?}");
+        assert_eq!(
+            placed_attributes(role.clone(), third_of_forty),
+            [],
+            "{role:?}"
+        );
     }
 }
 
@@ -2030,7 +2039,7 @@ fn a_live_region_behind_a_modal_layer_is_still_announced() {
             open(1, Semantics::group()),
             open(2, Semantics::of(Role::Button)),
             DrawCommand::PopElement,
-            open(3, Semantics::of(live)),
+            open(3, Semantics::of(live.clone())),
             open(4, Semantics::group()),
             DrawCommand::PopElement,
             open(5, Semantics::of(Role::Button)),

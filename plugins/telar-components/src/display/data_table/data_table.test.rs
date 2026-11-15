@@ -1120,7 +1120,7 @@ fn the_header_row_is_still_read_once_the_rows_have_scrolled_under_it() {
     );
     let after: Vec<(Role, &str)> = nodes[header + 1..header + 4]
         .iter()
-        .map(|node| (node.role, node.name.as_str()))
+        .map(|node| (node.role.clone(), node.name.as_str()))
         .collect();
     assert_eq!(
         after,
@@ -1152,7 +1152,7 @@ fn a_table_reads_as_a_grid_of_rows_that_hold_their_cells() {
         .iter()
         .map(|&row| {
             (
-                nodes[row].role,
+                nodes[row].role.clone(),
                 nodes[row].position.map(|place| place.position.get()),
             )
         })
@@ -1169,7 +1169,7 @@ fn a_table_reads_as_a_grid_of_rows_that_hold_their_cells() {
     let cells = |row: usize| -> Vec<(Role, &str)> {
         held(row)
             .into_iter()
-            .map(|cell| (nodes[cell].role, nodes[cell].name.as_str()))
+            .map(|cell| (nodes[cell].role.clone(), nodes[cell].name.as_str()))
             .collect()
     };
     assert_eq!(

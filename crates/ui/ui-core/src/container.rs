@@ -171,8 +171,8 @@ impl Component for Container {
             ),
         };
         // A transparent box still owns a layout node, and its children are laid out by it, so attaching them to its parent would put them in the wrong flow.
-        let role = crate::element::role_of(self.role, self.press.activates());
-        let element = crate::element::for_target(self.node, role, || {
+        let role = crate::element::role_of(self.role.as_ref(), self.press.activates());
+        let element = crate::element::for_target(self.node, role.clone(), || {
             let mut semantics = renderer_core::Semantics::of(role);
             semantics.click_through = !self.occludes();
             crate::element::with_semantics(self.node, semantics)

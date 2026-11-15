@@ -571,11 +571,11 @@ fn nested_controls(tree: &ComponentList) -> Vec<(Role, Role)> {
     for command in tree.commands().iter() {
         match command {
             DrawCommand::PushElement { element } => {
-                let role = element.semantics.role;
+                let role = element.semantics.role.clone();
                 if role.is_control()
                     && let Some(outer) = open.iter().rev().find(|outer| outer.is_control())
                 {
-                    nested.push((*outer, role));
+                    nested.push((outer.clone(), role.clone()));
                 }
                 open.push(role);
             }

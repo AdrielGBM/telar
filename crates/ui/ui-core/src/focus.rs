@@ -964,7 +964,7 @@ fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
 }
 
 /// One place Tab stops: the focusable, the box it is, and what it is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TabStop {
     pub id: FocusId,
     /// `None` for a focus id that belongs to no widget.
@@ -985,7 +985,7 @@ pub fn tab_order() -> Vec<TabStop> {
                 let stop = TabStop {
                     id: e.id,
                     node: e.node,
-                    role: e.role,
+                    role: e.role.clone(),
                 };
                 (stop, e.stop.clone())
             })
@@ -1406,7 +1406,7 @@ pub fn exposed() -> Vec<Exposed> {
                 (
                     e.id,
                     e.node,
-                    e.role,
+                    e.role.clone(),
                     e.toggled.clone(),
                     e.value.clone(),
                     e.help.clone(),
@@ -1598,7 +1598,7 @@ pub(crate) fn describe(
     semantics.multiselectable = multiselectable_state(id);
     semantics.active_descendant = active_descendant_state(id).and_then(node_of).map(u64::from);
     semantics.controls = controls_state(id).and_then(node_of).map(u64::from);
-    semantics.focusable = Some(focusable_of(id, semantics.role, declared));
+    semantics.focusable = Some(focusable_of(id, semantics.role.clone(), declared));
 }
 
 /// How the keyboard reaches `id` right now: whether Tab stops there, and which keys it keeps.

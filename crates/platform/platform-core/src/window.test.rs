@@ -36,8 +36,6 @@ impl EventHandler<TestWindow> for TestHandler {
             required: false,
             readonly: false,
             lang: None,
-            url: None,
-            current: None,
             orientation: None,
             expanded: None,
             position: None,

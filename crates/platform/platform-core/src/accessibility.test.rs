@@ -20,8 +20,6 @@ fn node(role: Role, name: &str) -> AccessNode {
         required: false,
         readonly: false,
         lang: None,
-        url: None,
-        current: None,
         orientation: None,
         expanded: None,
         position: None,
@@ -140,18 +138,30 @@ fn a_control_that_opens_something_says_what() {
 /// The link to where the reader is says so after its role, before whether it is focused, whatever it is the current one of.
 #[test]
 fn a_current_link_says_so() {
-    let link = |name: &str, current: Option<CurrentKind>| {
-        let mut node = node(Role::Link, name);
-        node.current = current;
-        node
+    let link = |name: &str, destination: crate::Destination, current: bool| {
+        node(
+            Role::Link(Link {
+                destination: Some(destination),
+                current,
+            }),
+            name,
+        )
     };
-    let mut page = link("Home", Some(CurrentKind::Page));
+    let mut page = link("Home", crate::Location::root().into(), true);
     page.focused = true;
     let nodes = [
         page,
-        link("Desktop", Some(CurrentKind::Location)),
-        link("Simulation", None),
-        link("EN", Some(CurrentKind::Item)),
+        link("Desktop", crate::Destination::anchor("desktop"), true),
+        link(
+            "Simulation",
+            crate::Destination::anchor("simulation"),
+            false,
+        ),
+        link(
+            "EN",
+            crate::Destination::Locale(semantics_core::locale_tag!("en")),
+            true,
+        ),
     ];
     assert_eq!(
         transcript(&nodes),

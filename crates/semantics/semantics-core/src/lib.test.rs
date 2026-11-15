@@ -115,7 +115,7 @@ fn the_role_says_what_its_on_off_state_is() {
     );
     assert_eq!(Role::Disclosure.toggle_kind(), Some(ToggleKind::Expanded));
     for role in [
-        Role::Link,
+        Role::Link(Link::default()),
         Role::Slider,
         Role::Navigation,
         Role::Group,
@@ -203,24 +203,47 @@ fn a_language_is_an_annotation_even_without_a_name() {
 
 #[test]
 fn only_a_link_with_somewhere_to_go_is_current() {
-    let link = Semantics::group().linking_to(Destination::anchor("web"));
+    let link = Link::to(Destination::anchor("web"));
     assert_eq!(link.current_kind(), None, "not marked");
     assert_eq!(
-        link.marked_current(true).current_kind(),
+        Link {
+            current: true,
+            ..link
+        }
+        .current_kind(),
         Some(CurrentKind::Location)
     );
     assert_eq!(
-        Semantics::of(Role::Link)
-            .marked_current(true)
-            .current_kind(),
+        Link {
+            destination: None,
+            current: true,
+        }
+        .current_kind(),
         None,
         "a disabled link goes nowhere, so it is the current one of nothing"
     );
+}
+
+#[test]
+fn only_a_link_carries_a_destination() {
+    let link = Role::Link(Link::to(Destination::anchor("web")));
     assert_eq!(
-        Semantics::of(Role::Button)
-            .marked_current(true)
-            .current_kind(),
-        None
+        link.link().and_then(|link| link.destination.clone()),
+        Some(Destination::anchor("web"))
+    );
+    for role in [Role::Button, Role::Group, Role::Navigation, Role::Tab] {
+        assert_eq!(role.link(), None, "{role:?}");
+    }
+}
+
+#[test]
+fn a_link_is_the_same_role_wherever_it_goes() {
+    let to_web = Role::Link(Link::to(Destination::anchor("web")));
+    assert!(to_web.is_same_role(&Role::Link(Link::default())));
+    assert!(!to_web.is_same_role(&Role::Button));
+    assert!(
+        !Role::Heading(HeadingLevel::One).is_same_role(&Role::Heading(HeadingLevel::Two)),
+        "a heading's level is part of what it is"
     );
 }
 
@@ -441,7 +464,7 @@ fn only_the_roles_that_describe_a_box_can_be_said_from_outside_it() {
     }
     for role in [
         Role::Button,
-        Role::Link,
+        Role::Link(Link::default()),
         Role::Switch,
         Role::Option,
         Role::List,
@@ -464,8 +487,11 @@ fn only_the_roles_that_describe_a_box_can_be_said_from_outside_it() {
 #[test]
 fn a_said_role_replaces_only_a_group_or_a_region() {
     let navigation = Some(Role::Navigation);
-    assert_eq!(Role::Group.annotated(navigation), Role::Navigation);
-    assert_eq!(Role::Section.annotated(navigation), Role::Navigation);
+    assert_eq!(Role::Group.annotated(navigation.clone()), Role::Navigation);
+    assert_eq!(
+        Role::Section.annotated(navigation.clone()),
+        Role::Navigation
+    );
     assert_eq!(
         Role::Group.annotated(Some(Role::Heading(HeadingLevel::Three))),
         Role::Heading(HeadingLevel::Three)
@@ -477,7 +503,7 @@ fn a_said_role_replaces_only_a_group_or_a_region() {
         Role::ScrollArea,
         Role::Drawing,
     ] {
-        assert_eq!(made.annotated(navigation), made, "{made:?}");
+        assert_eq!(made.clone().annotated(navigation.clone()), made, "{made:?}");
     }
     assert_eq!(
         Role::Group.annotated(Some(Role::Button)),

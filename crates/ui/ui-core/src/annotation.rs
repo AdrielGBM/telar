@@ -163,7 +163,7 @@ pub trait Accessible: LayoutItem + Sized {
             role.as_str()
         );
         follow(self.layout_node(), move |annotation| {
-            annotation.role = Some(role);
+            annotation.role = Some(role.clone());
         });
         self
     }

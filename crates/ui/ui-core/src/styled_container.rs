@@ -297,7 +297,7 @@ impl StyledContainer {
     /// The role is derived rather than declared — a box a press activates *is* a button whether or not anybody said so, and one that declines pointer events is one the document should let events through.
     fn element(&self) -> std::sync::Arc<renderer_core::Element> {
         let mut semantics = renderer_core::Semantics::of(crate::element::role_of(
-            self.role,
+            self.role.as_ref(),
             self.press.activates(),
         ));
         semantics.click_through = !self.occludes();
@@ -313,14 +313,12 @@ impl StyledContainer {
             .value
             .or_else(|| self.value.as_ref().and_then(|read| read()));
         if let Some(link) = &self.link {
-            semantics = match link() {
-                Some(destination) => semantics.linking_to(destination),
-                None => renderer_core::Semantics {
-                    disabled: true,
-                    ..semantics.with_role(renderer_core::Role::Link)
-                },
-            };
-            semantics.current = self.is_current();
+            let destination = link();
+            semantics.disabled |= destination.is_none();
+            semantics.role = renderer_core::Role::Link(renderer_core::Link {
+                destination,
+                current: self.is_current(),
+            });
         }
         crate::element::with_semantics(self.node, semantics)
     }
@@ -646,7 +644,7 @@ impl StyledContainer {
     ///
     /// Deliberately not implied by [`on_press`](Self::on_press): a scrim, a click-away backdrop and a drag surface all take presses and none of them is a place the keyboard should stop.
     pub fn control(mut self, role: focus::Role) -> Self {
-        self.role = Some(role);
+        self.role = Some(role.clone());
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_with_role(id, focus::FocusKind::Widget, self.node, role);
         focus::set_activation(id, self.press.activation());
@@ -675,7 +673,7 @@ impl StyledContainer {
                 crate::link::follow_pressed(&destination, crate::modifiers());
             }
         });
-        self.control(renderer_core::Role::Link)
+        self.control(renderer_core::Role::Link(renderer_core::Link::default()))
     }
 
     /// Marks the link as the current one of its set while `current` reads true: the page being shown, or the place on the page the reader is at, as its destination says. Re-read whenever what it read changes, so a link can follow [`use_anchor_at`](crate::use_anchor_at) or the location.
@@ -695,15 +693,15 @@ impl StyledContainer {
     }
 
     /// The role given by [`role`](Self::role), [`control`](Self::control) or [`presented`](Self::presented); `None` while the box has none and its role is still derived from what it answers.
-    pub fn declared_role(&self) -> Option<renderer_core::Role> {
-        self.role
+    pub fn declared_role(&self) -> Option<&renderer_core::Role> {
+        self.role.as_ref()
     }
 
     /// Announces the box as a control of `role` that something else drives: the rows of a tree, walked with the arrows while the tree holds focus. It is no Tab stop, and a tap on it leaves focus where it is, but it carries [`toggled`](Self::toggled), [`expanded`](Self::expanded) and [`positioned`](Self::positioned) like any control.
     ///
     /// `reach` is the owner's way to it: it moves the owner's cursor onto this box, and is what a reader moving to the box runs (see [`focus::register_presented`]). A reader activating the box runs its press, and focus stays with the owner.
     pub fn presented(mut self, role: focus::Role, reach: impl Fn() + 'static) -> Self {
-        self.role = Some(role);
+        self.role = Some(role.clone());
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_presented(id, self.node, role, reach);
         focus::set_activation(id, self.press.activation());
@@ -1373,7 +1371,7 @@ impl StyledContainer {
             },
             _ => crate::element::for_stated_target(
                 self.node,
-                crate::element::role_of(self.role, self.press.activates()),
+                crate::element::role_of(self.role.as_ref(), self.press.activates()),
                 |semantics| renderer_core::Semantics {
                     position: self.position.as_ref().map(|read| read()),
                     value: self.value.as_ref().and_then(|read| read()),
@@ -1411,6 +1409,7 @@ impl StyledContainer {
 
     fn role_keys(&self) -> ConsumedKeys {
         self.role
+            .as_ref()
             .map_or(ConsumedKeys::EMPTY, |role| role.consumed_keys())
     }
 

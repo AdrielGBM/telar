@@ -74,8 +74,6 @@ fn access_node(name: &str, role: Role, rect: Rect) -> AccessNode {
         required: false,
         readonly: false,
         lang: None,
-        url: None,
-        current: None,
         orientation: None,
         expanded: None,
         position: None,

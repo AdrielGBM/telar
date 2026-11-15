@@ -60,8 +60,6 @@ fn node(role: Role, name: &str, parent: Option<usize>) -> AccessNode {
         required: false,
         readonly: false,
         lang: None,
-        url: None,
-        current: None,
         orientation: None,
         expanded: None,
         position: None,

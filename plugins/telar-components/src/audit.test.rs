@@ -815,7 +815,7 @@ const PALETTE: telar::OverlayName = telar::OverlayName::new("commands");
 
 /// A list that scrolls is one control that takes focus, drawn where it opened; focused, it points a reader at the row its cursor is on, a `menuitem` of a menu or an `option` of a list box.
 async fn assert_list_points_at_its_cursor(list: Role, row_role: &str, what: &str) {
-    focus::request(focusable(list).id);
+    focus::request(focusable(list.clone()).id);
     key(telar::NamedKey::ArrowDown);
     let host = render();
     let row = pointed_at(&host, list.as_str());

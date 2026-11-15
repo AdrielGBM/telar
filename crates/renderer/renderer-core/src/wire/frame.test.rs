@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use geometry_core::{Point, Rect, Transform};
 use semantics_core::{
-    ConsumedKeys, Destination, HasPopup, HeadingLevel, Location, Modal, NumericValue, Orientation,
+    ConsumedKeys, Destination, HasPopup, Link, Location, Modal, NumericValue, Orientation,
     SetPosition, SortDirection, Toggle, Uri, Value,
 };
 
@@ -122,10 +122,12 @@ fn spans() -> Arc<[Span]> {
 
 fn semantics() -> Semantics {
     Semantics {
-        role: Role::Heading(HeadingLevel::Three),
+        role: Role::Link(Link {
+            destination: Some(Destination::anchor("settings")),
+            current: true,
+        }),
         label: Some("Settings".into()),
         description: Some("Where the app is set up".into()),
-        link: Some(Destination::anchor("settings")),
         focused: true,
         toggled: Some(Toggle::Mixed),
         disabled: true,
@@ -140,7 +142,6 @@ fn semantics() -> Semantics {
         lang: Some(semantics_core::locale_tag!("es")),
         hidden: true,
         anchor: Some("top".into()),
-        current: true,
         value: Some(Value::Number {
             reading: NumericValue::new(-1.0..=2.5, 0.3).expect("a reading within its range"),
             text: Some("a third".into()),
@@ -615,8 +616,10 @@ fn a_link_to_a_scheme_the_host_refuses_is_dropped_and_the_frame_still_draws() {
     let element = Element::new(
         ElementId(1),
         Semantics {
-            role: Role::Link,
-            link: Some(link()),
+            role: Role::Link(Link {
+                destination: Some(link()),
+                current: false,
+            }),
             ..Semantics::default()
         },
         "",
@@ -647,8 +650,11 @@ fn a_link_to_a_scheme_the_host_refuses_is_dropped_and_the_frame_still_draws() {
         .decode(&bytes, &mut out, |_| None)
         .unwrap();
     assert_eq!(out.len(), 3);
-    assert_eq!(element_of(&out[0]).semantics.link, None);
-    assert_eq!(element_of(&out[0]).semantics.role, Role::Link);
+    assert_eq!(
+        element_of(&out[0]).semantics.role,
+        Role::Link(Link::default()),
+        "still a link, going nowhere"
+    );
     let DrawCommand::Text { spans, text, .. } = &out[1] else {
         panic!("expected text, got {:?}", out[1]);
     };

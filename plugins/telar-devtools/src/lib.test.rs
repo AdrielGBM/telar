@@ -509,8 +509,6 @@ fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
         required: false,
         readonly: false,
         lang: None,
-        url: None,
-        current: None,
         orientation: None,
         expanded: None,
         position: None,

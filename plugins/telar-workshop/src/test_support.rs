@@ -69,7 +69,7 @@ pub fn control_matching(
             let controls: Vec<_> = nodes
                 .iter()
                 .filter(|node| node.id.is_some())
-                .map(|node| (node.role, node.name.as_str()))
+                .map(|node| (node.role.clone(), node.name.as_str()))
                 .collect();
             panic!("no {role:?} named {label:?} among {controls:?}")
         })

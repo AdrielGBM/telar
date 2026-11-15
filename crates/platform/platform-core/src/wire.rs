@@ -367,8 +367,6 @@ wire_struct!(AccessNode {
     required,
     readonly,
     lang,
-    url,
-    current,
     orientation,
     expanded,
     position,

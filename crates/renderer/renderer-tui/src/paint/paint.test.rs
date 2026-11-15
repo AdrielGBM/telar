@@ -317,7 +317,9 @@ fn element_linking(id: u64, destination: renderer_core::Destination) -> DrawComm
     DrawCommand::PushElement {
         element: Arc::new(renderer_core::Element::new(
             renderer_core::ElementId(id),
-            renderer_core::Semantics::group().linking_to(destination),
+            renderer_core::Semantics::of(renderer_core::Role::Link(renderer_core::Link::to(
+                destination,
+            ))),
             "",
             Rect::default(),
         )),

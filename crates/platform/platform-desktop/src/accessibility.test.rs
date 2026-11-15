@@ -1,5 +1,5 @@
 use geometry_core::Rect;
-use platform_core::HeadingLevel;
+use platform_core::{HeadingLevel, Link};
 use std::num::NonZeroU32;
 
 use super::*;
@@ -20,8 +20,6 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         required: false,
         readonly: false,
         lang: None,
-        url: None,
-        current: None,
         orientation: None,
         expanded: None,
         position: None,
@@ -213,10 +211,13 @@ fn a_named_drawing_is_an_image() {
 
 #[test]
 fn a_link_is_announced_with_where_it_goes() {
-    let link = AccessNode {
-        url: Some("https://example.com".to_string()),
-        ..node(Some(3), Role::Link, "Example")
-    };
+    let link = node(
+        Some(3),
+        Role::Link(Link::to(
+            platform_core::Destination::external("https://example.com").unwrap(),
+        )),
+        "Example",
+    );
     let update = tree_update(&[link], "Links", None);
     let ak = &update.nodes[0].1;
     assert_eq!(ak.role(), AkRole::Link);
@@ -226,23 +227,29 @@ fn a_link_is_announced_with_where_it_goes() {
 /// The current page, the current location on it, or plainly the current one: AccessKit's `aria_current` carries each, and a link not marked carries none.
 #[test]
 fn a_current_link_says_what_it_is_the_current_one_of() {
-    let published = |current: Option<CurrentKind>| {
-        let link = AccessNode {
-            url: Some("/#web".to_string()),
+    let published = |destination: platform_core::Destination, current: bool| {
+        let link = Link {
+            destination: Some(destination),
             current,
-            ..node(Some(3), Role::Link, "Web")
         };
-        tree_update(&[link], "Links", None).nodes[0]
+        tree_update(&[node(Some(3), Role::Link(link), "Web")], "Links", None).nodes[0]
             .1
             .aria_current()
     };
-    assert_eq!(published(Some(CurrentKind::Page)), Some(AriaCurrent::Page));
+    let page = || platform_core::Location::root().segment("web").into();
+    assert_eq!(published(page(), true), Some(AriaCurrent::Page));
     assert_eq!(
-        published(Some(CurrentKind::Location)),
+        published(platform_core::Destination::anchor("web"), true),
         Some(AriaCurrent::Location)
     );
-    assert_eq!(published(Some(CurrentKind::Item)), Some(AriaCurrent::True));
-    assert_eq!(published(None), None);
+    assert_eq!(
+        published(
+            platform_core::Destination::Locale(platform_core::locale_tag!("en")),
+            true
+        ),
+        Some(AriaCurrent::True)
+    );
+    assert_eq!(published(page(), false), None);
 }
 
 /// One flag, carried in the property AccessKit reads for the role: a switch's and a toggle button's `toggled`, a tab's `selected`, a disclosure's `expanded`.
@@ -957,7 +964,7 @@ fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
         (Role::ListBox, AkRole::ListBox),
         (Role::Option, AkRole::ListBoxOption),
     ] {
-        let update = tree_update(&[node(Some(1), role, "Item")], "Workbench", None);
+        let update = tree_update(&[node(Some(1), role.clone(), "Item")], "Workbench", None);
         assert_eq!(update.nodes[0].1.role(), expected, "{role:?}");
     }
 }
@@ -1357,7 +1364,7 @@ fn every_role_said_from_outside_is_published_as_the_role_a_reader_knows() {
         (Role::Alert, AkRole::Alert),
     ] {
         assert!(role.is_annotatable(), "{role:?}");
-        let update = tree_update(&[node(None, role, "Item")], "Window", None);
+        let update = tree_update(&[node(None, role.clone(), "Item")], "Window", None);
         let published = &update.nodes[0].1;
         assert_eq!(published.role(), expected, "{role:?}");
         let level = matches!(role, Role::Heading(_)).then_some(3);

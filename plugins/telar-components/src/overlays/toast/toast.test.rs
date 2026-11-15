@@ -77,10 +77,12 @@ impl Mounted {
     /// The node a reader hears by `name`, and the role of the node it sits in.
     fn heard(&self, name: &str) -> Option<(Role, Option<Role>)> {
         let nodes = self.nodes();
-        nodes
-            .iter()
-            .find(|node| node.name == name)
-            .map(|node| (node.role, node.parent.map(|parent| nodes[parent].role)))
+        nodes.iter().find(|node| node.name == name).map(|node| {
+            (
+                node.role.clone(),
+                node.parent.map(|parent| nodes[parent].role.clone()),
+            )
+        })
     }
 
     fn settle(&mut self) {

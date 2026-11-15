@@ -18,7 +18,9 @@ fn every_spelling_is_emitted_as_the_role_it_parses_to() {
         let parsed = semantics_core::Role::parse(name).expect("a known spelling");
         assert_eq!(
             format!("{parsed:?}"),
-            variant.replace("::telar::HeadingLevel::", ""),
+            variant
+                .replace("::telar::HeadingLevel::", "")
+                .replace("::telar::", ""),
             "`{name}`"
         );
     }

@@ -1,5 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Container, LayoutError, LayoutStyle, Location, Role, external};
+use telar::{Container, LayoutError, LayoutStyle, Link, Location, Role, external};
 
 use crate::navigation::link::link::{LinkProps, link};
 
@@ -34,10 +34,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
         .play(|canvas| {
-            canvas.expect(by_role(Role::Link).named("Getting started"))?;
-            canvas.expect(by_role(Role::Link).named("Source code (external link)"))?;
+            canvas.expect(by_role(Role::Link(Link::default())).named("Getting started"))?;
+            canvas.expect(
+                by_role(Role::Link(Link::default())).named("Source code (external link)"),
+            )?;
             canvas.tab()?;
-            canvas.expect_focused(by_role(Role::Link).named("Getting started"))
+            canvas.expect_focused(by_role(Role::Link(Link::default())).named("Getting started"))
         }),
     ]
 }

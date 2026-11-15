@@ -8,7 +8,9 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use platform_core::{Destination, Event, EventHandler, Location, Platform, WindowConfig, external};
 use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
-use renderer_core::{DrawCommand, Element, ElementId, Focusable, RenderBackend, Role, Semantics};
+use renderer_core::{
+    DrawCommand, Element, ElementId, Focusable, Link, RenderBackend, Role, Semantics,
+};
 use telar_renderer_dom::DomRenderer;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -83,12 +85,11 @@ fn mount() {
 }
 
 fn link(id: u64, destination: Destination, disabled: bool) -> Element {
-    let semantics = Semantics::group()
-        .linking_to(destination)
+    let semantics = Semantics::of(Role::Link(Link::to(destination)))
         .in_state(false, None, disabled)
         .focusable(Focusable {
             tab_stop: !disabled,
-            consumes: Role::Link.consumed_keys(),
+            consumes: Role::Link(Link::default()).consumed_keys(),
         });
     Element::new(
         ElementId(id),
@@ -102,11 +103,11 @@ fn link(id: u64, destination: Destination, disabled: bool) -> Element {
 /// role, but disabled and pointed nowhere, since [`IntoDestination`](platform_core::IntoDestination) flattened
 /// the refusal rather than the box carrying a destination it does not have.
 fn link_without_a_destination(id: u64) -> Element {
-    let semantics = Semantics::of(Role::Link)
+    let semantics = Semantics::of(Role::Link(Link::default()))
         .in_state(false, None, true)
         .focusable(Focusable {
             tab_stop: false,
-            consumes: Role::Link.consumed_keys(),
+            consumes: Role::Link(Link::default()).consumed_keys(),
         });
     Element::new(
         ElementId(id),

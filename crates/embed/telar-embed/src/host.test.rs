@@ -214,7 +214,7 @@ fn the_guests_controls_are_read_where_the_host_draws_them_under_ids_of_their_own
     let nodes = snapshot(&host.frame());
     let key = host.embed.boundary().key();
     for role in [Role::TextInput, Role::Button] {
-        let node = read(&nodes, role);
+        let node = read(&nodes, role.clone());
         assert!(
             matches!(
                 AccessTarget::of(node.id.expect("a control")),

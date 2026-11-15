@@ -303,11 +303,11 @@ fn a_bar_that_leaves_the_decorations_alone_never_touches_them() {
 #[test]
 fn a_bar_without_a_role_becomes_a_group() {
     let bar = title_bar(plain_bar(), TitleBarOptions::default());
-    assert_eq!(bar.declared_role(), Some(Role::Group));
+    assert_eq!(bar.declared_role(), Some(&Role::Group));
 }
 
 #[test]
 fn a_bar_with_a_role_keeps_it() {
     let bar = title_bar(plain_bar().role(Role::Banner), TitleBarOptions::default());
-    assert_eq!(bar.declared_role(), Some(Role::Banner));
+    assert_eq!(bar.declared_role(), Some(&Role::Banner));
 }

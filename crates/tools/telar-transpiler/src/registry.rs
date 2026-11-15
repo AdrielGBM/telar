@@ -1007,7 +1007,10 @@ pub const ROLE_VALUES: &[(&str, &str)] = &[
     ("item", "ListItem"),
     ("dialog", "Dialog"),
     ("button", "Button"),
-    ("link", "Link"),
+    (
+        "link",
+        "Link(::telar::Link { destination: None, current: false })",
+    ),
     ("checkbox", "CheckBox"),
     ("radiogroup", "RadioGroup"),
     ("radio", "Radio"),

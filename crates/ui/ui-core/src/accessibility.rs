@@ -13,7 +13,7 @@ use geometry_core::Rect;
 use i18n_core::LocaleTag;
 use layout_core::NodeId;
 use platform_core::{
-    AccessAction, AccessNode, ActionSupport, CurrentKind, Event, Role, SetPosition, Value,
+    AccessAction, AccessNode, ActionSupport, Event, Link, Role, SetPosition, Value,
 };
 use renderer_core::DrawCommand;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -94,7 +94,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         .collect();
     let focused = focus::current();
     let layers = focus::ModalLayers::now();
-    let modal = |role: Role, node: NodeId| role == Role::Dialog && layers.holds(node);
+    let modal = |role: &Role, node: NodeId| *role == Role::Dialog && layers.holds(node);
     let shut_out = |node: NodeId| layers.behind(node) && !reading.announced.contains(&node);
 
     let mut named_controls = vec![false; controls.len()];
@@ -104,11 +104,14 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         .map(|(i, (e, rect))| {
             let label = reading.label_of(e.node);
             named_controls[i] = label.is_some();
-            let link = reading.links.get(&e.node);
             let node = AccessNode {
                 id: Some(e.id),
                 parent: None,
-                role: e.role,
+                role: reading
+                    .links
+                    .get(&e.node)
+                    .map(|link| Role::Link(link.clone()))
+                    .unwrap_or_else(|| e.role.clone()),
                 name: label.map(str::to_string).unwrap_or_default(),
                 rect: hit_rect(e.node).unwrap_or(*rect),
                 focused: focused == Some(e.id),
@@ -128,13 +131,11 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 supports: e.supports,
                 position: e.position,
                 lang: reading.scope(e.node).lang.clone(),
-                url: link.map(|(destination, _)| platform_core::address_of(destination)),
-                current: link.and_then(|(_, current)| *current),
                 active_descendant: focus::active_descendant_state(e.id)
                     .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
                 controls: focus::controls_state(e.id)
                     .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
-                modal: modal(e.role, e.node),
+                modal: modal(&e.role, e.node),
                 selection: (focused == Some(e.id))
                     .then(|| focus::text_selection_state(e.id))
                     .flatten(),
@@ -173,17 +174,16 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         .filter(|named| words_of_title(named).is_none() || named.is_picture())
         .filter_map(|named| {
             let rect = visible_rect(named.node).filter(|rect| area(*rect) > 0.0)?;
-            let role = match named.role {
+            let role = match &named.role {
                 _ if named.is_picture() => Role::Drawing,
                 Role::Group => Role::Label,
-                role => role,
+                role => role.clone(),
             };
             Some(Piece {
                 text: named.label.to_string(),
                 rect,
                 role,
                 lang: named.lang.clone(),
-                url: None,
                 position: named.position,
                 named_box: Some(NamedBox {
                     node: named.node,
@@ -208,13 +208,13 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                     .iter()
                     .position(|(control, _)| control.node == node)
             }) {
-                Some(i) if holds_what_it_draws(controls[i].0.role, named_controls[i]) => None,
+                Some(i) if holds_what_it_draws(&controls[i].0.role, named_controls[i]) => None,
                 Some(i) => Some(i),
                 None => controls
                     .iter()
                     .enumerate()
                     .filter(|(i, (control, _))| {
-                        !holds_what_it_draws(control.role, named_controls[*i])
+                        !holds_what_it_draws(&control.role, named_controls[*i])
                     })
                     .filter(|(_, (_, bounds))| contains(*bounds, piece.rect))
                     .filter(|(_, (control, _))| !piece.groups(control.node))
@@ -223,7 +223,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                     .map(|(i, _)| i),
             },
         };
-        let drawn = piece.named_box.is_none() && piece.url.is_none();
+        let drawn = piece.named_box.is_none() && piece.role.link().is_none();
         match owner {
             // What a field or a select shows is its value; a select nobody named is also called by its choice, as a document calls it, and a field never by what was typed into it.
             Some(i) if drawn && controls[i].0.role.draws_its_value() => {
@@ -233,23 +233,22 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 }
             }
             // A control the application named is called that, whatever it draws.
-            Some(i) if named_controls[i] && piece.url.is_none() => {}
-            Some(i) if piece.url.is_none() => append(&mut found[i].node.name, &piece.text),
+            Some(i) if named_controls[i] && piece.role.link().is_none() => {}
+            Some(i) if piece.role.link().is_none() => append(&mut found[i].node.name, &piece.text),
             // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog asks about. A link run is its own node wherever it sits.
             _ => {
                 let node = AccessNode {
                     lang: piece.lang.clone(),
-                    url: piece.url,
                     position: piece.position,
                     value: piece
                         .named_box
                         .as_ref()
                         .and_then(|named| named.value.clone()),
-                    modal: piece.drawn_in.is_some_and(|node| modal(piece.role, node)),
+                    modal: piece.drawn_in.is_some_and(|node| modal(&piece.role, node)),
                     ..unaddressed(piece.role, piece.text, piece.rect)
                 };
                 found.push(match piece.named_box {
-                    Some(named) if holds_what_is_inside(node.role) => {
+                    Some(named) if holds_what_is_inside(&node.role) => {
                         Found::holding(node, named.node, &reading)
                     }
                     _ => Found::inside(node, piece.drawn_in, &reading),
@@ -274,7 +273,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 let node = AccessNode {
                     position: stated.position,
                     value: stated.value.clone(),
-                    ..unaddressed(stated.role, String::new(), rect)
+                    ..unaddressed(stated.role.clone(), String::new(), rect)
                 };
                 Some(Found::holding(node, stated.node, &reading))
             }),
@@ -288,8 +287,8 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
             .filter_map(|structure| {
                 let rect = visible_rect(structure.node).filter(|rect| area(*rect) > 0.0)?;
                 let node = AccessNode {
-                    modal: modal(structure.role, structure.node),
-                    ..unaddressed(structure.role, String::new(), rect)
+                    modal: modal(&structure.role, structure.node),
+                    ..unaddressed(structure.role.clone(), String::new(), rect)
                 };
                 Some(Found::holding(node, structure.node, &reading))
             }),
@@ -310,7 +309,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 }
                 let node = AccessNode {
                     lang: titled.lang.clone(),
-                    ..unaddressed(titled.role, name, rect)
+                    ..unaddressed(titled.role.clone(), name, rect)
                 };
                 Some(Found::holding(node, titled.node, &reading))
             }),
@@ -361,8 +360,6 @@ fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
         expanded: None,
         position: None,
         lang: None,
-        url: None,
-        current: None,
         active_descendant: None,
         controls: None,
         has_popup: None,
@@ -377,17 +374,17 @@ fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
 }
 
 /// Whether a control holds the text it draws as content read inside it, rather than being named by it: a scroll area that is a stop and was given a name, which says what it scrolls without saying it all, and a tab panel, which its tab names.
-fn holds_what_it_draws(role: Role, named: bool) -> bool {
-    role == Role::TabPanel || (named && role == Role::ScrollArea)
+fn holds_what_it_draws(role: &Role, named: bool) -> bool {
+    *role == Role::TabPanel || (named && *role == Role::ScrollArea)
 }
 
 /// Whether a node read for a box holds the nodes read inside that box. Text, and a picture, are read as what they say; a box named as a group reads as its name, a caption beside what it groups.
-fn holds_what_is_inside(role: Role) -> bool {
+fn holds_what_is_inside(role: &Role) -> bool {
     !matches!(role, Role::Label | Role::KeyboardInput | Role::Drawing)
 }
 
 /// Whether a box given no name is still a node for the nodes inside it, as the element a document makes of it is: a tab list around its tabs, a dialog around what it asks, a landmark around its region. A plain group is scaffolding, a heading is named by its text (see [`is_named_by_content`]), and a section or a form with no name is no landmark.
-fn holds_structure(role: Role) -> bool {
+fn holds_structure(role: &Role) -> bool {
     matches!(
         role,
         Role::TabList
@@ -415,18 +412,18 @@ fn holds_structure(role: Role) -> bool {
 }
 
 /// Whether a box given no name is a node for the nodes inside it because the application said what it is, as a component call's `role:` does: a role said on purpose is never scaffolding, so a list item, a section or a form said that way is read as one wherever a document makes it one, unlike a plain wrapper the widget gave that role. A plain group says nothing, said or not.
-fn said_as_structure(role: Role, said: Option<Role>) -> bool {
-    said == Some(role) && role != Role::Group && role.is_annotatable()
+fn said_as_structure(role: &Role, said: Option<&Role>) -> bool {
+    said == Some(role) && *role != Role::Group && role.is_annotatable()
 }
 
 /// Whether a box given no name is named by the words drawn inside it, as a document's `<h2>` is by its text: a heading, read as one node of its role and level rather than as the plain text it holds.
-fn is_named_by_content(role: Role) -> bool {
+fn is_named_by_content(role: &Role) -> bool {
     matches!(role, Role::Heading(_))
 }
 
 /// Whether a box given no name and no reading still tells a reader something by its role alone, as the element a document makes of it does: a progress bar with no reading says work is under way.
-fn speaks_by_role(role: Role) -> bool {
-    role == Role::ProgressBar
+fn speaks_by_role(role: &Role) -> bool {
+    *role == Role::ProgressBar
 }
 
 /// A node on its way into the tree: the box it was read for, if it holds what is inside that box, where in the frame's nesting it sits, and where it falls in reading order.
@@ -466,7 +463,7 @@ impl Found {
             || !self.node.name.is_empty()
             || self.node.position.is_some()
             || self.node.value.is_some()
-            || speaks_by_role(self.node.role)
+            || speaks_by_role(&self.node.role)
     }
 }
 
@@ -645,8 +642,6 @@ struct Piece {
     rect: Rect,
     role: Role,
     lang: Option<LocaleTag>,
-    /// Where a link run of a paragraph goes, as the address a reader announces.
-    url: Option<String>,
     /// Where a named box sits among the items of its set, as its role says it.
     position: Option<SetPosition>,
     /// The box the application named, for a piece that is one rather than a run of text.
@@ -892,8 +887,8 @@ struct Reading {
     artwork: Vec<SeenArt>,
     /// Where in the frame each control's box began.
     controls_opened: FxHashMap<NodeId, usize>,
-    /// Where each link box goes, and what it is the current one of when it is marked so.
-    links: FxHashMap<NodeId, (platform_core::Destination, Option<CurrentKind>)>,
+    /// The link each link box is.
+    links: FxHashMap<NodeId, Link>,
     /// The element each element is drawn inside, where it is drawn inside one.
     parents: FxHashMap<NodeId, NodeId>,
     /// How far sticking moves each element that it moves, on screen, with the boxes around it: see [`Reading::in_flow`].
@@ -958,10 +953,8 @@ impl Reading {
                     if controls.contains(&node) {
                         reading.controls_opened.entry(node).or_insert(at);
                     }
-                    if let Some(link) = &element.semantics.link {
-                        reading
-                            .links
-                            .insert(node, (link.clone(), element.semantics.current_kind()));
+                    if let Some(link) = element.semantics.role.link() {
+                        reading.links.insert(node, link.clone());
                     }
                     let annotation = crate::annotation::peek(node).unwrap_or_default();
                     let inner = Scope {
@@ -969,8 +962,12 @@ impl Reading {
                         lang: annotation.lang.or(scope.lang),
                     };
                     let role = match controls.contains(&node) {
-                        true => element.semantics.role,
-                        false => element.semantics.role.annotated(annotation.role),
+                        true => element.semantics.role.clone(),
+                        false => element
+                            .semantics
+                            .role
+                            .clone()
+                            .annotated(annotation.role.clone()),
                     };
                     let inner_replaced = !controls.contains(&node)
                         && (replaced
@@ -990,25 +987,31 @@ impl Reading {
                         .filter(|_| element.semantics.focusable.is_none());
                     if annotation.label.is_none() && !inner.hidden && !controls.contains(&node) {
                         match (position, value.clone()) {
-                            (None, None) if holds_structure(role) => {
-                                reading.structures.push(Structure { node, role })
+                            (None, None) if holds_structure(&role) => {
+                                reading.structures.push(Structure {
+                                    node,
+                                    role: role.clone(),
+                                })
                             }
-                            (None, None) if is_named_by_content(role) => {
+                            (None, None) if is_named_by_content(&role) => {
                                 reading.titled.push(Titled {
                                     node,
-                                    role,
+                                    role: role.clone(),
                                     lang: inner.lang.clone(),
                                     words: Vec::new(),
                                 });
                                 inner_titled = Some(reading.titled.len() - 1);
                             }
-                            (None, None) if said_as_structure(role, annotation.role) => {
-                                reading.structures.push(Structure { node, role })
+                            (None, None) if said_as_structure(&role, annotation.role.as_ref()) => {
+                                reading.structures.push(Structure {
+                                    node,
+                                    role: role.clone(),
+                                })
                             }
-                            (None, None) if !speaks_by_role(role) => {}
+                            (None, None) if !speaks_by_role(&role) => {}
                             (position, value) => reading.stated.push(Stated {
                                 node,
-                                role,
+                                role: role.clone(),
                                 position,
                                 value,
                             }),
@@ -1032,7 +1035,7 @@ impl Reading {
                                 node,
                                 label,
                                 lang: inner.lang.clone(),
-                                role,
+                                role: role.clone(),
                                 position,
                                 value,
                                 enclosing: named,
@@ -1119,7 +1122,6 @@ impl Reading {
                             rect: placed,
                             role: Role::Label,
                             lang: scope.lang.clone(),
-                            url: None,
                             position: None,
                             named_box: None,
                             drawn_at: Some(at),
@@ -1137,9 +1139,8 @@ impl Reading {
                         reading.text.push(Piece {
                             text: words.to_string(),
                             rect: placed,
-                            role: Role::Link,
+                            role: Role::Link(Link::to(link.clone())),
                             lang: scope.lang.clone(),
-                            url: Some(platform_core::address_of(link)),
                             position: None,
                             named_box: None,
                             drawn_at: Some(at),

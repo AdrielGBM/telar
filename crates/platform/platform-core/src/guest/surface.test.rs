@@ -22,8 +22,6 @@ fn field_node(focused: bool) -> AccessNode {
         expanded: None,
         position: None,
         lang: None,
-        url: None,
-        current: None,
         active_descendant: None,
         controls: None,
         has_popup: None,

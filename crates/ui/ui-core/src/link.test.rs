@@ -8,7 +8,7 @@ use platform_core::{
     Event, IntoDestination, Key, Location, ModifiersState, NamedKey, PointerButton, PointerSource,
     anchor, external, location_history, receive_location_history,
 };
-use renderer_core::{RectStyle, Role};
+use renderer_core::{Element, Link, RectStyle, Role};
 use services_core::UriOpener;
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -98,7 +98,7 @@ fn projects() -> Location {
     Location::root().segment("projects")
 }
 
-fn element_of(link: &StyledContainer, capture: bool) -> Arc<renderer_core::Element> {
+fn element_of(link: &StyledContainer, capture: bool) -> Arc<Element> {
     let was = ui_tree::set_element_capture(capture);
     let view = link.view();
     ui_tree::set_element_capture(was);
@@ -106,6 +106,10 @@ fn element_of(link: &StyledContainer, capture: bool) -> Arc<renderer_core::Eleme
         RenderNode::Element { element, .. } => element,
         _ => panic!("expected the box's element"),
     }
+}
+
+fn current_kind(element: &Element) -> Option<platform_core::CurrentKind> {
+    element.semantics.role.link().and_then(Link::current_kind)
 }
 
 #[test]
@@ -159,9 +163,8 @@ fn an_invalid_runtime_external_renders_a_disabled_link_that_goes_nowhere() {
     assert_eq!(location_history(), vec![Location::root()]);
 
     let element = element_of(&link, true);
-    assert_eq!(element.semantics.role, Role::Link);
+    assert_eq!(element.semantics.role, Role::Link(Link::default()));
     assert!(element.semantics.disabled);
-    assert_eq!(element.semantics.link, None);
 }
 
 #[test]
@@ -179,7 +182,10 @@ fn a_script_uri_built_at_runtime_is_never_handed_to_the_system() {
             .iter()
             .any(|uri| uri.starts_with("javascript:"))
     );
-    assert_eq!(element_of(&link, true).semantics.link, None);
+    assert_eq!(
+        element_of(&link, true).semantics.role,
+        Role::Link(Link::default())
+    );
 }
 
 #[test]
@@ -223,16 +229,18 @@ fn an_anchor_is_revealed_only_while_something_answers_to_it() {
 fn a_link_says_where_it_goes_and_keeps_no_keys() {
     let link = link_to(Destination::Route(projects()));
     let element = element_of(&link, true);
-    assert_eq!(element.semantics.role, Role::Link);
-    assert_eq!(element.semantics.link, Some(Destination::Route(projects())));
+    assert_eq!(
+        element.semantics.role,
+        Role::Link(Link::to(Destination::Route(projects())))
+    );
     assert_eq!(
         element.semantics.focusable.map(|f| f.consumes),
         Some(platform_core::ConsumedKeys::EMPTY)
     );
     let terminal = element_of(&link, false);
     assert_eq!(
-        terminal.semantics.link,
-        Some(Destination::Route(projects())),
+        terminal.semantics.role,
+        Role::Link(Link::to(Destination::Route(projects()))),
         "a surface that reads no document still sees where a link goes"
     );
 }
@@ -301,14 +309,14 @@ fn a_locale_link_switches_the_place_shown_and_goes_nowhere_without_one() {
 fn a_link_is_current_while_what_it_reads_says_so() {
     let here = reactive_core::signal(false);
     let link = link_to(anchor("web")).current(move || here.get());
-    assert_eq!(element_of(&link, true).semantics.current_kind(), None);
+    assert_eq!(current_kind(&element_of(&link, true)), None);
     here.set(true);
     assert_eq!(
-        element_of(&link, true).semantics.current_kind(),
+        current_kind(&element_of(&link, true)),
         Some(platform_core::CurrentKind::Location)
     );
     assert_eq!(
-        element_of(&link, false).semantics.current_kind(),
+        current_kind(&element_of(&link, false)),
         Some(platform_core::CurrentKind::Location),
         "a surface that reads no document still hears which link is current"
     );
@@ -318,8 +326,15 @@ fn a_link_is_current_while_what_it_reads_says_so() {
 fn a_link_with_nowhere_to_go_is_the_current_one_of_nothing() {
     let link = link_reading(|| external("not-a-uri")).current(|| true);
     let element = element_of(&link, true);
-    assert!(element.semantics.current, "it was told");
-    assert_eq!(element.semantics.current_kind(), None);
+    assert_eq!(
+        element.semantics.role,
+        Role::Link(Link {
+            destination: None,
+            current: true,
+        }),
+        "it was told"
+    );
+    assert_eq!(current_kind(&element), None);
 }
 
 #[test]

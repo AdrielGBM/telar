@@ -391,15 +391,20 @@ fn a_link_run_is_a_link_after_its_paragraph() {
         rect: rect(0.0, 0.0, 200.0, 20.0),
         style: Arc::new(TextStyle::new(12.0, renderer_core::Color::BLACK)),
     }]);
-    let described: Vec<(Role, &str, Option<&str>)> = nodes
+    let described: Vec<(Role, &str)> = nodes
         .iter()
-        .map(|node| (node.role, node.name.as_str(), node.url.as_deref()))
+        .map(|node| (node.role.clone(), node.name.as_str()))
         .collect();
     assert_eq!(
         described,
         [
-            (Role::Label, "Meet the team today", None),
-            (Role::Link, "team", Some("https://example.com")),
+            (Role::Label, "Meet the team today"),
+            (
+                Role::Link(Link::to(
+                    platform_core::Destination::external("https://example.com").unwrap()
+                )),
+                "team"
+            ),
         ]
     );
 }
@@ -806,7 +811,10 @@ fn a_named_box_is_read_as_its_name_in_place_of_the_words_it_draws() {
     let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(counter)]).unwrap();
 
     let nodes = snapshot_of(root);
-    let read: Vec<(Role, &str)> = nodes.iter().map(|n| (n.role, n.name.as_str())).collect();
+    let read: Vec<(Role, &str)> = nodes
+        .iter()
+        .map(|n| (n.role.clone(), n.name.as_str()))
+        .collect();
     assert_eq!(read, [(Role::Label, "3 unread comments")]);
 }
 
@@ -1105,8 +1113,6 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         expanded: None,
         position: None,
         lang: None,
-        url: None,
-        current: None,
         active_descendant: None,
         controls: None,
         has_popup: None,
@@ -1240,7 +1246,7 @@ fn a_live_region_behind_a_modal_layer_is_still_read() {
             vec![words("File deleted"), box_item(undo)],
         )
         .unwrap()
-        .role(live);
+        .role(live.clone());
         let dialog = StyledContainer::new(
             LayoutStyle::new().width(200.0).height(100.0),
             |_r| RectStyle::default(),
@@ -1391,7 +1397,7 @@ fn an_unnamed_box_that_says_where_it_sits_is_read_for_its_place() {
             .iter()
             .map(|n| {
                 (
-                    n.role,
+                    n.role.clone(),
                     n.name.as_str(),
                     n.position.map(|p| p.position.get()),
                 )
@@ -1437,7 +1443,10 @@ fn an_unnamed_box_with_no_place_to_say_is_not_read() {
     .unwrap();
 
     let nodes = snapshot_of(root);
-    let read: Vec<(Role, &str)> = nodes.iter().map(|n| (n.role, n.name.as_str())).collect();
+    let read: Vec<(Role, &str)> = nodes
+        .iter()
+        .map(|n| (n.role.clone(), n.name.as_str()))
+        .collect();
     assert_eq!(read, [(Role::Label, "A"), (Role::Label, "B")]);
 }
 
@@ -1479,7 +1488,7 @@ fn a_named_box_keeps_its_place() {
 /// What the node at `parent` holds, or the window for `None`, by role and name in reading order.
 fn held(nodes: &[AccessNode], parent: Option<usize>) -> Vec<(Role, &str)> {
     platform_core::accessibility::children_of(nodes, parent)
-        .map(|child| (nodes[child].role, nodes[child].name.as_str()))
+        .map(|child| (nodes[child].role.clone(), nodes[child].name.as_str()))
         .collect()
 }
 
@@ -1954,7 +1963,15 @@ fn a_heading_is_named_by_the_names_inside_it_and_holds_its_links() {
         held(&nodes, None),
         [(Role::Heading(HeadingLevel::One), "Te read more")]
     );
-    assert_eq!(held(&nodes, Some(0)), [(Role::Link, "more")]);
+    assert_eq!(
+        held(&nodes, Some(0)),
+        [(
+            Role::Link(Link::to(
+                platform_core::Location::root().segment("more").into()
+            )),
+            "more"
+        )]
+    );
 }
 
 /// The words of a control inside a heading name the control, as anywhere else, and the heading holds it.
@@ -2049,7 +2066,7 @@ fn every_role_said_from_outside_is_read_natively() {
         focus::clear();
         let said = Container::new(LayoutStyle::new(), vec![box_item(words("Inside"))])
             .unwrap()
-            .a11y_role(role);
+            .a11y_role(role.clone());
         let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(said)]).unwrap();
         let nodes = snapshot_of(root);
         let transcript = platform_core::accessibility::transcript(&nodes);
@@ -2059,11 +2076,11 @@ fn every_role_said_from_outside_is_read_natively() {
                 assert_eq!(transcript, "Inside");
             }
             Role::Heading(_) => {
-                assert_eq!(held(&nodes, None), [(role, "Inside")], "{role:?}");
+                assert_eq!(held(&nodes, None), [(role.clone(), "Inside")], "{role:?}");
                 assert_eq!(transcript, "Inside, heading, level 2");
             }
             _ => {
-                assert_eq!(held(&nodes, None), [(role, "")], "{role:?}");
+                assert_eq!(held(&nodes, None), [(role.clone(), "")], "{role:?}");
                 assert_eq!(held(&nodes, Some(0)), [(Role::Label, "Inside")], "{role:?}");
                 assert_eq!(transcript, format!("{}\n  Inside", role.as_str()));
             }

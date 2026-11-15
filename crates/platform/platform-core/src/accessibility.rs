@@ -7,8 +7,8 @@ use semantics_core::LocaleTag;
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
 pub use semantics_core::{
-    CurrentKind, HasPopup, HeadingLevel, Live, Modal, NumericValue, NumericValueError, Orientation,
-    Positioning, Role, SetPosition, SortDirection, Toggle, ToggleKind, Value,
+    CurrentKind, HasPopup, HeadingLevel, Link, Live, Modal, NumericValue, NumericValueError,
+    Orientation, Positioning, Role, SetPosition, SortDirection, Toggle, ToggleKind, Value,
 };
 
 /// One thing a screen reader can land on.
@@ -43,10 +43,6 @@ pub struct AccessNode {
     pub readonly: bool,
     /// The language the node is in, where the application said. `None` is the surface's own.
     pub lang: Option<LocaleTag>,
-    /// Where a link goes, written as [`address_of`](crate::address_of) writes it. `None` for everything that is not a link.
-    pub url: Option<String>,
-    /// What a link marked current is the current one of: the page being shown, the place on it the reader is at. `None` for every box that is not a current link.
-    pub current: Option<CurrentKind>,
     /// The axis a control that has one runs along: the bar of a splitter, the track of a slider. `None` for every role without an axis.
     pub orientation: Option<Orientation>,
     /// Whether a tree row with rows under it shows them. `None` for a leaf and for every role that does not expand this way.
@@ -153,7 +149,7 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         }
         out.push_str(&node.name);
         if !matches!(node.role, Role::Label | Role::KeyboardInput) {
-            let role = match node.role {
+            let role = match &node.role {
                 Role::Drawing => "image",
                 role => role.as_str(),
             };
@@ -162,7 +158,7 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
             }
             out.push_str(role);
         }
-        if let Role::Heading(level) = node.role {
+        if let Role::Heading(level) = &node.role {
             out.push_str(&format!(", level {}", level.get()));
         }
         if let Some(words) = node
@@ -183,7 +179,7 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         }
         if let Some(state) = node
             .toggled
-            .and_then(|state| toggle_words(node.role, state))
+            .and_then(|state| toggle_words(&node.role, state))
         {
             out.push_str(", ");
             out.push_str(state);
@@ -215,7 +211,7 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         if node.multiselectable {
             out.push_str(", multiselectable");
         }
-        if node.current.is_some() {
+        if node.role.link().and_then(Link::current_kind).is_some() {
             out.push_str(", current");
         }
         if !node.enabled {
@@ -269,7 +265,7 @@ fn value_words(value: &Value) -> String {
 }
 
 /// The words a reader says for a role's on/off state, or `None` where it says nothing: an unselected tab is every tab but one, and announcing each of them is noise.
-fn toggle_words(role: Role, state: Toggle) -> Option<&'static str> {
+fn toggle_words(role: &Role, state: Toggle) -> Option<&'static str> {
     Some(match (role.toggle_kind()?, state) {
         (ToggleKind::Checked, Toggle::On) => "checked",
         (ToggleKind::Checked, Toggle::Off) => "not checked",

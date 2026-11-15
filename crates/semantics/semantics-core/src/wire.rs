@@ -8,7 +8,7 @@ use wire_core::{
 };
 
 use crate::{
-    ConsumedKeys, CurrentKind, Destination, Focusable, ForcedColors, HasPopup, HeadingLevel,
+    ConsumedKeys, CurrentKind, Destination, Focusable, ForcedColors, HasPopup, HeadingLevel, Link,
     LocaleTag, Location, Modal, NumericValue, Orientation, Role, RouteAddress, Semantics,
     SetPosition, SortDirection, Toggle, Uri, UriError, Value,
 };
@@ -31,7 +31,7 @@ wire_enum!(Role {
     Drawing = 14,
     Dialog = 15,
     Button = 16,
-    Link = 17,
+    Link(link) = 17,
     CheckBox = 18,
     Radio = 19,
     Switch = 20,
@@ -298,110 +298,53 @@ pub fn take_link(r: &mut Reader<'_>) -> Result<Option<Destination>, WireError> {
     })
 }
 
-impl Shaped for Semantics {
-    const SHAPE: u64 = {
-        let hash = fold_fields!(
-            shape_named("Semantics"),
-            Semantics {
-                role,
-                label,
-                description
-            }
-        );
-        let hash = fold_shape(fold(hash, b"link"), LINK_SHAPE);
-        fold_fields!(
-            hash,
-            Semantics {
-                focused,
-                toggled,
-                disabled,
-                invalid,
-                required,
-                readonly,
-                click_through,
-                focusable,
-                lang,
-                hidden,
-                anchor,
-                current,
-                value,
-                orientation,
-                expanded,
-                position,
-                active_descendant,
-                controls,
-                has_popup,
-                keyboard_shortcut,
-                sort,
-                multiselectable,
-                modal,
-            }
-        )
-    };
+impl Shaped for Link {
+    const SHAPE: u64 = fold_fields!(
+        fold_shape(fold(shape_named("Link"), b"destination"), LINK_SHAPE),
+        Link { current }
+    );
 }
 
-impl Wire for Semantics {
+impl Wire for Link {
     fn put(&self, w: &mut Writer) {
-        self.role.put(w);
-        self.label.put(w);
-        self.description.put(w);
-        put_link(w, self.link.as_ref());
-        self.focused.put(w);
-        self.toggled.put(w);
-        self.disabled.put(w);
-        self.invalid.put(w);
-        self.required.put(w);
-        self.readonly.put(w);
-        self.click_through.put(w);
-        self.focusable.put(w);
-        self.lang.put(w);
-        self.hidden.put(w);
-        self.anchor.put(w);
+        put_link(w, self.destination.as_ref());
         self.current.put(w);
-        self.value.put(w);
-        self.orientation.put(w);
-        self.expanded.put(w);
-        self.position.put(w);
-        self.active_descendant.put(w);
-        self.controls.put(w);
-        self.has_popup.put(w);
-        self.keyboard_shortcut.put(w);
-        self.sort.put(w);
-        self.multiselectable.put(w);
-        self.modal.put(w);
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         Ok(Self {
-            role: Wire::take(r)?,
-            label: Wire::take(r)?,
-            description: Wire::take(r)?,
-            link: take_link(r)?,
-            focused: Wire::take(r)?,
-            toggled: Wire::take(r)?,
-            disabled: Wire::take(r)?,
-            invalid: Wire::take(r)?,
-            required: Wire::take(r)?,
-            readonly: Wire::take(r)?,
-            click_through: Wire::take(r)?,
-            focusable: Wire::take(r)?,
-            lang: Wire::take(r)?,
-            hidden: Wire::take(r)?,
-            anchor: Wire::take(r)?,
+            destination: take_link(r)?,
             current: Wire::take(r)?,
-            value: Wire::take(r)?,
-            orientation: Wire::take(r)?,
-            expanded: Wire::take(r)?,
-            position: Wire::take(r)?,
-            active_descendant: Wire::take(r)?,
-            controls: Wire::take(r)?,
-            has_popup: Wire::take(r)?,
-            keyboard_shortcut: Wire::take(r)?,
-            sort: Wire::take(r)?,
-            multiselectable: Wire::take(r)?,
-            modal: Wire::take(r)?,
         })
     }
 }
+
+wire_struct!(Semantics {
+    role,
+    label,
+    description,
+    focused,
+    toggled,
+    disabled,
+    invalid,
+    required,
+    readonly,
+    click_through,
+    focusable,
+    lang,
+    hidden,
+    anchor,
+    value,
+    orientation,
+    expanded,
+    position,
+    active_descendant,
+    controls,
+    has_popup,
+    keyboard_shortcut,
+    sort,
+    multiselectable,
+    modal,
+});
 
 #[cfg(test)]
 #[path = "wire.test.rs"]

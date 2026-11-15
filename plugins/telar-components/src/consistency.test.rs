@@ -19,7 +19,7 @@ struct Probe {
 }
 
 /// Where to find a probe's principal surface among what the row draws.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Surface {
     /// The control's own box.
     Root,
@@ -31,10 +31,10 @@ enum Surface {
 
 impl Surface {
     /// Where the surface is drawn, in a control laid out at `own` that draws `commands`.
-    fn located(self, own: Rect, commands: &[DrawCommand]) -> Option<Rect> {
+    fn located(&self, own: Rect, commands: &[DrawCommand]) -> Option<Rect> {
         match self {
             Self::Root => Some(own),
-            Self::First(role) => drawn(role).into_iter().next(),
+            Self::First(role) => drawn(role.clone()).into_iter().next(),
             Self::FirstFilled => commands.iter().find_map(|command| match command {
                 DrawCommand::Rect { rect, style, .. } if style.fill.is_some() => Some(*rect),
                 _ => None,
@@ -338,7 +338,7 @@ fn every_selection_control_stands_a_control_height_tall_with_a_box_scaled_to_the
             let (width, tall) = expected_box(&selection, size);
             let built = in_a_row(size, selection.build);
             let commands = built.1.commands();
-            let Some(target) = drawn(selection.role).into_iter().next() else {
+            let Some(target) = drawn(selection.role.clone()).into_iter().next() else {
                 failures.push(format!(
                     "`{}` at {size:?} exposes no control",
                     selection.name

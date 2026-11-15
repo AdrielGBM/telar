@@ -20,7 +20,7 @@ use platform_core::{
 };
 use renderer_core::{
     BlendMode, Color, CurrentKind, DrawCommand, Editing, Element, Focusable, ForcedColors,
-    ImageData, Modal, Picture, Role, TextStyle, Toggle, ToggleKind, Value,
+    ImageData, Link, Modal, Picture, Role, TextStyle, Toggle, ToggleKind, Value,
 };
 
 use crate::box_key::BoxKey;
@@ -1230,7 +1230,7 @@ impl Walk<'_> {
         let mut node = BoxNode {
             key,
             tag,
-            role: element.semantics.role,
+            role: element.semantics.role.clone(),
             modal: element.semantics.modal,
             scrolls,
             primary,
@@ -1474,7 +1474,7 @@ fn name_by_drawn_text(nodes: &mut [Node]) {
     for node in nodes.iter_mut().filter_map(Node::as_box_mut) {
         if node.described.control
             && node.described.label.is_none()
-            && !named_by_its_content(node.role)
+            && !named_by_its_content(&node.role)
             && !node.role.draws_what_was_typed()
             && !is_out_of_sight(node)
         {
@@ -1502,7 +1502,7 @@ fn speak_names_in_place(nodes: &mut [Node]) {
             continue;
         }
         node.spoken = node.described.label.take();
-        node.described.role = aria_role(node.role);
+        node.described.role = aria_role(&node.role);
         let surface = node.key.surface;
         mute(node, surface);
     }
@@ -1604,7 +1604,7 @@ fn mute(node: &mut BoxNode, surface: Option<u64>) {
 }
 
 /// Whether a browser names an element of this role by the text inside it, as ARIA's "name from content" says.
-fn named_by_its_content(role: Role) -> bool {
+fn named_by_its_content(role: &Role) -> bool {
     !matches!(
         role,
         Role::Slider
@@ -1698,18 +1698,19 @@ fn piece(painted: Painted) -> PaintNode {
 fn describe(element: &Element, tag: &'static str) -> Described {
     let semantics = &element.semantics;
     let label = semantics.label.as_deref();
-    let role = element_role(semantics.role, tag, label.is_some());
+    let role = element_role(&semantics.role, tag, label.is_some());
     let picture = tag == "img";
-    let hidden = semantics.hidden || is_decoration(semantics.role, label.is_some(), picture);
+    let hidden = semantics.hidden || is_decoration(&semantics.role, label.is_some(), picture);
     // An `<a>` without an `href` is no link, which is what a disabled one has to be.
-    let link = semantics.link.as_ref().filter(|_| !semantics.disabled);
+    let link = semantics.role.link().filter(|_| !semantics.disabled);
+    let destination = link.and_then(|link| link.destination.as_ref());
     Described {
         role,
         label: label.map(str::to_string),
         description: semantics.description.as_deref().map(str::to_string),
-        link: link.map(platform_core::address_of),
-        external: matches!(link, Some(Destination::External(_))),
-        opens_beside: matches!(link, Some(Destination::External(uri)) if uri.is_web()),
+        link: destination.map(platform_core::address_of),
+        external: matches!(destination, Some(Destination::External(_))),
+        opens_beside: matches!(destination, Some(Destination::External(uri)) if uri.is_web()),
         lang: semantics.lang.as_ref().map(ToString::to_string),
         anchor: semantics.anchor.as_deref().map(str::to_string),
         hidden,
@@ -1719,13 +1720,13 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         toggled: semantics
             .toggled
             .and_then(|state| Some((semantics.role.toggle_kind()?, state))),
-        current: semantics.current_kind().filter(|_| link.is_some()),
+        current: link.and_then(Link::current_kind),
         value: semantics.value.as_ref().and_then(Value::reading),
         value_text: semantics
             .value
             .as_ref()
             .and_then(Value::text)
-            .filter(|_| carries_range(semantics.role))
+            .filter(|_| carries_range(&semantics.role))
             .map(str::to_string),
         orientation: semantics.orientation,
         expanded: semantics.expanded,
@@ -1762,33 +1763,35 @@ fn describe(element: &Element, tag: &'static str) -> Described {
 /// Its name is the element's `aria-label`, except on static text, whose name is the text the element holds ([`text_of_access_node`]). What points at another node points at the `id` that node's element takes once it is pointed at; whether a node is pointed at, and how many rows a grid has, the caller reads off the rest of the snapshot.
 pub(crate) fn describe_access_node(node: &AccessNode) -> Described {
     let tag = tag_of(&node.role);
-    let label =
-        Some(node.name.as_str()).filter(|name| !name.is_empty() && !names_with_its_text(node.role));
-    let link = node.url.as_ref().filter(|_| node.enabled);
+    let label = Some(node.name.as_str())
+        .filter(|name| !name.is_empty() && !names_with_its_text(&node.role));
+    let link = node.role.link().filter(|_| node.enabled);
     let pointed_at = |id: u64| format!("{BOX_ID_PREFIX}{}", BoxKey::from(id));
     Described {
-        role: element_role(node.role, tag, label.is_some()),
+        role: element_role(&node.role, tag, label.is_some()),
         label: label.map(str::to_string),
         description: node.description.clone(),
-        link: link.cloned(),
+        link: link
+            .and_then(|link| link.destination.as_ref())
+            .map(platform_core::address_of),
         external: false,
         opens_beside: false,
         lang: node.lang.as_ref().map(ToString::to_string),
         anchor: None,
-        hidden: is_decoration(node.role, label.is_some(), false),
+        hidden: is_decoration(&node.role, label.is_some(), false),
         inert: false,
         modal: node.modal,
         live: node.role.live().map(|live| live.as_str()),
         toggled: node
             .toggled
             .and_then(|state| Some((node.role.toggle_kind()?, state))),
-        current: node.current.filter(|_| link.is_some()),
+        current: link.and_then(Link::current_kind),
         value: node.value.as_ref().and_then(Value::reading),
         value_text: node
             .value
             .as_ref()
             .and_then(Value::text)
-            .filter(|_| carries_range(node.role))
+            .filter(|_| carries_range(&node.role))
             .map(str::to_string),
         orientation: node.orientation,
         expanded: node.expanded,
@@ -1822,24 +1825,24 @@ pub(crate) fn describe_access_node(node: &AccessNode) -> Described {
 
 /// The words an element standing for a node holds as its own text rather than in an attribute: static text is named by what it says, and a field or a select is read by the text inside it as its value, as a document reads one.
 pub(crate) fn text_of_access_node(node: &AccessNode) -> Option<&str> {
-    match names_with_its_text(node.role) {
+    match names_with_its_text(&node.role) {
         true => Some(node.name.as_str()),
         false => node
             .value
             .as_ref()
             .and_then(Value::text)
-            .filter(|_| !carries_range(node.role)),
+            .filter(|_| !carries_range(&node.role)),
     }
     .filter(|text| !text.is_empty())
 }
 
 /// Whether a node of this role is static text: a reader drops an `aria-label` on an element with no role, and one given a role to carry it would announce that role.
-fn names_with_its_text(role: Role) -> bool {
+fn names_with_its_text(role: &Role) -> bool {
     matches!(role, Role::Label | Role::KeyboardInput)
 }
 
 /// The `role` an element of `tag` carries for a box of `role`: only where the tag does not already say it.
-fn element_role(role: Role, tag: &'static str, named: bool) -> Option<&'static str> {
+fn element_role(role: &Role, tag: &'static str, named: bool) -> Option<&'static str> {
     match (tag == "div" || tag == "svg")
         .then(|| aria_role(role))
         .flatten()
@@ -1851,8 +1854,8 @@ fn element_role(role: Role, tag: &'static str, named: bool) -> Option<&'static s
 }
 
 /// Whether a box is artwork nobody named, which is decoration: a graphic with no accessible name is noise to read out.
-fn is_decoration(role: Role, named: bool, picture: bool) -> bool {
-    role == Role::Drawing && !named && !picture
+fn is_decoration(role: &Role, named: bool, picture: bool) -> bool {
+    *role == Role::Drawing && !named && !picture
 }
 
 /// Whether a painted rect is the box it was painted in, in either of the two ways a widget can say so: a box that draws its own frame knows where it is, and a leaf that draws inside itself starts at its corner.
@@ -1965,7 +1968,7 @@ pub(crate) fn tag_of(role: &Role) -> &'static str {
         Role::Form => "form",
         Role::Search => "search",
         Role::Button => "button",
-        Role::Link => "a",
+        Role::Link(_) => "a",
         Role::Drawing => "svg",
         Role::KeyboardInput => "kbd",
         Role::Heading(level) => match level {
@@ -1991,7 +1994,7 @@ fn aria_current(current: CurrentKind) -> &'static str {
 /// The `role` attribute a box needs because the element it became does not carry its meaning.
 ///
 /// `None` where the role *is* the element, and where there is nothing worth announcing: a plain group is a `div`, and `role="group"` on every box in the tree is a reader reading out the scaffolding.
-pub(crate) fn aria_role(role: Role) -> Option<&'static str> {
+pub(crate) fn aria_role(role: &Role) -> Option<&'static str> {
     match role {
         Role::Group => None,
         // A picture with a name; without one it is hidden instead, which `describe` decides.
@@ -2010,7 +2013,7 @@ pub(crate) fn aria_role(role: Role) -> Option<&'static str> {
 }
 
 /// Whether ARIA reads `aria-valuetext` on a box of this role: only a range carries it. A field's or a select's text value has no attribute of its own, because a document reads the text the element holds as its value.
-fn carries_range(role: Role) -> bool {
+fn carries_range(role: &Role) -> bool {
     matches!(
         role,
         Role::Slider | Role::SpinButton | Role::ProgressBar | Role::Splitter

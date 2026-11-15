@@ -45,7 +45,7 @@ pub use uri::{
 /// What a box is.
 ///
 /// Deliberately not open-ended. Each variant has to earn itself by changing what at least one target does with it — a role that lands on the same element with the same attributes and the same announcement is a role that does not exist.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Role {
     /// A box that only groups. The overwhelming majority, and the right answer when nothing else fits: saying nothing is better than saying something wrong.
     #[default]
@@ -87,8 +87,8 @@ pub enum Role {
     // The things a person operates.
     /// Something pressable, whatever it is drawn as. The right answer for anything whose whole meaning is "activating this does something".
     Button,
-    /// A link. Where it goes is [`Semantics::link`], because that is data about the link rather than part of what it is — and keeping it out is what lets a role stay `Copy` and free to compare.
-    Link,
+    /// A link, with where it goes and whether it is the current one of its set: carried in the role rather than beside it, so nothing but a link can go somewhere or be current.
+    Link(Link),
     /// Carries a checked state that is part of what it is, not of what it looks like.
     CheckBox,
     /// The set [`Radio`](Self::Radio)s are chosen from, and what names the set: one stop in the tab order, walked with the arrows.
@@ -181,7 +181,7 @@ impl Role {
         matches!(
             self,
             Self::Button
-                | Self::Link
+                | Self::Link(_)
                 | Self::CheckBox
                 | Self::Radio
                 | Self::Switch
@@ -278,7 +278,7 @@ impl Role {
             Self::Drawing => "drawing",
             Self::Dialog => "dialog",
             Self::Button => "button",
-            Self::Link => "link",
+            Self::Link(_) => "link",
             Self::CheckBox => "checkbox",
             Self::RadioGroup => "radiogroup",
             Self::Radio => "radio",
@@ -361,6 +361,22 @@ impl Role {
         }
     }
 
+    /// The link this role is, or `None` for every role but [`Link`](Self::Link).
+    pub fn link(&self) -> Option<&Link> {
+        match self {
+            Self::Link(link) => Some(link),
+            _ => None,
+        }
+    }
+
+    /// Whether `other` is the same role as this one, whatever either link goes to: what a reader is told a box is, not where it leads.
+    pub fn is_same_role(&self, other: &Role) -> bool {
+        match (self, other) {
+            (Self::Link(_), Self::Link(_)) => true,
+            _ => self == other,
+        }
+    }
+
     /// The role a name spells, for the one place a name arrives as text: what an application wrote.
     ///
     /// Aliases are the words people reach for first. `nav` and `sidebar` are not ARIA — they are what an author types — and pointing them at the role they mean is cheaper than being asked why `sidebar` is spelled `complementary`.
@@ -388,7 +404,7 @@ impl Role {
             "drawing" | "img" | "image" => Self::Drawing,
             "dialog" => Self::Dialog,
             "button" => Self::Button,
-            "link" => Self::Link,
+            "link" => Self::Link(Link::default()),
             "checkbox" => Self::CheckBox,
             "radiogroup" => Self::RadioGroup,
             "radio" => Self::Radio,
@@ -424,6 +440,33 @@ impl Role {
             "keyboardinput" => Self::KeyboardInput,
             _ => return None,
         })
+    }
+}
+
+/// What a [`Role::Link`] says beyond being one: where it goes, and whether it is the current one of its set.
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
+pub struct Link {
+    /// Where the link goes. `None` while it has nowhere to go: its destination reads none right now, or this side's policy refused it.
+    pub destination: Option<Destination>,
+    /// Whether the link is the current one of its set: the page being shown, the place on the page the reader is at. Read through [`current_kind`](Self::current_kind), since what it is the current one of is its destination's to say.
+    pub current: bool,
+}
+
+impl Link {
+    /// A link to `destination` that is not the current one of its set.
+    pub fn to(destination: Destination) -> Self {
+        Self {
+            destination: Some(destination),
+            current: false,
+        }
+    }
+
+    /// What this link is the current one of: `None` unless it has somewhere to go and is marked current.
+    pub fn current_kind(&self) -> Option<CurrentKind> {
+        self.destination
+            .as_ref()
+            .filter(|_| self.current)
+            .map(Destination::current_kind)
     }
 }
 
@@ -503,8 +546,6 @@ pub struct Semantics {
     pub label: Option<Arc<str>>,
     /// What a reader says after the name, role and state, as help rather than identity: the hint under a field, the message that says why it is invalid, a tooltip's text. `None` where nothing more is said.
     pub description: Option<Arc<str>>,
-    /// Where a [`Link`](Role::Link) goes. Absent on every other role.
-    pub link: Option<Destination>,
     /// Whether the box is where the keyboard currently is.
     ///
     /// A target that draws its own focus ring does not need telling; one that hands the box to a document does, because the document has a focus of its own and the two must be the same box.
@@ -529,8 +570,6 @@ pub struct Semantics {
     pub hidden: bool,
     /// The name a [`Destination::Anchor`] reaches this box by: a place on the page.
     pub anchor: Option<Arc<str>>,
-    /// Whether a link is the current one of its set: the page being shown, the place on the page the reader is at. Read through [`current_kind`](Self::current_kind), since what it is the current one of is its destination's to say.
-    pub current: bool,
     /// What a control shows as its value: where a slider stands, what a field holds, the choice a select has made. `None` for a box that carries none.
     pub value: Option<Value>,
     /// The axis a splitter, slider or other oriented control runs along. `None` where the role has no axis or none was declared.
@@ -649,7 +688,7 @@ impl Semantics {
             self.label = Some(label.clone());
         }
         if self.focusable.is_none() {
-            self.role = self.role.annotated(annotation.role);
+            self.role = self.role.annotated(annotation.role.clone());
         }
         if let Some(lang) = &annotation.lang {
             self.lang = Some(lang.clone());
@@ -662,27 +701,6 @@ impl Semantics {
             self.modal = annotation.modal;
         }
         self
-    }
-
-    /// A link to `destination`. Sets the role too: a box with somewhere to go is a link whatever else it said.
-    pub fn linking_to(mut self, destination: Destination) -> Self {
-        self.role = Role::Link;
-        self.link = Some(destination);
-        self
-    }
-
-    /// Marks a link as the current one of its set, or not; see [`current`](Self::current).
-    pub fn marked_current(mut self, current: bool) -> Self {
-        self.current = current;
-        self
-    }
-
-    /// What this box is the current one of: `None` unless it is a link with somewhere to go that is marked current.
-    pub fn current_kind(&self) -> Option<CurrentKind> {
-        self.link
-            .as_ref()
-            .filter(|_| self.current)
-            .map(Destination::current_kind)
     }
 
     pub fn focusable(mut self, focusable: Focusable) -> Self {

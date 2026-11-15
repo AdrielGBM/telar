@@ -51,7 +51,7 @@ one (`myapp:`) is left to run time, where the app may have allowed it.
 | Item | What it is |
 | --- | --- |
 | `Destination` | `Route(Location)`, `Anchor(name)`, `Locale(tag)` (the place being shown, in another language) or `External(Uri)`. Lives in `semantics-core`, beside `Location`, because a renderer and a platform both read it. |
-| `Semantics::link` | The destination a box's element carries. `Semantics::linking_to` sets it and the `link` role together. |
+| `Role::Link(Link)` | A box that is a link carries where it goes in its role: `Link::destination` (`None` while it has nowhere to go) and `Link::current`. Nothing but a link can carry a destination or be current. |
 | `Uri`, `UriError`, `allow_uri_scheme` | An external address that passed the [URI policy](#which-uris-open), why text did not, and the app's registration of its own schemes. |
 | `RouteAddress` | A route's address, as `UriOpener::open_beside` takes it: parsed from the text `address_of` writes, and refused when it names a scheme or another host, so a custom `LocationFormat` cannot turn the second view into a way around the URI policy. |
 | `IntoDestination` | What `to` accepts: a `Destination`, a `Location`, or any `Route`, and an `Option` of one or the `Result` of `external`. `Route` lives in `platform-core` and is re-exported by `telar` (and by the `telar-navigate` plugin, as the same item), so this works without a navigator. |
@@ -116,7 +116,7 @@ box to:anchor("web") current:($here.as_deref() == Some("web"))
 ```
 
 `current:` marks a link as the current one of its set while it reads true, and is re-read whenever what it
-reads changes. What it is the current one of is its destination's to say (`Destination::current_kind`): a
+reads changes. What it is the current one of is its destination's to say (`Link::current_kind`, through `Destination::current_kind`): a
 route is the current **page**, an anchor the current **location** on the page, and a language or an outside
 address plainly the current one. A link with nowhere to go right now (a disabled one) is the current one of
 nothing. In Rust it is `StyledContainer::current(|| …)` after `to`. `current:` without `to:` on the same box
@@ -171,8 +171,8 @@ rather than inheriting one) when the spans are found by scanning the text and th
 | Headless | `push_location` | Revealed | Whatever opener a test installed with `set_uri_opener`; none by default | Followed in place |
 
 Assistive technology activates a link the way it activates any control: on the desktop, AccessKit's `Click`
-focuses it and runs its activation, which follows it as a tap does, and the node carries `Role::Link` and its
-URL. On a document the `<a>` is what a
+focuses it and runs its activation, which follows it as a tap does, and the node carries `Role::Link` with its
+destination, which the desktop publishes as the node's URL. On a document the `<a>` is what a
 reader activates, and the browser reports it like a click.
 
 ### The document target

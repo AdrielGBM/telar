@@ -123,7 +123,7 @@ fn a_control_is_one_element_that_has_the_role_scrolls_and_is_a_tab_stop() {
     let tree = mounted(scroll(1000.0).control(Role::Tree));
 
     let all = elements(&tree);
-    let roles: Vec<Role> = all.iter().map(|e| e.semantics.role).collect();
+    let roles: Vec<Role> = all.iter().map(|e| e.semantics.role.clone()).collect();
     assert_eq!(roles.iter().filter(|r| **r == Role::Tree).count(), 1);
     assert!(
         !roles.contains(&Role::ScrollArea),

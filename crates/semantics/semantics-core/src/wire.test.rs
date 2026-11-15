@@ -48,9 +48,13 @@ fn link_round_trip(link: Option<Destination>) -> Option<Destination> {
 fn every_role_tag_reads_back_as_a_role_of_its_own() {
     let mut roles = HashSet::new();
     for tag in 0..=50u8 {
-        let bytes = if tag == 10 { vec![tag, 2] } else { vec![tag] };
+        let bytes = match tag {
+            10 => vec![tag, 2],
+            17 => vec![tag, 0, 0],
+            _ => vec![tag],
+        };
         let role = decode::<Role>(&bytes).unwrap();
-        round_trip(role);
+        round_trip(role.clone());
         roles.insert(role);
     }
     assert_eq!(roles.len(), 51);
@@ -155,7 +159,6 @@ fn every_field_set() -> Semantics {
         role: Role::Heading(HeadingLevel::Three),
         label: Some(Arc::from("Title")),
         description: Some(Arc::from("The page's own title")),
-        link: Some(Destination::anchor("top")),
         focused: true,
         toggled: Some(Toggle::Mixed),
         disabled: true,
@@ -170,7 +173,6 @@ fn every_field_set() -> Semantics {
         lang: Some(crate::locale_tag!("en")),
         hidden: true,
         anchor: Some(Arc::from("here")),
-        current: true,
         value: Some(Value::Number {
             reading: NumericValue::new(0.0..=2.0, 1.0).expect("a reading within its range"),
             text: Some(Arc::from("Half")),
@@ -202,9 +204,25 @@ fn semantics_round_trip_with_every_field_set_and_with_none() {
 }
 
 #[test]
+fn a_link_round_trips_with_where_it_goes_and_whether_it_is_current() {
+    for current in [false, true] {
+        round_trip(Semantics {
+            role: Role::Link(Link {
+                destination: Some(Destination::anchor("top")),
+                current,
+            }),
+            ..every_field_set()
+        });
+    }
+}
+
+#[test]
 fn a_box_whose_link_is_refused_still_arrives_whole() {
     let semantics = Semantics {
-        link: Some(Destination::external("https://example.com").unwrap()),
+        role: Role::Link(Link {
+            destination: Some(Destination::external("https://example.com").unwrap()),
+            current: true,
+        }),
         ..every_field_set()
     };
     let mut bytes = encode(&semantics);
@@ -216,7 +234,10 @@ fn a_box_whose_link_is_refused_still_arrives_whole() {
     assert_eq!(
         decode::<Semantics>(&bytes),
         Ok(Semantics {
-            link: None,
+            role: Role::Link(Link {
+                destination: None,
+                current: true,
+            }),
             ..semantics
         })
     );
@@ -242,7 +263,10 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
         Role::Drawing,
         Role::Dialog,
         Role::Button,
-        Role::Link,
+        Role::Link(Link {
+            destination: Some(Destination::anchor("settings")),
+            current: true,
+        }),
         Role::CheckBox,
         Role::Radio,
         Role::Switch,

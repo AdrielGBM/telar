@@ -287,7 +287,7 @@ fn unnamed_controls(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
 
 fn unnamed_widgets(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
     for node in snapshot {
-        if needs_name(node.role) && node.name.trim().is_empty() {
+        if needs_name(&node.role) && node.name.trim().is_empty() {
             out.push(Violation::new(
                 Rule::UnnamedWidget,
                 format!(
@@ -301,7 +301,7 @@ fn unnamed_widgets(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
 }
 
 /// What a reader moves into or is told about as a whole, and tells from another of its kind only by its name.
-fn needs_name(role: Role) -> bool {
+fn needs_name(role: &Role) -> bool {
     matches!(
         role,
         Role::ListBox
@@ -318,7 +318,7 @@ fn symbol_only_names(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
     for node in snapshot {
         let name = node.name.trim();
         if node.id.is_some()
-            && activates(node.role)
+            && activates(&node.role)
             && !name.is_empty()
             && !has_word_character(name)
         {
@@ -334,11 +334,11 @@ fn symbol_only_names(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
     }
 }
 
-fn activates(role: Role) -> bool {
+fn activates(role: &Role) -> bool {
     matches!(
         role,
         Role::Button
-            | Role::Link
+            | Role::Link(_)
             | Role::CheckBox
             | Role::Radio
             | Role::Switch
@@ -421,7 +421,7 @@ fn contrast(
 }
 
 /// A control a person finds by its edges rather than by words it draws: a button or a link says what it is in its label, a field drawn with no edge is an empty stretch of page.
-fn found_by_edges(role: Role) -> bool {
+fn found_by_edges(role: &Role) -> bool {
     matches!(
         role,
         Role::TextInput
@@ -443,7 +443,7 @@ fn boundary_contrast(
 ) {
     let needed = ContrastUse::ControlBoundary.minimum(ContrastLevel::Standard);
     for node in snapshot {
-        if node.id.is_none() || !node.enabled || !found_by_edges(node.role) {
+        if node.id.is_none() || !node.enabled || !found_by_edges(&node.role) {
             continue;
         }
         let mut best = 0.0f32;
@@ -552,7 +552,7 @@ fn tab_stops<'a>(tab_order: &[TabStop], snapshot: &'a [AccessNode], walk: &Walk)
         .filter_map(|stop| {
             let node = stop.node?;
             Some(Stop {
-                role: stop.role,
+                role: stop.role.clone(),
                 placed: walk.boxes.get(&node).copied(),
                 read: read.get(&stop.id).copied(),
             })

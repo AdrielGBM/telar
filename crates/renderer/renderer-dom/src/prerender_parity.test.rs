@@ -8,8 +8,8 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use platform_core::{Destination, Location};
 use renderer_core::{
-    Color, ConsumedKeys, Declared, DrawCommand, Element, ElementId, Focusable, ImageData, Picture,
-    PictureFit, RectStyle, RenderBackend, Role, Semantics, Span, TextStyle,
+    Color, ConsumedKeys, Declared, DrawCommand, Element, ElementId, Focusable, ImageData, Link,
+    Picture, PictureFit, RectStyle, RenderBackend, Role, Semantics, Span, TextStyle,
 };
 use telar_renderer_dom::{DomRenderer, ID_ATTRIBUTE, prerender};
 use wasm_bindgen::JsCast;
@@ -166,11 +166,11 @@ fn page() -> Vec<DrawCommand> {
         DrawCommand::PopElement,
         boxed(
             3,
-            Semantics::of(Role::Link).linking_to(Destination::Route(
+            Semantics::of(Role::Link(Link::to(Destination::Route(
                 Location::root()
                     .segment("proyectos")
                     .with_locale(platform_core::locale_tag!("es")),
-            )),
+            )))),
             "",
             Rect::new(0.0, 48.0, 120.0, 20.0),
         ),

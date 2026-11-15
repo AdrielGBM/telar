@@ -12,8 +12,8 @@ use platform_core::{
 };
 use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use renderer_core::{
-    Color, Declared, DrawCommand, Element, ElementId, Focusable, RectStyle, RenderBackend, Role,
-    Semantics, Span, TextStyle,
+    Color, Declared, DrawCommand, Element, ElementId, Focusable, Link, RectStyle, RenderBackend,
+    Role, Semantics, Span, TextStyle,
 };
 use telar_renderer_dom::{DomRenderer, ID_ATTRIBUTE, prerender};
 use wasm_bindgen::JsCast;
@@ -224,7 +224,10 @@ const WRITTEN: Variant = Variant {
     heading: "Hola & <bienvenidos>",
     gap: "gap:8px;",
     button_label: "Cambiar tema",
-    link: Role::Link,
+    link: Role::Link(Link {
+        destination: None,
+        current: false,
+    }),
     link_holds_stamp: false,
     counter: "3 comentarios sin leer",
 };
@@ -233,14 +236,15 @@ const WRITTEN: Variant = Variant {
 fn page(variant: &Variant) -> Vec<DrawCommand> {
     let full = Rect::new(0.0, 0.0, 640.0, 480.0);
     let paragraph = Rect::new(0.0, 120.0, 640.0, 20.0);
-    let link_semantics = match variant.link {
-        Role::Link => Semantics::of(Role::Link)
-            .linking_to(Destination::Route(Location::root().segment("proyectos")))
-            .focusable(Focusable {
-                tab_stop: true,
-                consumes: Role::Link.consumed_keys(),
-            }),
-        role => Semantics::of(role),
+    let link_semantics = match &variant.link {
+        Role::Link(_) => Semantics::of(Role::Link(Link::to(Destination::Route(
+            Location::root().segment("proyectos"),
+        ))))
+        .focusable(Focusable {
+            tab_stop: true,
+            consumes: Role::Link(Link::default()).consumed_keys(),
+        }),
+        role => Semantics::of(role.clone()),
     };
     let mut commands = vec![
         fill(Rect::new(0.0, 0.0, 640.0, 40.0), Color::rgb(0.9, 0.9, 0.95)),
@@ -705,12 +709,13 @@ fn long_page() -> Vec<DrawCommand> {
         ),
         boxed(
             TOP_LINK,
-            Semantics::of(Role::Link)
-                .linking_to(Destination::Route(Location::root().segment("arriba")))
-                .focusable(Focusable {
-                    tab_stop: true,
-                    consumes: Role::Link.consumed_keys(),
-                }),
+            Semantics::of(Role::Link(Link::to(Destination::Route(
+                Location::root().segment("arriba"),
+            ))))
+            .focusable(Focusable {
+                tab_stop: true,
+                consumes: Role::Link(Link::default()).consumed_keys(),
+            }),
             "height:20px;",
             Rect::new(0.0, 0.0, 400.0, 20.0),
         ),

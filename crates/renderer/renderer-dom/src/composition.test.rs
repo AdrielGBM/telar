@@ -99,7 +99,7 @@ fn field(id: u64, focused: u64) -> Element {
         LINES => Role::MultilineTextInput,
         _ => Role::TextInput,
     };
-    let semantics = Semantics::of(role)
+    let semantics = Semantics::of(role.clone())
         .in_state(id == focused, None, false)
         .focusable(Focusable {
             tab_stop: true,

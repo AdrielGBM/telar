@@ -9,8 +9,8 @@ use geometry_core::Rect;
 use platform_core::{Destination, Event, EventHandler, Location, Platform, WindowConfig};
 use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, Element, ElementId, Focusable, RectStyle, RenderBackend,
-    Role, Semantics,
+    BorderRadius, Color, DrawCommand, Element, ElementId, Focusable, Link, RectStyle,
+    RenderBackend, Role, Semantics,
 };
 use telar_renderer_dom::{DomRenderer, prerender};
 use wasm_bindgen::JsCast;
@@ -108,12 +108,13 @@ fn button(id: u64, rect: Rect) -> DrawCommand {
 /// The window's box [`FRAME`] with surface [`NESTED`] drawn in it, whose boxes are numbered from the same start as the window's, and beside it the window's own button, which has the id of the surface's.
 fn render() {
     mount();
-    let link = Semantics::group()
-        .linking_to(Destination::Route(Location::root().segment("inside")))
-        .focusable(Focusable {
-            tab_stop: true,
-            consumes: Role::Link.consumed_keys(),
-        });
+    let link = Semantics::of(Role::Link(Link::to(Destination::Route(
+        Location::root().segment("inside"),
+    ))))
+    .focusable(Focusable {
+        tab_stop: true,
+        consumes: Role::Link(Link::default()).consumed_keys(),
+    });
     let scroller = Rect::new(0.0, 60.0, 100.0, 40.0);
     let commands = vec![
         boxed(

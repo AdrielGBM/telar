@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use telar::testing::{centre, lay_out, named, press, release, route};
 use telar::{
-    AccessNode, ComponentList, DrawCommand, Location, Role, anchor, external, focus,
+    AccessNode, ComponentList, DrawCommand, Link, Location, Role, anchor, external, focus,
     relayout_if_dirty, signal,
 };
 
@@ -21,7 +21,7 @@ fn mounted(props: LinkProps) -> ComponentList {
 fn the_link(tree: &ComponentList) -> AccessNode {
     telar::inspect::snapshot(&tree.commands())
         .into_iter()
-        .find(|node| node.role == Role::Link)
+        .find(|node| node.role.link().is_some())
         .expect("a link")
 }
 
@@ -53,7 +53,11 @@ fn a_link_is_a_link_named_by_its_words_and_told_apart_by_more_than_colour() {
     );
     let node = the_link(&tree);
     assert_eq!(node.name, "Guide");
-    assert!(node.url.is_some(), "a reader is told where it goes");
+    assert_eq!(
+        node.role,
+        Role::Link(Link::to(Location::root().segment("guide").into())),
+        "a reader is told where it goes"
+    );
     let style = drawn_style(&tree, "Guide");
     assert_eq!(style.decoration.line, telar::DecorationLine::Underline);
     let ink = style.color.solid_color();
@@ -107,7 +111,10 @@ fn the_current_link_is_announced_as_current_and_drawn_strong() {
             .current(true)
             .build(),
     );
-    assert!(the_link(&tree).current.is_some());
+    assert_eq!(
+        the_link(&tree).role.link().and_then(Link::current_kind),
+        Some(telar::CurrentKind::Page)
+    );
     assert_eq!(
         drawn_style(&tree, "Home").font_weight,
         shared::strong_weight()
@@ -145,5 +152,5 @@ fn a_link_with_nowhere_to_go_points_a_reader_nowhere() {
             .to(LinkTarget::of(|| None::<Location>))
             .build(),
     );
-    assert_eq!(the_link(&tree).url, None);
+    assert_eq!(the_link(&tree).role, Role::Link(Link::default()));
 }

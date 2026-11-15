@@ -4,8 +4,8 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use platform_core::Location;
 use renderer_core::{
-    Color, Declared, Destination, DrawCommand, Element, ElementId, RectStyle, Role, Semantics,
-    Span, TextStyle,
+    Color, Declared, Destination, DrawCommand, Element, ElementId, Link, RectStyle, Role,
+    Semantics, Span, TextStyle,
 };
 
 use super::*;
@@ -43,8 +43,9 @@ fn page() -> Vec<DrawCommand> {
         DrawCommand::PopElement,
         open(
             9,
-            Semantics::of(Role::Link)
-                .linking_to(Destination::Route(Location::root().segment("projects"))),
+            Semantics::of(Role::Link(Link::to(Destination::Route(
+                Location::root().segment("projects"),
+            )))),
             "",
             Rect::new(0.0, 40.0, 100.0, 20.0),
         ),
@@ -429,10 +430,10 @@ fn a_document_writes_an_href_only_for_a_uri_the_app_allows() {
         .chain(["telar-dom-test://settings"])
         .enumerate()
     {
-        let mut semantics = Semantics::of(Role::Link);
-        if let Ok(destination) = Destination::external(uri) {
-            semantics = semantics.linking_to(destination);
-        }
+        let semantics = Semantics::of(Role::Link(Link {
+            destination: Destination::external(uri).ok(),
+            current: false,
+        }));
         commands.push(open(
             id as u64 + 1,
             semantics,

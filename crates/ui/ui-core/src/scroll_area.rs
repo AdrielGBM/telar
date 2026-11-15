@@ -1159,7 +1159,7 @@ impl LayoutScrollArea {
     /// For the composite widget whose items are reached by a cursor while focus stays on the widget (a tree, a listbox): its rows are no Tab stops, so a plain scroller around them would be a stop of its own only while they overflow, and a second element beside the control that holds the cursor. It is a stop whether or not its content overflows, keeps the keys [`on_focused_key`](Self::on_focused_key) takes, and scrolls with the rest. Call it first: the other methods of the control act on what it declares.
     pub fn control(mut self, role: focus::Role) -> Self {
         if let Some(id) = self.focus {
-            focus::host_scroller(id, role);
+            focus::host_scroller(id, role.clone());
             self.host = Some(Host {
                 role,
                 presented: false,
@@ -1172,7 +1172,7 @@ impl LayoutScrollArea {
 
     /// Makes this scroll area the control `role` itself, as [`control`](Self::control) does, for a control that is announced and never takes focus: the list a combobox opens, whose keyboard stays on the combobox that [controls](crate::StyledContainer::controls) it and points into it. It is no Tab stop and a press does not focus it.
     pub fn presented(self, role: focus::Role) -> Self {
-        let mut this = self.control(role);
+        let mut this = self.control(role.clone());
         if let (Some(host), Some(id)) = (&mut this.host, this.focus) {
             focus::present_scroller(id, role);
             host.presented = true;
@@ -1357,8 +1357,8 @@ impl Component for LayoutScrollArea {
         let role = self
             .host
             .as_ref()
-            .map_or(renderer_core::Role::ScrollArea, |host| host.role);
-        let element = crate::element::for_target(self.leaf.node, role, || {
+            .map_or(renderer_core::Role::ScrollArea, |host| host.role.clone());
+        let element = crate::element::for_target(self.leaf.node, role.clone(), || {
             let mut semantics = renderer_core::Semantics::of(role);
             match (&self.host, self.focus) {
                 (Some(_), Some(id)) => focus::describe(id, &mut semantics, None),

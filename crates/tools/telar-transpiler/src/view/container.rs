@@ -68,9 +68,9 @@ fn role_contradictions(
     let has = |key: &str| el.attributes.iter().any(|a| a.key == key);
     let role = role.map(|(_, role)| role);
     let mut errors = Vec::new();
-    if let Some(role) = role
+    if let Some(role) = &role
         && role.is_control()
-        && role != semantics_core::Role::Link
+        && role.link().is_none()
         && has("to")
     {
         errors.push(format!(
@@ -78,7 +78,7 @@ fn role_contradictions(
             role.as_str()
         ));
     }
-    if has("toggled") && role.and_then(|role| role.toggle_kind()).is_none() {
+    if has("toggled") && role.as_ref().and_then(|role| role.toggle_kind()).is_none() {
         errors.push(
             "`toggled:` needs a role with an on/off state: `role:switch`, `role:checkbox` or `role:radio` (checked), `role:button` (pressed) or `role:tab` (selected)"
                 .to_string(),
@@ -221,8 +221,8 @@ impl ViewGen<'_> {
             );
         }
         let role = role_of(el);
-        errors.extend(role_contradictions(el, role));
-        let operated = role.is_some_and(|(_, role)| role.is_control());
+        errors.extend(role_contradictions(el, role.clone()));
+        let operated = role.as_ref().is_some_and(|(_, role)| role.is_control());
         // A described role is emitted on a plain `Container` too, so calling a `col` the navigation does not turn it into a styled box.
         let role_call = match role {
             Some((variant, _)) if operated => format!(".control(::telar::Role::{variant})"),

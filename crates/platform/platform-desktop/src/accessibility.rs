@@ -68,7 +68,7 @@ pub(crate) fn tree_update(
 
     for (index, node) in nodes.iter().enumerate() {
         let id = ids[index];
-        let mut ak = Node::new(role_of(node.role));
+        let mut ak = Node::new(role_of(&node.role));
         ak.set_label(node.name.clone());
         ak.set_bounds(AkRect {
             x0: node.rect.x as f64,
@@ -85,18 +85,20 @@ pub(crate) fn tree_update(
         if let Some(lang) = &node.lang {
             ak.set_language(lang.to_string());
         }
-        if let Some(url) = &node.url {
-            ak.set_url(url.as_str());
-        }
-        if let Some(current) = node.current {
-            ak.set_aria_current(aria_current(current));
+        if let Some(link) = node.role.link() {
+            if let Some(destination) = &link.destination {
+                ak.set_url(platform_core::address_of(destination));
+            }
+            if let Some(current) = link.current_kind() {
+                ak.set_aria_current(aria_current(current));
+            }
         }
         if node.focused {
             focus = id;
         }
         // A role carrying a state has to say which, or a reader announces "checkbox" and stops. Defaulting the answer would be worse than silence, since every box would read as unticked.
         if let Some(state) = node.toggled {
-            set_toggle_state(&mut ak, node.role, state);
+            set_toggle_state(&mut ak, &node.role, state);
         }
         // A slider that says only "slider" has not reported the one thing it is for.
         if let Some(value) = &node.value {
@@ -151,7 +153,7 @@ pub(crate) fn tree_update(
                 Live::Assertive => AkLive::Assertive,
             });
         }
-        if let Role::Heading(level) = node.role {
+        if let Role::Heading(level) = &node.role {
             ak.set_level(usize::from(level.get() - 1));
         }
         if let Some((kind, place)) = node
@@ -215,7 +217,7 @@ pub(crate) fn tree_update(
 fn say_what_it_holds(ak: &mut Node, nodes: &[AccessNode], children: &[Vec<usize>], index: usize) {
     let node = &nodes[index];
     let held = &children[index];
-    match node.role {
+    match &node.role {
         Role::Grid => {
             let rows = || {
                 held.iter()
@@ -328,7 +330,7 @@ fn set_value(ak: &mut Node, value: &Value) {
 }
 
 /// The on/off state, in the property AccessKit reads it from for this role: `toggled` is checked on a checkbox or switch and pressed on a button, while a tab is selected and a disclosure expanded.
-fn set_toggle_state(ak: &mut Node, role: Role, state: Toggle) {
+fn set_toggle_state(ak: &mut Node, role: &Role, state: Toggle) {
     let on = state == Toggle::On;
     match role.toggle_kind() {
         Some(ToggleKind::Checked | ToggleKind::Pressed) => ak.set_toggled(match state {
@@ -353,10 +355,10 @@ fn aria_current(current: CurrentKind) -> AriaCurrent {
 /// Telar's roles, mapped outwards. One-way and lossy by design: Telar names what its catalogue actually has, and each platform names rather more.
 ///
 /// The regions are here because a reader offers "jump to the navigation" and cannot until something says which box that is. They arrived with the document backend, and this is the half of that work that a screen reader on a desktop gets out of it.
-fn role_of(role: Role) -> AkRole {
+fn role_of(role: &Role) -> AkRole {
     match role {
         Role::Button | Role::Disclosure => AkRole::Button,
-        Role::Link => AkRole::Link,
+        Role::Link(_) => AkRole::Link,
         Role::CheckBox => AkRole::CheckBox,
         Role::Radio => AkRole::RadioButton,
         Role::RadioGroup => AkRole::RadioGroup,
