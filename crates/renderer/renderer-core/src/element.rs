@@ -126,10 +126,33 @@ pub struct Picture {
     /// The picture's own size in pixels, which a document reserves before it has arrived.
     pub width: u32,
     pub height: u32,
-    /// How it fills its box, as CSS `object-fit` names it.
-    pub fit: &'static str,
+    pub fit: PictureFit,
     /// Wanted as soon as the page is: fetched eagerly and first, rather than when it comes near the view.
     pub priority: bool,
+}
+
+/// How a linked picture fills its box: the ways a document can place one by itself, which are fewer than a drawn image has, since a document neither tiles nor snaps a picture to whole multiples.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PictureFit {
+    /// Stretched to the box, whatever its own proportions.
+    Fill,
+    /// Whole inside the box, at its own proportions.
+    Contain,
+    /// Covering the box at its own proportions, cut where it overflows.
+    Cover,
+}
+
+impl PictureFit {
+    pub const ALL: [PictureFit; 3] = [PictureFit::Fill, PictureFit::Contain, PictureFit::Cover];
+
+    /// The CSS `object-fit` keyword.
+    pub fn css_name(self) -> &'static str {
+        match self {
+            PictureFit::Fill => "fill",
+            PictureFit::Contain => "contain",
+            PictureFit::Cover => "cover",
+        }
+    }
 }
 
 impl Element {

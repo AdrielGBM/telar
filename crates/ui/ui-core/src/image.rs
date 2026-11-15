@@ -5,7 +5,9 @@ use std::sync::Arc;
 use geometry_core::{ObjectFit, Rect};
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
-use renderer_core::{BorderRadius, DrawCommand, ImageData, ImageFill, ImageSlice, Picture, Raster};
+use renderer_core::{
+    BorderRadius, DrawCommand, ImageData, ImageFill, ImageSlice, Picture, PictureFit, Raster,
+};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
@@ -94,9 +96,9 @@ impl Component for Image {
             let source = data.linked_source()?.clone();
             let fit = match (&self.slice, fit) {
                 (Some(_), _) => return None,
-                (None, ObjectFit::Fill) => "fill",
-                (None, ObjectFit::Contain) => "contain",
-                (None, ObjectFit::Cover) => "cover",
+                (None, ObjectFit::Fill) => PictureFit::Fill,
+                (None, ObjectFit::Contain) => PictureFit::Contain,
+                (None, ObjectFit::Cover) => PictureFit::Cover,
                 (None, ObjectFit::ContainInteger | ObjectFit::Tile { .. }) => return None,
             };
             Some(Picture {

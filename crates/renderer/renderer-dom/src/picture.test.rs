@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use renderer_core::{
-    DrawCommand, Element, ElementId, ImageData, ImageFill, Picture, Raster, RenderBackend,
-    Semantics,
+    DrawCommand, Element, ElementId, ImageData, ImageFill, Picture, PictureFit, Raster,
+    RenderBackend, Semantics,
 };
 use telar_renderer_dom::DomRenderer;
 use wasm_bindgen::JsCast;
@@ -26,7 +26,7 @@ fn picture(priority: bool) -> Picture {
         source: hero().linked_source().expect("a linked picture").clone(),
         width: 1200,
         height: 800,
-        fit: "cover",
+        fit: PictureFit::Cover,
         priority,
     }
 }

@@ -12,8 +12,8 @@ use crate::{
     BlendMode, Border, BorderRadius, Color, Declared, Editing, Element, ElementId, ExternalTexture,
     FillRule, Focusable, FontFamily, FontFeatures, FontStyle, FontTag, FontVariations, Gradient,
     ImageData, ImageFill, ImageSlice, Insets, LayerMask, LineCap, LineJoin, Linked, Paint,
-    PathData, PathStyle, Picture, Raster, RectStyle, Role, Semantics, Shadow, ShapeStyle, Span,
-    Stroke, TextAlign, TextCase, TextLength, TextStyle, TextWrap,
+    PathData, PathStyle, Picture, PictureFit, Raster, RectStyle, Role, Semantics, Shadow,
+    ShapeStyle, Span, Stroke, TextAlign, TextCase, TextLength, TextStyle, TextWrap,
 };
 
 const RED: Color = Color {
@@ -178,7 +178,7 @@ fn element() -> Element {
         .expect("one copy is in order"),
         width: 1280,
         height: 720,
-        fit: "cover",
+        fit: PictureFit::Cover,
         priority: true,
     })
     .asking_to_scroll(Some((0.0, 120.5)))
@@ -353,6 +353,33 @@ fn every_command_comes_back_equal() {
     .unwrap();
     assert_eq!(decoded, commands);
     assert_eq!(**element_of(&decoded[1]), element());
+}
+
+#[test]
+fn every_picture_fit_comes_back_as_it_was_sent() {
+    for fit in PictureFit::ALL {
+        let element = element().showing(Picture {
+            source: ImageData::linked("/hero.avif", 16, 9, &[])
+                .linked_source()
+                .expect("a linked picture")
+                .clone(),
+            width: 16,
+            height: 9,
+            fit,
+            priority: false,
+        });
+        let commands = [DrawCommand::PushElement {
+            element: Arc::new(element),
+        }];
+        let decoded = round_trip(
+            &mut FrameEncoder::new(),
+            &mut FrameDecoder::new(),
+            &commands,
+        )
+        .unwrap();
+        let picture = element_of(&decoded[0]).picture.clone().expect("a picture");
+        assert_eq!(picture.fit, fit);
+    }
 }
 
 #[test]

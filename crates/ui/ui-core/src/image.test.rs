@@ -188,7 +188,7 @@ fn a_linked_picture_is_shown_by_its_address_in_a_document() {
     let picture = picture_of(ObjectFit::Cover, hero(), true).expect("a picture");
     assert_eq!(picture.source.url().as_ref(), "images/a.png");
     assert_eq!((picture.width, picture.height), (1200, 600));
-    assert_eq!(picture.fit, "cover");
+    assert_eq!(picture.fit, PictureFit::Cover);
     assert!(picture.priority);
     assert!(
         !picture_of(ObjectFit::Contain, hero(), false)

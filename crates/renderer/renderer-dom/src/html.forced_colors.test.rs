@@ -56,7 +56,7 @@ fn a_picture_keeps_its_colours_without_being_told_to() {
         source: linked.linked_source().expect("a linked picture").clone(),
         width: 20,
         height: 20,
-        fit: "cover",
+        fit: renderer_core::PictureFit::Cover,
         priority: false,
     };
     let markup = prerender(&alone(plain_element().showing(picture)), None).markup;

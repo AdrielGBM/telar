@@ -8,7 +8,7 @@ use geometry_core::Rect;
 use platform_core::{Destination, Location};
 use renderer_core::{
     Color, ConsumedKeys, Declared, DrawCommand, Element, ElementId, Focusable, ImageData, Picture,
-    RectStyle, RenderBackend, Role, Semantics, Span, TextStyle,
+    PictureFit, RectStyle, RenderBackend, Role, Semantics, Span, TextStyle,
 };
 use telar_renderer_dom::{DomRenderer, ID_ATTRIBUTE, prerender};
 use wasm_bindgen::JsCast;
@@ -143,7 +143,7 @@ fn page() -> Vec<DrawCommand> {
         source: hero().linked_source().expect("a linked picture").clone(),
         width: 1200,
         height: 800,
-        fit: "cover",
+        fit: PictureFit::Cover,
         priority: true,
     };
     let paragraph = Rect::new(0.0, 120.0, 640.0, 20.0);

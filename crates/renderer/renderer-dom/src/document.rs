@@ -1153,7 +1153,7 @@ impl Walk<'_> {
         let mut style = String::new();
         if let Some(picture) = &element.picture {
             paint::declare(&mut style, "display", "block");
-            paint::declare(&mut style, "object-fit", picture.fit);
+            paint::declare(&mut style, "object-fit", picture.fit.css_name());
         }
         if element.picture.is_some() || element.forced_colors == ForcedColors::Keep {
             paint::declare(&mut style, "forced-color-adjust", "none");

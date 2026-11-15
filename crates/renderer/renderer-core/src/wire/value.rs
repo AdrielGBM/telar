@@ -11,8 +11,8 @@ use crate::{
     DecorationMetric, Editing, Element, ElementId, FillRule, FontFamily, FontFeatures, FontStyle,
     FontTag, FontVariations, Gradient, GradientKind, GradientStops, ImageFill, ImageSlice,
     LayerMask, LineCap, LineHeight, LineJoin, Linked, Paint, PathData, PathStyle, PathVerb,
-    Picture, Raster, RectStyle, Shadow, Span, Stroke, TextAlign, TextCase, TextDecoration,
-    TextLength, TextShadow, TextStyle, TextWrap,
+    Picture, PictureFit, Raster, RectStyle, Shadow, Span, Stroke, TextAlign, TextCase,
+    TextDecoration, TextLength, TextShadow, TextStyle, TextWrap,
 };
 
 wire_enum!(TextAlign {
@@ -489,46 +489,16 @@ impl Wire for ElementId {
     }
 }
 
-const PICTURE_FITS: [&str; 5] = ["fill", "contain", "cover", "none", "scale-down"];
+wire_enum!(PictureFit {
+    Fill = 0,
+    Contain = 1,
+    Cover = 2,
+});
 
-impl Shaped for Picture {
-    const SHAPE: u64 = {
-        let hash = fold_fields!(
-            shape_named("Picture"),
-            Picture {
-                source,
-                width,
-                height
-            }
-        );
-        let hash = fold_shape(fold(hash, b"fit"), String::SHAPE);
-        fold_fields!(hash, Picture { priority })
-    };
-}
-
-impl Wire for Picture {
-    fn put(&self, w: &mut Writer) {
-        self.source.put(w);
-        self.width.put(w);
-        self.height.put(w);
-        w.str(self.fit);
-        self.priority.put(w);
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        let source = Linked::take(r)?;
-        let width = u32::take(r)?;
-        let height = u32::take(r)?;
-        let fit = r.str()?;
-        let fit = PICTURE_FITS
-            .into_iter()
-            .find(|known| *known == fit)
-            .ok_or(WireError::Invalid("an object-fit no document knows"))?;
-        Ok(Picture {
-            source,
-            width,
-            height,
-            fit,
-            priority: bool::take(r)?,
-        })
-    }
-}
+wire_struct!(Picture {
+    source,
+    width,
+    height,
+    fit,
+    priority,
+});
