@@ -112,6 +112,7 @@ impl Globals {
             direction: self.direction.peek(),
             high_contrast: self.high_contrast.peek(),
             safe_area: self.safe_area.peek(),
+            ..SurfaceEnv::default()
         }
     }
 

@@ -137,6 +137,10 @@ impl Window for WebWindow {
         dom::document().set_title(title);
     }
 
+    fn set_tab_leaves(&self, leaves: platform_core::TabLeaves) {
+        crate::platform::set_tab_leaves(leaves);
+    }
+
     fn set_cursor(&self, cursor: Cursor) {
         let name = match cursor {
             Cursor::Default => "default",

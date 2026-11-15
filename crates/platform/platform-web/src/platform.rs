@@ -28,6 +28,8 @@ reactive_local::dropless_thread_local! {
     static SAFE_AREA: std::cell::Cell<Option<geometry_core::Insets>> = const { std::cell::Cell::new(None) };
     // The key each physical key (its DOM `code`) went down as, so its `keyup` names that key whatever the layout reads it as by then.
     static KEYS: ManuallyDrop<RefCell<KeyPairing<String>>> = ManuallyDrop::new(RefCell::new(KeyPairing::default()));
+    // Which Tab the app said would leave it, so a keydown can be decided before the app has heard it.
+    static TAB_LEAVES: std::cell::Cell<platform_core::TabLeaves> = const { std::cell::Cell::new(platform_core::TabLeaves { forward: false, backward: false }) };
 }
 
 struct Frame {
@@ -164,7 +166,7 @@ pub struct WebPlatformConfig {
     pub owns_context_menu: bool,
     /// Whether every key the app might use is the app's, whatever holds focus.
     ///
-    /// Set where the app draws pixels: nothing on a canvas is a native control, so Tab and the arrows are never the page's. A document is the other case: the browser walks its own Tab order through the boxes and scrolls with the arrows, and the focused box's declared [`ConsumedKeys`](platform_core::ConsumedKeys) decide which keys it keeps.
+    /// Set where the app draws pixels: nothing on a canvas is a native control, so Tab and the arrows are never the page's, but for a Tab the app says would leave it (see [`Window::set_tab_leaves`](platform_core::Window::set_tab_leaves)). A document is the other case: the browser walks its own Tab order through the boxes and scrolls with the arrows, and the focused box's declared [`ConsumedKeys`](platform_core::ConsumedKeys) decide which keys it keeps.
     pub owns_keyboard: bool,
     /// How the app's locations are written as addresses on this page. `None` takes the base path from the page's `<base href>`, and `/` where it has none.
     pub location: Option<platform_core::LocationFormat>,
@@ -226,6 +228,10 @@ impl Platform for WebPlatform {
 
     fn keyboard_convention(&self) -> platform_core::KeyboardConvention {
         crate::keyboard::keyboard_convention()
+    }
+
+    fn focus_boundary(&self) -> platform_core::FocusBoundary {
+        platform_core::FocusBoundary::Release
     }
 
     fn location_source(&mut self) -> Option<Box<dyn platform_core::LocationSource>> {
@@ -525,6 +531,10 @@ fn on_pointer(
     push(events);
 }
 
+pub(crate) fn set_tab_leaves(leaves: platform_core::TabLeaves) {
+    TAB_LEAVES.with(|current| current.set(leaves));
+}
+
 fn on_key(pressed: bool, owns_keyboard: bool, event: &web_sys::KeyboardEvent) {
     let modifiers = map::key_modifiers(event);
     let read = map::key_of(&event.key());
@@ -543,8 +553,16 @@ fn on_key(pressed: bool, owns_keyboard: bool, event: &web_sys::KeyboardEvent) {
     let Some(key) = paired else {
         return;
     };
+    let leaves = key == Key::Named(NamedKey::Tab) && {
+        let leaves = TAB_LEAVES.with(std::cell::Cell::get);
+        if modifiers.is_shift {
+            leaves.backward
+        } else {
+            leaves.forward
+        }
+    };
     let kept = if owns_keyboard {
-        map::key_steals_default(&key)
+        map::key_steals_default(&key) && !leaves
     } else {
         platform_core::consumes(kept_by_target(event), &key)
     };
@@ -553,7 +571,7 @@ fn on_key(pressed: bool, owns_keyboard: bool, event: &web_sys::KeyboardEvent) {
         event.prevent_default();
     }
     // The browser walks its own Tab order here, and reports where it landed as focus; delivered as a key too, the app would walk its own order a second step.
-    if !owns_keyboard && !kept && key == Key::Named(NamedKey::Tab) {
+    if !kept && key == Key::Named(NamedKey::Tab) {
         return;
     }
     let event = if pressed {

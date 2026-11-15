@@ -98,8 +98,19 @@ keeps its role's keys, answers them with `on_focused_key` first, and scrolls wit
 | Target | Behaviour |
 | --- | --- |
 | web-dom | The browser owns Tab and scrolling. The reconciler writes each focusable box's set to `data-telar-keys`, its identity to `data-telar-focus`, and `tabindex="0"` for Tab stops (`-1` for other focusables). The platform's `keydown` listener reads the set from the element the key was sent to and calls `preventDefault` only for a key that element keeps. Otherwise the browser's default runs. |
-| web (canvas) | Unchanged. Nothing on a canvas is a native control, so the platform keeps Tab, Space, the arrows, Page Up/Down, Home, End and Backspace whenever the surface has focus (`WebPlatformConfig::owns_keyboard`). Telar walks its own Tab order. |
-| desktop, Android, TUI, headless | Unchanged. No native default action competes for the keys, so every key reaches the app and Telar walks its own Tab order. The declaration is still built, so a future backend with native focus can read it. |
+| web (canvas) | Nothing on a canvas is a native control, so the platform keeps Tab, Space, the arrows, Page Up/Down, Home, End and Backspace whenever the surface has focus (`WebPlatformConfig::owns_keyboard`). Telar walks its own Tab order, except at its ends: see [Where Tab goes at the ends](#where-tab-goes-at-the-ends). |
+| desktop, Android, TUI, headless | Unchanged. No native default action competes for the keys, so every key reaches the app and Telar walks its own Tab order, wrapping at its ends. The declaration is still built, so a future backend with native focus can read it. |
+
+## Where Tab goes at the ends
+
+Each platform states a `FocusBoundary` (`telar::FocusBoundary`, from `Platform::focus_boundary`) for what Tab does past the last focusable and Shift+Tab past the first:
+
+- `Wrap` carries focus on at the other end, so the order is a loop. Desktop, Android, TUI and headless state it.
+- `Release` clears focus and lets the surroundings take the key. The web states it on both renderers, so a keyboard user is never trapped in the app (WCAG 2.1.2).
+
+A modal layer that holds focus traps Tab under either boundary: Tab wraps inside it. A control that keeps Tab, such as a text area that indents, keeps it at an end too.
+
+On web-dom the browser already walks past the last box, so `Release` only decides what the app does with a Tab it is handed. On a canvas the platform has to decide about a Tab before the app has heard it, so after each frame the runner tells the window, through `Window::set_tab_leaves`, which of Tab and Shift+Tab would run off an end. For those the platform leaves the default action alone, so the browser moves focus out of the surface, and does not deliver the key. A canvas drawn inside another tree (`NestedCanvas`) always releases, to the tree around it.
 
 ## Focus on web-dom
 

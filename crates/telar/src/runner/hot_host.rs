@@ -70,6 +70,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         &window.title,
         super::host::SurfaceRenderer::builtin(),
     );
+    handler.focus_boundary = platform.focus_boundary();
     handler.hot = Some(hot);
     handler.location = Some(super::location::LocationBinding::for_window(Box::new(
         platform_core::ArgumentLocation::from_env(),

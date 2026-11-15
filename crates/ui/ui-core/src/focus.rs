@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use layout_core::NodeId;
 use platform_core::{
-    Chord, ConsumedKeys, Event, Key, ModifiersState, NamedKey, Orientation, Toggle, Value,
-    keyboard_convention,
+    Chord, ConsumedKeys, Event, FocusBoundary, Key, ModifiersState, NamedKey, Orientation,
+    TabLeaves, Toggle, Value, keyboard_convention,
 };
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::Focusable;
@@ -160,8 +160,8 @@ struct FocusState {
     requests: u64,
     // Who the key being dispatched belongs to, fixed as its dispatch starts. See [`is_key_target`].
     keystroke: Option<Option<FocusId>>,
-    // A surface shown inside another tree's frame: stepping past either end of its tab order leaves it rather than wrapping. See [`host`].
-    hosted: bool,
+    // What stepping past either end of the tab order does. See [`set_boundary`].
+    boundary: FocusBoundary,
     departed: Option<Travel>,
     // The focusable the latest request was for, when a step made it, and which way that step went.
     arrival: Option<(FocusId, Travel)>,
@@ -175,7 +175,7 @@ pub(crate) enum Travel {
 }
 
 impl FocusState {
-    fn new() -> Self {
+    fn new(boundary: FocusBoundary) -> Self {
         Self {
             next_id: 1,
             next_scope: 1,
@@ -190,7 +190,7 @@ impl FocusState {
             deferred: None,
             requests: 0,
             keystroke: None,
-            hosted: false,
+            boundary,
             departed: None,
             arrival: None,
         }
@@ -207,7 +207,7 @@ impl FocusState {
 
 reactive_core::surface_local! {
     /// Per-surface focus state. The runner activates each surface's [`FocusContext`] around its build/event/frame, so focus never crosses windows.
-    slot FOCUS: FocusState = FocusState::new();
+    slot FOCUS: FocusState = FocusState::new(FocusBoundary::Wrap);
     access with_focus, with_focus_ref;
     context FocusContext;
 }
@@ -744,6 +744,10 @@ pub fn focused_keeps(keys: ConsumedKeys) -> bool {
     let Some(id) = key_target() else {
         return false;
     };
+    keeps(id, keys)
+}
+
+fn keeps(id: FocusId, keys: ConsumedKeys) -> bool {
     delegated(id).and_then(|keyboard| keyboard.keeps(keys)) == Some(true)
         || with_focus_ref(|s| {
             s.entry(id)
@@ -1386,7 +1390,7 @@ pub fn is_registered(id: FocusId) -> bool {
     with_focus_ref(|s| s.order.iter().any(|e| e.id == id))
 }
 
-/// Wraps at either end, except in a hosted surface with no modal up, where stepping past an end clears focus and leaves the way it went for the frame to carry on outside.
+/// Moves focus one stop along the order. Past either end the surface's [boundary](set_boundary) decides: focus wraps, or with no modal up and a boundary that releases, clears and leaves the way it went for the frame to carry on outside.
 fn step(dir: isize) {
     let order: Vec<FocusId> = tab_order().into_iter().map(|stop| stop.id).collect();
     let travel = if dir > 0 {
@@ -1395,12 +1399,8 @@ fn step(dir: isize) {
         Travel::Backward
     };
     let n = order.len() as isize;
-    let at = match current().and_then(|c| order.iter().position(|&x| x == c)) {
-        Some(i) => i as isize + dir,
-        None if dir > 0 => 0,
-        None => n - 1,
-    };
-    if !(0..n).contains(&at) && with_focus_ref(|s| s.hosted) && !trapped() {
+    let at = stepped_to(&order, current(), dir);
+    if !(0..n).contains(&at) && releases() {
         with_focus(|s| s.departed = Some(travel));
         clear();
         return;
@@ -1409,6 +1409,18 @@ fn step(dir: isize) {
         return;
     }
     take_arriving(order[at.rem_euclid(n) as usize], false, Some(travel));
+}
+
+fn stepped_to(order: &[FocusId], from: Option<FocusId>, dir: isize) -> isize {
+    match from.and_then(|c| order.iter().position(|&x| x == c)) {
+        Some(i) => i as isize + dir,
+        None if dir > 0 => 0,
+        None => order.len() as isize - 1,
+    }
+}
+
+fn releases() -> bool {
+    with_focus_ref(|s| s.boundary == FocusBoundary::Release) && !trapped()
 }
 
 /// Whether a modal is up and holding focus inside itself.
@@ -1422,12 +1434,29 @@ fn trapped() -> bool {
     scopes.iter().any(|(showing, traps)| *traps && showing())
 }
 
-/// Marks the active surface as one shown inside another tree's frame, whose keyboard carries on outside it: Tab past the last focusable, or Shift+Tab past the first, clears focus here instead of wrapping and leaves the way it went for [`take_departure`]. A modal up inside still holds Tab within itself.
-pub(crate) fn host() {
-    with_focus(|s| s.hosted = true);
+/// States what Tab past the last focusable, or Shift+Tab past the first, does in the active surface. [`Release`](FocusBoundary::Release) clears focus instead of wrapping and leaves the way it went for the surrounding tree to read; a modal up inside still holds Tab within itself.
+pub fn set_boundary(boundary: FocusBoundary) {
+    with_focus(|s| s.boundary = boundary);
 }
 
-/// Which way the keyboard last stepped out of the active hosted surface, forgetting it.
+/// Which of Tab and Shift+Tab, pressed now, would leave the active surface: only under a boundary that releases, with no modal up, and while the focused control does not keep Tab for itself.
+pub fn tab_leaves() -> TabLeaves {
+    if !releases() {
+        return TabLeaves::default();
+    }
+    let focused = focused_signal().peek();
+    if focused.is_some_and(|id| keeps(id, ConsumedKeys::TAB)) {
+        return TabLeaves::default();
+    }
+    let order: Vec<FocusId> = tab_order().into_iter().map(|stop| stop.id).collect();
+    let leaves = |dir| !(0..order.len() as isize).contains(&stepped_to(&order, focused, dir));
+    TabLeaves {
+        forward: leaves(1),
+        backward: leaves(-1),
+    }
+}
+
+/// Which way the keyboard last stepped out of the active surface whose boundary releases, forgetting it.
 pub(crate) fn take_departure() -> Option<Travel> {
     with_focus(|s| s.departed.take())
 }
@@ -1441,7 +1470,7 @@ pub fn arrive(backwards: bool) -> bool {
     current().is_some()
 }
 
-/// Tab, or Shift+Tab, `key`, pressed while the active surface holds the keyboard of the tree around it: offered through `dispatch` first, then moving focus unless something took it. Answers whether focus stepped past the last focusable, or the first, which in a hosted surface leaves nothing focused for the tree around to carry on from.
+/// Tab, or Shift+Tab, `key`, pressed while the active surface holds the keyboard of the tree around it: offered through `dispatch` first, then moving focus unless something took it. Answers whether focus stepped past the last focusable, or the first, which in a surface whose boundary releases leaves nothing focused for the tree around to carry on from.
 pub fn tab(key: &Event, dispatch: impl FnOnce(&Event) -> EventResult) -> bool {
     // A step off the end that something other than this Tab made is no reason for this one to leave.
     take_departure();

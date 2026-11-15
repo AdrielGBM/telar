@@ -10,20 +10,13 @@ use crate::focus;
 /// Both modes let the keyboard go when a primary press lands on nothing focusable: focus is only ever *taken*, by a press on a focusable or by Tab, so without this a field clicked away from keeps the caret, eats the keys and tells an application asking [`text_entry_focused`](crate::focus::text_entry_focused) that somebody is still typing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FocusMode {
-    /// The tree holds a keyboard of its own, as a window's does: Tab with nothing focused moves to the first focusable, or Shift+Tab to the last, unless the tree takes the key itself, and Tab past the last focusable wraps.
+    /// The tree holds a keyboard of its own, as a window's does: Tab with nothing focused moves to the first focusable, or Shift+Tab to the last, unless the tree takes the key itself.
     Standalone,
-    /// The tree is one focus stop of a tree around it, which carries the keyboard in and out through [`arrive`](crate::NestedCanvas::arrive) and [`tab`](crate::NestedCanvas::tab): Tab past the last focusable, or Shift+Tab past the first, leaves nothing focused here instead of wrapping, and a modal up inside still holds Tab within itself.
+    /// The tree is one focus stop of a tree around it, which carries the keyboard in and out through [`arrive`](crate::NestedCanvas::arrive) and [`tab`](crate::NestedCanvas::tab): Tab with nothing focused is the tree around's to move.
     Nested,
 }
 
 impl FocusMode {
-    /// Marks the surface entered now as this mode's.
-    pub(crate) fn enter(self) {
-        if self == Self::Nested {
-            focus::host();
-        }
-    }
-
     /// Hands `event` to the tree through `dispatch`, applying this mode's rules on the way.
     pub(crate) fn dispatch(
         self,

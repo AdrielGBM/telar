@@ -595,3 +595,104 @@ fn the_keyboard_is_left_within_a_region_while_inside_it_or_nowhere() {
     assert!(!left_within(region.layout_node()), "gone elsewhere");
     clear();
 }
+
+fn three_stops() -> [FocusId; 3] {
+    clear();
+    let stops = [next_id(), next_id(), next_id()];
+    for id in stops {
+        register_as(id, FocusKind::Widget);
+    }
+    stops
+}
+
+fn forget(stops: &[FocusId]) {
+    clear();
+    for &id in stops {
+        unregister(id);
+    }
+}
+
+#[test]
+fn a_wrapping_boundary_carries_tab_from_the_last_stop_to_the_first() {
+    let stops @ [first, _, last] = three_stops();
+    set_boundary(FocusBoundary::Wrap);
+
+    request(last);
+    assert_eq!(tab_leaves(), TabLeaves::default());
+    focus_next();
+    assert_eq!(current(), Some(first));
+    focus_prev();
+    assert_eq!(current(), Some(last));
+    assert_eq!(take_departure(), None);
+    forget(&stops);
+}
+
+#[test]
+fn a_releasing_boundary_lets_tab_leave_past_either_end() {
+    let stops @ [first, middle, last] = three_stops();
+    set_boundary(FocusBoundary::Release);
+
+    request(last);
+    assert_eq!(
+        tab_leaves(),
+        TabLeaves {
+            forward: true,
+            backward: false
+        },
+        "Tab from the last stop leaves, Shift+Tab does not"
+    );
+    focus_next();
+    assert_eq!(current(), None, "nothing is left focused inside");
+    assert_eq!(take_departure(), Some(Travel::Forward));
+
+    request(first);
+    assert_eq!(
+        tab_leaves(),
+        TabLeaves {
+            forward: false,
+            backward: true
+        }
+    );
+    focus_prev();
+    assert_eq!(current(), None);
+    assert_eq!(take_departure(), Some(Travel::Backward));
+
+    request(middle);
+    assert_eq!(tab_leaves(), TabLeaves::default());
+    forget(&stops);
+}
+
+#[test]
+fn a_releasing_boundary_with_nothing_to_focus_lets_tab_leave_both_ways() {
+    clear();
+    set_boundary(FocusBoundary::Release);
+    assert_eq!(
+        tab_leaves(),
+        TabLeaves {
+            forward: true,
+            backward: true
+        }
+    );
+}
+
+#[test]
+fn a_releasing_boundary_still_wraps_inside_a_modal() {
+    use crate::LayoutItem;
+    crate::context::reset_layout_runtime();
+    clear();
+    set_boundary(FocusBoundary::Release);
+    let node = laid_out_box().layout_node();
+    let (first, last) = (next_id(), next_id());
+    register_with_role(first, FocusKind::Widget, node, Role::Button);
+    register_with_role(last, FocusKind::Widget, node, Role::Button);
+    let scope = register_scope(node, || true, true);
+
+    request(last);
+    assert_eq!(tab_leaves(), TabLeaves::default());
+    focus_next();
+    assert_eq!(current(), Some(first), "Tab stays inside the layer");
+    assert_eq!(take_departure(), None);
+
+    unregister_scope(scope);
+    forget(&[first, last]);
+}

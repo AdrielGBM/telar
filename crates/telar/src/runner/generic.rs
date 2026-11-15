@@ -113,6 +113,7 @@ where
         &window.title,
         renderer,
     );
+    handler.focus_boundary = platform.focus_boundary();
     handler.location = location;
     handler.hydration = hydration;
     platform.run(window, handler)

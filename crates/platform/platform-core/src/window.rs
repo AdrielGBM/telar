@@ -166,6 +166,8 @@ pub trait Window {
     fn set_cursor(&self, _cursor: Cursor) {}
     /// Tells the window that a field holds the keyboard and where its caret is, so an input method composes into it and opens its candidates beside the caret; `None` when no field does, which leaves every key a plain key. Called when the answer changes. No-op where the platform composes text itself (a terminal) or finds the caret elsewhere (a document, which reads it off the field's element).
     fn set_text_input(&self, _input: Option<crate::TextInput>) {}
+    /// Tells the window which of Tab and Shift+Tab would leave the application now, called when the answer changes. A window whose platform decides about a Tab before the application has seen it needs this to hand the key to whatever lies around; the default does nothing.
+    fn set_tab_leaves(&self, _leaves: crate::TabLeaves) {}
     /// A handle that asks this window for a frame, usable from any thread.
     ///
     /// `None` where a window cannot hand one out: a browser surface redraws through a callback that never leaves the thread that registered it. Such a platform installs a process-global [`set_loop_waker`](crate::set_loop_waker) instead, which is what the runtime prefers anyway. A window that is `Clone + Send + Sync` answers this with [`window_waker`].
@@ -324,6 +326,10 @@ pub trait Platform {
     fn keyboard_convention(&self) -> crate::KeyboardConvention {
         crate::KeyboardConvention::native()
     }
+    /// What happens to the keyboard when Tab runs off an end of the app's focus order. Asked once, before [`run`](Self::run).
+    fn focus_boundary(&self) -> crate::FocusBoundary {
+        crate::FocusBoundary::Wrap
+    }
     /// Runs `handler` until the app closes.
     ///
     /// `'static` because a platform is allowed to *keep* the handler rather than drive it to completion before returning: a browser owns its own loop, so the run there mounts the app onto it and returns while the app carries on inside callbacks the platform registered.
@@ -347,6 +353,10 @@ pub trait MultiSurfacePlatform {
     /// As [`Platform::keyboard_convention`]: asked once, before [`run_surfaces`](Self::run_surfaces).
     fn keyboard_convention(&self) -> crate::KeyboardConvention {
         crate::KeyboardConvention::native()
+    }
+    /// As [`Platform::focus_boundary`]: asked once, before [`run_surfaces`](Self::run_surfaces).
+    fn focus_boundary(&self) -> crate::FocusBoundary {
+        crate::FocusBoundary::Wrap
     }
     /// Runs every surface in `surfaces` (each an `(id, config)` pair), building its handler via `factory(id)`. Blocks until all surfaces have closed.
     fn run_surfaces<H, F>(

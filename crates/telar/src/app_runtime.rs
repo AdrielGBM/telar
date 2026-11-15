@@ -113,6 +113,16 @@ pub trait AppRuntime: 'static {
         ui_core::text_input()
     }
 
+    /// States what Tab past an end of the focus order does in the surface being mounted, in the focus registry this application's widgets live in. See [`ui_core::focus::set_boundary`].
+    fn set_focus_boundary(&self, boundary: platform_core::FocusBoundary) {
+        ui_core::focus::set_boundary(boundary);
+    }
+
+    /// Which of Tab and Shift+Tab would leave the application now, read against the focus registry this application's widgets live in. See [`ui_core::focus::tab_leaves`].
+    fn tab_leaves(&self) -> platform_core::TabLeaves {
+        ui_core::focus::tab_leaves()
+    }
+
     /// Reports the user's system preferences into the store [`use_system_preferences`](crate::use_system_preferences) reads, which the theme's `follow_system` and the motion engine follow from there.
     fn set_system_preferences(&self, preferences: &SystemPreferences) {
         preferences_core::set_system_preferences(preferences.clone());

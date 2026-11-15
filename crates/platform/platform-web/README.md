@@ -11,7 +11,7 @@ language, reactive signals and a self-contained renderer.
 `WebPlatformConfig::owns_keyboard` chooses how keys are shared with the page. On a canvas the app keeps Tab,
 Space, the arrows and the paging keys whenever the surface has focus. On a document only the keys the focused
 box declares (`data-telar-keys`) are prevented, so the browser's Tab walk and keyboard scrolling keep working.
-A Tab left to the browser is not delivered as a key. See [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
+A Tab left to the browser is not delivered as a key. On a canvas that is the Tab the app says would run off either end of its focus order: the web states `FocusBoundary::Release`, so the browser moves focus out of the surface there. On a canvas that is the Tab the app says would run off either end of its focus order: the web always states `FocusBoundary::Release`, so the browser moves focus out of the surface there. See [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
 
 The host carries `data-telar-idle` (`IDLE_ATTRIBUTE`) while the loop has no frame coming: nothing queued,
 nothing animating, nothing due sooner than a frame from now. It is absent until the first frame is drawn, so a

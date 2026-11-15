@@ -44,6 +44,7 @@ web-sys = { workspace = true, features = [
     "HtmlInputElement",
     "InputEvent",
     "KeyboardEvent",
+    "KeyboardEventInit",
     "MediaQueryList",
     "MediaQueryListEvent",
     "MouseEvent",
@@ -93,3 +94,7 @@ path = "src/page_hidden.test.rs"
 [[test]]
 name = "idle"
 path = "src/idle.test.rs"
+
+[[test]]
+name = "tab_leaves"
+path = "src/tab_leaves.test.rs"

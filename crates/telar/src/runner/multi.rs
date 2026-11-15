@@ -44,6 +44,7 @@ where
     let app_name = app_name.to_owned();
     let debug = super::debug_settings::process_debug_settings();
     platform_core::set_keyboard_convention(platform.keyboard_convention());
+    let focus_boundary = platform.focus_boundary();
 
     platform.run_surfaces(window_configs, move |id| {
         let (fonts, title) = opened
@@ -63,6 +64,7 @@ where
             super::host::SurfaceRenderer::builtin(),
         );
         // Every surface shares this UI thread and the one reactive runtime, so each needs its own `Surface` world. Built here, on the thread that drives the handler.
+        handler.focus_boundary = focus_boundary;
         handler.surface = Some(ui_core::Surface::new());
         handler
     })

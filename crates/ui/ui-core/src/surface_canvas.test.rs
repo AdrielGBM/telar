@@ -209,6 +209,7 @@ fn a_canvas_in_an_environment_is_built_in_it() {
         direction: Some(Direction::Rtl),
         high_contrast: Some(true),
         safe_area: Insets::new(44.0, 0.0, 34.0, 0.0),
+        ..SurfaceEnv::default()
     };
     let built_in = Rc::new(Cell::new(None));
     let seen = Rc::clone(&built_in);
@@ -219,6 +220,7 @@ fn a_canvas_in_an_environment_is_built_in_it() {
             direction: Some(crate::current_direction()),
             high_contrast: preferences_core::high_contrast(),
             safe_area: crate::use_safe_area_insets(),
+            ..SurfaceEnv::default()
         }));
         Ok(Box::new(Container::new(fill(), vec![])?) as Box<dyn LayoutItem>)
     })
@@ -380,4 +382,31 @@ fn a_nested_canvas_leaves_tab_from_nothing_to_the_tree_around_and_steps_out_past
     assert!(second.get());
     assert!(canvas.tab(&tab(false)), "Tab past the last steps out");
     assert!(!canvas.holds_focus(), "and leaves nothing focused inside");
+}
+
+#[test]
+fn a_standalone_canvas_takes_the_boundary_its_environment_states_and_a_nested_one_always_releases()
+{
+    reset_layout_runtime();
+    let leaves_at_the_last_stop = |canvas: &SurfaceCanvas| {
+        shown(canvas);
+        canvas.with_entered(|| {
+            crate::focus::focus_prev();
+            crate::focus::tab_leaves().forward
+        })
+    };
+    let [first, second] = [signal(false), signal(false)];
+    let release = SurfaceEnv {
+        focus_boundary: FocusBoundary::Release,
+        ..SurfaceEnv::default()
+    };
+    let releasing =
+        SurfaceCanvas::new_in(CANVAS, &release, two_focusables([first, second])).unwrap();
+    assert!(leaves_at_the_last_stop(&releasing));
+
+    let wrapping = SurfaceCanvas::new(CANVAS, two_focusables([first, second])).unwrap();
+    assert!(!leaves_at_the_last_stop(&wrapping));
+
+    let nested = NestedCanvas::new(CANVAS, two_focusables([first, second])).unwrap();
+    assert!(leaves_at_the_last_stop(&nested));
 }

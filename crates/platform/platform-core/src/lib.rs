@@ -19,6 +19,7 @@ pub mod drag_drop;
 pub mod error;
 pub mod event;
 pub mod event_sink;
+pub mod focus_boundary;
 pub mod guest;
 pub mod history;
 pub mod key_pairing;
@@ -59,6 +60,7 @@ pub use event::{
     Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta, TAP_SLOP,
 };
 pub use event_sink::{post_event, set_event_sink};
+pub use focus_boundary::{FocusBoundary, TabLeaves};
 pub use history::{
     HistoryFollower, HistoryFollowerId, LocaleFollower, bind_location_locale,
     follow_location_history, history_back, is_following_location_history, location_history,

@@ -70,6 +70,10 @@ where
     pub(super) hydration: Option<super::hydration::Hydration>,
     // What the window was last told about the field taking text, so it hears only a change.
     pub(super) text_input: Option<platform_core::TextInput>,
+    // What the window was last told about Tab leaving the app, so it hears only a change.
+    pub(super) tab_leaves: platform_core::TabLeaves,
+    // What Tab past an end of the focus order does in this surface, as its platform states it.
+    pub(super) focus_boundary: platform_core::FocusBoundary,
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
@@ -161,6 +165,8 @@ where
         title: None,
         hydration: None,
         text_input: None,
+        tab_leaves: platform_core::TabLeaves::default(),
+        focus_boundary: platform_core::FocusBoundary::default(),
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -306,6 +312,15 @@ where
         self.text_input = input;
     }
 
+    /// Tells the window which Tab would leave the app now that a frame settled, when that changed: a platform that decides about a Tab before the app hears it hands the key to its surroundings only for these.
+    fn report_tab_leaves(&mut self, window: &W) {
+        let leaves = self.app.tab_leaves();
+        if leaves != self.tab_leaves {
+            window.set_tab_leaves(leaves);
+            self.tab_leaves = leaves;
+        }
+    }
+
     /// Tells the window no field takes text, when it was last told one did: that field was the tree's, which is gone, and a composition begun in it must not carry into whatever the next tree focuses, even a field it reports the same way.
     fn release_text_input(&mut self, window: &W) {
         if self.text_input.take().is_some() {
@@ -391,6 +406,7 @@ where
             self.app.open_title(&title.app, &title.showing);
         }
         self.app.open_font_family(self.fonts.family.as_deref());
+        self.app.set_focus_boundary(self.focus_boundary);
         self.tree = Some(self.app.mount());
         self.fit_tree_to(window);
         if let Some(hydration) = hydration {
@@ -1187,6 +1203,7 @@ where
             }
         }
         self.report_text_input(window);
+        self.report_tab_leaves(window);
     }
 
     fn suspend(&mut self) {
@@ -1249,6 +1266,7 @@ where
         // Before the platform first shows the window, so a tree that asked for no decorations is never seen with them.
         self.apply_window_commands(window);
         self.text_input = None;
+        self.tab_leaves = platform_core::TabLeaves::default();
         self.pacer.presentation_owed = true;
 
         let w = window.clone();
