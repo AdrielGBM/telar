@@ -1,7 +1,7 @@
 use geometry_core::Rect;
 
 use super::*;
-use crate::{ConsumedKeys, Key, ModifiersState, NamedKey, Role};
+use crate::{AccessId, ConsumedKeys, FocusId, Key, ModifiersState, NamedKey, Role};
 
 fn field_node(focused: bool) -> AccessNode {
     AccessNode {
@@ -54,7 +54,7 @@ impl ReportsSurface for Field {
 
     fn text_input(&self) -> Option<TextInput> {
         self.focused.then_some(TextInput {
-            field: 7,
+            field: AccessId::own(FocusId(7)),
             caret: Rect::new(3.0, 2.0, 1.0, 10.0),
             secret: false,
         })

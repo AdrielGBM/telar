@@ -157,6 +157,7 @@ impl ForeignBoundary {
     ) -> FrameFocus {
         let focus = FrameFocus::register(
             node,
+            self.key,
             Placed {
                 source: self.source.clone(),
                 placement: Box::new(placement),

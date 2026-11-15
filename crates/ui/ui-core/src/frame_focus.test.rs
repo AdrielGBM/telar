@@ -1,13 +1,19 @@
 use std::cell::Cell;
+use std::num::NonZeroU64;
 use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutStyle};
 
+use platform_core::AccessId;
+
 use super::*;
 use crate::container::Container;
 use crate::context::{compute_layout, reset_layout_runtime};
 use crate::layout_item::LayoutItem;
+
+const FIRST: SurfaceKey = SurfaceKey(NonZeroU64::new(1).unwrap());
+const SECOND: SurfaceKey = SurfaceKey(NonZeroU64::new(2).unwrap());
 
 /// A drawn surface with no keyboard of its own, whose field's caret is what the closure says.
 struct Caret(Box<dyn Fn() -> Option<(TextInput, Transform)>>);
@@ -42,7 +48,7 @@ impl Inside for Caret {
 
 fn input(field: u64, caret: Rect) -> TextInput {
     TextInput {
-        field,
+        field: AccessId::own(FocusId(field)),
         caret,
         secret: true,
     }
@@ -77,6 +83,7 @@ fn the_stop_reports_the_drawn_surfaces_caret_where_the_surface_around_shows_it()
     let (_outer, node) = drawn_box();
     let stop = FrameFocus::register(
         node,
+        FIRST,
         Caret(Box::new(|| {
             Some((
                 input(7, Rect::new(5.0, 4.0, 1.0, 10.0)),
@@ -89,14 +96,17 @@ fn the_stop_reports_the_drawn_surfaces_caret_where_the_surface_around_shows_it()
     assert!(stop.holds_keys());
     assert_eq!(
         crate::text_input(),
-        Some(input(
-            7u64.rotate_left(32) ^ stop.id().0,
-            Rect::new(30.0, 28.0, 2.0, 20.0)
-        ))
+        Some(TextInput {
+            field: AccessId {
+                surface: Some(FIRST),
+                id: FocusId(7)
+            },
+            ..input(7, Rect::new(30.0, 28.0, 2.0, 20.0))
+        })
     );
 }
 
-/// Two frames drawing surfaces whose fields have the same id there are told apart by their stops.
+/// Two frames drawing surfaces whose fields have the same id there are told apart by their surfaces.
 #[test]
 fn the_same_field_inside_two_frames_is_two_fields_here() {
     reset_layout_runtime();
@@ -105,12 +115,14 @@ fn the_same_field_inside_two_frames_is_two_fields_here() {
     let caret = Rect::new(0.0, 0.0, 1.0, 10.0);
     let first = FrameFocus::register(
         node,
+        FIRST,
         Caret(Box::new(move || {
             Some((input(1, caret), Transform::IDENTITY))
         })),
     );
     let second = FrameFocus::register(
         node,
+        SECOND,
         Caret(Box::new(move || {
             Some((input(1, caret), Transform::IDENTITY))
         })),
@@ -131,6 +143,7 @@ fn a_dropped_stop_leaves_the_tab_order_and_gives_up_focus() {
     let counted = Rc::clone(&asked);
     let stop = FrameFocus::register(
         node,
+        FIRST,
         Caret(Box::new(move || {
             counted.set(counted.get() + 1);
             None

@@ -6,7 +6,7 @@ use std::rc::{Rc, Weak};
 use geometry_core::{Rect, Size, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use layout_reactive::RelayoutHook;
-use platform_core::{ConsumedKeys, Event, PointerButton, TextInput, WindowCommand};
+use platform_core::{ConsumedKeys, Event, PointerButton, SurfaceKey, TextInput, WindowCommand};
 use reactive_core::{OwnerId, dispose_owner, effect, owner_scope};
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -66,7 +66,11 @@ impl SurfaceFrame {
             Sizing::Filling => style.clone(),
             Sizing::Sized => sized_style(style.clone(), canvas.size_now(), canvas.scale_now()),
         })?;
-        let focus = FrameFocus::register(leaf.node, Rc::downgrade(&canvas));
+        let focus = FrameFocus::register(
+            leaf.node,
+            SurfaceKey(canvas.surface().handle().raw()),
+            Rc::downgrade(&canvas),
+        );
         let id = focus.id();
         let surface = Rc::downgrade(canvas.surface());
 

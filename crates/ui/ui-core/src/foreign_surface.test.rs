@@ -301,7 +301,7 @@ fn the_focus_stop_tells_the_input_method_where_the_foreign_caret_is() {
     let stop = boundary.focus_stop(node, || Transform::scale_around(2.0, 2.0, 0.0, 0.0));
     host.view();
     fake.input.set(Some(TextInput {
-        field: 7,
+        field: platform_core::AccessId::own(focus::FocusId(7)),
         caret: Rect::new(5.0, 4.0, 1.0, 10.0),
         secret: false,
     }));
@@ -313,7 +313,15 @@ fn the_focus_stop_tells_the_input_method_where_the_foreign_caret_is() {
     );
     focus::request(stop.id());
     let input = crate::text_input().expect("the caret of the field inside");
-    assert_eq!(input.field, 7u64.rotate_left(32) ^ stop.id().0);
+    assert_eq!(
+        input.field.id,
+        focus::FocusId(7),
+        "the field keeps its id inside the surface"
+    );
+    assert_ne!(
+        input.field.surface, None,
+        "and is told apart by the surface"
+    );
     assert_eq!(input.caret, Rect::new(30.0, 28.0, 2.0, 20.0));
 }
 

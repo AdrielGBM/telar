@@ -52,7 +52,7 @@ impl ReportsSurface for Field {
 
     fn text_input(&self) -> Option<TextInput> {
         self.focused.then_some(TextInput {
-            field: 3,
+            field: platform_core::AccessId::own(platform_core::FocusId(3)),
             caret: Rect::new(4.0, 2.0, 1.0, 16.0),
             secret: false,
         })

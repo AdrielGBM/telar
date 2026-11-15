@@ -9,8 +9,8 @@ use std::rc::Rc;
 use geometry_core::{BorderRadius, Rect};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
 use platform_core::{
-    AccessAction, ConsumedKeys, Event, Ime, Key, KeyboardConvention, ModifiersState, NamedKey,
-    PointerButton, PointerSource, TextInput, TextSelection, Value, keyboard_convention,
+    AccessAction, AccessId, ConsumedKeys, Event, Ime, Key, KeyboardConvention, ModifiersState,
+    NamedKey, PointerButton, PointerSource, TextInput, TextSelection, Value, keyboard_convention,
 };
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{Color, LineHeight, RectStyle, Semantics, ShapeStyle, TextStyle, TextWrap};
@@ -912,7 +912,7 @@ impl Editor {
         };
         let caret_rect = placed.caret_rect(caret_at, affinity);
         self.drawn_caret.set(Some(TextInput {
-            field: self.id.0,
+            field: AccessId::own(self.id),
             caret: caret_rect,
             secret: self.mask().is_some(),
         }));

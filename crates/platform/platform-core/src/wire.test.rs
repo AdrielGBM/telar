@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroU64};
 use std::sync::Arc;
 
 use geometry_core::{Insets, Rect};
@@ -372,12 +372,15 @@ fn a_window_config_round_trips_in_every_shape() {
 #[test]
 fn the_field_taking_text_and_the_keyboard_convention_round_trip() {
     round_trip(TextInput {
-        field: 77,
+        field: AccessId {
+            surface: NonZeroU64::new(9).map(SurfaceKey),
+            id: FocusId(77),
+        },
         caret: Rect::new(10.0, 20.0, 1.0, 18.0),
         secret: true,
     });
     round_trip(Some(TextInput {
-        field: 1,
+        field: AccessId::own(FocusId(1)),
         caret: Rect::new(0.0, 0.0, 0.0, 0.0),
         secret: false,
     }));
@@ -654,7 +657,10 @@ fn the_bytes_of_every_platform_value_are_pinned_to_the_wire_version() {
         &mut bytes,
         [
             Some(TextInput {
-                field: 77,
+                field: AccessId {
+                    surface: NonZeroU64::new(9).map(SurfaceKey),
+                    id: FocusId(77),
+                },
                 caret: Rect::new(10.0, 20.0, 1.0, 18.0),
                 secret: true,
             }),

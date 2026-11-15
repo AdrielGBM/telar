@@ -4,11 +4,13 @@ use std::ops::Range;
 
 use geometry_core::Rect;
 
+use crate::AccessId;
+
 /// Where the field that holds the keyboard takes text, for the input method composing into it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextInput {
     /// Which field it is, opaque and stable while the field holds the keyboard: a composition belongs to the field it began in, and a change here is the keyboard moving to another field rather than a caret moving.
-    pub field: u64,
+    pub field: AccessId,
     /// The caret, in the surface's logical coordinates: where an input method opens its candidate window.
     pub caret: Rect,
     /// Whether what is typed is hidden, as a password is, so the input method neither shows nor learns it.

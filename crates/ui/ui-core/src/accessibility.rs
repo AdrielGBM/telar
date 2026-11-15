@@ -1259,20 +1259,24 @@ impl NestedSurface {
         }
     }
 
-    // A control of the surface itself takes the surface's key; one a surface nested deeper already named keeps that name, since keys are unique here, but a foreign surface names the surfaces nested in it in its own numbering, which here names other surfaces.
     fn qualify(&self, id: AccessId) -> Option<AccessId> {
-        let surface = match id.surface {
-            None => self.surface,
-            Some(guest) if crate::foreign_surface::is_foreign(self.surface) => {
-                crate::foreign_surface::nested_key_of(self.surface, guest)?
-            }
-            Some(deeper) => deeper,
-        };
-        Some(AccessId {
-            surface: Some(surface),
-            id: id.id,
-        })
+        qualify(self.surface, id)
     }
+}
+
+// A control of the surface itself takes the surface's key; one a surface nested deeper already named keeps that name, since keys are unique here, but a foreign surface names the surfaces nested in it in its own numbering, which here names other surfaces.
+pub(crate) fn qualify(surface: SurfaceKey, id: AccessId) -> Option<AccessId> {
+    let surface = match id.surface {
+        None => surface,
+        Some(guest) if crate::foreign_surface::is_foreign(surface) => {
+            crate::foreign_surface::nested_key_of(surface, guest)?
+        }
+        Some(deeper) => deeper,
+    };
+    Some(AccessId {
+        surface: Some(surface),
+        id: id.id,
+    })
 }
 
 /// Carries out a screen reader's `action` on the control `id` names in [`snapshot`] of the surface entered now.

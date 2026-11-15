@@ -5,7 +5,7 @@ use std::rc::{Rc, Weak};
 
 use geometry_core::Transform;
 use layout_core::NodeId;
-use platform_core::{Event, Key, NamedKey, Role, TextInput};
+use platform_core::{Event, Key, NamedKey, Role, SurfaceKey, TextInput};
 use reactive_core::{OwnerId, dispose_owner, effect, root_scope};
 
 use crate::focus::{self, FocusId, FocusKind, Keyboard, Travel};
@@ -66,7 +66,11 @@ pub(crate) struct Stop {
 
 impl FrameFocus {
     /// Registers the stop for the frame's box at `node`, driving `inside`.
-    pub(crate) fn register(node: NodeId, inside: impl Inside + 'static) -> Self {
+    pub(crate) fn register(
+        node: NodeId,
+        surface: SurfaceKey,
+        inside: impl Inside + 'static,
+    ) -> Self {
         let id = focus::next_id();
         focus::register_with_role(id, FocusKind::Widget, node, Role::Group);
         let inside = Rc::new(inside);
@@ -76,7 +80,7 @@ impl FrameFocus {
             let inside = Rc::clone(&inside);
             move || {
                 let (input, placement) = inside.text_input()?;
-                nested_text_input(id, node, placement, input)
+                nested_text_input(surface, node, placement, input)
             }
         });
         let scope = root_scope();
@@ -174,14 +178,13 @@ fn follow_outer_focus(id: FocusId, inside: Rc<dyn Inside>) {
 
 /// `inside`, the caret of a field in a surface drawn in the box at `node` through `placement`, as the surface around shows it.
 fn nested_text_input(
-    owner: FocusId,
+    surface: SurfaceKey,
     node: NodeId,
     placement: Transform,
     inside: TextInput,
 ) -> Option<TextInput> {
     let input = TextInput {
-        // Every surface numbers its fields from the same start, so the drawn surface's field is told apart by the stop that holds it.
-        field: inside.field.rotate_left(32) ^ owner.0,
+        field: crate::accessibility::qualify(surface, inside.field)?,
         caret: renderer_core::transform_clip_rect(placement.to_array(), inside.caret),
         secret: inside.secret,
     };
