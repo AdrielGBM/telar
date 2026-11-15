@@ -10,7 +10,7 @@ use platform_core::{
     NamedKey, Orientation, OutgoingDrag, PointerButton, PointerSource, Toggle, Value,
 };
 use reactive_core::{Reactive, RwSignal, effect, signal};
-use renderer_core::{BlendMode, Declared, RectStyle};
+use renderer_core::{BlendMode, Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -1613,6 +1613,10 @@ fn wear_ring(rect: Rect, base: RectStyle, ring: FocusRing) -> (RectStyle, Vec<Re
 
 /// The box's paint with a ring the caller drew composed over it: only what the ring names is applied, and its frame stands inside the box's edge when the theme's offset says so.
 fn wear_drawn_ring(rect: Rect, base: RectStyle, ring: RectStyle) -> (RectStyle, Vec<RenderNode>) {
+    let ring = RectStyle {
+        border: ring.border.map(Border::as_focus_ring),
+        ..ring
+    };
     let offset = use_theme_tokens().focus_ring_offset();
     let inside: Vec<RenderNode> = ring
         .border

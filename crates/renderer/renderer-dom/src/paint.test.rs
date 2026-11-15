@@ -77,7 +77,7 @@ fn forced_colors_paint_frames_in_the_text_colour() {
     let sheet = forced_colors();
     assert!(
         sheet.contains(
-            "[data-telar] *{border-color:CanvasText!important;outline-color:CanvasText!important}"
+            "[data-telar] *{border-color:var(--telar-ring,CanvasText)!important;outline-color:var(--telar-ring,CanvasText)!important}"
         ),
         "{sheet}"
     );
@@ -106,31 +106,65 @@ fn forced_colors_paint_a_chosen_box_as_a_highlight() {
 }
 
 #[test]
-fn forced_colors_paint_both_bands_of_the_focus_ring_as_a_highlight() {
+fn forced_colors_paint_a_focused_element_as_a_highlight() {
     let sheet = forced_colors();
-    for selector in [
-        "[data-telar] :focus-visible{",
-        "[data-telar] :focus-visible>:not([data-telar-id]){",
-    ] {
-        let rule = sheet
-            .split_once(selector)
-            .unwrap_or_else(|| panic!("{selector} has no rule: {sheet}"))
-            .1;
-        assert!(
-            rule.starts_with("border-color:Highlight!important;outline-color:Highlight!important}"),
-            "{selector}: {rule}"
-        );
-    }
+    let rule = sheet
+        .split_once("[data-telar] :focus-visible{")
+        .unwrap_or_else(|| panic!("no rule for a focused element: {sheet}"))
+        .1;
+    assert!(
+        rule.starts_with("border-color:Highlight!important;outline-color:Highlight!important}"),
+        "{rule}"
+    );
 }
 
 #[test]
-fn forced_colors_adjust_nothing_but_pictures() {
-    let sheet = forced_colors();
-    assert_eq!(sheet.matches("forced-color-adjust").count(), 1, "{sheet}");
-    assert!(
-        sheet.contains("[data-telar] :is(img,svg){forced-color-adjust:none}"),
-        "{sheet}"
+fn the_sheet_adjusts_no_colours_itself() {
+    assert!(!forced_colors().contains("forced-color-adjust"));
+}
+
+#[test]
+fn the_ring_property_is_one_a_frame_does_not_pass_to_what_it_holds() {
+    assert!(RESET.contains("@property --telar-ring{syntax:\"*\";inherits:false}"));
+    assert!(RESET.contains(&format!("var({RING_PROPERTY},CanvasText)")));
+}
+
+#[test]
+fn a_ring_names_the_highlight_for_forced_colors_and_a_plain_frame_does_not() {
+    let ring = css_of(
+        &RectStyle::default().with_border(Border::uniform(Color::BLACK, 2.0).as_focus_ring()),
     );
+    assert_eq!(
+        ring,
+        "--telar-ring:Highlight;outline:2px solid #000000;outline-offset:-2px;"
+    );
+    let frame = css_of(&RectStyle::default().with_border(Border::uniform(Color::BLACK, 2.0)));
+    assert!(!frame.contains(RING_PROPERTY), "{frame}");
+}
+
+#[test]
+fn an_uneven_frame_on_the_boxs_own_element_is_a_piece_laid_over_it() {
+    let style = RectStyle::default()
+        .with_fill(Color::WHITE)
+        .with_border(Border::per_side(Color::BLACK, 0.0, 0.0, 2.0, 0.0));
+    let mut own = String::new();
+    let over = own_box_style(&style, Rect::new(0.0, 0.0, 100.0, 40.0), &mut own);
+    assert_eq!(own, "background:#ffffff;");
+    assert_eq!(
+        over.as_deref(),
+        Some("border-style:solid;border-color:#000000;border-width:0px 0px 2px 0px;")
+    );
+}
+
+#[test]
+fn an_even_frame_stays_on_the_boxs_own_element() {
+    let style = RectStyle::default().with_border(Border::uniform(Color::BLACK, 2.0));
+    let mut own = String::new();
+    assert_eq!(
+        own_box_style(&style, Rect::new(0.0, 0.0, 100.0, 40.0), &mut own),
+        None
+    );
+    assert_eq!(own, "outline:2px solid #000000;outline-offset:-2px;");
 }
 
 #[test]

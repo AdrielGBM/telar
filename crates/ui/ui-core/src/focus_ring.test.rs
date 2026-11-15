@@ -57,8 +57,8 @@ fn the_ring_drawn_over_content_is_the_band_and_the_hairline_inside_it() {
     assert_eq!(
         borders,
         [
-            Some(Border::uniform(ring.band, 2.0)),
-            Some(Border::uniform(Color::WHITE, 1.0)),
+            Some(Border::uniform(ring.band, 2.0).as_focus_ring()),
+            Some(Border::uniform(Color::WHITE, 1.0).as_focus_ring()),
         ]
     );
 }

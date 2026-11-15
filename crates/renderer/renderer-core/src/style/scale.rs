@@ -74,6 +74,7 @@ impl Scale for Border {
         Border {
             paint: self.paint.scale(sf),
             widths: self.widths.map(|w| w * sf),
+            kind: self.kind,
         }
     }
 }

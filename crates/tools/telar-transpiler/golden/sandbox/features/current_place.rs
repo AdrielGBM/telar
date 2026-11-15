@@ -98,7 +98,7 @@ pub fn current_place(props: CurrentPlaceProps) -> Result<Box<dyn LayoutItem>, La
                                 )?
                             };
                             let __text_3 = __text_3.a11y_hidden();
-                            StyledContainer::new(LayoutStyle::new().flex_row().sticky().inset_top(0.0).height(BAR).width(SizeDimension::Percent(1.0)).gap(8.0).padding_horizontal(12.0).align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [0.0, 0.0, 1.0, 0.0] }), shadow: None, radius: BorderRadius::zero() } }, children![__sbox_0, __sbox_1, __sbox_2, __text_3])?.role(::telar::Role::Navigation)
+                            StyledContainer::new(LayoutStyle::new().flex_row().sticky().inset_top(0.0).height(BAR).width(SizeDimension::Percent(1.0)).gap(8.0).padding_horizontal(12.0).align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [0.0, 0.0, 1.0, 0.0])), shadow: None, radius: BorderRadius::zero() } }, children![__sbox_0, __sbox_1, __sbox_2, __text_3])?.role(::telar::Role::Navigation)
                         };
                         let __row_0 = __row_0.a11y_label(|| "Places");
                         let __col_2 = {

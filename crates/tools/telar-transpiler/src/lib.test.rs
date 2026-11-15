@@ -1888,7 +1888,7 @@ fn paint_code(view: &str) -> String {
 fn the_stroke_width_shorthand_names_one_side() {
     let code = paint_code("box stroke:#ff0000 stroke_width:\"0 0 1 0\"");
     assert!(
-        code.contains("widths: [0.0, 0.0, 1.0, 0.0]"),
+        code.contains("[0.0, 0.0, 1.0, 0.0])"),
         "the four values reach the style in CSS order:\n{code}"
     );
 }
@@ -1898,7 +1898,7 @@ fn the_stroke_width_shorthand_names_one_side() {
 fn a_plain_stroke_width_stays_uniform() {
     let code = paint_code("box stroke:#ff0000 stroke_width:2");
     assert!(
-        code.contains("paint: Paint::Solid(Color::rgba(255.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0)), widths: [2.0; 4]"),
+        code.contains("Border::new(Paint::Solid(Color::rgba(255.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0)), [2.0; 4])"),
         "a uniform border puts its one width on all four sides:\n{code}"
     );
 }
@@ -1913,12 +1913,12 @@ fn a_uniform_stroke_width_that_reads_is_not_replaced_by_a_hairline() {
     );
     let called = paint_code("box stroke:#ff0000 stroke_width:(hairline() * 2.0)");
     assert!(
-        called.contains("widths: [hairline() * 2.0; 4]"),
+        called.contains("[hairline() * 2.0; 4])"),
         "an expression is spliced as written:\n{called}"
     );
     let unwritten = paint_code("box stroke:#ff0000");
     assert!(
-        unwritten.contains("widths: [1.0; 4]"),
+        unwritten.contains("[1.0; 4])"),
         "a stroke with no width is still a hairline:\n{unwritten}"
     );
 }
@@ -2008,7 +2008,7 @@ fn an_empty_font_family_is_refused() {
 fn the_parenthesized_form_reaches_every_multi_token_value() {
     let stroke = paint_code("box stroke:#ff0000 stroke_width(0 0 1 0)");
     assert!(
-        stroke.contains("widths: [0.0, 0.0, 1.0, 0.0]"),
+        stroke.contains("[0.0, 0.0, 1.0, 0.0])"),
         "stroke_width:\n{stroke}"
     );
     let cols = paint_code("grid cols(1fr 2fr)");
@@ -2029,7 +2029,7 @@ fn the_parenthesized_form_reaches_every_multi_token_value() {
 fn a_named_side_needs_no_shorthand() {
     let code = paint_code("box stroke:#ff0000 stroke_bottom:1");
     assert!(
-        code.contains("widths: [0.0, 0.0, 1.0, 0.0]"),
+        code.contains("[0.0, 0.0, 1.0, 0.0])"),
         "an unnamed side is not drawn, the way CSS leaves it styleless:\n{code}"
     );
 }
@@ -2270,7 +2270,7 @@ fn stroke_signal_reads_reactively_and_clones_into_the_closure() {
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
         code.contains(
-            "{ let accent = accent.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(accent.get()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }"
+            "{ let accent = accent.clone(); move |_| RectStyle { fill: None, border: Some(Border::new(Paint::Solid(accent.get()), [1.0; 4])), shadow: None, radius: BorderRadius::zero() } }"
         ),
         "stroke should reactively read the cloned signal:\n{code}"
     );

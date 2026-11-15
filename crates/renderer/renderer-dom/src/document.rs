@@ -17,8 +17,8 @@ use platform_core::{
     Destination, HasPopup, NumericValue, Orientation, Positioning, SetPosition, SortDirection,
 };
 use renderer_core::{
-    BlendMode, Color, CurrentKind, DrawCommand, Editing, Element, Focusable, ImageData, Modal,
-    Picture, Role, TextStyle, Toggle, ToggleKind, Value,
+    BlendMode, Color, CurrentKind, DrawCommand, Editing, Element, Focusable, ForcedColors,
+    ImageData, Modal, Picture, Role, TextStyle, Toggle, ToggleKind, Value,
 };
 
 use crate::box_key::BoxKey;
@@ -55,7 +55,7 @@ pub(crate) const SPOKEN_ATTRIBUTE: &str = "data-telar-spoken";
 ///
 /// The outline goes only where Telar draws a ring of its own: a focusable box (`data-telar-focus`). Whatever else the browser walks Tab through — a link inside a paragraph, a scroll area Firefox makes focusable — keeps the browser's ring, since nothing else would show where the keyboard is.
 ///
-/// Forced colours recolour what the browser can, and a `box-shadow` or a background colour is not that. Telar's frames are `outline` and `border`, so they survive, and the sheet says what each becomes: a frame is `CanvasText`; a box that says it is pressed, checked or selected is a `Highlight` fill with `HighlightText` over it, since the fill that said so is gone; the focus ring is `Highlight` in both bands, the outer one being the focused element's own outline and the inner one the paint inside it, which has no id of its own. Pictures keep their own colours, the only place the adjustment is switched off.
+/// Forced colours recolour what the browser can, and a `box-shadow` or a background colour is not that. Telar's frames are `outline` and `border`, so they survive, and the sheet says what each becomes: a frame is `CanvasText`; a box that says it is pressed, checked or selected is a `Highlight` fill with `HighlightText` over it, since the fill that said so is gone; a frame that marks where the keyboard is (see [`paint::RING_PROPERTY`]) is `Highlight`, in both bands and whether or not the box holds focus, since a list draws its cursor on a row that never does. Colour content, a picture or a box that says so, keeps its colours: the element carries `forced-color-adjust:none`, which its descendants inherit, and nothing else does.
 ///
 /// The field entry's own selection goes as well: it is invisible text parked over the field, and the band an input method's selected clause gets there would sit over the text Telar draws, which marks the clause itself.
 ///
@@ -64,14 +64,13 @@ pub(crate) const RESET: &str = "[data-telar]{font:400 16px sans-serif;color-sche
 [data-telar] *{margin:0;border:0;padding:0;background:none;font:inherit;color:inherit;\
 text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;scrollbar-width:none;\
 -webkit-appearance:none;outline:none}\
+@property --telar-ring{syntax:\"*\";inherits:false}\
 [data-telar] :focus-visible:not([data-telar-focus]){outline:revert}\
 @media (forced-colors:active){\
-[data-telar] *{border-color:CanvasText!important;outline-color:CanvasText!important}\
+[data-telar] *{border-color:var(--telar-ring,CanvasText)!important;outline-color:var(--telar-ring,CanvasText)!important}\
 [data-telar] :is([aria-pressed=true],[aria-pressed=mixed],[aria-checked=true],[aria-checked=mixed],[aria-selected=true]){background:Highlight!important;color:HighlightText!important}\
 [data-telar] :is([aria-pressed=true],[aria-pressed=mixed],[aria-checked=true],[aria-checked=mixed],[aria-selected=true]) *{color:HighlightText!important}\
-[data-telar] :focus-visible{border-color:Highlight!important;outline-color:Highlight!important}\
-[data-telar] :focus-visible>:not([data-telar-id]){border-color:Highlight!important;outline-color:Highlight!important}\
-[data-telar] :is(img,svg){forced-color-adjust:none}}\
+[data-telar] :focus-visible{border-color:Highlight!important;outline-color:Highlight!important}}\
 [data-telar] *::-webkit-scrollbar{display:none}\
 [data-telar] [data-telar-entry]::selection{background:transparent;color:transparent}\
 [data-telar] [data-telar-spoken]{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;\
@@ -816,6 +815,8 @@ struct Open {
     painted: bool,
     children: Vec<Node>,
     pieces: Vec<Painted>,
+    /// The frame of the box's own paint when it is uneven on its sides, laid over the box once everything else is placed.
+    frame: Option<Painted>,
     /// A transform whose subject is not yet known: the box itself if its own paint turns up inside, and the boxes it wraps otherwise.
     moved: Option<[f32; 6]>,
     /// Whether this box scrolls its own content, which is what makes its clip an overflow rather than a cut.
@@ -841,6 +842,7 @@ impl Open {
             painted: true,
             children: Vec::new(),
             pieces: Vec::new(),
+            frame: None,
             moved: None,
             scrolls: false,
             primary: false,
@@ -1040,7 +1042,12 @@ impl Walk<'_> {
                             &paint::matrix(matrix, rect.x, rect.y),
                         );
                     }
-                    paint::rect_style(style, *rect, &mut open.style);
+                    open.frame = paint::own_box_style(style, *rect, &mut open.style).map(|css| {
+                        Painted::Rect {
+                            rect: Rect::new(0.0, 0.0, rect.width, rect.height),
+                            style: format!("pointer-events:none;{css}"),
+                        }
+                    });
                     return;
                 }
                 let mut css = String::new();
@@ -1147,6 +1154,9 @@ impl Walk<'_> {
             paint::declare(&mut style, "display", "block");
             paint::declare(&mut style, "object-fit", picture.fit);
         }
+        if element.picture.is_some() || element.forced_colors == ForcedColors::Keep {
+            paint::declare(&mut style, "forced-color-adjust", "none");
+        }
         if drawing {
             // An `<svg>` is inline by default, reserving a descender's worth of space under it that the box it stands in never asked for. The declarations follow, so a box that wants another display still gets it.
             paint::declare(&mut style, "display", "block");
@@ -1227,6 +1237,7 @@ impl Walk<'_> {
             painted: false,
             children: Vec::new(),
             pieces: Vec::new(),
+            frame: None,
             moved: None,
             scrolls,
             primary,
@@ -1280,6 +1291,7 @@ impl Walk<'_> {
         let Some(mut node) = open.node.take() else {
             return;
         };
+        open.pieces.extend(open.frame.take());
         // A single run of text is the box's own label, not something inside it, so it becomes the element's text and style — which is what lets it be selected, found and read as part of the document. Unless the text needs the background to itself: glyphs filled with a gradient are a background clipped to their shape.
         let inline_text = open.children.is_empty()
             && open.pieces.len() == 1

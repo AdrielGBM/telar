@@ -217,7 +217,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_8, __text_9])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_8, __text_9])?
                     };
                     let __sbox_4 = {
                         let __text_10 = {
@@ -234,7 +234,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_10, __text_11])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_10, __text_11])?
                     };
                     let __sbox_5 = {
                         let __text_12 = {
@@ -251,7 +251,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_12, __text_13])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_12, __text_13])?
                     };
                     let __sbox_6 = {
                         let __text_14 = {
@@ -268,7 +268,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_14, __text_15])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_14, __text_15])?
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap(), children![__sbox_3, __sbox_4, __sbox_5, __sbox_6])?
                 };

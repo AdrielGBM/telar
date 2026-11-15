@@ -7,7 +7,7 @@ use wire_core::{
 };
 
 use crate::{
-    BlendMode, Border, Clamp, Color, Dash, Declared, DecorationLength, DecorationLine,
+    BlendMode, Border, BorderKind, Clamp, Color, Dash, Declared, DecorationLength, DecorationLine,
     DecorationMetric, Editing, Element, ElementId, FillRule, FontFamily, FontFeatures, FontStyle,
     FontTag, FontVariations, Gradient, GradientKind, GradientStops, ImageFill, ImageSlice,
     LayerMask, LineCap, LineHeight, LineJoin, Linked, Paint, PathData, PathStyle, PathVerb,
@@ -129,7 +129,15 @@ wire_struct!(Shadow {
     color
 });
 wire_struct!(Gradient { kind, stops });
-wire_struct!(Border { paint, widths });
+wire_enum!(BorderKind {
+    Frame = 0,
+    FocusRing = 1
+});
+wire_struct!(Border {
+    paint,
+    widths,
+    kind
+});
 wire_struct!(RectStyle {
     fill,
     border,
@@ -409,6 +417,7 @@ wire_struct!(Element {
     picture,
     fixed_in_place_of,
     editing,
+    forced_colors,
 });
 
 impl Shaped for Editing {

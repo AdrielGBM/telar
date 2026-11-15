@@ -1,4 +1,4 @@
-//! What an application says about a box for assistive technology: the name it goes by, what it is, the language it is in, and whether a reader skips it.
+//! What an application says about a box for assistive technology and for a reader's forced colours: the name it goes by, what it is, the language it is in, whether a reader skips it, and whether it is colour content.
 //!
 //! Kept beside the tree rather than on each widget, so every widget that owns a layout node takes it the same way and every target reads it from the same place: a document merges it into the element it writes, and the accessibility snapshot resolves it along the frame's element nesting.
 
@@ -178,6 +178,14 @@ pub trait Accessible: LayoutItem + Sized {
     /// Takes this box and everything under it out of what assistive technology is told. It is still drawn and still answers the pointer.
     fn a11y_hidden(self) -> Self {
         follow(self.layout_node(), |annotation| annotation.hidden = true);
+        self
+    }
+
+    /// Says this box and everything under it is colour content, such as a swatch or the area a colour is picked on: a document keeps its colours when the reader forces their own, where every other box takes theirs.
+    fn colour_content(self) -> Self {
+        follow(self.layout_node(), |annotation| {
+            annotation.forced_colors = renderer_core::ForcedColors::Keep
+        });
         self
     }
 

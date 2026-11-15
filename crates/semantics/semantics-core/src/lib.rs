@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+mod colours;
 mod destination;
 mod keys;
 mod location;
@@ -24,6 +25,7 @@ mod reading;
 mod uri;
 pub mod wire;
 
+pub use colours::ForcedColors;
 pub use destination::{CurrentKind, Destination};
 pub use keys::ConsumedKeys;
 pub use location::Location;
@@ -558,6 +560,8 @@ pub struct Annotation {
     pub anchor: Option<Arc<str>>,
     /// Said by the overlay the box is the top of rather than by the application: the box is a modal layer.
     pub modal: Option<Modal>,
+    /// Said of a box that is colour content, whatever the widget that made it is.
+    pub forced_colors: ForcedColors,
 }
 
 impl Annotation {
@@ -569,6 +573,7 @@ impl Annotation {
             && !self.decorative
             && self.anchor.is_none()
             && self.modal.is_none()
+            && self.forced_colors == ForcedColors::Adjust
     }
 
     /// Whether a reader skips the box and everything under it: hidden outright, or decorative and named by nothing.

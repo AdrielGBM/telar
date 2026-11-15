@@ -136,6 +136,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
             },
             vec![],
         )?
+        .colour_content()
         .styled_by(move || disc(diameter()));
         let swatch =
             StyledContainer::new(cell(diameter()), |_r| RectStyle::default(), children![face])?

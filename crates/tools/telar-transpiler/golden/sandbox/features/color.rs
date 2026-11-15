@@ -166,7 +166,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let __node_7 = {
                                     let __col_7 = {
                                         let __sbox_6 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().ink)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().ink)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_6 = {
                                             Text::declaring(
@@ -179,7 +179,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_8 = {
                                         let __sbox_7 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().muted)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().muted)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_7 = {
                                             Text::declaring(
@@ -192,7 +192,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_9 = {
                                         let __sbox_8 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_8 = {
                                             Text::declaring(
@@ -205,7 +205,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_10 = {
                                         let __sbox_9 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_9 = {
                                             Text::declaring(
@@ -218,7 +218,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_11 = {
                                         let __sbox_10 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().border)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().border)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_10 = {
                                             Text::declaring(
@@ -231,7 +231,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_12 = {
                                         let __sbox_11 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().background)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().background)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_11 = {
                                             Text::declaring(

@@ -4,9 +4,12 @@
 
 use geometry_core::Rect;
 use renderer_core::{
-    Border, BorderRadius, Color, Gradient, GradientStops, Paint, RectStyle, ResolvedGradient,
-    Shadow, TextStyle,
+    Border, BorderKind, BorderRadius, Color, Gradient, GradientStops, Paint, RectStyle,
+    ResolvedGradient, Shadow, TextStyle,
 };
+
+/// The custom property a forced-colors document reads a frame's colour from: set on the frames that mark where the keyboard is, so the sheet can give them the highlight instead of the text colour.
+pub(crate) const RING_PROPERTY: &str = "--telar-ring";
 
 /// Appends `property: value;`.
 pub fn declare(out: &mut String, property: &str, value: &str) {
@@ -125,7 +128,7 @@ fn radius(r: BorderRadius) -> Option<String> {
 
 /// A box's frame, as the real `outline` or `border` that draws it, so a document in forced colours paints it too: a shadow is dropped there, a frame is recoloured.
 ///
-/// An even frame is an `outline` pulled that far inward, which follows the radius and costs the layout nothing: a CSS border eats into the content box, and a 1px frame left every child two pixels narrower than the rect hit-testing reads. A frame uneven on its sides has no outline to be, so it is a `border` of those widths and takes the room they come to out of the box it is on.
+/// An even frame is an `outline` pulled that far inward, which follows the radius and costs the layout nothing: a CSS border eats into the content box, and a 1px frame left every child two pixels narrower than the rect hit-testing reads. A frame uneven on its sides has no outline to be, so it is a `border` of those widths, which takes the room they come to out of the box it is on: the box's own element never wears one (see [`own_box_style`]).
 ///
 /// A gradient is not a colour a frame can take, so it is drawn as a background layer (see [`frame_image`]) and the frame itself is left transparent, which forced colours still has something to repaint.
 fn border(b: &Border, out: &mut String) {
@@ -136,8 +139,11 @@ fn border(b: &Border, out: &mut String) {
         Paint::Solid(colour) => color(colour),
         Paint::Gradient(_) => color(Color::TRANSPARENT),
     };
+    if b.kind == BorderKind::FocusRing {
+        declare(out, RING_PROPERTY, "Highlight");
+    }
     let [top, right, bottom, left] = b.widths;
-    if top == right && top == bottom && top == left {
+    if is_even(b) {
         declare(out, "outline", &format!("{} solid {colour}", px(top)));
         declare(out, "outline-offset", &px(-top));
         return;
@@ -149,6 +155,12 @@ fn border(b: &Border, out: &mut String) {
         "border-width",
         &format!("{} {} {} {}", px(top), px(right), px(bottom), px(left)),
     );
+}
+
+/// Whether a frame is the same on every side, which is the one a box can draw as an outline.
+fn is_even(b: &Border) -> bool {
+    let [top, right, bottom, left] = b.widths;
+    top == right && top == bottom && top == left
 }
 
 fn shadow(s: Shadow) -> String {
@@ -197,6 +209,26 @@ fn frame_image(style: &RectStyle, rect: Rect) -> Option<String> {
 ///
 /// `rect` is the one it was drawn with, which is what a gradient's own coordinates are measured against.
 pub fn rect_style(style: &RectStyle, rect: Rect, out: &mut String) {
+    declarations(style, rect, out, true);
+}
+
+/// [`rect_style`] for the box's own element, where a frame uneven on its sides is not drawn on it: a CSS border takes its width out of the content box, which layout never reserved. It comes back as the style of a piece laid over the box instead, which is the same frame without the cost.
+pub fn own_box_style(style: &RectStyle, rect: Rect, out: &mut String) -> Option<String> {
+    let uneven = style
+        .border
+        .as_ref()
+        .filter(|b| b.is_visible() && !is_even(b));
+    declarations(style, rect, out, uneven.is_none());
+    let frame = uneven?;
+    let mut css = String::new();
+    if let Some(value) = radius(style.radius) {
+        declare(&mut css, "border-radius", &value);
+    }
+    border(frame, &mut css);
+    Some(css)
+}
+
+fn declarations(style: &RectStyle, rect: Rect, out: &mut String, framed: bool) {
     // One property, because a background is one property: the frame is a layer over the fill, and a fill that is a colour may only be the last of them.
     match (style.fill.as_ref().map(paint), frame_image(style, rect)) {
         (Some(fill), Some(frame)) => declare(out, "background", &format!("{frame},{fill}")),
@@ -207,7 +239,7 @@ pub fn rect_style(style: &RectStyle, rect: Rect, out: &mut String) {
     if let Some(value) = radius(style.radius) {
         declare(out, "border-radius", &value);
     }
-    if let Some(frame) = &style.border {
+    if let Some(frame) = style.border.as_ref().filter(|_| framed) {
         border(frame, out);
     }
     if let Some(drop) = style.shadow {

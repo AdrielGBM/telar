@@ -121,11 +121,17 @@ fn element_of(node: NodeId, semantics: Semantics) -> Element {
     let rect = layout_reactive::track_layout(node)
         .map(|rect| rect.get())
         .unwrap_or_default();
-    let semantics = match crate::annotation::of(node) {
+    let annotation = crate::annotation::of(node);
+    let forced_colors = annotation
+        .as_ref()
+        .map_or(renderer_core::ForcedColors::Adjust, |annotation| {
+            annotation.forced_colors
+        });
+    let semantics = match annotation {
         Some(annotation) => semantics.annotated(&annotation),
         None => semantics,
     };
-    Element::new(ElementId(node.into()), semantics, layout, rect)
+    Element::new(ElementId(node.into()), semantics, layout, rect).with_forced_colors(forced_colors)
 }
 
 /// The shape most widgets need: they own a node, they draw children into it, and they have nothing to say about what it means beyond being a box.

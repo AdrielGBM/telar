@@ -40,10 +40,7 @@ fn red_at(pixels: &[u8], x: u32, y: u32) -> u8 {
 }
 
 fn bordered(widths: [f32; 4]) -> RectStyle {
-    RectStyle::default().with_border(Border {
-        paint: Color::RED.into(),
-        widths,
-    })
+    RectStyle::default().with_border(Border::new(Color::RED, widths))
 }
 
 /// The whole feature in one assertion: a rule under a header paints its own edge and leaves the other three alone. A border that ignored the sides would light up all four.

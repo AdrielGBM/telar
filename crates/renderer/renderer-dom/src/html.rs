@@ -244,3 +244,7 @@ fn write_runs(out: &mut String, runs: &[Run], owner: BoxKey) {
 #[cfg(test)]
 #[path = "html.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "html.forced_colors.test.rs"]
+mod forced_colors_tests;

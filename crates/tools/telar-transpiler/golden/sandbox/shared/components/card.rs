@@ -29,7 +29,7 @@ pub fn card(props: CardProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
         __children.extend(props.header.build()?);
         __children.extend(props.children.build()?);
-        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, __children)?.styled_by(move || LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered())
+        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(12.0) } }, __children)?.styled_by(move || LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered())
     };
     Ok(Box::new(__sbox_0))
 }

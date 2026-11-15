@@ -189,7 +189,7 @@ pub fn positioning(props: PositioningProps) -> Result<Box<dyn LayoutItem>, Layou
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(8.0).sticky().inset_bottom(0.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_4])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(8.0).sticky().inset_bottom(0.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::zero() } }, children![__text_4])?
                                         };
                                         __children.push(box_item(__sbox_7));
                                         Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)), __children)?
@@ -481,7 +481,7 @@ pub fn positioning(props: PositioningProps) -> Result<Box<dyn LayoutItem>, Layou
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_12])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_12])?
                                     };
                                     let __sbox_20 = {
                                         let __text_13 = {
@@ -491,7 +491,7 @@ pub fn positioning(props: PositioningProps) -> Result<Box<dyn LayoutItem>, Layou
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_13])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_13])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::START), children![__sbox_19, __sbox_20])?
                                 };
@@ -614,7 +614,7 @@ pub fn positioning(props: PositioningProps) -> Result<Box<dyn LayoutItem>, Layou
                                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                         )?
                                                     };
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(150.0).height(44.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_18])?
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(150.0).height(44.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_18])?
                                                 };
                                                 Ok(box_item(__sbox_22))
                                             }

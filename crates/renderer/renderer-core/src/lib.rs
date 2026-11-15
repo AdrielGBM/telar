@@ -43,7 +43,7 @@ pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, for_each_with_matrix, transform_clip_rect};
 pub use element::{
     Annotation, ConsumedKeys, CurrentKind, Destination, Editing, Element, ElementId, Focusable,
-    Modal, Picture, Role, Semantics, Toggle, ToggleKind, Value,
+    ForcedColors, Modal, Picture, Role, Semantics, Toggle, ToggleKind, Value,
 };
 pub use error::RendererError;
 pub use font_config::{
@@ -64,12 +64,12 @@ pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers}
 pub use renderer::{BuiltRenderer, RenderBackend, RendererBuild, RendererFactory};
 pub use shadow::ShadowLayout;
 pub use style::{
-    Border, CasedText, Clamp, Dash, Declared, DecorationLength, DecorationLine, DecorationMetric,
-    FillRule, FitWidth, FontFamily, FontFeatures, FontFit, FontStyle, FontTag, FontVariations,
-    Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineHeight, LineJoin, Paint,
-    PathStyle, Raster, RectStyle, ResolvedGradient, Scale, Segment, Shadow, ShapeStyle, Span,
-    Stroke, TextAlign, TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap,
-    border_inner_shape, case_text, css_string, link_at, span_segments,
+    Border, BorderKind, CasedText, Clamp, Dash, Declared, DecorationLength, DecorationLine,
+    DecorationMetric, FillRule, FitWidth, FontFamily, FontFeatures, FontFit, FontStyle, FontTag,
+    FontVariations, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineHeight,
+    LineJoin, Paint, PathStyle, Raster, RectStyle, ResolvedGradient, Scale, Segment, Shadow,
+    ShapeStyle, Span, Stroke, TextAlign, TextCase, TextDecoration, TextLength, TextShadow,
+    TextStyle, TextWrap, border_inner_shape, case_text, css_string, link_at, span_segments,
 };
 pub use style_pool::{hash_declared, hash_path_style};
 pub use text_lines::{PlacedGlyph, TextCluster, TextLine};

@@ -2482,7 +2482,7 @@ fn a_prop_read_by_several_paint_closures_of_one_box_is_copied_into_each() {
     let code = &out.rust_code;
     assert!(
         code.contains(
-            "{ let __props_tint = props.tint.clone(); move |_| RectStyle { fill: Some(Paint::Solid(__props_tint.get())), border: Some(Border { paint: Paint::Solid(__props_tint.get())"
+            "{ let __props_tint = props.tint.clone(); move |_| RectStyle { fill: Some(Paint::Solid(__props_tint.get())), border: Some(Border::new(Paint::Solid(__props_tint.get())"
         ),
         "the base takes one copy for its fill and its stroke:\n{code}"
     );

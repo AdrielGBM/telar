@@ -1174,7 +1174,11 @@ fn a_focus_ring_is_drawn_over_the_state_that_won_not_instead_of_it() {
         Some(renderer_core::Paint::Solid(hover_fill)),
         "the hover fill survives the ring"
     );
-    assert_eq!(painted.border, Some(ring), "and the ring is drawn over it");
+    assert_eq!(
+        painted.border,
+        Some(ring.as_focus_ring()),
+        "and the ring is drawn over it"
+    );
     focus::release(id);
 }
 
@@ -1210,7 +1214,10 @@ fn a_tap_takes_focus_without_drawing_a_ring() {
     );
 
     focus::request(id);
-    assert_eq!(rect_style(&card.view()).and_then(|s| s.border), Some(ring));
+    assert_eq!(
+        rect_style(&card.view()).and_then(|s| s.border),
+        Some(ring.as_focus_ring())
+    );
     focus::release(id);
 }
 
@@ -2693,10 +2700,16 @@ fn the_default_ring_is_the_theme_s_band_on_the_box_s_edge_over_a_hairline_inside
     });
     let (control, id) = focused_control();
     let rects = drawn_rects(&control.view());
-    assert_eq!(rects[0].1.border, Some(Border::uniform(RING, 3.0)));
+    assert_eq!(
+        rects[0].1.border,
+        Some(Border::uniform(RING, 3.0).as_focus_ring())
+    );
     assert_eq!(rects.len(), 2, "the box and the hairline inside its band");
     assert!(strictly_inside(rects[1].0, rects[0].0));
-    assert_eq!(rects[1].1.border, Some(Border::uniform(RING_INNER, 1.5)));
+    assert_eq!(
+        rects[1].1.border,
+        Some(Border::uniform(RING_INNER, 1.5).as_focus_ring())
+    );
     assert_eq!(
         focus_ring(),
         FocusRing {
@@ -2720,8 +2733,14 @@ fn an_offset_ring_keeps_the_box_s_border_and_stands_inside_it() {
     let [(box_rect, _), (band_rect, band), (hairline_rect, hairline)] = rects[..] else {
         panic!("the box, then the ring's band and hairline as rects of their own: {rects:?}");
     };
-    assert_eq!(band.border, Some(Border::uniform(RING, 2.0)));
-    assert_eq!(hairline.border, Some(Border::uniform(RING_INNER, 1.0)));
+    assert_eq!(
+        band.border,
+        Some(Border::uniform(RING, 2.0).as_focus_ring())
+    );
+    assert_eq!(
+        hairline.border,
+        Some(Border::uniform(RING_INNER, 1.0).as_focus_ring())
+    );
     assert!(strictly_inside(band_rect, box_rect));
     assert!(strictly_inside(hairline_rect, band_rect));
     focus::release(id);
@@ -2744,16 +2763,25 @@ fn a_keyboard_cursor_draws_the_focus_ring_while_it_answers_one() {
 
     at_cursor.set(true);
     let rects = drawn_rects(&row.view());
-    assert_eq!(rects[0].1.border, Some(Border::uniform(RING, 2.0)));
-    assert_eq!(rects[1].1.border, Some(Border::uniform(RING_INNER, 1.0)));
+    assert_eq!(
+        rects[0].1.border,
+        Some(Border::uniform(RING, 2.0).as_focus_ring())
+    );
+    assert_eq!(
+        rects[1].1.border,
+        Some(Border::uniform(RING_INNER, 1.0).as_focus_ring())
+    );
 
     let tone = Color::rgba(0.8, 0.1, 0.5, 1.0);
     let tinted = laid_out(framed_box().keyboard_cursor(move || Some(focus_ring().with_band(tone))));
     let rects = drawn_rects(&tinted.view());
-    assert_eq!(rects[0].1.border, Some(Border::uniform(tone, 2.0)));
+    assert_eq!(
+        rects[0].1.border,
+        Some(Border::uniform(tone, 2.0).as_focus_ring())
+    );
     assert_eq!(
         rects[1].1.border,
-        Some(Border::uniform(RING_INNER, 1.0)),
+        Some(Border::uniform(RING_INNER, 1.0).as_focus_ring()),
         "a cursor in a colour of its own keeps the theme's hairline"
     );
 }

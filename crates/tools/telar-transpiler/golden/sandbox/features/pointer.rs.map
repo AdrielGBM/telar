@@ -425,8 +425,8 @@
 424	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-3520..3524	17829	`at_x`
-3541..3545	17849	`at_y`
-4042..4049	21025	`settled`
-5159..5164	27327	`wheel`
-5233..5236	27906	`alt`
+3520..3524	17751	`at_x`
+3541..3545	17771	`at_y`
+4042..4049	20921	`settled`
+5159..5164	27197	`wheel`
+5233..5236	27776	`alt`

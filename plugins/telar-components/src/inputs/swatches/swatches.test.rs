@@ -325,3 +325,33 @@ fn every_swatch_keeps_the_arrows_the_edges_and_its_activation_keys() {
         vec![ConsumedKeys::ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ACTIVATION; 4],
     );
 }
+
+#[test]
+fn every_swatch_is_colour_content_a_document_keeps_the_colours_of() {
+    crate::test_support::fresh_layout_runtime();
+    let was = telar::testing::set_element_capture(true);
+    let tree = telar::testing::scoped(|| {
+        let item = swatches(
+            SwatchesProps::props()
+                .colors(palette())
+                .diameter(DIAMETER)
+                .build(),
+        )
+        .unwrap();
+        telar::testing::lay_out_row(item.layout_node(), 400.0, 100.0);
+        ComponentList::new(item)
+    });
+    let kept = tree
+        .commands()
+        .iter()
+        .filter(|command| {
+            matches!(
+                command,
+                DrawCommand::PushElement { element }
+                    if element.forced_colors == telar::ForcedColors::Keep
+            )
+        })
+        .count();
+    telar::testing::set_element_capture(was);
+    assert_eq!(kept, palette().len());
+}

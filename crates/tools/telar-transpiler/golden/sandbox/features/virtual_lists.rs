@@ -84,7 +84,7 @@ pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, La
                                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                     )?
                                                 };
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).padding_horizontal(12.0).padding_vertical(10.0).gap(4.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_0, __text_1])?
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).padding_horizontal(12.0).padding_vertical(10.0).gap(4.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::zero() } }, children![__text_0, __text_1])?
                                             };
                                             Ok(box_item(__col_1))
                                         }
@@ -165,7 +165,7 @@ pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, La
                                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                     )?
                                                 };
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).padding_horizontal(12.0).padding_vertical(10.0).gap(4.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_2, __text_3])?
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).padding_horizontal(12.0).padding_vertical(10.0).gap(4.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::zero() } }, children![__text_2, __text_3])?
                                             };
                                             Ok(box_item(__col_2))
                                         }

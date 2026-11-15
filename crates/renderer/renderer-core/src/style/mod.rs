@@ -25,7 +25,7 @@ pub use font_fit::{FitWidth, FontFit};
 pub use font_settings::{FontFeatures, FontTag, FontVariations};
 pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops, ResolvedGradient};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};
-pub use shape::{Border, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
+pub use shape::{Border, BorderKind, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
 pub use span_segments::{Segment, span_segments};
 pub use text_case::{CasedText, TextCase, case_text};
 pub use text_length::TextLength;

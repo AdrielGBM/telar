@@ -21,6 +21,16 @@ pub trait ShapeStyle: Sized {
     }
 }
 
+/// What a frame is for, which a document needs to tell a reader's forced colours: a frame follows their text colour, and the ring that shows where the keyboard is follows their highlight. Every other target draws both alike.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum BorderKind {
+    /// A box's own frame.
+    #[default]
+    Frame,
+    /// The ring that shows where the keyboard is: a control's focus ring, or the cursor a list draws on the item the arrows reached.
+    FocusRing,
+}
+
 /// A box's frame: what it is painted with, and how thick it is on each side.
 ///
 /// The thickness is defined here and nowhere else, and a rect has no `cap` or `join` to set: a [`Stroke`] carries those for a [`PathStyle`] and a line, where they matter.
@@ -31,22 +41,33 @@ pub struct Border {
     pub paint: Paint,
     /// Thicknesses in `[top, right, bottom, left]` order.
     pub widths: [f32; 4],
+    pub kind: BorderKind,
 }
 
 impl Border {
-    /// The same thickness the whole way round.
-    pub fn uniform(paint: impl Into<Paint>, width: f32) -> Self {
+    pub fn new(paint: impl Into<Paint>, widths: [f32; 4]) -> Self {
         Self {
             paint: paint.into(),
-            widths: [width; 4],
+            widths,
+            kind: BorderKind::Frame,
         }
     }
 
-    pub fn per_side(paint: impl Into<Paint>, top: f32, right: f32, bottom: f32, left: f32) -> Self {
+    /// The same frame as the ring that shows where the keyboard is.
+    pub fn as_focus_ring(self) -> Self {
         Self {
-            paint: paint.into(),
-            widths: [top, right, bottom, left],
+            kind: BorderKind::FocusRing,
+            ..self
         }
+    }
+
+    /// The same thickness the whole way round.
+    pub fn uniform(paint: impl Into<Paint>, width: f32) -> Self {
+        Self::new(paint, [width; 4])
+    }
+
+    pub fn per_side(paint: impl Into<Paint>, top: f32, right: f32, bottom: f32, left: f32) -> Self {
+        Self::new(paint, [top, right, bottom, left])
     }
 
     /// Whether this frame puts anything on screen at all — every side at zero draws nothing.

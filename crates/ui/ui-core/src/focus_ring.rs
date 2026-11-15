@@ -45,9 +45,9 @@ impl FocusRing {
     fn bands(self, fill: Option<&Paint>) -> Vec<(Border, f32)> {
         if geometry_core::layout_grid().is_unit() {
             return vec![
-                (Border::uniform(self.band, self.width), 0.0),
+                (Border::uniform(self.band, self.width).as_focus_ring(), 0.0),
                 (
-                    Border::uniform(self.hairline, self.hairline_width()),
+                    Border::uniform(self.hairline, self.hairline_width()).as_focus_ring(),
                     self.width,
                 ),
             ];
@@ -62,7 +62,7 @@ impl FocusRing {
             }
             _ => self.band,
         };
-        vec![(Border::uniform(colour, self.width), 0.0)]
+        vec![(Border::uniform(colour, self.width).as_focus_ring(), 0.0)]
     }
 
     /// What the ring adds on a surface drawn in whole cells under a box that has no fill of its own.

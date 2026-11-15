@@ -44,7 +44,7 @@ pub fn feature_card(props: FeatureCardProps) -> Result<Box<dyn LayoutItem>, Layo
             )?
         };
         __children.push(box_item(__text_1));
-        StyledContainer::new(LayoutStyle::new().flex_column().width(300.0).min_width(260.0).flex_grow(1.0).padding_all(24.0).gap(10.0).flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) } }, __children)?
+        StyledContainer::new(LayoutStyle::new().flex_column().width(300.0).min_width(260.0).flex_grow(1.0).padding_all(24.0).gap(10.0).flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(16.0) } }, __children)?
     };
     Ok(Box::new(__sbox_0))
 }

@@ -8,8 +8,8 @@ use geometry_core::{Insets, Rect};
 
 /// What a box *is* and what to call it. Shared with the platform layer rather than defined here: the desktop announcing a checkbox and a document drawing one are describing the same box, and two vocabularies for that is how they came to disagree.
 pub use semantics_core::{
-    Annotation, ConsumedKeys, CurrentKind, Destination, Focusable, Modal, Role, Semantics, Toggle,
-    ToggleKind, Value,
+    Annotation, ConsumedKeys, CurrentKind, Destination, Focusable, ForcedColors, Modal, Role,
+    Semantics, Toggle, ToggleKind, Value,
 };
 
 /// Identifies one box across frames.
@@ -51,6 +51,8 @@ pub struct Element {
     pub fixed_in_place_of: Option<ElementId>,
     /// What the field that holds the keyboard shows, what is selected in it and where its caret is: what a document mirrors in the element the browser types into, which is the element a screen reader reads, placed at the caret so an input method opens its candidates there. A fact about one frame, like [`rect`](Self::rect), and `None` on every box but that field.
     pub editing: Option<Editing>,
+    /// Whether a document keeps the colours this box and everything under it was drawn in when its reader forces their own: set on colour content, such as a swatch or the area a colour is picked on. A picture keeps its colours whatever this says. Every other target ignores it.
+    pub forced_colors: ForcedColors,
 }
 
 /// A field that holds the keyboard, as a document mirrors it in the element a browser types into.
@@ -149,7 +151,14 @@ impl Element {
             picture: None,
             fixed_in_place_of: None,
             editing: None,
+            forced_colors: ForcedColors::Adjust,
         }
+    }
+
+    /// Says whether the box is colour content; see [`Element::forced_colors`].
+    pub fn with_forced_colors(mut self, forced_colors: ForcedColors) -> Self {
+        self.forced_colors = forced_colors;
+        self
     }
 
     /// Says the box is a layer fixed over the surface, declared where `place` stands. See [`Element::fixed_in_place_of`].

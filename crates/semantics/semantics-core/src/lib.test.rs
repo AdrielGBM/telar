@@ -147,6 +147,7 @@ fn an_annotation_names_a_box_over_what_the_widget_derived() {
         decorative: false,
         anchor: Some("logo".into()),
         modal: None,
+        forced_colors: Default::default(),
     };
     let said = derived.annotated(&annotation);
     assert_eq!(said.role, Role::Drawing, "the role is still the widget's");

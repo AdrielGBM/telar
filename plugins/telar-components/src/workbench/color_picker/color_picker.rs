@@ -359,6 +359,7 @@ fn area(
         },
         children![whiten, darken, thumb],
     )?
+    .colour_content()
     .control(Role::Slider)
     .a11y_label(|| strings::text(strings::SATURATION_BRIGHTNESS))
     .valued(move || NumericValue {
@@ -541,7 +542,8 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
 
     let (announced, stepped, keyed) = (read.clone(), read.clone(), read);
     let (drag, set) = (write.clone(), write.clone());
-    let track = Container::new(LayoutStyle::new().width(width).height(track_height), layers)?;
+    let track = Container::new(LayoutStyle::new().width(width).height(track_height), layers)?
+        .colour_content();
     let track = StyledContainer::new(
         LayoutStyle::column()
             .width(width)
@@ -637,6 +639,7 @@ fn chip(
         LayoutStyle::new().width(size).height(size).flex_shrink(0.0),
         vec![checker(control_size, rounded)?, box_item(face)],
     )?
+    .colour_content()
     .a11y_hidden();
     Ok(box_item(chip))
 }

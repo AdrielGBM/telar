@@ -147,3 +147,17 @@ fn a_said_role_makes_a_group_a_region_and_leaves_a_control_alone() {
     let title = as_document(|| captured(&title.view()));
     assert_eq!(title[0].semantics.role, Role::Heading(2));
 }
+
+#[test]
+fn a_box_said_to_be_colour_content_reaches_a_document_as_one_and_another_does_not() {
+    reset_layout_runtime();
+    let swatch = letter("A").colour_content();
+    let plain = letter("B");
+    let kept = as_document(|| captured(&swatch.view()));
+    let adjusted = as_document(|| captured(&plain.view()));
+    assert_eq!(kept[0].forced_colors, renderer_core::ForcedColors::Keep);
+    assert_eq!(
+        adjusted[0].forced_colors,
+        renderer_core::ForcedColors::Adjust
+    );
+}

@@ -751,7 +751,7 @@ pub(super) fn build_rect_style(
             .unwrap_or_else(|| "None".to_string());
         let border_s = match stroke {
             Some(s) => {
-                format!("Some(Border {{ paint: Paint::Solid({s}), widths: {border_widths} }})")
+                format!("Some(Border::new(Paint::Solid({s}), {border_widths}))")
             }
             None => "None".to_string(),
         };
