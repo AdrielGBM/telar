@@ -34,7 +34,7 @@ jobs:
       - uses: ./.github/actions/rust
         with:
           components: clippy, rustfmt
-      - run: cargo fmt --all -- --check
+      - run: .github/scripts/format.sh --check
       - run: .github/scripts/check-layering.sh
       - run: cargo clippy --workspace --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics -- -D warnings
 
