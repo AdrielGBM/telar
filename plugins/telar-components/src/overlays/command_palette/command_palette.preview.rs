@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
-use telar::{Container, Key, LayoutError, NamedKey, Role, box_item};
+use telar::{Chord, Container, Key, LayoutError, NamedKey, Role, box_item};
 
 use crate::inputs::button::button::{ButtonProps, button};
 use crate::overlays::command_palette::command_palette::{Command, CommandPaletteProps, command_palette};
@@ -12,30 +12,34 @@ fn commands() -> Vec<Command> {
     vec![
         Command::new("open", "Open file")
             .in_group("File")
-            .with_shortcut("Mod+O"),
+            .with_shortcut(primary('o')),
         Command::new("save", "Save")
             .in_group("File")
-            .with_shortcut("Mod+S"),
+            .with_shortcut(primary('s')),
         Command::new("save-as", "Save as…")
             .in_group("File")
-            .with_shortcut("Mod+Shift+S"),
+            .with_shortcut(primary('s').with_shift()),
         Command::new("theme", "Toggle dark mode")
             .in_group("View")
             .with_keywords(["theme", "appearance"]),
         Command::new("zoom-in", "Zoom in")
             .in_group("View")
-            .with_shortcut("Mod+="),
+            .with_shortcut(primary('=')),
         Command::new("zoom-out", "Zoom out")
             .in_group("View")
-            .with_shortcut("Mod+-"),
+            .with_shortcut(primary('-')),
         Command::new("sidebar", "Toggle sidebar")
             .in_group("View")
-            .with_shortcut("Alt+S"),
+            .with_shortcut(Chord::new(Key::Char('s')).with_alt()),
         Command::new("print", "Print")
             .in_group("File")
             .disabled(true),
         Command::new("about", "About"),
     ]
+}
+
+fn primary(key: char) -> Chord {
+    Chord::new(Key::Char(key)).with_primary()
 }
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {

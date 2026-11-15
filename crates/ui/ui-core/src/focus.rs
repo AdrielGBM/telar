@@ -1251,7 +1251,7 @@ pub fn set_orientation(id: FocusId, orientation: Orientation) {
 struct Outline {
     expanded: Option<Rc<dyn Fn() -> bool>>,
     has_popup: Option<HasPopup>,
-    shortcut: Option<Rc<dyn Fn() -> String>>,
+    shortcut: Option<Rc<dyn Fn() -> Option<Chord>>>,
     position: Option<SetPosition>,
     sort: Option<Rc<dyn Fn() -> Option<SortDirection>>>,
     multiselectable: bool,
@@ -1276,9 +1276,9 @@ pub fn set_has_popup(id: FocusId, popup: HasPopup) {
     });
 }
 
-/// Declares the chord that runs the command `id` runs, written as [`Chord`] reads it and re-read whenever what it reads changes, so a reader is told the key even where it is not part of the control's name.
-pub fn set_keyboard_shortcut(id: FocusId, read: impl Fn() -> String + 'static) {
-    let read: Rc<dyn Fn() -> String> = Rc::new(read);
+/// Declares the chord that runs the command `id` runs, re-read whenever what it reads changes, so a reader is told the key even where it is not part of the control's name. `None` while no chord runs it.
+pub fn set_keyboard_shortcut(id: FocusId, read: impl Fn() -> Option<Chord> + 'static) {
+    let read: Rc<dyn Fn() -> Option<Chord>> = Rc::new(read);
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.outline.shortcut = Some(read);
@@ -1453,8 +1453,8 @@ pub fn exposed() -> Vec<Exposed> {
                     keyboard_shortcut: outline
                         .shortcut
                         .as_ref()
-                        .and_then(|read| aria_shortcut(&read()))
-                        .map(Into::into),
+                        .and_then(|read| read())
+                        .map(|chord| chord.aria(keyboard_convention()).into()),
                     position: outline.position,
                     sort: outline.sort.as_ref().and_then(|read| read()),
                     multiselectable: outline.multiselectable,
@@ -1824,14 +1824,10 @@ pub fn expanded_state(id: FocusId) -> Option<bool> {
     Some(read())
 }
 
-/// The chord `id` said runs its command, in `aria-keyshortcuts` syntax under the keyboard convention in force; `None` if it said none, or said text that names no chord.
+/// The chord `id` said runs its command, in `aria-keyshortcuts` syntax under the keyboard convention in force; `None` if it said none.
 pub fn keyboard_shortcut_state(id: FocusId) -> Option<String> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.outline.shortcut.clone()))?;
-    aria_shortcut(&read())
-}
-
-fn aria_shortcut(text: &str) -> Option<String> {
-    Some(Chord::parse(text).ok()?.aria(keyboard_convention()))
+    Some(read()?.aria(keyboard_convention()))
 }
 
 /// What `id` said it opens, if it said.

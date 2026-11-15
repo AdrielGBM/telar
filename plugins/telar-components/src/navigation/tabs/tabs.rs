@@ -502,7 +502,7 @@ where
         .on_press(move || selected.set(value))
         .a11y_label(move || name.get());
         let tab = match shortcut {
-            Some(chord) => tab.keyboard_shortcut(move || chord.get()),
+            Some(chord) => tab.keyboard_shortcut(move || shared::declared_chord(&chord.get())),
             None => tab,
         };
         let tab = match panel {

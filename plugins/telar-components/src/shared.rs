@@ -654,6 +654,11 @@ pub(crate) fn shown_chord(chord: &str) -> String {
     }
 }
 
+/// The single chord a shortcut's text names, for the control the keys run: `None` for a sequence or text that names no chord, which a reader is shown but cannot be told as keys, since `aria-keyshortcuts` has no form for either.
+pub(crate) fn declared_chord(text: &str) -> Option<Chord> {
+    Chord::parse(text).ok()
+}
+
 /// One step of a sequence: a chord, or a step that names none, kept as written.
 pub(crate) enum ChordStep {
     Chord(Chord),

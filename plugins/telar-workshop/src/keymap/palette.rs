@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use telar::{LayoutError, LayoutItem, Reactive};
+use telar::{Chord, LayoutError, LayoutItem, Reactive};
 use telar_components::{Command, CommandPaletteProps, command_palette};
 
 use super::{ACTIONS, Action, Keymap, preview_command};
@@ -48,8 +48,12 @@ pub(super) fn commands(state: &WorkshopState) -> Vec<Command> {
         .map(|action| {
             let command = Command::new(action.id(), strings::text(action.label()))
                 .in_group(strings::text(action.group()));
-            match action.chords().first() {
-                Some(chord) => command.with_shortcut(*chord),
+            match action
+                .chords()
+                .first()
+                .and_then(|text| Chord::parse(text).ok())
+            {
+                Some(chord) => command.with_shortcut(chord),
                 None => command,
             }
         });

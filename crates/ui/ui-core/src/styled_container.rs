@@ -820,8 +820,11 @@ impl StyledContainer {
         self
     }
 
-    /// Declares the chord that runs this control's command without the control, written as [`Chord`](platform_core::Chord) reads it (`"Mod+Z"`) and re-read whenever what it reads changes. A reader is told the keys in the form its platform takes (`aria-keyshortcuts`, an accessibility tree's keyboard shortcut) and the keys follow the convention in force. See [`focus::set_keyboard_shortcut`].
-    pub fn keyboard_shortcut(self, chord: impl Fn() -> String + 'static) -> Self {
+    /// Declares the chord that runs this control's command without the control, re-read whenever what it reads changes; `None` while no chord runs it. A reader is told the keys in the form its platform takes (`aria-keyshortcuts`, an accessibility tree's keyboard shortcut) and the keys follow the convention in force. See [`focus::set_keyboard_shortcut`].
+    pub fn keyboard_shortcut(
+        self,
+        chord: impl Fn() -> Option<platform_core::Chord> + 'static,
+    ) -> Self {
         if let Some(id) = self.focusable.id {
             focus::set_keyboard_shortcut(id, chord);
         }

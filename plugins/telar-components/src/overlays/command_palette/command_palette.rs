@@ -5,8 +5,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Clip, ClippedItem, Color, Container, Declared,
-    JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
+    Accessible, AlignItems, Border, BorderRadius, Chord, Clip, ClippedItem, Color, Container,
+    Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
     ModifiersState, NamedKey, OverlayControl, Props, Reactive, ReactiveList, RectStyle, RwSignal,
     ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap,
     amend_surface, box_item, children, effect,
@@ -18,7 +18,7 @@ use crate::overlays::command_palette::fuzzy::fuzzy_match;
 use crate::layout::list::list::{ListTokens, row_paint, tinted};
 use crate::shared::rows::{BuiltRows, RowPlaces};
 use crate::shared::scrim;
-use crate::shared::{self, shown_chord};
+use crate::shared;
 use crate::strings;
 use crate::inputs::text_field::text_field::{TextFieldProps, text_field};
 use crate::{KbdProps, kbd};
@@ -84,8 +84,8 @@ pub struct Command {
     pub group: Option<Arc<str>>,
     /// Words the command is found by that its name does not say: `"theme"` for "Toggle dark mode".
     pub keywords: Arc<[Arc<str>]>,
-    /// The chord shown beside it, written portably as [`kbd`](crate::kbd) takes it: `"Mod+K"`.
-    pub shortcut: Option<Arc<str>>,
+    /// The chord shown beside it and told to a reader as the key that runs it.
+    pub shortcut: Option<Chord>,
     /// Listed, but passed over by the keyboard and never run.
     pub disabled: bool,
 }
@@ -115,8 +115,8 @@ impl Command {
         self
     }
 
-    pub fn with_shortcut(mut self, chord: impl Into<Arc<str>>) -> Self {
-        self.shortcut = Some(chord.into());
+    pub fn with_shortcut(mut self, chord: Chord) -> Self {
+        self.shortcut = Some(chord);
         self
     }
 
@@ -718,7 +718,7 @@ fn build_row(
 
     let chord = command.shortcut.clone();
     let name = match &command.shortcut {
-        Some(chord) => format!("{}, {}", command.label, shown_chord(chord)),
+        Some(chord) => format!("{}, {chord}", command.label),
         None => command.label.to_string(),
     };
     let id = command.id.clone();
@@ -770,7 +770,7 @@ fn build_row(
         .presented(Role::Option, reach)
         .toggled(selected)
         .a11y_label(move || name.clone())
-        .keyboard_shortcut(move || chord.as_deref().unwrap_or_default().to_string())
+        .keyboard_shortcut(move || chord.clone())
         .on_hover(hover)
         .on_press(press);
     if let Some(focus_id) = row.focus_id() {

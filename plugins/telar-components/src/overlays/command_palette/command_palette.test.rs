@@ -12,10 +12,10 @@ fn catalogue() -> Vec<Command> {
     vec![
         Command::new("open", "Open file")
             .in_group("File")
-            .with_shortcut("Mod+O"),
+            .with_shortcut(Chord::new(Key::Char('o')).with_primary()),
         Command::new("save", "Save")
             .in_group("File")
-            .with_shortcut("Mod+S"),
+            .with_shortcut(Chord::new(Key::Char('s')).with_primary()),
         Command::new("theme", "Toggle dark mode")
             .in_group("View")
             .with_keywords(["theme", "appearance"]),

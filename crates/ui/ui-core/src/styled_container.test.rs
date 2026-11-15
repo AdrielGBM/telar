@@ -2786,13 +2786,14 @@ fn a_keyboard_cursor_draws_the_focus_ring_while_it_answers_one() {
     );
 }
 
-/// A control that runs the same command as a key says so in the form a reader takes, under the keyboard convention in force and re-read as what it reads changes; text that names no chord says nothing.
+/// A control that runs the same command as a key says so in the form a reader takes, under the keyboard convention in force and re-read as what it reads changes; while it names no chord it says nothing.
 #[test]
 fn a_control_says_the_keys_that_run_its_command() {
-    use platform_core::{KeyboardConvention, set_keyboard_convention};
+    use platform_core::{Chord, KeyboardConvention, set_keyboard_convention};
 
+    let parsed = |text: &str| Chord::parse(text).expect("the chord parses");
     focus::clear();
-    let chord = reactive_core::signal("Mod+Shift+Z".to_string());
+    let chord = reactive_core::signal(Some(parsed("Mod+Shift+Z")));
     let mut button = laid_out_box()
         .control(focus::Role::Button)
         .keyboard_shortcut(move || chord.get());
@@ -2814,14 +2815,12 @@ fn a_control_says_the_keys_that_run_its_command() {
     );
     set_keyboard_convention(KeyboardConvention::Pc);
 
-    chord.set("Alt+1".to_string());
+    chord.set(Some(parsed("Alt+1")));
     assert_eq!(
         semantics_of(&button).keyboard_shortcut.as_deref(),
         Some("Alt+1")
     );
-    chord.set(String::new());
-    assert_eq!(semantics_of(&button).keyboard_shortcut, None);
-    chord.set("not a chord".to_string());
+    chord.set(None);
     assert_eq!(semantics_of(&button).keyboard_shortcut, None);
 
     focus::clear();
@@ -2829,7 +2828,7 @@ fn a_control_says_the_keys_that_run_its_command() {
     settle(&mut plain);
     assert_eq!(semantics_of(&plain).keyboard_shortcut, None);
 
-    let mut unfocusable = laid_out_box().keyboard_shortcut(|| "Mod+K".to_string());
+    let mut unfocusable = laid_out_box().keyboard_shortcut(move || Some(parsed("Mod+K")));
     settle(&mut unfocusable);
     assert_eq!(
         semantics_of(&unfocusable).keyboard_shortcut,

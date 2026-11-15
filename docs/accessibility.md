@@ -391,14 +391,16 @@ has no way to make a `scroll` one, so there `a11y_label:` always means the stop'
 ## Shortcuts
 
 A control that runs the same command as a key says which, so a reader can tell the key before it is used:
-from Rust `StyledContainer::keyboard_shortcut(|| "Mod+Shift+Z".to_string())` on the control the key activates
-(never on a tooltip, which only describes it). The text is a `Chord`, and the reader is told
+from Rust `StyledContainer::keyboard_shortcut(move || Some(redo.clone()))` on the control the key activates
+(never on a tooltip, which only describes it), where `redo` is the `Chord` parsed from `"Mod+Shift+Z"` where
+it was declared, its parse error reported there. The reader is told
 `Chord::aria` of it under the keyboard convention in force: the ARIA `aria-keyshortcuts` grammar with every
 key spelled as UI Events names it, so `Mod+Shift+Z` is `Control+Shift+Z` on a PC and `Shift+Meta+Z` on a
 Mac, and `Ctrl++` is `Control+Plus`. It is `aria-keyshortcuts` in a document, AccessKit `keyboard_shortcut`
-on the desktop, and `, shortcut Control+Z` in the terminal's reading. Text that names no chord says nothing.
+on the desktop, and `, shortcut Control+Z` in the terminal's reading; `None` says nothing.
 The catalogue sets it on a menu row with `shortcut`, on an `icon_button` and a tab with `shortcut`, and on a
-command palette row.
+command palette row. Those props are text that may name a sequence (`"Mod+K S"`) to show; a reader is told
+only the text that names one chord.
 
 The visible shortcut stays in the control's name (`Undo, Ctrl+Z`; a palette row is `Open file, Ctrl+O`).
 `aria-keyshortcuts` is a hint on top of the name, not a replacement for it: VoiceOver and TalkBack do not

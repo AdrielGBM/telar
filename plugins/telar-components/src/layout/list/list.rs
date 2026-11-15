@@ -543,7 +543,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         _ => row,
     };
     let row = match shortcut {
-        Some(chord) => row.keyboard_shortcut(move || chord.get()),
+        Some(chord) => row.keyboard_shortcut(move || shared::declared_chord(&chord.get())),
         None => row,
     };
     // The tick is drawn for the eye; a reader hears the state instead, and the row keeps one name whether it is ticked or not.

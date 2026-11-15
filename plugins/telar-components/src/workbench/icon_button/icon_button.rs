@@ -215,7 +215,9 @@ impl Square {
             _ => button.control(Role::Button),
         };
         let button = match shortcut {
-            Some(shortcut) => button.keyboard_shortcut(move || shortcut.get()),
+            Some(shortcut) => {
+                button.keyboard_shortcut(move || shared::declared_chord(&shortcut.get()))
+            }
             None => button,
         };
         let button = if pressed.is_some() {

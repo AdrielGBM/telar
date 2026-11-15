@@ -225,9 +225,10 @@ over its own when it loads one, before the guest's app is built: a guest shows a
 matches it.
 
 The components that show a shortcut take it as that text and show it the platform's way: `item`'s
-`shortcut`, `kbd`'s `chord`, `tooltip`'s and `icon_button`'s `shortcut`, a tab's `.shortcut(…)` and a
-command palette entry's `with_shortcut(…)`. A reader hears the same text the row shows. Text that names no
-chord is shown as written.
+`shortcut`, `kbd`'s `chord`, `tooltip`'s and `icon_button`'s `shortcut` and a tab's `.shortcut(…)`. A
+reader hears the same text the row shows. Text that names no chord is shown as written. A command palette
+entry's `with_shortcut(…)` takes a `Chord` rather than text, so a chord that does not parse is an error
+where the entry is declared: `Chord::parse("Mod+O")?`, or `Chord::new(Key::Char('o')).with_primary()`.
 
 ```text
 menu label:"Edit"
