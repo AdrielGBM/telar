@@ -147,7 +147,8 @@ element group
                         element row
                           rect 0,180 420x36 radius=6
                           element gridcell
-                            rect 0,180 211x36 radius=6
+                            rect 0,180 211x36 border=2 border-color=#7394ffff radius=6
+                            rect 2,182 207x32 border=1 border-color=#1c1f29ff radius=4
                             element group
                               clip 8,180 72x36
                                 matrix 1,0,0,1,8,180

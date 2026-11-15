@@ -60,7 +60,8 @@ element group
                 rect 0,38 174x1 fill=#dbdeedff
               end
               element menuitemcheckbox
-                rect 0,41 174x36 fill=#0000000a radius=6
+                rect 0,41 174x36 fill=#0000000a border=2 border-color=#4261edff radius=6
+                rect 2,43 170x32 border=1 border-color=#ffffffff radius=4
                 element group
                 end
                 element group

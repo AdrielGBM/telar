@@ -72,7 +72,8 @@ element group
                         end
                       end
                       element option
-                        rect 0,144 280x36 fill=#00000014 radius=6
+                        rect 0,144 280x36 fill=#00000014 border=2 border-color=#4261edff radius=6
+                        rect 2,146 276x32 border=1 border-color=#ffffffff radius=4
                         element group
                           clip 8,144 241x36
                             matrix 1,0,0,1,8,144

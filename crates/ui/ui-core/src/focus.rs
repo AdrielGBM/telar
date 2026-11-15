@@ -290,15 +290,21 @@ fn key_target() -> Option<FocusId> {
 }
 
 /// Fixes [`is_key_target`] to whoever holds focus now, until the guard drops. `None` inside a dispatch that already fixed it, so the outermost walk decides.
-pub(crate) fn deliver_keystroke() -> Option<KeystrokeGuard> {
+///
+/// A key press is the keyboard taking over from the pointer, so focus shows its ring from then on, as `:focus-visible` does after a keystroke.
+pub(crate) fn deliver_keystroke(pressed: bool) -> Option<KeystrokeGuard> {
     let held = focused_signal().peek();
-    with_focus(|s| match s.keystroke {
+    let guard = with_focus(|s| match s.keystroke {
         Some(_) => None,
         None => {
             s.keystroke = Some(held);
             Some(KeystrokeGuard)
         }
-    })
+    });
+    if guard.is_some() && pressed {
+        set_pointer_focus(false);
+    }
+    guard
 }
 
 pub(crate) struct KeystrokeGuard;

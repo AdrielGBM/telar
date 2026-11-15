@@ -8,7 +8,8 @@ element group
           element list
             element group
               element listitem
-                rect 324,249 71x29
+                rect 324,249 71x29 border=2 border-color=#7394ffff
+                rect 326,251 67x25 border=1 border-color=#1c1f29ff
                 element group
                   rect 324,249 71x29 fill=#12141cff border=1 border-color=#3d4252ff radius=10
                   element group

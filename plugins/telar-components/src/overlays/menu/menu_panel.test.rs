@@ -762,6 +762,31 @@ fn a_menu_shows_the_keyboard_s_ring_only_when_the_keyboard_opened_it() {
     assert_eq!(open(false), (false, 0));
 }
 
+/// A key is the keyboard taking over: walking a menu a press opened shows the ring on the row the cursor reaches.
+#[test]
+fn an_arrow_key_in_a_menu_opened_by_a_press_shows_the_ring() {
+    fresh_layout_runtime();
+    focus::clear();
+    focus::blur_from_pointer(40.0, 60.0);
+    let said: Said = Rc::default();
+    let menu = context_menu(
+        ContextMenuProps::props()
+            .at((40.0, 60.0))
+            .within(WINDOW)
+            .children(written(rows(3), &said))
+            .build(),
+    )
+    .unwrap();
+    lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+    let mut tree = ComponentList::new(menu);
+    settle(&tree);
+    assert_eq!(ringed(&tree), 0, "a press opened it, so no ring yet");
+
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    settle(&tree);
+    assert!(ringed(&tree) > 0, "the arrow key shows the ring");
+}
+
 #[test]
 fn the_context_menu_key_and_shift_f10_ask_for_a_context_menu() {
     assert!(is_context_menu_key(&Key::Named(NamedKey::ContextMenu)));

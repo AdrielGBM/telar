@@ -40,7 +40,8 @@ element group
               end
             end
             element listitem
-              rect 484,286 54x28
+              rect 484,286 54x28 border=2 border-color=#7394ffff
+              rect 486,288 50x24 border=1 border-color=#1c1f29ff
               element group
                 rect 484,286 54x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
                 element group

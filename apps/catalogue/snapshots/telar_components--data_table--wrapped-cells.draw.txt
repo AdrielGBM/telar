@@ -108,7 +108,8 @@ element group
                         element row
                           rect 0,166 420x59 fill=#00000014 radius=6
                           element gridcell
-                            rect 0,166 253x59 radius=6
+                            rect 0,166 253x59 border=2 border-color=#4261edff radius=6
+                            rect 2,168 249x55 border=1 border-color=#ffffffff radius=4
                             element group
                               matrix 1,0,0,1,8,170
                                 text 0,0 237x50.4 "Check keyboard paging in the tree, the table and the list against rows of different heights" size=14 family=sans-serif weight=400 color=#171a2eff lang=en

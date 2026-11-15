@@ -103,7 +103,8 @@ element group
                       end
                     end
                     element treeitem
-                      rect 4,216 252x36 fill=#ffffff1a radius=6
+                      rect 4,216 252x36 fill=#ffffff1a border=2 border-color=#7394ffff radius=6
+                      rect 6,218 248x32 border=1 border-color=#1c1f29ff radius=4
                       element group
                         element group
                           matrix 1,0,0,1,14,231
