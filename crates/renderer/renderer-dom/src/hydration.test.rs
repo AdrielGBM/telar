@@ -153,7 +153,7 @@ fn without_entry(host: &web_sys::HtmlElement) -> String {
         .expect("the host clones")
         .dyn_into()
         .expect("a clone of an element is one");
-    if let Ok(Some(entry)) = copy.query_selector(":scope > textarea[data-telar-entry]") {
+    if let Ok(Some(entry)) = copy.query_selector(":scope > [data-telar-entry]") {
         entry.remove();
     }
     copy.inner_html()

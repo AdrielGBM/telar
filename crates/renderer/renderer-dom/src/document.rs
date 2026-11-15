@@ -17,8 +17,8 @@ use platform_core::{
     Destination, HasPopup, NumericValue, Orientation, Positioning, SetPosition, SortDirection,
 };
 use renderer_core::{
-    BlendMode, Color, CurrentKind, DrawCommand, Element, Focusable, ImageData, Modal, Picture,
-    Role, TextStyle, Toggle, ToggleKind, Value,
+    BlendMode, Color, CurrentKind, DrawCommand, Editing, Element, Focusable, ImageData, Modal,
+    Picture, Role, TextStyle, Toggle, ToggleKind, Value,
 };
 
 use crate::box_key::BoxKey;
@@ -157,8 +157,8 @@ pub(crate) struct BoxNode {
     /// The picture an `<img>` shows, and the width it is laid out at.
     pub picture: Option<(Arc<Picture>, f32)>,
     pub scroll_to: Option<(f32, f32)>,
-    /// Where the caret of a field holding the keyboard is, in its box's own coordinates.
-    pub caret: Option<Rect>,
+    /// What a field holding the keyboard shows, and where its caret is in its box's own coordinates.
+    pub editing: Option<Editing>,
     /// The rect layout computed, carried only when the page asked to compare the two.
     pub audit: Option<Rect>,
     pub content: Content,
@@ -1173,7 +1173,7 @@ impl Walk<'_> {
                 .as_ref()
                 .map(|picture| (Arc::clone(picture), element.rect.width)),
             scroll_to: element.scroll_to,
-            caret: element.caret,
+            editing: element.editing.clone(),
             audit: self.audit.then_some(element.rect),
             content: Content::Children {
                 children: Vec::new(),
@@ -1394,7 +1394,9 @@ fn lend_name_to_control(wrapper: &mut BoxNode) {
     }
 }
 
-/// Names each control nothing named, of a role a browser does not name by what is inside it, by the text drawn inside it: the name every other target gives it. ARIA takes the content of a field, a combobox, a slider, a spin button or a splitter as its value, so a select showing "Small" was nameless in the document and called "Small" by a desktop reader.
+/// Names each control nothing named, of a role a browser does not name by what is inside it, by the text drawn inside it: the name every other target gives it. ARIA takes the content of a combobox, a slider, a spin button or a splitter as its value, so a select showing "Small" was nameless in the document and called "Small" by a desktop reader.
+///
+/// A field is left as it is: what it draws is what was typed into it, which the element it is typed through carries as its value, and a name made of it would read the value twice and stand in for the name the app never gave.
 ///
 /// Run once the frame is whole, after every wrapper has lent its name: a control named here would keep the name of the box around it from reaching it.
 fn name_by_drawn_text(nodes: &mut [Node]) {
@@ -1402,6 +1404,7 @@ fn name_by_drawn_text(nodes: &mut [Node]) {
         if node.described.control
             && node.described.label.is_none()
             && !named_by_its_content(node.role)
+            && !draws_what_was_typed(node.role)
             && !is_out_of_sight(node)
         {
             let mut name = String::new();
@@ -1540,6 +1543,11 @@ fn named_by_its_content(role: Role) -> bool {
             | Role::ComboBox
             | Role::Splitter
     )
+}
+
+/// Whether what a box of this role draws is the text typed into it, which is its value and never its name.
+fn draws_what_was_typed(role: Role) -> bool {
+    matches!(role, Role::TextInput | Role::MultilineTextInput)
 }
 
 /// The text drawn in `node` and the boxes inside it, in the order it was drawn, each piece trimmed and joined by a space as a reader's name is.

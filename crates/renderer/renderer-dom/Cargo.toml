@@ -23,7 +23,7 @@ unicode-segmentation = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }
-web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData", "NodeList", "TextMetrics", "CssStyleDeclaration", "Document", "DomRect", "Element", "AddEventListenerOptions", "EventTarget", "HtmlElement", "HtmlTextAreaElement", "InputEvent", "KeyboardEvent", "HtmlHeadElement", "Node", "Text", "Window", "Location", "FocusEvent", "FontFaceSet", "MouseEvent", "HtmlAnchorElement", "NamedNodeMap", "Attr", "HtmlCollection", "CompositionEvent"] }
+web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData", "NodeList", "TextMetrics", "CssStyleDeclaration", "Document", "DomRect", "Element", "AddEventListenerOptions", "EventTarget", "HtmlElement", "HtmlTextAreaElement", "InputEvent", "KeyboardEvent", "HtmlHeadElement", "Node", "Text", "Window", "Location", "FocusEvent", "FontFaceSet", "MouseEvent", "HtmlAnchorElement", "NamedNodeMap", "Attr", "HtmlCollection", "CompositionEvent", "HtmlInputElement"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 

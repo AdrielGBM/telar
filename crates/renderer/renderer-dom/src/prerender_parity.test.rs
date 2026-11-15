@@ -81,7 +81,7 @@ fn reconciled_markup(host: &web_sys::HtmlElement) -> String {
         .dyn_into()
         .expect("a clone of an element is one");
     let entries = copy
-        .query_selector_all("textarea")
+        .query_selector_all("[data-telar-entry]")
         .expect("a selector the browser reads");
     for index in 0..entries.length() {
         if let Some(entry) = entries.item(index) {

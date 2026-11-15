@@ -9,7 +9,7 @@ use semantics_core::{
 
 use super::*;
 use crate::{
-    BlendMode, Border, BorderRadius, Color, Declared, Element, ElementId, ExternalTexture,
+    BlendMode, Border, BorderRadius, Color, Declared, Editing, Element, ElementId, ExternalTexture,
     FillRule, Focusable, FontFamily, FontFeatures, FontStyle, FontTag, FontVariations, Gradient,
     ImageData, ImageFill, ImageSlice, Insets, LayerMask, LineCap, LineJoin, Linked, Paint,
     PathData, PathStyle, Picture, Raster, RectStyle, Role, Semantics, Shadow, ShapeStyle, Span,
@@ -189,7 +189,13 @@ fn element() -> Element {
     .scrolling()
     .as_primary_scroll(true)
     .fixed_in_place_of(ElementId(12))
-    .with_caret(Some(Rect::new(4.0, 2.0, 1.0, 16.0)))
+    .editing(Some(Editing::new(
+        "señal",
+        1,
+        3,
+        Rect::new(4.0, 2.0, 1.0, 16.0),
+        false,
+    )))
 }
 
 fn pixels() -> Arc<ImageData> {

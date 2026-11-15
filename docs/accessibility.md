@@ -386,13 +386,25 @@ and a node with no name reads as its role alone (`row, 1 of 501`).
 ## Names the catalogue gives
 
 A `text_field` is named by its `label`, or by its `placeholder` when it has no label: the caption drawn above
-the box is not inside the line a reader lands on, so without the name the document's entry announced only
-"Text field" and the desktop read out whatever had been typed. `a11y_label:` with an empty string is
-no name at all: the box goes by what it draws, as if nothing had been said.
+the box is not inside the line a reader lands on, so without the name the document's entry was announced as
+an edit box with no name and the desktop read out whatever had been typed. `a11y_label:` with an empty string
+is no name at all: the box goes by what it draws, as if nothing had been said.
 
-In the document, a field, a combobox, a slider, a spin button or a splitter that nothing named is named by the
-text drawn inside it, the name every other target gives it. A browser takes that text as the value of those
-roles and their name only from a label, so a `select` showing "Small" was nameless there.
+In the document, a combobox, a slider, a spin button or a splitter that nothing named is named by the text
+drawn inside it, the name every other target gives it. A browser takes that text as the value of those roles
+and their name only from a label, so a `select` showing "Small" was nameless there. A field is not: what it
+draws is what was typed into it, which is its value, so a field nothing named stays unnamed.
+
+## The document's text entry
+
+A field is typed into through an element the document renderer parks, invisible, at the field's caret: an
+`<input>` for a field of one line (`type="password"` for a secret one) and a `<textarea>` for a text area. It
+holds the keyboard, so it is the element a screen reader reads, and it mirrors the field: its value is what the
+field shows (the mask, for a secret field, never the value) and its selection is the field's selection, both
+written again after every change to the field. It goes by the field's own name, and by none when the app gave
+the field none. Every edit the browser reports on it is prevented and handed to the field as the keys that
+make it, so the field's next frame is what changes the element; a composition is the one thing the browser
+writes into it, over the field's selection, and it reaches the field as `Ime` steps and one commit.
 
 ## Contrast of the defaults
 

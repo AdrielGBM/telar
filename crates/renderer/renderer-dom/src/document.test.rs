@@ -938,6 +938,35 @@ fn a_control_a_browser_would_not_name_by_its_content_is_named_by_what_it_draws()
     );
 }
 
+/// A field draws what was typed into it, which is its value: a field nothing named stays unnamed rather than being called by what it holds, and one the app named goes by that name alone.
+#[test]
+fn a_field_is_never_named_by_what_was_typed_into_it() {
+    let frame = describe_frame(
+        &[
+            open(1, Semantics::group()),
+            open(2, Semantics::of(Role::TextInput)),
+            text("hunter2"),
+            DrawCommand::PopElement,
+            open(3, Semantics::of(Role::MultilineTextInput)),
+            text("Dear reader"),
+            DrawCommand::PopElement,
+            open(4, named(Semantics::of(Role::TextInput), "Name")),
+            text("Ada"),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let [line, lines, named] = children(only_box(&frame))[..] else {
+        panic!("three fields inside the root");
+    };
+    assert_eq!(attribute(line, "aria-label"), None);
+    assert_eq!(attribute(lines, "aria-label"), None);
+    assert_eq!(attribute(named, "aria-label").as_deref(), Some("Name"));
+}
+
 /// A control hidden with `display:none` is still an element, and it is not one a reader would be sent to: only the visible control is counted and named.
 #[test]
 fn a_hidden_control_does_not_stop_a_wrapper_naming_the_visible_one() {

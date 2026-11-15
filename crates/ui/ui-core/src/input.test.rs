@@ -1064,15 +1064,53 @@ fn the_reported_caret_is_the_drawn_one_in_a_right_to_left_surface() {
     assert!(drawn.x > 100.0, "the line starts at the right: {drawn:?}");
 }
 
+/// What a document reads off the field's own element while it holds the keyboard.
+fn editing_of(input: &Input) -> Option<renderer_core::Editing> {
+    let was = ui_tree::set_element_capture(true);
+    let mut editing = None;
+    if let RenderNode::Element { element, .. } = input.view() {
+        editing = element.editing.clone();
+    }
+    ui_tree::set_element_capture(was);
+    editing
+}
+
 /// A document is told where the caret is on the field's own element, so the element the browser types into can stand there.
 #[test]
 fn a_document_reads_the_caret_off_the_field_s_element() {
-    let was = ui_tree::set_element_capture(true);
     let (input, _) = focused_input("ab");
-    let mut caret = None;
-    if let RenderNode::Element { element, .. } = input.view() {
-        caret = element.caret;
-    }
-    ui_tree::set_element_capture(was);
-    assert_eq!(caret, Some(caret_of(&input).0));
+    let editing = editing_of(&input).expect("the focused field says what it shows");
+    assert_eq!(editing.caret(), caret_of(&input).0);
+}
+
+/// A document is told what the field holds and what is selected in it, which is what a screen reader reads back.
+#[test]
+fn a_document_reads_the_value_and_the_selection_off_the_field_s_element() {
+    let (mut input, _) = focused_input("señal");
+    input.on_event(&key(Key::Named(NamedKey::End)));
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    let editing = editing_of(&input).expect("the focused field says what it shows");
+    assert_eq!(editing.text(), "señal");
+    assert_eq!((editing.anchor(), editing.focus()), (6, 4));
+}
+
+/// A secret field tells a document its mask, never what was typed, with the selection counted in mask characters.
+#[test]
+fn a_secret_field_shows_a_document_only_its_mask() {
+    let (input, _) = focused_input("mañana");
+    let input = input.secret();
+    let editing = editing_of(&input).expect("the focused field says what it shows");
+    assert!(editing.secret());
+    assert_eq!(editing.text(), "••••••");
+    let end = "••••••".len();
+    assert_eq!((editing.anchor(), editing.focus()), (end, end));
+}
+
+/// A field without the keyboard tells a document nothing about what it shows.
+#[test]
+fn an_unfocused_field_carries_no_editing_state() {
+    let (input, _) = focused_input("ab");
+    focus::clear();
+    assert_eq!(editing_of(&input), None);
 }

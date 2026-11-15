@@ -2,6 +2,8 @@
 //!
 //! A raster backend needs only the id: it is handed rects that are already where they belong, and uses the id to tell which box is which when it diffs a frame against the last. A backend whose output is a document needs that too, so it can move an element rather than rebuild it — and needs to know what a box *means*, so a button is a `<button>` and not a `<div>` that happens to be clickable.
 
+use std::sync::Arc;
+
 use geometry_core::{Insets, Rect};
 
 /// What a box *is* and what to call it. Shared with the platform layer rather than defined here: the desktop announcing a checkbox and a document drawing one are describing the same box, and two vocabularies for that is how they came to disagree.
@@ -47,8 +49,72 @@ pub struct Element {
     ///
     /// The frame draws the layer after the page, which is where a raster target needs it: above every box of the page, sticky ones included. A document needs it where it was declared instead, because there the order of the elements is the order Tab walks and a reader reads, so it puts the element in that place and fixes it against the viewport.
     pub fixed_in_place_of: Option<ElementId>,
-    /// Where the caret of a field that holds the keyboard is, in the box's own coordinates: where a document puts the element the browser types into, so an input method opens its candidates beside the caret rather than at the corner of the field. A fact about one frame, like [`rect`](Self::rect), and `None` on every box but that field.
-    pub caret: Option<Rect>,
+    /// What the field that holds the keyboard shows, what is selected in it and where its caret is: what a document mirrors in the element the browser types into, which is the element a screen reader reads, placed at the caret so an input method opens its candidates there. A fact about one frame, like [`rect`](Self::rect), and `None` on every box but that field.
+    pub editing: Option<Editing>,
+}
+
+/// A field that holds the keyboard, as a document mirrors it in the element a browser types into.
+///
+/// The text is what the field shows rather than what it holds, so a secret field carries its mask and never its value. [`Editing::new`] keeps the selection on the text's char boundaries, since a document reads it as offsets into that text.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Editing {
+    pub(crate) text: Arc<str>,
+    pub(crate) anchor: usize,
+    pub(crate) focus: usize,
+    pub(crate) caret: Rect,
+    pub(crate) secret: bool,
+}
+
+impl Editing {
+    /// A field showing `text`, selected from byte `anchor` to byte `focus` (the same offset for a bare caret), its caret drawn at `caret` in the box's own coordinates. An offset past the text or inside a character moves back onto the start of that character.
+    pub fn new(
+        text: impl Into<Arc<str>>,
+        anchor: usize,
+        focus: usize,
+        caret: Rect,
+        secret: bool,
+    ) -> Self {
+        let text = text.into();
+        Self {
+            anchor: floor_char_boundary(&text, anchor),
+            focus: floor_char_boundary(&text, focus),
+            text,
+            caret,
+            secret,
+        }
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// The end of the selection that stays put while it is extended, in bytes of [`text`](Self::text).
+    pub fn anchor(&self) -> usize {
+        self.anchor
+    }
+
+    /// The end of the selection the caret is at, in bytes of [`text`](Self::text).
+    pub fn focus(&self) -> usize {
+        self.focus
+    }
+
+    /// Where the caret is drawn, in the box's own coordinates.
+    pub fn caret(&self) -> Rect {
+        self.caret
+    }
+
+    /// Whether the field hides what is typed into it, which a document says by making it a password field.
+    pub fn secret(&self) -> bool {
+        self.secret
+    }
+}
+
+fn floor_char_boundary(text: &str, at: usize) -> usize {
+    let mut at = at.min(text.len());
+    while !text.is_char_boundary(at) {
+        at -= 1;
+    }
+    at
 }
 
 /// A box that is a linked picture, as a document is told about it.
@@ -82,7 +148,7 @@ impl Element {
             arrival_margin: Insets::default(),
             picture: None,
             fixed_in_place_of: None,
-            caret: None,
+            editing: None,
         }
     }
 
@@ -116,9 +182,9 @@ impl Element {
         self
     }
 
-    /// Says where the caret of the field this box is stands. See [`Element::caret`].
-    pub fn with_caret(mut self, caret: Option<Rect>) -> Self {
-        self.caret = caret;
+    /// Says what the field this box is shows while it holds the keyboard. See [`Element::editing`].
+    pub fn editing(mut self, editing: Option<Editing>) -> Self {
+        self.editing = editing;
         self
     }
 
@@ -128,3 +194,7 @@ impl Element {
         self
     }
 }
+
+#[cfg(test)]
+#[path = "element.test.rs"]
+mod tests;

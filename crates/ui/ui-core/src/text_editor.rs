@@ -358,6 +358,27 @@ impl Editor {
         }
     }
 
+    /// What the editor shows of `text` while it holds the keyboard, selected up to `caret`: the text, or its mask with the selection counted in mask characters, so a secret never leaves the editor.
+    fn editing(&self, text: &str, caret: usize, caret_rect: Rect) -> renderer_core::Editing {
+        let anchor = self
+            .anchor
+            .get()
+            .map_or(caret, |anchor| floor_boundary(text, anchor));
+        match self.mask() {
+            Some(bullet) => {
+                let shown = |at: usize| masked(&text[..at], bullet).len();
+                renderer_core::Editing::new(
+                    masked(text, bullet),
+                    shown(anchor),
+                    shown(caret),
+                    caret_rect,
+                    true,
+                )
+            }
+            None => renderer_core::Editing::new(text, anchor, caret, caret_rect, false),
+        }
+    }
+
     /// `text` in the rows the editor draws it in, at the width and scroll it was last laid out at.
     pub(crate) fn placed<'a>(&self, text: &'a str, style: &TextStyle) -> Placed<'a> {
         let area = self.leaf.rect.get();
@@ -911,7 +932,7 @@ impl Editor {
             .chain(caret_node);
         self.leaf.at_layout_position_editing(
             || self.semantics(),
-            Some(caret_rect),
+            || self.editing(&text, caret, caret_rect),
             clipped(area, layers),
         )
     }

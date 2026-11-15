@@ -170,8 +170,9 @@ takes each box's element from there instead of creating one:
   order, the same way.
 - **Swept once the frame is done.** Nothing served is removed while the frame may still claim it; what it did
   not claim goes at the end.
-- **The text entry**, the `<textarea>` the document renderer types through, is not part of the page. It is
-  appended after the served content, which moves nothing, or taken over if the host already holds one.
+- **The text entry**, the `<input>` or `<textarea>` the document renderer types through, is not part of the
+  page. It is appended after the served content, which moves nothing, or taken over if the host already holds
+  one.
 
 A drawing over pixels the app makes at run time is written without them: the `<image>` is in the page with no
 address, and the first frame gives it one, which is an attribute rather than a new element. The files a page

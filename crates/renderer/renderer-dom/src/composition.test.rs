@@ -8,7 +8,9 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use platform_core::{Event, EventHandler, Ime, Key, Platform, WindowConfig};
 use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
-use renderer_core::{DrawCommand, Element, ElementId, Focusable, RenderBackend, Role, Semantics};
+use renderer_core::{
+    DrawCommand, Editing, Element, ElementId, Focusable, RenderBackend, Role, Semantics,
+};
 use telar_renderer_dom::DomRenderer;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -17,12 +19,15 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 const FIELD: u64 = 201;
 const OTHER: u64 = 202;
+const LINES: u64 = 203;
 const CARET: Rect = Rect {
     x: 30.0,
     y: 2.0,
     width: 1.5,
     height: 16.0,
 };
+/// What the focused field shows, its caret after the first letter.
+const SHOWN: &str = "ab";
 
 thread_local! {
     static RECORDED: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
@@ -90,11 +95,15 @@ fn host() -> web_sys::HtmlElement {
 }
 
 fn field(id: u64, focused: u64) -> Element {
-    let semantics = Semantics::of(Role::TextInput)
+    let role = match id {
+        LINES => Role::MultilineTextInput,
+        _ => Role::TextInput,
+    };
+    let semantics = Semantics::of(role)
         .in_state(id == focused, None, false)
         .focusable(Focusable {
             tab_stop: true,
-            consumes: Role::TextInput.consumed_keys(),
+            consumes: role.consumed_keys(),
         });
     Element::new(
         ElementId(id),
@@ -102,14 +111,14 @@ fn field(id: u64, focused: u64) -> Element {
         "width:200px;height:20px",
         Rect::new(0.0, 0.0, 200.0, 20.0),
     )
-    .with_caret((id == focused).then_some(CARET))
+    .editing((id == focused).then(|| Editing::new(SHOWN, 1, 1, CARET, false)))
 }
 
-/// Two fields, the keyboard in `focused`.
+/// Two fields of one line and one of several, the keyboard in `focused`.
 fn render(focused: u64) {
     mount();
     let mut commands = Vec::new();
-    for id in [FIELD, OTHER] {
+    for id in [FIELD, OTHER, LINES] {
         commands.push(DrawCommand::PushElement {
             element: Arc::new(field(id, focused)),
         });
@@ -126,13 +135,19 @@ fn render(focused: u64) {
     });
 }
 
-fn entry() -> web_sys::HtmlTextAreaElement {
+fn entry() -> web_sys::HtmlElement {
     host()
-        .query_selector("textarea[data-telar-entry]")
+        .query_selector("[data-telar-entry]")
         .expect("a valid selector")
         .expect("the entry is in the host")
         .dyn_into()
-        .expect("the entry is a textarea")
+        .expect("the entry is an HTML element")
+}
+
+fn line() -> web_sys::HtmlInputElement {
+    entry()
+        .dyn_into()
+        .expect("the entry of a field of one line is an input")
 }
 
 fn compose(kind: &str, data: &str) {
@@ -144,10 +159,13 @@ fn compose(kind: &str, data: &str) {
     entry().dispatch_event(&event).expect("dispatched");
 }
 
-/// The `input` a browser fires once it has written `value` into the entry.
-fn written(value: &str, composing: bool) {
-    let entry = entry();
+/// The `input` a browser fires once it has written `value` into the entry, its caret `caret` UTF-16 units in.
+fn written(value: &str, caret: u32, composing: bool) {
+    let entry = line();
     entry.set_value(value);
+    entry
+        .set_selection_range(caret, caret)
+        .expect("the entry takes a selection");
     let init = web_sys::InputEventInit::new();
     init.set_is_composing(composing);
     init.set_input_type("insertCompositionText");
@@ -220,7 +238,7 @@ fn the_entry_stands_on_the_caret_s_line() {
     );
 }
 
-/// **A composed word is typed once.** Each step reaches the field as the composition it is, its end as one commit, and the text a browser writes again once the composition is over — Safari's `insertFromComposition`, an `input` after the end — is no second insertion.
+/// **A composed word is typed once.** Composed at the caret of a field that already shows text, each step reaches the field as the composition it is, without the text around it, its end as one commit, and the text a browser writes again once the composition is over — Safari's `insertFromComposition`, an `input` after the end — is no second insertion.
 #[wasm_bindgen_test]
 async fn a_composition_is_told_step_by_step_and_committed_once() {
     render(FIELD);
@@ -228,12 +246,12 @@ async fn a_composition_is_told_step_by_step_and_committed_once() {
     recorded();
     compose("compositionstart", "");
     compose("compositionupdate", "か");
-    written("か", true);
+    written("aかb", 2, true);
     compose("compositionupdate", "かな");
-    written("かな", true);
+    written("aかなb", 3, true);
     compose("compositionend", "仮名");
     before_input("insertFromComposition", "仮名");
-    written("仮名", false);
+    written("a仮名b", 3, false);
     next_frames().await;
     let events = recorded();
     assert!(
@@ -245,7 +263,15 @@ async fn a_composition_is_told_step_by_step_and_committed_once() {
     );
     assert_eq!(commits(&events), ["仮名"], "{events:?}");
     assert_eq!(typed(&events), "", "and nothing typed besides: {events:?}");
-    assert_eq!(entry().value(), "", "the entry is empty for the next one");
+    assert_eq!(
+        line().value(),
+        "a仮名b",
+        "the entry shows the field with the word in place of its caret"
+    );
+    assert_eq!(
+        (line().selection_start(), line().selection_end()),
+        (Ok(Some(3)), Ok(Some(3)))
+    );
 }
 
 /// Typing outside a composition is still typing.
@@ -257,6 +283,33 @@ async fn text_inserted_outside_a_composition_is_typed() {
     before_input("insertText", "a");
     next_frames().await;
     assert_eq!(typed(&recorded()), "a");
+}
+
+/// What an input method writes straight into the entry, with no `beforeinput` ahead of it, is typed as what it put at the caret.
+#[wasm_bindgen_test]
+async fn text_an_input_method_wrote_directly_is_typed() {
+    render(FIELD);
+    next_frames().await;
+    recorded();
+    written("aXYb", 3, false);
+    next_frames().await;
+    assert_eq!(typed(&recorded()), "XY");
+}
+
+/// A change the browser made itself that is no insertion at the caret is typed as nothing, and the entry goes back to showing the field.
+#[wasm_bindgen_test]
+async fn a_change_that_is_no_insertion_at_the_caret_is_undone() {
+    render(FIELD);
+    next_frames().await;
+    recorded();
+    written("zz", 2, false);
+    next_frames().await;
+    assert_eq!(typed(&recorded()), "");
+    assert_eq!(line().value(), SHOWN);
+    assert_eq!(
+        (line().selection_start(), line().selection_end()),
+        (Ok(Some(1)), Ok(Some(1)))
+    );
 }
 
 /// A press that takes the keyboard from the field ends the composition in the browser; the field types what it showed by itself, so the commit the browser reports for it would be the word a second time.
@@ -298,6 +351,30 @@ async fn a_composition_stays_with_the_field_it_began_in() {
         })),
         "{events:?}"
     );
+}
+
+/// The keyboard moving to a field of several lines moves the entry to a `textarea`, and back to an `input` for one of a single line: one entry at a time, holding the keyboard and still typing.
+#[wasm_bindgen_test]
+async fn the_entry_becomes_the_kind_of_field_the_keyboard_is_in() {
+    render(FIELD);
+    render(LINES);
+    next_frames().await;
+    recorded();
+    let entries = host()
+        .query_selector_all("[data-telar-entry]")
+        .expect("a valid selector");
+    assert_eq!(entries.length(), 1);
+    let active = document().active_element().expect("something is focused");
+    assert_eq!(active.tag_name().to_ascii_lowercase(), "textarea");
+    assert!(active.has_attribute("data-telar-entry"));
+    before_input("insertText", "a");
+    next_frames().await;
+    assert_eq!(typed(&recorded()), "a");
+
+    render(FIELD);
+    let active = document().active_element().expect("something is focused");
+    assert_eq!(active.tag_name().to_ascii_lowercase(), "input");
+    assert_eq!(line().value(), SHOWN);
 }
 
 /// A key an input method is handling is its own even when the browser says the composition is over, as Safari does for the Enter that confirms one.

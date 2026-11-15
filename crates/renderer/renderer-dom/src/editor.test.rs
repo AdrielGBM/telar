@@ -17,8 +17,8 @@ use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, DrawCommand, RenderBackend, TextStyle};
 use telar_renderer_dom::{CanvasTextMetrics, DomRenderer, ID_ATTRIBUTE};
 use ui_core::{
-    ComponentList, Container, Input, LayoutItem, LayoutScrollArea, ScrollViewport, TextArea,
-    WindowRoot, box_item,
+    Accessible, ComponentList, Container, Input, LayoutItem, LayoutScrollArea, ScrollViewport,
+    TextArea, WindowRoot, box_item,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -126,7 +126,9 @@ impl Page {
         self.last
             .iter()
             .find_map(|command| match command {
-                DrawCommand::PushElement { element } => element.caret,
+                DrawCommand::PushElement { element } => {
+                    element.editing.as_ref().map(|editing| editing.caret())
+                }
                 _ => None,
             })
             .expect("the focused editor says where its caret is")
@@ -547,4 +549,157 @@ async fn wait_past_a_double_click() {
             );
     });
     let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+}
+
+fn shifted(key: Key) -> Event {
+    Event::KeyPressed {
+        key,
+        modifiers: ModifiersState {
+            is_shift: true,
+            ..ModifiersState::default()
+        },
+        unmodified: None,
+    }
+}
+
+/// The element the document's focus is on, which a screen reader reads: the entry the focused field is typed through.
+fn focused_entry() -> web_sys::Element {
+    let active = document()
+        .active_element()
+        .expect("something holds the keyboard");
+    assert!(
+        active.has_attribute("data-telar-entry"),
+        "the keyboard is in the entry: {}",
+        active.outer_html()
+    );
+    active
+}
+
+/// What a reader is told the focused element holds: its value, and its selection's ends in UTF-16 units with the end the caret is at.
+fn read_back(entry: &web_sys::Element) -> (String, u32, u32, String) {
+    let (value, start, end, direction) = match entry.dyn_ref::<web_sys::HtmlInputElement>() {
+        Some(line) => (
+            line.value(),
+            line.selection_start(),
+            line.selection_end(),
+            line.selection_direction(),
+        ),
+        None => {
+            let lines = entry
+                .dyn_ref::<web_sys::HtmlTextAreaElement>()
+                .expect("the entry is an input or a textarea");
+            (
+                lines.value(),
+                lines.selection_start(),
+                lines.selection_end(),
+                lines.selection_direction(),
+            )
+        }
+    };
+    (
+        value,
+        start.ok().flatten().expect("a selection start"),
+        end.ok().flatten().expect("a selection end"),
+        direction.ok().flatten().unwrap_or_default(),
+    )
+}
+
+/// `input`, focused on a page of its own.
+fn focused_field(input: Input) -> Page {
+    let focus = input.focus_id();
+    let mut page = Page::new(box_item(input));
+    ui_core::focus::request(focus);
+    page.frame();
+    page
+}
+
+fn field_holding(text: &str) -> Input {
+    Input::new(
+        signal(text.to_string()),
+        LayoutStyle::new().width(300.0).height(30.0),
+        style,
+    )
+    .expect("the field builds")
+}
+
+/// **A screen reader reads what a field holds.** The focused element is the entry the field is typed through, an `input` for a field of one line: once typed into, its value is the field's text and its selection is the field's caret, and a selection made with the keyboard is its selection, with the caret at the same end.
+#[wasm_bindgen_test]
+fn typing_leaves_the_field_s_text_and_caret_on_the_focused_element() {
+    as_a_document();
+    let mut page = focused_field(field_holding("señal"));
+    page.send(key(Key::Named(NamedKey::End)));
+    page.send(key(Key::Char('!')));
+
+    let entry = focused_entry();
+    assert_eq!(entry.tag_name().to_ascii_lowercase(), "input");
+    assert_eq!(entry.get_attribute("type").as_deref(), Some("text"));
+    let (shown, start, end, _) = read_back(&entry);
+    assert_eq!((shown.as_str(), start, end), ("señal!", 6, 6));
+
+    page.send(shifted(Key::Named(NamedKey::ArrowLeft)));
+    page.send(shifted(Key::Named(NamedKey::ArrowLeft)));
+    assert_eq!(
+        read_back(&focused_entry()),
+        ("señal!".to_string(), 4, 6, "backward".to_string())
+    );
+}
+
+/// A text area is typed through a `textarea`, holding its lines.
+#[wasm_bindgen_test]
+fn a_text_area_is_read_as_a_field_of_several_lines() {
+    as_a_document();
+    let value = signal("uno\ndos".to_string());
+    let area = TextArea::new(value, LayoutStyle::new(), style).expect("the area builds");
+    let focus = area.focus_id();
+    let mut page = Page::new(box_item(area));
+    ui_core::focus::request(focus);
+    page.frame();
+    page.send(key(Key::Named(NamedKey::End)));
+    page.send(key(Key::Named(NamedKey::Enter)));
+
+    let entry = focused_entry();
+    assert_eq!(entry.tag_name().to_ascii_lowercase(), "textarea");
+    let (shown, start, end, _) = read_back(&entry);
+    assert_eq!(shown, value.get());
+    let caret = shown.encode_utf16().count() as u32;
+    assert_eq!((start, end), (caret, caret));
+}
+
+/// A secret field is a password to a reader, and what it holds never reaches the document: the entry shows the field's mask.
+#[wasm_bindgen_test]
+fn a_secret_field_is_read_as_a_password_showing_only_its_mask() {
+    as_a_document();
+    let page = focused_field(field_holding("hunter").secret());
+
+    let entry = focused_entry();
+    assert_eq!(entry.get_attribute("type").as_deref(), Some("password"));
+    assert_eq!(read_back(&entry).0, "••••••");
+    assert!(
+        !page.host.inner_html().contains("hunter"),
+        "the value is nowhere in the document"
+    );
+}
+
+/// **The entry goes by the field's name and no other.** A field the app named is read by that name; one it did not name is read unnamed, never by a fallback the app did not give or by what was typed into it.
+#[wasm_bindgen_test]
+fn the_focused_field_is_read_by_the_name_the_app_gave_and_no_other() {
+    as_a_document();
+    let page = focused_field(field_holding("hola"));
+    assert_eq!(focused_entry().get_attribute("aria-label"), None);
+    let named = page
+        .host
+        .query_selector("[aria-label]")
+        .expect("a valid selector");
+    assert!(
+        named.is_none(),
+        "no element goes by a name the app did not give: {:?}",
+        named.map(|element| element.outer_html())
+    );
+    drop(page);
+
+    let _page = focused_field(field_holding("hola").a11y_label(|| "Nombre"));
+    assert_eq!(
+        focused_entry().get_attribute("aria-label").as_deref(),
+        Some("Nombre")
+    );
 }

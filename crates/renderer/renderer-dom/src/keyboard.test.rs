@@ -298,7 +298,7 @@ fn tab_stops_are_the_boxes_telar_says_and_in_its_order() {
         "a row driven by arrows is focusable without being a stop"
     );
     let plain = host()
-        .query_selector("[tabindex]:not([data-telar-focus]):not(textarea)")
+        .query_selector("[tabindex]:not([data-telar-focus]):not([data-telar-entry])")
         .expect("a valid selector");
     assert!(
         plain.is_none(),
@@ -403,7 +403,7 @@ async fn a_box_the_browser_focuses_is_reported_as_focused() {
 fn a_field_types_through_the_entry_and_keeps_its_caret_keys() {
     render(FIELD);
     let entry = active().expect("the entry holds the keyboard");
-    assert_eq!(entry.tag_name().to_ascii_lowercase(), "textarea");
+    assert_eq!(entry.tag_name().to_ascii_lowercase(), "input");
     assert!(press_on_focus("ArrowLeft"));
     assert!(press_on_focus("Home"));
     assert!(press_on_focus("Backspace"));
@@ -487,7 +487,7 @@ async fn the_entry_taking_the_keyboard_is_no_move_away_from_the_field() {
     render(FIELD);
     next_frames().await;
     let entry = active().expect("the entry holds the keyboard");
-    assert_eq!(entry.tag_name().to_ascii_lowercase(), "textarea");
+    assert_eq!(entry.tag_name().to_ascii_lowercase(), "input");
     let events = recorded();
     assert!(!events.contains(&Event::FocusLeftBoxes), "{events:?}");
 }

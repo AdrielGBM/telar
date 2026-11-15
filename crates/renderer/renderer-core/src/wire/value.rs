@@ -8,11 +8,11 @@ use wire_core::{
 
 use crate::{
     BlendMode, Border, Clamp, Color, Dash, Declared, DecorationLength, DecorationLine,
-    DecorationMetric, Element, ElementId, FillRule, FontFamily, FontFeatures, FontStyle, FontTag,
-    FontVariations, Gradient, GradientKind, GradientStops, ImageFill, ImageSlice, LayerMask,
-    LineCap, LineHeight, LineJoin, Linked, Paint, PathData, PathStyle, PathVerb, Picture, Raster,
-    RectStyle, Shadow, Span, Stroke, TextAlign, TextCase, TextDecoration, TextLength, TextShadow,
-    TextStyle, TextWrap,
+    DecorationMetric, Editing, Element, ElementId, FillRule, FontFamily, FontFeatures, FontStyle,
+    FontTag, FontVariations, Gradient, GradientKind, GradientStops, ImageFill, ImageSlice,
+    LayerMask, LineCap, LineHeight, LineJoin, Linked, Paint, PathData, PathStyle, PathVerb,
+    Picture, Raster, RectStyle, Shadow, Span, Stroke, TextAlign, TextCase, TextDecoration,
+    TextLength, TextShadow, TextStyle, TextWrap,
 };
 
 wire_enum!(TextAlign {
@@ -408,8 +408,38 @@ wire_struct!(Element {
     arrival_margin,
     picture,
     fixed_in_place_of,
-    caret,
+    editing,
 });
+
+impl Shaped for Editing {
+    const SHAPE: u64 = fold_fields!(
+        shape_named("Editing"),
+        Editing {
+            text,
+            anchor,
+            focus,
+            caret,
+            secret
+        }
+    );
+}
+
+impl Wire for Editing {
+    fn put(&self, w: &mut Writer) {
+        self.text.put(w);
+        self.anchor.put(w);
+        self.focus.put(w);
+        self.caret.put(w);
+        self.secret.put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        let text = std::sync::Arc::<str>::take(r)?;
+        let anchor = usize::take(r)?;
+        let focus = usize::take(r)?;
+        let caret = Wire::take(r)?;
+        Ok(Editing::new(text, anchor, focus, caret, bool::take(r)?))
+    }
+}
 
 impl Shaped for ElementId {
     const SHAPE: u64 = fold_shape(shape_named("ElementId"), u64::SHAPE);

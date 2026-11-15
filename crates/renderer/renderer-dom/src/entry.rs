@@ -2,9 +2,9 @@
 //!
 //! Telar owns the text: the field is its widget, the caret is its own, and the value lives in a signal. What it does not own is *how characters are produced*. A browser gives that job to an editable element, and only to an editable element — a soft keyboard rises for one, an input method composes into one, a password manager fills one, dictation writes into one. A page that draws its fields itself gets none of that, and there is no key event to substitute for it: an IME reports `keydown` with a key that means "ask the input method", and the text arrives later, as a composition, addressed to a field.
 //!
-//! So there is one, parked at the caret of whichever field holds the keyboard and invisible on top of it, which is where an input method opens its candidates. It never shows what was typed — Telar draws that — and it is emptied after every insertion, so it accumulates nothing and has no state to keep in step. What it produces goes back through the platform's own event queue as the keys the field would have received anyway, which is what lets the whole editing path — selection, undo, the caret — stay exactly where it was.
+//! So there is one, parked at the caret of whichever field holds the keyboard and invisible on top of it, which is where an input method opens its candidates. It is the element a screen reader reads, since it is the one that is focused, so it mirrors the field: an `<input>` for a field of one line and a `<textarea>` for one of several, holding what the field shows with the field's selection, written again after every change to the field. It never changes on its own account. Every edit the browser reports is prevented before it lands and goes back through the platform's own event queue as the keys the field would have received anyway, which is what lets the whole editing path — selection, undo, the caret — stay exactly where it was; the field's next frame writes the result back.
 //!
-//! A composition is the one thing it holds for a while: the browser composes into the element, and the entry reports each step of it to the field as [`Ime::Preedit`] and its end as one [`Ime::Commit`], swallowing whatever a browser goes on to report as an edit of its own, so a composed word is typed once.
+//! A composition is the one thing it holds for a while: the browser composes into the element, over the field's selection, and the entry reports each step of it to the field as [`Ime::Preedit`] and its end as one [`Ime::Commit`], swallowing whatever a browser goes on to report as an edit of its own, so a composed word is typed once.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -12,6 +12,7 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use platform_core::consumed_keys::CONSUMED_KEYS_ATTRIBUTE;
 use platform_core::{ConsumedKeys, Event, Ime, Key, ModifiersState, NamedKey};
+use renderer_core::Editing;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
@@ -21,9 +22,6 @@ use crate::paint;
 const HIDDEN: &str = "position:absolute;padding:0;border:0;outline:none;background:transparent;\
 color:transparent;caret-color:transparent;font:inherit;resize:none;overflow:hidden;\
 white-space:pre;-webkit-user-select:text;user-select:text;";
-
-/// What the entry answers to while standing for a field that named nothing.
-const FALLBACK: &str = "Text field";
 
 /// The `keyCode` a browser gives a key an input method is handling, even after it says the composition is over: Safari reports the Enter that confirms one as a fresh key.
 const PROCESSED_BY_INPUT_METHOD: u32 = 229;
@@ -36,6 +34,8 @@ pub struct Field<'a> {
     pub rect: geometry_core::Rect,
     /// Where the field's caret is, in the same coordinates as `rect`; `None` when the field said nothing, and the entry covers the whole field instead.
     pub caret: Option<Rect>,
+    /// What the field shows and what is selected in it; `None` when it said nothing, and the entry shows nothing.
+    pub shows: Option<&'a Editing>,
     pub multiline: bool,
     pub label: Option<&'a str>,
     pub keys: Option<&'a str>,
@@ -51,12 +51,150 @@ type Listener = (
 
 type Standing = Rc<RefCell<Option<web_sys::HtmlElement>>>;
 
+/// What the entry shows: the field's text with its selection, both ends in UTF-16 code units, as a browser counts them.
+#[derive(Clone, Default, PartialEq, Debug)]
+struct Shown {
+    text: String,
+    anchor: u32,
+    focus: u32,
+}
+
+impl Shown {
+    fn of(editing: &Editing) -> Self {
+        let text = editing.text();
+        let units = |at: usize| text[..at].encode_utf16().count() as u32;
+        Self {
+            text: text.to_string(),
+            anchor: units(editing.anchor()),
+            focus: units(editing.focus()),
+        }
+    }
+
+    fn range(&self) -> (u32, u32) {
+        (self.anchor.min(self.focus), self.anchor.max(self.focus))
+    }
+
+    /// How many code units the selection leaves before it and after it: what a composition over it keeps on either side.
+    fn around_selection(&self) -> (usize, usize) {
+        let length = self.text.encode_utf16().count();
+        let (start, end) = self.range();
+        let start = (start as usize).min(length);
+        (start, length - (end as usize).clamp(start, length))
+    }
+
+    /// This, with the selection replaced by `text` and the caret after it.
+    fn replacing_selection(&self, text: &str) -> Self {
+        let units: Vec<u16> = self.text.encode_utf16().collect();
+        let (before, after) = self.around_selection();
+        let mut replaced = units[..before].to_vec();
+        replaced.extend(text.encode_utf16());
+        let caret = replaced.len() as u32;
+        replaced.extend_from_slice(&units[units.len() - after..]);
+        Self {
+            text: String::from_utf16_lossy(&replaced),
+            anchor: caret,
+            focus: caret,
+        }
+    }
+
+    /// What `value` puts in place of the selection, when it is this with only the selection replaced.
+    fn inserted_by(&self, value: &str) -> Option<String> {
+        let (before, after) = self.around_selection();
+        let units: Vec<u16> = self.text.encode_utf16().collect();
+        let written: Vec<u16> = value.encode_utf16().collect();
+        let kept = written.len().checked_sub(before + after)?;
+        let same = written[..before] == units[..before]
+            && written[before + kept..] == units[units.len() - after..];
+        same.then(|| String::from_utf16_lossy(&written[before..before + kept]))
+    }
+}
+
+/// The entry's element, as the kind of editable element it is.
+enum Editable {
+    Line(web_sys::HtmlInputElement),
+    Lines(web_sys::HtmlTextAreaElement),
+}
+
+impl Editable {
+    fn of(node: &web_sys::EventTarget) -> Option<Self> {
+        if let Some(line) = node.dyn_ref::<web_sys::HtmlInputElement>() {
+            return Some(Self::Line(line.clone()));
+        }
+        node.dyn_ref::<web_sys::HtmlTextAreaElement>()
+            .map(|lines| Self::Lines(lines.clone()))
+    }
+
+    fn value(&self) -> String {
+        match self {
+            Self::Line(line) => line.value(),
+            Self::Lines(lines) => lines.value(),
+        }
+    }
+
+    fn set_value(&self, value: &str) {
+        match self {
+            Self::Line(line) => line.set_value(value),
+            Self::Lines(lines) => lines.set_value(value),
+        }
+    }
+
+    /// The selection as `(start, end, direction)`, when the element has one.
+    fn selection(&self) -> Option<(u32, u32, String)> {
+        let (start, end, direction) = match self {
+            Self::Line(line) => (
+                line.selection_start(),
+                line.selection_end(),
+                line.selection_direction(),
+            ),
+            Self::Lines(lines) => (
+                lines.selection_start(),
+                lines.selection_end(),
+                lines.selection_direction(),
+            ),
+        };
+        Some((
+            start.ok()??,
+            end.ok()??,
+            direction.ok()?.unwrap_or_default(),
+        ))
+    }
+
+    fn select(&self, start: u32, end: u32, direction: &str) {
+        let _ = match self {
+            Self::Line(line) => line.set_selection_range_with_direction(start, end, direction),
+            Self::Lines(lines) => lines.set_selection_range_with_direction(start, end, direction),
+        };
+    }
+
+    /// Makes the element show `shown`, writing only what differs: a value written again moves the browser's caret, and a reader announces every move.
+    fn show(&self, shown: &Shown) {
+        if self.value() != shown.text {
+            self.set_value(&shown.text);
+        }
+        let (start, end) = shown.range();
+        let direction = match shown.anchor > shown.focus {
+            true => "backward",
+            false => "forward",
+        };
+        let collapsed = start == end;
+        let current = self.selection();
+        let same = current.as_ref().is_some_and(|(at, to, going)| {
+            (*at, *to) == (start, end) && (collapsed || going == direction)
+        });
+        if !same {
+            self.select(start, end, direction);
+        }
+    }
+}
+
 /// A composition the browser is making in the entry, as far as the field has been told of it.
 #[derive(Default)]
 struct Composing {
     active: bool,
     /// The field it began in. Its steps reach the field only while the entry still stands for that one.
     began_in: Option<web_sys::HtmlElement>,
+    /// How many code units of what the entry showed it keeps before and after itself: the selection it was typed over is what lies between.
+    around: (usize, usize),
     /// A press landed while it was open: one that moves the browser's focus ends it, and the field the press takes the keyboard from types what it showed by itself.
     pressed: bool,
     /// The last step the field was told of, so a step reported twice is told once.
@@ -71,7 +209,7 @@ impl Composing {
     }
 }
 
-/// The hidden editable element the browser types into, placed at the caret of whichever field holds the keyboard.
+/// The hidden editable element the browser types into, placed at the caret of whichever field holds the keyboard and showing what that field shows.
 pub struct TextEntry {
     node: web_sys::HtmlElement,
     /// Taken off their targets when the entry goes, since the element can outlive it: a later reconcile on the same host takes it over.
@@ -86,6 +224,8 @@ pub struct TextEntry {
     keys: Option<String>,
     /// The field it stands for, which is where the browser's own Tab order has to start from.
     field: Standing,
+    /// What the field it stands for shows, which the element is brought back to whenever no composition holds it.
+    shown: Rc<RefCell<Shown>>,
     composing: Rc<RefCell<Composing>>,
 }
 
@@ -93,38 +233,24 @@ impl TextEntry {
     /// The entry `host` already holds, when an earlier reconcile left one there, or a new one appended after everything the host was served with.
     pub fn new(document: &web_sys::Document, host: &web_sys::HtmlElement) -> Option<Self> {
         let existing = host
-            .query_selector(&format!(":scope > textarea[{ENTRY_ATTRIBUTE}]"))
+            .query_selector(&format!(":scope > [{ENTRY_ATTRIBUTE}]"))
             .ok()
-            .flatten();
+            .flatten()
+            .and_then(|node| node.dyn_into::<web_sys::HtmlElement>().ok())
+            .filter(|node| Editable::of(node.as_ref()).is_some());
         let created = existing.is_none();
         let node = match existing {
             Some(node) => node,
-            None => document.create_element("textarea").ok()?,
-        }
-        .dyn_into::<web_sys::HtmlElement>()
-        .ok()?;
-        let attributes = [
-            ("style", Some(HIDDEN)),
-            (ENTRY_ATTRIBUTE, Some("")),
-            ("autocapitalize", Some("off")),
-            ("autocorrect", Some("off")),
-            ("spellcheck", Some("false")),
-            // A single line as far as the browser is concerned; `Enter` is Telar's to interpret, and a textarea lets an input method compose without the element submitting anything.
-            ("rows", Some("1")),
-            // Deliberately not `aria-hidden`: this is where the keyboard actually is, and a focused element a reader has been told to ignore is worse than an unnamed one. It takes the name of whichever field it stands for in `park`.
-            ("tabindex", Some("-1")),
-            ("aria-label", Some(FALLBACK)),
-            (CONSUMED_KEYS_ATTRIBUTE, None),
-        ];
-        for (name, value) in attributes {
-            crate::adopt::patch_attribute(&node, name, value);
-        }
+            None => editable(document, false)?,
+        };
+        prepare(&node);
         stand_by(&node, true);
         if created {
             host.append_child(node.as_ref()).ok()?;
         }
 
         let field: Standing = Rc::default();
+        let shown: Rc<RefCell<Shown>> = Rc::default();
         let composing: Rc<RefCell<Composing>> = Rc::default();
         let target: &web_sys::EventTarget = node.as_ref();
         let listeners = vec![
@@ -137,20 +263,20 @@ impl TextEntry {
                 move |event| on_before_input(event, &composing)
             }),
             listen(target, "input", false, {
-                let (field, composing) = (field.clone(), composing.clone());
-                move |event| on_input(event, &field, &composing)
+                let (field, shown, composing) = (field.clone(), shown.clone(), composing.clone());
+                move |event| on_input(event, &field, &shown, &composing)
             }),
             listen(target, "compositionstart", false, {
-                let (field, composing) = (field.clone(), composing.clone());
-                move |_| on_composition_start(&field, &composing)
+                let (field, shown, composing) = (field.clone(), shown.clone(), composing.clone());
+                move |_| on_composition_start(&field, &shown, &composing)
             }),
             listen(target, "compositionupdate", false, {
                 let (field, composing) = (field.clone(), composing.clone());
                 move |event| on_composition_update(event, &field, &composing)
             }),
             listen(target, "compositionend", false, {
-                let (field, composing) = (field.clone(), composing.clone());
-                move |event| on_composition_end(event, &field, &composing)
+                let (field, shown, composing) = (field.clone(), shown.clone(), composing.clone());
+                move |event| on_composition_end(event, &field, &shown, &composing)
             }),
             // Capturing, so it is heard before the press moves the browser's focus and that move ends the composition.
             listen(host.as_ref(), "pointerdown", true, {
@@ -165,30 +291,35 @@ impl TextEntry {
             node,
             listeners,
             placed: String::new(),
-            named: Some(FALLBACK.to_string()),
+            named: None,
             active: false,
             keys: None,
             field,
+            shown,
             composing,
         })
     }
 
-    /// Parks the entry at the caret of the field that holds the keyboard, and takes the keyboard with it.
+    /// Parks the entry at the caret of the field that holds the keyboard, shows what the field shows, and takes the keyboard with it.
     ///
     /// Focus goes here rather than to the field's own element, and that is the point: the element a person sees is not one a browser will type into, and the one it will type into must not be seen.
     ///
-    /// It answers to the field's own name while it stands for it. A screen reader reads the *focused* element, which is this one and never the field, so an entry with no name is a person being told they are in an edit box and not which one — and an unnamed form control is a failure every accessibility audit reports. `FALLBACK` covers the field that named nothing, because "text field" read out is still better than silence.
+    /// A screen reader reads the *focused* element, which is this one and never the field, so it is what the field is to a reader: one line or several, a password or not, the field's text and selection, and the field's own name. A field nobody named leaves it unnamed rather than answering to a name the app never gave.
     ///
     /// It also carries the keys the field keeps, since the platform reads them off whichever element the key was sent to. `take_focus` is false when a person moved focus elsewhere on the page: the entry still follows the field, and leaves the keyboard where it went.
     pub fn park(&mut self, field: Field<'_>, take_focus: bool) {
         let Field {
             rect,
             caret,
+            shows,
             multiline,
             label,
             keys,
             element,
         } = field;
+        if is_multiline(&self.node) != multiline {
+            self.become_editable(multiline);
+        }
         let mut style = String::from(HIDDEN);
         let at = caret.map_or(rect, |caret| along_the_caret(rect, caret));
         paint::declare(&mut style, "left", &paint::px(at.x));
@@ -202,32 +333,41 @@ impl TextEntry {
             let _ = self.node.set_attribute("style", &style);
             self.placed = style;
         }
-        let name = label.filter(|label| !label.is_empty()).unwrap_or(FALLBACK);
-        if self.named.as_deref() != Some(name) {
-            let _ = self.node.set_attribute("aria-label", name);
-            self.named = Some(name.to_string());
+        let name = label.filter(|label| !label.is_empty());
+        if self.named.as_deref() != name {
+            crate::adopt::patch_attribute(&self.node, "aria-label", name);
+            self.named = name.map(str::to_string);
         }
-        let _ = self
-            .node
-            .set_attribute("enterkeyhint", if multiline { "enter" } else { "done" });
+        if !multiline {
+            let secret = shows.is_some_and(Editing::secret);
+            crate::adopt::patch_attribute(
+                &self.node,
+                "type",
+                Some(if secret { "password" } else { "text" }),
+            );
+        }
+        crate::adopt::patch_attribute(
+            &self.node,
+            "enterkeyhint",
+            Some(if multiline { "enter" } else { "done" }),
+        );
         if self.keys.as_deref() != keys {
-            match keys {
-                Some(keys) => {
-                    let _ = self.node.set_attribute(CONSUMED_KEYS_ATTRIBUTE, keys);
-                }
-                None => {
-                    let _ = self.node.remove_attribute(CONSUMED_KEYS_ATTRIBUTE);
-                }
-            }
+            crate::adopt::patch_attribute(&self.node, CONSUMED_KEYS_ATTRIBUTE, keys);
             self.keys = keys.map(str::to_string);
         }
         *self.field.borrow_mut() = element;
+        *self.shown.borrow_mut() = shows.map(Shown::of).unwrap_or_default();
         // A press that left the keyboard in the field it was composing in did not end the composition.
-        {
+        let composing = {
             let mut composing = self.composing.borrow_mut();
             if composing.active && composing.belongs_to(&self.field) {
                 composing.pressed = false;
             }
+            composing.active
+        };
+        // The browser owns the element while it composes: writing to it would end the composition under the input method.
+        if !composing && let Some(editable) = Editable::of(self.node.as_ref()) {
+            editable.show(&self.shown.borrow());
         }
         self.active = true;
         stand_by(&self.node, false);
@@ -238,18 +378,27 @@ impl TextEntry {
 
     /// Takes the entry out of the way, for a frame where no field holds the keyboard.
     ///
-    /// Only ever *releases*: blurring would be taking focus away from whatever just claimed it, and by the time this runs that is exactly what has happened.
+    /// Focus that moved on to whatever claimed it is left there. Focus still here has nowhere it was claimed for, and an empty editable element is no place to leave a reader, so it is let go.
     pub fn release(&mut self) {
+        if self.holds_focus() {
+            let _ = self.node.blur();
+        }
         if !std::mem::take(&mut self.active) {
             return;
         }
         let _ = self.node.set_attribute("style", HIDDEN);
         self.placed.clear();
         *self.field.borrow_mut() = None;
-        // Back to the generic name: standing for no field, it must not keep answering to the last one.
-        if self.named.as_deref() != Some(FALLBACK) {
-            let _ = self.node.set_attribute("aria-label", FALLBACK);
-            self.named = Some(FALLBACK.to_string());
+        // Standing for no field, it must not keep answering to the last one, nor keep what it showed.
+        if self.named.take().is_some() {
+            let _ = self.node.remove_attribute("aria-label");
+        }
+        if self.keys.take().is_some() {
+            let _ = self.node.remove_attribute(CONSUMED_KEYS_ATTRIBUTE);
+        }
+        *self.shown.borrow_mut() = Shown::default();
+        if let Some(editable) = Editable::of(self.node.as_ref()) {
+            editable.show(&Shown::default());
         }
         stand_by(&self.node, true);
     }
@@ -267,8 +416,70 @@ impl TextEntry {
         let _ = host.insert_before(node, current.as_ref());
     }
 
+    /// Swaps the element for the kind a field of `multiline` lines is, since an element's tag cannot change: the listeners move to the new one, and what the old one was told is told again.
+    fn become_editable(&mut self, multiline: bool) {
+        let Some(node) = self
+            .node
+            .owner_document()
+            .and_then(|document| editable(&document, multiline))
+        else {
+            return;
+        };
+        prepare(&node);
+        let _ = self.node.replace_with_with_node_1(node.as_ref());
+        let new: &web_sys::EventTarget = node.as_ref();
+        for (target, event, capture, closure) in &mut self.listeners {
+            let on_old = target
+                .dyn_ref::<web_sys::Node>()
+                .is_some_and(|target| target.is_same_node(Some(self.node.as_ref())));
+            if !on_old {
+                continue;
+            }
+            let callback = closure.as_ref().unchecked_ref();
+            let _ = target.remove_event_listener_with_callback_and_bool(event, callback, *capture);
+            let _ = new.add_event_listener_with_callback_and_bool(event, callback, *capture);
+            *target = new.clone();
+        }
+        *self.composing.borrow_mut() = Composing::default();
+        self.node = node;
+        self.placed.clear();
+        self.named = None;
+        self.keys = None;
+    }
+
     fn holds_focus(&self) -> bool {
         is_focused(&self.node)
+    }
+}
+
+/// A new editable element of the kind a field of `multiline` lines is.
+fn editable(document: &web_sys::Document, multiline: bool) -> Option<web_sys::HtmlElement> {
+    let tag = if multiline { "textarea" } else { "input" };
+    document.create_element(tag).ok()?.dyn_into().ok()
+}
+
+fn is_multiline(node: &web_sys::HtmlElement) -> bool {
+    node.dyn_ref::<web_sys::HtmlTextAreaElement>().is_some()
+}
+
+/// What the entry says about itself whatever field it stands for.
+fn prepare(node: &web_sys::HtmlElement) {
+    let multiline = is_multiline(node);
+    let attributes = [
+        ("style", Some(HIDDEN)),
+        (ENTRY_ATTRIBUTE, Some("")),
+        ("autocapitalize", Some("off")),
+        ("autocorrect", Some("off")),
+        ("autocomplete", Some("off")),
+        ("spellcheck", Some("false")),
+        // One row as far as the browser is concerned: the rows are Telar's to lay out, and what is composed into it runs along the caret's line.
+        ("rows", multiline.then_some("1")),
+        ("type", (!multiline).then_some("text")),
+        // Deliberately not `aria-hidden`: this is where the keyboard actually is, and a focused element a reader has been told to ignore is worse than one it reads.
+        ("tabindex", Some("-1")),
+    ];
+    for (name, value) in attributes {
+        crate::adopt::patch_attribute(node, name, value);
     }
 }
 
@@ -336,7 +547,7 @@ impl Drop for TextEntry {
 
 /// The edits a browser reports before making them, as the keys the field would have received.
 ///
-/// `beforeinput` rather than `keydown` because this is where the ones a key never named arrive: a deletion from a soft keyboard, a word replaced by autocorrect, a line dictated. The default is prevented in every case — the element must stay empty, or the next composition would start on top of the last one.
+/// `beforeinput` rather than `keydown` because this is where the ones a key never named arrive: a deletion from a soft keyboard, a line dictated, a paste. The default is prevented in every case — the element shows what the field shows, and only the field's next frame changes that.
 fn on_before_input(event: &web_sys::Event, composing: &RefCell<Composing>) {
     let Some(event) = event.dyn_ref::<web_sys::InputEvent>() else {
         return;
@@ -375,53 +586,70 @@ fn on_before_input(event: &web_sys::Event, composing: &RefCell<Composing>) {
             event.prevent_default();
             post_key(Key::Named(NamedKey::Delete));
         }
-        // Everything else is an edit this field has no key for, a composition's own deletion among them. Prevented rather than let through, which would put text in an element nobody is going to read.
+        // Everything else is an edit this field has no key for, a composition's own deletion among them. Prevented rather than let through, which would leave the element showing what the field does not.
         _ => event.prevent_default(),
     }
 }
 
-/// The empty it has to go back to, and each step of a composition the browser wrote into it.
+/// Each step of a composition the browser wrote into the element, and what an input method wrote there directly.
 ///
-/// `beforeinput` prevents every edit, so outside a composition nothing lands here — except what an input method wrote directly, which no `beforeinput` precedes on every browser, and the text a composition ended with, which some browsers write again once it is over. Clearing unconditionally costs nothing and means a composition can never start on top of the last one.
-fn on_input(event: &web_sys::Event, field: &Standing, composing: &RefCell<Composing>) {
-    let Some(target) = event
-        .target()
-        .and_then(|target| target.dyn_into::<web_sys::HtmlTextAreaElement>().ok())
-    else {
+/// `beforeinput` prevents every edit, so outside a composition nothing lands here — except what an input method wrote directly, which no `beforeinput` precedes on every browser, and the text a composition ended with, which some browsers write again once it is over. What replaced the selection is typed, unless it is that echo; anything else puts the element back to what the field shows.
+fn on_input(
+    event: &web_sys::Event,
+    field: &Standing,
+    shown: &RefCell<Shown>,
+    composing: &RefCell<Composing>,
+) {
+    let Some(target) = event.target().as_ref().and_then(Editable::of) else {
         return;
     };
     let in_composition = event
         .dyn_ref::<web_sys::InputEvent>()
         .is_some_and(web_sys::InputEvent::is_composing);
     if in_composition || composing.borrow().active {
-        let selection = target
-            .selection_start()
-            .ok()
-            .flatten()
-            .zip(target.selection_end().ok().flatten());
-        tell(
-            field,
-            composing,
-            Ime::preedit_utf16(target.value(), selection),
-        );
+        let around = composing.borrow().around;
+        tell(field, composing, composed(&target, around));
         return;
     }
+    let shown = shown.borrow().clone();
     let value = target.value();
-    if value.is_empty() {
+    if value == shown.text {
         return;
     }
     let echo = composing.borrow_mut().committed.take();
-    if echo.as_deref() != Some(value.as_str()) {
-        post_text(&value);
+    match shown.inserted_by(&value) {
+        Some(inserted) if echo.as_deref() == Some(inserted.as_str()) => {}
+        Some(inserted) if inserted.is_empty() => {
+            post_key(Key::Named(NamedKey::Delete));
+            return;
+        }
+        Some(inserted) => {
+            post_text(&inserted);
+            return;
+        }
+        None => {}
     }
-    target.set_value("");
+    target.show(&shown);
 }
 
-fn on_composition_start(field: &Standing, composing: &RefCell<Composing>) {
+/// The composition as the element holds it: what lies between the text it kept on either side, with the browser's selection inside it as the input method's cursor.
+fn composed(target: &Editable, (before, after): (usize, usize)) -> Ime {
+    let units: Vec<u16> = target.value().encode_utf16().collect();
+    let start = before.min(units.len());
+    let end = units.len().saturating_sub(after).max(start);
+    let inside = |at: u32| (at as usize).clamp(start, end) as u32 - start as u32;
+    let cursor = target
+        .selection()
+        .map(|(from, to, _)| (inside(from), inside(to)));
+    Ime::preedit_utf16(String::from_utf16_lossy(&units[start..end]), cursor)
+}
+
+fn on_composition_start(field: &Standing, shown: &RefCell<Shown>, composing: &RefCell<Composing>) {
     let mut composing = composing.borrow_mut();
     *composing = Composing {
         active: true,
         began_in: field.borrow().clone(),
+        around: shown.borrow().around_selection(),
         ..Composing::default()
     };
 }
@@ -437,7 +665,14 @@ fn on_composition_update(event: &web_sys::Event, field: &Standing, composing: &R
 }
 
 /// The composition's text, committed once, to the field it began in — unless the press that ended it took the keyboard from that field, which then types what it showed by itself, or the keyboard had already moved on.
-fn on_composition_end(event: &web_sys::Event, field: &Standing, composing: &RefCell<Composing>) {
+///
+/// The element is left showing the field with the text committed in place of its selection, which is what the field's next frame writes; a composition that was not the field's is taken back out.
+fn on_composition_end(
+    event: &web_sys::Event,
+    field: &Standing,
+    shown: &RefCell<Shown>,
+    composing: &RefCell<Composing>,
+) {
     let text = event
         .dyn_ref::<web_sys::CompositionEvent>()
         .and_then(web_sys::CompositionEvent::data)
@@ -451,11 +686,12 @@ fn on_composition_end(event: &web_sys::Event, field: &Standing, composing: &RefC
         };
         ours
     };
-    if let Some(target) = event
-        .target()
-        .and_then(|target| target.dyn_into::<web_sys::HtmlTextAreaElement>().ok())
-    {
-        target.set_value("");
+    if ours {
+        let committed = shown.borrow().replacing_selection(&text);
+        *shown.borrow_mut() = committed;
+    }
+    if let Some(target) = event.target().as_ref().and_then(Editable::of) {
+        target.show(&shown.borrow());
     }
     if ours {
         platform_core::post_event(Event::Ime(Ime::Commit(text)));

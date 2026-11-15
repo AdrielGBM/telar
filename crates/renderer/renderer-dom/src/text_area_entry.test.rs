@@ -71,7 +71,9 @@ fn the_entry_stands_on_the_row_a_wrapped_area_has_its_caret_on() {
     let caret = frame
         .iter()
         .find_map(|command| match command {
-            DrawCommand::PushElement { element } => element.caret,
+            DrawCommand::PushElement { element } => {
+                element.editing.as_ref().map(|editing| editing.caret())
+            }
             _ => None,
         })
         .expect("the focused area says where its caret is");
@@ -81,7 +83,7 @@ fn the_entry_stands_on_the_row_a_wrapped_area_has_its_caret_on() {
         "the caret is past the first row: {caret:?}"
     );
     let entry = host
-        .query_selector("textarea[data-telar-entry]")
+        .query_selector("[data-telar-entry]")
         .expect("a valid selector")
         .expect("the entry is in the host")
         .get_bounding_client_rect();

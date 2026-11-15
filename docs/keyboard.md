@@ -281,8 +281,11 @@ keyboard-focused control wears Telar's ring in the document (see [accessibility.
 written as boxes with a role, and checks that the page keeps neither, that the platform hands each to the
 box, and that its state attribute follows. `crates/renderer/renderer-dom/src/composition.test.rs` replays the
 composition events each browser sends and checks where the entry stands, that a composed word reaches the
-field as steps and one commit, and that it stays with the field it began in.
-`crates/renderer/renderer-dom/src/text_area_entry.test.rs` checks the entry stands on the row a wrapped area
+field as steps and one commit, that it stays with the field it began in, that what an input method writes
+straight into the entry is typed, and that the entry is an `input` or a `textarea` as the field is.
+`crates/renderer/renderer-dom/src/editor.test.rs` checks that the focused entry holds the field's text and
+selection after typing, is a password showing the mask for a secret field, and goes by the field's name or
+none. `crates/renderer/renderer-dom/src/text_area_entry.test.rs` checks the entry stands on the row a wrapped area
 has its caret on. `ui-core`'s `input.test.rs`, `text_area.test.rs`, `composition.test.rs` and
 `text_input.test.rs` cover what a field does with each `Ime` event and the caret it reports.
 

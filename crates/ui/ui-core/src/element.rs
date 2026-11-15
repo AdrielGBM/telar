@@ -2,7 +2,7 @@
 
 use geometry_core::Rect;
 use layout_core::NodeId;
-use renderer_core::{Element, ElementId, Semantics};
+use renderer_core::{Editing, Element, ElementId, Semantics};
 use std::sync::Arc;
 
 /// What a box is: what it was told, or what it does.
@@ -107,9 +107,9 @@ pub(crate) fn with_semantics(node: NodeId, semantics: Semantics) -> Arc<Element>
     Arc::new(element_of(node, semantics))
 }
 
-/// The element for a field, carrying where its caret is while it holds the keyboard. See [`renderer_core::Element::caret`].
-pub(crate) fn editing(node: NodeId, semantics: Semantics, caret: Option<Rect>) -> Arc<Element> {
-    Arc::new(element_of(node, semantics).with_caret(caret))
+/// The element for a field, carrying what it shows while it holds the keyboard. See [`renderer_core::Element::editing`].
+pub(crate) fn editing(node: NodeId, semantics: Semantics, editing: Editing) -> Arc<Element> {
+    Arc::new(element_of(node, semantics).editing(Some(editing)))
 }
 
 pub(crate) fn showing(

@@ -214,11 +214,11 @@ pub struct Reconciler {
     served: Option<crate::adopt::Served>,
 }
 
-/// The field that holds the keyboard this frame, and where its caret is in its own box.
+/// The field that holds the keyboard this frame, what it shows and where its caret is in its own box.
 struct EntryTarget {
     element: web_sys::Element,
     multiline: bool,
-    caret: Option<Rect>,
+    editing: Option<renderer_core::Editing>,
 }
 
 /// `caret`, in the coordinates of the field `element` the browser placed at `placed`, where it is on the host: scaled by whatever transform the box is drawn under, so a field inside a zoomed frame still has its caret where it is drawn. The box's own size is no measure of that, since a field's content is placed in it rather than sizing it.
@@ -605,7 +605,7 @@ impl Reconciler {
         if let Some(EntryTarget {
             element: node,
             multiline,
-            caret,
+            editing,
         }) = self.entry_target.take()
         {
             let host = self.host.get_bounding_client_rect();
@@ -616,13 +616,16 @@ impl Reconciler {
                 box_rect.width() as f32,
                 box_rect.height() as f32,
             );
-            let caret = caret.map(|caret| caret_on(&node, placed, caret));
+            let caret = editing
+                .as_ref()
+                .map(|editing| caret_on(&node, placed, editing.caret()));
             let label = node.get_attribute("aria-label");
             let keys = node.get_attribute(CONSUMED_KEYS_ATTRIBUTE);
             if let Some(entry) = self.entry.as_mut() {
                 let field = crate::entry::Field {
                     rect: placed,
                     caret,
+                    shows: editing.as_ref(),
                     multiline,
                     label: label.as_deref(),
                     keys: keys.as_deref(),
@@ -641,15 +644,16 @@ impl Reconciler {
         if claimed {
             return;
         }
-        if let Some(entry) = self.entry.as_mut() {
-            entry.release();
-        }
-        let inside = self
-            .document
-            .active_element()
-            .is_some_and(|active| self.host.contains(Some(active.as_ref())));
+        // The entry standing for no field is an empty editable element a reader would land in, so the keyboard goes back to the host before it is put away.
+        let inside = self.document.active_element().is_some_and(|active| {
+            self.host.contains(Some(active.as_ref()))
+                && !active.has_attribute(crate::entry::ENTRY_ATTRIBUTE)
+        });
         if ours && !inside {
             let _ = self.host.focus();
+        }
+        if let Some(entry) = self.entry.as_mut() {
+            entry.release();
         }
     }
 
@@ -676,7 +680,7 @@ impl Reconciler {
                     self.entry_target = Some(EntryTarget {
                         element: element.clone(),
                         multiline: node.role == Role::MultilineTextInput,
-                        caret: node.caret,
+                        editing: node.editing.clone(),
                     });
                 }
                 // The document has a focus of its own, and two that disagree is one interface the keyboard and the screen reader read differently.
