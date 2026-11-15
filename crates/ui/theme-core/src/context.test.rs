@@ -474,24 +474,128 @@ fn a_dark_mode_outside_the_pair_resolves_the_dark_defaults() {
     })
 }
 
+/// What a component draws in a token, and so the WCAG minimum the token owes what it is drawn on.
+#[derive(Clone, Copy, Debug)]
+enum Use {
+    Text,
+    ControlBoundary,
+}
+
+impl Use {
+    fn minimum(self) -> f32 {
+        match self {
+            Use::Text => geometry_core::BODY_TEXT_CONTRAST,
+            Use::ControlBoundary => NON_TEXT_CONTRAST,
+        }
+    }
+}
+
+/// Every pair the catalogue draws one token on another, by what the token is used for there. `surface_alt` is translucent and is always seen laid over `surface`.
+const PAIRS: &[(&str, &str, Use)] = &[
+    ("ink", "surface", Use::Text),
+    ("ink", "surface_alt", Use::Text),
+    ("muted", "surface", Use::Text),
+    ("muted", "surface_alt", Use::Text),
+    ("primary", "surface", Use::Text),
+    ("primary", "surface_alt", Use::Text),
+    ("success", "surface", Use::Text),
+    ("success", "surface_alt", Use::Text),
+    ("warning", "surface", Use::Text),
+    ("warning", "surface_alt", Use::Text),
+    ("info", "surface", Use::Text),
+    ("info", "surface_alt", Use::Text),
+    ("error", "surface", Use::Text),
+    ("error", "surface_alt", Use::Text),
+    ("on_primary", "primary", Use::Text),
+    ("on_error", "error", Use::Text),
+    ("inverse_ink", "inverse_surface", Use::Text),
+    ("control_border", "surface", Use::ControlBoundary),
+    ("control_border", "surface_alt", Use::ControlBoundary),
+    ("focus_ring", "surface", Use::ControlBoundary),
+];
+
+fn token(tokens: &dyn ThemeTokens, name: &str) -> Color {
+    let surface = tokens.surface();
+    let color = match name {
+        "ink" => tokens.ink(),
+        "muted" => tokens.muted(),
+        "primary" => tokens.primary(),
+        "on_primary" => tokens.on_primary(),
+        "success" => tokens.success(),
+        "warning" => tokens.warning(),
+        "info" => tokens.info(),
+        "error" => tokens.error(),
+        "on_error" => tokens.on_error(),
+        "inverse_ink" => tokens.inverse_ink(),
+        "inverse_surface" => tokens.inverse_surface(),
+        "control_border" => tokens.control_border(),
+        "focus_ring" => tokens.focus_ring(),
+        "surface" => surface,
+        "surface_alt" => tokens.surface_alt(),
+        other => panic!("no token `{other}` in the contrast table"),
+    };
+    color.over(surface)
+}
+
+fn contrast_shortfalls(tokens: &dyn ThemeTokens, mode: &str) -> Vec<String> {
+    PAIRS
+        .iter()
+        .filter_map(|&(drawn, on, used)| {
+            let ratio = token(tokens, drawn).contrast_ratio(token(tokens, on));
+            (ratio < used.minimum()).then(|| {
+                format!(
+                    "{mode}: {drawn} on {on} is {ratio:.2}:1, {used:?} needs {}:1",
+                    used.minimum()
+                )
+            })
+        })
+        .collect()
+}
+
 #[test]
-fn the_default_ink_on_each_filled_token_reads_at_4_5_to_1_in_either_mode() {
+fn every_default_token_reaches_its_wcag_minimum_on_what_the_catalogue_draws_it_on_in_either_mode() {
     crate::register_mode("light", || {});
     crate::register_mode("dark", || {});
     crate::follow_system("light", "dark");
 
+    let mut shortfalls = Vec::new();
     for (mode, color_scheme) in [("light", ColorScheme::Light), ("dark", ColorScheme::Dark)] {
         scheme(color_scheme);
-        let tokens = use_theme_tokens();
-        for (name, fill, ink) in [
-            ("primary", tokens.primary(), tokens.on_primary()),
-            ("error", tokens.error(), tokens.on_error()),
-        ] {
-            let ratio = fill.contrast_ratio(ink);
-            assert!(
-                ratio >= 4.5,
-                "on_{name} on {name} in {mode} mode reads at {ratio:.2}:1"
-            );
-        }
+        shortfalls.extend(contrast_shortfalls(&*use_theme_tokens(), mode));
     }
+    assert!(shortfalls.is_empty(), "{shortfalls:#?}");
+}
+
+#[derive(Clone)]
+struct Dusk;
+
+impl ThemeTokens for Dusk {
+    fn surface(&self) -> Color {
+        Color::rgba(0.16, 0.10, 0.24, 1.0)
+    }
+    fn surface_alt(&self) -> Color {
+        Color::rgba(0.9, 0.8, 1.0, 0.12)
+    }
+    fn muted(&self) -> Color {
+        Color::rgba(0.80, 0.72, 0.90, 1.0)
+    }
+}
+
+#[test]
+fn a_theme_that_names_its_surfaces_and_muted_gets_a_control_boundary_that_stands_out_from_them() {
+    set_theme(Dusk);
+    let tokens = use_theme_tokens();
+    let surface = tokens.surface();
+    let boundary = tokens.control_border();
+    for ground in [surface, tokens.surface_alt().over(surface)] {
+        let ratio = boundary.contrast_ratio(ground);
+        assert!(
+            ratio >= NON_TEXT_CONTRAST,
+            "{ratio:.2}:1 against {ground:?}"
+        );
+    }
+    assert!(
+        boundary.contrast_ratio(surface) < tokens.muted().contrast_ratio(surface),
+        "the boundary stops short of muted rather than taking it whole"
+    );
 }

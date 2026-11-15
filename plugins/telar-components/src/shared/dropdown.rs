@@ -437,9 +437,9 @@ fn trigger_rect_style(color: &Reactive<Color>, face: Shown, geometry: Geometry) 
             (false, false) => rect,
         };
     }
-    let accent = shared::resolve(color, shared::accent);
+    let frame = shared::resolve(color, shared::control_border);
     rect.with_fill(shared::surface())
-        .with_border(Border::uniform(accent, geometry.border_width))
+        .with_border(Border::uniform(frame, geometry.border_width))
 }
 
 fn panel_rect_style() -> RectStyle {

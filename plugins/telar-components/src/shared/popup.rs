@@ -76,7 +76,7 @@ pub(crate) fn popup(
     let scroll = match keyboard {
         Keyboard::Held { pointed } => scroll
             .control(Role::Menu)
-            .focus_style(|_r| RectStyle::default())
+            .focus_ring(|| None)
             .active_descendant(move || pointed()),
         Keyboard::Stays => scroll.presented(Role::ListBox),
     };

@@ -287,7 +287,8 @@ pressed, toggled or walked to without Shift; Ctrl+A (Command+A) chooses every ro
 A list or a table with no rows says so in a `status` beside the list box or the grid rather than inside it, which
 holds nothing but its rows: its `empty_label`, or the children it was given, else the localized "Nothing to show".
 The status is there all along, so a reader hears the message as the last row goes; the list keeps a row's height,
-the table its header, so the control still has a box to hold focus in.
+the table its header, so the control still has a box to hold focus in. With no row for the keyboard's cursor to rest
+on, a list or a tree wears the ring on its own box, and a table on its header, so the keyboard still shows where it is.
 
 A `data_table` column that is `resizable` holds a splitter on its header's inline-end edge, the catalogue's
 `resize_handle`, named for the column ("Resize Name column") and reading its width and its narrowest: a Tab stop
@@ -408,11 +409,20 @@ writes into it, over the field's selection, and it reaches the field as `Ime` st
 
 ## Contrast of the defaults
 
-The tokens a theme leaves to `ThemeTokens` meet WCAG AA (4.5:1) for the text the catalogue draws with them.
-`primary` and `on_primary` follow the light/dark mode, since one blue cannot carry white text and also read as
-text on a dark surface; `muted` is opaque and mode-following, so a caption or a hint reads on `surface` and on
-`surface_alt` over it; and a field's placeholder keeps 70% of the field's ink rather than half. A theme that
-overrides a token owns its contrast, and the audit below is the way to check it.
+The tokens a theme leaves to `ThemeTokens` meet WCAG AA (4.5:1) for the text the catalogue draws with them, and
+3:1 (WCAG 1.4.11) for what tells a control from the page. `primary` and `on_primary` follow the light/dark mode,
+since one blue cannot carry white text and also read as text on a dark surface; `muted` and the status colours
+(`success`, `warning`, `info`, `error`) are opaque and mode-following, so a caption, a hint, a code token or a
+counter over its limit reads on `surface` and on `surface_alt` over it; and a field's placeholder keeps 70% of the
+field's ink rather than half.
+
+`border` is the decorative hairline, a divider or a panel's edge, and may stay faint. What identifies a control at
+rest — a field's frame, an unchecked checkbox, an unselected radio or filter, an off switch's track, a select's
+trigger, an unchosen swatch — is drawn in `control_border`, which by default is the first step from `surface`
+toward `muted` that stands 3:1 from `surface` and from `surface_alt` over it, so a theme that sets its own surfaces
+and `muted` gets control boundaries that follow them. A theme that overrides a token owns its contrast; theme-core
+checks every pair the catalogue draws for the defaults, and the audit below is the way to check a theme of one's
+own.
 
 ## Audits
 

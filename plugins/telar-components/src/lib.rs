@@ -27,6 +27,9 @@ telar::library_previews!();
 #[path = "consistency.test.rs"]
 mod consistency_test;
 #[cfg(test)]
+#[path = "control_boundary.test.rs"]
+mod control_boundary_test;
+#[cfg(test)]
 #[path = "focus_ring.test.rs"]
 mod focus_ring_test;
 #[cfg(test)]
@@ -145,7 +148,7 @@ pub use workbench::tree_view::tree_view::{
 ///     .min_height(metrics::control_height(ControlSize::Regular))
 ///     .padding_horizontal(metrics::control_pad_x(ControlSize::Regular));
 /// let paint = |_r| RectStyle::default()
-///     .with_border(Border::uniform(border(), metrics::border_width()))
+///     .with_border(Border::uniform(use_theme_tokens().control_border(), metrics::border_width()))
 ///     .with_radius(BorderRadius::all(metrics::radius_control()));
 /// ```
 ///

@@ -6,9 +6,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Children, Clip, ClippedItem, Color, Key, KeyNav, KeyNavMove,
+    Accessible, AlignItems, Children, Clip, ClippedItem, Color, FocusRing, Key, KeyNav, KeyNavMove,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey, Props, Reactive,
-    RectStyle, RwSignal, StyledContainer, Text, TextWrap, box_item,
+    RwSignal, StyledContainer, Text, TextWrap, box_item,
     focus::{self, FocusId, Role, SetPosition},
     key_nav_apply, memo, signal,
 };
@@ -130,6 +130,7 @@ pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, Layo
     let selection = RowSelection::new(selection_mode, selected, selected_rows, on_selection_change);
     let rows = memo(move || Rows(Rc::new(items.get())));
     let row_height = ListTokens::current().row_height(size);
+    let ring_color = color.clone();
 
     let mut made: Option<Rc<List>> = None;
     let scroll = LayoutScrollArea::new_with(LayoutStyle::new().flex_grow(1.0), |viewport| {
@@ -160,10 +161,10 @@ pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, Layo
     })?;
     let list = made.expect("a scroll area builds its content before it returns");
 
-    let (seeding, keys, cursor) = (list.clone(), list.clone(), list.clone());
+    let (seeding, keys, cursor, ringed) = (list.clone(), list.clone(), list.clone(), list.clone());
     let scroll = scroll
         .control(Role::ListBox)
-        .focus_style(|_r| RectStyle::default())
+        .focus_ring(move || ringed.own_ring(&ring_color))
         .on_focus(move |now| {
             if now {
                 seeding.seed_cursor();
@@ -241,6 +242,13 @@ impl List {
 
     fn cursor_row(&self) -> Option<FocusId> {
         self.built.get(&self.cursor.get()?)
+    }
+
+    /// The ring the list wears itself while it holds the keyboard: the cursor's, while the cursor rests on no row listed, so an empty list still shows where the keyboard is.
+    fn own_ring(&self, color: &Reactive<Color>) -> Option<FocusRing> {
+        Self::index_of(&self.rows(), self.cursor.get())
+            .is_none()
+            .then(|| cursor_ring(color))
     }
 
     /// Puts the cursor where Tab arriving at the list should find it: on the first row chosen, or on the first row it can stop on.

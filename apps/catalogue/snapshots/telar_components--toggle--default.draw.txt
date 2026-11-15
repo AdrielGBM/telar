@@ -7,7 +7,7 @@ element group
         element switch
           rect 336,284 128x32
           element group
-            rect 336,290 36x20 fill=#00000024 radius=10
+            rect 336,290 36x20 fill=#00000024 border=1.5 border-color=#7e8398ff radius=10
             element group
               rect 338,292 16x16 fill=#171a2eff radius=8
             end

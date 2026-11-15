@@ -100,7 +100,7 @@ fn frame(style: &RectStyle) -> Color {
 /// The contrast the label has over the tag's fill laid on the surface.
 fn contrast(tree: &ComponentList) -> f32 {
     let fill = solid(first_painted(tree).fill);
-    ink(tree).contrast_ratio(shared::over(fill, shared::surface()))
+    ink(tree).contrast_ratio(fill.over(shared::surface()))
 }
 
 fn in_scheme(scheme: ColorScheme) {
@@ -539,8 +539,8 @@ fn an_unselected_filter_is_drawn_neutral_and_a_selected_one_in_its_tone() {
     assert_eq!(solid(off.fill).a, 0.0, "no fill while off");
     assert_eq!(
         frame(&off),
-        shared::border(),
-        "the theme's border while off"
+        shared::control_border(),
+        "the theme's control boundary while off"
     );
     let on = drawn(true);
     assert_eq!(solid(on.fill), telar::use_theme_tokens().success());
@@ -661,15 +661,15 @@ fn ink_and_grounds(props: TagProps) -> (Color, Vec<Color>) {
     let item = tag(props).unwrap();
     in_a_row_node(item.layout_node());
     let mut tree = ComponentList::new(item);
-    let rest = shared::over(solid(first_painted(&tree).fill), shared::surface());
+    let rest = solid(first_painted(&tree).fill).over(shared::surface());
     let ink = ink(&tree);
     let mut grounds = vec![rest];
     if let Some(part) = crate::test_support::drawn(Role::Button).first().copied() {
         let (x, y) = centre(part);
         tree.on_event(&moved(x, y));
-        grounds.push(shared::over(solid(painted_at(&tree, part).fill), rest));
+        grounds.push(solid(painted_at(&tree, part).fill).over(rest));
         tree.on_event(&press(x, y));
-        grounds.push(shared::over(solid(painted_at(&tree, part).fill), rest));
+        grounds.push(solid(painted_at(&tree, part).fill).over(rest));
     }
     (ink, grounds)
 }

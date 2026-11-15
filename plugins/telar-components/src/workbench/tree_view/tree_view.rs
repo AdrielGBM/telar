@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Clip, ClippedItem, Color, Container, Direction, JustifyContent, Key,
+    Accessible, AlignItems, Clip, ClippedItem, Color, Container, Direction, FocusRing, JustifyContent, Key,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey, PointerButton, Props,
     Reactive, Rect, RectStyle, RwSignal, StyledContainer, Text, TextWrap, box_item,
     current_direction,
@@ -212,6 +212,7 @@ pub fn tree_view(props: TreeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
         expanded.with(|open| Flat::of(&items, open))
     });
     let row_height = TreeViewTokens::current().row_height(size);
+    let ring_color = color.clone();
 
     let mut made: Option<Rc<Tree>> = None;
     let scroll = LayoutScrollArea::new_with(fill(), |viewport| {
@@ -256,9 +257,10 @@ pub fn tree_view(props: TreeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
     let seeding = tree.clone();
     let keys = tree.clone();
     let cursor = tree.clone();
+    let ringed = tree.clone();
     let scroll = scroll
         .control(Role::Tree)
-        .focus_style(|_r| RectStyle::default())
+        .focus_ring(move || ringed.own_ring(&ring_color))
         .on_focus(move |now| {
             if now {
                 seeding.seed_cursor();
@@ -378,6 +380,13 @@ impl Tree {
 
     fn cursor_row(&self) -> Option<FocusId> {
         self.built.get(&self.cursor.get()?)
+    }
+
+    /// The ring the tree wears itself while it holds the keyboard: the cursor's, while the cursor rests on no row showing, so an empty tree still shows where the keyboard is.
+    fn own_ring(&self, color: &Reactive<Color>) -> Option<FocusRing> {
+        Self::index_of(&self.rows(), self.cursor.get())
+            .is_none()
+            .then(|| cursor_ring(color))
     }
 
     /// Puts the cursor where Tab arriving at the tree should find it: on the selection, or on the first row.

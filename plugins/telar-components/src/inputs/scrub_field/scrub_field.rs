@@ -4,7 +4,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, BorderRadius, Container, Cursor, DragAxis, Input, Key, LayoutError, LayoutItem,
+    AlignItems, Border, BorderRadius, Container, Cursor, DragAxis, Input, Key, LayoutError, LayoutItem,
     LayoutStyle, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
     SurfaceAmendment, Text, Transaction, amend_surface, box_item, children, effect,
     focus::{self, Role},
@@ -200,6 +200,10 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
         move |_| {
             let rect = RectStyle::default()
                 .with_fill(shared::surface_alt())
+                .with_border(Border::uniform(
+                    shared::control_border(),
+                    shared::border_width(),
+                ))
                 .with_radius(BorderRadius::all(ScrubFieldTokens::current().radius()));
             amend_surface(rect, &style)
         },

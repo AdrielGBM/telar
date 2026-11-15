@@ -319,12 +319,12 @@ impl telar::ThemeTokens for Hairline {
 }
 
 #[test]
-fn the_frame_is_the_theme_s_hairline() {
+fn the_frame_is_the_theme_s_control_boundary_at_its_hairline_width() {
     telar::set_theme(Hairline(3.0));
     let tree = mounted(TextFieldProps::props().build());
     assert_eq!(
         crate::test_support::first_painted(&tree).border,
-        Some(Border::uniform(telar::use_theme_tokens().border(), 3.0))
+        Some(Border::uniform(telar::use_theme_tokens().control_border(), 3.0))
     );
 }
 

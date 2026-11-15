@@ -224,7 +224,7 @@ fn contrast(
         let Some(backdrop) = walk.backdrop(x, y, run.over, behind(x, y)) else {
             continue;
         };
-        let ink = over(ink, backdrop);
+        let ink = ink.over(backdrop);
         let ratio = ink.contrast_ratio(backdrop);
         let large = run.size >= 24.0 || (run.size >= 18.66 && run.weight >= 700);
         let needed = if large {
@@ -601,20 +601,9 @@ impl Walk {
             between
                 .into_iter()
                 .rev()
-                .fold(base, |under, top| over(top, under)),
+                .fold(base, |under, top| top.over(under)),
         )
     }
-}
-
-/// `top` painted over the opaque `under`.
-fn over(top: Color, under: Color) -> Color {
-    let a = top.a.clamp(0.0, 1.0);
-    Color::rgba(
-        top.r * a + under.r * (1.0 - a),
-        top.g * a + under.g * (1.0 - a),
-        top.b * a + under.b * (1.0 - a),
-        1.0,
-    )
 }
 
 fn scale_of(matrix: [f32; 6]) -> f32 {

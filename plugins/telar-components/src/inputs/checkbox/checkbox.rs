@@ -128,7 +128,7 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
                 let accent = shared::resolve(&color, shared::accent);
                 (accent, accent)
             } else {
-                (shared::surface(), shared::border())
+                (shared::surface(), shared::control_border())
             };
             let rest = RectStyle::default()
                 .with_fill(fill)

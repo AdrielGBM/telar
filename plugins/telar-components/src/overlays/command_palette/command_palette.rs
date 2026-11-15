@@ -520,7 +520,7 @@ fn build_open_palette(
         let dismiss = dismiss.clone();
         scroll
             .control(Role::ListBox)
-            .focus_style(|_r| RectStyle::default())
+            .focus_ring(|| None)
             .on_focused_key(move |key: &Key| keys.on_key(key, telar::modifiers(), &*dismiss))
             .active_descendant(move || cursor.cursor_row())
             .a11y_label(|| strings::text(strings::COMMANDS))

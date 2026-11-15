@@ -49,17 +49,6 @@ pub fn readable_on(color: Color, background: Color) -> Color {
 }
 const READABLE_STEPS: u8 = 10;
 
-/// `top` laid over the opaque `bottom`: what a translucent fill looks like on the surface under it, which is what its label has to read against.
-pub(crate) fn over(top: Color, bottom: Color) -> Color {
-    let blend = |t: f32, b: f32| t * top.a + b * (1.0 - top.a);
-    Color {
-        r: blend(top.r, bottom.r),
-        g: blend(top.g, bottom.g),
-        b: blend(top.b, bottom.b),
-        a: bottom.a,
-    }
-}
-
 /// What a knob, a thumb or the ring round one is drawn in over `fill`: the theme's `thumb` wherever it stands out from `fill`, else the ink that reads on `fill`, so a light primary or a light track never swallows the knob. A toggle's knob, a slider's thumb, a handle and a colour picker's thumbs all take it.
 pub fn thumb_on(fill: Color) -> Color {
     let thumb = use_theme_tokens().thumb();
@@ -81,9 +70,13 @@ pub(crate) fn surface() -> Color {
 pub(crate) fn surface_alt() -> Color {
     use_theme_tokens().surface_alt()
 }
-/// The hairline border and divider tone.
+/// The decorative hairline: a divider, a panel's or a popup's edge.
 pub(crate) fn border() -> Color {
     use_theme_tokens().border()
+}
+/// The boundary that tells a control from what it sits on: a field's frame, an unchecked box, an off switch.
+pub(crate) fn control_border() -> Color {
+    use_theme_tokens().control_border()
 }
 pub(crate) fn accent() -> Color {
     use_theme_tokens().primary()

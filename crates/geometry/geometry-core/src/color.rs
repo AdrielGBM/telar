@@ -120,6 +120,23 @@ impl Color {
         )
     }
 
+    /// `self` laid over `under` the way a painter composites a translucent fill on what is behind it (source-over, in sRGB): what a wash, a translucent surface or a faded label looks like where it is drawn, and so what contrast is judged against.
+    pub fn over(self, under: Color) -> Self {
+        let top = self.a.clamp(0.0, 1.0);
+        let below = under.a.clamp(0.0, 1.0) * (1.0 - top);
+        let a = top + below;
+        if a <= 0.0 {
+            return Self::TRANSPARENT;
+        }
+        let blend = |t: f32, u: f32| (t * top + u * below) / a;
+        Self::rgba(
+            blend(self.r, under.r),
+            blend(self.g, under.g),
+            blend(self.b, under.b),
+            a,
+        )
+    }
+
     pub fn darken(self, factor: f32) -> Self {
         Self {
             r: (self.r * (1.0 - factor)).max(0.0),

@@ -360,7 +360,7 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     let (seeding, keys, cursor) = (table.clone(), table.clone(), table.clone());
     let scroll = scroll
         .control(Role::Grid)
-        .focus_style(|_r| RectStyle::default())
+        .focus_ring(|| None)
         .on_focus(move |now| {
             if now {
                 seeding.seed_cursor();

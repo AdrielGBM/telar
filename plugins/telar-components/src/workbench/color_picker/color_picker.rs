@@ -479,7 +479,7 @@ fn alpha_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, Layo
                     &[(0.0, opaque.with_alpha(0.0)), (1.0, opaque)],
                 ))
             }),
-            under: Rc::new(move || shared::over(under.value.get(), shared::surface())),
+            under: Rc::new(move || under.value.get().over(shared::surface())),
             size: picker.size,
             checkered: true,
             name: strings::OPACITY,
@@ -584,7 +584,7 @@ fn checker(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let canvas = Canvas::new(LayoutStyle::new().absolute_fill(), move |rect| {
         let light = shared::surface();
-        let dark = shared::over(shared::border(), light);
+        let dark = shared::border().over(light);
         let cell = checker_cell(size);
         let columns = (rect.width / cell).ceil() as usize;
         let rows = (rect.height / cell).ceil() as usize;

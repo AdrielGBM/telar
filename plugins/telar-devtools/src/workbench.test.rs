@@ -17,16 +17,6 @@ fn luminance(c: Color) -> f32 {
     0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b)
 }
 
-fn over(top: Color, base: Color) -> Color {
-    let mix = |t: f32, b: f32| t * top.a + b * (1.0 - top.a);
-    Color::rgba(
-        mix(top.r, base.r),
-        mix(top.g, base.g),
-        mix(top.b, base.b),
-        1.0,
-    )
-}
-
 fn contrast(a: Color, b: Color) -> f32 {
     let (la, lb) = (luminance(a), luminance(b));
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
@@ -131,7 +121,7 @@ fn a_selected_row_keeps_its_text_readable() {
     for (name, theme) in variants() {
         let wb = &theme.workbench;
         for base in [wb.panel_background, wb.sidebar_background] {
-            let row = over(wb.selection, base);
+            let row = wb.selection.over(base);
             assert_aa(name, "ink on selection", theme.ink, row);
             assert_aa(name, "accent on selection", theme.primary, row);
             assert_aa(name, "muted on selection", theme.muted, row);

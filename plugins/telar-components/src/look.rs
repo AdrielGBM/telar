@@ -48,7 +48,7 @@ impl Look {
 
     pub fn frame(&self, around: Color) -> Color {
         match (self.lit(), self.variant) {
-            (false, _) => shared::border(),
+            (false, _) => shared::control_border(),
             (true, Variant::Outline) => self.hue(around),
             (true, _) => Color::TRANSPARENT,
         }
@@ -87,7 +87,7 @@ impl Look {
     /// A solid fill's ink is picked for the fill alone, since its states step away from that ink. Any other ink is held to every state the component can show, because a wash only deepens the colour the label is drawn in, against the theme's surface it is assumed to sit on, except the ink of the place itself: that one already reads on whatever the place is, which may be no theme surface at all.
     pub fn ink(&self, around: Color) -> Color {
         let surface = shared::surface();
-        let rest = shared::over(self.fill(around), surface);
+        let rest = self.fill(around).over(surface);
         let wanted = match (self.lit(), self.variant, &self.tone) {
             (true, Variant::Solid, _) => {
                 return shared::readable_on(shared::ink_on(rest), rest);
@@ -99,14 +99,12 @@ impl Look {
         let mut under = vec![rest];
         if self.interactive {
             under.extend([
-                shared::over(self.state(around, false), rest),
-                shared::over(self.state(around, true), rest),
+                self.state(around, false).over(rest),
+                self.state(around, true).over(rest),
             ]);
         }
-        under
-            .into_iter()
-            .fold(shared::over(wanted, surface), |ink, page| {
-                shared::readable_on(ink, page)
-            })
+        under.into_iter().fold(wanted.over(surface), |ink, page| {
+            shared::readable_on(ink, page)
+        })
     }
 }

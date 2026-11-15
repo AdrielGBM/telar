@@ -176,7 +176,7 @@ element group
               end
             end
             element group
-              rect 288,381 224x32 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+              rect 288,381 224x32 fill=#12141cff border=1 border-color=#63697aff radius=10
               element group
                 matrix 1,0,0,1,300,381
                   clip 0,0 200x32
@@ -189,13 +189,13 @@ element group
               element radio
                 rect 288,421 24x24
                 element group
-                  rect 288,421 20x20 fill=#7394ffff border=1 border-color=#3d4252ff radius=10
+                  rect 288,421 20x20 fill=#7394ffff border=1 border-color=#63697aff radius=10
                 end
               end
               element radio
                 rect 312,421 24x24
                 element group
-                  rect 312,421 20x20 fill=#6badfaff border=1 border-color=#3d4252ff radius=10
+                  rect 312,421 20x20 fill=#6badfaff border=1 border-color=#63697aff radius=10
                 end
               end
               element radio
@@ -207,19 +207,19 @@ element group
               element radio
                 rect 360,421 24x24
                 element group
-                  rect 360,421 20x20 fill=#f5b847ff border=1 border-color=#3d4252ff radius=10
+                  rect 360,421 20x20 fill=#f5b847ff border=1 border-color=#63697aff radius=10
                 end
               end
               element radio
                 rect 384,421 24x24
                 element group
-                  rect 384,421 20x20 fill=#f06b70ff border=1 border-color=#3d4252ff radius=10
+                  rect 384,421 20x20 fill=#f06b70ff border=1 border-color=#63697aff radius=10
                 end
               end
               element radio
                 rect 408,421 24x24
                 element group
-                  rect 408,421 20x20 fill=#99a1b8ff border=1 border-color=#3d4252ff radius=10
+                  rect 408,421 20x20 fill=#99a1b8ff border=1 border-color=#63697aff radius=10
                 end
               end
             end

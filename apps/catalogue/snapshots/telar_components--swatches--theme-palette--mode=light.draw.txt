@@ -8,19 +8,19 @@ element group
           element radio
             rect 340,288 24x24
             element group
-              rect 340,288 20x20 fill=#4261edff border=1 border-color=#dbdeedff radius=10
+              rect 340,288 20x20 fill=#4261edff border=1 border-color=#7e8398ff radius=10
             end
           end
           element radio
             rect 364,288 24x24
             element group
-              rect 364,288 20x20 fill=#3d8ce6ff border=1 border-color=#dbdeedff radius=10
+              rect 364,288 20x20 fill=#3d8ce6ff border=1 border-color=#7e8398ff radius=10
             end
           end
           element radio
             rect 388,288 24x24
             element group
-              rect 388,288 20x20 fill=#2eb073ff border=1 border-color=#dbdeedff radius=10
+              rect 388,288 20x20 fill=#2eb073ff border=1 border-color=#7e8398ff radius=10
             end
           end
           element radio
@@ -32,7 +32,7 @@ element group
           element radio
             rect 436,288 24x24
             element group
-              rect 436,288 20x20 fill=#cc3342ff border=1 border-color=#dbdeedff radius=10
+              rect 436,288 20x20 fill=#cc3342ff border=1 border-color=#7e8398ff radius=10
             end
           end
         end

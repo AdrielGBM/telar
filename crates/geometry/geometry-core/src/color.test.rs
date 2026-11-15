@@ -252,6 +252,27 @@ fn contrast_ratio_extremes_and_identity() {
 }
 
 #[test]
+fn a_translucent_colour_over_an_opaque_one_is_the_opaque_blend() {
+    let washed = Color::rgba(0.0, 0.0, 0.0, 0.25).over(Color::WHITE);
+    assert_rgb(washed, 0.75, 0.75, 0.75, 1e-6);
+    assert_eq!(washed.a, 1.0);
+}
+
+#[test]
+fn an_opaque_colour_over_anything_is_itself_and_a_clear_one_shows_what_is_under() {
+    assert_eq!(Color::RED.over(Color::BLUE), Color::RED);
+    assert_eq!(Color::TRANSPARENT.over(Color::BLUE), Color::BLUE);
+}
+
+#[test]
+fn two_translucent_colours_compose_to_their_combined_coverage() {
+    let both = Color::rgba(1.0, 0.0, 0.0, 0.5).over(Color::rgba(0.0, 0.0, 1.0, 0.5));
+    assert!((both.a - 0.75).abs() < 1e-6, "{both:?}");
+    assert_rgb(both, 2.0 / 3.0, 0.0, 1.0 / 3.0, 1e-6);
+    assert_rgb(both.over(Color::WHITE), 0.75, 0.25, 0.5, 1e-6);
+}
+
+#[test]
 fn most_readable_picks_the_higher_contrast_foreground() {
     let ink = Color::from_rgb_u8(20, 20, 25);
     let paper = Color::from_rgb_u8(240, 240, 245);

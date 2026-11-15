@@ -133,7 +133,7 @@ fn the_knob_stands_out_from_its_track_in_either_scheme_and_on_a_light_primary() 
             }
             for on in [false, true] {
                 let ((_, track), (_, knob)) = track_and_knob(|| switch(on));
-                let under = crate::shared::over(solid(&track), crate::shared::surface());
+                let under = solid(&track).over(crate::shared::surface());
                 let ratio = under.contrast_ratio(solid(&knob));
                 assert!(
                     ratio >= 3.0,

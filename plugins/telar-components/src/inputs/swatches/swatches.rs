@@ -184,7 +184,7 @@ fn swatch_rect(color: Color, chosen: bool) -> RectStyle {
             SwatchesTokens::current().ring(),
         )
     } else {
-        Border::uniform(shared::border(), shared::border_width())
+        Border::uniform(shared::control_border(), shared::border_width())
     };
     RectStyle::default().with_fill(color).with_border(border)
 }

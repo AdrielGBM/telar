@@ -178,7 +178,7 @@ fn label_color(variant: Variant, tone: Option<Color>) -> Option<Color> {
         Variant::Outline => Some(tone.unwrap_or_else(shared::accent)),
         Variant::Soft => {
             let color = tone.unwrap_or_else(shared::accent);
-            let fill = shared::over(washed(color, shared::pressed_wash()), shared::surface());
+            let fill = washed(color, shared::pressed_wash()).over(shared::surface());
             Some(shared::readable_on(color, fill))
         }
         Variant::Ghost => tone,

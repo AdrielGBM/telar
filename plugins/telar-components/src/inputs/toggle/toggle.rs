@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, BorderRadius, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive,
+    AlignItems, Border, BorderRadius, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive,
     RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item,
     box_transform, children, focus::Role, signal,
 };
@@ -97,12 +97,27 @@ fn track_box(SwitchSize { knob, inset }: SwitchSize) -> LayoutStyle {
         .align_items(AlignItems::CENTER)
 }
 
-/// The track's fill: the accent while on, else the strongest of the theme's washes, so an off switch still reads as a track against the surface it sits on.
+/// The track's fill: the accent while on, else the strongest of the theme's washes.
 fn track_fill(on: bool, color: &Reactive<Color>) -> Color {
     if on {
         shared::resolve(color, shared::accent)
     } else {
         shared::pressed_wash()
+    }
+}
+
+/// The track's paint: an off track is framed in the theme's `control_border`, since a wash alone does not tell it from the surface it sits on.
+fn track_style(on: bool, color: &Reactive<Color>, radius: BorderRadius) -> RectStyle {
+    let rest = RectStyle::default()
+        .with_fill(track_fill(on, color))
+        .with_radius(radius);
+    if on {
+        rest
+    } else {
+        rest.with_border(Border::uniform(
+            shared::control_border(),
+            shared::border_width_strong(),
+        ))
     }
 }
 
@@ -119,7 +134,7 @@ pub(crate) fn switch_track(
     let knob = StyledContainer::new(
         knob_box(size()),
         move |r| {
-            let track = shared::over(track_fill(knob_on(), &knob_color), shared::surface());
+            let track = track_fill(knob_on(), &knob_color).over(shared::surface());
             RectStyle::default()
                 .with_fill(shared::thumb_on(track))
                 .with_radius(ToggleTokens::current().knob_radius(r, size().inset))
@@ -135,9 +150,7 @@ pub(crate) fn switch_track(
     Ok(StyledContainer::new(
         track_box(size()),
         move |r| {
-            let rest = RectStyle::default()
-                .with_fill(track_fill(on(), &color))
-                .with_radius(ToggleTokens::current().track_radius(r));
+            let rest = track_style(on(), &color, ToggleTokens::current().track_radius(r));
             amend_surface(rest, &style)
         },
         children![knob],

@@ -82,13 +82,6 @@ fn in_mode(scheme: ColorScheme) {
     set_mode(id);
 }
 
-fn over(paint: Option<Color>, backdrop: Color) -> Color {
-    match paint {
-        Some(paint) => backdrop.mix(paint.with_alpha(1.0), paint.a),
-        None => backdrop,
-    }
-}
-
 /// What the keyboard reaching the first control changes on screen: the paint of the control that wears the ring, and every band of the ring.
 fn ring_on_first_control(probe: &Probe) -> (Option<Color>, Vec<Color>) {
     fresh_layout_runtime();
@@ -122,7 +115,7 @@ fn one_band_of_the_ring_stands_out_from_the_control_s_fill_and_from_the_surface_
                 probe.name
             );
             let surface = use_theme_tokens().surface();
-            let fill = over(fill, surface);
+            let fill = fill.map_or(surface, |fill| fill.over(surface));
             for (what, against) in [("its fill", fill), ("the surface", surface)] {
                 let best = bands
                     .iter()

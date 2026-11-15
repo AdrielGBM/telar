@@ -311,7 +311,7 @@ fn bubble_ink(color: &Reactive<Color>) -> Color {
 /// The ink of a line that ranks below the name: [`bubble_ink`] at `strength` over the bubble, taken back toward full strength only as far as it has to go to read on the bubble at 4.5:1. A shortcut faded to a fixed strength fell under that on the dark theme's light bubble.
 fn line_ink(color: &Reactive<Color>, strength: f32) -> Color {
     let fill = bubble_fill(color);
-    let faded = shared::over(bubble_ink(color).with_alpha(strength), fill);
+    let faded = bubble_ink(color).with_alpha(strength).over(fill);
     shared::readable_on(faded, fill)
 }
 

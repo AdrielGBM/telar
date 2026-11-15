@@ -466,7 +466,7 @@ fn in_scheme(scheme: telar::ColorScheme) {
 fn ring_as_painted(element: &web_sys::Element, surface: Color) -> (Color, Vec<Color>) {
     let fill = colours_in(&computed(element, "background-color"))
         .first()
-        .map_or(surface, |fill| surface.mix(fill.with_alpha(1.0), fill.a));
+        .map_or(surface, |fill| fill.over(surface));
     let inside = element.query_selector_all("*").expect("a valid selector");
     let bands = std::iter::once(element.clone())
         .chain((0..inside.length()).filter_map(|i| inside.item(i)?.dyn_into().ok()))

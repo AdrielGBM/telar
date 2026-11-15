@@ -6,7 +6,7 @@ element group
       element group
         element group
           element combobox
-            rect 309,284 182x32 fill=#1c1f29ff border=1 border-color=#7394ffff radius=10
+            rect 309,284 182x32 fill=#1c1f29ff border=1 border-color=#63697aff radius=10
             element group
               clip 321,-1000000 38x2000000
                 matrix 1,0,0,1,321,284

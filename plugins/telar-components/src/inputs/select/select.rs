@@ -93,7 +93,7 @@ pub struct SelectProps {
     /// How large the field and its list are drawn: the field's height, padding, value and caret, and the list's padding, width and offset, as [`ControlSize`] works them out. The choices are sized where they are written.
     #[props(default)]
     pub size: ControlSize,
-    /// The colour the trigger is framed in and the rows' washes are tinted with. `Color::TRANSPARENT` (the default) frames it in the theme accent and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
+    /// The colour the trigger is framed in and the rows' washes are tinted with. `Color::TRANSPARENT` (the default) frames it in the theme's `control_border` and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
     /// Fired with the picked index whenever a selection is made.

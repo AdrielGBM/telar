@@ -1192,3 +1192,44 @@ fn a_scroll_area_in_a_bounded_row_shrinks_and_scrolls_without_a_zero_minimum() {
         assert_eq!(rect.width, 200.0);
     }
 }
+
+/// The border colours a control scroll area draws while the keyboard is on it, once its rule answers `ring`.
+fn ring_bands(ring: Option<crate::FocusRing>) -> Vec<renderer_core::Paint> {
+    reset_layout_runtime();
+    let content = Canvas::new(LayoutStyle::new().width(100.0).height(40.0), |_| {
+        RenderNode::Empty
+    })
+    .unwrap();
+    let scroll = LayoutScrollArea::new(
+        LayoutStyle::new().width(100.0).height(40.0),
+        Box::new(content),
+    )
+    .unwrap()
+    .control(crate::focus::Role::ListBox)
+    .focus_ring(move || ring);
+    compute_layout(
+        scroll.layout_node(),
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(40.0),
+    )
+    .unwrap();
+    crate::focus::request(scroll.focus_id().expect("a control holds focus"));
+    let tree = crate::ComponentList::new(crate::box_item(scroll));
+    tree.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DrawCommand::Rect { style, .. } => style.border.map(|border| border.paint),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_control_scroll_area_wears_the_ring_its_rule_answers_and_none_when_it_answers_none() {
+    let ring = crate::focus_ring();
+    assert_eq!(
+        ring_bands(Some(ring)),
+        [ring.band.into(), ring.hairline.into()]
+    );
+    assert!(ring_bands(None).is_empty());
+}

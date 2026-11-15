@@ -1027,3 +1027,39 @@ fn the_rows_stand_at_the_tree_s_size() {
         }
     }
 }
+
+/// The names of the nodes framed in the keyboard's ring.
+fn ringed(tree: &Mounted) -> Vec<String> {
+    let band = telar::Paint::Solid(telar::focus_ring().band);
+    let commands = tree.tree.commands();
+    let framed: Vec<Rect> = commands
+        .iter()
+        .filter_map(|command| match command {
+            DrawCommand::Rect { rect, style } => style
+                .border
+                .is_some_and(|border| border.paint == band)
+                .then_some(*rect),
+            _ => None,
+        })
+        .collect();
+    telar::inspect::snapshot(&commands)
+        .into_iter()
+        .filter(|node| node.id.is_some() && framed.contains(&node.rect))
+        .map(|node| match node.role {
+            Role::Tree => "the tree".to_string(),
+            _ => node.name,
+        })
+        .collect()
+}
+
+#[test]
+fn an_empty_tree_wears_the_ring_itself_while_the_keyboard_is_on_it() {
+    let tree = Mounted::focused(Vec::new());
+    assert_eq!(ringed(&tree), ["the tree"]);
+}
+
+#[test]
+fn a_tree_with_rows_rings_the_cursor_s_row_and_not_itself() {
+    let tree = Mounted::focused(catalogue());
+    assert_eq!(ringed(&tree), [pointed(&tree).expect("a cursor row")]);
+}

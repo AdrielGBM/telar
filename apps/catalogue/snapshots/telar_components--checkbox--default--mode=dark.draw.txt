@@ -7,7 +7,7 @@ element group
         element checkbox
           rect 324,284 152x32
           element group
-            rect 324,292 16x16 fill=#1c1f29ff border=1.5 border-color=#3d4252ff radius=6
+            rect 324,292 16x16 fill=#1c1f29ff border=1.5 border-color=#63697aff radius=6
             element group
               rect 328,296 8x8 fill=#00000000 radius=2
             end

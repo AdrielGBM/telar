@@ -118,7 +118,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             let stroke = if ring_selected.get() == Some(value) {
                 shared::resolve(&color, shared::accent)
             } else {
-                shared::border()
+                shared::control_border()
             };
             let rest = RectStyle::default()
                 .with_fill(shared::surface())

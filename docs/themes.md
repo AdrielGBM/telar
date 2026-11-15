@@ -78,6 +78,7 @@ defaults to a primitive or a convention, so a theme that names none of them stil
 | `radius_dialog` | modals, the command palette, drawers | `radius × 3` |
 | `radius_item` | rows, options and items inside a surface; key caps and tags | `radius_sm` |
 | `border_width`, `border_width_strong` | a hairline; a frame that is the control's shape | `1`, `1.5` |
+| `control_border` | the boundary that tells a control from the page: a field's frame, an unchecked checkbox, an unselected radio, an off switch's track, a select's trigger, an unchosen swatch or filter | the first step from `surface` toward `muted` that stands 3:1 from `surface` and from `surface_alt` over it |
 | `focus_ring`, `focus_ring_inner`, `focus_ring_width`, `focus_ring_offset` | the keyboard's ring and a list's cursor: its outer band, the hairline inside it, the band's width (the hairline is half), how far inside the edge it stands | `primary`, `surface`, `2`, `0` |
 | `scrollbar_width`, `scrollbar_inset`, `scrollbar_radius` | the lane a scroll area's bar runs in; how much narrower the thumb is than its lane; the corner of its thumb | `8`, `2`, fully rounded (`(width - inset) / 2`) |
 | `highlight_low/med/high` | the wash of hover, of selected or held open, of pressed | neutral washes |
@@ -119,7 +120,9 @@ text's.
 `pressed_wash`, `hovered_fill`/`pressed_fill`, `thumb_on`, `strong_weight`, `control_text`, `ink_on` and
 `mark`. Each length takes the `ControlSize` it is for, and the heights and `measure` are in whole pixels. `focus_ring` is the
 theme's `FocusRing`, which a control of an application's own draws on the item its keyboard cursor rests on with
-`StyledContainer::keyboard_cursor`, the way a list, a tree and a toolbar do. Every single-line control is
+`StyledContainer::keyboard_cursor`, the way a list, a tree and a toolbar do; a list or a tree that scrolls wears the
+same ring itself with `LayoutScrollArea::focus_ring` while it has no row for the cursor to rest on. A control of an
+application's own draws its boundary at rest in the theme's `control_border`. Every single-line control is
 `control_height` tall and centres its line in it, so a button, a field, a select, a tab and a stepper stand level
 in one row; every row of a list, a menu, a select, a tree or a context menu is `row_height` tall; and a panel that drops
 from a control — a menu's, a select's — stands `popup_offset` away from it, on whichever side it opens.
@@ -129,7 +132,7 @@ The rules every catalogue component follows, and a control of an application's o
 | Rule | What it says |
 | --- | --- |
 | Widths | A box not sized by what it holds — a field, a slider, a trigger and its list, a tooltip, a dialog, a notice — defaults to `measure(ems)`: `ems` of the document's text at the component's size, so it keeps as many characters to a line at any text size. A token width wins, at the regular size and scaled with the component's. |
-| Frames | A frame that is the control's shape — a checkbox's box, a radio's ring, an outline button, the ring round a chosen swatch or a thumb — is `border_width_strong`; a selection control draws its frame in `border` until it is on and in its colour once it is. A passive hairline — a field's frame, a chip, a key cap, a panel's edge, a divider — is `border_width` in `border`. |
+| Frames | A frame that is the control's shape — a checkbox's box, a radio's ring, an off switch's track, an outline button, the ring round a chosen swatch or a thumb — is `border_width_strong`; the frame of a field — a text field's, a select's, a scrub field's — and of an unchosen swatch is `border_width`. Whatever tells a control from the page while it is at rest — a field's frame, an unchecked box, an unselected radio or filter, an off switch, an unchosen swatch — is drawn in `control_border`, which WCAG holds to 3:1, and a selection control takes its own colour once it is on. A decorative hairline — a chip, a key cap, a panel's edge, a divider — is `border_width` in `border`, which nothing has to be seen through and may stay faint. |
 | Thumbs | A knob, a thumb or the ring round one is `thumb_on(fill)` over what it sits on: the theme's `thumb` wherever that stands out from the fill at 3:1, else the ink that reads on it. A toggle's knob, a slider's thumb, a handle and a colour picker's thumbs all take it. |
 | Washes | A pointer resting on a control or a row lays `hover_wash` over it, the selected row or a control held open `held_wash`, a press `pressed_wash`. A filled control cannot take a wash over its own fill, so it darkens instead: `hovered_fill`, `pressed_fill`. A soft surface is its colour at a wash's strength. |
 | Marks | A caret, a disclosure, a sort, a close, a tick, a magnifying glass, an external link's arrow or a window control is `mark`, strokes sized from `icon_size`, never a text glyph a face may not carry. |

@@ -151,7 +151,6 @@ element group
               end
             end
           end
-          rect 4,4 174x108
         end
       end
     end

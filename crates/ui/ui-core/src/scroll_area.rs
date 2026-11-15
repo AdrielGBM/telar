@@ -18,7 +18,7 @@ use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::track_layout;
 use crate::focus::{self, FocusId};
-use crate::focus_ring::focus_ring;
+use crate::focus_ring::{FocusRing, focus_ring};
 use crate::impl_leaf_widget;
 use crate::input_region::{InputHandle, Placement};
 use crate::kept::kept;
@@ -992,9 +992,12 @@ pub struct LayoutScrollArea {
 struct Host {
     role: focus::Role,
     presented: bool,
-    ring: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    ring: Option<RingRule>,
     keys: Option<KeyRule>,
 }
+
+/// The ring a control scroll area wears while the keyboard is what reached it, or none, in place of the theme's.
+type RingRule = Box<dyn Fn() -> Option<FocusRing>>;
 
 /// What a control scroll area does with a key pressed while it holds focus: whether it took it.
 type KeyRule = Box<dyn Fn(&Key) -> bool>;
@@ -1198,8 +1201,10 @@ impl LayoutScrollArea {
         self.host.as_ref().and(self.focus)
     }
 
-    /// The ring this control draws, in place of the theme's, while the keyboard is what reached it. See [`StyledContainer::focus_style`](crate::StyledContainer::focus_style).
-    pub fn focus_style(mut self, ring: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+    /// The ring this control wears while the keyboard is what reached it, in place of the theme's, or none while `ring` answers `None`. Re-read when what `ring` reads changes.
+    ///
+    /// For a control whose items carry the keyboard's cursor themselves, a list, a tree or a menu: it rings the item the cursor rests on and answers `None`, and a list or a tree answers the cursor's ring while it has no item to put the cursor on, so an empty one still shows where the keyboard is.
+    pub fn focus_ring(mut self, ring: impl Fn() -> Option<FocusRing> + 'static) -> Self {
         if let Some(host) = &mut self.host {
             host.ring = Some(Box::new(ring));
         }
@@ -1376,18 +1381,20 @@ impl Component for LayoutScrollArea {
         let ring = self
             .focus
             .filter(|id| focus::is_focus_visible(*id))
-            .map(
+            .and_then(
                 |_| match self.host.as_ref().and_then(|host| host.ring.as_ref()) {
-                    Some(ring) => vec![RenderNode::rect(rect, ring(rect))],
-                    None => focus_ring().nodes(
-                        rect,
-                        BorderRadius::zero(),
-                        use_theme_tokens().focus_ring_offset(),
-                    ),
+                    Some(ring) => ring(),
+                    None => Some(focus_ring()),
                 },
             )
             .into_iter()
-            .flatten();
+            .flat_map(|ring| {
+                ring.nodes(
+                    rect,
+                    BorderRadius::zero(),
+                    use_theme_tokens().focus_ring_offset(),
+                )
+            });
         RenderNode::element(element, std::iter::once(content).chain(ring))
     }
 

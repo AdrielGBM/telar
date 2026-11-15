@@ -82,7 +82,6 @@ element group
             end
           end
         end
-        rect 4,4 174x113
       end
     end
   end

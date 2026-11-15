@@ -181,7 +181,7 @@ pub struct MenuProps {
     /// Fired with the index of the row picked on the first panel, among its rows. A submenu's rows report to its own `on_select`.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(usize)>>,
-    /// The colour a bordered trigger is framed in and the rows' washes are tinted with. `Color::TRANSPARENT` (the default) frames it in the theme accent and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
+    /// The colour a bordered trigger is framed in and the rows' washes are tinted with. `Color::TRANSPARENT` (the default) frames it in the theme's `control_border` and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
     /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::stretch`]. The panel opens at least that wide.

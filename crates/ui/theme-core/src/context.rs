@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use geometry_core::Color;
+use geometry_core::{Color, NON_TEXT_CONTRAST};
 use reactive_core::{RwSignal, detached, signal};
 use renderer_core::Declared;
 
@@ -178,17 +178,41 @@ pub trait ThemeTokens: 'static {
     fn surface_alt(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.55, 0.1)
     }
-    /// Hairline border/divider tone. Defaults to a faint neutral.
+    /// The decorative hairline: a divider, the edge of a panel or a popup, a code block's frame. Nothing has to be seen through it to be used, so it may stay faint; what tells a control from the page is [`control_border`](Self::control_border).
     fn border(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.55, 0.35)
     }
+    /// The boundary that tells an interactive control from what it sits on: a field's frame, an unchecked checkbox's box, an unselected radio's ring, an off switch's track, a select's trigger, an unchosen swatch or filter.
+    ///
+    /// WCAG 1.4.11 holds it to 3:1 against [`surface`](Self::surface) and against [`surface_alt`](Self::surface_alt) laid over it, where [`border`](Self::border) answers to nothing. By default it is the first step from `surface` toward [`muted`](Self::muted) that stands 3:1 from both, so it follows the theme's palette and takes its contrast from `muted`'s own.
+    fn control_border(&self) -> Color {
+        let surface = self.surface();
+        let grounds = [surface, self.surface_alt().over(surface)];
+        let muted = self.muted();
+        (1..=CONTROL_BORDER_STEPS)
+            .map(|step| surface.mix(muted, f32::from(step) / f32::from(CONTROL_BORDER_STEPS)))
+            .find(|candidate| {
+                grounds
+                    .iter()
+                    .all(|ground| candidate.contrast_ratio(*ground) >= NON_TEXT_CONTRAST)
+            })
+            .unwrap_or(muted)
+    }
 
-    /// Semantic status colours. Defaults are conventional hues; a theme should override to match its palette.
+    /// Semantic status colours, each read as text as well as a fill: a code token, a counter over its limit, a step's verdict. The defaults follow the mode and reach 4.5:1 on [`surface`](Self::surface) and on [`surface_alt`](Self::surface_alt) laid over it; a theme should override them to match its palette.
     fn success(&self) -> Color {
-        Color::rgba(0.4, 0.7, 0.4, 1.0)
+        if crate::mode::is_dark() {
+            Color::rgba(0.40, 0.78, 0.50, 1.0)
+        } else {
+            Color::rgba(0.10, 0.45, 0.22, 1.0)
+        }
     }
     fn warning(&self) -> Color {
-        Color::rgba(0.9, 0.75, 0.4, 1.0)
+        if crate::mode::is_dark() {
+            Color::rgba(0.95, 0.75, 0.35, 1.0)
+        } else {
+            Color::rgba(0.58, 0.34, 0.0, 1.0)
+        }
     }
     /// Readable ink on [`error`](Self::error): what a control filled with it draws its glyph or label in.
     fn on_error(&self) -> Color {
@@ -200,13 +224,17 @@ pub trait ThemeTokens: 'static {
     }
     fn error(&self) -> Color {
         if crate::mode::is_dark() {
-            Color::rgba(0.8, 0.35, 0.4, 1.0)
+            Color::rgba(0.95, 0.48, 0.50, 1.0)
         } else {
             Color::rgba(0.75, 0.2, 0.25, 1.0)
         }
     }
     fn info(&self) -> Color {
-        Color::rgba(0.4, 0.6, 0.8, 1.0)
+        if crate::mode::is_dark() {
+            Color::rgba(0.45, 0.70, 0.95, 1.0)
+        } else {
+            Color::rgba(0.10, 0.40, 0.70, 1.0)
+        }
     }
 
     /// Three progressively stronger washes laid over whatever is under them: `highlight_low` while a pointer rests on a control or a row, `highlight_med` on the selected or held-open one, `highlight_high` while it is pressed. Every catalogue component takes its washes from here, so a theme decides once how an interaction looks.
@@ -244,6 +272,8 @@ pub trait ThemeTokens: 'static {
     /// Not a token: where a theme hands over the values of tokens a plugin declares for itself, each keyed by its type and read back with [`use_theme_extension`]. The derive fills it from the fields marked `#[theme(extension)]`; a theme that inserts nothing leaves every plugin on its own defaults.
     fn register_extensions(&self, _extensions: &mut ThemeExtensions) {}
 }
+
+const CONTROL_BORDER_STEPS: u8 = 10;
 
 /// The values a theme supplies for vocabularies it does not define, one per type: a plugin declares its own token struct and the application's theme carries an instance of it, so neither has to name the other's type.
 #[derive(Default)]

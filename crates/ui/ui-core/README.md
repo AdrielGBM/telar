@@ -10,7 +10,8 @@ the control's state (disabled, hidden, inside a modal that holds focus), `Styled
 overrides it for state-dependent widgets, and `focus::follow_box` follows a focus move the surface made
 itself. The ring (`FocusRing`: a band over a hairline in a second colour) shows where `focus::is_focus_visible`
 says, a box that frames a control without being one (a field's border) draws it with
-`StyledContainer::frames_focus_of`, and a list's cursor draws the same ring with `StyledContainer::keyboard_cursor`. See
+`StyledContainer::frames_focus_of`, and a list's cursor draws the same ring with `StyledContainer::keyboard_cursor`; a scrolling control whose items carry
+the cursor says which ring it wears itself, if any, with `LayoutScrollArea::focus_ring`. See
 [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
 
 `FixedLayer` (the `layer` tag) stands boxes against the surface over the page: a layout root of its own,
