@@ -53,7 +53,9 @@ pub(crate) const SPOKEN_ATTRIBUTE: &str = "data-telar-spoken";
 ///
 /// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, which layout never reserved, so the box would be narrower than every rect hit-testing reads, with a horizontal scrollbar underneath for what no longer fits. The scrolling stays the browser's; only the bar is Telar's, as it is on every other target.
 ///
-/// The outline goes only where Telar draws a ring of its own: a focusable box (`data-telar-focus`). Whatever else the browser walks Tab through — a link inside a paragraph, a scroll area Firefox makes focusable — keeps the browser's ring, since nothing else would show where the keyboard is. Forced colours drop the shadow Telar's ring is painted with, so there every focused element takes the browser's ring back, the field entry included.
+/// The outline goes only where Telar draws a ring of its own: a focusable box (`data-telar-focus`). Whatever else the browser walks Tab through — a link inside a paragraph, a scroll area Firefox makes focusable — keeps the browser's ring, since nothing else would show where the keyboard is.
+///
+/// Forced colours recolour what the browser can, and a `box-shadow` or a background colour is not that. Telar's frames are `outline` and `border`, so they survive, and the sheet says what each becomes: a frame is `CanvasText`; a box that says it is pressed, checked or selected is a `Highlight` fill with `HighlightText` over it, since the fill that said so is gone; the focus ring is `Highlight` in both bands, the outer one being the focused element's own outline and the inner one the paint inside it, which has no id of its own. Pictures keep their own colours, the only place the adjustment is switched off.
 ///
 /// The field entry's own selection goes as well: it is invisible text parked over the field, and the band an input method's selected clause gets there would sit over the text Telar draws, which marks the clause itself.
 ///
@@ -63,7 +65,13 @@ pub(crate) const RESET: &str = "[data-telar]{font:400 16px sans-serif;color-sche
 text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;scrollbar-width:none;\
 -webkit-appearance:none;outline:none}\
 [data-telar] :focus-visible:not([data-telar-focus]){outline:revert}\
-@media (forced-colors:active){[data-telar] :focus-visible{outline:revert!important}}\
+@media (forced-colors:active){\
+[data-telar] *{border-color:CanvasText!important;outline-color:CanvasText!important}\
+[data-telar] :is([aria-pressed=true],[aria-pressed=mixed],[aria-checked=true],[aria-checked=mixed],[aria-selected=true]){background:Highlight!important;color:HighlightText!important}\
+[data-telar] :is([aria-pressed=true],[aria-pressed=mixed],[aria-checked=true],[aria-checked=mixed],[aria-selected=true]) *{color:HighlightText!important}\
+[data-telar] :focus-visible{border-color:Highlight!important;outline-color:Highlight!important}\
+[data-telar] :focus-visible>:not([data-telar-id]){border-color:Highlight!important;outline-color:Highlight!important}\
+[data-telar] :is(img,svg){forced-color-adjust:none}}\
 [data-telar] *::-webkit-scrollbar{display:none}\
 [data-telar] [data-telar-entry]::selection{background:transparent;color:transparent}\
 [data-telar] [data-telar-spoken]{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;\

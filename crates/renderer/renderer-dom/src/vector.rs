@@ -475,7 +475,7 @@ impl Drawing {
 
 /// A box's gradient frame, as a picture of the ring it is.
 ///
-/// Every other frame here is an inset `box-shadow`, which follows the radius and takes no room from the box — but a shadow carries a colour, and a gradient is not one. So the ring is drawn: the box's own outline with the inner edge punched out of it under the even-odd rule, which is the shape the rasterising backends fill for the same border.
+/// Every other frame here is an `outline` or a `border`, which follows the radius — but those take a colour, and a gradient is not one. So the ring is drawn: the box's own outline with the inner edge punched out of it under the even-odd rule, which is the shape the rasterising backends fill for the same border.
 ///
 /// Drawn in the box's own corner rather than where it stands on the surface, so the picture can be laid over it as a background of exactly its size — and the gradient moves with it, since its points were measured against the rect the widget drew.
 pub fn frame_svg(

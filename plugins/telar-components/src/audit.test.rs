@@ -455,6 +455,14 @@ fn colours_in(css: &str) -> Vec<Color> {
         .collect()
 }
 
+fn frame_colours(element: &web_sys::Element) -> Vec<Color> {
+    ["outline", "border"]
+        .into_iter()
+        .filter(|kind| computed(element, &format!("{kind}-style")) != "none")
+        .flat_map(|kind| colours_in(&computed(element, &format!("{kind}-color"))))
+        .collect()
+}
+
 fn in_scheme(scheme: telar::ColorScheme) {
     let id = format!("{scheme:?}");
     telar::register_mode(id.clone(), || {});
@@ -470,12 +478,12 @@ fn ring_as_painted(element: &web_sys::Element, surface: Color) -> (Color, Vec<Co
     let inside = element.query_selector_all("*").expect("a valid selector");
     let bands = std::iter::once(element.clone())
         .chain((0..inside.length()).filter_map(|i| inside.item(i)?.dyn_into().ok()))
-        .flat_map(|painted| colours_in(&computed(&painted, "box-shadow")))
+        .flat_map(|painted| frame_colours(&painted))
         .collect();
     (fill, bands)
 }
 
-/// The ring a keyboard user follows is Telar's own, its two bands painted as inset shadows, and one of them stands out from whatever the ring lands on: the accent filling a button and the selected tab, and the surface around an outline button, in either scheme.
+/// The ring a keyboard user follows is Telar's own, its two bands painted as outlines, and one of them stands out from whatever the ring lands on: the accent filling a button and the selected tab, and the surface around an outline button, in either scheme.
 #[wasm_bindgen_test]
 fn the_keyboard_s_ring_stands_out_from_the_control_and_the_surface() {
     let named = |role: Role, text: &str| {
@@ -538,7 +546,10 @@ fn a_field_s_frame_wears_the_ring_of_the_line_inside_it() {
     let line = element_of(field.node);
     let framed = std::iter::successors(line.parent_element(), |node| node.parent_element())
         .take(3)
-        .any(|frame| computed(&frame, "box-shadow").contains("2px"));
+        .any(|frame| {
+            computed(&frame, "outline-width") == "2px"
+                && computed(&frame, "outline-style") != "none"
+        });
     assert!(
         framed,
         "a field tapped into shows it is the one being typed into"

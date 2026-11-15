@@ -117,35 +117,32 @@ fn radius(r: BorderRadius) -> Option<String> {
     )
 }
 
-/// A box's frame, as the inset shadows that draw it.
+/// A box's frame, as the real `outline` or `border` that draws it, so a document in forced colours paints it too: a shadow is dropped there, a frame is recoloured.
 ///
-/// Not `border`, which takes room: Telar's frame is paint on a box whose size layout already decided, and a CSS border eats into the content box instead — a 1px frame left every child two pixels narrower than the rect hit-testing reads. An inset shadow is drawn inside the same shape, follows the radius, and costs the layout nothing.
-fn border(b: &Border) -> Vec<String> {
+/// An even frame is an `outline` pulled that far inward, which follows the radius and costs the layout nothing: a CSS border eats into the content box, and a 1px frame left every child two pixels narrower than the rect hit-testing reads. A frame uneven on its sides has no outline to be, so it is a `border` of those widths and takes the room they come to out of the box it is on.
+///
+/// A gradient is not a colour a frame can take, so it is drawn as a background layer (see [`frame_image`]) and the frame itself is left transparent, which forced colours still has something to repaint.
+fn border(b: &Border, out: &mut String) {
     if !b.is_visible() {
-        return Vec::new();
+        return;
     }
-    // A shadow carries a colour and a gradient is not one: written here it made the whole `box-shadow` invalid and the browser dropped it, taking the box's drop shadow with it, since the two share the property. A frame painted with a gradient becomes a background layer instead.
-    let Paint::Solid(colour) = b.paint else {
-        return Vec::new();
+    let colour = match b.paint {
+        Paint::Solid(colour) => color(colour),
+        Paint::Gradient(_) => color(Color::TRANSPARENT),
     };
-    let colour = color(colour);
     let [top, right, bottom, left] = b.widths;
     if top == right && top == bottom && top == left {
-        return vec![format!("inset 0 0 0 {} {colour}", px(top))];
+        declare(out, "outline", &format!("{} solid {colour}", px(top)));
+        declare(out, "outline-offset", &px(-top));
+        return;
     }
-    // Each side is a shadow displaced by its own width, filling the band between the edge and where it moved to. They overlap at the corners, which for a solid colour is the corner drawn twice.
-    [
-        (top > 0.0, format!("inset 0 {} 0 0 {colour}", px(top))),
-        (right > 0.0, format!("inset {} 0 0 0 {colour}", px(-right))),
-        (
-            bottom > 0.0,
-            format!("inset 0 {} 0 0 {colour}", px(-bottom)),
-        ),
-        (left > 0.0, format!("inset {} 0 0 0 {colour}", px(left))),
-    ]
-    .into_iter()
-    .filter_map(|(drawn, shadow)| drawn.then_some(shadow))
-    .collect()
+    declare(out, "border-style", "solid");
+    declare(out, "border-color", &colour);
+    declare(
+        out,
+        "border-width",
+        &format!("{} {} {} {}", px(top), px(right), px(bottom), px(left)),
+    );
 }
 
 fn shadow(s: Shadow) -> String {
@@ -178,7 +175,7 @@ fn data_uri(svg: &str) -> String {
     out
 }
 
-/// A gradient frame, as the background layer that draws it — `None` for every frame [`border`] can draw itself.
+/// A gradient frame, as the background layer that draws it — `None` for a solid frame, which [`border`] draws itself.
 ///
 /// Laid over the fill rather than beside it because a frame is over the box it frames, and sized to the box so the ring inside the picture lands exactly on its edge.
 fn frame_image(style: &RectStyle, rect: Rect) -> Option<String> {
@@ -204,11 +201,11 @@ pub fn rect_style(style: &RectStyle, rect: Rect, out: &mut String) {
     if let Some(value) = radius(style.radius) {
         declare(out, "border-radius", &value);
     }
-    // The frame and the shadow share one property, and the frame is drawn over the shadow.
-    let mut shadows = style.border.as_ref().map(border).unwrap_or_default();
-    shadows.extend(style.shadow.map(shadow));
-    if !shadows.is_empty() {
-        declare(out, "box-shadow", &shadows.join(","));
+    if let Some(frame) = &style.border {
+        border(frame, out);
+    }
+    if let Some(drop) = style.shadow {
+        declare(out, "box-shadow", &shadow(drop));
     }
 }
 

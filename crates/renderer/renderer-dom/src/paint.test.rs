@@ -1,4 +1,5 @@
 use super::*;
+use crate::document::RESET;
 use geometry_core::{Point, Transform};
 use renderer_core::{Border, ShapeStyle};
 
@@ -8,18 +9,25 @@ fn css_of(style: &RectStyle) -> String {
     out
 }
 
+fn forced_colors() -> &'static str {
+    let start = RESET
+        .find("@media (forced-colors:active){")
+        .expect("the sheet has a forced-colors block");
+    &RESET[start..]
+}
+
 #[test]
-fn a_frame_takes_no_room_from_the_box_it_is_drawn_on() {
+fn an_even_frame_is_an_outline_that_takes_no_room_from_the_box() {
     let css = css_of(&RectStyle::default().with_border(Border::uniform(Color::BLACK, 1.0)));
-    assert_eq!(css, "box-shadow:inset 0 0 0 1px #000000;");
+    assert_eq!(css, "outline:1px solid #000000;outline-offset:-1px;");
     assert!(
-        !css.contains("border:"),
+        !css.contains("border"),
         "a CSS border would eat the content box"
     );
 }
 
 #[test]
-fn each_side_of_an_uneven_frame_is_drawn_on_its_own() {
+fn an_uneven_frame_is_a_border_with_the_width_of_each_side() {
     let css = css_of(&RectStyle::default().with_border(Border::per_side(
         Color::BLACK,
         2.0,
@@ -29,12 +37,24 @@ fn each_side_of_an_uneven_frame_is_drawn_on_its_own() {
     )));
     assert_eq!(
         css,
-        "box-shadow:inset 0 2px 0 0 #000000,inset 0 -4px 0 0 #000000;"
+        "border-style:solid;border-color:#000000;border-width:2px 0px 4px 0px;"
     );
 }
 
 #[test]
-fn a_frame_and_a_shadow_share_one_property_with_the_frame_on_top() {
+fn a_frame_the_theme_wants_invisible_is_still_a_frame() {
+    let css = css_of(&RectStyle::default().with_border(Border::uniform(Color::TRANSPARENT, 1.0)));
+    assert_eq!(css, "outline:1px solid rgba(0,0,0,0);outline-offset:-1px;");
+}
+
+#[test]
+fn a_frame_with_no_width_declares_nothing() {
+    let css = css_of(&RectStyle::default().with_border(Border::uniform(Color::BLACK, 0.0)));
+    assert_eq!(css, "");
+}
+
+#[test]
+fn a_frame_and_a_shadow_are_declared_apart() {
     let css = css_of(
         &RectStyle::default()
             .with_border(Border::uniform(Color::BLACK, 1.0))
@@ -48,7 +68,68 @@ fn a_frame_and_a_shadow_share_one_property_with_the_frame_on_top() {
     );
     assert_eq!(
         css,
-        "box-shadow:inset 0 0 0 1px #000000,0px 2px 6px 0px #000000;"
+        "outline:1px solid #000000;outline-offset:-1px;box-shadow:0px 2px 6px 0px #000000;"
+    );
+}
+
+#[test]
+fn forced_colors_paint_frames_in_the_text_colour() {
+    let sheet = forced_colors();
+    assert!(
+        sheet.contains(
+            "[data-telar] *{border-color:CanvasText!important;outline-color:CanvasText!important}"
+        ),
+        "{sheet}"
+    );
+}
+
+#[test]
+fn forced_colors_paint_a_chosen_box_as_a_highlight() {
+    let sheet = forced_colors();
+    for state in [
+        "[aria-pressed=true]",
+        "[aria-pressed=mixed]",
+        "[aria-checked=true]",
+        "[aria-checked=mixed]",
+        "[aria-selected=true]",
+    ] {
+        assert!(sheet.contains(state), "{state} has no rule: {sheet}");
+    }
+    assert!(
+        sheet.contains("{background:Highlight!important;color:HighlightText!important}"),
+        "{sheet}"
+    );
+    assert!(
+        sheet.contains(" *{color:HighlightText!important}"),
+        "{sheet}"
+    );
+}
+
+#[test]
+fn forced_colors_paint_both_bands_of_the_focus_ring_as_a_highlight() {
+    let sheet = forced_colors();
+    for selector in [
+        "[data-telar] :focus-visible{",
+        "[data-telar] :focus-visible>:not([data-telar-id]){",
+    ] {
+        let rule = sheet
+            .split_once(selector)
+            .unwrap_or_else(|| panic!("{selector} has no rule: {sheet}"))
+            .1;
+        assert!(
+            rule.starts_with("border-color:Highlight!important;outline-color:Highlight!important}"),
+            "{selector}: {rule}"
+        );
+    }
+}
+
+#[test]
+fn forced_colors_adjust_nothing_but_pictures() {
+    let sheet = forced_colors();
+    assert_eq!(sheet.matches("forced-color-adjust").count(), 1, "{sheet}");
+    assert!(
+        sheet.contains("[data-telar] :is(img,svg){forced-color-adjust:none}"),
+        "{sheet}"
     );
 }
 
@@ -92,9 +173,9 @@ fn a_surface_is_the_scheme_its_own_brightness_makes_it() {
     assert_eq!(scheme_of(Color::rgba(1.0, 1.0, 0.0, 1.0)), "light");
 }
 
-/// A gradient is not a colour, and `box-shadow` takes one: written there the declaration was invalid and the browser dropped it whole — the frame *and* the drop shadow that shares the property.
+/// A gradient is not a colour an `outline` takes, so the frame is a background layer and the outline it leaves is transparent, which forced colours can still repaint.
 #[test]
-fn a_gradient_frame_does_not_take_the_drop_shadow_down_with_it() {
+fn a_gradient_frame_is_a_layer_with_a_transparent_outline_beside_the_drop_shadow() {
     let gradient = Gradient::linear(
         Point::new(0.0, 0.0),
         Point::new(100.0, 0.0),
@@ -113,11 +194,15 @@ fn a_gradient_frame_does_not_take_the_drop_shadow_down_with_it() {
     );
     assert!(
         css.contains("box-shadow:0px 2px 6px 0px #000000;"),
-        "the shadow is the whole of the property, and valid: {css}"
+        "the shadow is declared whole: {css}"
     );
     assert!(
         css.contains("background:url(\"data:image/svg+xml,"),
         "the frame is drawn as the ring it is: {css}"
+    );
+    assert!(
+        css.contains("outline:2px solid rgba(0,0,0,0);"),
+        "forced colours still find a frame to repaint: {css}"
     );
 }
 
@@ -136,8 +221,8 @@ fn a_gradient_frame_is_a_layer_over_the_fill() {
     );
     let background = css
         .strip_prefix("background:")
-        .and_then(|rest| rest.strip_suffix(';'))
-        .unwrap_or_else(|| panic!("one background property and nothing else: {css}"));
+        .and_then(|rest| rest.split_once(";outline:").map(|(layers, _)| layers))
+        .unwrap_or_else(|| panic!("one background property, then the frame: {css}"));
     assert!(background.starts_with("url(\""), "{background}");
     assert!(background.ends_with(",#ffffff"), "{background}");
 }

@@ -433,6 +433,27 @@ and `muted` gets control boundaries that follow them. A theme that overrides a t
 checks every pair the catalogue draws for the defaults, and the audit below is the way to check a theme of one's
 own.
 
+## Forced colors
+
+A browser in `forced-colors: active` replaces the colours a page sets with the user's palette, and it drops what it
+cannot recolour: a `box-shadow`, and a background that says a control is on. The document renderer therefore draws
+every frame as a real CSS line. An even frame is an `outline` pulled inward by its own width, so it follows the
+radius and takes no room from the box; an uneven one, such as a rule on one side, is a `border` of those widths. A
+frame the theme wants invisible is still declared, in a transparent colour, so forced colors has a line to paint,
+and a gradient frame stays a background layer with a transparent line beside it. Only the drop shadow remains a
+`box-shadow`.
+
+The document's stylesheet then says what each part becomes under `forced-colors: active`:
+
+| Part | Painted as |
+| --- | --- |
+| A frame | `CanvasText` |
+| A box that is pressed, checked (or mixed) or selected | a `Highlight` fill with `HighlightText` for the text in it |
+| The focus ring, both bands | `Highlight`: the focused element's own outline, and the paint inside it |
+| A picture (`img`, `svg`) | its own colours: the one place `forced-color-adjust: none` is set |
+
+Nothing else opts out of forced colors, so no part of the page keeps a colour the user did not choose.
+
 ## Audits
 
 Two tests hold every target to the same fixture: a heading, a button, a link to an external address and one
