@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, BorderRadius, Color, IconName, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
-    amend_surface, box_item, focus::Role,
+    Accessible, AlignItems, AuthoredText, BorderRadius, Color, Declared, IconName, JustifyContent,
+    LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer,
+    SurfaceAmendment, amend_surface, box_item, focus::Role,
 };
 
 use crate::shared;
@@ -232,53 +232,42 @@ impl Square {
     }
 }
 
-fn ink(disabled: Reactive<bool>) -> Reactive<Color> {
-    Reactive::of(move || {
-        if disabled.get() {
-            shared::muted()
-        } else {
-            Color::TRANSPARENT
-        }
-    })
+fn ink(disabled: Reactive<bool>) -> impl Fn() -> Option<Color> + 'static {
+    move || disabled.get().then(shared::muted)
 }
 
-/// `icon` at the size a control of `size` draws one, in `color`, or in the text around it while that is transparent.
-#[cfg(feature = "icons")]
+/// `icon` at the size a control of `size` draws one, inked by `ink`: in the colour it reads, or in the text around it while it reads `None`.
 pub(crate) fn picture(
     icon: IconName,
     size: ControlSize,
-    color: Reactive<Color>,
+    ink: impl Fn() -> Option<Color> + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    Ok(drawn(icon, size)?.authored_text(move || {
+        ink().map_or_else(Declared::default, |ink| Declared::default().with_color(ink))
+    }))
+}
+
+#[cfg(feature = "icons")]
+fn drawn(icon: IconName, size: ControlSize) -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_icons::{IconProps, icon as draw};
 
     draw(
         IconProps::props()
             .name(icon)
             .size(shared::icon_size(size))
-            .color(color)
             .build(),
     )
 }
 
 #[cfg(not(feature = "icons"))]
-pub(crate) fn picture(
-    icon: IconName,
-    size: ControlSize,
-    color: Reactive<Color>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn drawn(icon: IconName, size: ControlSize) -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar::{Container, Text, TextWrap};
 
     let side = shared::icon_size(size);
     let glyph = Text::declaring(
         move || glyph_for(&icon.id()).to_string(),
         LayoutStyle::new(),
-        move |t| {
-            let text = shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap);
-            match color.get() {
-                Color::TRANSPARENT => text,
-                dimmed => text.with_color(dimmed),
-            }
-        },
+        move |t| shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap),
     )?;
     let frame = Container::new(
         LayoutStyle::row()

@@ -541,17 +541,9 @@ fn pictured<T>(
 where
     T: Copy + PartialEq + 'static,
 {
-    picture(
-        icon,
-        size,
-        Reactive::of(move || {
-            if selected.get() == value {
-                shared::on_accent()
-            } else {
-                Color::TRANSPARENT
-            }
-        }),
-    )
+    picture(icon, size, move || {
+        (selected.get() == value).then(shared::on_accent)
+    })
 }
 
 /// Which of its paints a tab is showing.

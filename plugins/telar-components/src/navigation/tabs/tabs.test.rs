@@ -345,6 +345,40 @@ fn an_icon_tab_is_the_same_square_as_an_icon_button() {
     assert_eq!((tab.width, tab.height), (pressed.width, pressed.height));
 }
 
+#[test]
+fn the_selected_icon_tab_draws_its_icon_on_the_accent_and_the_others_in_the_ink_around_them() {
+    crate::test_support::fresh_layout_runtime();
+    let tab_list = tab_list(
+        signal(0usize),
+        vec![
+            Tab::new(0usize, "One").icon(telar::icon!("lucide:search")),
+            Tab::new(1usize, "Two").icon(telar::icon!("lucide:search")),
+        ],
+        None,
+        None,
+        None,
+        ControlSize::Regular,
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_row().width(400.0).height(100.0),
+        &[tab_list.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(tab_list);
+    let inks = crate::test_support::icon_inks(&tree.commands());
+    let accent = telar::Paint::Solid(shared::on_accent());
+    assert!(inks.len() >= 2, "{inks:?}");
+    assert_eq!(inks.first(), Some(&accent), "{inks:?}");
+    assert_ne!(inks.last(), Some(&accent), "{inks:?}");
+}
+
 fn mounted(props: TabsProps) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
     let item = tabs(props).unwrap();

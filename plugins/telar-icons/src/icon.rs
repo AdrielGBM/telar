@@ -21,9 +21,9 @@ pub struct IconProps {
     /// The side of the box in px. Unset (`0`), the theme's `icon_size`.
     #[props(into, default)]
     pub size: Reactive<f32>,
-    /// The colour the icon is drawn in, as a silhouette. Unset (`Color::TRANSPARENT`), a monochrome icon takes the colour of the text around it, and one of a palette set keeps its own colours.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// The colour the icon is drawn in, as a silhouette. `None` (the default): a monochrome icon takes the colour of the text around it, and one of a palette set keeps its own colours.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
 }
 
 /// Artwork ready to draw, and whether it takes the colour around it.
@@ -49,9 +49,8 @@ pub fn icon(props: IconProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let glyph = Rc::clone(&glyph);
         let node = Rc::clone(&node);
         move || {
-            let chosen = color.get();
-            if chosen != Color::TRANSPARENT {
-                return Some(chosen);
+            if let Some(color) = &color {
+                return Some(color.get());
             }
             if !glyph()?.monochrome {
                 return None;

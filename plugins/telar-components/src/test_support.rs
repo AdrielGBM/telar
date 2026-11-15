@@ -279,3 +279,33 @@ pub(crate) fn find_text(cmds: &[telar::DrawCommand], needle: &str) -> bool {
     cmds.iter()
         .any(|c| matches!(c, telar::DrawCommand::Text { text, .. } if text.as_ref() == needle))
 }
+
+/// The paint each icon `cmds` draw is inked in: its artwork's fills and strokes where `telar-icons` draws it.
+#[cfg(feature = "icons")]
+pub(crate) fn icon_inks(cmds: &[telar::DrawCommand]) -> Vec<telar::Paint> {
+    cmds.iter()
+        .flat_map(|c| match c {
+            telar::DrawCommand::Path { style, .. } => {
+                [style.fill, style.stroke.as_ref().map(|stroke| stroke.paint)]
+            }
+            _ => [None, None],
+        })
+        .flatten()
+        .collect()
+}
+
+/// The paint each icon `cmds` draw is inked in: its stand-in glyph's colour where no icon set is built in.
+#[cfg(not(feature = "icons"))]
+pub(crate) fn icon_inks(cmds: &[telar::DrawCommand]) -> Vec<telar::Paint> {
+    cmds.iter()
+        .filter_map(|c| match c {
+            telar::DrawCommand::Text { text, style, .. }
+                if text.as_ref()
+                    == crate::workbench::icon_button::icon_button::glyph_for("lucide:search") =>
+            {
+                Some(style.color)
+            }
+            _ => None,
+        })
+        .collect()
+}

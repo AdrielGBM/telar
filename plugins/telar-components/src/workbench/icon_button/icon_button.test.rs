@@ -402,3 +402,27 @@ fn draws_its_icon_at(tree: &ComponentList, size: ControlSize) -> bool {
         _ => false,
     })
 }
+
+#[test]
+fn a_disabled_button_draws_its_icon_muted_and_an_enabled_one_in_the_ink_around_it() {
+    for disabled in [false, true] {
+        crate::test_support::fresh_layout_runtime();
+        focus::clear();
+        let button = icon_button(
+            IconButtonProps::props()
+                .icon(telar::icon!("lucide:search"))
+                .label("Square")
+                .disabled(disabled)
+                .build(),
+        )
+        .unwrap();
+        let inks = crate::test_support::icon_inks(&mount(button).commands());
+        let muted = telar::Paint::Solid(shared::muted());
+        assert!(!inks.is_empty(), "the icon is drawn");
+        assert_eq!(
+            inks.iter().all(|ink| *ink == muted),
+            disabled,
+            "disabled: {disabled}, inks: {inks:?}"
+        );
+    }
+}
