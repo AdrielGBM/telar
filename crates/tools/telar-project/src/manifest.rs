@@ -68,14 +68,55 @@ impl WindowSection {
     }
 }
 
-/// Where translation catalogs are discovered. Both sources may be active at once; either name set to `""` disables it.
+/// One catalog discovery source: a directory name, or `false` to turn the source off. `true` is the default directory.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(try_from = "RawCatalogDir")]
+pub enum CatalogDir {
+    Disabled,
+    Default,
+    Named(String),
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawCatalogDir {
+    Enabled(bool),
+    Named(String),
+}
+
+impl TryFrom<RawCatalogDir> for CatalogDir {
+    type Error = String;
+
+    fn try_from(raw: RawCatalogDir) -> Result<Self, String> {
+        match raw {
+            RawCatalogDir::Enabled(false) => Ok(Self::Disabled),
+            RawCatalogDir::Enabled(true) => Ok(Self::Default),
+            RawCatalogDir::Named(name) if name.is_empty() => {
+                Err("a directory name, or `false` to turn the source off".to_string())
+            }
+            RawCatalogDir::Named(name) => Ok(Self::Named(name)),
+        }
+    }
+}
+
+impl CatalogDir {
+    fn resolve(this: Option<&Self>, default: &str) -> Option<String> {
+        match this {
+            None | Some(Self::Default) => Some(default.to_string()),
+            Some(Self::Disabled) => None,
+            Some(Self::Named(name)) => Some(name.clone()),
+        }
+    }
+}
+
+/// Where translation catalogs are discovered. Both sources may be active at once; either set to `false` is off.
 #[derive(Deserialize, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct I18nSection {
     /// The project-wide catalog directory, joined onto the package root. Default `"locales"`.
-    pub root: Option<String>,
+    pub root: Option<CatalogDir>,
     /// The directory name looked for recursively under `src/`, for catalogs kept beside the module that reads them. Default `"i18n"`.
-    pub scan: Option<String>,
+    pub scan: Option<CatalogDir>,
     /// The locale a lookup falls back to. `None` means `"en"` if present, else the first tag found.
     pub default: Option<String>,
 }
@@ -211,10 +252,6 @@ pub struct TelarSection {
     pub previews: PreviewsSection,
     /// Where the ids of `telar-icons`' `icon` tag resolve and whether they are baked. `None` bakes nothing: every id is then left for a runtime source.
     pub icons: Option<IconsSection>,
-    /// The pre-`[telar.i18n]` spelling of [`I18nSection::root`].
-    pub locales: Option<String>,
-    /// The pre-`[telar.i18n]` spelling of [`I18nSection::default`].
-    pub default_locale: Option<String>,
 }
 
 /// The whole file.
@@ -380,8 +417,6 @@ impl TelarSection {
             previews: self.previews.over(base.previews),
             // Whole rather than merged: a package naming any source of its own is declaring where all of its icons come from.
             icons: self.icons.or(base.icons),
-            locales: self.locales.or(base.locales),
-            default_locale: self.default_locale.or(base.default_locale),
         }
     }
 
@@ -439,28 +474,19 @@ impl TelarSection {
         package_root.join(self.assets.as_deref().unwrap_or("assets"))
     }
 
-    /// The project-wide catalog directory, or `None` when it is disabled with `""`.
+    /// The project-wide catalog directory, or `None` when `[telar.i18n] root = false` turns it off.
     pub fn locales_root(&self, package_root: &Path) -> Option<PathBuf> {
-        let root = self
-            .i18n
-            .root
-            .clone()
-            .or_else(|| self.locales.clone())
-            .unwrap_or_else(|| "locales".to_string());
-        (!root.is_empty()).then(|| package_root.join(root))
+        CatalogDir::resolve(self.i18n.root.as_ref(), "locales").map(|root| package_root.join(root))
     }
 
-    /// The directory name looked for under `src/` for co-located catalogs.
-    pub fn catalog_scan_dir(&self) -> String {
-        self.i18n.scan.clone().unwrap_or_else(|| "i18n".to_string())
+    /// The directory name looked for under `src/` for co-located catalogs, or `None` when `[telar.i18n] scan = false` turns the scan off.
+    pub fn catalog_scan_dir(&self) -> Option<String> {
+        CatalogDir::resolve(self.i18n.scan.as_ref(), "i18n")
     }
 
     /// The locale a lookup falls back to, if the project names one.
     pub fn default_locale(&self) -> Option<String> {
-        self.i18n
-            .default
-            .clone()
-            .or_else(|| self.default_locale.clone())
+        self.i18n.default.clone()
     }
 }
 

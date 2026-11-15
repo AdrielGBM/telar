@@ -52,7 +52,7 @@ default = "es"
     assert_eq!(telar.dev.devtools, Some(false));
     assert_eq!(telar.dev.window.as_ref().unwrap().width, Some(1024));
     assert_eq!(telar.locales_root(&root), Some(root.join("strings")));
-    assert_eq!(telar.catalog_scan_dir(), "lang");
+    assert_eq!(telar.catalog_scan_dir().as_deref(), Some("lang"));
     assert_eq!(telar.default_locale().as_deref(), Some("es"));
 }
 
@@ -133,26 +133,35 @@ fn the_dev_window_reads_its_fullscreen_mode_and_position() {
     assert_eq!(window.position, Some(WindowPosition::At { x: 10, y: -20 }));
 }
 
-/// The pre-`[telar.i18n]` spellings still answer, so a project written against the old keys keeps working.
 #[test]
-fn the_older_i18n_spellings_still_answer() {
-    let root = package(
-        "legacy",
-        Some("[telar]\nlocales = \"strings\"\ndefault_locale = \"fr\"\n"),
-    );
-    let telar = TelarManifest::load(&root)
-        .expect("the old keys are still in the schema")
-        .telar;
-    assert_eq!(telar.locales_root(&root), Some(root.join("strings")));
-    assert_eq!(telar.default_locale().as_deref(), Some("fr"));
+fn the_pre_i18n_table_keys_are_refused() {
+    for key in ["locales = \"strings\"", "default_locale = \"fr\""] {
+        let root = package("legacy", Some(&format!("[telar]\n{key}\n")));
+        let error = TelarManifest::load(&root).expect_err("a removed key has to be an error");
+        assert!(error.to_string().contains("unknown field"), "{error}");
+    }
 }
 
-/// `""` is how a project turns a discovery source off, which is different from leaving it at its default.
 #[test]
-fn an_empty_locales_root_disables_it() {
-    let root = package("disabled", Some("[telar.i18n]\nroot = \"\"\n"));
+fn a_discovery_source_is_turned_off_with_false_and_never_with_an_empty_name() {
+    let root = package(
+        "disabled",
+        Some("[telar.i18n]\nroot = false\nscan = false\n"),
+    );
     let telar = TelarManifest::load(&root).unwrap().telar;
     assert_eq!(telar.locales_root(&root), None);
+    assert_eq!(telar.catalog_scan_dir(), None);
+
+    let root = package("empty", Some("[telar.i18n]\nroot = \"\"\n"));
+    assert!(TelarManifest::load(&root).is_err());
+}
+
+#[test]
+fn an_absent_or_true_source_uses_its_default_directory() {
+    let root = package("defaults", Some("[telar.i18n]\nscan = true\n"));
+    let telar = TelarManifest::load(&root).unwrap().telar;
+    assert_eq!(telar.locales_root(&root), Some(root.join("locales")));
+    assert_eq!(telar.catalog_scan_dir().as_deref(), Some("i18n"));
 }
 
 /// A workspace declares once what its packages share. Every package answering the same way is the common case, and saying it in eight files is how the eight drift apart.

@@ -121,10 +121,10 @@ pub fn bake_catalog(
     Ok(Some(report))
 }
 
-/// How the catalog is discovered, read from the one `telar.toml` schema. Both sources may be active at once; either name set to `""` disables it.
+/// How the catalog is discovered, read from the one `telar.toml` schema. Both sources may be active at once; either turned off with `false` in `telar.toml`.
 struct I18nConfig {
     root: Option<PathBuf>,
-    scan: String,
+    scan: Option<String>,
     default: Option<String>,
 }
 
@@ -156,7 +156,7 @@ fn catalog_sources(package_root: &Path, cfg: &I18nConfig) -> Vec<(String, PathBu
     if let Some(root) = &cfg.root {
         discover_root_dir(root, &mut sources);
     }
-    if !cfg.scan.is_empty() {
+    if let Some(scan) = &cfg.scan {
         for file in
             telar_project::collect_files_by_ext(&package_root.join("src"), &["toml"], &|_| true)
         {
@@ -164,7 +164,7 @@ fn catalog_sources(package_root: &Path, cfg: &I18nConfig) -> Vec<(String, PathBu
                 .parent()
                 .and_then(|p| p.file_name())
                 .and_then(|n| n.to_str())
-                == Some(cfg.scan.as_str());
+                == Some(scan.as_str());
             if in_scan_dir && let Some(tag) = file.file_stem().and_then(|s| s.to_str()) {
                 sources.push((tag.to_string(), file));
             }

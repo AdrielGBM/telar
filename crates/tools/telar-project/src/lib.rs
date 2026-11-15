@@ -75,8 +75,8 @@ pub use library::{
     ICONS_LIBRARY_RECORD_FILENAME, library_files, library_include, library_include_covers,
 };
 pub use manifest::{
-    DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, TelarManifest,
-    TelarSection, WebSection, WindowSection,
+    CatalogDir, DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection,
+    TelarManifest, TelarSection, WebSection, WindowSection,
 };
 pub use orphan_tests::orphan_test_warnings;
 pub use page::{
