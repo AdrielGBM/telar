@@ -118,6 +118,11 @@ impl Surface for PageAtRest {
         };
         (line - size) / 2.0 + size * 0.8
     }
+
+    /// The browser's default, which the page is laid out at: a reader who set another sees its text scaled by the browser before the app runs.
+    fn root_font_size(&mut self) -> f32 {
+        crate::document::DEFAULT_ROOT_FONT_SIZE
+    }
 }
 
 fn write_box(out: &mut String, node: &BoxNode) {

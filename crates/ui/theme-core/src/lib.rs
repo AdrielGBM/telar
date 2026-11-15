@@ -19,12 +19,18 @@
 
 mod appearance;
 mod context;
+mod contrast;
+mod high_contrast;
 mod mode;
 
 pub use appearance::{ControlSize, Tone, Variant};
 pub use context::{
     ScopedTheme, Theme, ThemeExtensions, ThemeTokens, nearest_theme, set_theme, use_theme,
     use_theme_extension, use_theme_tokens,
+};
+pub use contrast::{
+    CONTRAST_PAIRS, ColorToken, ContrastLevel, ContrastPair, ContrastShortfall, ContrastUse,
+    contrast_shortfalls,
 };
 pub use mode::{
     ModeContext, ResolvedScheme, SchemePreference, active_mode, follow_system, is_dark,

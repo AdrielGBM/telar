@@ -1,5 +1,6 @@
 use super::*;
-use geometry_core::{BODY_TEXT_CONTRAST, Color};
+use geometry_core::Color;
+use theme_core::{ThemeTokens, contrast_shortfalls};
 
 fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cargo_telar_new_{name}_{}", std::process::id()));
@@ -396,24 +397,70 @@ fn theme_color(source: &str, mode: &str, field: &str) -> Color {
     Color::rgba(r, g, b, a)
 }
 
-#[test]
-fn the_scaffold_theme_meets_body_text_contrast_in_both_modes() {
-    let source = scaffold_theme();
-    let pairs = [
-        ("ink", "surface"),
-        ("ink", "surface_alt"),
-        ("muted", "surface"),
-        ("muted", "surface_alt"),
-        ("on_error", "error"),
-    ];
-    for mode in ["light", "dark"] {
-        for (text, background) in pairs {
-            let ratio = theme_color(&source, mode, text)
-                .contrast_ratio(theme_color(&source, mode, background));
-            assert!(
-                ratio >= BODY_TEXT_CONTRAST,
-                "{mode}: `{text}` on `{background}` is {ratio:.2}:1, below {BODY_TEXT_CONTRAST}:1"
-            );
-        }
+/// One mode of the scaffold's theme, read back from the source it writes: every colour the scaffold sets answers its token, and the rest follow from them as they do for an application's own theme.
+struct ScaffoldMode {
+    source: String,
+    mode: &'static str,
+}
+
+impl ScaffoldMode {
+    fn color(&self, field: &str) -> Color {
+        theme_color(&self.source, self.mode, field)
     }
+}
+
+impl ThemeTokens for ScaffoldMode {
+    fn primary(&self) -> Color {
+        self.color("primary")
+    }
+    fn on_primary(&self) -> Color {
+        self.color("on_primary")
+    }
+    fn surface(&self) -> Color {
+        self.color("surface")
+    }
+    fn surface_alt(&self) -> Color {
+        self.color("surface_alt")
+    }
+    fn border(&self) -> Color {
+        self.color("border")
+    }
+    fn ink(&self) -> Color {
+        self.color("ink")
+    }
+    fn muted(&self) -> Color {
+        self.color("muted")
+    }
+    fn success(&self) -> Color {
+        self.color("success")
+    }
+    fn warning(&self) -> Color {
+        self.color("warning")
+    }
+    fn error(&self) -> Color {
+        self.color("error")
+    }
+    fn on_error(&self) -> Color {
+        self.color("on_error")
+    }
+    fn info(&self) -> Color {
+        self.color("info")
+    }
+}
+
+#[test]
+fn the_scaffold_theme_reaches_every_minimum_of_the_contrast_table_in_both_modes() {
+    let source = scaffold_theme();
+    let shortfalls: Vec<String> = ["light", "dark"]
+        .into_iter()
+        .flat_map(|mode| {
+            contrast_shortfalls(ScaffoldMode {
+                source: source.clone(),
+                mode,
+            })
+            .into_iter()
+            .map(move |shortfall| format!("{mode}: {shortfall}"))
+        })
+        .collect();
+    assert!(shortfalls.is_empty(), "{shortfalls:#?}");
 }

@@ -36,6 +36,7 @@ toml = { workspace = true }
 [dev-dependencies]
 geometry-core = { workspace = true }
 test-process = { workspace = true }
+theme-core = { workspace = true }
 
 ureq = { workspace = true }
 

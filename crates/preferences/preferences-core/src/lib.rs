@@ -6,7 +6,7 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
-pub use platform_core::{ColorScheme, SystemPreferences};
+pub use platform_core::{ColorScheme, SystemPreferences, TextScale};
 use reactive_core::{RwSignal, detached, signal};
 
 reactive_core::dropless_thread_local! {
@@ -14,6 +14,7 @@ reactive_core::dropless_thread_local! {
     static REDUCED_MOTION: RwSignal<Option<bool>> = detached(|| signal(None));
     static HIGH_CONTRAST: RwSignal<Option<bool>> = detached(|| signal(None));
     static LOCALES: RwSignal<Vec<String>> = detached(|| signal(Vec::new()));
+    static TEXT_SCALE: RwSignal<TextScale> = detached(|| signal(TextScale::UNSCALED));
     static REDUCED_MOTION_OVERRIDE: RwSignal<Option<bool>> = detached(|| signal(None));
 }
 
@@ -30,12 +31,14 @@ pub fn set_system_preferences(preferences: SystemPreferences) {
         reduced_motion,
         high_contrast,
         locales,
+        text_scale,
     } = preferences;
     reactive_core::batch(|| {
         replace(&COLOR_SCHEME, color_scheme);
         replace(&REDUCED_MOTION, reduced_motion);
         replace(&HIGH_CONTRAST, high_contrast);
         replace(&LOCALES, locales);
+        replace(&TEXT_SCALE, text_scale);
     });
 }
 
@@ -50,13 +53,14 @@ fn replace<T: Clone + PartialEq + 'static>(
     });
 }
 
-/// Reactive read of every field as the system reported it; subscribes the caller to all four.
+/// Reactive read of every field as the system reported it; subscribes the caller to all five.
 pub fn use_system_preferences() -> SystemPreferences {
     SystemPreferences {
         color_scheme: use_color_scheme(),
         reduced_motion: use_system_reduced_motion(),
         high_contrast: use_system_high_contrast(),
         locales: use_preferred_locales(),
+        text_scale: use_text_scale(),
     }
 }
 
@@ -67,6 +71,7 @@ pub fn system_preferences() -> SystemPreferences {
         reduced_motion: REDUCED_MOTION.with(|s| s.peek()),
         high_contrast: HIGH_CONTRAST.with(|s| s.peek()),
         locales: LOCALES.with(|s| s.peek()),
+        text_scale: text_scale(),
     }
 }
 
@@ -149,6 +154,16 @@ pub fn use_surface_high_contrast() -> Option<bool> {
 /// BCP 47 tags, most preferred first; empty where the platform reports none.
 pub fn use_preferred_locales() -> Vec<String> {
     LOCALES.with(|s| s.get())
+}
+
+/// What the user asked every text to be multiplied by, [`TextScale::UNSCALED`] where the platform has no such setting or cannot read it.
+pub fn use_text_scale() -> TextScale {
+    TEXT_SCALE.with(|s| s.get())
+}
+
+/// Non-reactive [`use_text_scale`].
+pub fn text_scale() -> TextScale {
+    TEXT_SCALE.with(|s| s.peek())
 }
 
 #[cfg(test)]

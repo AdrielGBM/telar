@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use platform_core::{
     ColorScheme, Event, EventHandler, MultiSurfacePlatform, Platform, SurfaceId, SystemPreferences,
-    Window, WindowConfig,
+    TextScale, Window, WindowConfig,
 };
 
 use super::HeadlessPlatform;
@@ -38,6 +38,7 @@ fn declared() -> SystemPreferences {
         reduced_motion: Some(true),
         high_contrast: None,
         locales: vec!["es".into(), "en".into()],
+        text_scale: TextScale::new(1.25).expect("a scale above zero"),
     }
 }
 

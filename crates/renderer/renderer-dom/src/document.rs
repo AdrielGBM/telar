@@ -107,7 +107,13 @@ pub(crate) trait Surface {
 
     /// How far below the top of its line box a line in `style` sits on its baseline.
     fn baseline(&mut self, style: &TextStyle) -> f32;
+
+    /// The font size of the document's root element in CSS pixels, which a text's `rem` size is of: the reader's text size setting, which the platform reports as the text scale the layout already sized the text at.
+    fn root_font_size(&mut self) -> f32;
 }
+
+/// The root font size every browser starts from until its reader changes it, in CSS pixels.
+pub(crate) const DEFAULT_ROOT_FONT_SIZE: f32 = 16.0;
 
 /// One frame, as the elements the host holds.
 pub(crate) struct Frame {
@@ -1003,7 +1009,7 @@ impl Walk<'_> {
                     text, rect, style, ..
                 } => {
                     let mut css = String::new();
-                    paint::text_style(style, &mut css);
+                    paint::text_style(style, self.surface.root_font_size(), &mut css);
                     self.paint_at_surface_level(*rect, &css, text);
                     return;
                 }
@@ -1050,8 +1056,9 @@ impl Walk<'_> {
                 style,
                 spans,
             } => {
+                let root_font_size = self.surface.root_font_size();
                 let mut css = String::new();
-                paint::text_style(style, &mut css);
+                paint::text_style(style, root_font_size, &mut css);
                 open.pieces.push(Painted::Text {
                     rect: *rect,
                     style: css,
@@ -1059,7 +1066,7 @@ impl Walk<'_> {
                     runs: spans
                         .as_deref()
                         .filter(|spans| !spans.is_empty())
-                        .map(|spans| crate::runs::runs_of(text, spans)),
+                        .map(|spans| crate::runs::runs_of(text, spans, root_font_size)),
                     claims_background: paint::text_claims_background(style),
                 });
             }
@@ -1772,11 +1779,11 @@ fn draw(
             text, rect, style, ..
         } if drawing.in_mask() => {
             let baseline = surface.baseline(style);
-            drawing.mask_text(text, *rect, style, baseline)
+            drawing.mask_text(text, *rect, style, baseline, surface.root_font_size())
         }
         DrawCommand::Text {
             text, rect, style, ..
-        } => drawing.text(text, *rect, style),
+        } => drawing.text(text, *rect, style, surface.root_font_size()),
         DrawCommand::Path { data, style } => drawing.path(data, style),
         DrawCommand::Line { p1, p2, style } => drawing.line(*p1, *p2, style),
         DrawCommand::Image {

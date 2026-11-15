@@ -52,6 +52,12 @@ pub fn px(value: f32) -> String {
     format!("{}px", round(value))
 }
 
+/// `value` CSS pixels as `rem` of a root of `root_font_size` pixels, to a hundred-thousandth so a size of a sixteenth of a pixel comes back whole at the default root.
+pub fn rem(value: f32, root_font_size: f32) -> String {
+    let rem = ((value / root_font_size) * 100_000.0).round() / 100_000.0;
+    format!("{rem}rem")
+}
+
 /// A paint as the CSS value a `background` or `color` takes.
 pub fn paint(p: &Paint) -> String {
     match p {
@@ -251,9 +257,11 @@ fn push_family_piece(family: &renderer_core::FontFamily, out: &mut Vec<String>) 
     }
 }
 
-/// What a `Text` command contributes to the element that holds it.
-pub fn text_style(style: &TextStyle, out: &mut String) {
-    declare(out, "font-size", &px(style.font_size));
+/// What a `Text` command contributes to the element that holds it, its size in `rem` of a root of `root_font_size` CSS pixels.
+///
+/// In `rem` so a change of the reader's text size reaches the text the moment the browser applies it, and so does the size they had set before the page loaded, on a page written ahead of time at the browser's default root. Layout has already scaled the size by the text scale that root stands for, so at that root the text is drawn at the size it was measured at.
+pub fn text_style(style: &TextStyle, root_font_size: f32, out: &mut String) {
+    declare(out, "font-size", &rem(style.font_size, root_font_size));
     match &style.color {
         Paint::Solid(ink) => declare(out, "color", &color(*ink)),
         // `color` takes a colour, so a gradient written there was dropped and the text came out in whatever it had inherited. Painted behind the element and clipped to the glyphs instead, the only way a document fills text with anything but a colour. It costs the element its own background, which is why a text asking for one is never folded into the box it is in.
@@ -344,10 +352,18 @@ fn length(length: renderer_core::TextLength) -> String {
     }
 }
 
-/// The declarations a run of a paragraph adds over the paragraph: only what its span says, since everything else it inherits from the element around it.
-pub fn span_style(over: &renderer_core::Declared, out: &mut String) {
-    if let Some(size) = over.font_size {
-        declare(out, "font-size", &length(size));
+/// The declarations a run of a paragraph adds over the paragraph: only what its span says, since everything else it inherits from the element around it. A size in pixels is in `rem` of a root of `root_font_size`, as [`text_style`] writes the paragraph's.
+pub fn span_style(over: &renderer_core::Declared, root_font_size: f32, out: &mut String) {
+    match over.font_size {
+        Some(renderer_core::TextLength::Em(em)) => {
+            declare(out, "font-size", &format!("{}em", round(em)))
+        }
+        Some(size) => declare(
+            out,
+            "font-size",
+            &rem(size.resolve(0.0, geometry_core::Size::ZERO), root_font_size),
+        ),
+        None => {}
     }
     match &over.color {
         Some(Paint::Solid(ink)) => declare(out, "color", &color(*ink)),

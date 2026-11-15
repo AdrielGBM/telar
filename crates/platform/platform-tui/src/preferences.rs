@@ -1,8 +1,8 @@
 //! What a terminal can say about the user's preferences without a round trip: the locale its environment declares, and a background colour hint.
 //!
-//! Motion and contrast are the terminal emulator's business and reach no program running inside it, so they stay unknown.
+//! Motion and contrast are the terminal emulator's business and reach no program running inside it, so they stay unknown; its cells are its own size, so text stays unscaled.
 
-use platform_core::{ColorScheme, SystemPreferences};
+use platform_core::{ColorScheme, SystemPreferences, TextScale};
 
 pub fn read() -> SystemPreferences {
     SystemPreferences {
@@ -10,8 +10,10 @@ pub fn read() -> SystemPreferences {
             .ok()
             .as_deref()
             .and_then(colorfgbg_scheme),
+        reduced_motion: None,
+        high_contrast: None,
         locales: platform_core::system_locales_from_env(),
-        ..SystemPreferences::default()
+        text_scale: TextScale::UNSCALED,
     }
 }
 

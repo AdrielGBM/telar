@@ -3,6 +3,9 @@
 /// The WCAG AA contrast ratio body text needs against what is behind it.
 pub const BODY_TEXT_CONTRAST: f32 = 4.5;
 
+/// The WCAG AAA (1.4.6) contrast ratio body text needs: what a person who asked for more contrast is owed.
+pub const ENHANCED_TEXT_CONTRAST: f32 = 7.0;
+
 /// The WCAG AA contrast ratio large text needs: 24 px, or 18.66 px at a weight of 700 and up.
 pub const LARGE_TEXT_CONTRAST: f32 = 3.0;
 

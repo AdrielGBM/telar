@@ -1,7 +1,7 @@
 //! The inputs a prerendered page carries for the app that takes it over (`telar-state`), read with the browser's own JSON parser so a page build links no parser of its own for them.
 
 use js_sys::{Array, JSON, Object, Reflect};
-use platform_core::{ColorScheme, SystemPreferences};
+use platform_core::{ColorScheme, SystemPreferences, TextScale};
 use wasm_bindgen::{JsCast, JsValue};
 
 /// What a prerendered page says it was built from.
@@ -52,6 +52,7 @@ pub fn parse_served_state(json: &str) -> Option<ServedState> {
                         .collect()
                 })
                 .unwrap_or_default(),
+            text_scale: TextScale::UNSCALED,
         },
         surface: (
             number(&field(&surface, "width")?)?,

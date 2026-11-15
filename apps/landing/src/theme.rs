@@ -42,7 +42,7 @@ impl LandingTheme {
             border: Color::rgba(0.86, 0.87, 0.93, 1.0),
             primary: Color::rgba(0.26, 0.38, 0.93, 1.0),
             accent: Color::rgba(0.74, 0.14, 0.38, 1.0),
-            success: Color::rgba(0.18, 0.69, 0.45, 1.0),
+            success: Color::rgba(0.10, 0.48, 0.30, 1.0),
             dark: Color::rgba(0.09, 0.10, 0.18, 1.0),
             muted: Color::rgba(0.33, 0.35, 0.45, 1.0),
             on_primary: Color::WHITE,
@@ -55,3 +55,7 @@ impl LandingTheme {
 pub fn theme() -> LandingTheme {
     use_theme::<LandingTheme>()
 }
+
+#[cfg(test)]
+#[path = "theme.test.rs"]
+mod tests;

@@ -1,6 +1,6 @@
-//! What the user asked every application on the system for: a colour scheme, less motion, more contrast and an ordered list of languages.
+//! What the user asked every application on the system for: a colour scheme, less motion, more contrast, an ordered list of languages and larger text.
 //!
-//! Every field can be unknown. A platform that cannot answer says so with `None` (or an empty locale list) rather than guessing, so a consumer can tell "the user wants light" from "nobody said" and keep its own default for the second.
+//! Every field but the text scale can be unknown. A platform that cannot answer says so with `None` (or an empty locale list) rather than guessing, so a consumer can tell "the user wants light" from "nobody said" and keep its own default for the second. The text scale has no such gap: an unset scale and one the platform cannot read both mean text at its designed size, so a platform says [`TextScale::UNSCALED`] for either.
 
 /// The light/dark preference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -22,6 +22,42 @@ pub struct SystemPreferences {
     pub high_contrast: Option<bool>,
     /// BCP 47 tags, most preferred first. Empty when the platform reports none.
     pub locales: Vec<String>,
+    /// What the user asked every text to be multiplied by. A platform with no such setting, or one it cannot read, says [`TextScale::UNSCALED`].
+    pub text_scale: TextScale,
+}
+
+/// How much larger than its design the user wants text drawn: `1.0` as designed, `2.0` twice the size. Always finite and above zero, so a reader never has to guard a scale that would make text vanish.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct TextScale(f32);
+
+impl TextScale {
+    /// Text at the size it was designed at: what a platform says when the user set nothing or it cannot ask.
+    pub const UNSCALED: TextScale = TextScale(1.0);
+
+    /// `factor` as a text scale, or `None` when it is not a finite number above zero.
+    pub fn new(factor: f32) -> Option<Self> {
+        (factor.is_finite() && factor > 0.0).then_some(Self(factor))
+    }
+
+    /// The factor every text size is multiplied by.
+    pub fn get(self) -> f32 {
+        self.0
+    }
+}
+
+impl Default for TextScale {
+    fn default() -> Self {
+        Self::UNSCALED
+    }
+}
+
+// The factor is finite and above zero by construction, so equality by value is reflexive and agrees with the bits hashed.
+impl Eq for TextScale {}
+
+impl std::hash::Hash for TextScale {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.to_bits().hash(state);
+    }
 }
 
 impl SystemPreferences {

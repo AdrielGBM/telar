@@ -146,8 +146,8 @@ pub use platform_core::{
 pub use app_runtime::{AppRuntime, LocalApp};
 #[cfg(feature = "runtime")]
 pub use geometry_core::{
-    BODY_TEXT_CONTRAST, CellSize, Insets, NON_TEXT_CONTRAST, ObjectFit, Point, Rect, Size,
-    Transform,
+    BODY_TEXT_CONTRAST, CellSize, ENHANCED_TEXT_CONTRAST, Insets, NON_TEXT_CONTRAST, ObjectFit,
+    Point, Rect, Size, Transform,
 };
 #[cfg(feature = "runtime")]
 pub use layout_core::{
@@ -308,7 +308,7 @@ pub use services_core::{
 pub use services_core::{UriOpener, open_beside, open_uri, set_uri_opener};
 // Available in every GUI build rather than opt-in: `ui_core::Surface` composes the per-surface service scope, so `runtime` turns on services-core/di. A non-GUI build has no ui-core and nothing to re-export.
 #[cfg(feature = "runtime")]
-pub use platform_core::{ColorScheme, SystemPreferences, system_locales_from_env};
+pub use platform_core::{ColorScheme, SystemPreferences, TextScale, system_locales_from_env};
 // The app's address: always on, because every target has one to report even where no navigator follows it.
 #[cfg(feature = "runtime")]
 pub use location::navigate_back;
@@ -334,7 +334,7 @@ pub use preferences_core::{
     high_contrast_override, reduced_motion_override, set_high_contrast_override,
     set_reduced_motion_override, set_system_preferences, system_preferences, use_color_scheme,
     use_high_contrast, use_preferred_locales, use_reduced_motion, use_reduced_motion_override,
-    use_system_high_contrast, use_system_preferences, use_system_reduced_motion,
+    use_system_high_contrast, use_system_preferences, use_system_reduced_motion, use_text_scale,
 };
 #[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
@@ -344,11 +344,12 @@ pub use surface::{SurfaceControl, SurfaceToken};
 pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
+    CONTRAST_PAIRS, ColorToken, ContrastLevel, ContrastPair, ContrastShortfall, ContrastUse,
     ControlSize, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions,
-    ThemeTokens, Tone, Variant, active_mode, follow_system, is_dark, nearest_theme, register_mode,
-    register_mode_theme, registered_modes, scheme_mode, scheme_preference, set_mode,
-    set_mode_scheme, set_scheme_preference, set_theme, use_mode, use_resolved_scheme,
-    use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
+    ThemeTokens, Tone, Variant, active_mode, contrast_shortfalls, follow_system, is_dark,
+    nearest_theme, register_mode, register_mode_theme, registered_modes, scheme_mode,
+    scheme_preference, set_mode, set_mode_scheme, set_scheme_preference, set_theme, use_mode,
+    use_resolved_scheme, use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;

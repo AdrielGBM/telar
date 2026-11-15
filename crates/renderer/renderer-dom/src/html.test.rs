@@ -66,7 +66,7 @@ fn every_box_is_the_element_its_role_is_and_names_the_box_it_stands_for() {
     assert!(
         written
             .markup
-            .contains("<h1 data-telar-id=\"8\" style=\"font-size:16px;"),
+            .contains("<h1 data-telar-id=\"8\" style=\"font-size:1rem;"),
         "{}",
         written.markup
     );

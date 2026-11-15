@@ -141,7 +141,7 @@ impl Scale for Span {
 }
 
 /// Pixels scale; `em` is relative to a size that scales itself. A fraction of the surface is resolved to pixels before it gets this far (see `Declared::on_surface`).
-fn scale_length(length: crate::TextLength, sf: f32) -> crate::TextLength {
+pub(super) fn scale_length(length: crate::TextLength, sf: f32) -> crate::TextLength {
     match length {
         crate::TextLength::Px(px) => crate::TextLength::Px(px * sf),
         other => other,
@@ -163,7 +163,7 @@ impl Scale for TextDecoration {
     }
 }
 
-fn scale_decoration(length: DecorationLength, sf: f32) -> DecorationLength {
+pub(super) fn scale_decoration(length: DecorationLength, sf: f32) -> DecorationLength {
     match length {
         DecorationLength::Length(length) => DecorationLength::Length(scale_length(length, sf)),
         from_font => from_font,

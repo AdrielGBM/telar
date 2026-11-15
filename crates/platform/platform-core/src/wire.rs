@@ -21,7 +21,7 @@ use crate::{
     DropAction, DropAnswer, DroppedData, Event, FullscreenMode, HistoryStep, HistoryUpdate, Ime,
     Key, KeyboardConvention, LocationFormat, MimeType, ModifiersState, NamedKey, OutgoingDrag,
     PointerButton, PointerSource, Representation, ResizeEdge, ScrollDelta, SystemPreferences,
-    TextInput, TextSelection, WindowCommand, WindowConfig, WindowPosition,
+    TextInput, TextScale, TextSelection, WindowCommand, WindowConfig, WindowPosition,
 };
 
 wire_enum!(NamedKey {
@@ -116,11 +116,25 @@ wire_enum!(ColorScheme {
     Light = 0,
     Dark = 1
 });
+impl Shaped for TextScale {
+    const SHAPE: u64 = fold_shape(shape_named("TextScale"), f32::SHAPE);
+}
+
+impl Wire for TextScale {
+    fn put(&self, w: &mut Writer) {
+        self.get().put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        TextScale::new(f32::take(r)?).ok_or(WireError::Invalid("text scale"))
+    }
+}
+
 wire_struct!(SystemPreferences {
     color_scheme,
     reduced_motion,
     high_contrast,
-    locales
+    locales,
+    text_scale
 });
 wire_enum!(Event {
     WindowResized { width, height } = 0,

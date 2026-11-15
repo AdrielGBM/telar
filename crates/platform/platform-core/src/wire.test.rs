@@ -11,8 +11,8 @@ use crate::{
     DropAction, DropAnswer, DroppedData, Event, FullscreenMode, HasPopup, HistoryStep,
     HistoryUpdate, Ime, Key, KeyboardConvention, Location, MimeType, ModifiersState, NamedKey,
     NumericValue, Orientation, OutgoingDrag, PointerButton, PointerSource, ResizeEdge, Role,
-    ScrollDelta, SetPosition, SortDirection, SystemPreferences, TextInput, TextSelection, Toggle,
-    Value, WindowCommand, WindowConfig, WindowPosition,
+    ScrollDelta, SetPosition, SortDirection, SystemPreferences, TextInput, TextScale,
+    TextSelection, Toggle, Value, WindowCommand, WindowConfig, WindowPosition,
 };
 
 fn round_trip<T: Wire + PartialEq + Debug>(value: T) {
@@ -50,6 +50,7 @@ fn preferences() -> SystemPreferences {
         reduced_motion: Some(true),
         high_contrast: None,
         locales: vec!["es-CL".into(), "en".into()],
+        text_scale: TextScale::new(1.25).expect("a scale above zero"),
     }
 }
 

@@ -12,7 +12,11 @@ fn a_paragraph_is_cut_at_its_spans_with_plain_text_between() {
         )
         .linking_to(Destination::external("https://example.com").unwrap()),
     ];
-    let runs = runs_of("Meet the team today", &spans);
+    let runs = runs_of(
+        "Meet the team today",
+        &spans,
+        crate::document::DEFAULT_ROOT_FONT_SIZE,
+    );
     let texts: Vec<&str> = runs.iter().map(|run| run.text.as_str()).collect();
     assert_eq!(texts, ["Meet", " the ", "team", " today"]);
     assert_eq!(runs[0].css, "font-weight:700;");
@@ -32,7 +36,7 @@ fn a_span_that_does_not_fit_the_text_is_skipped() {
         Span::new(2..40, Declared::default()),
         Span::new(1..2, Declared::default()),
     ];
-    let runs = runs_of("ñandú", &spans);
+    let runs = runs_of("ñandú", &spans, crate::document::DEFAULT_ROOT_FONT_SIZE);
     assert_eq!(
         runs.iter().map(|run| run.text.as_str()).collect::<String>(),
         "ñandú"
@@ -44,10 +48,12 @@ fn a_restyled_run_changes_the_signature() {
     let plain = runs_of(
         "ab",
         &[Span::new(0..1, Declared::default().with_font_weight(400))],
+        crate::document::DEFAULT_ROOT_FONT_SIZE,
     );
     let bold = runs_of(
         "ab",
         &[Span::new(0..1, Declared::default().with_font_weight(700))],
+        crate::document::DEFAULT_ROOT_FONT_SIZE,
     );
     assert_ne!(signature(&plain), signature(&bold));
 }

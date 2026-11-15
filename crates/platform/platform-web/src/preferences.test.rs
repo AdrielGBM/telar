@@ -2,7 +2,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use platform_core::ColorScheme;
+use platform_core::{ColorScheme, TextScale};
 use telar_platform_web::{MediaAnswers, read_system_preferences};
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -51,7 +51,7 @@ fn the_snapshot_agrees_with_the_dark_query() {
 
 #[wasm_bindgen_test]
 fn unsupported_features_stay_unknown() {
-    let preferences = MediaAnswers::default().into_preferences(Vec::new());
+    let preferences = MediaAnswers::default().into_preferences(Vec::new(), TextScale::UNSCALED);
     assert_eq!(preferences.color_scheme, None);
     assert_eq!(preferences.reduced_motion, None);
     assert_eq!(preferences.high_contrast, None);
@@ -64,7 +64,7 @@ fn forced_colors_count_as_more_contrast() {
         forced_colors: Some(true),
         ..MediaAnswers::default()
     }
-    .into_preferences(Vec::new());
+    .into_preferences(Vec::new(), TextScale::UNSCALED);
     assert_eq!(preferences.high_contrast, Some(true));
 
     let preferences = MediaAnswers {
@@ -72,7 +72,7 @@ fn forced_colors_count_as_more_contrast() {
         forced_colors: None,
         ..MediaAnswers::default()
     }
-    .into_preferences(Vec::new());
+    .into_preferences(Vec::new(), TextScale::UNSCALED);
     assert_eq!(preferences.high_contrast, Some(false));
 }
 
@@ -89,11 +89,28 @@ fn a_light_or_dark_answer_names_the_scheme() {
         ..MediaAnswers::default()
     };
     assert_eq!(
-        dark.into_preferences(Vec::new()).color_scheme,
+        dark.into_preferences(Vec::new(), TextScale::UNSCALED)
+            .color_scheme,
         Some(ColorScheme::Dark)
     );
     assert_eq!(
-        light.into_preferences(Vec::new()).color_scheme,
+        light
+            .into_preferences(Vec::new(), TextScale::UNSCALED)
+            .color_scheme,
         Some(ColorScheme::Light)
     );
+}
+
+#[wasm_bindgen_test]
+fn the_text_scale_follows_the_root_font_size() {
+    let root = web_sys::window()
+        .unwrap()
+        .document()
+        .unwrap()
+        .document_element()
+        .unwrap();
+    root.set_attribute("style", "font-size:24px").unwrap();
+    let scaled = read_system_preferences().text_scale;
+    root.remove_attribute("style").unwrap();
+    assert_eq!(scaled.get(), 1.5);
 }

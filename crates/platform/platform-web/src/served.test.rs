@@ -1,4 +1,4 @@
-use platform_core::{ColorScheme, SystemPreferences};
+use platform_core::{ColorScheme, SystemPreferences, TextScale};
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
 use super::{ServedState, parse_served_state};
@@ -20,6 +20,7 @@ fn a_page_s_state_reads_back_as_the_inputs_it_was_written_from() {
                 reduced_motion: Some(true),
                 high_contrast: None,
                 locales: vec!["es-CL".to_string(), "en".to_string()],
+                text_scale: TextScale::UNSCALED,
             },
             surface: (1280, 800),
             signals: vec![

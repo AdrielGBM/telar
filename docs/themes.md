@@ -95,6 +95,57 @@ a gap. The ring is two bands because no one colour stands out from every fill an
 fill shows, and on the surface around a control the band shows. A theme that moves either colour keeps the two
 apart. A `[telar] library`'s `$theme` reads every role like any other token.
 
+## High contrast
+
+Where the person asked for more contrast (`use_high_contrast()` is `Some(true)`: the system's preference, the
+app's override or a surface's own, see [system preferences](system-preferences.md#choosing-high-contrast)),
+`use_theme_tokens()` answers a high-contrast set derived from the theme in force, so a theme needs no second
+variant for it and every catalogue component follows:
+
+| Tokens | Under high contrast |
+| --- | --- |
+| `ink`, `muted`, `primary`, `success`, `warning`, `info`, `error` | the theme's colour, or the first step from it toward black or white that stands 7:1 from `surface` and from `surface_alt` |
+| `on_primary`, `on_error`, `inverse_ink` | the same, 7:1 from the colour they are drawn on |
+| `control_border`, `focus_ring` | 4.5:1 from what they sit on |
+| `border` | 3:1 from the surfaces |
+| `surface`, `surface_alt`, `inverse_surface`, `focus_ring_inner` | opaque, a translucent one laid over `surface` |
+| `focus_ring_width` | half as wide again |
+
+A colour that already stands far enough apart stays the theme's own, and every other token (metrics, washes, a
+plugin's own tokens) is the theme's answer. The set is derived on the `ThemeTokens` view: `use_theme::<AppTheme>()`
+and an application's `$theme.field` read the theme as it was written, so an application that draws in its own
+fields and should follow high contrast reads the tokens instead, or registers a variant of its own and picks it
+under `use_high_contrast()`.
+
+### The contrast table
+
+`CONTRAST_PAIRS` lists every pair the catalogue draws one colour token on another, and what it draws it as: text,
+held to 4.5:1 and to 7:1 under high contrast, or a control's boundary, held to 3:1 and to 4.5:1. `surface_alt` is
+judged laid over `surface`. `contrast_shortfalls(theme)` checks a theme against it, as it is and as its
+high-contrast set, in the mode in force where it is called, so an application tests its theme once per mode:
+
+```rust
+#[test]
+fn both_variants_read_well() {
+    register_modes();
+    for (mode, theme) in [("light", AppTheme::light()), ("dark", AppTheme::dark())] {
+        set_mode(mode);
+        let shortfalls = contrast_shortfalls(theme);
+        assert!(shortfalls.is_empty(), "{mode}: {shortfalls:?}");
+    }
+}
+```
+
+theme-core holds the defaults to it, and the catalogue's and the scaffolded app's themes are tested against it in
+both modes.
+
+## The reader's text size
+
+A theme sets the document's text at `ThemeTokens::root`; the reader's text scale (`use_text_scale()`, see
+[system preferences](system-preferences.md#what-follows-them)) multiplies it and every other size the text
+cascade resolves, so a theme designs its type at a scale of 1 and needs no token for the setting. What a
+component sizes from the text around it, a `measure` width or a caption, grows with it.
+
 ## A component's size
 
 A catalogue component with metrics of its own — a control, a `tag`, a field — takes `size`, a

@@ -1,10 +1,10 @@
-//! Android's [`SystemPreferences`]: night mode from the configuration, the rest from the settings providers and `LocaleList` over JNI.
+//! Android's [`SystemPreferences`]: night mode from the configuration, the rest, the font scale among them, from the settings providers and `LocaleList` over JNI.
 
 use android_activity::AndroidApp;
 use android_activity::ndk::configuration::{Configuration, UiModeNight};
 use jni::objects::{JObject, JString, JValue};
 use jni::{Env, JavaVM, jni_sig, jni_str};
-use platform_core::{ColorScheme, SystemPreferences};
+use platform_core::{ColorScheme, SystemPreferences, TextScale};
 
 use crate::preference_values::{
     animator_scale_reduces_motion, configuration_locale, split_language_tags,
@@ -39,6 +39,7 @@ pub fn read(app: &AndroidApp) -> SystemPreferences {
         reduced_motion: java.reduced_motion,
         high_contrast: java.high_contrast,
         locales,
+        text_scale: java.text_scale,
     }
 }
 
@@ -47,6 +48,7 @@ struct FromJava {
     reduced_motion: Option<bool>,
     high_contrast: Option<bool>,
     locales: Vec<String>,
+    text_scale: TextScale,
 }
 
 fn from_java(app: &AndroidApp) -> jni::errors::Result<FromJava> {
@@ -68,6 +70,10 @@ fn from_java(app: &AndroidApp) -> jni::errors::Result<FromJava> {
                 .map(animator_scale_reduces_motion),
             high_contrast: high_text_contrast(env, &resolver).ok(),
             locales: locale_list(env, &activity).unwrap_or_default(),
+            text_scale: font_scale(env, &resolver)
+                .ok()
+                .and_then(TextScale::new)
+                .unwrap_or(TextScale::UNSCALED),
         })
     })
 }
@@ -76,6 +82,22 @@ fn animator_duration_scale(env: &mut Env, resolver: &JObject) -> jni::errors::Re
     let name = env.new_string("animator_duration_scale")?;
     env.call_static_method(
         jni_str!("android/provider/Settings$Global"),
+        jni_str!("getFloat"),
+        jni_sig!("(Landroid/content/ContentResolver;Ljava/lang/String;F)F"),
+        &[
+            JValue::Object(resolver),
+            JValue::Object(&name),
+            JValue::Float(1.0),
+        ],
+    )?
+    .f()
+}
+
+/// The font size the display settings set, as `Configuration.fontScale` carries it to every app.
+fn font_scale(env: &mut Env, resolver: &JObject) -> jni::errors::Result<f32> {
+    let name = env.new_string("font_scale")?;
+    env.call_static_method(
+        jni_str!("android/provider/Settings$System"),
         jni_str!("getFloat"),
         jni_sig!("(Landroid/content/ContentResolver;Ljava/lang/String;F)F"),
         &[

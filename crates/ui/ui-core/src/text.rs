@@ -226,6 +226,17 @@ impl Text {
         layout_style: LayoutStyle,
         source: StyleSource,
     ) -> Result<Self, LayoutError> {
+        let spans_fn = spans_fn.map(|spans| {
+            Rc::new(move || {
+                spans()
+                    .into_iter()
+                    .map(|span| Span {
+                        over: crate::inherit::scaled(&span.over),
+                        ..span
+                    })
+                    .collect()
+            }) as Rc<dyn Fn() -> Vec<Span>>
+        });
         // The node does not exist until the leaf is registered, and that call's measure closure already reads the style, so the cell lets the style close over a node older than itself.
         let node_cell = Rc::new(std::cell::Cell::new(None::<layout_core::NodeId>));
         let in_language = |styled: Rc<dyn Fn() -> TextStyle>| -> Rc<dyn Fn() -> TextStyle> {

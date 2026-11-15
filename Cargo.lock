@@ -859,6 +859,7 @@ dependencies = [
  "telar-renderer-core",
  "telar-renderer-dom",
  "telar-test-process",
+ "telar-theme-core",
  "telar-transpiler",
  "tempfile",
  "toml",

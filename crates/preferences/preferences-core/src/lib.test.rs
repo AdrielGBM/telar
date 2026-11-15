@@ -9,6 +9,7 @@ fn dark_spanish() -> SystemPreferences {
         reduced_motion: Some(false),
         high_contrast: None,
         locales: vec!["es-CL".into(), "en".into()],
+        text_scale: TextScale::new(1.5).expect("a scale above zero"),
     }
 }
 
@@ -56,6 +57,26 @@ fn a_reader_of_one_field_ignores_the_others() {
         ..dark_spanish()
     });
     assert_eq!(runs.get(), 2);
+}
+
+#[test]
+fn a_reader_of_the_text_scale_follows_it_alone() {
+    set_system_preferences(dark_spanish());
+    let runs = count_runs(|| {
+        use_text_scale();
+    });
+    set_system_preferences(SystemPreferences {
+        color_scheme: Some(ColorScheme::Light),
+        ..dark_spanish()
+    });
+    assert_eq!(runs.get(), 1, "the scheme is not the text scale");
+
+    set_system_preferences(SystemPreferences {
+        text_scale: TextScale::new(2.0).expect("a scale above zero"),
+        ..dark_spanish()
+    });
+    assert_eq!(runs.get(), 2);
+    assert_eq!(text_scale().get(), 2.0);
 }
 
 #[test]

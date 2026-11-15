@@ -826,6 +826,11 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     ),
     (
         "crates/preferences/preferences-core/src/lib.rs",
+        "TEXT_SCALE",
+        "the system's value, which the host hands this copy's signal through the `set_system_preferences` entry on every change",
+    ),
+    (
+        "crates/preferences/preferences-core/src/lib.rs",
         "REDUCED_MOTION_OVERRIDE",
         "the app's own choice, set by code of this copy and kept between runs through the bridged preference store",
     ),

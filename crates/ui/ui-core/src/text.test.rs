@@ -876,3 +876,68 @@ fn what_a_container_authors_is_inherited_and_a_text_inside_still_overrides_it() 
     assert_eq!(style.font_weight, 700);
     assert_eq!(style.letter_spacing, 2.0);
 }
+
+fn at_text_scale(factor: f32) {
+    preferences_core::set_system_preferences(preferences_core::SystemPreferences {
+        text_scale: preferences_core::TextScale::new(factor).expect("a scale above zero"),
+        ..preferences_core::SystemPreferences::default()
+    });
+}
+
+fn label() -> Text {
+    Text::declaring(
+        || "Label".to_string(),
+        LayoutStyle::new(),
+        |inherited| inherited,
+    )
+    .unwrap()
+}
+
+/// The reader's text scale multiplies every size the cascade resolves: the document's own, one a region declares, one the call placing a text authors, and one a span of a paragraph names.
+#[test]
+fn a_text_scale_of_two_doubles_a_labels_font_size_wherever_the_size_comes_from() {
+    use crate::inherit::AuthoredText;
+    use renderer_core::{Declared, Span};
+    let sizes = |factor: f32| {
+        at_text_scale(factor);
+        reset_layout_runtime();
+        let document = drawn_style(label()).font_size;
+        let declared = drawn_style(
+            crate::Container::new(LayoutStyle::new(), vec![crate::box_item(label())])
+                .unwrap()
+                .declaring(|| Declared::default().with_font_size(11.0)),
+        )
+        .font_size;
+        let authored =
+            drawn_style(label().authored_text(|| Declared::default().with_font_size(20.0)))
+                .font_size;
+        let spanned = Text::spanned_declaring(
+            || "a span".to_string(),
+            || vec![Span::new(0..1, Declared::default().with_font_size(30.0))],
+            LayoutStyle::new(),
+            |inherited| inherited,
+        )
+        .unwrap();
+        let span = spanned.spans.as_ref().unwrap()()[0]
+            .over
+            .font_size
+            .map_or(0.0, |size| size.resolve(0.0, geometry_core::Size::ZERO));
+        [document, declared, authored, span]
+    };
+    let unscaled = sizes(1.0);
+    assert_eq!(
+        unscaled,
+        [crate::inherit::Inherited::BASE_FONT_SIZE, 11.0, 20.0, 30.0]
+    );
+    assert_eq!(sizes(2.0), unscaled.map(|size| size * 2.0));
+}
+
+#[test]
+fn a_label_follows_the_text_scale_as_it_changes() {
+    at_text_scale(1.0);
+    reset_layout_runtime();
+    let label = label();
+    let before = (label.style)().font_size;
+    at_text_scale(1.5);
+    assert_eq!((label.style)().font_size, before * 1.5);
+}

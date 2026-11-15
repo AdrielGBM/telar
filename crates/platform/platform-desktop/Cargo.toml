@@ -21,7 +21,7 @@ clipboard = ["dep:arboard"]
 clipboard-wayland = ["clipboard", "arboard/wayland-data-control"]
 # Native file pickers: the XDG portal on Linux, the OS panel elsewhere. The cheapest of the four to drop — a kiosk that opens no files links `rfd` for nothing.
 dialogs = ["dep:rfd"]
-# Linux only: the freedesktop settings portal, which is where colour scheme, contrast and reduced motion come from there, over `zbus`. Windows and macOS answer through their own system APIs and need no feature.
+# Linux only: the freedesktop settings portal, which is where colour scheme, contrast, reduced motion and, where the desktop publishes it, the text scale come from there, over `zbus`. Windows and macOS answer through their own system APIs and need no feature.
 system-theme = ["dep:zbus"]
 
 [dependencies]
@@ -57,7 +57,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", 
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSEnumerator", "NSLocale", "NSString", "block2", "NSNotification", "NSOperation", "NSURL"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_Accessibility", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_UI_Accessibility", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 layout-core = { workspace = true }

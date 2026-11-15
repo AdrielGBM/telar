@@ -37,7 +37,7 @@ element group
       element group
         rect 420,476 364x40 fill=#ffffffff border=1 border-color=#dbdeedff radius=12
         element group
-          rect 432,488 2x16 fill=#3d8ce6ff radius=1
+          rect 432,488 2x16 fill=#1f6bc7ff radius=1
         end
         element group
           element group

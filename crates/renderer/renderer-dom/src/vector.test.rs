@@ -199,6 +199,7 @@ fn text_carries_the_css_a_box_would_have_given_it() {
         "fill & stroke",
         Rect::new(2.0, 4.0, 100.0, 14.0),
         &TextStyle::new(11.0, Color::BLACK),
+        crate::document::DEFAULT_ROOT_FONT_SIZE,
     );
     let out = d.finish();
     assert!(
@@ -209,7 +210,7 @@ fn text_carries_the_css_a_box_would_have_given_it() {
         out.contains("xmlns=\"http://www.w3.org/1999/xhtml\""),
         "{out}"
     );
-    assert!(out.contains("font-size:11px"), "{out}");
+    assert!(out.contains("font-size:0.6875rem"), "{out}");
     assert!(out.contains(">fill &amp; stroke<"), "{out}");
 }
 
@@ -401,6 +402,7 @@ fn a_mask_source_is_a_definition_and_its_content_is_shown_through_it() {
         Rect::new(10.0, 20.0, 300.0, 80.0),
         &renderer_core::TextStyle::new(64.0, renderer_core::Color::WHITE),
         60.0,
+        crate::document::DEFAULT_ROOT_FONT_SIZE,
     );
     d.close_group();
     assert!(!d.in_mask());

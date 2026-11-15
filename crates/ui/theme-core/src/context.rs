@@ -9,6 +9,8 @@ use geometry_core::{Color, NON_TEXT_CONTRAST};
 use reactive_core::{RwSignal, detached, signal};
 use renderer_core::Declared;
 
+use crate::high_contrast::HighContrast;
+
 /// Opt-in semantic-token contract the built-in component catalogue reads through, so a component can resolve a token without knowing the concrete theme type.
 ///
 /// **Every method carries a default**, which makes `impl ThemeTokens for MyTheme {}` valid and each token an independent opt-in: a theme answers the questions it cares about and lets the catalogue keep its own answer for the rest. This trait is deliberately not where a theme's vocabulary lives — that belongs to the theme's own type, reachable in full through [`use_theme`]. What is here is only the subset a component written without knowledge of that type has to be able to ask for.
@@ -296,7 +298,7 @@ impl ThemeExtensions {
 #[derive(Clone)]
 pub(crate) struct Installed {
     theme: Rc<dyn Any>,
-    tokens: Rc<dyn ThemeTokens>,
+    tokens: TokenSets,
     extensions: Rc<ThemeExtensions>,
 }
 
@@ -307,8 +309,33 @@ impl Installed {
         let theme = Rc::new(theme);
         Self {
             theme: theme.clone(),
-            tokens: theme,
+            tokens: TokenSets::new(theme),
             extensions: Rc::new(extensions),
+        }
+    }
+}
+
+/// A theme's tokens as it answers them, and the high-contrast set derived from them once, so a read under high contrast allocates nothing.
+#[derive(Clone)]
+struct TokenSets {
+    standard: Rc<dyn ThemeTokens>,
+    high: Rc<dyn ThemeTokens>,
+}
+
+impl TokenSets {
+    fn new(standard: Rc<dyn ThemeTokens>) -> Self {
+        Self {
+            high: Rc::new(HighContrast(Rc::clone(&standard))),
+            standard,
+        }
+    }
+
+    /// The set the active surface is shown in, subscribing the caller to its high-contrast preference.
+    fn current(&self) -> Rc<dyn ThemeTokens> {
+        if preferences_core::use_high_contrast() == Some(true) {
+            Rc::clone(&self.high)
+        } else {
+            Rc::clone(&self.standard)
         }
     }
 }
@@ -371,10 +398,10 @@ impl ScopedTheme {
         self.0.with(Option::is_none)
     }
 
-    /// This theme's tokens, read reactively.
+    /// This theme's tokens, read reactively: the high-contrast set derived from them where the active surface is shown with more contrast, as [`use_theme_tokens`] answers.
     pub fn tokens(&self) -> Rc<dyn ThemeTokens> {
         match self.resolved() {
-            Some(installed) => installed.tokens,
+            Some(installed) => installed.tokens.current(),
             None => default_tokens(),
         }
     }
@@ -443,6 +470,8 @@ impl<T: Clone + 'static> Theme<T> {
 }
 
 /// The theme in force as the application's own type: the nearest [`ScopedTheme`] above the current owner that holds a `T`, else the theme of the surface's own mode, else the global theme, walking past any of them that holds another type. A provider that [follows the global theme](ScopedTheme::follow_global) holds whatever the global theme holds. Reads reactively, so a switch re-runs the caller; panics if no provider or the global theme holds a `T`.
+///
+/// The value is the one the application wrote, whatever the contrast preference: the high-contrast set is derived on the [`ThemeTokens`] view ([`use_theme_tokens`]), so an application that reads its own fields and should follow high contrast reads the tokens instead, or picks a variant of its own under `use_high_contrast`.
 pub fn use_theme<T: Clone + 'static>() -> T {
     let scoped = reactive_core::find_context::<Provided, _>(|provided| {
         provided.0.resolved()?.theme.downcast_ref::<T>().cloned()
@@ -462,10 +491,12 @@ pub fn use_theme<T: Clone + 'static>() -> T {
         })
 }
 
-/// Never `None`: with no theme registered the answer is the same table nobody overrode, because per-caller fallbacks drifted into a second palette that ignored light/dark mode.
+/// The tokens of the theme in force, read reactively. Never `None`: with no theme registered the answer is the same table nobody overrode, because per-caller fallbacks drifted into a second palette that ignored light/dark mode.
+///
+/// Where the active surface is shown with more contrast ([`use_high_contrast`](preferences_core::use_high_contrast)), the answer is the high-contrast set derived from the theme: every colour drawn as text pushed to 7:1 from `surface` and `surface_alt`, `control_border` and `focus_ring` to 4.5:1, `border` to 3:1, the surfaces opaque and the ring half as wide again. A theme answers its other tokens as it would anyway. [`contrast_shortfalls`](crate::contrast_shortfalls) checks both sets.
 pub fn use_theme_tokens() -> Rc<dyn ThemeTokens> {
     match in_force() {
-        Some(installed) => installed.tokens,
+        Some(installed) => installed.tokens.current(),
         None => default_tokens(),
     }
 }
@@ -483,17 +514,17 @@ struct DefaultTokens;
 impl ThemeTokens for DefaultTokens {}
 
 reactive_core::dropless_thread_local! {
-    static DEFAULT_TOKENS: released Option<Rc<dyn ThemeTokens>> = const { None };
+    static DEFAULT_TOKENS: released Option<TokenSets> = const { None };
 }
 
 fn default_tokens() -> Rc<dyn ThemeTokens> {
-    DEFAULT_TOKENS.with(|tokens| {
-        Rc::clone(
-            tokens
-                .borrow_mut()
-                .get_or_insert_with(|| Rc::new(DefaultTokens)),
-        )
-    })
+    let sets = DEFAULT_TOKENS.with(|tokens| {
+        tokens
+            .borrow_mut()
+            .get_or_insert_with(|| TokenSets::new(Rc::new(DefaultTokens)))
+            .clone()
+    });
+    sets.current()
 }
 
 #[cfg(test)]

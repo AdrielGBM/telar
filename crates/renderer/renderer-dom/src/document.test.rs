@@ -25,6 +25,10 @@ impl Surface for Fixed {
     fn baseline(&mut self, style: &TextStyle) -> f32 {
         style.font_size
     }
+
+    fn root_font_size(&mut self) -> f32 {
+        DEFAULT_ROOT_FONT_SIZE
+    }
 }
 
 fn open(id: u64, semantics: Semantics) -> DrawCommand {
@@ -68,7 +72,7 @@ fn a_single_run_of_text_is_the_elements_own_text() {
     );
     let node = only_box(&frame);
     assert!(matches!(&node.content, Content::Text { text, runs: None, .. } if text == "Hello"));
-    assert!(node.style.contains("font-size:14px;"), "{}", node.style);
+    assert!(node.style.contains("font-size:0.875rem;"), "{}", node.style);
 }
 
 #[test]
@@ -1190,6 +1194,10 @@ impl Surface for Offset {
 
     fn baseline(&mut self, style: &TextStyle) -> f32 {
         style.font_size
+    }
+
+    fn root_font_size(&mut self) -> f32 {
+        DEFAULT_ROOT_FONT_SIZE
     }
 }
 

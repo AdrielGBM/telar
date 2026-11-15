@@ -24,16 +24,16 @@ impl Inherited {
         Self::from_tokens(&*use_theme_tokens())
     }
 
-    /// Text size inherits, so this stays a constant rather than a theme token — a theme instead sets [`ThemeTokens::root`].
+    /// Text size inherits, so this stays a constant rather than a theme token — a theme instead sets [`ThemeTokens::root`]. The size before the reader's text scale, which multiplies it like every size the cascade resolves.
     pub const BASE_FONT_SIZE: f32 = 14.0;
 
-    /// The row `tokens` set, over the active surface's default family ([`set_font_family`](crate::set_font_family)) — read reactively, so a cascade resolved from here follows it.
+    /// The row `tokens` set, over the active surface's default family ([`set_font_family`](crate::set_font_family)) and at the reader's text scale ([`use_text_scale`](preferences_core::use_text_scale)) — read reactively, so a cascade resolved from here follows both.
     pub fn from_tokens(tokens: &dyn ThemeTokens) -> Self {
-        let base = TextStyle::new(Self::BASE_FONT_SIZE, tokens.ink())
+        let base = TextStyle::new(Self::BASE_FONT_SIZE * text_scale(), tokens.ink())
             .with_font_family(crate::surface_font::root_family());
         Self {
             text: {
-                let root = tokens.root();
+                let root = scaled(&tokens.root());
                 root.over(&base, surface_for(&root))
             },
             cursor: Cursor::Default,
@@ -41,9 +41,11 @@ impl Inherited {
         }
     }
 
+    /// This row with `declared` applied over it, its lengths in pixels at the reader's text scale.
     pub fn with(&self, declared: &Declared) -> Self {
+        let declared = scaled(declared);
         Self {
-            text: declared.over(&self.text, surface_for(declared)),
+            text: declared.over(&self.text, surface_for(&declared)),
             ..self.clone()
         }
     }
@@ -51,6 +53,15 @@ impl Inherited {
     pub fn text_style(&self) -> TextStyle {
         self.text.clone()
     }
+}
+
+fn text_scale() -> f32 {
+    preferences_core::use_text_scale().get()
+}
+
+/// `declared` at the reader's text scale, read reactively so a resolved style follows it.
+pub(crate) fn scaled(declared: &Declared) -> Declared {
+    declared.text_scaled(text_scale())
 }
 
 /// The surface a declaration resolves against: read reactively only by one that names a fraction of it, so a resize re-resolves exactly the text that depends on it.
@@ -241,7 +252,7 @@ pub(crate) fn authored_over(
     let Some(authored) = authored else {
         return own;
     };
-    let authored = authored.get();
+    let authored = scaled(&authored.get());
     let surface = surface_for(&authored);
     authored
         .sized_against(em_base(), surface)

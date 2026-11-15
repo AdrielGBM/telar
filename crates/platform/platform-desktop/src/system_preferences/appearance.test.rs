@@ -1,4 +1,4 @@
-use platform_core::{ColorScheme, SystemPreferences};
+use platform_core::{ColorScheme, SystemPreferences, TextScale};
 
 use super::*;
 
@@ -82,4 +82,16 @@ fn a_change_signal_updates_only_its_own_field() {
     assert_eq!(preferences.color_scheme, Some(ColorScheme::Light));
     assert_eq!(preferences.high_contrast, Some(false));
     assert_eq!(preferences.reduced_motion, Some(true));
+}
+
+#[test]
+fn a_text_scaling_factor_that_is_no_scale_leaves_text_at_its_designed_size() {
+    assert_eq!(
+        AppearanceSetting::text_scaling_factor(1.5),
+        AppearanceSetting::TextScale(TextScale::new(1.5).expect("a scale above zero"))
+    );
+    assert_eq!(
+        AppearanceSetting::text_scaling_factor(0.0),
+        AppearanceSetting::TextScale(TextScale::UNSCALED)
+    );
 }

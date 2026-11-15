@@ -78,6 +78,7 @@ fn the_tree_is_built_already_knowing_the_preferences() {
         reduced_motion: Some(true),
         high_contrast: Some(false),
         locales: vec!["es-CL".into(), "en".into()],
+        text_scale: telar::TextScale::new(1.25).expect("a scale above zero"),
     };
     let observed = run(declared.clone());
     assert_eq!(observed.seen_at_build.borrow().as_ref(), Some(&declared));

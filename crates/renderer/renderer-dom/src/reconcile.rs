@@ -249,6 +249,8 @@ struct LiveSurface<'a> {
     document_scroll: &'a mut Option<crate::document_scroll::DocumentScroll>,
     /// Where the surface's origin is in the viewport this frame, read once and only when something is placed against it.
     origin: Option<(f32, f32)>,
+    /// The root element's font size this frame, read once and only when a text is written.
+    root_font_size: Option<f32>,
 }
 
 impl Surface for LiveSurface<'_> {
@@ -279,6 +281,26 @@ impl Surface for LiveSurface<'_> {
     fn baseline(&mut self, style: &TextStyle) -> f32 {
         crate::metrics::baseline(style)
     }
+
+    fn root_font_size(&mut self) -> f32 {
+        *self
+            .root_font_size
+            .get_or_insert_with(|| root_font_size(self.host))
+    }
+}
+
+/// The computed font size of the document's root element, or the browser's default where it cannot be read.
+fn root_font_size(host: &web_sys::HtmlElement) -> f32 {
+    let root = host
+        .owner_document()
+        .and_then(|document| document.document_element());
+    let computed =
+        root.and_then(|root| web_sys::window()?.get_computed_style(&root).ok().flatten());
+    computed
+        .and_then(|style| style.get_property_value("font-size").ok())
+        .and_then(|size| size.strip_suffix("px")?.parse::<f32>().ok())
+        .filter(|size| size.is_finite() && *size > 0.0)
+        .unwrap_or(crate::document::DEFAULT_ROOT_FONT_SIZE)
 }
 
 impl Reconciler {
@@ -320,6 +342,7 @@ impl Reconciler {
                 host: &self.host,
                 document_scroll: &mut self.document_scroll,
                 origin: None,
+                root_font_size: None,
             },
             self.audit,
         );

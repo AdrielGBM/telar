@@ -483,9 +483,10 @@ field's ink rather than half.
 rest — a field's frame, an unchecked checkbox, an unselected radio or filter, an off switch's track, a select's
 trigger, an unchosen swatch — is drawn in `control_border`, which by default is the first step from `surface`
 toward `muted` that stands 3:1 from `surface` and from `surface_alt` over it, so a theme that sets its own surfaces
-and `muted` gets control boundaries that follow them. A theme that overrides a token owns its contrast; theme-core
-checks every pair the catalogue draws for the defaults, and the audit below is the way to check a theme of one's
-own.
+and `muted` gets control boundaries that follow them. A theme that overrides a token owns its contrast: theme-core
+holds the defaults to every pair the catalogue draws, and `contrast_shortfalls(theme)` checks a theme of one's own
+against the same table, at the regular contrast and at the high contrast derived from it (see
+[themes](themes.md#high-contrast)); the audit below checks what a screen actually draws.
 
 ## Forced colors
 

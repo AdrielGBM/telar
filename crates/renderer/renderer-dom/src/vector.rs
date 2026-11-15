@@ -174,13 +174,13 @@ impl Drawing {
         }
     }
 
-    pub fn text(&mut self, text: &str, rect: Rect, style: &TextStyle) {
+    pub fn text(&mut self, text: &str, rect: Rect, style: &TextStyle, root_font_size: f32) {
         if text.is_empty() {
             return;
         }
         // Laid out by the browser rather than placed as an SVG `<text>`: wrapping, alignment, line height and the clamp are all things a Telar text style can ask for and an SVG text run cannot do.
         let mut css = String::new();
-        crate::paint::text_style(style, &mut css);
+        crate::paint::text_style(style, root_font_size, &mut css);
         self.body.push_str(&format!(
             "<foreignObject x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"><div xmlns=\"http://www.w3.org/1999/xhtml\" style=\"{}\">{}</div></foreignObject>",
             round(rect.x),
@@ -360,7 +360,14 @@ impl Drawing {
     }
 
     /// A one-line text as an SVG `<text>`, for a mask source: a browser does not draw a document inside a mask, so the `foreignObject` [`text`](Self::text) writes would cover nothing. `baseline` is how far below the top of its line box the text sits on its baseline.
-    pub fn mask_text(&mut self, text: &str, rect: Rect, style: &TextStyle, baseline: f32) {
+    pub fn mask_text(
+        &mut self,
+        text: &str,
+        rect: Rect,
+        style: &TextStyle,
+        baseline: f32,
+        root_font_size: f32,
+    ) {
         if text.is_empty() {
             return;
         }
@@ -372,7 +379,7 @@ impl Drawing {
             }
         };
         let mut css = String::new();
-        crate::paint::text_style(style, &mut css);
+        crate::paint::text_style(style, root_font_size, &mut css);
         let fill = match style.color {
             Paint::Solid(ink) => color(ink),
             Paint::Gradient(_) => "#fff".to_string(),

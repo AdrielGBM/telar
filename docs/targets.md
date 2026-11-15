@@ -56,8 +56,8 @@ time — an app that ships to a known fleet can drop one:
 telar = { version = "0.1", default-features = false, features = ["desktop-bare", "software"] }
 ```
 
-Reads the OS theme, reduced motion, high contrast and locales through winit and the platform's own APIs
-(see [docs/system-preferences.md](system-preferences.md)), and its surface size from winit's `Resized`
+Reads the OS theme, reduced motion, high contrast, text scale and locales through winit and the platform's own
+APIs (see [docs/system-preferences.md](system-preferences.md)), and its surface size from winit's `Resized`
 (see [docs/surface-size.md](surface-size.md)).
 
 ## Terminal
@@ -81,7 +81,7 @@ paths, images) is approximated or dropped, because a cell is the smallest thing 
 picture comes back as half blocks, two colours to a cell.
 
 Reads `COLORFGBG` for colour scheme and the environment for locales, like Linux desktop; reduced motion and
-high contrast are unknown here, a terminal keeps those to itself (see
+high contrast are unknown here, a terminal keeps those to itself, and text is unscaled (see
 [docs/system-preferences.md](system-preferences.md)). Its surface size is the terminal's columns and rows,
 snapped to whole cells (see [docs/surface-size.md](surface-size.md)).
 
@@ -119,9 +119,9 @@ grows with the content and the browser scrolls it. On `web` the canvas stays the
 scrolls by drawing. See [docs/primary-scroll.md](primary-scroll.md).
 
 Both read the OS theme, reduced motion, high contrast and `navigator.languages` through media queries and
-`languagechange` (see [docs/system-preferences.md](system-preferences.md)), and both measure the host
-element's own box for surface size rather than the browser viewport (see
-[docs/surface-size.md](surface-size.md)).
+`languagechange`, and the text scale from the root font size (see
+[docs/system-preferences.md](system-preferences.md)), and both measure the host element's own box for surface
+size rather than the browser viewport (see [docs/surface-size.md](surface-size.md)).
 
 The document is the default: `--renderer` on `build` and `dev` is `dom` unless it says `canvas`, which also
 writes `data-telar-renderer="canvas"` into the page. A page whose renderer setting names the canvas draws one
@@ -163,9 +163,9 @@ here than anywhere else.
 The Android frontend is opt-in rather than implied by the target triple, because a command-line build under
 Termux is an ordinary Linux process with no activity behind it, and linking one would be dead weight.
 
-Reads colour scheme, reduced motion, high contrast and the locale list over JNI, polled every 500 ms (see
-[docs/system-preferences.md](system-preferences.md)); surface size comes from the same winit `Resized` path
-desktop uses (see [docs/surface-size.md](surface-size.md)).
+Reads colour scheme, reduced motion, high contrast, the font scale and the locale list over JNI, polled every
+500 ms (see [docs/system-preferences.md](system-preferences.md)); surface size comes from the same winit
+`Resized` path desktop uses (see [docs/surface-size.md](surface-size.md)).
 
 ## Headless
 

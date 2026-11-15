@@ -1,10 +1,10 @@
 //! The desktop's [`SystemPreferences`]: read from each OS's own source, and kept current as one snapshot the runners deliver whole.
 //!
-//! | OS | Colour scheme | Reduced motion | High contrast | Locales | Changes |
-//! | --- | --- | --- | --- | --- | --- |
-//! | Linux | settings portal | portal `reduced-motion` | portal `contrast` | `LANGUAGE`/`LC_*`/`LANG` | portal `SettingChanged` |
-//! | Windows | winit | `SPI_GETCLIENTAREAANIMATION` | `SPI_GETHIGHCONTRAST` | `GetUserPreferredUILanguages` | `WM_SETTINGCHANGE` to a hidden listener window, winit theme change |
-//! | macOS | winit | `accessibilityDisplayShouldReduceMotion` | `accessibilityDisplayShouldIncreaseContrast` | `NSLocale.preferredLanguages` | accessibility-options and current-locale notifications, winit theme change |
+//! | OS | Colour scheme | Reduced motion | High contrast | Locales | Text scale | Changes |
+//! | --- | --- | --- | --- | --- | --- | --- |
+//! | Linux | settings portal | portal `reduced-motion` | portal `contrast` | `LANGUAGE`/`LC_*`/`LANG` | portal `org.gnome.desktop.interface` `text-scaling-factor`, where the desktop publishes it | portal `SettingChanged` |
+//! | Windows | winit | `SPI_GETCLIENTAREAANIMATION` | `SPI_GETHIGHCONTRAST` | `GetUserPreferredUILanguages` | `HKCU\Software\Microsoft\Accessibility` `TextScaleFactor` | `WM_SETTINGCHANGE` to a hidden listener window, winit theme change |
+//! | macOS | winit | `accessibilityDisplayShouldReduceMotion` | `accessibilityDisplayShouldIncreaseContrast` | `NSLocale.preferredLanguages` | none, so unscaled | accessibility-options and current-locale notifications, winit theme change |
 
 #[cfg(any(test, all(target_os = "linux", feature = "system-theme")))]
 pub mod appearance;
@@ -51,6 +51,7 @@ fn read_os(winit_scheme: Option<ColorScheme>) -> SystemPreferences {
         reduced_motion: windows::reduced_motion(),
         high_contrast: windows::high_contrast(),
         locales: windows::locales(),
+        text_scale: windows::text_scale(),
     }
 }
 
@@ -61,6 +62,7 @@ fn read_os(winit_scheme: Option<ColorScheme>) -> SystemPreferences {
         reduced_motion: macos::reduced_motion(),
         high_contrast: macos::high_contrast(),
         locales: macos::locales(),
+        text_scale: platform_core::TextScale::UNSCALED,
     }
 }
 
@@ -72,8 +74,10 @@ fn read_os(winit_scheme: Option<ColorScheme>) -> SystemPreferences {
 fn read_os(winit_scheme: Option<ColorScheme>) -> SystemPreferences {
     SystemPreferences {
         color_scheme: winit_scheme,
+        reduced_motion: None,
+        high_contrast: None,
         locales: platform_core::system_locales_from_env(),
-        ..SystemPreferences::default()
+        text_scale: platform_core::TextScale::UNSCALED,
     }
 }
 

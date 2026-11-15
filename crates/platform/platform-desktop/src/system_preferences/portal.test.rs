@@ -35,3 +35,20 @@ fn a_value_of_another_type_is_not_a_number() {
     assert_eq!(as_u32(&Value::I64(1)), None);
     assert_eq!(as_u32(&Value::Value(Box::new(Value::Bool(false)))), None);
 }
+
+#[test]
+fn the_text_scale_is_read_from_the_interface_namespace_alone() {
+    let scaled = changed_setting(INTERFACE_NAMESPACE, TEXT_SCALING_FACTOR, &Value::F64(1.25));
+    let mut preferences = SystemPreferences::default();
+    scaled.expect("a text scale").apply(&mut preferences);
+    assert_eq!(preferences.text_scale.get(), 1.25);
+
+    assert_eq!(
+        changed_setting(APPEARANCE_NAMESPACE, TEXT_SCALING_FACTOR, &Value::F64(1.25)),
+        None
+    );
+    assert_eq!(
+        changed_setting(INTERFACE_NAMESPACE, "cursor-size", &Value::F64(1.25)),
+        None
+    );
+}

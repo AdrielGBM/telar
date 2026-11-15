@@ -4,7 +4,7 @@ use renderer_core::{FontFamily, TextWrap};
 
 fn css_of(style: &TextStyle) -> String {
     let mut out = String::new();
-    text_style(style, &mut out);
+    text_style(style, crate::document::DEFAULT_ROOT_FONT_SIZE, &mut out);
     out
 }
 
@@ -213,6 +213,7 @@ fn a_span_says_its_own_case_and_underline_in_em_as_written() {
             .with_text_case(renderer_core::TextCase::Capitalize)
             .with_underline(true)
             .with_underline_offset(renderer_core::TextLength::Em(0.18)),
+        crate::document::DEFAULT_ROOT_FONT_SIZE,
         &mut css,
     );
     assert!(css.contains("text-transform:capitalize;"), "{css}");
@@ -223,4 +224,35 @@ fn a_span_says_its_own_case_and_underline_in_em_as_written() {
 #[test]
 fn a_backdrop_blur_radius_is_half_as_a_css_deviation() {
     assert_eq!(backdrop_filter(20.0), "blur(10px)");
+}
+
+/// A text's size is written in `rem`, so the browser's text size setting reaches it: at the default root a size in pixels is that many sixteenths of a `rem`, and at a root the reader enlarged, the size layout already scaled comes back to the same `rem`.
+#[test]
+fn a_run_s_font_size_is_written_in_rem_of_the_root() {
+    assert!(
+        css_of(&TextStyle::new(20.0, Color::BLACK)).contains("font-size:1.25rem;"),
+        "{}",
+        css_of(&TextStyle::new(20.0, Color::BLACK))
+    );
+    let mut enlarged = String::new();
+    text_style(&TextStyle::new(25.0, Color::BLACK), 20.0, &mut enlarged);
+    assert!(enlarged.contains("font-size:1.25rem;"), "{enlarged}");
+}
+
+#[test]
+fn a_span_s_size_in_pixels_is_written_in_rem_and_one_in_em_stays_em() {
+    let css = |size: renderer_core::TextLength| {
+        let mut css = String::new();
+        span_style(
+            &renderer_core::Declared::default().with_font_size(size),
+            crate::document::DEFAULT_ROOT_FONT_SIZE,
+            &mut css,
+        );
+        css
+    };
+    assert_eq!(
+        css(renderer_core::TextLength::Px(24.0)),
+        "font-size:1.5rem;"
+    );
+    assert_eq!(css(renderer_core::TextLength::Em(1.5)), "font-size:1.5em;");
 }

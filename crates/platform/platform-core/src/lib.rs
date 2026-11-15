@@ -85,7 +85,7 @@ pub use primary_scroll::{
 pub use route::Route;
 pub use semantics_core::Location;
 pub use system_preferences::{
-    ColorScheme, SystemPreferences, locales_from_env, posix_locale_to_bcp47,
+    ColorScheme, SystemPreferences, TextScale, locales_from_env, posix_locale_to_bcp47,
     system_locales_from_env,
 };
 pub use text_input::{Ime, TextInput};

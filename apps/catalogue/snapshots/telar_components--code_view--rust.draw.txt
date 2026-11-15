@@ -22,7 +22,7 @@ element group
                   end
                   element group
                     matrix 1,0,0,1,28,8
-                      text 0,0 257.11x77.28 "/// Greets whoever is named.\nfn greet(name: &str) -> String {\n    let greeting = format!(\"Hello, {name}!\");\n    greeting\n}" size=12.88 family=monospace weight=400 color=#171a2eff wrap=none lang=en span=0..28[color=#616680ff style=italic] span=29..31[weight=600 color=#4261edff] span=32..37[weight=600] span=44..48[color=#3d8ce6ff] span=53..59[color=#3d8ce6ff] span=66..69[weight=600 color=#4261edff] span=81..88[weight=600] span=89..105[color=#2eb073ff]
+                      text 0,0 257.11x77.28 "/// Greets whoever is named.\nfn greet(name: &str) -> String {\n    let greeting = format!(\"Hello, {name}!\");\n    greeting\n}" size=12.88 family=monospace weight=400 color=#171a2eff wrap=none lang=en span=0..28[color=#616680ff style=italic] span=29..31[weight=600 color=#4261edff] span=32..37[weight=600] span=44..48[color=#1f6bc7ff] span=53..59[color=#1f6bc7ff] span=66..69[weight=600 color=#4261edff] span=81..88[weight=600] span=89..105[color=#1a7a4dff]
                     end
                   end
                 end

@@ -35,8 +35,8 @@ impl Run {
     }
 }
 
-/// `text` cut at its spans, in order, with the gaps between them as plain runs. A link's `run` is its span's index in `spans`.
-pub(crate) fn runs_of(text: &str, spans: &[Span]) -> Vec<Run> {
+/// `text` cut at its spans, in order, with the gaps between them as plain runs. A link's `run` is its span's index in `spans`. A size in pixels is written in `rem` of `root_font_size`, as the paragraph's is.
+pub(crate) fn runs_of(text: &str, spans: &[Span], root_font_size: f32) -> Vec<Run> {
     renderer_core::span_segments(text, spans)
         .map(|segment| {
             let piece = &text[segment.range];
@@ -44,7 +44,7 @@ pub(crate) fn runs_of(text: &str, spans: &[Span]) -> Vec<Run> {
                 return Run::plain(piece);
             };
             let mut css = String::new();
-            crate::paint::span_style(&span.over, &mut css);
+            crate::paint::span_style(&span.over, root_font_size, &mut css);
             let link = span.link.as_ref().map(|destination| RunLink {
                 href: platform_core::address_of(destination),
                 external: matches!(destination, Destination::External(_)),

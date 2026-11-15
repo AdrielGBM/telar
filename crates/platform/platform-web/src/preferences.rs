@@ -1,6 +1,6 @@
-//! The browser's [`SystemPreferences`]: media queries for appearance and `navigator.languages` for locales, with the listeners that report changes.
+//! The browser's [`SystemPreferences`]: media queries for appearance, `navigator.languages` for locales and the root font size for the text scale, with the listeners that report changes.
 
-use platform_core::{ColorScheme, SystemPreferences};
+use platform_core::{ColorScheme, SystemPreferences, TextScale};
 
 use crate::dom;
 
@@ -25,7 +25,11 @@ pub struct MediaAnswers {
 
 impl MediaAnswers {
     /// A forced-colours mode is the platform's own high-contrast theme (Windows' contrast themes reach a page this way), so it counts as asking for more contrast.
-    pub fn into_preferences(self, locales: Vec<String>) -> SystemPreferences {
+    pub fn into_preferences(
+        self,
+        locales: Vec<String>,
+        text_scale: TextScale,
+    ) -> SystemPreferences {
         let color_scheme = match (self.dark, self.light) {
             (Some(true), _) => Some(ColorScheme::Dark),
             (_, Some(true)) => Some(ColorScheme::Light),
@@ -40,6 +44,7 @@ impl MediaAnswers {
             reduced_motion: self.reduced_motion,
             high_contrast,
             locales,
+            text_scale,
         }
     }
 }
@@ -53,13 +58,27 @@ pub fn read() -> SystemPreferences {
         more_contrast: matches(MORE_CONTRAST),
         forced_colors: matches(FORCED_COLORS),
     }
-    .into_preferences(languages())
+    .into_preferences(languages(), root_text_scale())
 }
 
 // A browser that does not know a media feature parses the whole query to `not all`, which is how "unsupported" is told apart from "does not match".
 fn matches(query: &str) -> Option<bool> {
     let list = media_query(query)?;
     (list.media() != "not all").then(|| list.matches())
+}
+
+/// The font size every browser gives the root element until its reader changes it, in CSS pixels.
+const DEFAULT_ROOT_FONT_SIZE: f32 = 16.0;
+
+/// The reader's text size setting: the root element's computed font size over the browser's default. Unscaled where the page cannot be asked.
+fn root_text_scale() -> TextScale {
+    let root = dom::document().document_element();
+    let computed = root.and_then(|root| dom::window().get_computed_style(&root).ok().flatten());
+    computed
+        .and_then(|style| style.get_property_value("font-size").ok())
+        .and_then(|size| size.strip_suffix("px")?.parse::<f32>().ok())
+        .and_then(|size| TextScale::new(size / DEFAULT_ROOT_FONT_SIZE))
+        .unwrap_or(TextScale::UNSCALED)
 }
 
 pub fn media_query(query: &str) -> Option<web_sys::MediaQueryList> {

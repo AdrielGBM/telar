@@ -86,12 +86,13 @@ fn duplicates_keep_their_first_position() {
 }
 
 #[test]
-fn unknown_is_the_default_for_every_field() {
+fn unknown_is_the_default_for_every_field_and_text_stays_at_its_designed_size() {
     let preferences = SystemPreferences::default();
     assert_eq!(preferences.color_scheme, None);
     assert_eq!(preferences.reduced_motion, None);
     assert_eq!(preferences.high_contrast, None);
     assert!(preferences.locales.is_empty());
+    assert_eq!(preferences.text_scale, TextScale::UNSCALED);
     assert_eq!(preferences.prefers_dark(), None);
 }
 
@@ -107,4 +108,12 @@ fn prefers_dark_reads_the_scheme() {
     };
     assert_eq!(dark.prefers_dark(), Some(true));
     assert_eq!(light.prefers_dark(), Some(false));
+}
+
+#[test]
+fn a_text_scale_is_a_finite_factor_above_zero() {
+    assert_eq!(TextScale::new(2.0).map(TextScale::get), Some(2.0));
+    for refused in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+        assert_eq!(TextScale::new(refused), None, "{refused}");
+    }
 }

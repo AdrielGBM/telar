@@ -1,10 +1,12 @@
-//! Windows' answers: the client-area animation switch, the high-contrast flag and the user's UI languages, plus a listener for the broadcast that says one of them changed.
+//! Windows' answers: the client-area animation switch, the high-contrast flag, the text size and the user's UI languages, plus a listener for the broadcast that says one of them changed.
 
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use platform_core::TextScale;
+use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HWND, LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
 use windows_sys::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, MSG, RegisterClassW,
@@ -42,6 +44,31 @@ pub fn high_contrast() -> Option<bool> {
         )
     };
     (ok != 0).then_some(contrast.dwFlags & HCF_HIGHCONTRASTON != 0)
+}
+
+/// "Make text bigger" in the accessibility settings, which Windows keeps as a percentage from 100 to 225. Unscaled where the value is missing, as it is until the user first moves the slider.
+pub fn text_scale() -> TextScale {
+    let subkey: Vec<u16> = "Software\\Microsoft\\Accessibility\0"
+        .encode_utf16()
+        .collect();
+    let value: Vec<u16> = "TextScaleFactor\0".encode_utf16().collect();
+    let mut percent = 0u32;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            subkey.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            (&mut percent as *mut u32).cast(),
+            &mut size,
+        )
+    };
+    if status != ERROR_SUCCESS {
+        return TextScale::UNSCALED;
+    }
+    TextScale::new(percent as f32 / 100.0).unwrap_or(TextScale::UNSCALED)
 }
 
 /// The display languages in the user's order, as BCP 47 names (`es-CL`). Empty where the call fails.

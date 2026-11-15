@@ -140,6 +140,24 @@ impl Declared {
         }
     }
 
+    /// This declaration with every length of text it names in pixels multiplied by `factor`, as the text scale a reader chose multiplies the type: a length in `em` is of a size already scaled, and a fraction of the surface stays the surface's.
+    pub fn text_scaled(&self, factor: f32) -> Self {
+        use super::scale::{scale_decoration, scale_length};
+        Self {
+            font_size: self.font_size.map(|size| scale_length(size, factor)),
+            letter_spacing: self
+                .letter_spacing
+                .map(|spacing| scale_length(spacing, factor)),
+            decoration_offset: self
+                .decoration_offset
+                .map(|offset| scale_decoration(offset, factor)),
+            decoration_thickness: self
+                .decoration_thickness
+                .map(|thickness| scale_decoration(thickness, factor)),
+            ..self.clone()
+        }
+    }
+
     pub fn with_font_weight(mut self, font_weight: u16) -> Self {
         self.font_weight = Some(font_weight);
         self
