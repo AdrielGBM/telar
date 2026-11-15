@@ -5,7 +5,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-/// Identifies which surface (window / layer-surface) a reactive effect belongs to. It is a cheap `Copy` id: the reactive runtime stamps one onto every effect at registration and re-enters that surface's context before running the effect during a flush, so an effect owned by surface A resolves its layout/overlay/focus world against A even when a signal set from surface B triggers it (the "owner scope" model of Solid/Floem).
+/// Identifies which surface (window / layer-surface) a reactive effect belongs to. It is a cheap `Copy` id: the reactive runtime stamps one onto every effect at registration and re-enters that surface's context before running the effect during a flush, so an effect owned by surface A resolves its layout/overlay/focus world against A even when a signal set from surface B triggers it.
 ///
 /// [`SurfaceHandle::NONE`] is the ambient handle used when no surface context is active — single-window apps, or reactive work outside any surface. Entering `NONE`, or entering the already-active surface, is a no-op, so single-surface apps pay ~zero overhead.
 ///
