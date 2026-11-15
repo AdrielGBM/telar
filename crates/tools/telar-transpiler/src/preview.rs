@@ -682,23 +682,97 @@ enum Matrix {
     Axes(Vec<MatrixAxis>),
 }
 
-/// Every option a preview header takes, in the order a message lists them. `args(name:default …)` is the one form that is not `key:value`.
-pub const PREVIEW_OPTION_KEYS: &[&str] = &[
-    "layout",
-    "viewport",
-    "bg",
-    "mode",
-    "locale",
-    "dir",
-    "tags",
-    "matrix",
-    "decorator",
-    "fixture",
-    "surface",
-    "animate",
-    "snapshot",
-    "args",
-];
+/// An option a preview header takes: `key:value`, or for [`Animate`](Self::Animate) a bare flag. `args(name:default …)` is the one declaration that is not an option.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviewOption {
+    Layout,
+    Viewport,
+    Bg,
+    Mode,
+    Locale,
+    Dir,
+    Tags,
+    Matrix,
+    Decorator,
+    Fixture,
+    Surface,
+    Animate,
+    Snapshot,
+    Args,
+}
+
+impl PreviewOption {
+    /// Every option, in the order a message lists them.
+    pub const ALL: [PreviewOption; 14] = [
+        Self::Layout,
+        Self::Viewport,
+        Self::Bg,
+        Self::Mode,
+        Self::Locale,
+        Self::Dir,
+        Self::Tags,
+        Self::Matrix,
+        Self::Decorator,
+        Self::Fixture,
+        Self::Surface,
+        Self::Animate,
+        Self::Snapshot,
+        Self::Args,
+    ];
+
+    /// How a header writes the option.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Layout => "layout",
+            Self::Viewport => "viewport",
+            Self::Bg => "bg",
+            Self::Mode => "mode",
+            Self::Locale => "locale",
+            Self::Dir => "dir",
+            Self::Tags => "tags",
+            Self::Matrix => "matrix",
+            Self::Decorator => "decorator",
+            Self::Fixture => "fixture",
+            Self::Surface => "surface",
+            Self::Animate => "animate",
+            Self::Snapshot => "snapshot",
+            Self::Args => "args",
+        }
+    }
+
+    /// The option a header writes as `key`, or why there is none: the error names `key` and lists the options there are.
+    pub fn parse(key: &str) -> Result<Self, String> {
+        Self::ALL
+            .into_iter()
+            .find(|option| option.key() == key)
+            .ok_or_else(|| {
+                let keys: Vec<&str> = Self::ALL.into_iter().map(Self::key).collect();
+                format!(
+                    "has no option `{key}`: a preview header takes {}",
+                    keys.join(", ")
+                )
+            })
+    }
+
+    fn example(self) -> &'static str {
+        match self {
+            Self::Layout => "layout:centered",
+            Self::Viewport => "viewport:390x844",
+            Self::Bg => "bg:#202020",
+            Self::Mode => "mode:dark",
+            Self::Locale => "locale:ar",
+            Self::Dir => "dir:rtl",
+            Self::Tags => "tags:[stateful]",
+            Self::Matrix => "matrix:themes",
+            Self::Decorator => "decorator:frames::card",
+            Self::Fixture => "fixture:seed_state",
+            Self::Surface => "surface:360x240",
+            Self::Animate => "animate",
+            Self::Snapshot => "snapshot:both",
+            Self::Args => "args:none",
+        }
+    }
+}
 
 impl Options {
     fn parse(options: &[StyleProp], header: &str) -> (Self, Vec<String>) {
@@ -722,29 +796,24 @@ impl Options {
 
     /// Reads one option into `self`, or says why it cannot be read.
     fn read(&mut self, key: &str, value: &str) -> Result<(), String> {
-        if key == "animate" {
-            return match value.is_empty() {
-                true => {
-                    self.animate = true;
-                    Ok(())
-                }
-                false => {
-                    Err("`animate` is a flag: write it bare, beside `surface:WIDTHxHEIGHT`".into())
-                }
-            };
-        }
-        if !PREVIEW_OPTION_KEYS.contains(&key) {
+        let option = PreviewOption::parse(key)?;
+        if value.is_empty() && option != PreviewOption::Animate {
             return Err(format!(
-                "has no option `{key}`: a preview header takes {}",
-                PREVIEW_OPTION_KEYS.join(", ")
+                "`{key}` needs a value, like `{}`",
+                option.example()
             ));
         }
-        if value.is_empty() {
-            return Err(format!("`{key}` needs a value, like `{}`", example(key)));
-        }
         let text = unquoted(value);
-        match key {
-            "layout" => {
+        match option {
+            PreviewOption::Animate => {
+                if !value.is_empty() {
+                    return Err(
+                        "`animate` is a flag: write it bare, beside `surface:WIDTHxHEIGHT`".into(),
+                    );
+                }
+                self.animate = true;
+            }
+            PreviewOption::Layout => {
                 self.layout = Some(match text {
                     "padded" => "Padded",
                     "centered" => "Centered",
@@ -756,13 +825,13 @@ impl Options {
                     }
                 })
             }
-            "viewport" => {
+            PreviewOption::Viewport => {
                 let size = Viewport::parse(text).ok_or_else(|| {
                     format!("`viewport:{text}` is not a size: write it WIDTHxHEIGHT, like viewport:390x844")
                 })?;
                 self.viewport = Some((size.width as f32, size.height as f32));
             }
-            "bg" => {
+            PreviewOption::Bg => {
                 if geometry_core::parse_hex(text).is_none() || !text.starts_with('#') {
                     return Err(format!(
                         "`bg:{text}` is not a colour: write it in hex, like bg:#202020"
@@ -770,9 +839,9 @@ impl Options {
                 }
                 self.bg = Some(hex_to_color_expr(text));
             }
-            "mode" => self.mode = Some(text.to_string()),
-            "locale" => self.locale = Some(text.to_string()),
-            "dir" => {
+            PreviewOption::Mode => self.mode = Some(text.to_string()),
+            PreviewOption::Locale => self.locale = Some(text.to_string()),
+            PreviewOption::Dir => {
                 self.dir = Some(match MatrixDirection::parse(text) {
                     Some(MatrixDirection::Ltr) => "Ltr",
                     Some(MatrixDirection::Rtl) => "Rtl",
@@ -781,17 +850,17 @@ impl Options {
                     }
                 })
             }
-            "tags" => {
+            PreviewOption::Tags => {
                 let tags = list(value);
                 if tags.iter().any(String::is_empty) || tags.is_empty() {
                     return Err("`tags:` lists names, like tags:[stateful slow]".into());
                 }
                 self.tags = tags;
             }
-            "matrix" => self.matrix = Some(Matrix::parse(value)?),
-            "decorator" => self.decorator = Some(text.to_string()),
-            "fixture" => self.fixture = Some(text.to_string()),
-            "snapshot" => {
+            PreviewOption::Matrix => self.matrix = Some(Matrix::parse(value)?),
+            PreviewOption::Decorator => self.decorator = Some(text.to_string()),
+            PreviewOption::Fixture => self.fixture = Some(text.to_string()),
+            PreviewOption::Snapshot => {
                 self.snapshot = Some(match text {
                     "start" => "Start",
                     "end" => "End",
@@ -803,7 +872,7 @@ impl Options {
                     }
                 })
             }
-            "surface" => {
+            PreviewOption::Surface => {
                 let size = text.split_once(['x', 'X']).and_then(|(w, h)| {
                     Some((w.trim().parse::<f32>().ok()?, h.trim().parse::<f32>().ok()?))
                 });
@@ -811,7 +880,7 @@ impl Options {
                     format!("surface: expects WIDTHxHEIGHT, e.g. surface:360x240 (got {text})")
                 })?);
             }
-            "args" => {
+            PreviewOption::Args => {
                 if text != "none" {
                     return Err(format!(
                         "`args:{text}` is not an option: `args:none` keeps the root's literals fixed, and `args(name:default …)` declares args"
@@ -820,7 +889,6 @@ impl Options {
                 self.implicit_args = false;
                 self.args_written = true;
             }
-            _ => unreachable!("every key in PREVIEW_OPTION_KEYS is read above"),
         }
         Ok(())
     }
@@ -911,24 +979,6 @@ impl Options {
                 "snapshot(::telar::preview::SnapshotAt::{snapshot})"
             ));
         }
-    }
-}
-
-fn example(key: &str) -> &'static str {
-    match key {
-        "layout" => "layout:centered",
-        "viewport" => "viewport:390x844",
-        "bg" => "bg:#202020",
-        "mode" => "mode:dark",
-        "locale" => "locale:ar",
-        "dir" => "dir:rtl",
-        "tags" => "tags:[stateful]",
-        "matrix" => "matrix:themes",
-        "decorator" => "decorator:frames::card",
-        "fixture" => "fixture:seed_state",
-        "surface" => "surface:360x240",
-        "snapshot" => "snapshot:both",
-        _ => "args:none",
     }
 }
 

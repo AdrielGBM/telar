@@ -198,7 +198,7 @@ fn a_preview_header_completes_its_options_and_their_values() {
     );
     assert_eq!(
         header_context("[preview \"A\" layout:"),
-        Some(CompletionKind::PreviewOptionValue("layout".into()))
+        Some(CompletionKind::PreviewOptionValue(PreviewOption::Layout))
     );
     assert_eq!(
         header_context("[preview \"A\" matrix:("),
@@ -220,8 +220,8 @@ fn only_a_variant_declares_args() {
         assert!(labels(&variant).contains(&declares));
         assert!(!labels(&meta).contains(&declares));
     }
-    for option in preview_header::options() {
-        assert!(labels(&meta).contains(&option.key), "{}", option.key);
+    for option in PreviewOption::ALL {
+        assert!(labels(&meta).contains(&option.key()), "{}", option.key());
     }
     let layout = variant.iter().find(|item| item.label == "layout").unwrap();
     assert!(
@@ -242,13 +242,13 @@ fn a_matrix_is_named_from_the_package_and_the_built_in() {
     let project = with_previews(
         "[viewports]\nphone = \"390x844\"\n\n[matrices.screens]\nviewport = [\"phone\", \"1280x800\"]\nmode = [\"light\", \"dark\"]\n",
     );
-    let items = preview_option_value_items("matrix", Some(&project));
+    let items = preview_option_value_items(PreviewOption::Matrix, Some(&project));
     assert_eq!(labels(&items), ["screens", "themes", "(…)"]);
     let screens = items[0].label_details.as_ref().unwrap();
     assert_eq!(screens.detail.as_deref(), Some(" mode × viewport"));
 
     let own_themes = with_previews("[matrices.themes]\nmode = [\"light\", \"dark\"]\n");
-    let items = preview_option_value_items("matrix", Some(&own_themes));
+    let items = preview_option_value_items(PreviewOption::Matrix, Some(&own_themes));
     assert_eq!(
         labels(&items),
         ["themes", "(…)"],
@@ -262,15 +262,18 @@ fn a_matrix_is_named_from_the_package_and_the_built_in() {
 #[test]
 fn an_option_value_is_listed_where_it_can_be() {
     assert_eq!(
-        labels(&preview_option_value_items("layout", None)),
+        labels(&preview_option_value_items(PreviewOption::Layout, None)),
         ["padded", "centered", "fullscreen"]
     );
     assert_eq!(
-        labels(&preview_option_value_items("dir", None)),
+        labels(&preview_option_value_items(PreviewOption::Dir, None)),
         ["ltr", "rtl"]
     );
-    assert_eq!(labels(&preview_option_value_items("args", None)), ["none"]);
-    assert!(preview_option_value_items("bg", None).is_empty());
+    assert_eq!(
+        labels(&preview_option_value_items(PreviewOption::Args, None)),
+        ["none"]
+    );
+    assert!(preview_option_value_items(PreviewOption::Bg, None).is_empty());
 }
 
 #[test]

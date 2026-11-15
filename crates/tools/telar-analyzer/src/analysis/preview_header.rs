@@ -2,7 +2,7 @@
 //!
 //! The parser keeps options raw and refuses a malformed header outright, so it cannot answer for a header still being typed; this reads the same grammar leniently, from the text alone.
 
-use telar_transpiler::PREVIEW_OPTION_KEYS;
+use telar_transpiler::PreviewOption;
 
 /// Which preview header a line opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,85 +13,72 @@ pub enum HeaderKind {
     Meta,
 }
 
-/// One option a preview header takes, as the editor describes it.
-#[derive(Debug, Clone, Copy)]
-pub struct PreviewOption {
-    pub key: &'static str,
-    pub doc: &'static str,
-    /// What completing the key inserts, as a snippet.
-    pub snippet: &'static str,
+/// What `option` does, shown where it is completed and hovered.
+pub fn doc(option: PreviewOption) -> &'static str {
+    describe(option).0
 }
 
-/// The docs and completion snippet of the option `key`, or `None` for a key the editor does not describe.
-fn describe(key: &str) -> Option<(&'static str, &'static str)> {
-    Some(match key {
-        "layout" => (
+/// What completing `option`'s key inserts, as a snippet.
+pub fn snippet(option: PreviewOption) -> &'static str {
+    describe(option).1
+}
+
+fn describe(option: PreviewOption) -> (&'static str, &'static str) {
+    match option {
+        PreviewOption::Layout => (
             "How the canvas places the preview: `padded`, `centered` or `fullscreen`.",
             "layout:",
         ),
-        "viewport" => (
+        PreviewOption::Viewport => (
             "The canvas size in logical px, `WIDTHxHEIGHT`.",
             "viewport:${1:390}x${2:844}",
         ),
-        "bg" => ("The canvas background, a hex colour.", "bg:#${1:202020}"),
-        "mode" => (
+        PreviewOption::Bg => ("The canvas background, a hex colour.", "bg:#${1:202020}"),
+        PreviewOption::Mode => (
             "The theme mode the canvas renders in, by the id it is registered under.",
             "mode:${1:dark}",
         ),
-        "locale" => (
+        PreviewOption::Locale => (
             "The locale the canvas renders in, a BCP 47 language tag.",
             "locale:${1:en}",
         ),
-        "dir" => (
+        PreviewOption::Dir => (
             "The canvas's writing direction, `ltr` or `rtl`, whatever the locale's own.",
             "dir:",
         ),
-        "tags" => (
+        PreviewOption::Tags => (
             "Free-form labels the workshop filters by: `tags:[stateful slow]`.",
             "tags:[${1:name}]",
         ),
-        "matrix" => (
+        PreviewOption::Matrix => (
             "Renders the preview once per cell: a matrix named in `[telar.previews.matrices]` or the built-in `themes`, or its axes written out, `matrix:(mode:[light dark] size:[12 16])`.",
             "matrix:",
         ),
-        "decorator" => (
+        PreviewOption::Decorator => (
             "A fn that wraps the preview's tree, by its path: `decorator:frames::card`.",
             "decorator:${1:path}",
         ),
-        "fixture" => (
+        PreviewOption::Fixture => (
             "A fn called before the preview builds, by its path: `fixture:seed_state`.",
             "fixture:${1:path}",
         ),
-        "surface" => (
+        PreviewOption::Surface => (
             "Mounts the preview as a surface of this size, `WIDTHxHEIGHT`, the way a compositor would.",
             "surface:${1:360}x${2:240}",
         ),
-        "animate" => (
+        PreviewOption::Animate => (
             "A flag beside `surface:`: plays the root's enter transition.",
             "animate",
         ),
-        "snapshot" => (
+        PreviewOption::Snapshot => (
             "Which moments of the preview's play its snapshots keep: `end`, as the play leaves the canvas (the default), `start`, as it opens, or `both`.",
             "snapshot:",
         ),
-        "args" => (
+        PreviewOption::Args => (
             "`args:none` keeps the root's literal attributes fixed rather than turning each into an arg.",
             "args:",
         ),
-        _ => return None,
-    })
-}
-
-/// The option `key` names, if a preview header takes one by that name.
-pub fn option(key: &str) -> Option<PreviewOption> {
-    let key = PREVIEW_OPTION_KEYS.iter().copied().find(|k| *k == key)?;
-    let (doc, snippet) = describe(key)?;
-    Some(PreviewOption { key, doc, snippet })
-}
-
-/// Every option a preview header takes, in the order the transpiler lists them. `args(…)` is the one form that is not `key:value`, and only a variant takes it.
-pub fn options() -> impl Iterator<Item = PreviewOption> {
-    PREVIEW_OPTION_KEYS.iter().filter_map(|key| option(key))
+    }
 }
 
 /// What `args(…)` does, shown where it is completed and hovered.
@@ -124,8 +111,8 @@ pub struct HeaderToken {
 pub enum Place {
     /// Where an option's key is, or is about to be, written.
     OptionKey,
-    /// In the value of the option `key`.
-    OptionValue(String),
+    /// In the value of `option`.
+    OptionValue(PreviewOption),
     /// Where an `args(…)` name is written.
     ArgName,
     /// In the default of an `args(…)` name.
@@ -285,7 +272,10 @@ impl<'a> Scanner<'a> {
                         Place::MatrixAxisValue(axis.to_string())
                     });
                 }
-                self.value(Place::OptionValue(key))
+                match PreviewOption::parse(&key) {
+                    Ok(option) => self.value(Place::OptionValue(option)),
+                    Err(_) => self.value(Place::Elsewhere),
+                }
             }
             Some(b) if b.is_ascii_whitespace() || b == b']' => {
                 self.push(TokenKind::OptionKey, start);

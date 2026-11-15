@@ -512,8 +512,8 @@ impl Backend {
                 }
                 CompletionKind::ThemeToken => theme_items(project.as_ref()),
                 CompletionKind::PreviewOption(kind) => preview_option_items(kind),
-                CompletionKind::PreviewOptionValue(key) => {
-                    preview_option_value_items(&key, project.as_ref())
+                CompletionKind::PreviewOptionValue(option) => {
+                    preview_option_value_items(option, project.as_ref())
                 }
                 CompletionKind::MatrixAxis => matrix_axis_items(
                     &parsed.document,

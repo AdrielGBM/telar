@@ -64,12 +64,13 @@ fn finds_where_the_cursor_falls_in_a_header_being_typed() {
     assert_eq!(place("[preview \"A\" lay"), Place::OptionKey);
     assert_eq!(
         place("[preview \"A\" layout:"),
-        Place::OptionValue("layout".into())
+        Place::OptionValue(PreviewOption::Layout)
     );
     assert_eq!(
         place("[previews \"T\" matrix:th"),
-        Place::OptionValue("matrix".into())
+        Place::OptionValue(PreviewOption::Matrix)
     );
+    assert_eq!(place("[preview \"A\" layuot:"), Place::Elsewhere);
     assert_eq!(place("[preview \"A\" args("), Place::ArgName);
     assert_eq!(place("[preview \"A\" args(agree:"), Place::ArgValue);
     assert_eq!(place("[preview \"A\" args(agree:false "), Place::ArgName);
@@ -104,11 +105,13 @@ fn finds_the_token_under_a_cursor() {
 }
 
 #[test]
-fn every_option_the_transpiler_reads_is_described() {
-    let described: Vec<&str> = options().map(|option| option.key).collect();
-    assert_eq!(described, telar_transpiler::PREVIEW_OPTION_KEYS);
-    for option in options() {
-        assert!(!option.doc.is_empty(), "{}", option.key);
-        assert!(option.snippet.starts_with(option.key), "{}", option.key);
+fn every_option_is_described_and_completes_its_own_key() {
+    for option in PreviewOption::ALL {
+        assert!(!doc(option).is_empty(), "{}", option.key());
+        assert!(
+            snippet(option).starts_with(option.key()),
+            "{}",
+            option.key()
+        );
     }
 }

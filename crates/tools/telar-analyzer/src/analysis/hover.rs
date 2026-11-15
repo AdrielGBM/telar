@@ -6,7 +6,7 @@ use crate::analysis::util::{ViewToken, view_token_at};
 use crate::project::ProjectInfo;
 use crate::text::utf16_to_byte;
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
-use telar_transpiler::{ValueKind, keyword_color_rgba};
+use telar_transpiler::{PreviewOption, ValueKind, keyword_color_rgba};
 
 /// What the token under the cursor says about itself, for tags, colours, classes and preview header options.
 pub fn hover_info(
@@ -38,7 +38,7 @@ fn hover_preview_option(source: &str, line: u32, character: u32) -> Option<Hover
     let doc = match (declares, key) {
         (true, "values") => preview_header::VALUES_DECL_DOC,
         (true, _) => preview_header::ARGS_DECL_DOC,
-        (false, _) => preview_header::option(key)?.doc,
+        (false, _) => preview_header::doc(PreviewOption::parse(key).ok()?),
     };
     Some(make_hover(format!("`{key}` — preview option\n\n{doc}")))
 }

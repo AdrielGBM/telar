@@ -13,6 +13,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use telar_parser::{Preview, RsxDocument, ViewNode};
 use telar_project::naming::to_pascal_case;
+use telar_transpiler::PreviewOption;
 use telar_transpiler::{color_attr_keys, color_keywords, is_builtin_tag, is_control_flow_keyword};
 
 /// What may be written at the cursor: an element name, an attribute key, a colour, a class, a signal, the name after `$theme.`, or a preview header's option, its value, or an inline matrix's axis or value.
@@ -25,7 +26,7 @@ pub enum CompletionKind {
     SignalRef,
     ThemeToken,
     PreviewOption(HeaderKind),
-    PreviewOptionValue(String),
+    PreviewOptionValue(PreviewOption),
     MatrixAxis,
     MatrixAxisValue(String),
     /// A value of the prop named, on a component call, when the prop is named after an axis of the shared vocabulary.
@@ -39,7 +40,7 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
     if let Some((kind, place)) = preview_header::place_at_end(prefix) {
         return match place {
             Place::OptionKey => Some(CompletionKind::PreviewOption(kind)),
-            Place::OptionValue(key) => Some(CompletionKind::PreviewOptionValue(key)),
+            Place::OptionValue(option) => Some(CompletionKind::PreviewOptionValue(option)),
             Place::MatrixAxis => Some(CompletionKind::MatrixAxis),
             Place::MatrixAxisValue(axis) => Some(CompletionKind::MatrixAxisValue(axis)),
             Place::ArgName | Place::ArgValue | Place::Elsewhere => None,
@@ -380,10 +381,12 @@ fn preview_at(doc: &RsxDocument, line: u32) -> Option<&Preview> {
 
 /// The options a preview header takes, and on a variant, `args(…)`.
 pub fn preview_option_items(kind: HeaderKind) -> Vec<CompletionItem> {
-    let mut items: Vec<CompletionItem> = preview_header::options()
+    let mut items: Vec<CompletionItem> = PreviewOption::ALL
+        .into_iter()
         .map(|option| {
-            let mut item = snippet_item(option.key, option.snippet, option.doc);
-            if option.snippet.ends_with(':') {
+            let snippet = preview_header::snippet(option);
+            let mut item = snippet_item(option.key(), snippet, preview_header::doc(option));
+            if snippet.ends_with(':') {
                 item.command = Some(trigger_suggest());
             }
             item
@@ -405,9 +408,12 @@ pub fn preview_option_items(kind: HeaderKind) -> Vec<CompletionItem> {
 }
 
 /// The values an option takes that can be listed: a layout, a direction, the moments a play's snapshots keep, `none` for `args:`, and the matrices a preview may name.
-pub fn preview_option_value_items(key: &str, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
-    match key {
-        "layout" => word_items(&[
+pub fn preview_option_value_items(
+    option: PreviewOption,
+    project: Option<&ProjectInfo>,
+) -> Vec<CompletionItem> {
+    match option {
+        PreviewOption::Layout => word_items(&[
             ("padded", "The preview with room around it."),
             (
                 "centered",
@@ -415,12 +421,12 @@ pub fn preview_option_value_items(key: &str, project: Option<&ProjectInfo>) -> V
             ),
             ("fullscreen", "The preview filling the canvas."),
         ]),
-        "dir" => direction_items(),
-        "args" => word_items(&[(
+        PreviewOption::Dir => direction_items(),
+        PreviewOption::Args => word_items(&[(
             "none",
             "Keeps the root's literal attributes fixed rather than turning each into an arg.",
         )]),
-        "snapshot" => word_items(&[
+        PreviewOption::Snapshot => word_items(&[
             ("end", "The canvas as the play leaves it: the default."),
             ("start", "The canvas as it opens, before the play."),
             (
@@ -428,8 +434,16 @@ pub fn preview_option_value_items(key: &str, project: Option<&ProjectInfo>) -> V
                 "The end under the preview's own id, and the start under `<id>--start`.",
             ),
         ]),
-        "matrix" => matrix_items(project),
-        _ => Vec::new(),
+        PreviewOption::Matrix => matrix_items(project),
+        PreviewOption::Viewport
+        | PreviewOption::Bg
+        | PreviewOption::Mode
+        | PreviewOption::Locale
+        | PreviewOption::Tags
+        | PreviewOption::Decorator
+        | PreviewOption::Fixture
+        | PreviewOption::Surface
+        | PreviewOption::Animate => Vec::new(),
     }
 }
 

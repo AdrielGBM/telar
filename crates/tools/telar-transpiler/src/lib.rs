@@ -54,7 +54,7 @@ pub use package::{
     write_package,
 };
 #[cfg(feature = "transpile")]
-pub use preview::PREVIEW_OPTION_KEYS;
+pub use preview::PreviewOption;
 #[cfg(feature = "transpile")]
 pub use registry::{
     AttrSpec, ROLE_VALUES, SLOT_ATTR, STATE_STYLE_KEYS, ValueKind, attr_doc, attr_spec,
