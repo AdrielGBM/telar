@@ -27,7 +27,7 @@ fn an_id_without_a_set_is_refused() {
     let error = IconId::parse("home").unwrap_err();
     assert_eq!(
         error,
-        IconError::MissingSet {
+        IconIdError::MissingSet {
             name: "home".to_string()
         }
     );
@@ -49,7 +49,7 @@ fn a_written_set_wins_over_the_default() {
 #[test]
 fn a_bare_name_without_a_default_set_names_the_missing_set() {
     let error = IconId::parse_with_default("arrow-left", None).unwrap_err();
-    assert!(matches!(error, IconError::MissingSet { ref name } if name == "arrow-left"));
+    assert!(matches!(error, IconIdError::MissingSet { ref name } if name == "arrow-left"));
     assert!(error.to_string().contains("mdi:arrow-left"), "{error}");
 }
 
@@ -58,7 +58,7 @@ fn a_bare_name_outside_iconify_naming_is_refused_as_an_id() {
     for default_set in [None, Some("mdi")] {
         let error = IconId::parse_with_default("Home", default_set).unwrap_err();
         assert!(
-            matches!(error, IconError::InvalidId { .. }),
+            matches!(error, IconIdError::Invalid { .. }),
             "{default_set:?}: {error}"
         );
     }
@@ -67,7 +67,7 @@ fn a_bare_name_outside_iconify_naming_is_refused_as_an_id() {
 #[test]
 fn an_invalid_default_set_is_refused() {
     let error = IconId::parse_with_default("home", Some("MDI")).unwrap_err();
-    assert!(matches!(error, IconError::InvalidId { .. }), "{error}");
+    assert!(matches!(error, IconIdError::Invalid { .. }), "{error}");
 }
 
 #[test]

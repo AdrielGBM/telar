@@ -120,10 +120,10 @@ pub(crate) fn resolve_with(
                     .or_insert(reference);
                 wanted.entry(id).or_insert(reference);
             }
-            Err(reason) => out.problems.push(BakeProblem::new(
+            Err(error) => out.problems.push(BakeProblem::new(
                 ProblemKind::IconIdInvalid {
                     line: reference.line,
-                    reason,
+                    error,
                 },
                 &reference.file,
             )),

@@ -25,7 +25,7 @@ use crate::registry::ValueKind;
 use crate::theme_access::ThemeAccess;
 pub(crate) use component::props_type;
 pub(crate) use signals::{is_paint_key, substitute_reads, view_let_names};
-use telar_project::{AssetContext, asset_kind_for_tag};
+use telar_project::{AssetContext, AssetKind};
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
 const SRC_PUSH: &str = "//@RSX@PUSH:";
@@ -489,8 +489,8 @@ impl<'a> ViewGen<'a> {
     }
 
     fn next_variable_name(&mut self, tag: &str) -> String {
-        let prefix = match asset_kind_for_tag(tag) {
-            Some(kind) => kind.var_prefix,
+        let prefix = match AssetKind::for_tag(tag) {
+            Some(kind) => kind.var_prefix(),
             None => match tag {
                 "text" => "text",
                 "col" => "col",
@@ -836,11 +836,13 @@ impl ViewGen<'_> {
     }
 
     fn emit_element_inner(&mut self, el: &Element) -> ChildEmit {
-        if let Some(kind) = asset_kind_for_tag(&el.tag) {
-            return match kind.id {
-                "svg" => self.emit_svg(el),
-                "image" => self.emit_image(el),
-                _ => unreachable!("asset kind ids are svg and image"),
+        if let Some(kind) = AssetKind::for_tag(&el.tag) {
+            return match kind {
+                AssetKind::Svg => self.emit_svg(el),
+                AssetKind::Image => self.emit_image(el),
+                AssetKind::Icon => unreachable!(
+                    "an icon is named through a component's prop, never a built-in tag"
+                ),
             };
         }
         match el.tag.as_str() {
@@ -876,7 +878,7 @@ const BUILT_TAGS: &[&str] = &[
 
 /// Whether `tag` is a component call rather than a tag the view builds itself.
 pub(crate) fn is_component_tag(tag: &str) -> bool {
-    asset_kind_for_tag(tag).is_none() && !BUILT_TAGS.contains(&tag)
+    AssetKind::for_tag(tag).is_none() && !BUILT_TAGS.contains(&tag)
 }
 
 /// Whether a view node must build a mutable `__children` vec rather than a `children![...]` literal: control flow (`if`/`for`/`let`) that mutates the vec in place, or a `children` slot placeholder that splices a runtime `Vec` into it.

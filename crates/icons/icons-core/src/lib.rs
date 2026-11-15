@@ -19,7 +19,7 @@ mod set;
 mod source;
 mod svg_dir;
 
-pub use error::IconError;
+pub use error::{IconError, IconIdError};
 #[cfg(all(feature = "http", not(target_arch = "wasm32")))]
 pub use http::HttpProvider;
 pub use iconify_dir::IconifyDir;

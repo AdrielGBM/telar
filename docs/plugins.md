@@ -328,7 +328,7 @@ impl From<&'static str> for IconName { /* … */ }
 
 A value that is not a literal reaches the component as written, unless the section bakes every id, where it is an
 error on the `.rsx` line. What is not general is the resolver: it runs inside the CLI at bake time, and the CLI
-loads no plugin code, so a new kind is an entry in `telar_project::ASSET_KINDS` and a resolver in `telar-baker`,
+loads no plugin code, so a new kind is a variant of `telar_project::AssetKind` and a resolver in `telar-baker`,
 the way a new file format is.
 
 ## A plugin in `.rsx`

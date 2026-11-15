@@ -146,7 +146,14 @@ fn a_bare_name_without_a_default_set_points_at_the_key() {
         svg: Some("icons".to_string()),
         ..IconsSection::default()
     };
-    let message = icons.icon_id("home").unwrap_err();
+    let error = icons.icon_id("home").unwrap_err();
+    assert_eq!(
+        error,
+        IconIdError::MissingSet {
+            name: "home".to_string()
+        }
+    );
+    let message = icon_id_message(&error);
     assert!(message.contains("`home` names no icon set"), "{message}");
     assert!(message.contains("mdi:home"), "{message}");
     assert!(message.contains("[telar.icons] default_set"), "{message}");

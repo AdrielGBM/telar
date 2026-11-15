@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use telar_project::{IconLicensesSection, asset_kind_for_id};
+use telar_project::{AssetKind, IconLicensesSection};
 
 use super::*;
 use crate::problem::Severity;
@@ -35,7 +35,7 @@ fn section() -> IconsSection {
 
 fn literal(id: &str, line: usize) -> IdRef {
     IdRef {
-        kind: asset_kind_for_id("icon").unwrap(),
+        kind: AssetKind::Icon,
         tag: "icon".to_string(),
         prop: "name".to_string(),
         literal: Some(id.to_string()),
@@ -131,9 +131,16 @@ fn a_bare_name_without_a_default_set_is_an_error() {
     let [problem] = resolved.problems.as_slice() else {
         panic!("one problem expected: {:?}", resolved.problems);
     };
-    let ProblemKind::IconIdInvalid { line: 4, reason } = &problem.kind else {
+    let ProblemKind::IconIdInvalid { line: 4, error } = &problem.kind else {
         panic!("an invalid id on line 4 expected: {problem:?}");
     };
+    assert_eq!(
+        error,
+        &icons_core::IconIdError::MissingSet {
+            name: "home".to_string()
+        }
+    );
+    let reason = problem.to_string();
     assert_eq!(problem.file, Path::new("src/app.rsx"));
     assert!(reason.contains("set:name"), "{reason}");
     assert!(reason.contains("[telar.icons] default_set"), "{reason}");

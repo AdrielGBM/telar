@@ -4,7 +4,7 @@ use std::path::Path;
 
 use lsp_types::{DocumentLink, Range};
 use telar_parser::{RsxDocument, ViewNode};
-use telar_project::asset_kind_for_tag;
+use telar_project::AssetKind;
 
 use crate::text::offset_to_position;
 
@@ -22,9 +22,9 @@ fn collect(nodes: &[ViewNode], source: &str, file_dir: &Path, out: &mut Vec<Docu
     for node in nodes {
         match node {
             ViewNode::Element(el) => {
-                if let Some(kind) = asset_kind_for_tag(&el.tag) {
+                if let Some(kind) = AssetKind::for_tag(&el.tag) {
                     for attr in &el.attributes {
-                        if attr.key == kind.attr
+                        if attr.key == kind.attr()
                             && attr.value.is_quoted()
                             && let Some(link) =
                                 link_for(attr.value.text(), attr.value_start, source, file_dir)

@@ -18,7 +18,11 @@ pub(super) fn ship_images(out: &Path, crates: &[PathBuf]) -> Result<usize, Strin
             continue;
         };
         let root = telar_project::assets_root(dir).map_err(|e| e.to_string())?;
-        for entry in index.entries.iter().filter(|entry| entry.kind == "image") {
+        for entry in index
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == telar_project::AssetKind::Image)
+        {
             let source = root.join(&entry.path);
             let bytes = std::fs::read(&source)
                 .map_err(|e| format!("could not read {}: {e}", source.display()))?;

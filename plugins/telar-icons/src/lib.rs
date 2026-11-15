@@ -91,8 +91,8 @@ pub use licenses::licenses;
 #[cfg(feature = "runtime")]
 pub use runtime::RuntimeIcons;
 pub use telar::icons::{
-    Author, Icon, IconError, IconId, IconSet, IconSource, IconifyDir, License, SetInfo,
-    SourcedIcon, Sources, SvgDir,
+    Author, Icon, IconError, IconId, IconIdError, IconSet, IconSource, IconifyDir, License,
+    SetInfo, SourcedIcon, Sources, SvgDir,
 };
 pub use telar::{IconName, icon};
 #[cfg(all(feature = "runtime", not(target_arch = "wasm32")))]

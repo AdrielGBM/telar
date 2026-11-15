@@ -61,8 +61,3 @@ fn bakes_the_address_for_a_browser() {
         web.full.path, web.width, web.height
     )));
 }
-
-#[test]
-fn kind_id_is_image() {
-    assert_eq!(ImageBaker.kind().id, "image");
-}

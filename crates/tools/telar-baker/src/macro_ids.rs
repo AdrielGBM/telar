@@ -13,12 +13,12 @@ pub(crate) fn collect_macro_ids(
     source: &str,
     file: &Path,
     first_line: usize,
-    kinds: &[&'static AssetKind],
+    kinds: &[AssetKind],
     out: &mut Vec<IdRef>,
 ) {
-    let tags: Vec<(&str, &'static AssetKind)> = kinds
+    let tags: Vec<(&str, AssetKind)> = kinds
         .iter()
-        .filter_map(|kind| Some((kind.component?.tag, *kind)))
+        .filter_map(|kind| Some((kind.component()?.tag, *kind)))
         .filter(|(tag, _)| source.contains(tag))
         .collect();
     if tags.is_empty() {
@@ -44,7 +44,7 @@ pub(crate) fn collect_macro_ids(
         out.push(IdRef {
             kind,
             tag: name.to_string(),
-            prop: kind.attr.to_string(),
+            prop: kind.attr().to_string(),
             literal: Some(id.trim().to_string()),
             written: written.to_string(),
             file: file.to_path_buf(),

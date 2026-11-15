@@ -47,7 +47,7 @@ fn baked_icons(root: &Path) -> Vec<String> {
         .unwrap()
         .entries
         .into_iter()
-        .filter(|entry| entry.kind == "icon")
+        .filter(|entry| entry.kind == telar_project::AssetKind::Icon)
         .map(|entry| entry.path)
         .collect()
 }
@@ -90,7 +90,7 @@ fn only_the_icons_the_view_names_are_baked() {
     assert!(notice.contains("Icons: home, house"), "{notice}");
 
     let assets = asset_context(&root);
-    let kind = telar_project::asset_kind_for_id("icon").unwrap();
+    let kind = telar_project::AssetKind::Icon;
     assert!(assets.resolve_id(kind, "demo:house").is_ok());
     assert!(assets.resolve_id(kind, "demo:gear").is_err());
 }
@@ -187,7 +187,7 @@ fn a_bare_name_bakes_under_the_default_sets_id_and_resolves_from_the_rsx() {
     assert_eq!(baked_icons(&root), vec!["demo:home", "demo:star"]);
 
     let assets = asset_context(&root);
-    let kind = telar_project::asset_kind_for_id("icon").unwrap();
+    let kind = telar_project::AssetKind::Icon;
     let triple = assets.resolve_id(kind, "home").unwrap();
     assert!(triple.starts_with("(\"demo:home\", "), "{triple}");
 }
@@ -204,9 +204,10 @@ fn a_bare_name_without_a_default_set_fails_the_bake_on_its_line() {
         panic!("one problem expected: {:?}", report.problems);
     };
     assert!(
-        matches!(&problem.kind, ProblemKind::IconIdInvalid { line: 4, reason } if reason.contains("default_set")),
+        matches!(&problem.kind, ProblemKind::IconIdInvalid { line: 4, error: icons_core::IconIdError::MissingSet { name } } if name == "home"),
         "{problem:?}"
     );
+    assert!(problem.to_string().contains("default_set"), "{problem}");
     assert_eq!(problem.file, root.join("src").join("app.rsx"));
     assert_eq!(baked_icons(&root), vec!["demo:star"]);
 }
@@ -236,7 +237,7 @@ fn the_tint_decision_is_carried_into_the_artifact() {
     );
 
     let assets = asset_context(&root);
-    let kind = telar_project::asset_kind_for_id("icon").unwrap();
+    let kind = telar_project::AssetKind::Icon;
     assert!(
         assets
             .resolve_id(kind, "demo:home")

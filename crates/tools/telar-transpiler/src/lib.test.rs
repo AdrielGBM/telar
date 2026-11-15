@@ -2,7 +2,7 @@ use super::*;
 // Placement types the transpiler produces output *for*: a codegen test that then checks where the output lands touches both crates, which is what the split makes visible.
 use std::path::{Path, PathBuf};
 use telar_project::{
-    ASSET_ARTIFACT_FORMAT, AssetContext, AssetEntry, AssetIndex, content_hash,
+    ASSET_ARTIFACT_FORMAT, AssetContext, AssetEntry, AssetIndex, AssetKind, content_hash,
     relative_output_path, static_name_for_path,
 };
 
@@ -2303,7 +2303,7 @@ fn hex_theme_and_keyword_colors_are_unaffected_by_signal_support() {
 }
 
 /// A package with one baked asset, laid out the way the CLI leaves it: the source file under `assets/` and the index under `.telar/`.
-fn baked_package(name: &str, kind: &str, rel: &str, content: &[u8]) -> std::path::PathBuf {
+fn baked_package(name: &str, kind: AssetKind, rel: &str, content: &[u8]) -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!("rsx_assets_{name}_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("assets")).unwrap();
@@ -2314,7 +2314,7 @@ fn baked_package(name: &str, kind: &str, rel: &str, content: &[u8]) -> std::path
         producer: "test".to_string(),
         telar_version: env!("CARGO_PKG_VERSION").to_string(),
         entries: vec![AssetEntry {
-            kind: kind.to_string(),
+            kind,
             path: rel.to_string(),
             hash: content_hash(content),
             static_name: static_name_for_path(rel),
@@ -2332,7 +2332,7 @@ fn asset_context(root: &Path, telar_version: &str) -> AssetContext {
 
 #[test]
 fn quoted_svg_src_references_the_baked_artifact() {
-    let root = baked_package("svg_ref", "svg", "icon.svg", b"<svg/>");
+    let root = baked_package("svg_ref", AssetKind::Svg, "icon.svg", b"<svg/>");
     let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let src = "[view]\ncol\n    svg src:\"icon.svg\" color:Color::WHITE width:24 height:24\n";
     let code = transpile_source(src, "demo", None, Some(&assets))
@@ -2365,7 +2365,7 @@ fn quoted_svg_src_references_the_baked_artifact() {
 /// Two uses of one asset share the artifact's single `static`. The macro used to hoist a `BAKED_SVG_N` per use site, so the same 24 KB of path data was compiled in three times for three icons.
 #[test]
 fn two_uses_of_one_asset_share_a_single_static() {
-    let root = baked_package("svg_shared", "svg", "icon.svg", b"<svg/>");
+    let root = baked_package("svg_shared", AssetKind::Svg, "icon.svg", b"<svg/>");
     let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let src = "[view]\ncol\n    svg src:\"icon.svg\"\n    svg src:\"icon.svg\"\n";
     let code = transpile_source(src, "demo", None, Some(&assets))
@@ -2405,7 +2405,7 @@ fn a_src_with_no_artifact_at_all_names_the_bake_command() {
 
 #[test]
 fn a_src_the_artifact_does_not_list_names_the_bake_command() {
-    let root = baked_package("svg_unlisted", "svg", "icon.svg", b"<svg/>");
+    let root = baked_package("svg_unlisted", AssetKind::Svg, "icon.svg", b"<svg/>");
     let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let code = transpile_source(
         "[view]\nsvg src:\"other.svg\" width:24\n",
@@ -2429,7 +2429,7 @@ fn a_src_the_artifact_does_not_list_names_the_bake_command() {
 /// The check that makes an edited asset a compile error rather than a build that silently keeps drawing what was baked last week — the whole reason the macro emits an `include_bytes!` per entry.
 #[test]
 fn an_asset_edited_since_the_bake_is_a_compile_error() {
-    let root = baked_package("svg_stale", "svg", "icon.svg", b"<svg/>");
+    let root = baked_package("svg_stale", AssetKind::Svg, "icon.svg", b"<svg/>");
     std::fs::write(root.join("assets/icon.svg"), b"<svg viewBox=\"0 0 1 1\"/>").unwrap();
     let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let code = transpile_source(
@@ -2453,7 +2453,7 @@ fn an_asset_edited_since_the_bake_is_a_compile_error() {
 
 #[test]
 fn an_artifact_baked_for_another_telar_names_both_commands() {
-    let root = baked_package("svg_version", "svg", "icon.svg", b"<svg/>");
+    let root = baked_package("svg_version", AssetKind::Svg, "icon.svg", b"<svg/>");
     let assets = asset_context(&root, "0.0.1-other");
     let code = transpile_source(
         "[view]\nsvg src:\"icon.svg\" width:24\n",
@@ -3456,7 +3456,7 @@ fn icon_package_with(name: &str, mode: &str, extra: &str) -> std::path::PathBuf 
         producer: "test".to_string(),
         telar_version: env!("CARGO_PKG_VERSION").to_string(),
         entries: vec![AssetEntry {
-            kind: "icon".to_string(),
+            kind: AssetKind::Icon,
             path: "mdi:home".to_string(),
             hash: content_hash(b"<svg/>"),
             static_name: static_name_for_path("mdi:home"),

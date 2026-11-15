@@ -8,7 +8,7 @@ fn package(name: &str, telar_toml: &str, icons: &[&str]) -> PathBuf {
     let assets: Vec<telar_project::BakedAsset> = icons
         .iter()
         .map(|id| telar_project::BakedAsset {
-            kind: "icon".to_string(),
+            kind: telar_project::AssetKind::Icon,
             path: id.to_string(),
             content: id.as_bytes().to_vec(),
             init_expr: format!("SvgData::from_baked_vector((24.0f32, 24.0f32), vec![]) /* {id} */"),
@@ -90,7 +90,7 @@ fn a_rebake_is_seen_by_a_process_that_outlives_it() {
     std::thread::sleep(std::time::Duration::from_millis(20));
     let generated = telar_project::generate_assets(
         &[telar_project::BakedAsset {
-            kind: "icon".to_string(),
+            kind: telar_project::AssetKind::Icon,
             path: "mdi:gear".to_string(),
             content: b"gear".to_vec(),
             init_expr: "SvgData::from_baked_vector((24.0f32, 24.0f32), vec![])".to_string(),

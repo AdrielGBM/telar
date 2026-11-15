@@ -2,11 +2,21 @@
 
 use std::path::{Path, PathBuf};
 
-use icons_core::{IconError, IconId};
+use icons_core::{IconId, IconIdError};
 use serde::Deserialize;
 
 /// File name of the icon licence notice the bake writes, joined onto a package's `.telar/`.
 pub const ICONS_NOTICE_FILENAME: &str = "ICONS-LICENSES.txt";
+
+/// `error` as a sentence for the `.rsx` line whose id [`IconsSection::icon_id`] refused: a bare name is pointed at the `[telar.icons]` key that reads it in a set.
+pub fn icon_id_message(error: &IconIdError) -> String {
+    match error {
+        IconIdError::MissingSet { name } => format!(
+            "`{name}` names no icon set: write it as `set:name`, like `mdi:{name}`, or set `[telar.icons] default_set` to the set a bare name is read in, like `default_set = \"mdi\"`"
+        ),
+        IconIdError::Invalid { .. } => error.to_string(),
+    }
+}
 
 /// The icon licence notice `cargo telar bake` wrote for the package at `package_dir`, or `None` when it baked no icons, its own or its dependencies'.
 pub fn icon_notice_file(package_dir: &Path) -> Option<PathBuf> {
@@ -83,14 +93,9 @@ impl IconsSection {
         self.licenses.unlisted.unwrap_or_default()
     }
 
-    /// The icon `written` names: `set:name`, or a bare name read in [`default_set`](Self::default_set). The error is a sentence for the `.rsx` line that wrote it.
-    pub fn icon_id(&self, written: &str) -> Result<IconId, String> {
-        IconId::parse_with_default(written, self.default_set.as_deref()).map_err(|error| match error {
-            IconError::MissingSet { name } => format!(
-                "`{name}` names no icon set: write it as `set:name`, like `mdi:{name}`, or set `[telar.icons] default_set` to the set a bare name is read in, like `default_set = \"mdi\"`"
-            ),
-            other => other.to_string(),
-        })
+    /// The icon `written` names: `set:name`, or a bare name read in [`default_set`](Self::default_set). [`icon_id_message`] words the error for the `.rsx` line that wrote it.
+    pub fn icon_id(&self, written: &str) -> Result<IconId, IconIdError> {
+        IconId::parse_with_default(written, self.default_set.as_deref())
     }
 
     pub(crate) fn problems(&self) -> Vec<String> {

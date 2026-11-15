@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use telar_baker::{ProblemKind, bake_package, read_library_icons};
-use telar_project::{AssetContext, TelarManifest, asset_kind_for_id, read_index};
+use telar_project::{AssetContext, AssetKind, TelarManifest, read_index};
 
 const VERSION: &str = "0.2.1";
 
@@ -47,7 +47,7 @@ fn baked_icons(root: &Path) -> Vec<String> {
         .expect("the bake wrote an artifact")
         .entries
         .into_iter()
-        .filter(|entry| entry.kind == "icon")
+        .filter(|entry| entry.kind == AssetKind::Icon)
         .map(|entry| entry.path)
         .collect()
 }
@@ -78,7 +78,7 @@ fn a_crate_with_no_rsx_bakes_the_icons_its_rust_names() {
     );
 
     let baked = asset_context(&root)
-        .baked_id(asset_kind_for_id("icon").unwrap(), "demo:home")
+        .baked_id(AssetKind::Icon, "demo:home")
         .expect("the call resolves against the artifact");
     assert!(
         baked.init_expr.starts_with("SvgData::from_baked_vector("),

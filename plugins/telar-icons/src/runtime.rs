@@ -38,7 +38,7 @@ pub use installed::RuntimeIcons;
 mod installed {
     use std::sync::Arc;
 
-    use telar::icons::{IconError, IconId, IconSource};
+    use telar::icons::{IconError, IconId, IconIdError, IconSource};
     use telar::{
         AssetCache, AssetDecoder, AssetError, AssetKey, AssetLoader, AssetState, AssetTransport,
         Reply,
@@ -164,7 +164,7 @@ mod installed {
             let installed = slot.as_ref()?;
             let path = match IconId::parse_with_default(id, installed.default_set.as_deref()) {
                 Ok(id) => id.path(),
-                Err(IconError::MissingSet { .. }) => {
+                Err(IconIdError::MissingSet { .. }) => {
                     super::warn_once(id, || {
                         format!(
                             "icon `{id}` names no set and the installed `RuntimeIcons` has no default set, so it draws nothing: write it as `set:name`, or read bare names in a set with `RuntimeIcons::with_default_set`"
@@ -224,6 +224,7 @@ mod installed {
     impl AssetTransport for SourceTransport {
         fn load(&self, key: &AssetKey, reply: Reply) {
             let answer = IconId::from_path(&key.id)
+                .map_err(IconError::from)
                 .and_then(|id| self.0.icon(&id))
                 .map_err(|error| AssetError::permanent(error.to_string()))
                 .and_then(|icon| {

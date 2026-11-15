@@ -90,7 +90,7 @@ pub fn read_library_icons(library_dir: &Path) -> Result<Option<CrateIcons>, Stri
             index
                 .entries
                 .into_iter()
-                .filter(|entry| entry.kind == "icon")
+                .filter(|entry| entry.kind == telar_project::AssetKind::Icon)
                 .map(|entry| entry.path)
                 .collect()
         })

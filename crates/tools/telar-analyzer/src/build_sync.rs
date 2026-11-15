@@ -12,9 +12,7 @@ use std::time::SystemTime;
 use telar_baker::{BakeReport, Origin};
 use telar_diagnostics::{Severity, Span};
 use telar_parser::{RsxDocument, ViewNode};
-use telar_project::{
-    AssetContext, AssetKind, BuildFlavour, TelarManifest, TelarSection, asset_kind_for_tag,
-};
+use telar_project::{AssetContext, AssetKind, BuildFlavour, TelarManifest, TelarSection};
 use telar_transpiler::SourceMap;
 
 /// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`. Anchored on `Cargo.toml` (not `telar.toml`) so this works in crates without an rsx config too.
@@ -143,7 +141,7 @@ struct FailedBake {
 }
 
 struct AssetReference {
-    kind: &'static AssetKind,
+    kind: AssetKind,
     path: String,
     line: usize,
 }
@@ -276,10 +274,10 @@ fn collect_references(nodes: &[ViewNode], source: &str, out: &mut Vec<AssetRefer
     for node in nodes {
         match node {
             ViewNode::Element(el) => {
-                if let Some(kind) = asset_kind_for_tag(&el.tag) {
+                if let Some(kind) = AssetKind::for_tag(&el.tag) {
                     for attr in &el.attributes {
                         let path = attr.value.text().trim();
-                        if attr.key == kind.attr && attr.value.is_quoted() && !path.is_empty() {
+                        if attr.key == kind.attr() && attr.value.is_quoted() && !path.is_empty() {
                             let line = source
                                 .get(..attr.value_start)
                                 .map_or(el.line, |before| before.matches('\n').count() + 1);

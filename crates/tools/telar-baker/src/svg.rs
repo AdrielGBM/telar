@@ -1,14 +1,8 @@
-use telar_project::{AssetKind, asset_kind_for_id};
-
 use crate::Baker;
 
 pub(crate) struct SvgBaker;
 
 impl Baker for SvgBaker {
-    fn kind(&self) -> &'static AssetKind {
-        asset_kind_for_id("svg").expect("svg is a registered asset kind")
-    }
-
     fn bake(&self, bytes: &[u8]) -> Result<String, String> {
         bake_svg(bytes)
     }
@@ -18,10 +12,6 @@ impl Baker for SvgBaker {
 pub(crate) struct IconBaker;
 
 impl Baker for IconBaker {
-    fn kind(&self) -> &'static AssetKind {
-        asset_kind_for_id("icon").expect("icon is a registered asset kind")
-    }
-
     fn bake(&self, bytes: &[u8]) -> Result<String, String> {
         bake_svg(bytes)
     }

@@ -2,7 +2,7 @@ use super::*;
 
 fn svg_asset(path: &str, content: &[u8]) -> BakedAsset {
     BakedAsset {
-        kind: "svg".to_string(),
+        kind: AssetKind::Svg,
         path: path.to_string(),
         content: content.to_vec(),
         init_expr: "SvgData::from_baked_vector(&[])".to_string(),
@@ -12,7 +12,7 @@ fn svg_asset(path: &str, content: &[u8]) -> BakedAsset {
 
 fn image_asset(path: &str, content: &[u8]) -> BakedAsset {
     BakedAsset {
-        kind: "image".to_string(),
+        kind: AssetKind::Image,
         path: path.to_string(),
         content: content.to_vec(),
         init_expr: "ImageData::new(vec![0; 4], 1, 1).expect(\"a baked picture fills its size\")"
@@ -28,7 +28,7 @@ fn index_round_trips_through_json() {
         producer: "cargo-telar 0.1.8".to_string(),
         telar_version: "0.1.8".to_string(),
         entries: vec![AssetEntry {
-            kind: "svg".to_string(),
+            kind: AssetKind::Svg,
             path: "badge.svg".to_string(),
             hash: content_hash(b"<svg/>"),
             static_name: static_name_for_path("badge.svg"),
@@ -88,7 +88,7 @@ fn generates_one_static_per_asset_with_the_right_wrapper_type() {
 #[test]
 fn the_generated_module_imports_telar_wholesale() {
     let asset = BakedAsset {
-        kind: "svg".to_string(),
+        kind: AssetKind::Svg,
         path: "a.svg".to_string(),
         content: b"1".to_vec(),
         init_expr: "SvgData::from_baked_vector((1.0, 1.0), vec![VectorCommand::Path { data: PathData::new() }])"
@@ -159,16 +159,23 @@ fn duplicate_paths_are_rejected() {
 }
 
 #[test]
-fn unknown_kinds_are_rejected() {
-    let asset = BakedAsset {
-        kind: "font".to_string(),
-        path: "sans.ttf".to_string(),
-        content: b"1".to_vec(),
-        init_expr: "x".to_string(),
-        monochrome: false,
-    };
-    let err = generate_assets(&[asset], "t", "0.1.8").unwrap_err();
+fn an_index_naming_an_unknown_kind_is_refused_naming_it() {
+    let index = generate_assets(&[svg_asset("logo.svg", b"<svg/>")], "t", "0.1.8")
+        .unwrap()
+        .index
+        .to_json()
+        .replace("\"svg\"", "\"font\"");
+    let err = AssetIndex::from_json(&index).unwrap_err();
     assert!(err.contains("font"), "{err}");
+}
+
+#[test]
+fn every_kind_reads_back_from_its_id() {
+    for kind in AssetKind::ALL {
+        assert_eq!(AssetKind::parse(kind.id()), Ok(kind));
+    }
+    let err = AssetKind::parse("font").unwrap_err();
+    assert!(err.to_string().contains("`font`"), "{err}");
 }
 
 #[test]

@@ -14,9 +14,9 @@ fn temp_dir(name: &str) -> PathBuf {
 
 #[test]
 fn init_expr_round_trips_a_real_baked_entry() {
-    let expected = crate::baker_for_id("svg").unwrap().bake(ICON_SVG).unwrap();
+    let expected = crate::baker_for(AssetKind::Svg).bake(ICON_SVG).unwrap();
     let baked = BakedAsset {
-        kind: "svg".to_string(),
+        kind: AssetKind::Svg,
         path: "badge.svg".to_string(),
         content: ICON_SVG.to_vec(),
         init_expr: expected.clone(),
@@ -52,9 +52,12 @@ fn collects_static_refs_including_previews_and_skips_dynamic_or_empty_ones() {
     collect_asset_refs(&doc, &mut refs);
     let paths: Vec<_> = refs
         .iter()
-        .map(|(kind, path)| (kind.id, path.as_str()))
+        .map(|(kind, path)| (*kind, path.as_str()))
         .collect();
-    assert_eq!(paths, vec![("svg", "badge.svg"), ("image", "dot.png")]);
+    assert_eq!(
+        paths,
+        vec![(AssetKind::Svg, "badge.svg"), (AssetKind::Image, "dot.png")]
+    );
 }
 
 #[test]
@@ -123,7 +126,7 @@ fn a_missing_asset_file_is_an_error_naming_the_reference_and_its_expected_path()
         panic!("a missing asset expected: {problem:?}");
     };
     assert_eq!(asset.path, "missing.png");
-    assert_eq!(asset.kind.id, "image");
+    assert_eq!(asset.kind, AssetKind::Image);
     assert_eq!(problem.file, root.join("assets").join("missing.png"));
     assert_eq!(problem.severity(), Severity::Error);
 

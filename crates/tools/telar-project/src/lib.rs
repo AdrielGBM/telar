@@ -36,10 +36,9 @@ mod vocabulary;
 mod web;
 
 pub use assets::{
-    ASSET_ARTIFACT_FORMAT, ASSET_KINDS, ASSETS_INDEX_FILENAME, ASSETS_MODULE,
-    ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetContext, AssetEntry, AssetIndex, AssetKind,
-    BakedAsset, BakedId, ComponentAsset, GeneratedAssets, IdBaking, IdProp,
-    asset_kind_for_component, asset_kind_for_id, asset_kind_for_tag, baked_init_expr,
+    ASSET_ARTIFACT_FORMAT, ASSETS_INDEX_FILENAME, ASSETS_MODULE, ASSETS_SOURCE_FILENAME,
+    ArtifactHandshake, AssetContext, AssetEntry, AssetIndex, AssetKind, BakedAsset, BakedId,
+    ComponentAsset, GeneratedAssets, IdBaking, IdProp, UnknownAssetKind, baked_init_expr,
     check_artifact, content_hash, generate_assets, read_index, static_name_for_path,
     write_generated,
 };
@@ -69,7 +68,7 @@ pub use fonts::{
 };
 pub use icons::{
     ICONS_NOTICE_FILENAME, IconLicensesSection, IconMode, IconsSection, UnlistedLicense,
-    icon_notice_file,
+    icon_id_message, icon_notice_file,
 };
 pub use library::{
     ICONS_LIBRARY_RECORD_FILENAME, library_files, library_include, library_include_covers,

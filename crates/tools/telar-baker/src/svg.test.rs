@@ -17,8 +17,3 @@ fn non_utf8_bytes_are_rejected_before_reaching_the_svg_parser() {
         "non-utf8 bytes are rejected before the parser ever sees them"
     );
 }
-
-#[test]
-fn kind_id_is_svg() {
-    assert_eq!(SvgBaker.kind().id, "svg");
-}

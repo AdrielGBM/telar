@@ -11,7 +11,8 @@ use super::artifact::{
     ASSETS_INDEX_FILENAME, ASSETS_MODULE, ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetEntry,
     AssetIndex, baked_init_expr, check_artifact, content_hash,
 };
-use super::{AssetKind, IdBaking, asset_kind_for_component};
+use super::{AssetKind, IdBaking};
+use crate::icons::icon_id_message;
 
 /// What a package's `.telar/` had to say. `Unusable` carries the mismatch already phrased, so a caller that hits it for ten different assets writes the same explanation ten times without re-deriving it.
 enum ArtifactState {
@@ -101,10 +102,7 @@ impl AssetContext {
                 index
                     .entries
                     .iter()
-                    .filter(|entry| {
-                        super::asset_kind_for_id(&entry.kind)
-                            .is_some_and(|kind| kind.component.is_none())
-                    })
+                    .filter(|entry| entry.kind.component().is_none())
                     .map(|entry| self.root.join(&entry.path))
                     .filter(|path| path.is_file())
                     .collect()
@@ -113,7 +111,7 @@ impl AssetContext {
     }
 
     /// The path expression a widget's `src:"rel"` becomes — `crate::__rsx_assets::ASSET_…` — or the message explaining why it cannot be one.
-    pub fn resolve(&self, kind: &AssetKind, rel: &str) -> Result<String, String> {
+    pub fn resolve(&self, kind: AssetKind, rel: &str) -> Result<String, String> {
         let index = match &self.state {
             ArtifactState::NotBaked => return Err(self.not_baked_message(kind, rel)),
             ArtifactState::Unusable(why) => {
@@ -125,11 +123,11 @@ impl AssetContext {
         let Some(entry) = index
             .entries
             .iter()
-            .find(|entry| entry.kind == kind.id && entry.path == path)
+            .find(|entry| entry.kind == kind && entry.path == path)
         else {
             return Err(format!(
                 "rsx: the baked artifact does not list the {} asset `{rel}`. Run: cargo telar bake (or build through cargo telar check/dev/build, which bake first).",
-                kind.label
+                kind.label()
             ));
         };
 
@@ -137,14 +135,14 @@ impl AssetContext {
         let bytes = std::fs::read(&file).map_err(|e| {
             format!(
                 "rsx: the {} asset `{rel}` is in the baked artifact but no longer at {}: {e}. Run: cargo telar bake",
-                kind.label,
+                kind.label(),
                 file.display()
             )
         })?;
         if content_hash(&bytes) != entry.hash {
             return Err(format!(
                 "rsx: the {} asset `{rel}` has changed since it was baked, so the artifact holds its old contents. Run: cargo telar bake (or build through cargo telar check/dev/build, which bake first).",
-                kind.label
+                kind.label()
             ));
         }
 
@@ -152,10 +150,10 @@ impl AssetContext {
     }
 
     /// The component-named kind whose id `prop` carries on `tag`, and how this package bakes it. `None` when the package bakes nothing there, and the prop then receives the id as written.
-    pub fn id_baking(&self, tag: &str, prop: &str) -> Option<(&'static AssetKind, IdBaking)> {
-        let kind = asset_kind_for_component(tag, prop)?;
+    pub fn id_baking(&self, tag: &str, prop: &str) -> Option<(AssetKind, IdBaking)> {
+        let kind = AssetKind::for_component(tag, prop)?;
         let baking = match self.telar.id_baking(kind) {
-            IdBaking::Required if kind.component.is_some_and(|c| c.carries(tag, prop)) => {
+            IdBaking::Required if kind.component().is_some_and(|c| c.carries(tag, prop)) => {
                 IdBaking::Literals
             }
             baking => baking,
@@ -170,10 +168,9 @@ impl AssetContext {
         prop: &str,
         written: &str,
     ) -> Option<Result<String, String>> {
-        let kind = asset_kind_for_component(tag, prop)?;
+        let kind = AssetKind::for_component(tag, prop)?;
         Some(match self.telar.id_baking(kind) {
             IdBaking::Off => self
-                .telar
                 .canonical_id(kind, written)?
                 .map(|id| format!("{id:?}"))
                 .map_err(|message| format!("rsx: {message}")),
@@ -184,14 +181,14 @@ impl AssetContext {
     /// The value a baked id becomes, `("set:name", crate::__rsx_assets::ASSET_….get(), monochrome)` — the triple a component-named kind's prop accepts — or the message explaining why it cannot be one. `written` is read the way the bake keyed it, so a bare icon name finds the icon of the default set.
     ///
     /// Unlike a path, there is no file here to re-hash: the id is either in the artifact or it is not, and whether its source changed is the bake's question, which runs before every build route.
-    pub fn resolve_id(&self, kind: &AssetKind, written: &str) -> Result<String, String> {
-        self.resolve_prop_id(kind, kind.attr, written)
+    pub fn resolve_id(&self, kind: AssetKind, written: &str) -> Result<String, String> {
+        self.resolve_prop_id(kind, kind.attr(), written)
     }
 
     /// [`Self::resolve_id`] for an id given to `prop`, which a message names it by.
     fn resolve_prop_id(
         &self,
-        kind: &AssetKind,
+        kind: AssetKind,
         prop: &str,
         written: &str,
     ) -> Result<String, String> {
@@ -208,18 +205,18 @@ impl AssetContext {
     }
 
     /// The baked id a Rust macro names as `tag!("written")`, where `tag` is the component that draws `kind`, such as `icon!("mdi:home")`: what the macro inlines at its call site, or the message explaining why it cannot. Unlike [`Self::resolve_id`] it needs no module wired by `rsx_modules!`, so a crate with no `.rsx` at all, such as a widget library written in Rust, can name what its bake baked.
-    pub fn baked_id(&self, kind: &AssetKind, written: &str) -> Result<BakedId, String> {
-        let Some(component) = kind.component else {
+    pub fn baked_id(&self, kind: AssetKind, written: &str) -> Result<BakedId, String> {
+        let Some(component) = kind.component() else {
             return Err(format!(
                 "the {} kind is baked from a path, not named by id",
-                kind.label
+                kind.label()
             ));
         };
         let call = format!("{}!(\"{written}\")", component.tag);
         if self.telar.id_baking(kind) == IdBaking::Off {
             return Err(format!(
                 "`{call}` names a {label} baked into this package, and its telar.toml bakes none: name where they come from in `[telar.{section}]`, leaving `mode` unset or setting it to \"both\"",
-                label = kind.label,
+                label = kind.label(),
                 section = component.section
             ));
         }
@@ -233,25 +230,38 @@ impl AssetContext {
             .ok_or_else(|| {
                 format!(
                     "the baked artifact lists the {} `{id}`, and `.telar/{ASSETS_SOURCE_FILENAME}` holds no initializer for it. Run: cargo telar bake",
-                    kind.label
+                    kind.label()
                 )
             })?;
         Ok(BakedId {
             id,
             monochrome: entry.monochrome,
-            data_ty: kind.data_ty,
+            data_ty: kind.data_ty(),
             init_expr,
         })
+    }
+
+    /// The id `written` names for the component-named `kind`, spelled the way the bake keys it, or the message saying why it names none. `None` where the package does not configure `kind`, whose ids then reach the component as written.
+    fn canonical_id(&self, kind: AssetKind, written: &str) -> Option<Result<String, String>> {
+        match kind {
+            AssetKind::Icon => Some(
+                self.telar
+                    .canonical_icon_id(written)?
+                    .map(|id| id.to_string())
+                    .map_err(|error| icon_id_message(&error)),
+            ),
+            AssetKind::Svg | AssetKind::Image => None,
+        }
     }
 
     /// The id `written` names, spelled the way the bake keyed it, and its entry in the artifact. `shown` spells the id for a message the way its caller wrote it.
     fn baked_entry(
         &self,
-        kind: &AssetKind,
+        kind: AssetKind,
         written: &str,
         shown: impl Fn(&str) -> String,
     ) -> Result<(String, &AssetEntry), String> {
-        let id = match self.telar.canonical_id(kind, written) {
+        let id = match self.canonical_id(kind, written) {
             Some(Ok(id)) => id,
             Some(Err(message)) => return Err(message),
             None => written.to_string(),
@@ -261,7 +271,7 @@ impl AssetContext {
             ArtifactState::NotBaked => {
                 return Err(format!(
                     "no baked artifact for the {} {shown}. {}",
-                    kind.label,
+                    kind.label(),
                     self.bake_hint(kind)
                 ));
             }
@@ -271,12 +281,12 @@ impl AssetContext {
         let Some(entry) = index
             .entries
             .iter()
-            .find(|entry| entry.kind == kind.id && entry.path == id)
+            .find(|entry| entry.kind == kind && entry.path == id)
         else {
             return Err(format!(
                 "the baked artifact holds no {} {shown}. The bake reports an id it could not resolve, so check its output, or the id, against the sources `[telar.{}]` names. {}",
-                kind.label,
-                kind.component.map_or("", |component| component.section),
+                kind.label(),
+                kind.component().map_or("", |component| component.section),
                 self.bake_hint(kind)
             ));
         };
@@ -293,41 +303,44 @@ impl AssetContext {
     }
 
     /// Why `prop` on `tag`, which has to be baked, was given something that is not a literal id.
-    pub fn dynamic_id_message(kind: &AssetKind, tag: &str, prop: &str) -> String {
-        let section = kind.component.map_or("", |component| component.section);
-        let drawn_by = kind.component.map_or("", |component| component.tag);
+    pub fn dynamic_id_message(kind: AssetKind, tag: &str, prop: &str) -> String {
+        let section = kind.component().map_or("", |component| component.section);
+        let drawn_by = kind.component().map_or("", |component| component.tag);
         format!(
             "rsx: `{tag} {prop}:` takes a literal id while `[telar.{section}]` bakes every {}, because only a literal can be baked ahead of time. Write the id out, choosing between literal ids with `if` or `match` where it varies; or set `[telar.{section}] mode = \"both\"` to resolve ids that are not literal as the application runs, or `mode = \"runtime\"` to resolve all of them then — see the `runtime` feature of the crate that provides `{drawn_by}`.",
-            kind.label
+            kind.label()
         )
     }
 
-    fn bake_hint(&self, kind: &AssetKind) -> String {
+    fn bake_hint(&self, kind: AssetKind) -> String {
         format!(
             "A {} id is baked by the CLI, not by the compiler. Run: cargo telar bake (or build through cargo telar check/dev/build, which bake first). Install it with: cargo install cargo-telar --version {}",
-            kind.label, self.telar_version
+            kind.label(),
+            self.telar_version
         )
     }
 
     /// A `src:"…"` transpiled with no package to anchor it — an in-memory transpile with no `.telar/` to look in, such as a unit test or an analyzer query on a detached buffer.
-    pub fn detached_message(kind: &AssetKind, rel: &str) -> String {
+    pub fn detached_message(kind: AssetKind, rel: &str) -> String {
         format!(
             "rsx: cannot resolve the {} asset `{rel}`: this transpile has no package directory, so there is no baked artifact to read.",
-            kind.label
+            kind.label()
         )
     }
 
-    fn not_baked_message(&self, kind: &AssetKind, rel: &str) -> String {
+    fn not_baked_message(&self, kind: AssetKind, rel: &str) -> String {
         format!(
             "rsx: no baked artifact for the {} asset `{rel}`. Static src:\"…\" assets are baked by the CLI, not by the compiler. Run: cargo telar bake (or build through cargo telar check/dev/build, which bake first). Install it with: cargo install cargo-telar --version {}",
-            kind.label, self.telar_version
+            kind.label(),
+            self.telar_version
         )
     }
 
-    fn unusable_message(&self, kind: &AssetKind, rel: &str, why: &str) -> String {
+    fn unusable_message(&self, kind: AssetKind, rel: &str, why: &str) -> String {
         format!(
             "the baked artifact cannot be used for the {} asset `{rel}`: {why}. Run: cargo install cargo-telar --version {} && cargo telar bake",
-            kind.label, self.telar_version
+            kind.label(),
+            self.telar_version
         )
     }
 }

@@ -15,9 +15,7 @@ use telar_project::protocol::{
     HotReply, PREVIEW_VAR, RENDERER_BACKEND_VAR, TARGET_VAR, TERMINAL_TARGET, TEST_TARGET_DIR_VAR,
     WORKSPACE_DIR_VAR, dev_window_env, encode_flag,
 };
-use telar_project::{
-    ASSET_KINDS, DEVTOOLS_PACKAGE, ManifestError, TelarManifest, WORKSHOP_PACKAGE,
-};
+use telar_project::{AssetKind, DEVTOOLS_PACKAGE, ManifestError, TelarManifest, WORKSHOP_PACKAGE};
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::artifacts::{self, build_with_diagnostics, with_json_messages};
@@ -46,9 +44,9 @@ fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
 }
 
 fn is_asset_extension(ext: &str) -> bool {
-    ASSET_KINDS
-        .iter()
-        .any(|kind| kind.extensions.contains(&ext))
+    AssetKind::ALL
+        .into_iter()
+        .any(|kind| kind.extensions().contains(&ext))
 }
 
 /// Everything an edit that should rebuild can come from.

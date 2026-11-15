@@ -3,7 +3,7 @@
 use telar_parser::{Attr, Element, Value};
 
 use crate::registry;
-use telar_project::{AssetContext, AssetKind, asset_kind_for_tag};
+use telar_project::{AssetContext, AssetKind};
 
 use super::signals::substitute_reads;
 use super::{ChildEmit, ViewGen, expr_marker};
@@ -18,21 +18,15 @@ fn fit_closure(attributes: &[Attr]) -> String {
     format!("move || {variant}")
 }
 
-fn svg_asset() -> &'static AssetKind {
-    asset_kind_for_tag("svg").expect("svg is a registered asset kind")
-}
-
-fn image_asset() -> &'static AssetKind {
-    asset_kind_for_tag("image").expect("image is a registered asset kind")
-}
-
 impl ViewGen<'_> {
     pub(super) fn emit_image(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
 
-        let (setup, data_fn) =
-            self.media_src_binding(el.attributes.iter().find(|a| a.key == "src"), image_asset());
+        let (setup, data_fn) = self.media_src_binding(
+            el.attributes.iter().find(|a| a.key == "src"),
+            AssetKind::Image,
+        );
 
         let raster = el
             .attributes
@@ -82,8 +76,10 @@ impl ViewGen<'_> {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
 
-        let (setup, data_fn) =
-            self.media_src_binding(el.attributes.iter().find(|a| a.key == "src"), svg_asset());
+        let (setup, data_fn) = self.media_src_binding(
+            el.attributes.iter().find(|a| a.key == "src"),
+            AssetKind::Svg,
+        );
 
         let color_fn = self.svg_color_closure(el.attributes.iter().find(|a| a.key == "color"));
         let stroke = el.attributes.iter().find(|a| a.key == "stroke");
@@ -147,11 +143,7 @@ impl ViewGen<'_> {
     /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). The closure takes its captures by [`ViewGen::owning`], so the outer handle stays usable, mirroring `svg color:$sig` / `box fill:$sig`.
     /// - Non-quoted, `$`-free `src:expr` is a constant `Arc<Data>` handle: `setup` hoists it into `__src` once and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
     /// - Missing, empty, or written in a form that cannot name an asset (a bare flag, a `t"…"` key) falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
-    fn media_src_binding(
-        &self,
-        src_attr: Option<&Attr>,
-        kind: &'static AssetKind,
-    ) -> (String, String) {
+    fn media_src_binding(&self, src_attr: Option<&Attr>, kind: AssetKind) -> (String, String) {
         let pad = self.indent_str();
         match src_attr.map(|a| (a, &a.value)) {
             Some((_, Value::Quoted(path))) if !path.trim().is_empty() => {
@@ -174,14 +166,14 @@ impl ViewGen<'_> {
                 )
             }
             _ => (
-                format!("{pad}    let __src = {}.clone();\n", kind.placeholder),
+                format!("{pad}    let __src = {}.clone();\n", kind.placeholder()),
                 "move || __src.clone()".to_string(),
             ),
         }
     }
 
     /// The `data_fn` for a static `src:"rel"`: what the `static` the baked artifact declares for it holds, read with `get`. Nothing is read or decoded here — an asset the artifact cannot answer for becomes a `compile_error!` naming the command that bakes it, and that call's `!`-typed result unifies with the widget's `Fn() -> Arc<Data>` bound, so no secondary type errors leak from it.
-    fn static_asset_data_fn(&self, rel: &str, kind: &'static AssetKind) -> String {
+    fn static_asset_data_fn(&self, rel: &str, kind: AssetKind) -> String {
         let resolved = match self.assets {
             Some(assets) => assets.resolve(kind, rel),
             None => Err(AssetContext::detached_message(kind, rel)),

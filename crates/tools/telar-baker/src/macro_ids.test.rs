@@ -1,12 +1,8 @@
 use super::*;
 
-fn icon_kind() -> &'static AssetKind {
-    telar_project::asset_kind_for_id("icon").unwrap()
-}
-
 fn ids(source: &str) -> Vec<(String, usize)> {
     let mut out = Vec::new();
-    collect_macro_ids(source, Path::new("lib.rs"), 1, &[icon_kind()], &mut out);
+    collect_macro_ids(source, Path::new("lib.rs"), 1, &[AssetKind::Icon], &mut out);
     out.into_iter()
         .map(|reference| (reference.literal.unwrap(), reference.line))
         .collect()
@@ -72,7 +68,7 @@ fn lines_count_from_where_the_source_starts() {
         "\n\nicon!(\"a:b\")",
         Path::new("view.rsx"),
         10,
-        &[icon_kind()],
+        &[AssetKind::Icon],
         &mut out,
     );
     assert_eq!(out[0].line, 12);

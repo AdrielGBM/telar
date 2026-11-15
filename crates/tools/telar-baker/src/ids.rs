@@ -3,14 +3,14 @@
 use std::path::{Path, PathBuf};
 
 use telar_parser::{RsxDocument, Value, ViewNode};
-use telar_project::{AssetKind, asset_kind_for_component};
+use telar_project::AssetKind;
 
 use crate::macro_ids::collect_macro_ids;
 
 /// One prop, or one macro call, that names an asset by id.
 #[derive(Clone)]
 pub struct IdRef {
-    pub kind: &'static AssetKind,
+    pub kind: AssetKind,
     /// The component the id was given to, or for a macro call, the component the macro is named after.
     pub tag: String,
     /// The prop the id was given to, or for a macro call, the prop of the component the macro is named after.
@@ -29,7 +29,7 @@ pub fn collect_id_refs(
     doc: &RsxDocument,
     source: &str,
     file: &Path,
-    kinds: &[&'static AssetKind],
+    kinds: &[AssetKind],
     out: &mut Vec<IdRef>,
 ) {
     collect_macro_ids(&doc.logic.source, file, doc.logic.start_line, kinds, out);
@@ -56,7 +56,7 @@ pub fn collect_id_refs(
 struct Walk<'a> {
     source: &'a str,
     file: &'a Path,
-    kinds: &'a [&'static AssetKind],
+    kinds: &'a [AssetKind],
     out: &'a mut Vec<IdRef>,
 }
 
@@ -77,8 +77,8 @@ impl Walk<'_> {
                 ViewNode::Element(el) => {
                     let tag = el.tag.rsplit("::").next().unwrap_or(&el.tag);
                     for attr in &el.attributes {
-                        let Some(kind) = asset_kind_for_component(tag, &attr.key)
-                            .filter(|kind| self.kinds.iter().any(|k| k.id == kind.id))
+                        let Some(kind) = AssetKind::for_component(tag, &attr.key)
+                            .filter(|kind| self.kinds.contains(kind))
                         else {
                             continue;
                         };
@@ -86,7 +86,7 @@ impl Walk<'_> {
                             Value::Quoted(id) => Some(id.trim().to_string()),
                             _ => None,
                         };
-                        let carried = kind.component.is_some_and(|c| c.carries(tag, &attr.key));
+                        let carried = kind.component().is_some_and(|c| c.carries(tag, &attr.key));
                         if carried && literal.is_none() {
                             continue;
                         }

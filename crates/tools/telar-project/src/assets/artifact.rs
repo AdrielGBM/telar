@@ -22,6 +22,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use super::AssetKind;
+
 /// Bumped whenever `.telar/assets.rs`'s generated source changes shape in a way older `telar`/`telar-macros`
 /// can't read (e.g. the `static`'s wrapper type, or how an entry's initializer is called), as (at 7) a baked
 /// picture's initializer unwrapping the constructor that checks its pixels fill it. This is mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal
@@ -48,8 +50,8 @@ pub const ASSETS_SOURCE_FILENAME: &str = "assets.rs";
 /// baker turned its bytes into a `static` the generated module exports.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetEntry {
-    /// [`crate::AssetKind::id`] this resource bakes as.
-    pub kind: String,
+    /// The kind this resource bakes as.
+    pub kind: AssetKind,
     /// Path to the source file, relative to the project's asset root ([`crate::assets_root`]).
     pub path: String,
     /// Content hash of the source file, hex-encoded — how a stale artifact is detected. Editing the file
@@ -96,8 +98,8 @@ impl AssetIndex {
 /// baker's job, not this module's.
 #[derive(Debug, Clone)]
 pub struct BakedAsset {
-    /// [`crate::AssetKind::id`] this resource bakes as.
-    pub kind: String,
+    /// The kind this resource bakes as.
+    pub kind: AssetKind,
     /// Path to the source file, relative to the project's asset root, `/`-separated.
     pub path: String,
     /// The source file's bytes, hashed for [`AssetEntry::hash`] and otherwise unused.
@@ -150,8 +152,8 @@ pub fn content_hash(bytes: &[u8]) -> String {
 }
 
 /// Turns already-baked resources into the artifact's two halves: the Rust module and the index describing
-/// it, from the same pass so the two can never drift apart. `Err` when an entry can't be placed — an
-/// unknown `kind`, a `path` listed twice, or (astronomically unlikely, but silent corruption otherwise) two
+/// it, from the same pass so the two can never drift apart. `Err` when an entry can't be placed — a
+/// `path` listed twice, or (astronomically unlikely, but silent corruption otherwise) two
 /// different paths whose hash collides on the same `static_name`.
 ///
 /// Changing the shape of the source this emits — the `static`'s wrapper type, or how `init_expr` gets
@@ -177,8 +179,6 @@ pub fn generate_assets(
         if !seen_paths.insert(asset.path.as_str()) {
             return Err(format!("duplicate asset path `{}`", asset.path));
         }
-        let kind = super::asset_kind_for_id(&asset.kind)
-            .ok_or_else(|| format!("unknown asset kind `{}` for `{}`", asset.kind, asset.path))?;
         let static_name = static_name_for_path(&asset.path);
         if let Some(other) = seen_static_names.insert(static_name.clone(), asset.path.as_str()) {
             return Err(format!(
@@ -188,10 +188,11 @@ pub fn generate_assets(
         }
         body.push_str(&format!(
             "{STATIC_OPENING}{static_name}: Arc<{}>{INIT_OPENING}{}{STATIC_CLOSING}\n",
-            kind.data_ty, asset.init_expr
+            asset.kind.data_ty(),
+            asset.init_expr
         ));
         entries.push(AssetEntry {
-            kind: asset.kind.clone(),
+            kind: asset.kind,
             path: asset.path.clone(),
             hash: content_hash(&asset.content),
             static_name,

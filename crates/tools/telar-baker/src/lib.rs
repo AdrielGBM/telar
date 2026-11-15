@@ -7,8 +7,8 @@
 //! instead of in `telar-transpiler`, which every app compiles and which would otherwise carry `usvg`/`resvg`/
 //! `image` (~66 host crates) into a project that never bakes an asset.
 //!
-//! Adding a kind — fonts, shaders, audio — is an entry in [`ASSET_KINDS`](telar_project::ASSET_KINDS) plus
-//! one [`Baker`] impl here; nothing in the transpiler, the macro, or a CLI needs to change to pick it up.
+//! Adding a kind — fonts, shaders, audio — is a variant of [`AssetKind`] plus one [`Baker`] impl here, which
+//! [`baker_for`] must then name; nothing in the transpiler, the macro, or a CLI needs to change to pick it up.
 //!
 //! A kind a plugin's component names by id rather than by path — `icon name:"mdi:home"` in `.rsx`, or `icon!("mdi:home")` in Rust — also needs its ids
 //! resolved into bytes before a [`Baker`] sees them. That resolver lives here too, because it runs inside the CLI
@@ -47,24 +47,16 @@ pub use web_image::{WEB_IMAGES_DIR, WebImage, WebImageFile, web_image};
 ///
 /// `bytes` is always the asset's raw file content, whatever its kind: a `Baker` for a text format (SVG) is
 /// responsible for its own UTF-8 decoding. Keeping that conversion on the impl, not the caller, is what lets
-/// [`bakers`] stay a single uniform slice, with no caller dispatching on kind to pick `&str` vs `&[u8]`.
+/// [`baker_for`] answer one uniform trait object, with no caller dispatching on kind to pick `&str` vs `&[u8]`.
 pub trait Baker {
-    /// The asset kind this baker handles, i.e. the id `bake()` was chosen for.
-    fn kind(&self) -> &'static AssetKind;
     /// Bakes `bytes` into a Rust expression, or an error message describing why they could not be baked.
     fn bake(&self, bytes: &[u8]) -> Result<String, String>;
 }
 
-/// Every registered baker, one per [`ASSET_KINDS`](telar_project::ASSET_KINDS) entry.
-pub fn bakers() -> &'static [&'static dyn Baker] {
-    &[&svg::SvgBaker, &image::ImageBaker, &svg::IconBaker]
+pub fn baker_for(kind: AssetKind) -> &'static dyn Baker {
+    match kind {
+        AssetKind::Svg => &svg::SvgBaker,
+        AssetKind::Image => &image::ImageBaker,
+        AssetKind::Icon => &svg::IconBaker,
+    }
 }
-
-/// The baker for the asset kind identified by [`AssetKind::id`], or `None` if `id` names no registered baker.
-pub fn baker_for_id(id: &str) -> Option<&'static dyn Baker> {
-    bakers().iter().copied().find(|b| b.kind().id == id)
-}
-
-#[cfg(test)]
-#[path = "lib.test.rs"]
-mod tests;

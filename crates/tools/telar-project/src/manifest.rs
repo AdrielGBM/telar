@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use icons_core::{IconId, IconIdError};
 use platform_core::{FullscreenMode, WindowPosition};
 use serde::Deserialize;
 
@@ -430,31 +431,20 @@ impl TelarSection {
     }
 
     /// What this package does with the ids its `.rsx` gives `kind`'s prop, as the `[telar.<section>]` that configures the kind says. A path kind, and a component kind whose section is absent, bakes nothing.
-    pub fn id_baking(&self, kind: &AssetKind) -> IdBaking {
-        let Some(component) = kind.component else {
-            return IdBaking::Off;
-        };
-        match component.section {
-            "icons" => match self.icons.as_ref().map(IconsSection::mode) {
+    pub fn id_baking(&self, kind: AssetKind) -> IdBaking {
+        match kind {
+            AssetKind::Icon => match self.icons.as_ref().map(IconsSection::mode) {
                 Some(IconMode::Baked) => IdBaking::Required,
                 Some(IconMode::Both) => IdBaking::Literals,
                 Some(IconMode::Runtime) | None => IdBaking::Off,
             },
-            _ => IdBaking::Off,
+            AssetKind::Svg | AssetKind::Image => IdBaking::Off,
         }
     }
 
-    /// The id `written` names for the component-named `kind`, spelled the way the bake keys it: for an icon, `set:name`, with a bare name read in `[telar.icons] default_set`. `None` where the package does not configure `kind`, whose ids then reach the component as written.
-    pub fn canonical_id(&self, kind: &AssetKind, written: &str) -> Option<Result<String, String>> {
-        match kind.component?.section {
-            "icons" => Some(
-                self.icons
-                    .as_ref()?
-                    .icon_id(written)
-                    .map(|id| id.to_string()),
-            ),
-            _ => None,
-        }
+    /// The icon `written` names, spelled the way the bake keys it: `set:name`, with a bare name read in `[telar.icons] default_set`. `None` where the package configures no icons, whose ids then reach the component as written.
+    pub fn canonical_icon_id(&self, written: &str) -> Option<Result<IconId, IconIdError>> {
+        Some(self.icons.as_ref()?.icon_id(written))
     }
 
     /// How far the modules discovered in this package reach: a library keeps its own to itself, an application exposes them to its benches and integration tests.

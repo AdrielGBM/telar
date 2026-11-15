@@ -1,10 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::*;
-use crate::{
-    BakedAsset, MANIFEST_FILENAME, TelarManifest, asset_kind_for_component, generate_assets,
-    write_generated,
-};
+use crate::{BakedAsset, MANIFEST_FILENAME, TelarManifest, generate_assets, write_generated};
 
 const VERSION: &str = "0.2.1";
 
@@ -29,7 +26,7 @@ fn bake(root: &Path, assets: &[BakedAsset]) {
 
 fn icon(id: &str) -> BakedAsset {
     BakedAsset {
-        kind: "icon".to_string(),
+        kind: AssetKind::Icon,
         path: id.to_string(),
         content: b"<svg/>".to_vec(),
         init_expr: "SvgData::from_baked_vector((24.0, 24.0), vec![])".to_string(),
@@ -37,23 +34,23 @@ fn icon(id: &str) -> BakedAsset {
     }
 }
 
-fn icon_kind() -> &'static AssetKind {
-    asset_kind_for_component("icon", "name").expect("icon is a registered component kind")
+fn icon_kind() -> AssetKind {
+    AssetKind::for_component("icon", "name").expect("icon is a registered component kind")
 }
 
 #[test]
 fn the_icon_tags_name_prop_is_a_component_kind() {
-    assert_eq!(icon_kind().id, "icon");
-    assert!(asset_kind_for_component("icon", "size").is_none());
+    assert_eq!(icon_kind(), AssetKind::Icon);
+    assert!(AssetKind::for_component("icon", "size").is_none());
     assert_eq!(
-        asset_kind_for_component("icon_button", "icon").map(|kind| kind.id),
-        Some("icon"),
+        AssetKind::for_component("icon_button", "icon"),
+        Some(AssetKind::Icon),
         "an icon button carries an icon id to the `icon` it draws"
     );
-    assert!(asset_kind_for_component("icon_button", "name").is_none());
-    assert!(asset_kind_for_component("icon_button", "label").is_none());
+    assert!(AssetKind::for_component("icon_button", "name").is_none());
+    assert!(AssetKind::for_component("icon_button", "label").is_none());
     assert!(
-        super::super::asset_kind_for_tag("icon").is_none(),
+        AssetKind::for_tag("icon").is_none(),
         "`icon` is not a built-in tag"
     );
 }
@@ -143,7 +140,7 @@ fn an_icon_is_not_a_file_to_track() {
         &[
             icon("mdi:home"),
             BakedAsset {
-                kind: "svg".to_string(),
+                kind: AssetKind::Svg,
                 path: "mark.svg".to_string(),
                 content: b"<svg/>".to_vec(),
                 init_expr: "SvgData::from_baked_vector((1.0, 1.0), vec![])".to_string(),

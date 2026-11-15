@@ -4,7 +4,8 @@ use std::fmt;
 use std::path::PathBuf;
 
 use i18n_core::SourceProblem;
-use telar_project::{AssetContext, AssetKind, ManifestError};
+use icons_core::IconIdError;
+use telar_project::{AssetContext, AssetKind, ManifestError, icon_id_message};
 
 /// Whether a build may go on from a problem. An error leaves everything else baked, so an editor keeps answering for the rest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,7 +24,7 @@ pub struct BakeProblem {
 /// A `src:"…"` reference to an asset file, its path as the bake keys it, with `/` separators.
 #[derive(Debug, Clone)]
 pub struct AssetRef {
-    pub kind: &'static AssetKind,
+    pub kind: AssetKind,
     pub path: String,
 }
 
@@ -49,14 +50,14 @@ pub enum ProblemKind {
     },
     IdNotLiteral {
         line: usize,
-        kind: &'static AssetKind,
+        kind: AssetKind,
         tag: String,
         prop: String,
         written: String,
     },
     IconIdInvalid {
         line: usize,
-        reason: String,
+        error: IconIdError,
     },
     IconNotFound {
         line: usize,
@@ -256,12 +257,14 @@ impl fmt::Display for BakeProblem {
             ProblemKind::AssetMissing { asset, error } => write!(
                 f,
                 "cannot bake {} asset `{}`: not found at {file} ({error})",
-                asset.kind.label, asset.path
+                asset.kind.label(),
+                asset.path
             ),
             ProblemKind::AssetUndecodable { asset, reason } => write!(
                 f,
                 "cannot bake {} asset `{}` from {file}: {reason}",
-                asset.kind.label, asset.path
+                asset.kind.label(),
+                asset.path
             ),
             ProblemKind::IdNotLiteral {
                 kind,
@@ -270,14 +273,14 @@ impl fmt::Display for BakeProblem {
                 written,
                 ..
             } => {
-                let message = AssetContext::dynamic_id_message(kind, tag, prop);
+                let message = AssetContext::dynamic_id_message(*kind, tag, prop);
                 write!(
                     f,
                     "`{prop}:{written}` — {}",
                     message.trim_start_matches("rsx: ")
                 )
             }
-            ProblemKind::IconIdInvalid { reason, .. } => write!(f, "{reason}"),
+            ProblemKind::IconIdInvalid { error, .. } => f.write_str(&icon_id_message(error)),
             ProblemKind::IconNotFound { id, searched, .. } => {
                 write!(f, "no icon source has `{id}`: it is in none of {searched}")
             }

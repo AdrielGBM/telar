@@ -8,10 +8,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use telar_parser::{RsxDocument, ViewNode};
-use telar_project::{
-    ASSET_KINDS, AssetIndex, AssetKind, BakedAsset, IconsSection, IdBaking, TelarManifest,
-    asset_kind_for_tag,
-};
+use telar_project::{AssetIndex, AssetKind, BakedAsset, IconsSection, IdBaking, TelarManifest};
 
 use crate::icon_dependencies::IconDependency;
 use crate::icons::{Recording, read_icon_record, resolve_with};
@@ -64,12 +61,12 @@ pub fn bake_package_with(
         library: manifest.telar.library,
         dependencies,
     };
-    let id_kinds: Vec<(&'static AssetKind, IdBaking)> = ASSET_KINDS
-        .iter()
+    let id_kinds: Vec<(AssetKind, IdBaking)> = AssetKind::ALL
+        .into_iter()
         .map(|kind| (kind, manifest.telar.id_baking(kind)))
         .filter(|(_, baking)| *baking != IdBaking::Off)
         .collect();
-    let id_kind_list: Vec<&'static AssetKind> = id_kinds.iter().map(|(kind, _)| *kind).collect();
+    let id_kind_list: Vec<AssetKind> = id_kinds.iter().map(|(kind, _)| *kind).collect();
     let mut id_refs: Vec<IdRef> = Vec::new();
     if !id_kind_list.is_empty() {
         for file in rust_files(package_dir) {
@@ -102,7 +99,7 @@ pub fn bake_package_with(
     }
 
     let mut report = BakeReport::default();
-    let mut refs: Vec<(&'static AssetKind, String)> = Vec::new();
+    let mut refs: Vec<(AssetKind, String)> = Vec::new();
     for rsx in &rsx_files {
         let Ok(source) = std::fs::read_to_string(rsx) else {
             continue;
@@ -161,12 +158,12 @@ pub fn bake_package_with(
         if *baking == IdBaking::Required {
             for reference in id_refs
                 .iter()
-                .filter(|reference| reference.kind.id == kind.id && reference.literal.is_none())
+                .filter(|reference| reference.kind == *kind && reference.literal.is_none())
             {
                 report.problems.push(BakeProblem::new(
                     ProblemKind::IdNotLiteral {
                         line: reference.line,
-                        kind,
+                        kind: *kind,
                         tag: reference.tag.clone(),
                         prop: reference.prop.clone(),
                         written: reference.written.clone(),
@@ -178,14 +175,9 @@ pub fn bake_package_with(
     }
     let icon_refs: Vec<IdRef> = id_refs
         .into_iter()
-        .filter(|reference| {
-            reference
-                .kind
-                .component
-                .is_some_and(|c| c.section == "icons")
-        })
+        .filter(|reference| reference.kind == AssetKind::Icon)
         .collect();
-    let bakes_icons = id_kinds.iter().any(|(kind, _)| kind.id == "icon");
+    let bakes_icons = id_kinds.iter().any(|(kind, _)| *kind == AssetKind::Icon);
     let icons = resolve_with(
         package_dir,
         &icons_section(&manifest, bakes_icons),
@@ -193,11 +185,15 @@ pub fn bake_package_with(
         recording,
     );
     report.problems.extend(icons.problems);
-    let icon_kind =
-        telar_project::asset_kind_for_id("icon").expect("icon is a registered asset kind");
     for icon in icons.icons {
         let id = icon.id.to_string();
-        match bake_one(icon_kind, id.clone(), icon.svg, icon.monochrome, &previous) {
+        match bake_one(
+            AssetKind::Icon,
+            id.clone(),
+            icon.svg,
+            icon.monochrome,
+            &previous,
+        ) {
             Ok(asset) => baked.push(asset),
             Err(reason) => report.problems.push(BakeProblem::new(
                 ProblemKind::IconUndecodable {
@@ -255,7 +251,7 @@ struct Previous<'a> {
 
 /// One asset as the artifact will hold it: the expression a previous bake wrote for these exact bytes, or a fresh bake of them. `Err` says why the bytes do not bake.
 fn bake_one(
-    kind: &'static AssetKind,
+    kind: AssetKind,
     path: String,
     bytes: Vec<u8>,
     monochrome: bool,
@@ -269,19 +265,17 @@ fn bake_one(
             let entry = index
                 .entries
                 .iter()
-                .find(|e| e.path == path && e.kind == kind.id && e.hash == hash)?;
+                .find(|e| e.path == path && e.kind == kind && e.hash == hash)?;
             telar_project::baked_init_expr(source, &entry.static_name)
         });
 
     let init_expr = match cached_expr {
         Some(expr) => expr,
-        None => super::baker_for_id(kind.id)
-            .ok_or_else(|| format!("no baker registered for asset kind `{}`", kind.id))?
-            .bake(&bytes)?,
+        None => super::baker_for(kind).bake(&bytes)?,
     };
 
     Ok(BakedAsset {
-        kind: kind.id.to_string(),
+        kind,
         path,
         content: bytes,
         init_expr,
@@ -290,20 +284,20 @@ fn bake_one(
 }
 
 /// Every `kind.attr` reference an `.rsx` document's view (and its `[preview]` bodies) makes to a static, quoted asset path. Mirrors `telar-analyzer`'s `document_links` walk, minus the LSP-only concerns: a dynamic `src:$signal`/`src:expr` names no file to bake, so only `Value::Quoted` is collected.
-pub fn collect_asset_refs(doc: &RsxDocument, out: &mut Vec<(&'static AssetKind, String)>) {
+pub fn collect_asset_refs(doc: &RsxDocument, out: &mut Vec<(AssetKind, String)>) {
     collect_nodes(&doc.view.nodes, out);
     for preview in &doc.previews {
         collect_nodes(&preview.body, out);
     }
 }
 
-fn collect_nodes(nodes: &[ViewNode], out: &mut Vec<(&'static AssetKind, String)>) {
+fn collect_nodes(nodes: &[ViewNode], out: &mut Vec<(AssetKind, String)>) {
     for node in nodes {
         match node {
             ViewNode::Element(el) => {
-                if let Some(kind) = asset_kind_for_tag(&el.tag) {
+                if let Some(kind) = AssetKind::for_tag(&el.tag) {
                     for attr in &el.attributes {
-                        if attr.key == kind.attr && attr.value.is_quoted() {
+                        if attr.key == kind.attr() && attr.value.is_quoted() {
                             let text = attr.value.text().trim();
                             if !text.is_empty() {
                                 out.push((kind, text.to_string()));

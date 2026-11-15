@@ -3,7 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crate::IconError;
+use crate::IconIdError;
 
 /// An icon as Iconify names it: the prefix of its set and its name within that set, written `set:name` (`mdi:home`).
 ///
@@ -15,28 +15,28 @@ pub struct IconId {
 }
 
 impl IconId {
-    /// Reads `set:name`. A bare name is refused with [`IconError::MissingSet`]; [`parse_with_default`](Self::parse_with_default) reads one in a default set.
-    pub fn parse(id: &str) -> Result<Self, IconError> {
+    /// Reads `set:name`. A bare name is refused with [`IconIdError::MissingSet`]; [`parse_with_default`](Self::parse_with_default) reads one in a default set.
+    pub fn parse(id: &str) -> Result<Self, IconIdError> {
         Self::parse_with_default(id, None)
     }
 
-    /// Reads `set:name`, or a bare `name` as `default_set:name`, the way an application that draws most of its icons from one set writes them (`home` for `mdi:home`). A bare name with no `default_set` is [`IconError::MissingSet`].
-    pub fn parse_with_default(id: &str, default_set: Option<&str>) -> Result<Self, IconError> {
-        let invalid = |reason| IconError::InvalidId {
+    /// Reads `set:name`, or a bare `name` as `default_set:name`, the way an application that draws most of its icons from one set writes them (`home` for `mdi:home`). A bare name with no `default_set` is [`IconIdError::MissingSet`].
+    pub fn parse_with_default(id: &str, default_set: Option<&str>) -> Result<Self, IconIdError> {
+        let invalid = |reason| IconIdError::Invalid {
             id: id.to_string(),
             reason,
         };
         let Some((prefix, name)) = id.split_once(':') else {
             return match default_set {
                 Some(set) => Self::new(set, id),
-                None if is_iconify_word(id) => Err(IconError::MissingSet {
+                None if is_iconify_word(id) => Err(IconIdError::MissingSet {
                     name: id.to_string(),
                 }),
                 None => Err(invalid("write it as `set:name`, like `mdi:home`")),
             };
         };
         Self::new(prefix, name).map_err(|error| match error {
-            IconError::InvalidId { reason, .. } => invalid(reason),
+            IconIdError::Invalid { reason, .. } => invalid(reason),
             other => other,
         })
     }
@@ -47,8 +47,8 @@ impl IconId {
     }
 
     /// Reads `set/name`, the layout a provider URL and a folder of SVGs use, and the id a runtime transport is handed.
-    pub fn from_path(path: &str) -> Result<Self, IconError> {
-        let (prefix, name) = path.split_once('/').ok_or(IconError::InvalidId {
+    pub fn from_path(path: &str) -> Result<Self, IconIdError> {
+        let (prefix, name) = path.split_once('/').ok_or(IconIdError::Invalid {
             id: path.to_string(),
             reason: "write it as `set/name`, like `mdi/home`",
         })?;
@@ -56,8 +56,8 @@ impl IconId {
     }
 
     /// The id of `name` in the set `prefix`.
-    pub fn new(prefix: &str, name: &str) -> Result<Self, IconError> {
-        let invalid = |reason| IconError::InvalidId {
+    pub fn new(prefix: &str, name: &str) -> Result<Self, IconIdError> {
+        let invalid = |reason| IconIdError::Invalid {
             id: format!("{prefix}:{name}"),
             reason,
         };
@@ -98,7 +98,7 @@ impl fmt::Display for IconId {
 }
 
 impl FromStr for IconId {
-    type Err = IconError;
+    type Err = IconIdError;
 
     fn from_str(id: &str) -> Result<Self, Self::Err> {
         Self::parse(id)

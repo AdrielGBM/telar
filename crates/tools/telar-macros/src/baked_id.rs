@@ -74,8 +74,9 @@ pub(crate) fn expand(input: BakedIdInput) -> syn::Result<TokenStream2> {
 
 fn expand_in(input: BakedIdInput, manifest_dir: &Path) -> syn::Result<TokenStream2> {
     let BakedIdInput { kind, id, telar } = input;
-    let asset_kind = telar_project::asset_kind_for_id(&kind.to_string())
-        .filter(|asset_kind| asset_kind.component.is_some())
+    let asset_kind = telar_project::AssetKind::parse(&kind.to_string())
+        .ok()
+        .filter(|asset_kind| asset_kind.component().is_some())
         .ok_or_else(|| {
             syn::Error::new(
                 kind.span(),

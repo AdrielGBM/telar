@@ -1,5 +1,3 @@
-use telar_project::{AssetKind, asset_kind_for_id};
-
 use crate::Baker;
 
 pub(crate) struct ImageBaker;
@@ -8,10 +6,6 @@ pub(crate) struct ImageBaker;
 const BROWSER: &str = "all(target_arch = \"wasm32\", target_os = \"unknown\")";
 
 impl Baker for ImageBaker {
-    fn kind(&self) -> &'static AssetKind {
-        asset_kind_for_id("image").expect("image is a registered asset kind")
-    }
-
     /// The pixels everywhere but a browser, where the picture is a file beside the page instead: a module carries none of its weight, and the browser decodes it off the main thread. One line, because the artifact's cache reads an entry back by its line.
     fn bake(&self, bytes: &[u8]) -> Result<String, String> {
         let pixels = renderer_assets::bake_image_to_source(bytes).map_err(|e| e.to_string())?;
