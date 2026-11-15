@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::ManifestError;
 
-pub(crate) const CARGO_MANIFEST_FILENAME: &str = "Cargo.toml";
+const CARGO_MANIFEST_FILENAME: &str = "Cargo.toml";
 
 /// A `Cargo.toml` as read from its directory, which the targets cargo discovers on its own are found in.
 #[derive(Debug, Clone)]

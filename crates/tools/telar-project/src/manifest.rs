@@ -266,11 +266,8 @@ impl TelarManifest {
     ///
     /// Settings are inherited key by key, so a workspace declares its theme, backend and catalogs once and a package overrides only what differs from its siblings. Every package of a workspace answering the same way is the common case, and saying it eight times is how the eight drift apart.
     ///
-    /// `telar.toml` is the only place a package is configured: a `[package.metadata.telar]` table left in its `Cargo.toml` is an error naming the file its keys belong in, since nothing reads that table and a backend set there would otherwise be dropped without a word.
-    ///
     /// A `[telar] library` inherits nothing: it ships its artifact transpiled against its own manifest, and once published there is no workspace above it, or there is an application's, when a copy is vendored into one. Either way the answer would differ from the one the artifact was written under.
     pub fn load(package_root: &Path) -> Result<Self, ManifestError> {
-        Self::refuse_package_metadata(package_root)?;
         let own = Self::read(package_root)?;
         let library = own.as_ref().is_some_and(|own| own.telar.library);
         let inherited = Self::workspace_dir(package_root, library)
@@ -313,26 +310,6 @@ impl TelarManifest {
             .map(|dir| dir.join(MANIFEST_FILENAME))
             .filter(|path| path.is_file())
             .collect()
-    }
-
-    fn refuse_package_metadata(package_root: &Path) -> Result<(), ManifestError> {
-        let declared = crate::CargoManifest::read(package_root).is_some_and(|cargo| {
-            cargo
-                .table()
-                .get("package")
-                .and_then(|package| package.get("metadata"))
-                .and_then(|metadata| metadata.get("telar"))
-                .is_some()
-        });
-        if !declared {
-            return Ok(());
-        }
-        Err(ManifestError::Invalid {
-            path: package_root.join(crate::cargo_manifest::CARGO_MANIFEST_FILENAME),
-            message: format!(
-                "`[package.metadata.telar]` is not read: telar is configured in `{MANIFEST_FILENAME}` beside this Cargo.toml. Move its keys under `[telar]` in `{MANIFEST_FILENAME}` and remove the table"
-            ),
-        })
     }
 
     fn workspace_dir(package_root: &Path, library: bool) -> Option<PathBuf> {

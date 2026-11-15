@@ -226,37 +226,6 @@ fn a_package_dev_window_overrides_the_workspace_window_key_by_key() {
 }
 
 #[test]
-fn a_telar_table_left_in_cargo_package_metadata_is_an_error_naming_telar_toml() {
-    let root = package("cargo_metadata", Some("[telar]\ntheme = \"app::Theme\"\n"));
-    std::fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"app\"\n\n[package.metadata.telar]\nbackend = \"software\"\n",
-    )
-    .unwrap();
-
-    let error = TelarManifest::load(&root).unwrap_err().to_string();
-    assert!(error.contains("Cargo.toml"), "{error}");
-    assert!(error.contains("[package.metadata.telar]"), "{error}");
-    assert!(error.contains(MANIFEST_FILENAME), "{error}");
-}
-
-#[test]
-fn other_tools_cargo_package_metadata_is_left_alone() {
-    let root = package(
-        "cargo_other_metadata",
-        Some("[telar]\nbackend = \"software\"\n"),
-    );
-    std::fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"app\"\n\n[package.metadata.android]\npackage = \"x\"\n",
-    )
-    .unwrap();
-
-    let telar = TelarManifest::load(&root).unwrap().telar;
-    assert_eq!(telar.backend, Some(RendererBackend::Software));
-}
-
-#[test]
 fn a_project_without_a_web_table_gets_the_web_defaults() {
     let root = package("web_defaults", Some("[telar]\nbackend = \"auto\"\n"));
     let web = TelarManifest::load(&root).unwrap().telar.web;
