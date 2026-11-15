@@ -328,6 +328,9 @@ wire_enum!(AccessRule {
     HiddenFocusable = 5,
     FocusOrder = 6,
     MissingLang = 7,
+    UnnamedWidget = 8,
+    BoundaryContrast = 9,
+    FocusIndicator = 10,
 });
 wire_struct!(AccessViolation {
     rule,

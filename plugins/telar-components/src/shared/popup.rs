@@ -74,10 +74,14 @@ pub(crate) fn popup(
     })?;
     let view = handed.expect("a scroll area builds its content before it returns");
     let scroll = match keyboard {
-        Keyboard::Held { pointed } => scroll
-            .control(Role::Menu)
-            .focus_ring(|| None)
-            .active_descendant(move || pointed()),
+        Keyboard::Held { pointed } => {
+            let resting = pointed.clone();
+            // The cursor's row wears the ring while there is one, so the menu wears it only while its cursor rests on no row.
+            scroll
+                .control(Role::Menu)
+                .focus_ring(move || resting().is_none().then(crate::shared::focus_ring))
+                .active_descendant(move || pointed())
+        }
         Keyboard::Stays => scroll.presented(Role::ListBox),
     };
     let list = scroll

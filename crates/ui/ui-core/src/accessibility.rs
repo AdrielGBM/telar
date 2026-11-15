@@ -260,6 +260,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
             control.node.value = Some(Value::Text(drawn.into()));
         }
     }
+    name_what_is_controlled(&mut found);
 
     found.extend(
         reading
@@ -318,6 +319,23 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
     SurfaceTree {
         nodes,
         nested: surfaces.into_iter().zip(anchors).collect(),
+    }
+}
+
+/// Gives each control with no name of its own the name of the control that [names what it controls](Role::names_what_it_controls) and controls it.
+fn name_what_is_controlled(found: &mut [Found]) {
+    let namers: Vec<(u64, String)> = found
+        .iter()
+        .filter(|f| f.node.role.names_what_it_controls() && !f.node.name.is_empty())
+        .filter_map(|f| Some((f.node.controls?, f.node.name.clone())))
+        .collect();
+    for f in found.iter_mut().filter(|f| f.node.name.is_empty()) {
+        if let Some((_, name)) = namers
+            .iter()
+            .find(|(controlled, _)| Some(*controlled) == f.node.id)
+        {
+            f.node.name = name.clone();
+        }
     }
 }
 
@@ -404,6 +422,11 @@ fn is_named_by_content(role: Role) -> bool {
     matches!(role, Role::Heading(_))
 }
 
+/// Whether a box given no name and no reading still tells a reader something by its role alone, as the element a document makes of it does: a progress bar with no reading says work is under way.
+fn speaks_by_role(role: Role) -> bool {
+    role == Role::ProgressBar
+}
+
 /// A node on its way into the tree: the box it was read for, if it holds what is inside that box, where in the frame's nesting it sits, and where it falls in reading order.
 struct Found {
     node: AccessNode,
@@ -441,6 +464,7 @@ impl Found {
             || !self.node.name.is_empty()
             || self.node.position.is_some()
             || self.node.value.is_some()
+            || speaks_by_role(self.node.role)
     }
 }
 
@@ -979,7 +1003,7 @@ impl Reading {
                             (None, None) if said_as_structure(role, annotation.role) => {
                                 reading.structures.push(Structure { node, role })
                             }
-                            (None, None) => {}
+                            (None, None) if !speaks_by_role(role) => {}
                             (position, value) => reading.stated.push(Stated {
                                 node,
                                 role,

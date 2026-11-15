@@ -4,8 +4,9 @@ use std::rc::Rc;
 
 use telar::{
     Accessible, AlignItems, Border, Color, Container, Cursor, JustifyContent, LayoutError,
-    LayoutItem, LayoutStyle, Props, RectStyle, RovingAxis, RovingGroup, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
+    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RovingAxis, RovingGroup, RwSignal,
+    ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role,
+    signal,
 };
 
 use crate::shared;
@@ -75,6 +76,9 @@ pub struct SwatchesProps {
     /// What each swatch is called, for assistive technology; one per colour (missing names read as empty).
     #[props(default)]
     pub names: Vec<String>,
+    /// What a reader calls the row: "Accent colour". `None` (the default) leaves it unnamed.
+    #[props(some, into, default)]
+    pub label: Option<Reactive<String>>,
     /// Bound selection: the index of the chosen colour, `None` for none of them. `None` for the prop itself (the default) is uncontrolled.
     #[props(some, into, default)]
     pub selected: Option<RwSignal<Option<u32>>>,
@@ -97,6 +101,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let SwatchesProps {
         colors,
         names,
+        label,
         selected,
         size,
         diameter,
@@ -150,11 +155,13 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
         cells.push(box_item(swatch));
     }
 
-    Ok(box_item(
-        Container::new(row(size, diameter()), cells)?
-            .styled_by(move || row(size, diameter()))
-            .role(Role::RadioGroup),
-    ))
+    let set = Container::new(row(size, diameter()), cells)?
+        .styled_by(move || row(size, diameter()))
+        .role(Role::RadioGroup);
+    Ok(match label {
+        Some(label) => box_item(set.a11y_label(move || label.get())),
+        None => box_item(set),
+    })
 }
 
 fn choose(selected: RwSignal<Option<u32>>, idx: u32, on_select: Option<&dyn Fn(u32)>) {

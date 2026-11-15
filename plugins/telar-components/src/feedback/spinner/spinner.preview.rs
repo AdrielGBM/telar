@@ -1,4 +1,4 @@
-use telar::Color;
+use telar::{Accessible, Color};
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use super::sample::Given;
 
@@ -15,6 +15,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .given(p.arg("diameter", None::<f32>), |props, value| props.diameter(value))
                     .build(),
             )
+            .map(|ring| ring.a11y_label(|| "Loading"))
         })
         .title("Feedback/Spinner")
         .layout(Layout::Centered)

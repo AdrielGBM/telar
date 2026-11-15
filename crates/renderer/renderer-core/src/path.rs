@@ -3,6 +3,11 @@
 use geometry_core::{Point, Rect};
 use xxhash_rust::xxh3::Xxh3;
 
+use crate::FillRule;
+
+/// How many straight runs [`PathData::contains`] follows a curve as.
+const CURVE_STEPS: u32 = 16;
+
 #[derive(Debug, Clone, PartialEq)]
 /// One step of a path: a move, a line, a curve, or the close that returns to the subpath's start.
 pub enum PathVerb {
@@ -152,6 +157,76 @@ impl PathData {
             path = path.line_to(*p);
         }
         path.close()
+    }
+
+    /// Whether filling the path under `rule` covers `point`. A subpath left open is filled as if closed, as every renderer fills it; curves are followed as short straight runs, so a point within a fraction of a pixel of a curve may land on either side.
+    pub fn contains(&self, point: Point, rule: FillRule) -> bool {
+        let mut winding = 0i32;
+        let mut cross = |from: Point, to: Point| {
+            if (from.y <= point.y) == (to.y <= point.y) {
+                return;
+            }
+            let x = from.x + (point.y - from.y) / (to.y - from.y) * (to.x - from.x);
+            if x > point.x {
+                winding += if to.y > from.y { 1 } else { -1 };
+            }
+        };
+        let mut start = Point::new(0.0, 0.0);
+        let mut at = start;
+        for verb in &self.verbs {
+            match *verb {
+                PathVerb::MoveTo(to) => {
+                    cross(at, start);
+                    start = to;
+                    at = to;
+                }
+                PathVerb::LineTo(to) => {
+                    cross(at, to);
+                    at = to;
+                }
+                PathVerb::QuadTo { ctrl, to } => {
+                    let from = at;
+                    for step in 1..=CURVE_STEPS {
+                        let t = step as f32 / CURVE_STEPS as f32;
+                        let u = 1.0 - t;
+                        let next = Point::new(
+                            u * u * from.x + 2.0 * u * t * ctrl.x + t * t * to.x,
+                            u * u * from.y + 2.0 * u * t * ctrl.y + t * t * to.y,
+                        );
+                        cross(at, next);
+                        at = next;
+                    }
+                }
+                PathVerb::CubicTo { ctrl1, ctrl2, to } => {
+                    let from = at;
+                    for step in 1..=CURVE_STEPS {
+                        let t = step as f32 / CURVE_STEPS as f32;
+                        let u = 1.0 - t;
+                        let point_at = |p0: f32, p1: f32, p2: f32, p3: f32| {
+                            u * u * u * p0
+                                + 3.0 * u * u * t * p1
+                                + 3.0 * u * t * t * p2
+                                + t * t * t * p3
+                        };
+                        let next = Point::new(
+                            point_at(from.x, ctrl1.x, ctrl2.x, to.x),
+                            point_at(from.y, ctrl1.y, ctrl2.y, to.y),
+                        );
+                        cross(at, next);
+                        at = next;
+                    }
+                }
+                PathVerb::Close => {
+                    cross(at, start);
+                    at = start;
+                }
+            }
+        }
+        cross(at, start);
+        match rule {
+            FillRule::Winding => winding != 0,
+            FillRule::EvenOdd => winding % 2 != 0,
+        }
     }
 
     pub fn bounds(&self) -> Option<Rect> {

@@ -12,10 +12,11 @@ fn options(vars: &[(&str, &str)]) -> Result<TestOptions, OptionsError> {
 }
 
 #[test]
-fn a_run_nobody_configured_checks_every_preview_and_takes_no_snapshot() {
+fn a_run_nobody_configured_checks_every_preview_fails_on_accessibility_errors_and_takes_no_snapshot()
+ {
     let options = options(&[]).unwrap();
     assert_eq!(options, TestOptions::default());
-    assert_eq!(options.a11y, A11yLevel::Warn);
+    assert_eq!(options.a11y, A11yLevel::Error);
     assert_eq!(options.snapshots, SnapshotSetting::Off);
 }
 
@@ -23,7 +24,7 @@ fn a_run_nobody_configured_checks_every_preview_and_takes_no_snapshot() {
 fn every_variable_cargo_telar_sets_is_read() {
     let options = options(&[
         (TEST_PREVIEW_VAR, " demo--button--* "),
-        (TEST_A11Y_VAR, "error"),
+        (TEST_A11Y_VAR, "warn"),
         (TEST_SNAPSHOTS_VAR, "update"),
         (TEST_PACKAGE_DIR_VAR, "/repo/apps/demo"),
         (TEST_TARGET_DIR_VAR, "/repo/target"),
@@ -32,7 +33,7 @@ fn every_variable_cargo_telar_sets_is_read() {
     ])
     .unwrap();
     assert_eq!(options.filter, Some(PreviewFilter::new("demo--button--*")));
-    assert_eq!(options.a11y, A11yLevel::Error);
+    assert_eq!(options.a11y, A11yLevel::Warn);
     assert_eq!(options.snapshots, SnapshotSetting::Update);
     assert_eq!(options.package_dir, Some(PathBuf::from("/repo/apps/demo")));
     assert_eq!(options.target_dir, Some(PathBuf::from("/repo/target")));
@@ -44,7 +45,7 @@ fn every_variable_cargo_telar_sets_is_read() {
 fn a_blank_variable_counts_as_unset() {
     let options = options(&[(TEST_PREVIEW_VAR, "  "), (TEST_A11Y_VAR, "")]).unwrap();
     assert_eq!(options.filter, None);
-    assert_eq!(options.a11y, A11yLevel::Warn);
+    assert_eq!(options.a11y, A11yLevel::Error);
 }
 
 #[test]
@@ -59,7 +60,7 @@ fn a_value_a_run_does_not_understand_is_refused_by_name() {
 
 #[test]
 fn each_word_reads_back_as_itself() {
-    for level in [A11yLevel::Off, A11yLevel::Warn, A11yLevel::Error] {
+    for level in A11yLevel::ALL {
         assert_eq!(A11yLevel::parse(level.as_str()), Some(level));
     }
     for setting in [

@@ -23,6 +23,7 @@ pub fn greeting_card(props: GreetingCardProps) -> Result<Box<dyn LayoutItem>, La
                 move || ObjectFit::Contain,
             )?
         };
+        let __svg_0 = __svg_0.a11y_hidden();
         let __node_0 = icon(IconProps::props().name(("fixture:dot", crate::__rsx_assets::ASSET_6504A2AF.get(), true)).size(::telar::Int(16)).build())?;
         let __text_0 = {
             Text::declaring(

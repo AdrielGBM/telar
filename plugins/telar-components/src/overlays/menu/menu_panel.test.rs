@@ -710,6 +710,48 @@ fn a_menu_asked_for_from_the_keyboard_opens_under_the_focused_control() {
     assert_eq!(*said.borrow(), vec!["fila 0"]);
 }
 
+/// How many of the frame's boxes wear the band of the keyboard's ring.
+fn ringed(tree: &ComponentList) -> usize {
+    let band = crate::shared::focus_ring().band;
+    tree.commands()
+        .iter()
+        .filter(|command| match command {
+            telar::DrawCommand::Rect { style, .. } => style
+                .border
+                .is_some_and(|border| border.paint.solid_color() == band),
+            _ => false,
+        })
+        .count()
+}
+
+/// Opened from the keyboard, a menu shows where the keyboard is, a ring on the row its cursor rests on; opened by a press, it shows no ring, as a press that hands focus on shows none.
+#[test]
+fn a_menu_shows_the_keyboard_s_ring_only_when_the_keyboard_opened_it() {
+    let open = |keyboard: bool| {
+        fresh_layout_runtime();
+        focus::clear();
+        let said: Said = Rc::default();
+        let props = ContextMenuProps::props().within(WINDOW);
+        let props = match keyboard {
+            true => props.around(Rect::new(40.0, 50.0, 100.0, 30.0)),
+            false => {
+                focus::blur_from_pointer(40.0, 60.0);
+                props.at((40.0, 60.0))
+            }
+        };
+        let menu = context_menu(props.children(written(rows(3), &said)).build()).unwrap();
+        lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+        let tree = ComponentList::new(menu);
+        settle(&tree);
+        let menu = lists()[0];
+        (focus::is_focus_visible(menu), ringed(&tree))
+    };
+    let (shows, rings) = open(true);
+    assert!(shows, "the menu shows focus");
+    assert!(rings > 0, "its cursor row wears the ring");
+    assert_eq!(open(false), (false, 0));
+}
+
 #[test]
 fn the_context_menu_key_and_shift_f10_ask_for_a_context_menu() {
     assert!(is_context_menu_key(&Key::Named(NamedKey::ContextMenu)));

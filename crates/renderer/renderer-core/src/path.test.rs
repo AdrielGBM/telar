@@ -138,3 +138,53 @@ fn negative_zero_hashes_like_zero() {
     assert_eq!(positive, negative);
     assert_eq!(positive.id(), negative.id());
 }
+
+fn ring() -> PathData {
+    let mut path = PathData::new();
+    for inset in [0.0, 10.0] {
+        let (lo, hi) = (inset, 40.0 - inset);
+        path = path
+            .move_to(Point::new(lo, lo))
+            .line_to(Point::new(hi, lo))
+            .line_to(Point::new(hi, hi))
+            .line_to(Point::new(lo, hi))
+            .close();
+    }
+    path
+}
+
+#[test]
+fn a_point_is_inside_a_filled_polygon_and_outside_past_its_edges() {
+    let triangle = PathData::polygon(&[
+        Point::new(0.0, 0.0),
+        Point::new(40.0, 0.0),
+        Point::new(0.0, 40.0),
+    ]);
+    assert!(triangle.contains(Point::new(10.0, 10.0), FillRule::Winding));
+    assert!(!triangle.contains(Point::new(30.0, 30.0), FillRule::Winding));
+    assert!(!triangle.contains(Point::new(-5.0, 10.0), FillRule::Winding));
+}
+
+#[test]
+fn the_fill_rule_decides_the_hole_of_two_nested_squares_wound_the_same_way() {
+    let centre = Point::new(20.0, 20.0);
+    assert!(ring().contains(centre, FillRule::Winding));
+    assert!(!ring().contains(centre, FillRule::EvenOdd));
+    assert!(ring().contains(Point::new(5.0, 20.0), FillRule::EvenOdd));
+}
+
+#[test]
+fn a_curved_edge_is_followed_and_an_open_subpath_fills_as_if_closed() {
+    let dome = PathData::new().move_to(Point::new(0.0, 40.0)).cubic_to(
+        Point::new(0.0, -13.0),
+        Point::new(40.0, -13.0),
+        Point::new(40.0, 40.0),
+    );
+    assert!(dome.contains(Point::new(20.0, 10.0), FillRule::Winding));
+    assert!(!dome.contains(Point::new(2.0, 2.0), FillRule::Winding));
+    let bowl = PathData::new()
+        .move_to(Point::new(0.0, 0.0))
+        .quad_to(Point::new(20.0, 80.0), Point::new(40.0, 0.0));
+    assert!(bowl.contains(Point::new(20.0, 20.0), FillRule::Winding));
+    assert!(!bowl.contains(Point::new(20.0, 45.0), FillRule::Winding));
+}

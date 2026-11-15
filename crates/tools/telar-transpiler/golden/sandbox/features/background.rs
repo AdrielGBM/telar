@@ -129,6 +129,7 @@ pub fn background(props: BackgroundProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                         move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             if __cond {
                                                 let __node_4 = spinner(SpinnerProps::props().diameter(::telar::Int(20)).build())?;
+                                                let __node_4 = __node_4.a11y_label(|| "Computing");
                                                 Ok(box_item(__node_4))
                                             } else {
                                                 Ok(box_item(Container::column(children![])?))
@@ -205,6 +206,7 @@ pub fn background(props: BackgroundProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                         move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             if __cond {
                                                 let __node_13 = spinner(SpinnerProps::props().diameter(::telar::Int(20)).build())?;
+                                                let __node_13 = __node_13.a11y_label(|| "Scanning");
                                                 Ok(box_item(__node_13))
                                             } else {
                                                 Ok(box_item(Container::column(children![])?))

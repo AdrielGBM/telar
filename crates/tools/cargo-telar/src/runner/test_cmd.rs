@@ -5,12 +5,12 @@ use std::process::Command;
 
 use telar_project::SnapshotSettings;
 use telar_project::protocol::{
-    LIBRARY_TEST_NAME, TEST_A11Y_VAR, TEST_OUT_DIR, TEST_PACKAGE_DIR_VAR, TEST_PREVIEW_VAR,
-    TEST_REPORT_FILE, TEST_SNAPSHOTS_VAR, TEST_TARGET_DIR_VAR, TEST_TOLERANCE_CHANNEL_VAR,
-    TEST_TOLERANCE_PIXELS_VAR, TEST_VAR,
+    A11yLevel, LIBRARY_TEST_NAME, TEST_A11Y_VAR, TEST_OUT_DIR, TEST_PACKAGE_DIR_VAR,
+    TEST_PREVIEW_VAR, TEST_REPORT_FILE, TEST_SNAPSHOTS_VAR, TEST_TARGET_DIR_VAR,
+    TEST_TOLERANCE_CHANNEL_VAR, TEST_TOLERANCE_PIXELS_VAR, TEST_VAR,
 };
 
-use super::cli::{A11yArg, CommonArgs, Target, TestArgs};
+use super::cli::{CommonArgs, Target, TestArgs};
 use super::config::{self, load_config, resolve_package};
 use super::junit::junit_from_report;
 use super::{build_cargo_args, frontend_args};
@@ -171,7 +171,7 @@ fn invocation(library: bool, cargo_args: &[String]) -> Vec<String> {
 /// What the run is asked, as the variables the app reads it from.
 struct TestEnv {
     filter: Option<String>,
-    a11y: A11yArg,
+    a11y: A11yLevel,
     snapshots: &'static str,
     package_dir: PathBuf,
     target_dir: PathBuf,

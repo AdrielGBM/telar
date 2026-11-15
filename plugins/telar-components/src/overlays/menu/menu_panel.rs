@@ -87,6 +87,8 @@ pub(crate) struct Built {
     deepest: Deepest,
     /// Puts the cursor on the first row, or on none, as the panel is shown again.
     enter: Rc<dyn Fn(bool)>,
+    /// Whether the keyboard opened it, which the menu always shows focus for as it takes it.
+    from_keyboard: bool,
 }
 
 /// The submenus hanging off one panel's rows, and what those rows reach the panel through.
@@ -256,6 +258,7 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
     *cascade.host.view.borrow_mut() = Some(opened.view);
 
     let list_id = opened.list;
+    list.held_by(list_id);
     let deepest: Deepest = {
         let cascade = cascade.clone();
         Rc::new(move || cascade.deepest().unwrap_or(list_id))
@@ -271,6 +274,7 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
         list: list_id,
         deepest,
         enter,
+        from_keyboard: seed,
     })
 }
 
@@ -368,6 +372,7 @@ pub(crate) fn overlay(
         layers: subs,
         list,
         deepest,
+        from_keyboard,
         ..
     } = built;
     let mut layers = vec![panel];
@@ -384,19 +389,22 @@ pub(crate) fn overlay(
         None => backdrop,
     };
     let overlay = Overlay::new(LayoutStyle::column(), children![backdrop])?;
-    hand_keyboard_in(overlay.content_node(), list, deepest);
+    hand_keyboard_in(overlay.content_node(), list, deepest, from_keyboard);
     Ok(overlay)
 }
 
-/// Takes the keyboard into the menu as it opens, keeps it on the deepest panel open — the one the keys go to — and gives it back to whatever held it when the menu goes, however it went.
-fn hand_keyboard_in(content: NodeId, list: FocusId, deepest: Deepest) {
+/// Takes the keyboard into the menu as it opens — showing it there when the keyboard opened the menu, and otherwise as the focus it takes over showed it, so a menu a press opened shows no ring — keeps it on the deepest panel open, the one the keys go to, and gives it back to whatever held it when the menu goes, however it went.
+fn hand_keyboard_in(content: NodeId, list: FocusId, deepest: Deepest, from_keyboard: bool) {
     let handback = popup::Handback::default();
     handback.remember(content);
-    focus::request(list);
+    match from_keyboard {
+        true => focus::request(list),
+        false => focus::pass_to(list),
+    }
     effect(move || {
         let panel = deepest();
         if focus::left_within(content) {
-            focus::request(panel);
+            focus::pass_to(panel);
         }
     });
     on_cleanup(move || handback.give_back());

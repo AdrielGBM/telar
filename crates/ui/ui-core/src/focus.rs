@@ -325,6 +325,11 @@ pub fn request_from_pointer(id: FocusId) {
     take(id, true);
 }
 
+/// [`request`] for focus moved on from where it is, the way it is held there: showing its ring only if the focus it takes over does, as a menu hands the keyboard from one of its panels to the next whether a press or a key opened that panel.
+pub fn pass_to(id: FocusId) {
+    take(id, pointer_focus_signal().peek());
+}
+
 fn take(id: FocusId, from_pointer: bool) {
     take_arriving(id, from_pointer, None);
 }
@@ -470,8 +475,11 @@ pub(crate) fn reach_changed() {
 /// **The rule every platform has, and the one a toolkit cannot leave to its applications.** Focus was only ever *taken* here — by a tap on a focusable, by Tab — so a field kept the caret until something else asked for it, and clicking away from a form left it sitting there looking editable, eating the keys, and telling an application asking [`text_entry_focused`] that somebody was still typing.
 ///
 /// Asked before the press is dispatched, so a focusable that is pressed takes focus back on its way through and only a press with no focusable under it clears anything. The test is the on-screen shape — where the widget is drawn rather than where it was laid out — so a field inside a scrolled viewport answers about the place the pointer actually is.
+///
+/// A press that leaves nothing focused is the latest word on how focus moves, so focus [passed on](pass_to) from there, as a menu the press opens takes it, shows no ring.
 pub fn blur_from_pointer(x: f32, y: f32) {
     if current().is_none() {
+        set_pointer_focus(true);
         return;
     }
     // Collected before the rects are asked for: reading layout under the focus borrow would hold one runtime across a call into another. A scroll area is left out: one that is a stop takes focus from the press itself, as it reaches it. So is a region announced around content, such as a tab panel, which nobody presses.
@@ -488,6 +496,7 @@ pub fn blur_from_pointer(x: f32, y: f32) {
         .any(|node| crate::input_region::pointable(node, x, y));
     if !on_a_focusable {
         clear();
+        set_pointer_focus(true);
     }
 }
 

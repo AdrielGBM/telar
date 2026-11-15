@@ -261,6 +261,12 @@ pub(crate) struct Described {
     pub controls: Option<String>,
     /// Whether a box points at this one with `aria-controls`, which takes an `id` to point at.
     pub is_controlled: bool,
+    /// Whether the box names the box it controls when that one has no name of its own: see [`Role::names_what_it_controls`].
+    pub names_controlled: bool,
+    /// The `id` of the element that names this one, as `aria-labelledby` says it: the control that names the box it controls.
+    pub labelled_by: Option<String>,
+    /// Whether a box names itself after this one with `aria-labelledby`, which takes an `id` to point at.
+    pub is_labelling: bool,
     pub disabled: bool,
     pub invalid: bool,
     pub required: bool,
@@ -298,6 +304,7 @@ impl Described {
         } else {
             attributes.push(("aria-label", label));
         }
+        attributes.push(("aria-labelledby", self.labelled_by.clone()));
         attributes.extend([
             ("aria-description", self.description.clone()),
             ("href", self.link.clone()),
@@ -380,10 +387,10 @@ impl Described {
         attributes
     }
 
-    /// The element's `id`: the anchor that reaches it, or, for a box a cursor rests on or another box controls, one named after the box so it stays the same for as long as the box lives.
+    /// The element's `id`: the anchor that reaches it, or, for a box a cursor rests on, another box controls or another box is named after, one named after the box so it stays the same for as long as the box lives.
     fn element_id(&self, key: BoxKey) -> Option<String> {
         self.anchor.clone().or_else(|| {
-            (self.is_active_descendant || self.is_controlled)
+            (self.is_active_descendant || self.is_controlled || self.is_labelling)
                 .then(|| format!("{BOX_ID_PREFIX}{key}"))
         })
     }
@@ -579,7 +586,7 @@ struct Controlling {
     cursor: Option<BoxKey>,
 }
 
-/// Points every box that controls another at that box's element by `id`, wherever in the frame it is: the list a combobox opens is laid over the page, far from the combobox. A cursor the walk found nowhere under its box is looked for inside the box it controls, as a combobox's rests on a row of its list.
+/// Points every box that controls another at that box's element by `id`, wherever in the frame it is: the list a combobox opens is laid over the page, far from the combobox. A cursor the walk found nowhere under its box is looked for inside the box it controls, as a combobox's rests on a row of its list, and a controlled box with no name of its own is named after a control that [names what it controls](Role::names_what_it_controls).
 fn point_at_controlled(roots: &mut [Node]) {
     let mut found = Vec::new();
     controlling(roots, &mut found);
@@ -594,17 +601,28 @@ fn point_at_controlled(roots: &mut [Node]) {
         };
         controlled.described.is_controlled = true;
         let controls = controlled.described.element_id(target);
+        let unnamed = controlled.described.label.is_none();
         let row = cursor
             .and_then(|cursor| box_within(controlled, cursor))
             .map(|row| {
                 row.described.is_active_descendant = true;
                 row.described.element_id(row.key)
             });
-        if let Some(owner) = find_box(roots, owner) {
-            owner.described.controls = controls;
+        let mut namer = None;
+        if let Some(owner_box) = find_box(roots, owner) {
+            owner_box.described.controls = controls;
             if let Some(row) = row {
-                owner.described.active_descendant = row;
+                owner_box.described.active_descendant = row;
             }
+            if unnamed && owner_box.described.names_controlled {
+                owner_box.described.is_labelling = true;
+                namer = owner_box.described.element_id(owner);
+            }
+        }
+        if namer.is_some()
+            && let Some(controlled) = find_box(roots, target)
+        {
+            controlled.described.labelled_by = namer;
         }
     }
 }
@@ -1722,6 +1740,9 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         controls_box: semantics.controls,
         controls: None,
         is_controlled: false,
+        names_controlled: semantics.role.names_what_it_controls(),
+        labelled_by: None,
+        is_labelling: false,
         disabled: semantics.disabled,
         invalid: semantics.invalid,
         required: semantics.required,
@@ -1782,6 +1803,9 @@ pub(crate) fn describe_access_node(node: &AccessNode) -> Described {
         controls_box: None,
         controls: node.controls.map(pointed_at),
         is_controlled: false,
+        names_controlled: node.role.names_what_it_controls(),
+        labelled_by: None,
+        is_labelling: false,
         disabled: !node.enabled,
         invalid: node.invalid,
         required: node.required,

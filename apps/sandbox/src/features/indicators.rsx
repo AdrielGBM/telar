@@ -11,16 +11,16 @@ col gap:20
     doc_header kicker:"FEEDBACK" title:"Progress & spinner" desc:"progress is a determinate bar you drive with a 0..1 signal; spinner is an indeterminate ring that animates itself. Both are components (from the components feature, not base tags)."
     example title:"progress — a determinate bar bound to a 0..1 signal"
         card gap:10
-            progress value:$p width:280
+            progress value:$p width:280 a11y_label:"Loading"
             row gap:12 align:center
                 text "Loading · {$pct}%" font_size:14 color:$theme.muted
                 button label:"Advance" color:$theme.primary on_press:(|| { $p.set(($p.get() + 0.15).min(1.0)) })
                 button label:"Reset" variant:ghost on_press:(|| { $p.set(0.0) })
-        code_line code:"progress value:$p width:280"
+        code_line code:"progress value:$p width:280 a11y_label:\"Loading\""
     example title:"spinner — an indeterminate ring; it drives its own rotation"
         card gap:10
             row gap:16 align:center
-                spinner diameter:28
-                spinner diameter:20 color:$theme.success
+                spinner diameter:28 a11y_label:"Working"
+                spinner diameter:20 color:$theme.success a11y_label:"Working"
                 text "working…" font_size:14 color:$theme.muted
-        code_line code:"spinner diameter:28"
+        code_line code:"spinner diameter:28 a11y_label:\"Working\""

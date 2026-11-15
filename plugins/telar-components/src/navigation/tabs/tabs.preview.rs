@@ -19,6 +19,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             tabs(
                 TabsProps::props()
                     .items(labels(p.arg("count", 3u32)))
+                    .label("Sections")
                     .size(p.arg("size", ControlSize::Regular))
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
@@ -37,6 +38,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             tabs(
                 TabsProps::props()
                     .items(labels(4))
+                    .label("Sections")
                     .selected(selected)
                     .build(),
             )

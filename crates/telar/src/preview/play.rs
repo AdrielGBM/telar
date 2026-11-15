@@ -9,7 +9,8 @@ use reactive_core::{OwnerId, dispose_owner, owner_scope};
 
 use crate::{
     AccessNode, BuildFailure, Color, Event, EventResult, Key, LayoutError, LayoutItem, LayoutStyle,
-    ModifiersState, NamedKey, NestedCanvas, Size, Text, TextStyle, Toggle, Value, motion, testing,
+    ModifiersState, NamedKey, NestedCanvas, Size, Text, TextStyle, Toggle, Value, focus, motion,
+    testing,
 };
 
 use super::a11y::{self, Severity};
@@ -263,7 +264,9 @@ impl Play {
         query.find_all(&snapshot).into_iter().cloned().collect()
     }
 
-    /// The [`a11y::check`] findings for the canvas now, without the rules the entry ignores.
+    /// The [`a11y::check`] findings for the canvas now, and the [`a11y::check_focus`] findings as the keyboard reaches each of its stops, without the rules the entry ignores.
+    ///
+    /// Each stop is given focus in turn and the canvas settled; focus goes back where it was, the way it was held, before this returns.
     pub fn check_a11y(&self) -> a11y::Report {
         let frame = self.frame();
         let snapshot = frame
@@ -271,7 +274,40 @@ impl Play {
             .as_ref()
             .map(|access| access.snapshot.as_slice())
             .unwrap_or_default();
-        a11y::check(&frame, snapshot).ignoring(self.entry.a11y_ignore)
+        a11y::check(&frame, snapshot)
+            .and(self.check_focus())
+            .ignoring(self.entry.a11y_ignore)
+    }
+
+    fn check_focus(&self) -> a11y::Report {
+        let canvas = self.canvas();
+        let (held, order) = canvas.with_entered(|| (focus::remember(), focus::tab_order()));
+        canvas.with_entered(focus::clear);
+        self.settle_now();
+        let rest = self.frame();
+        let mut focused = Vec::new();
+        for stop in order {
+            canvas.with_entered(|| focus::request(stop.id));
+            self.settle_now();
+            let frame = self.frame();
+            let holder = canvas.with_entered(focus::current);
+            let node = frame.access.as_deref().and_then(|access| {
+                access
+                    .snapshot
+                    .iter()
+                    .find(|node| node.id.is_some() && node.id == holder)
+                    .cloned()
+            });
+            if let Some(node) = node {
+                focused.push(a11y::FocusedStop { node, frame });
+            }
+        }
+        canvas.with_entered(|| match held {
+            Some(held) => held.restore(),
+            None => focus::clear(),
+        });
+        self.settle_now();
+        a11y::check_focus(&rest, &focused)
     }
 
     /// Moves the pointer onto the node `query` matches, presses and releases it there.

@@ -4,41 +4,11 @@ use std::fmt;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+pub use telar_project::protocol::A11yLevel;
 use telar_project::protocol::{
     TEST_A11Y_VAR, TEST_PACKAGE_DIR_VAR, TEST_PREVIEW_VAR, TEST_SNAPSHOTS_VAR, TEST_TARGET_DIR_VAR,
     TEST_TOLERANCE_CHANNEL_VAR, TEST_TOLERANCE_PIXELS_VAR,
 };
-
-/// What a run does with what [`a11y::check`](super::super::a11y::check) finds.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum A11yLevel {
-    /// Checks nothing.
-    Off,
-    /// Reports every finding and fails nothing.
-    #[default]
-    Warn,
-    /// Fails a preview on any finding of [`Severity::Error`](super::super::a11y::Severity::Error), and reports the warnings.
-    Error,
-}
-
-impl A11yLevel {
-    /// The word that names the level on the command line and in the environment.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Warn => "warn",
-            Self::Error => "error",
-        }
-    }
-
-    /// The level `word` names, or `None` when it names none.
-    pub fn parse(word: &str) -> Option<Self> {
-        [Self::Off, Self::Warn, Self::Error]
-            .into_iter()
-            .find(|level| level.as_str() == word)
-    }
-}
 
 /// What a run does with snapshots.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -71,7 +41,7 @@ impl SnapshotSetting {
     }
 }
 
-/// Everything a test run reads from its environment. [`Default`] is a run nobody configured: every preview, accessibility findings reported, no snapshots and no report.
+/// Everything a test run reads from its environment. [`Default`] is a run nobody configured: every preview, failing on an error-level accessibility finding, no snapshots and no report.
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TestOptions {

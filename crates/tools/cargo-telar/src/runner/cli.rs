@@ -1,7 +1,9 @@
 //! The command-line surface: subcommands, flags and what each one dispatches to.
 
+use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{Parser, Subcommand, ValueEnum};
 use telar_project::PageRenderer;
+use telar_project::protocol::A11yLevel;
 
 use crate::runner::config::BackendArg;
 
@@ -221,8 +223,8 @@ pub(crate) struct TestArgs {
     #[arg(long, value_name = "GLOB")]
     pub(crate) preview: Option<String>,
     /// What accessibility findings do: `off` checks nothing, `warn` reports them, `error` fails a preview on any error-level finding
-    #[arg(long, value_enum, default_value = "warn")]
-    pub(crate) a11y: A11yArg,
+    #[arg(long, default_value_t, value_parser = a11y_level())]
+    pub(crate) a11y: A11yLevel,
     /// Write the snapshot goldens that are missing or no longer match, instead of failing on them
     #[arg(long, conflicts_with = "no_snapshots")]
     pub(crate) update_snapshots: bool,
@@ -234,21 +236,10 @@ pub(crate) struct TestArgs {
     pub(crate) report: Option<Vec<String>>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub(crate) enum A11yArg {
-    Off,
-    Warn,
-    Error,
-}
-
-impl A11yArg {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Warn => "warn",
-            Self::Error => "error",
-        }
-    }
+/// The levels a test run understands, offered and parsed by the words the run itself reads them by.
+fn a11y_level() -> impl TypedValueParser<Value = A11yLevel> {
+    PossibleValuesParser::new(A11yLevel::ALL.map(A11yLevel::as_str))
+        .try_map(|word| A11yLevel::parse(&word).ok_or(format!("no accessibility level {word:?}")))
 }
 
 #[derive(clap::Args)]

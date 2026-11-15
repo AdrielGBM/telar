@@ -1,5 +1,6 @@
 //! [`command_palette`]: a dialog that finds a command by typing part of its name and runs it, with the keyboard never leaving the search field.
 
+use std::cell::Cell;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -7,7 +8,8 @@ use std::sync::Arc;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Chord, Clip, ClippedItem, Color, Container,
     Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
-    ModifiersState, NamedKey, OverlayControl, Props, Reactive, ReactiveList, RectStyle, RwSignal,
+    ModifiersState, NamedKey, NodeId, OverlayControl, Props, Reactive, ReactiveList, RectStyle,
+    RwSignal,
     ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap,
     amend_surface, box_item, children, effect,
     focus::{FocusId, Role},
@@ -16,7 +18,7 @@ use telar::{
 
 use crate::overlays::command_palette::fuzzy::fuzzy_match;
 use crate::layout::list::list::{ListTokens, row_paint, tinted};
-use crate::shared::rows::{BuiltRows, RowPlaces};
+use crate::shared::rows::{BuiltRows, RowPlaces, cursor_ring};
 use crate::shared::scrim;
 use crate::shared;
 use crate::strings;
@@ -345,6 +347,8 @@ struct Palette {
     built: BuiltRows<Arc<str>>,
     run: Rc<dyn Fn(&Command)>,
     color: Option<Reactive<Color>>,
+    /// The palette's card: while the keyboard shows focus anywhere in it, the cursor's row wears the keyboard's ring.
+    card: Cell<Option<NodeId>>,
 }
 
 impl Palette {
@@ -365,6 +369,15 @@ impl Palette {
                     .iter()
                     .position(|entry| entry.reachable_id().is_some())
             })
+    }
+
+    /// The ring the row of `id` wears: the keyboard's, while the cursor rests on it and the keyboard shows focus in the palette, in the field or on the list.
+    fn cursor_ring(&self, id: &str) -> Option<telar::FocusRing> {
+        let shows_focus = self
+            .card
+            .get()
+            .is_some_and(telar::focus::shows_focus_within);
+        (shows_focus && self.is_cursor(id)).then(|| cursor_ring(&self.color))
     }
 
     fn is_cursor(&self, id: &str) -> bool {
@@ -490,6 +503,7 @@ fn build_open_palette(
                 built: BuiltRows::new(),
                 run,
                 color,
+                card: Cell::new(None),
             });
             made = Some(palette.clone());
             let source = {
@@ -600,6 +614,7 @@ fn build_open_palette(
         None => strings::text(strings::COMMAND_PALETTE),
     })
     .on_press(|| {});
+    palette.card.set(Some(card.layout_node()));
 
     let backdrop_box = move || {
         LayoutStyle::column()
@@ -762,10 +777,15 @@ fn build_row(
         let (palette, id) = (palette.clone(), id.clone());
         move || palette.is_cursor(&id)
     };
+    let cursor = {
+        let (palette, id) = (palette.clone(), id.clone());
+        move || palette.cursor_ring(&id)
+    };
     // Selected while the cursor is on it, as the list autocomplete pattern has it: nothing is chosen until it is run, and the cursor is what Enter runs.
     let row = StyledContainer::new(row_box(), paint(false), content)?
         .styled_by(row_box)
         .hover_style(paint(true))
+        .keyboard_cursor(cursor)
         .disabled(move || disabled)
         .presented(Role::Option, reach)
         .toggled(selected)

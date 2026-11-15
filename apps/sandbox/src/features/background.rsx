@@ -80,7 +80,7 @@ col gap:20
             row gap:12 align:center
                 text "sum(1..2M) · {$total}" font_size:16 color:$theme.ink
                 if $busy
-                    spinner diameter:20
+                    spinner diameter:20 a11y_label:"Computing"
             row gap:10
                 button label:"Compute" color:$theme.primary on_press:(|| { $busy.set(true); $total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed($total.clone(), $busy.clone())); })
                 button label:"Bounce" variant:outline color:$theme.primary on_press:(|| { $beat.retarget(if $beat.get() > 1.0 { 1.0 } else { 1.4 }) })
@@ -94,7 +94,7 @@ col gap:20
                 button label:"Scan" color:$theme.primary on_press:(|| { $found.set(Vec::new()); $scanning.set(true); *$scan.borrow_mut() = Some(spawn_stream(walk_project, on_found($found.clone()), on_scan_end($scanning.clone()))); })
                 button label:"Cancel" variant:outline color:$theme.danger on_press:(|| { if let Some(task) = $scan.borrow_mut().take() { task.cancel(); } $scanning.set(false); })
                 if $scanning
-                    spinner diameter:20
+                    spinner diameter:20 a11y_label:"Scanning"
             text "{$found.len()} crates" font_size:14 color:$theme.muted
             for name in $found key name.clone()
                 row gap:8 align:center pad_y:2

@@ -20,7 +20,7 @@ fn test_args(argv: &[&str]) -> Result<TestArgs, clap::Error> {
 fn the_play_lens_names_one_preview_by_id() {
     let args = test_args(&["--preview", "demo--button--primary"]).unwrap();
     assert_eq!(args.preview.as_deref(), Some("demo--button--primary"));
-    assert_eq!(args.a11y, A11yArg::Warn);
+    assert_eq!(args.a11y, A11yLevel::Error);
     assert!(!args.update_snapshots && !args.no_snapshots);
     assert_eq!(args.report, None);
 }
@@ -31,7 +31,7 @@ fn every_flag_of_a_test_run_parses() {
         "-p",
         "catalogue",
         "--a11y",
-        "error",
+        "warn",
         "--update-snapshots",
         "--report",
         "junit",
@@ -39,7 +39,7 @@ fn every_flag_of_a_test_run_parses() {
     ])
     .unwrap();
     assert_eq!(args.common.package.as_deref(), Some("catalogue"));
-    assert_eq!(args.a11y, A11yArg::Error);
+    assert_eq!(args.a11y, A11yLevel::Warn);
     assert!(args.update_snapshots);
     let report = ReportRequest::parse(args.report.as_deref().unwrap()).unwrap();
     assert_eq!(
@@ -49,6 +49,22 @@ fn every_flag_of_a_test_run_parses() {
             path: PathBuf::from("out/previews.xml"),
         }
     );
+}
+
+#[test]
+fn a_run_given_no_level_fails_on_accessibility_errors_as_the_runner_does_by_itself() {
+    let args = test_args(&[]).unwrap();
+    assert_eq!(args.a11y, A11yLevel::default());
+    assert_eq!(args.a11y, A11yLevel::Error);
+}
+
+#[test]
+fn an_unknown_level_is_refused_with_the_levels_a_run_understands() {
+    let error = test_args(&["--a11y", "loud"])
+        .err()
+        .expect("refused")
+        .to_string();
+    assert!(error.contains("off, warn, error"), "{error}");
 }
 
 #[test]
@@ -98,7 +114,7 @@ fn an_application_is_run_and_a_library_runs_its_previews_test() {
 fn the_run_is_told_everything_through_its_environment() {
     let env = TestEnv {
         filter: None,
-        a11y: A11yArg::Off,
+        a11y: A11yLevel::Off,
         snapshots: "update",
         package_dir: PathBuf::from("/repo/apps/demo"),
         target_dir: PathBuf::from("/repo/target"),

@@ -1,4 +1,4 @@
-use telar::Color;
+use telar::{Accessible, Color};
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use super::sample::Given;
 
@@ -18,6 +18,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .given(p.arg("height", None::<f32>), |props, value| props.height(value))
                     .build(),
             )
+            .map(|bar| bar.a11y_label(|| "Uploading"))
         })
         .title("Feedback/Progress")
         .layout(Layout::Centered)

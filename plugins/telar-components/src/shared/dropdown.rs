@@ -341,6 +341,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             })
     };
     let trigger_node = trigger.layout_node();
+    list.held_by(trigger.focus_id().expect("a combobox is a control"));
     // `track_layout` returns the signal now and layout fills it in, so the trigger's rect is known by the time the panel is built.
     let trigger_rect = track_layout(trigger_node).expect("trigger node is registered");
 

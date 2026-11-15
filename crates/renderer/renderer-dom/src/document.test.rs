@@ -208,6 +208,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
         [
             "role",
             "aria-label",
+            "aria-labelledby",
             "aria-description",
             "href",
             "target",
@@ -1609,6 +1610,12 @@ fn a_combobox_names_the_list_it_controls_and_points_into_it() {
     );
     assert_eq!(attribute(list, "id").as_deref(), Some("telar-box-3"));
     assert_eq!(
+        attribute(list, "aria-labelledby").as_deref(),
+        Some("telar-box-2"),
+        "a list with no name of its own is called what its combobox is"
+    );
+    assert_eq!(attribute(combobox, "id").as_deref(), Some("telar-box-2"));
+    assert_eq!(
         attribute(combobox, "aria-activedescendant").as_deref(),
         Some("telar-box-5")
     );
@@ -1643,6 +1650,11 @@ fn a_controlled_box_before_its_control_or_with_an_anchor_is_named_too() {
     assert_eq!(
         attribute(roots[1], "aria-controls").as_deref(),
         Some("choices")
+    );
+    assert_eq!(
+        attribute(roots[0], "aria-labelledby"),
+        None,
+        "a button names nothing it controls"
     );
 }
 

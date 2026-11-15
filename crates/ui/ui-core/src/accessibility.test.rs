@@ -552,6 +552,55 @@ fn a_combobox_names_the_list_it_controls() {
     focus::clear();
 }
 
+/// The list a select opens is that select's choices: with no name of its own, it is called what the select is called.
+#[test]
+fn a_list_with_no_name_of_its_own_is_called_what_the_combobox_controlling_it_is() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let list = |named: bool| {
+        let list = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(40.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .presented(Role::ListBox, || {});
+        let id = list.focus_id().unwrap();
+        let list: Box<dyn LayoutItem> = match named {
+            true => box_item(list.a11y_label(|| "Choices")),
+            false => box_item(list),
+        };
+        (list, id)
+    };
+    let combobox = |controlled: focus::FocusId| {
+        StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(20.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .control(Role::ComboBox)
+        .controls(move || Some(controlled))
+        .a11y_label(|| "Size")
+    };
+    let (unnamed, unnamed_id) = list(false);
+    let (named, named_id) = list(true);
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![
+            box_item(combobox(unnamed_id)),
+            unnamed,
+            box_item(combobox(named_id)),
+            named,
+        ],
+    )
+    .unwrap();
+    let nodes = snapshot_of(root);
+    assert_eq!(names_of(&nodes, Role::ListBox), ["Size", "Choices"]);
+    focus::clear();
+}
+
 /// A scroll area places its content in a space of its own and moves it by the scroll offset, so a control inside one is reported where it is drawn: in window space, the same space its label is read in.
 #[test]
 fn a_control_inside_a_scrolled_area_is_named_where_it_is_drawn() {
@@ -2028,4 +2077,23 @@ fn a_said_role_holding_nothing_is_not_read_and_a_said_group_unmakes_a_region() {
     .unwrap();
     let nodes = snapshot_of(root);
     assert_eq!(held(&nodes, None), [(Role::Label, "Aside")]);
+}
+
+/// A document writes a progress bar with no name and no reading as one, so every target reads it as one: work is under way, and the checks can say it needs a name.
+#[test]
+fn a_progress_bar_with_no_name_and_no_reading_is_still_read_as_one() {
+    reset_layout_runtime();
+    focus::clear();
+    let square = || LayoutStyle::new().width(24.0).height(24.0);
+    let busy = StyledContainer::new(square(), |_r| RectStyle::default(), vec![])
+        .unwrap()
+        .role(Role::ProgressBar);
+    let plain = StyledContainer::new(square(), |_r| RectStyle::default(), vec![]).unwrap();
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(busy), box_item(plain)],
+    )
+    .unwrap();
+    let nodes = snapshot_of(root);
+    assert_eq!(held(&nodes, None), [(Role::ProgressBar, "")]);
 }

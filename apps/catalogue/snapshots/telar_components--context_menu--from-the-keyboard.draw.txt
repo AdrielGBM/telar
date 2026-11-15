@@ -110,7 +110,8 @@ element group
             matrix 1,0,0,1,4,4
               element group
                 element menuitem
-                  rect 0,0 174x36 fill=#0000000a radius=6
+                  rect 0,0 174x36 fill=#0000000a border=2 border-color=#4261edff radius=6
+                  rect 2,2 170x32 border=1 border-color=#ffffffff radius=4
                   element group
                   end
                   element group

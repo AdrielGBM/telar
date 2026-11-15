@@ -241,6 +241,11 @@ impl Role {
         self.draws_what_was_typed() || *self == Self::ComboBox
     }
 
+    /// Whether a control of this role names the box it [controls](Semantics::controls) when that box has no name of its own: the list a select opens is that select's choices, and a reader entering it hears whose. Every target applies this one rule, so the list is called the same wherever it is read.
+    pub fn names_what_it_controls(&self) -> bool {
+        *self == Self::ComboBox
+    }
+
     /// Whether what a control of this role draws is the text typed into it, which is its value and never its name: a field nobody named stays unnamed on every target, as a document leaves an `<input>` with no label unnamed.
     pub fn draws_what_was_typed(&self) -> bool {
         matches!(self, Self::TextInput | Self::MultilineTextInput)

@@ -822,6 +822,7 @@ fn swatch_row(
         SwatchesProps::props()
             .colors(palette)
             .names(names)
+            .label(Reactive::of(|| strings::text(strings::SWATCHES)))
             .selected(selected)
             .on_select(choose)
             .size(picker.size)

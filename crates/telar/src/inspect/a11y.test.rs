@@ -3,8 +3,8 @@ use std::sync::Arc;
 use super::*;
 use crate::preview::{Play, PreviewCtx, PreviewEntry};
 use crate::{
-    Accessible, Container, FixedLayer, LayoutError, LayoutItem, LayoutStyle, PathData, PathStyle,
-    Point, RectStyle, ShapeStyle, StyledContainer, Text, TextStyle, box_item,
+    Accessible, Border, Container, FixedLayer, LayoutError, LayoutItem, LayoutStyle, PathData,
+    PathStyle, Point, RectStyle, ShapeStyle, StyledContainer, Text, TextStyle, box_item,
 };
 
 type Built = Result<Box<dyn LayoutItem>, LayoutError>;
@@ -507,5 +507,265 @@ fn a_pressable_named_only_by_symbols_is_reported() {
             .next()
             .map(|violation| violation.severity),
         Some(Severity::Error)
+    );
+}
+
+/// 1.25:1 on white: an edge nobody sees.
+const FAINT: Color = Color::rgb(230.0 / 255.0, 230.0 / 255.0, 230.0 / 255.0);
+
+fn progress_bar() -> StyledContainer {
+    StyledContainer::new(
+        LayoutStyle::new().width(80.0).height(8.0),
+        |_| RectStyle::default().with_fill(INK),
+        vec![],
+    )
+    .unwrap()
+    .role(Role::ProgressBar)
+}
+
+fn tab_list() -> StyledContainer {
+    let tab = StyledContainer::new(
+        LayoutStyle::new().width(80.0).height(32.0),
+        |_| RectStyle::default(),
+        vec![label("Overview", 12.0, INK)],
+    )
+    .unwrap()
+    .control(Role::Tab)
+    .on_press(|| {});
+    StyledContainer::new(
+        LayoutStyle::new().flex_row(),
+        |_| RectStyle::default(),
+        vec![box_item(tab)],
+    )
+    .unwrap()
+    .role(Role::TabList)
+}
+
+#[test]
+fn a_progress_bar_and_a_tab_list_need_a_name() {
+    fn unnamed(_: &PreviewCtx) -> Built {
+        column(vec![box_item(progress_bar()), box_item(tab_list())])
+    }
+    fn named(_: &PreviewCtx) -> Built {
+        column(vec![
+            box_item(progress_bar().a11y_label(|| "Uploading")),
+            box_item(tab_list().a11y_label(|| "Sections")),
+        ])
+    }
+    let unnamed = report(unnamed);
+    let roles: Vec<&str> = unnamed
+        .of(Rule::UnnamedWidget)
+        .map(|violation| violation.message.split_whitespace().nth(1).unwrap_or(""))
+        .collect();
+    assert_eq!(roles, ["progressbar", "tablist"], "{unnamed}");
+    assert_eq!(found(&report(named), Rule::UnnamedWidget), 0);
+    assert_eq!(Rule::UnnamedWidget.severity(), Severity::Error);
+}
+
+fn field(paint: fn() -> RectStyle) -> Box<dyn LayoutItem> {
+    box_item(
+        StyledContainer::new(
+            LayoutStyle::new().width(160.0).height(32.0),
+            move |_| paint(),
+            vec![],
+        )
+        .unwrap()
+        .control(Role::TextInput)
+        .a11y_label(|| "Name"),
+    )
+}
+
+#[test]
+fn a_field_needs_an_edge_or_a_fill_that_stands_out_from_the_page() {
+    fn faint_edge(_: &PreviewCtx) -> Built {
+        column(vec![field(|| {
+            RectStyle::default().with_border(Border::uniform(FAINT, 1.0))
+        })])
+    }
+    fn no_edge(_: &PreviewCtx) -> Built {
+        column(vec![field(RectStyle::default)])
+    }
+    fn dark_edge(_: &PreviewCtx) -> Built {
+        column(vec![field(|| {
+            RectStyle::default().with_border(Border::uniform(INK, 1.0))
+        })])
+    }
+    fn dark_fill(_: &PreviewCtx) -> Built {
+        column(vec![field(|| RectStyle::default().with_fill(INK))])
+    }
+    let faint = report(faint_edge);
+    let violations: Vec<&Violation> = faint.of(Rule::BoundaryContrast).collect();
+    assert_eq!(violations.len(), 1, "{faint}");
+    assert!(violations[0].message.contains("1.25:1"), "{faint}");
+    assert_eq!(found(&report(no_edge), Rule::BoundaryContrast), 1);
+    assert_eq!(found(&report(dark_edge), Rule::BoundaryContrast), 0);
+    assert_eq!(found(&report(dark_fill), Rule::BoundaryContrast), 0);
+}
+
+fn framed(edge: Color) -> Built {
+    let frame = StyledContainer::new(
+        LayoutStyle::new().padding_all(8.0),
+        move |_| RectStyle::default().with_border(Border::uniform(edge, 1.0)),
+        vec![field(RectStyle::default)],
+    )?;
+    column(vec![box_item(frame)])
+}
+
+#[test]
+fn a_field_that_draws_nothing_itself_is_judged_by_the_frame_around_it() {
+    fn faint(_: &PreviewCtx) -> Built {
+        framed(FAINT)
+    }
+    fn dark(_: &PreviewCtx) -> Built {
+        framed(INK)
+    }
+    assert_eq!(found(&report(faint), Rule::BoundaryContrast), 1);
+    assert_eq!(found(&report(dark), Rule::BoundaryContrast), 0);
+}
+
+fn ringed(ring: fn(Rect) -> RectStyle) -> Box<dyn LayoutItem> {
+    box_item(
+        StyledContainer::new(
+            LayoutStyle::new().width(80.0).height(32.0),
+            |_| RectStyle::default().with_border(Border::uniform(INK, 1.0)),
+            vec![label("Save", 12.0, INK)],
+        )
+        .unwrap()
+        .control(Role::Button)
+        .on_press(|| {})
+        .focus_style(ring),
+    )
+}
+
+#[test]
+fn a_stop_has_to_show_where_the_keyboard_is() {
+    fn unchanged(_: &PreviewCtx) -> Built {
+        column(vec![ringed(|_| {
+            RectStyle::default().with_border(Border::uniform(INK, 1.0))
+        })])
+    }
+    fn faint_ring(_: &PreviewCtx) -> Built {
+        column(vec![ringed(|_| {
+            RectStyle::default().with_border(Border::uniform(FAINT, 2.0))
+        })])
+    }
+    fn dark_ring(_: &PreviewCtx) -> Built {
+        column(vec![ringed(|_| {
+            RectStyle::default().with_border(Border::uniform(INK, 3.0))
+        })])
+    }
+    fn theme_ring(_: &PreviewCtx) -> Built {
+        column(vec![button(Some("Save"), 80.0, 32.0)])
+    }
+    let unchanged = report(unchanged);
+    let violations: Vec<&Violation> = unchanged.of(Rule::FocusIndicator).collect();
+    assert_eq!(violations.len(), 1, "{unchanged}");
+    assert!(
+        violations[0].message.contains("looks the same"),
+        "{unchanged}"
+    );
+    let faint = report(faint_ring);
+    let violations: Vec<&Violation> = faint.of(Rule::FocusIndicator).collect();
+    assert_eq!(violations.len(), 1, "{faint}");
+    assert!(violations[0].message.contains("1.25:1"), "{faint}");
+    let dark = report(dark_ring);
+    assert_eq!(found(&dark, Rule::FocusIndicator), 0, "{dark}");
+    assert_eq!(found(&report(theme_ring), Rule::FocusIndicator), 0);
+}
+
+#[test]
+fn checking_focus_leaves_it_where_the_play_put_it() {
+    fn pair(_: &PreviewCtx) -> Built {
+        column(vec![
+            button(Some("One"), 80.0, 32.0),
+            button(Some("Two"), 80.0, 32.0),
+        ])
+    }
+    let mut play = Play::mount(&entry(pair).locale("en")).unwrap();
+    play.tab().unwrap();
+    play.tab().unwrap();
+    let before = play.frame();
+    let _ = play.check_a11y();
+    let focused = |frame: &Frame| -> Vec<String> {
+        frame
+            .access
+            .as_deref()
+            .expect("captured")
+            .snapshot
+            .iter()
+            .filter(|node| node.focused)
+            .map(|node| node.name.clone())
+            .collect()
+    };
+    assert_eq!(focused(&before), ["Two"]);
+    assert_eq!(focused(&play.frame()), ["Two"]);
+    assert_eq!(&*play.frame().commands, &*before.commands);
+}
+
+/// A path drawn under a word: a triangle covering the word's top-left corner of the box, or the opposite triangle, whose bounds still cover the word.
+fn over_triangle(covering: bool) -> Built {
+    let corners = match covering {
+        true => [
+            Point::new(0.0, 0.0),
+            Point::new(200.0, 0.0),
+            Point::new(0.0, 40.0),
+        ],
+        false => [
+            Point::new(200.0, 0.0),
+            Point::new(200.0, 40.0),
+            Point::new(0.0, 40.0),
+        ],
+    };
+    let data = Arc::new(PathData::polygon(&corners));
+    let triangle = crate::Path::new(
+        LayoutStyle::new().absolute_fill(),
+        move || Arc::clone(&data),
+        || PathStyle::default().with_fill(INK),
+    )?
+    .a11y_hidden();
+    column(vec![box_item(Container::new(
+        LayoutStyle::new().width(200.0).height(40.0),
+        vec![box_item(triangle), label("Inverted", 14.0, PAPER)],
+    )?)])
+}
+
+#[test]
+fn text_over_a_filled_path_is_measured_against_the_path_where_its_shape_covers_the_text() {
+    fn covered(_: &PreviewCtx) -> Built {
+        over_triangle(true)
+    }
+    fn beside(_: &PreviewCtx) -> Built {
+        over_triangle(false)
+    }
+    assert_eq!(found(&report(covered), Rule::Contrast), 0);
+    let beside = report(beside);
+    let violations: Vec<&Violation> = beside.of(Rule::Contrast).collect();
+    assert_eq!(
+        violations.len(),
+        1,
+        "white beside the triangle is on the white page: {beside}"
+    );
+    assert!(violations[0].message.contains("1.00:1"), "{beside}");
+}
+
+#[test]
+fn findings_of_the_frame_and_of_focus_read_in_the_order_of_the_rules() {
+    fn both(_: &PreviewCtx) -> Built {
+        column(vec![
+            ringed(|_| RectStyle::default().with_border(Border::uniform(INK, 1.0))),
+            label("Fine print", 14.0, GREY),
+            button(None, 40.0, 40.0),
+        ])
+    }
+    let report = report(both);
+    let rules: Vec<Rule> = report
+        .violations
+        .iter()
+        .map(|violation| violation.rule)
+        .collect();
+    assert_eq!(
+        rules,
+        [Rule::UnnamedControl, Rule::Contrast, Rule::FocusIndicator],
+        "{report}"
     );
 }

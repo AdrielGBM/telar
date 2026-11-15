@@ -42,6 +42,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = progress(ProgressProps::props().value(p.clone()).width(::telar::Int(280)).build())?;
+                                let __node_3 = __node_3.a11y_label(|| "Loading");
                                 __children.push(box_item(__node_3));
                                 let __row_0 = {
                                     let __text_0 = {
@@ -64,7 +65,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_6 = code_line(CodeLineProps::props().code("progress value:$p width:280").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("progress value:$p width:280 a11y_label:\"Loading\"").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }
@@ -86,7 +87,9 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
                                     let __node_9 = spinner(SpinnerProps::props().diameter(::telar::Int(28)).build())?;
+                                    let __node_9 = __node_9.a11y_label(|| "Working");
                                     let __node_10 = spinner(SpinnerProps::props().diameter(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build())?;
+                                    let __node_10 = __node_10.a11y_label(|| "Working");
                                     let __text_1 = {
                                         Text::declaring(
                                             || "working…".to_string(),
@@ -104,7 +107,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_11 = code_line(CodeLineProps::props().code("spinner diameter:28").build())?;
+                    let __node_11 = code_line(CodeLineProps::props().code("spinner diameter:28 a11y_label:\"Working\"").build())?;
                     __children.push(box_item(__node_11));
                     Ok(__children)
                 }

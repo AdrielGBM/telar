@@ -136,6 +136,8 @@ struct ListState {
     /// Whether any row draws a tick, so every row keeps the column the ticks stand in and the labels line up.
     ticked: RwSignal<bool>,
     menu: Option<Rc<crate::overlays::menu::menu_panel::Cascade>>,
+    /// The control that holds the keyboard while the rows are walked: the menu itself, or the select that opened them. Its ring is what the cursor row wears while it shows focus.
+    holder: Cell<Option<FocusId>>,
 }
 
 struct Row {
@@ -166,6 +168,7 @@ impl ListContext {
             declaring: Cell::new(false),
             ticked: signal(false),
             menu: None,
+            holder: Cell::new(None),
         }))
     }
 
@@ -187,6 +190,7 @@ impl ListContext {
             declaring: Cell::new(false),
             ticked: signal(false),
             menu: Some(cascade),
+            holder: Cell::new(None),
         }))
     }
 
@@ -314,6 +318,22 @@ impl ListContext {
 
     pub(crate) fn highlighted(&self) -> RwSignal<Option<usize>> {
         self.0.highlighted
+    }
+
+    /// Says which control holds the keyboard while the rows are walked: see [`cursor_ring`](Self::cursor_ring).
+    pub(crate) fn held_by(&self, holder: FocusId) {
+        self.0.holder.set(Some(holder));
+    }
+
+    /// The ring the row at `index` wears: the keyboard's, while the cursor rests on it and the control holding the keyboard shows focus, as a tree's row wears it. A pointer resting on a row moves the cursor too, and shows only the wash.
+    fn cursor_ring(&self, index: usize) -> Option<telar::FocusRing> {
+        let shows_focus = self
+            .0
+            .holder
+            .get()
+            .is_some_and(telar::focus::is_focus_visible);
+        (shows_focus && self.0.highlighted.get() == Some(index))
+            .then(|| shared::rows::cursor_ring(&self.0.color))
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -554,7 +574,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     shown_while(box_item(row), shown)
 }
 
-/// A row's box at `size` and its paint in the list it is in — the wash under the cursor, the selection's, the pointer moving the cursor in a menu — around `content`, laid start to end.
+/// A row's box at `size` and its paint in the list it is in — the wash under the cursor, the selection's, the pointer moving the cursor in a menu, the keyboard's ring on the cursor — around `content`, laid start to end.
 pub(crate) fn styled_row(
     size: ControlSize,
     list: &Option<ListContext>,
@@ -588,9 +608,17 @@ pub(crate) fn styled_row(
             }
         }
     };
+    let cursor = {
+        let list = list.clone();
+        move || match (&list, index) {
+            (Some(ctx), Some(i)) => ctx.cursor_ring(i),
+            _ => None,
+        }
+    };
     Ok(StyledContainer::new(layout(), row_style, content)?
         .styled_by(layout)
         .hover_style(hover_style)
+        .keyboard_cursor(cursor)
         .on_hover(pointed)
         .disabled(move || disabled.get()))
 }
@@ -818,7 +846,7 @@ impl ListContext {
 
     /// The chosen row keeps the selection's wash whatever else is on it, so the cursor or the pointer passing over it never makes it look less chosen than it is.
     fn row_style(&self, index: usize) -> RectStyle {
-        // The keyboard cursor wears the hover paint on purpose: it says the same thing, and a look of its own would have the list report two different places at once.
+        // The keyboard cursor wears the hover paint on purpose: it says the same thing, and a wash of its own would have the list report two different places at once. The ring it adds while the keyboard shows focus is drawn on the same row.
         if self.is_selected(index) {
             row_paint(Some(tinted(&self.0.color, shared::held_wash())))
         } else if self.0.highlighted.get() == Some(index) {

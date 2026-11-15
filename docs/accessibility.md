@@ -185,7 +185,7 @@ button or a splitter, with the words a reader says for it where the bare number 
 or `Text` for what a field holds and the choice a select has made. A box the keyboard never stops at carries
 one the same way (`StyledContainer::valued`): the catalogue's `progress` is a progress bar standing at its
 reading out of 100, and its `spinner` a progress bar with no value, which says the work is under way and not
-how far along it is; each is called what its call's `a11y_label:` names it. A `description` is what a reader says after
+how far along it is; each is called what its call's `a11y_label:` names it, and `cargo telar test` reports one left unnamed. A `description` is what a reader says after
 the name, role and state, as help rather than identity: a field's hint, why it is invalid, a tooltip's text.
 `invalid`, `required` and `readonly` say that what a field holds fails its checks, that it must be filled in,
 and that it can be read but not changed. A control declares them with `focus::set_description`,
@@ -354,6 +354,9 @@ holds nothing but its rows: its `empty_label`, or the children it was given, els
 The status is there all along, so a reader hears the message as the last row goes; the list keeps a row's height,
 the table its header, so the control still has a box to hold focus in. With no row for the keyboard's cursor to rest
 on, a list or a tree wears the ring on its own box, and a table on its header, so the keyboard still shows where it is.
+A menu, a select's list and the command palette mark the row their cursor is on with the keyboard's ring as well as
+the pointer's wash while the keyboard shows focus there; a menu a press opened shows no ring, as a press that hands
+focus on shows none, and the list a select opens is called what the select is called.
 
 A `data_table` column that is `resizable` holds a splitter on its header's inline-end edge, the catalogue's
 `resize_handle`, named for the column ("Resize Name column") and reading its width and its narrowest: a Tab stop

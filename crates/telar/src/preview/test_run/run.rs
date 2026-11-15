@@ -194,7 +194,7 @@ fn unexpandable(entry: &PreviewEntry, error: String) -> CellReport {
     report.settle()
 }
 
-/// Builds and lays out `entry`, in `cell` when there is one, then runs its play, checks the canvas the play left, and compares the canvas at each moment its snapshots keep, as it opened and as the play left it.
+/// Builds and lays out `entry`, in `cell` when there is one, then runs its play, compares the canvas at each moment its snapshots keep, as it opened and as the play left it, and checks the canvas the play left.
 fn check(
     entry: &PreviewEntry,
     cell: Option<&MatrixCell>,
@@ -226,7 +226,6 @@ fn check(
         error: None,
     };
     report.play = run_play(&mut play);
-    report.a11y = check_a11y(&play, a11y);
     if let Some(snapshots) = snapshots {
         let stopped = match (report.play.status, &report.play.error) {
             (CheckStatus::Failed, Some(error)) => Some(PlayError::new(error.clone())),
@@ -241,6 +240,8 @@ fn check(
             detail: Some(error),
         });
     }
+    // Checked once the snapshot is taken: the check walks focus across every stop, which a snapshot of the canvas the play left must not show.
+    report.a11y = check_a11y(&play, a11y);
     report.teardown = tear_down(play);
     report.settle()
 }

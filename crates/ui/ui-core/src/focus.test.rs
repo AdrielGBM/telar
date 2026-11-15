@@ -498,6 +498,28 @@ fn a_host_focus_move_to_no_known_box_changes_nothing() {
     assert_eq!(current(), Some(id));
 }
 
+/// Focus handed on keeps showing as it showed where it came from: a menu opened from a pressed button shows no ring, one opened from a button Tab reached does.
+#[test]
+fn focus_passed_on_shows_as_the_focus_it_takes_over() {
+    clear();
+    let opener = next_id();
+    register_as(opener, FocusKind::Widget);
+    let menu = next_id();
+    register_as(menu, FocusKind::Widget);
+
+    request_from_pointer(opener);
+    pass_to(menu);
+    assert!(is_focused(menu));
+    assert!(!is_focus_visible(menu));
+
+    request(opener);
+    pass_to(menu);
+    assert!(is_focus_visible(menu));
+
+    unregister(opener);
+    unregister(menu);
+}
+
 /// `:focus-visible` makes the same exception: a tap on a button needs no ring, but a tap on a field is the start of typing, and the caret alone blinks out half the time.
 #[test]
 fn a_text_entry_shows_focus_however_it_was_reached() {

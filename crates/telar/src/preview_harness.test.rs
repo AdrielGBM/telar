@@ -298,16 +298,16 @@ fn a_filter_narrows_the_run_to_the_ids_it_matches() {
 }
 
 #[test]
-fn accessibility_errors_warn_unless_asked_to_fail() {
+fn accessibility_errors_fail_unless_asked_only_to_warn() {
     let run = Run::new("a11y");
     let (passed, stdout) = run.test("faint", &[]);
-    assert!(passed, "{stdout}");
-    assert!(stdout.contains("warn  harness--faint--default"), "{stdout}");
-    assert!(stdout.contains("contrast"), "{stdout}");
-
-    let (passed, stdout) = run.test("faint", &[(TEST_A11Y_VAR, "error")]);
     assert!(!passed, "{stdout}");
     assert!(stdout.contains("FAIL  harness--faint--default"), "{stdout}");
+    assert!(stdout.contains("contrast"), "{stdout}");
+
+    let (passed, stdout) = run.test("faint", &[(TEST_A11Y_VAR, "warn")]);
+    assert!(passed, "{stdout}");
+    assert!(stdout.contains("warn  harness--faint--default"), "{stdout}");
 
     let (passed, stdout) = run.test("faint", &[(TEST_A11Y_VAR, "off")]);
     assert!(passed, "{stdout}");

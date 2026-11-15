@@ -39,6 +39,7 @@ pub(crate) const SEARCH: &str = "search";
 pub(crate) const SEARCH_COMMANDS: &str = "search_commands";
 pub(crate) const SELECT: &str = "select";
 pub(crate) const SUCCESS: &str = "success";
+pub(crate) const SWATCHES: &str = "swatches";
 pub(crate) const THEN: &str = "then";
 pub(crate) const TITLED_NOTICE: &str = "titled_notice";
 pub(crate) const WARNING: &str = "warning";
@@ -394,6 +395,14 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("نجاح")),
                 ("en", Message::Plain("Success")),
                 ("es", Message::Plain("Éxito")),
+            ],
+        },
+        Entry {
+            key: SWATCHES,
+            messages: &[
+                ("ar", Message::Plain("عينات الألوان")),
+                ("en", Message::Plain("Swatches")),
+                ("es", Message::Plain("Muestras")),
             ],
         },
         Entry {

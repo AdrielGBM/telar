@@ -1,16 +1,17 @@
 //! Accessibility checks over what a canvas drew and what a reader is told about it.
 //!
-//! [`check`] reads a [`Frame`] beside the accessibility snapshot of the same moment and reports what would stop someone using the canvas with a screen reader, a keyboard, low vision or an imprecise pointer. Each finding names its [`Rule`] and carries the rule's [`Severity`]; a preview that knowingly breaks a rule says so with its `a11y_ignore`, and [`Report::ignoring`] drops those.
+//! [`check`] reads a [`Frame`] beside the accessibility snapshot of the same moment and reports what would stop someone using the canvas with a screen reader, a keyboard, low vision or an imprecise pointer; [`check_focus`] reads the frames the canvas draws as the keyboard reaches each of its stops. Each finding names its [`Rule`] and carries the rule's [`Severity`]; a preview that knowingly breaks a rule says so with its `a11y_ignore`, and [`Report::ignoring`] drops those.
 
-use renderer_core::LayerMask;
+use renderer_core::{FillRule, LayerMask, PathData};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::sync::Arc;
 use ui_core::accessibility::{Artwork, FrameReading};
 use ui_core::focus::{self, TabStop};
 
 use crate::{
-    AccessNode, Color, Direction, DrawCommand, NodeId, Paint, Rect, Role, for_each_with_matrix,
-    transform_clip_rect,
+    AccessNode, Color, ContrastLevel, ContrastUse, Direction, DrawCommand, NodeId, Paint, Point,
+    Rect, Role, Transform, for_each_with_matrix, transform_clip_rect,
 };
 
 use super::Frame;
@@ -20,6 +21,8 @@ pub const MIN_TARGET: f32 = 24.0;
 
 const OPAQUE: f32 = 0.999;
 const EPSILON: f32 = 0.5;
+/// How far outside a ring the colour around it is read, so the ring's own antialiased edge is not mistaken for it.
+const AROUND: f32 = 1.0;
 
 /// How much a finding matters, what it is about and the finding itself: shared with the platform layer, so a finding made where an application's registries live reaches an overlay drawn somewhere else.
 pub use platform_core::{
@@ -38,6 +41,14 @@ impl Report {
     pub fn ignoring(mut self, rules: &[Rule]) -> Self {
         self.violations
             .retain(|violation| !rules.contains(&violation.rule));
+        self
+    }
+
+    /// This report and `other` as one, still in the order of [`Rule::ALL`].
+    pub fn and(mut self, other: Report) -> Self {
+        self.violations.extend(other.violations);
+        self.violations
+            .sort_by_key(|violation| Rule::ALL.iter().position(|rule| *rule == violation.rule));
         self
     }
 
@@ -86,8 +97,10 @@ impl fmt::Display for Report {
 /// What takes focus, in what order, and what a reader skips are the surface's live state, which commands drawn on a raster target do not carry. A frame [captured](Frame::capture) from a canvas keeps them in its [`access`](Frame::access), so it can be checked whenever; one made from commands alone is read against the surface entered now, so call it with the frame's surface entered and before anything in it changes.
 ///
 /// - **Unnamed controls and pictures:** a control whose name is empty, and a picture (a bitmap or vector art outside every control) that is neither named nor hidden from readers.
+/// - **Unnamed widgets:** a list box, a tree, a grid, a tab list, a radio group, a dialog or a progress bar whose name is empty.
 /// - **Symbol-only names:** a control activated by pressing it whose name has no letter or number in it, such as "×" or "⋯".
-/// - **Contrast:** each run of text against the nearest opaque fill behind its centre, with the translucent fills between them composited over it, below [`BODY_TEXT_CONTRAST`](geometry_core::BODY_TEXT_CONTRAST), or [`LARGE_TEXT_CONTRAST`](geometry_core::LARGE_TEXT_CONTRAST) for large text. Text over a picture or a gradient, and text in a disabled control, is not judged.
+/// - **Contrast:** each run of text against the nearest opaque fill behind its centre, a filled path included where its shape covers that point, with the translucent fills between them composited over it, below [`BODY_TEXT_CONTRAST`](geometry_core::BODY_TEXT_CONTRAST), or [`LARGE_TEXT_CONTRAST`](geometry_core::LARGE_TEXT_CONTRAST) for large text. Text over a picture or a gradient, and text in a disabled control, is not judged.
+/// - **Boundary contrast:** an enabled field, box to tick, switch, slider or select none of whose fills and edges stands the [`ContrastUse::ControlBoundary`] minimum from what it is drawn on, so nothing shows where it is. A control that draws nothing inside its own box is judged by the innermost box drawn around it, as a field by its frame. One drawn over a picture or a gradient is not judged.
 /// - **Target size:** an enabled control smaller than [`MIN_TARGET`] on a side whose 24 px circle reaches another target or another small target's circle.
 /// - **Hidden focusables:** a Tab stop a reader is not told about, or one collapsed to no size.
 /// - **Focus order:** a Tab stop, in the order Tab walks them, that reads before the previous one — on an earlier line and not in a later column, or earlier on the same line.
@@ -113,15 +126,148 @@ pub(crate) fn check_over(
     let walk = Walk::of(frame);
     let mut violations = Vec::new();
     unnamed_controls(snapshot, &mut violations);
+    unnamed_widgets(snapshot, &mut violations);
     symbol_only_names(snapshot, &mut violations);
     unnamed_pictures(reading, &walk, &mut violations);
     contrast(snapshot, &walk, behind, &mut violations);
+    boundary_contrast(snapshot, &walk, behind, &mut violations);
     target_sizes(snapshot, &mut violations);
     let stops = tab_stops(tab_order, snapshot, &walk);
     hidden_focusables(&stops, &mut violations);
     focus_order(frame.direction, &stops, &mut violations);
     missing_lang(frame, snapshot, &mut violations);
     Report { violations }
+}
+
+/// A Tab stop as the keyboard reaches it: what a reader is told about it then, and the frame the canvas draws while it holds focus.
+#[derive(Clone, Debug)]
+pub struct FocusedStop {
+    /// The stop as a reader is told about it while it holds focus.
+    pub node: AccessNode,
+    /// The canvas while the stop holds focus.
+    pub frame: Frame,
+}
+
+/// Checks that each of `focused` shows where the keyboard is: `rest` is the same canvas with nothing focused.
+///
+/// What the keyboard reaching a stop changes inside its box is its focus indicator. A ring is judged as the keyboard's ring is drawn, in two bands so that one of them always shows: the better band has to stand the [`ContrastUse::ControlBoundary`] minimum from the stop's fill and from what is around the ring. An indicator drawn as a change of fill alone has to stand as far from what was there before. A stop whose box looks the same focused or not shows nothing at all.
+///
+/// A stop whose cursor rests on one of its items, as a menu's or a tree's does, shows the keyboard on that item: what is judged is what focus changes there.
+pub fn check_focus(rest: &Frame, focused: &[FocusedStop]) -> Report {
+    let before = Walk::of(rest);
+    let violations = focused
+        .iter()
+        .filter_map(|stop| focus_indicator(&before, rest.background, stop))
+        .collect();
+    Report { violations }
+}
+
+fn focus_indicator(
+    before: &Walk,
+    background: Option<Color>,
+    stop: &FocusedStop,
+) -> Option<Violation> {
+    let walk = Walk::of(&stop.frame);
+    let background = stop.frame.background.or(background);
+    let pointed = stop.node.active_descendant.and_then(|item| {
+        stop.frame
+            .access
+            .as_deref()?
+            .snapshot
+            .iter()
+            .find(|node| node.id == Some(item))
+    });
+    let area = pointed.map_or(stop.node.rect, |item| item.rect);
+    let changed: Vec<&Shape> = walk
+        .shapes
+        .iter()
+        .filter(|shape| shape.rect.overlaps(area))
+        .filter(|shape| !before.shapes.iter().any(|old| old.looks_like(shape)))
+        .collect();
+    let needed = ContrastUse::ControlBoundary.minimum(ContrastLevel::Standard);
+    let violation =
+        |message: String| Some(Violation::new(Rule::FocusIndicator, message, Some(area)));
+    if changed.is_empty() {
+        return violation(match pointed {
+            Some(item) => format!(
+                "nothing marks {}, which the cursor of {} rests on",
+                describe(item),
+                describe(&stop.node)
+            ),
+            None => format!(
+                "{} looks the same with the keyboard on it: nothing shows where focus is",
+                describe(&stop.node)
+            ),
+        });
+    }
+    let bands: Vec<(&Shape, Color)> = changed
+        .iter()
+        .filter_map(|shape| match shape.edge_ink() {
+            Some(Ink::Solid(color)) => Some((*shape, color)),
+            _ => None,
+        })
+        .collect();
+    if bands.is_empty() {
+        let best = changed
+            .iter()
+            .filter(|shape| matches!(shape.fill, Some(Ink::Solid(_))))
+            .filter_map(|shape| {
+                let (x, y) = centre(shape.rect);
+                let now = walk.backdrop(x, y, shape.upto, background)?;
+                let was = before.backdrop(x, y, before.fills.len(), background)?;
+                Some(now.contrast_ratio(was))
+            })
+            .fold(None, |best: Option<f32>, ratio| {
+                Some(best.map_or(ratio, |best| best.max(ratio)))
+            })?;
+        return (best + 0.005 < needed).then(|| {
+            Violation::new(
+                Rule::FocusIndicator,
+                format!(
+                    "{} shows focus only by a change of fill {best:.2}:1 from what was there; it needs {needed}:1",
+                    describe(&stop.node)
+                ),
+                Some(area),
+            )
+        });
+    }
+    let ring = bands
+        .iter()
+        .map(|(shape, _)| shape.rect)
+        .reduce(Rect::union)
+        .unwrap_or(area);
+    let under = bands
+        .iter()
+        .map(|(shape, _)| shape.under)
+        .min()
+        .unwrap_or(0);
+    let upto = bands.iter().map(|(shape, _)| shape.upto).max().unwrap_or(0);
+    let (x, y) = centre(area);
+    let fill = walk.backdrop(x, y, upto, background);
+    let (rx, ry) = centre(ring);
+    let around = [
+        (ring.x - AROUND, ry),
+        (ring.x + ring.width + AROUND, ry),
+        (rx, ring.y - AROUND),
+        (rx, ring.y + ring.height + AROUND),
+    ]
+    .map(|(x, y)| walk.backdrop(x, y, under, background));
+    let better_band = |against: Color| {
+        bands
+            .iter()
+            .map(|(_, band)| band.over(against).contrast_ratio(against))
+            .fold(0.0f32, f32::max)
+    };
+    let short = std::iter::once(("its fill", fill))
+        .chain(around.map(|colour| ("what is around it", colour)))
+        .filter_map(|(what, against)| against.map(|against| (what, better_band(against))))
+        .filter(|(_, ratio)| ratio + 0.005 < needed)
+        .min_by(|(_, a), (_, b)| a.total_cmp(b));
+    let (what, ratio) = short?;
+    violation(format!(
+        "the ring {} wears with the keyboard on it is {ratio:.2}:1 against {what} at best; it needs {needed}:1",
+        describe(&stop.node)
+    ))
 }
 
 fn unnamed_controls(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
@@ -137,6 +283,35 @@ fn unnamed_controls(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
             ));
         }
     }
+}
+
+fn unnamed_widgets(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
+    for node in snapshot {
+        if needs_name(node.role) && node.name.trim().is_empty() {
+            out.push(Violation::new(
+                Rule::UnnamedWidget,
+                format!(
+                    "a {} has no name, so a reader cannot tell it from another: name it with `a11y_label`",
+                    node.role.as_str()
+                ),
+                Some(node.rect),
+            ));
+        }
+    }
+}
+
+/// What a reader moves into or is told about as a whole, and tells from another of its kind only by its name.
+fn needs_name(role: Role) -> bool {
+    matches!(
+        role,
+        Role::ListBox
+            | Role::Tree
+            | Role::Grid
+            | Role::TabList
+            | Role::RadioGroup
+            | Role::Dialog
+            | Role::ProgressBar
+    )
 }
 
 fn symbol_only_names(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
@@ -243,6 +418,82 @@ fn contrast(
             ));
         }
     }
+}
+
+/// A control a person finds by its edges rather than by words it draws: a button or a link says what it is in its label, a field drawn with no edge is an empty stretch of page.
+fn found_by_edges(role: Role) -> bool {
+    matches!(
+        role,
+        Role::TextInput
+            | Role::MultilineTextInput
+            | Role::ComboBox
+            | Role::SpinButton
+            | Role::CheckBox
+            | Role::Radio
+            | Role::Switch
+            | Role::Slider
+    )
+}
+
+fn boundary_contrast(
+    snapshot: &[AccessNode],
+    walk: &Walk,
+    behind: &dyn Fn(f32, f32) -> Option<Color>,
+    out: &mut Vec<Violation>,
+) {
+    let needed = ContrastUse::ControlBoundary.minimum(ContrastLevel::Standard);
+    for node in snapshot {
+        if node.id.is_none() || !node.enabled || !found_by_edges(node.role) {
+            continue;
+        }
+        let mut best = 0.0f32;
+        let mut unknown = false;
+        for shape in edges_of(walk, node.rect) {
+            let (x, y) = centre(shape.rect);
+            let Some(under) = walk.backdrop(x, y, shape.under, behind(x, y)) else {
+                unknown |= walk.obscured(x, y, shape.under);
+                continue;
+            };
+            for ink in [shape.fill, shape.edge_ink()].into_iter().flatten() {
+                match ink {
+                    Ink::Solid(color) => best = best.max(color.over(under).contrast_ratio(under)),
+                    Ink::Unknown => unknown = true,
+                }
+            }
+        }
+        if best + 0.005 < needed && !unknown {
+            out.push(Violation::new(
+                Rule::BoundaryContrast,
+                format!(
+                    "{} stands {best:.2}:1 from what it is drawn on at best, so nothing shows where it is; its edge or fill needs {needed}:1",
+                    describe(node)
+                ),
+                Some(node.rect),
+            ));
+        }
+    }
+}
+
+/// What draws the edges of a control at `rect`: the shapes inside it, or, where it draws none of its own, the innermost shape around it, as a field's frame is drawn round the line it types into.
+fn edges_of(walk: &Walk, rect: Rect) -> Vec<&Shape> {
+    let inside: Vec<&Shape> = walk
+        .shapes
+        .iter()
+        .filter(|shape| within(shape.rect, rect))
+        .collect();
+    if !inside.is_empty() {
+        return inside;
+    }
+    walk.shapes
+        .iter()
+        .filter(|shape| within(rect, shape.rect))
+        .min_by(|a, b| area(a.rect).total_cmp(&area(b.rect)))
+        .into_iter()
+        .collect()
+}
+
+fn area(rect: Rect) -> f32 {
+    rect.width * rect.height
 }
 
 fn target_sizes(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
@@ -400,10 +651,11 @@ impl Painted {
     }
 }
 
-/// The frame as the checks read it: what is painted where, which text sits on what, the pictures, and where each box is placed.
+/// The frame as the checks read it: what is painted where, the shapes that paint it, which text sits on what, the pictures, and where each box is placed.
 #[derive(Default)]
 struct Walk {
     fills: Vec<Fill>,
+    shapes: Vec<Shape>,
     text: Vec<Run>,
     art: Vec<Art>,
     boxes: HashMap<NodeId, Rect>,
@@ -414,10 +666,84 @@ enum Fill {
         rect: Rect,
         color: Color,
     },
-    /// Paint whose colour under a point the frame does not say: a picture, a gradient, a filled path.
+    /// A path filled in one colour, which paints only the points its shape covers within `rect`, its placed bounds.
+    Path {
+        rect: Rect,
+        color: Color,
+        data: Arc<PathData>,
+        rule: FillRule,
+        /// From the frame's coordinates back to the path's own.
+        inverse: Transform,
+    },
+    /// Paint whose colour under a point the frame does not say: a picture, a gradient.
     Unknown {
         rect: Rect,
     },
+}
+
+impl Fill {
+    /// What the fill paints at (`x`, `y`), or `None` where it paints nothing.
+    fn at(&self, x: f32, y: f32) -> Option<Ink> {
+        match self {
+            Fill::Solid { rect, color } => rect.contains(x, y).then_some(Ink::Solid(*color)),
+            Fill::Path {
+                rect,
+                color,
+                data,
+                rule,
+                inverse,
+            } => (rect.contains(x, y) && data.contains(inverse.apply(Point::new(x, y)), *rule))
+                .then_some(Ink::Solid(*color)),
+            Fill::Unknown { rect } => rect.contains(x, y).then_some(Ink::Unknown),
+        }
+    }
+}
+
+/// The paint of a shape's fill or edge: one colour, or one that varies across it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Ink {
+    Solid(Color),
+    Unknown,
+}
+
+impl Ink {
+    fn of(paint: &Paint, opacity: f32) -> Option<Self> {
+        match paint {
+            Paint::Solid(color) if color.a * opacity > 0.0 => {
+                Some(Ink::Solid(color.with_alpha(color.a * opacity)))
+            }
+            Paint::Solid(_) => None,
+            Paint::Gradient(_) => Some(Ink::Unknown),
+        }
+    }
+}
+
+/// A box or a path as painted: what tells a control from what it is drawn on, and what a focus ring is drawn with.
+struct Shape {
+    rect: Rect,
+    fill: Option<Ink>,
+    edge: Option<Edge>,
+    /// How many fills were painted before it.
+    under: usize,
+    /// How many fills were painted once its own was.
+    upto: usize,
+}
+
+/// A box's border or a path's stroke: its paint, and how thick it is on each side.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Edge {
+    ink: Ink,
+    widths: [f32; 4],
+}
+
+impl Shape {
+    fn looks_like(&self, other: &Shape) -> bool {
+        self.rect == other.rect && self.fill == other.fill && self.edge == other.edge
+    }
+
+    fn edge_ink(&self) -> Option<Ink> {
+        self.edge.map(|edge| edge.ink)
+    }
 }
 
 struct Run {
@@ -507,17 +833,27 @@ impl Walk {
                     layers.pop();
                 }
                 DrawCommand::Rect { rect, style } => {
-                    let (Some(fill), Some(rect)) = (&style.fill, placed(*rect)) else {
-                        return;
-                    };
-                    walk.fills.push(match fill {
-                        Paint::Solid(color) if color.a * layer.opacity > 0.0 => Fill::Solid {
-                            rect,
-                            color: color.with_alpha(color.a * layer.opacity),
-                        },
-                        Paint::Solid(_) => return,
-                        Paint::Gradient(_) => Fill::Unknown { rect },
-                    });
+                    let Some(rect) = placed(*rect) else { return };
+                    let fill = style
+                        .fill
+                        .as_ref()
+                        .and_then(|fill| Ink::of(fill, layer.opacity));
+                    let edge = style
+                        .border
+                        .filter(|border| border.widths.iter().any(|width| *width > 0.0))
+                        .and_then(|border| {
+                            Some(Edge {
+                                ink: Ink::of(&border.paint, layer.opacity)?,
+                                widths: border.widths,
+                            })
+                        });
+                    let under = walk.fills.len();
+                    match fill {
+                        Some(Ink::Solid(color)) => walk.fills.push(Fill::Solid { rect, color }),
+                        Some(Ink::Unknown) => walk.fills.push(Fill::Unknown { rect }),
+                        None => {}
+                    }
+                    walk.push_shape(rect, fill, edge, under);
                 }
                 DrawCommand::Image { rect, .. } => {
                     if let Some(placed) = placed(*rect) {
@@ -529,26 +865,35 @@ impl Walk {
                     }
                 }
                 DrawCommand::Path { data, style } => {
-                    let inked = |paint: Option<&Paint>| {
-                        paint.is_some_and(|paint| match paint {
-                            Paint::Solid(color) => color.a > 0.0,
-                            Paint::Gradient(_) => true,
+                    let fill = style
+                        .fill
+                        .as_ref()
+                        .and_then(|fill| Ink::of(fill, layer.opacity));
+                    let edge = style.stroke.as_ref().and_then(|stroke| {
+                        Some(Edge {
+                            ink: Ink::of(&stroke.paint, layer.opacity)?,
+                            widths: [stroke.width; 4],
                         })
-                    };
-                    let filled = inked(style.fill.as_ref());
-                    let stroked = inked(style.stroke.as_ref().map(|stroke| &stroke.paint));
-                    let Some(placed) = data.bounds().and_then(placed) else {
+                    });
+                    let Some(rect) = data.bounds().and_then(placed) else {
                         return;
                     };
-                    if filled {
-                        walk.fills.push(Fill::Unknown { rect: placed });
+                    let under = walk.fills.len();
+                    match (fill, Transform::from_array(matrix).invert()) {
+                        (Some(Ink::Solid(color)), Some(inverse)) => walk.fills.push(Fill::Path {
+                            rect,
+                            color,
+                            data: Arc::clone(data),
+                            rule: style.fill_rule,
+                            inverse,
+                        }),
+                        (Some(_), _) => walk.fills.push(Fill::Unknown { rect }),
+                        (None, _) => {}
                     }
-                    if filled || stroked {
-                        walk.art.push(Art {
-                            index,
-                            rect: placed,
-                        });
+                    if fill.is_some() || edge.is_some() {
+                        walk.art.push(Art { index, rect });
                     }
+                    walk.push_shape(rect, fill, edge, under);
                 }
                 DrawCommand::Text {
                     text, rect, style, ..
@@ -557,12 +902,10 @@ impl Walk {
                         return;
                     }
                     let Some(rect) = placed(*rect) else { return };
-                    let color = match style.color {
-                        Paint::Solid(color) if color.a * layer.opacity > 0.0 => {
-                            Some(color.with_alpha(color.a * layer.opacity))
-                        }
-                        Paint::Solid(_) => return,
-                        Paint::Gradient(_) => None,
+                    let color = match Ink::of(&style.color, layer.opacity) {
+                        Some(Ink::Solid(color)) => Some(color),
+                        Some(Ink::Unknown) => None,
+                        None => return,
                     };
                     walk.text.push(Run {
                         text: text.to_string(),
@@ -579,21 +922,38 @@ impl Walk {
         walk
     }
 
+    fn push_shape(&mut self, rect: Rect, fill: Option<Ink>, edge: Option<Edge>, under: usize) {
+        if fill.is_some() || edge.is_some() {
+            self.shapes.push(Shape {
+                rect,
+                fill,
+                edge,
+                under,
+                upto: self.fills.len(),
+            });
+        }
+    }
+
+    /// Whether something whose colour is unknown is painted at (`x`, `y`) under the first `under` fills, rather than nothing at all.
+    fn obscured(&self, x: f32, y: f32, under: usize) -> bool {
+        self.fills[..under]
+            .iter()
+            .any(|fill| fill.at(x, y) == Some(Ink::Unknown))
+    }
+
     /// The colour at (`x`, `y`) under the first `under` fills: the nearest opaque fill there, or `background` under everything, with the translucent fills between composited over it. `None` where something whose colour is unknown is in the way, or nothing is.
     fn backdrop(&self, x: f32, y: f32, under: usize, background: Option<Color>) -> Option<Color> {
         let mut between = Vec::new();
         let mut base = None;
         for fill in self.fills[..under].iter().rev() {
-            match fill {
-                Fill::Unknown { rect } if rect.contains(x, y) => return None,
-                Fill::Solid { rect, color } if rect.contains(x, y) => {
-                    if color.a >= OPAQUE {
-                        base = Some(*color);
-                        break;
-                    }
-                    between.push(*color);
+            match fill.at(x, y) {
+                None => {}
+                Some(Ink::Unknown) => return None,
+                Some(Ink::Solid(color)) if color.a >= OPAQUE => {
+                    base = Some(color);
+                    break;
                 }
-                _ => {}
+                Some(Ink::Solid(color)) => between.push(color),
             }
         }
         let base = base.or(background.map(|color| color.with_alpha(1.0)))?;
@@ -613,6 +973,14 @@ fn scale_of(matrix: [f32; 6]) -> f32 {
 
 fn centre(rect: Rect) -> (f32, f32) {
     (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0)
+}
+
+/// Whether `inner` lies inside `outer`, give or take half a pixel.
+fn within(inner: Rect, outer: Rect) -> bool {
+    inner.x + EPSILON >= outer.x
+        && inner.y + EPSILON >= outer.y
+        && inner.x + inner.width <= outer.x + outer.width + EPSILON
+        && inner.y + inner.height <= outer.y + outer.height + EPSILON
 }
 
 fn distance_to_rect(x: f32, y: f32, rect: Rect) -> f32 {

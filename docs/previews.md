@@ -270,9 +270,15 @@ the frame it left. `cargo telar test` runs it on a headless canvas.
 ## Accessibility checks
 
 Each preview and cell is checked for what would keep someone from using it, by rule: `unnamed-control`,
-`symbol-only-name`, `unnamed-picture`, `contrast`, `hidden-focusable` (errors), and `target-size`, `focus-order`,
-`missing-lang` (warnings). The workshop's Accessibility panel shows the findings of the canvas on screen, and
-`expect_accessible()` in a play asserts there are none. A canvas with no `locale` of its own is in the language
+`unnamed-widget`, `symbol-only-name`, `unnamed-picture`, `contrast`, `boundary-contrast`, `hidden-focusable`,
+`focus-indicator` (errors), and `target-size`, `focus-order`, `missing-lang` (warnings). An unnamed widget is a list
+box, tree, grid, tab list, radio group, dialog or progress bar with no name: give it one with `a11y_label:` or the
+component's `label`. Boundary contrast holds a field, box to tick, switch, slider or select to 3:1 against what it is
+drawn on, by its own fill or edge or by the frame drawn round it. For the focus indicator each Tab stop is given focus
+in turn and the canvas compared with nothing focused: the ring has to stand 3:1 from the control's fill and from what
+is around it, in one of its two bands; a list or menu is judged by the cursor on its current item. Focus goes back
+where it was once the check is done. The workshop's Accessibility panel shows the findings of the canvas on screen,
+and `expect_accessible()` in a play asserts there are none. A canvas with no `locale` of its own is in the language
 the app's setup chose, or else its catalog's default, in the workshop and in `cargo telar test` alike.
 
 A preview that breaks a rule on purpose, such as a dense layout with small targets, says so, and the checks leave
@@ -340,7 +346,7 @@ failed, a panic while one is unmounted included.
 | Flag | Does |
 | --- | --- |
 | `--preview <GLOB>` | Test only the previews, or cells, whose id matches (`*` any run of characters, `?` one) |
-| `--a11y off\|warn\|error` | `off` checks nothing, `warn` (the default) reports findings and fails nothing, `error` fails a preview on an error-level finding |
+| `--a11y off\|warn\|error` | `off` checks nothing, `warn` reports findings and fails nothing, `error` (the default) fails a preview on an error-level finding |
 | `--update-snapshots` | Write the goldens that are missing or no longer match, instead of failing on them |
 | `--no-snapshots` | Take no snapshots |
 | `--report <json\|junit> <PATH>` | Also write the run's report to a path, as `report.json` or JUnit XML for a CI |

@@ -29,16 +29,22 @@ impl AccessSeverity {
 pub enum AccessRule {
     /// A control a reader announces by its role alone.
     UnnamedControl,
+    /// A set of choices, a dialog or a progress bar a reader announces by its role alone, so it cannot tell one from another.
+    UnnamedWidget,
     /// A control activated by pressing it that is named only by symbols, which a reader spells out or skips.
     SymbolOnlyName,
     /// A picture a reader is not told about, and not told to skip.
     UnnamedPicture,
     /// Text too close in luminance to the nearest opaque fill behind it.
     Contrast,
+    /// A control that is found by its edges, such as a field, a box to tick or a switch, whose edges all stand less than 3:1 from what is around them.
+    BoundaryContrast,
     /// A pointer target too small with something else within reach of it.
     TargetSize,
     /// A Tab stop a reader is never told is there.
     HiddenFocusable,
+    /// A Tab stop that shows nothing when the keyboard reaches it, or whose ring stands less than 3:1 from its fill or from what is around it.
+    FocusIndicator,
     /// Tab moving back against the reading order.
     FocusOrder,
     /// Text in a surface that names no language.
@@ -46,13 +52,16 @@ pub enum AccessRule {
 }
 
 impl AccessRule {
-    pub const ALL: [AccessRule; 8] = [
+    pub const ALL: [AccessRule; 11] = [
         AccessRule::UnnamedControl,
+        AccessRule::UnnamedWidget,
         AccessRule::SymbolOnlyName,
         AccessRule::UnnamedPicture,
         AccessRule::Contrast,
+        AccessRule::BoundaryContrast,
         AccessRule::TargetSize,
         AccessRule::HiddenFocusable,
+        AccessRule::FocusIndicator,
         AccessRule::FocusOrder,
         AccessRule::MissingLang,
     ];
@@ -61,11 +70,14 @@ impl AccessRule {
     pub const fn id(self) -> &'static str {
         match self {
             AccessRule::UnnamedControl => "unnamed-control",
+            AccessRule::UnnamedWidget => "unnamed-widget",
             AccessRule::SymbolOnlyName => "symbol-only-name",
             AccessRule::UnnamedPicture => "unnamed-picture",
             AccessRule::Contrast => "contrast",
+            AccessRule::BoundaryContrast => "boundary-contrast",
             AccessRule::TargetSize => "target-size",
             AccessRule::HiddenFocusable => "hidden-focusable",
+            AccessRule::FocusIndicator => "focus-indicator",
             AccessRule::FocusOrder => "focus-order",
             AccessRule::MissingLang => "missing-lang",
         }
@@ -75,10 +87,13 @@ impl AccessRule {
     pub const fn severity(self) -> AccessSeverity {
         match self {
             AccessRule::UnnamedControl
+            | AccessRule::UnnamedWidget
             | AccessRule::SymbolOnlyName
             | AccessRule::UnnamedPicture
             | AccessRule::Contrast
-            | AccessRule::HiddenFocusable => AccessSeverity::Error,
+            | AccessRule::BoundaryContrast
+            | AccessRule::HiddenFocusable
+            | AccessRule::FocusIndicator => AccessSeverity::Error,
             AccessRule::TargetSize | AccessRule::FocusOrder | AccessRule::MissingLang => {
                 AccessSeverity::Warning
             }

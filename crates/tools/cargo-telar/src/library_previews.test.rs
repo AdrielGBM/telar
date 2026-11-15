@@ -1,4 +1,4 @@
-//! `cargo telar test -p <library>` runs the one previews test `library_previews!` emits, which tests every preview the crate root lists however many modules place `.rsx`, and refuses a library that never wrote the macro instead of passing with nothing tested.
+//! `cargo telar test -p <library>` runs the one previews test `library_previews!` emits, which tests every preview the crate root lists however many modules place `.rsx`, refuses a library that never wrote the macro instead of passing with nothing tested, and fails on an error-level accessibility finding unless told only to warn.
 //!
 //! It compiles telar with its previews into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`. Every cargo it starts runs offline, so the registry has to hold what `Cargo.lock` names first (`cargo fetch`).
 
@@ -13,6 +13,8 @@ fn a_library_placing_its_rsx_from_several_modules_has_every_preview_tested_once(
     let run = test_library(
         "several-modules",
         "telar::rsx_modules!();\ntelar::library_previews!();\nmod ui;\n",
+        BADGE_RSX,
+        &[],
     );
     let shown = shown(&run.output);
     assert!(
@@ -39,13 +41,36 @@ fn a_library_placing_its_rsx_from_several_modules_has_every_preview_tested_once(
 #[test]
 #[ignore = "builds telar with its previews: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`"]
 fn a_library_without_library_previews_fails_naming_the_macro() {
-    let run = test_library("without-macro", "telar::rsx_modules!();\nmod ui;\n");
+    let run = test_library(
+        "without-macro",
+        "telar::rsx_modules!();\nmod ui;\n",
+        BADGE_RSX,
+        &[],
+    );
     let shown = shown(&run.output);
     assert!(!run.output.status.success(), "{shown}");
     assert!(
         String::from_utf8_lossy(&run.output.stderr).contains("`telar::library_previews!();`"),
         "{shown}"
     );
+}
+
+#[test]
+#[ignore = "builds telar with its previews: run it with `cargo test -p cargo-telar --test library_previews -- --ignored`"]
+fn an_error_level_accessibility_finding_fails_the_run_unless_asked_only_to_warn() {
+    let lib_rs = "telar::rsx_modules!();\ntelar::library_previews!();\nmod ui;\n";
+    let failed = test_library("faint", lib_rs, FAINT_RSX, &[]);
+    let shown_failed = shown(&failed.output);
+    assert!(!failed.output.status.success(), "{shown_failed}");
+    assert!(
+        shown_failed.contains("FAIL  faint--badge--plain"),
+        "{shown_failed}"
+    );
+    assert!(shown_failed.contains("contrast"), "{shown_failed}");
+
+    let warned = test_library("faint", lib_rs, FAINT_RSX, &["--a11y", "warn"]);
+    let shown_warned = shown(&warned.output);
+    assert!(warned.output.status.success(), "{shown_warned}");
 }
 
 struct LibraryRun {
@@ -61,7 +86,7 @@ fn shown(output: &Output) -> String {
     )
 }
 
-fn test_library(name: &str, lib_rs: &str) -> LibraryRun {
+fn test_library(name: &str, lib_rs: &str, badge_rsx: &str, args: &[&str]) -> LibraryRun {
     let repo = repo_root();
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("library-previews");
     let target_dir = work.join(format!("target-{name}"));
@@ -69,10 +94,11 @@ fn test_library(name: &str, lib_rs: &str) -> LibraryRun {
     if library.exists() {
         std::fs::remove_dir_all(&library).expect("remove the previous run");
     }
-    write_library(&library, &repo, name, lib_rs);
+    write_library(&library, &repo, name, lib_rs, badge_rsx);
 
     let output = Command::new(env!("CARGO_BIN_EXE_cargo-telar"))
         .args(["test", "--no-snapshots"])
+        .args(args)
         .current_dir(&library)
         .env("CARGO_TARGET_DIR", &target_dir)
         .env("CARGO_NET_OFFLINE", "true")
@@ -89,7 +115,7 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn write_library(dir: &Path, repo: &Path, name: &str, lib_rs: &str) {
+fn write_library(dir: &Path, repo: &Path, name: &str, lib_rs: &str, badge_rsx: &str) {
     let manifest = format!(
         r#"[package]
 name = "{name}"
@@ -109,7 +135,7 @@ telar = {{ path = {telar}, default-features = false, features = ["runtime", "sha
         ("telar.toml", "[telar]\nlibrary = true\n"),
         ("src/lib.rs", lib_rs),
         ("src/ui/mod.rs", "telar::rsx_modules!();\n"),
-        ("src/ui/badge.rsx", BADGE_RSX),
+        ("src/ui/badge.rsx", badge_rsx),
     ];
     for (relative, contents) in files {
         let path = dir.join(relative);
@@ -126,6 +152,18 @@ text "Nested" font_size:14
 
 [previews "Nested/Badge"]
 A badge placed from a nested `mod.rs`.
+
+[preview "Plain"]
+badge
+"#;
+
+/// Grey on white at 1.8:1, short of what body text needs.
+const FAINT_RSX: &str = r#"[view]
+box fill:#ffffff
+    text "Faint" font_size:14 color:#bbbbbb
+
+[previews "Faint/Badge"]
+A badge too faint to read.
 
 [preview "Plain"]
 badge

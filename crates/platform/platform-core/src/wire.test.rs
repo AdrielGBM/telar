@@ -583,6 +583,9 @@ fn the_bytes_of_every_platform_value_are_pinned_to_the_wire_version() {
             AccessRule::HiddenFocusable,
             AccessRule::FocusOrder,
             AccessRule::MissingLang,
+            AccessRule::UnnamedWidget,
+            AccessRule::BoundaryContrast,
+            AccessRule::FocusIndicator,
         ],
     );
     put_each(

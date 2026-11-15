@@ -30,6 +30,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                             .map(String::from)
                             .to_vec(),
                     )
+                    .label("Accent colour")
                     .selected(p.signal("selected", Some(0u32)))
                     .size(p.arg("size", ControlSize::Regular))
                     .given(p.arg("diameter", None::<f32>), |props, value| props.diameter(value))
