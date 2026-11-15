@@ -166,7 +166,7 @@ impl<T: Lerp + 'static> Tickable for RefCell<AnimInner<T>> {
 
 /// A signal-backed value that chases a `target` over time under a [`Curve`], driven by the central ticker.
 ///
-/// `Copy`, like every other reactive handle. The state it used to hold directly now lives in the reactive runtime's arena and this is an id into it, so a closure that reads an animation takes a register copy rather than an `Rc` bump — and the animation is disposed with the owner that built it instead of with its last handle. The ticker's `Weak` is unaffected: the `Rc` did not disappear, it changed owner.
+/// `Copy`, like every other reactive handle: its state lives in the reactive runtime's arena and this is an id into it, so a closure that reads an animation takes a register copy rather than an `Rc` bump, and the animation is disposed with the owner that built it instead of with its last handle. The ticker holds only a `Weak` to that state.
 pub struct Animated<T: Lerp + 'static> {
     state: RwSignal<Shared<T>>,
     id: u64,

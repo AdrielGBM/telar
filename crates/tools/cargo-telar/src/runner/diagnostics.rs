@@ -19,7 +19,7 @@ use telar_transpiler::{GeneratedSite, RsxSpan, SourceMap};
 
 use super::artifacts::Artifact;
 
-/// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that says what to do about it.
+/// A `help:`/`note:` rustc hung off a diagnostic, kept because it is often the half of a type error that says what to do about it.
 pub(crate) struct Note {
     level: String,
     message: String,

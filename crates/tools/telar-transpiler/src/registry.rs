@@ -595,7 +595,7 @@ pub const TEXT_CASE_VALUES: &[(&str, &str)] = &[
 
 /// `text_wrap:` — whether text wraps into its box or keeps one line.
 ///
-/// Named apart from the container's `wrap:`, which is flex-wrap and one character away from the `nowrap` flag this replaces.
+/// Named apart from the container's `wrap:`, which is flex-wrap.
 pub const TEXT_WRAP_VALUES: &[(&str, &str)] = &[
     ("wrap", "TextWrap::Wrap"),
     ("nowrap", "TextWrap::NoWrap"),
@@ -637,7 +637,7 @@ pub enum ValueKind {
 
 /// One attribute of one tag: its spelling, what its value has to be, and what it does.
 ///
-/// The single entry the whole DSL vocabulary is described by. Completion lists [`key`](Self::key), the emitter validates against [`kind`](Self::kind), and hover shows [`doc`](field@Self::doc) — so a key cannot be offered by the editor without the build knowing what it takes, which is what the three parallel tables here used to allow.
+/// The single entry the whole DSL vocabulary is described by. Completion lists [`key`](Self::key), the emitter validates against [`kind`](Self::kind), and hover shows [`doc`](field@Self::doc) — so a key cannot be offered by the editor without the build knowing what it takes.
 #[derive(Clone, Copy)]
 pub struct AttrSpec {
     /// The attribute's spelling in the markup.

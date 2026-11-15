@@ -17,8 +17,7 @@
 pub struct PathsProps {}
 
 #[allow(dead_code)]
-// Paths are drawn imperatively inside a Canvas — the escape hatch for vector art layout can't express.
-// Widest x reached by the fixed-coordinate art below; the drawing is scaled to fit narrower canvases.
+// The widest x the fixed-coordinate art reaches, so the drawing can be scaled to fit a narrower canvas.
 const PATHS_DESIGN_W: f32 = 520.0;
 
 #[allow(dead_code)]

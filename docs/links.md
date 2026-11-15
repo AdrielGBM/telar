@@ -182,10 +182,10 @@ back exactly one case: a plain primary click on an `<a>` with no `target` or `do
 page's origin. Its default is prevented and `Event::BoxActivated` is reported, so the app follows the
 destination itself instead of the browser reloading the page.
 
-The platform used to capture the pointer on every press, so a drag that leaves the host keeps arriving. A
-captured pointer's `click` goes to the host rather than to what was pressed, which kept every native `<a>` from
-activating. The capture now engages only once a press travels past the tap slop (`platform_core::TAP_SLOP`, 10
-logical pixels), which is also the distance past which a press stops being a tap for Telar.
+The platform captures the pointer so a drag that leaves the host keeps arriving, but only once a press travels
+past the tap slop (`platform_core::TAP_SLOP`, 10 logical pixels), which is also the distance past which a press
+stops being a tap for Telar: a captured pointer's `click` goes to the host rather than to what was pressed, so
+capturing on every press would keep every native `<a>` from activating.
 
 ## Limits
 
@@ -196,5 +196,5 @@ logical pixels), which is also the distance past which a press stops being a tap
 - A link run is reached by the pointer on every target and by Tab only in a document, whose `<a>` the browser
   puts in its own order. Elsewhere a reader announces it, but it is not a focus stop: a link the keyboard must
   reach on every target belongs on a box with `to:`.
-- A synthetic pointer event is untrusted, so the browser test checks that a press no longer captures the
+- A synthetic pointer event is untrusted, so the browser test checks that a press does not capture the
   pointer and that a click is taken back, not that a real drag is captured past the slop.

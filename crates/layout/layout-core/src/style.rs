@@ -271,7 +271,7 @@ pub(crate) struct LogicalStyle {
     pub(crate) hidden: bool,
     /// Set by `LayoutEngine::set_display`: an answer given *out of band*, which no style knows about and so none may overwrite. `None` leaves the question to [`hidden`](Self::hidden).
     ///
-    /// The two used to be one flag that `set_style` OR-ed into whatever came next, so a node hidden once — by either door — could never be shown again by a style. That is the trap this pair exists to close: the out-of-band answer is carried forward because nothing else knows it, and the declared one is replaced because the new style is exactly what does.
+    /// Kept apart from `hidden` so a node hidden once — by either door — can still be shown again by a style: the out-of-band answer is carried forward because nothing else knows it, and the declared one is replaced because the new style is exactly what does.
     pub(crate) display_override: Option<bool>,
     /// Set by `LayoutEngine::set_min_height`: overrides `inner.min_size.height`.
     pub(crate) min_height_override: Option<f32>,
@@ -304,8 +304,6 @@ impl LogicalStyle {
 }
 
 /// A box's four margins, named by axis so they follow the writing direction rather than the screen.
-///
-/// The nine builders this replaces mixed two vocabularies — seven physical, two logical — and nothing in the name of `margin_left` said which of the two it belonged to.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Margin {
     pub block_start: f32,

@@ -46,9 +46,8 @@ pub use web_image::{WEB_IMAGES_DIR, WebImage, WebImageFile, web_image};
 /// the equivalent runtime data with no baking dependency left in the compiled app.
 ///
 /// `bytes` is always the asset's raw file content, whatever its kind: a `Baker` for a text format (SVG) is
-/// responsible for its own UTF-8 decoding, the same way the caller used to do it before this trait existed.
-/// Keeping that conversion on the impl, not the caller, is what lets [`bakers`] stay a single uniform slice —
-/// a caller that dispatched on kind to pick `&str` vs `&[u8]` is exactly the coupling this trait removes.
+/// responsible for its own UTF-8 decoding. Keeping that conversion on the impl, not the caller, is what lets
+/// [`bakers`] stay a single uniform slice, with no caller dispatching on kind to pick `&str` vs `&[u8]`.
 pub trait Baker {
     /// The asset kind this baker handles, i.e. the id `bake()` was chosen for.
     fn kind(&self) -> &'static AssetKind;

@@ -165,7 +165,7 @@ pub(super) fn format_attr(attr: &Attr) -> String {
     format_key_value(&attr.key, &attr.value)
 }
 
-/// One arm per [`Value`] variant, because the variant is the whole of what decides the spelling: guessing it back from the text is what used to turn a `t"…"` key into a plain literal and a `transition(…)` into a colon the parser reads as one token.
+/// One arm per [`Value`] variant, because the variant is the whole of what decides the spelling: guessing it back from the text would turn a `t"…"` key into a plain literal and a `transition(…)` into a colon the parser reads as one token.
 fn format_key_value(key: &str, value: &Value) -> String {
     match value {
         Value::Flag => key.to_string(),

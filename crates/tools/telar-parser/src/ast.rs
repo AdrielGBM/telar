@@ -199,7 +199,7 @@ pub struct Element {
 
 /// The form an attribute value was written in, kept rather than flattened back into a string.
 ///
-/// This is syntax, not meaning: `12` is a [`Value::Expr`] whether it sits under `gap` or under `weight`, because what a token means belongs to the key schema and the parser does not own that. What the form does settle is how the text reaches the output — an expression is spliced, a quoted value expands to a `format!`, a directive goes to its own parser — and every consumer used to re-derive that from the text with its own `starts_with`/`contains` check.
+/// This is syntax, not meaning: `12` is a [`Value::Expr`] whether it sits under `gap` or under `weight`, because what a token means belongs to the key schema and the parser does not own that. What the form does settle is how the text reaches the output — an expression is spliced, a quoted value expands to a `format!`, a directive goes to its own parser — so no consumer re-derives it from the text.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// A bare flag (`ghost`): the attribute asserts itself and carries no text.
@@ -231,7 +231,7 @@ impl Value {
         matches!(self, Value::Quoted(_))
     }
 
-    /// Whether the author wrote a closure out in place, in either spelling Rust accepts, as opposed to forwarding a handler expression the caller was given. The transpiler wires the two to different builder methods (`.on_press` against `.maybe_on_press`), and used to ask it from two near-identical predicates of its own before the question had a value to sit on.
+    /// Whether the author wrote a closure out in place, in either spelling Rust accepts, as opposed to forwarding a handler expression the caller was given. The transpiler wires the two to different builder methods (`.on_press` against `.maybe_on_press`).
     pub fn is_closure(&self) -> bool {
         !self.is_quoted() && starts_closure(self.text().trim())
     }

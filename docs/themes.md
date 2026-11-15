@@ -11,7 +11,7 @@ col theme:(AppTheme::for_act(Act::Web, $scheme)) fill:$theme.background
 `theme:` works on any built-in tag and provides the theme to that box and everything under it, however many
 children it has; the box's own `$theme` reads resolve it too. The value is a theme, or a `ScopedTheme` the
 caller keeps to switch the subtree later. A value that reads `$state` is followed: when the state changes the
-theme is swapped in place and only the readers under it run again. The global `set_theme` no longer reaches the
+theme is swapped in place and only the readers under it run again. The global `set_theme` does not reach the
 subtree.
 
 `$scheme` is the scheme the app is in, read the way `$theme` is: it is `use_resolved_scheme()` as a built-in

@@ -1,8 +1,6 @@
 //! Ambient values a widget can read without being handed them, scoped to the owner that provided them.
 //!
-//! This used to be a per-surface stack of registries, pushed and popped around a call. That shape had one thing wrong with it and it was not the storage: **a call-stack scope closes when the call returns**, and an `on_press` handler runs long after the build that made it did. So the values a component wanted its subtree to read were readable only *during* the build, which is the one moment nothing needs to ask.
-//!
-//! Backed by [the owner tree](reactive_core) instead, a scope lives as long as the node that opened it.
+//! Backed by [the owner tree](reactive_core), a scope lives as long as the node that opened it rather than closing when a call returns, so an `on_press` handler that runs long after the build can still read what its subtree was given.
 
 use std::any::Any;
 
@@ -34,7 +32,7 @@ pub fn with_service<T: Any + 'static, R>(f: impl FnOnce(&T) -> R) -> Option<R> {
 
 /// Opens a nested scope for the duration of `f`.
 ///
-/// Kept as a spelling for code that wants a scope around a call and nothing more. Note what it no longer does: the scope it opens outlives `f`, and is disposed with the owner rather than at the closing brace.
+/// For code that wants a scope around a call and nothing more. The scope it opens outlives `f`, and is disposed with the owner rather than at the closing brace.
 pub struct Scope(());
 
 impl Scope {
@@ -46,7 +44,7 @@ impl Scope {
 
 /// Sets the current owner's context of type `T`, replacing whatever it had.
 ///
-/// The difference from [`provide`] is repetition: a rebuild says the same things about the same subtree, and this is the spelling that means "again". It used to be implemented by providing an `Rc<RefCell<T>>` once and writing through the cell forever after, because the only scope available outlived every build of its content and would refuse the second `provide`. An owner per build removes the reason for the cell.
+/// The difference from [`provide`] is repetition: a rebuild says the same things about the same subtree, and this is the spelling that means "again".
 pub fn set_context<T: Clone + 'static>(value: T) {
     reactive_core::provide_context(Provided(value));
 }

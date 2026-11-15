@@ -111,7 +111,7 @@ pub(crate) fn with_json_messages(args: &mut Vec<String>) {
 
 /// Runs a cargo build and re-points whatever it says about generated Rust back onto the `.rsx` it came from; the report also carries the artifacts cargo reported.
 ///
-/// stdout carries the JSON message stream and is consumed here; stderr is cargo's own progress and is left on the terminal, so a build still looks like a build. The report is printed here, warnings included: they used to be captured into a `String` that was read on the failure path alone, which made them invisible for a whole development session.
+/// stdout carries the JSON message stream and is consumed here; stderr is cargo's own progress and is left on the terminal, so a build still looks like a build. The report is printed here, warnings included, so a build that succeeds still shows them.
 pub(crate) fn build_with_diagnostics(cmd: &mut Command) -> (bool, diagnostics::Report) {
     cmd.arg("--color=always")
         .stdout(Stdio::piped())

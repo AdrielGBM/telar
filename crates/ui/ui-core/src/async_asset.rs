@@ -294,7 +294,7 @@ impl<V: Clone + Send + 'static> Inner<V> {
     }
 }
 
-/// The cache write sits behind the same `?` that already proved the bytes decoded, so a failed decode cannot reach [`AssetCache::put`] by construction — not by a caller remembering to check first, the way the worker this replaces relied on an `if` for the same guarantee.
+/// The cache write sits behind the same `?` that already proved the bytes decoded, so a failed decode cannot reach [`AssetCache::put`] by construction, not by a caller remembering to check first.
 fn decode_and_cache<V: Clone + Send + 'static>(
     result: Result<Vec<u8>, AssetError>,
     decoder: &dyn AssetDecoder<Output = V>,

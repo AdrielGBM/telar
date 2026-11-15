@@ -74,7 +74,7 @@ impl Parser {
         let content = self.lines[self.pos].content.clone();
         let first_word = content.split_whitespace().next().unwrap_or("");
 
-        // Before the tag dispatch: an unrecognised first word becomes a component call, so a note left here used to compile into a call to a component named `//`.
+        // Before the tag dispatch, which would read a note as a call to a component named `//`.
         if content.starts_with("//") {
             self.pos += 1;
             return Ok(ViewNode::Comment(content));

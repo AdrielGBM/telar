@@ -17,7 +17,7 @@ impl ViewGen<'_> {
     ///
     /// Inline wins, because every reader takes the first `.find()` match and inline attrs come first; among several classes a later one overrides an earlier one, so classes are appended in REVERSE order and the last class's props land ahead of the first's.
     ///
-    /// A class carries whatever it was written with. It used to be gated to the paint keys, which is why `@heading { font_size: 22 }` compiled and did nothing at all.
+    /// A class carries whatever it was written with, text keys such as `@heading { font_size: 22 }` included, not only the paint keys.
     pub(super) fn effective_attrs(&self, el: &Element) -> Vec<Attr> {
         let mut attrs = el.attributes.clone();
         attrs.extend(self.class_attrs(&el.classes));
@@ -361,7 +361,7 @@ impl ViewGen<'_> {
 
     /// The raw values of this element's layout attributes that are not literals, so the caller can wrap the style expression in an effect. Empty means the style is a constant and the node needs none.
     ///
-    /// **A literal is the only thing that cannot change**, and that is the whole of the test. It used to be `contains('$')`, which made the sigil the reactivity rule rather than sugar — so `pad:$theme.gutter` followed a theme switch and `pad:gutter()` silently did not, from one expression to the next. The runtime already tracks what a closure reads; the closure is all it needs to be given.
+    /// **A literal is the only thing that cannot change**, and that is the whole of the test. The `$` sigil is sugar, not the reactivity rule, so `pad:gutter()` follows a theme switch as `pad:$theme.gutter` does: the runtime already tracks what a closure reads, and the closure is all it needs to be given.
     pub(super) fn reactive_layout_values(&self, tag: &str, attrs: &[Attr]) -> Vec<String> {
         attrs
             .iter()

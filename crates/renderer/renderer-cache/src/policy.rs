@@ -9,7 +9,7 @@ use std::time::Duration;
 pub struct Policy {
     /// The ceiling, in bytes.
     ///
-    /// Bytes for every cache, including the ones that used to cap an entry count instead. Two units meant two kinds of bound to reason about and no way to compare a 1000-entry cache against a 32 MB one; measuring a cache of 8-byte values in bytes costs nothing and leaves one number to read.
+    /// Bytes for every cache, even one of tiny values: an entry count is a second unit that cannot be compared against a byte budget, and measuring a cache of 8-byte values in bytes costs nothing.
     pub capacity: usize,
     /// How long an entry survives with nothing asking for it. `None` bounds by [`capacity`](Self::capacity) alone.
     pub idle: Option<Duration>,

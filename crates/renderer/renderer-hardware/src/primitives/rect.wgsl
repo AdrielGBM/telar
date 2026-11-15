@@ -193,10 +193,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var stroke_mask: f32;
 
     if has_stroke {
-        // The border's inner edge, derived exactly as `renderer_core::border_inner_shape` derives it for the
-        // rasterizer: the box pulled in by each side, and every corner tightened by the thicker of the two
-        // sides meeting there. A second SDF rather than an offset of the first, because with four different
-        // insets the inner shape is no longer concentric with the outer one.
+        // Must match `renderer_core::border_inner_shape`; a second SDF rather than an offset of the first, because with four different insets the inner shape is not concentric with the outer one.
         let inner_half = max(in.half_size - vec2<f32>(bw.w + bw.y, bw.x + bw.z) * 0.5, vec2<f32>(0.0));
         let inner_center = vec2<f32>((bw.w - bw.y) * 0.5, (bw.x - bw.z) * 0.5);
         let max_r = min(inner_half.x, inner_half.y);
@@ -247,9 +244,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if final_a < 0.001 {
         discard;
     }
-    // Premultiplied output required by PREMULTIPLIED_ALPHA_BLENDING: rgb must already be
-    // multiplied by alpha so AA edges and shadow falloff blend correctly instead of leaking
-    // full-brightness color into the destination.
+    // PREMULTIPLIED_ALPHA_BLENDING expects rgb already multiplied by alpha, or AA edges and shadow falloff leak full-brightness colour.
     let final_rgb = main_rgb * main_a + shadow_rgb * shadow_a * (1.0 - main_a);
     return vec4<f32>(final_rgb, final_a);
 }

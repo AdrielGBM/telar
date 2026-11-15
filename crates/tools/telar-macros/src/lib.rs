@@ -44,7 +44,7 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Generates a typed builder for a component's props: `Props::props()`, one setter per prop, `.build()`.
 ///
-/// **What it removes.** A call site used to need a table describing the callee — which props exist, which are optional, which take a closure — kept by hand and able to drift from the struct it described. With a builder the call site spells the prop names it was given and rustc answers everything else.
+/// A call site needs no description of the callee — which props exist, which are optional, which take a closure — that could drift from the struct: it spells the prop names it was given and rustc answers everything else.
 ///
 /// A prop with no attribute is **required**: its setter must be called or `.build()` does not exist, so forgetting one is a compile error rather than a default that looks like a value at runtime.
 ///
@@ -238,9 +238,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         tooling_crate(telar_project::WORKSHOP_PACKAGE).as_ref(),
     );
 
-    // The env-var dispatch lives in `telar::dev_entry` and `show_previews` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
-    //
-    // Absent from a build that carries no previews, and that is the whole of what keeps the dev loop out of a shipped application: the two read four environment variables on every start and can be told to run the preview harness and exit, so a release binary that still called them answered `TELAR_TEST=1` from anyone who set it.
+    // Absent from a build that carries no previews, which is what keeps a shipped binary from answering `TELAR_TEST=1` and the other dev-loop variables from anyone who sets them.
     let dev_entry_call = quote! {
         ::telar::__previews! {
             if ::telar::dev_entry(
@@ -449,7 +447,7 @@ impl Wiring {
 
 /// Refuses a build driven by a `cargo-telar` older than this `telar`.
 ///
-/// The two halves agree on the build shape through a feature now. An older CLI asks for it by setting `TELAR_HOT_RELOAD_BUILD` and pushing `--cfg=telar_hot_reload` into `RUSTFLAGS`, and neither is read any more — so nothing fails: the project compiles, the window opens, and hot reload simply never happens, because the dylib exports no factory and the host branch was never generated. `cargo telar dev` then reports only that the app is not connected to its own channel, which describes the symptom and names nothing that could be done about it.
+/// The two halves agree on the build shape through a feature. An older CLI asks for it by setting `TELAR_HOT_RELOAD_BUILD` and pushing `--cfg=telar_hot_reload` into `RUSTFLAGS`, and neither is read any more — so nothing fails: the project compiles, the window opens, and hot reload simply never happens, because the dylib exports no factory and the host branch was never generated. `cargo telar dev` then reports only that the app is not connected to its own channel, which describes the symptom and names nothing that could be done about it.
 ///
 /// The variable is read here and nowhere else, and only ever to refuse. What a build *is* still comes from the feature alone, so this cannot reintroduce an output cargo does not track.
 fn check_cli_is_current() -> Result<(), TokenStream2> {
@@ -647,7 +645,7 @@ fn wire_sources(
         check_prelude_agrees(index, prelude)?;
     }
 
-    // Nothing here can produce the Rust: this crate carries no transpiler, on purpose. Which of the two messages is not a guess — an artifact that is absent and one that no longer answers are different facts, and only the first can mean the CLI was never installed. What else made an artifact stop answering (an edited `.rsx`, a rewritten output, another theme) it does not try to say: the command is the same for all of them.
+    // This crate carries no transpiler on purpose, so it can only report: an absent artifact and a stale one are different facts, and only the first can mean the CLI was never installed.
     let msg = match (artifact.is_some(), package.wiring.library_dependency) {
         (true, false) => {
             "rsx: the transpiled `.rsx` for this package no longer answers for its sources.\n\
@@ -803,7 +801,7 @@ fn wire_package(
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_path_str); });
 
         if file.previews {
-            // The const lives inside the file's own module now, so it is named by its path rather than reached by a bare name the crate root used to re-export.
+            // The const lives inside the file's own module, so it is named by its path.
             let refuse = |error: telar_project::NotUtf8Path| {
                 let msg = format!("rsx: {error}");
                 quote! { compile_error!(#msg); }

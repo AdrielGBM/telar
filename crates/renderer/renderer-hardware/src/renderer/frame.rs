@@ -8,7 +8,6 @@ use super::steps::{Boundary, LayerAccum, MaskSource};
 use crate::composite::MaskParams;
 use renderer_core::LayerMask;
 
-// A run of draw steps, or the layer boundary that ended it. At module scope so it can appear in the phase-method signatures that build and execute segments.
 // Built from the steps every frame; boxing `Boundary` would put a heap allocation on every layer boundary in the hot path.
 #[allow(clippy::large_enum_variant)]
 pub(super) enum Segment {
@@ -665,8 +664,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 );
                 parent.bounds = Some(parent.bounds.map_or(footprint, |b| b.union(footprint)));
             }
-            // Backdrop-blur layers read framebuffer content, so they are never cacheable.
-            // A mask's two layers are drawn each frame: what one shows depends on the other.
+            // Never cached: a backdrop-blur layer reads framebuffer content, and what one layer of a mask shows depends on the other.
             let layer_hash: Option<u64> =
                 if accum.backdrop_blur == 0.0 && accum.mask == LayerMask::None {
                     use std::hash::{Hash, Hasher};

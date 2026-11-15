@@ -2,9 +2,7 @@
 //!
 //! A container dispatches to a *snapshot* of its children and releases the borrow first, because a handler is allowed to remove the row it is running in — a row with a delete button, a menu item that closes its own menu. [`ReactiveList::on_event`](crate::ReactiveList) spells the rule out: the removed child finishes the event it is in the middle of instead of being dropped underneath itself.
 //!
-//! That guarantee used to be the handle refcount's. The snapshot's `Rc` kept the widget alive, and the widget's handles kept its signals alive with it. An owner disposed the instant the reconcile drops the row takes those signals away mid-handler, and the next read is a panic rather than a stale value — which is the right failure, and still a failure.
-//!
-//! So disposal waits for the dispatch to unwind. The invariant is not about lists or events: **nothing is freed while something is executing inside it.**
+//! The snapshot's `Rc` keeps the widget alive but not its signals: an owner disposed the instant the reconcile drops the row would take those away mid-handler, and the next read would panic. So disposal waits for the dispatch to unwind. The invariant is not about lists or events: **nothing is freed while something is executing inside it.**
 
 use std::cell::Cell;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};

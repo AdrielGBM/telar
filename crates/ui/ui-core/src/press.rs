@@ -21,7 +21,7 @@ pub(crate) struct PressGesture {
     on_alt_press: Option<Box<dyn Fn(PointerButton)>>,
     // The press point while a tap is pending; cleared once the pointer travels past `TAP_SLOP`.
     press_origin: Option<(f32, f32)>,
-    // Cleared alongside `press_origin`; used to detect a long press.
+    // Cleared alongside `press_origin`, so a press that turned into a drag never fires as a long press.
     press_started_at: Option<Instant>,
     // Which button armed the pending gesture, so a release by a different one completes nothing.
     armed_button: Option<PointerButton>,

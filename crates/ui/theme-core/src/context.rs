@@ -158,7 +158,7 @@ pub trait ThemeTokens: 'static {
         (self.scrollbar_width() - self.scrollbar_inset()) / 2.0
     }
 
-    /// Primary text ink for component labels/titles/values. A theme should override it, but the default follows the active light/dark mode rather than assuming light: a theme that overrides `surface` and forgets `ink` used to paint near-black text on its own dark panel.
+    /// Primary text ink for component labels/titles/values. A theme should override it, but the default follows the active light/dark mode rather than assuming light, so a dark-mode theme that overrides `surface` and forgets `ink` does not paint near-black text on its own panel.
     fn ink(&self) -> Color {
         if crate::mode::is_dark() {
             Color::rgba(0.98, 0.98, 1.0, 1.0)

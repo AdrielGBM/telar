@@ -21,8 +21,7 @@ pub fn motion(props: MotionProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let big = signal(false);
 
-    // Spring-driven scale, read reactively by the declarative `box scale:$scale` below — no Canvas needed
-    // for a box that only scales, since `scale:` accepts a `$signal` and `Animated` is signal-backed.
+    // No Canvas needed for a box that only scales: `scale:` accepts a `$signal`, and `Animated` is signal-backed.
     let scale = motion::Animated::<f32>::new(1.0, motion::spring(170.0, 12.0));
 
     // Six PingPong keyframe loops, each delayed a bit more by hold() so the wave enters left-to-right.

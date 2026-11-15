@@ -940,7 +940,7 @@ impl StyledContainer {
     ///
     /// **The other half of «the innermost drag owns the stroke».** A band that moves the window is dragged by its empty space, and the controls sitting in it are not empty space — but a button claims nothing, so its press was the band.s and the compositor took the pointer away to move the window before the button could answer. The same shape holds for a menu panel over a dismissing backdrop, and for any control inside anything draggable.
     ///
-    /// Not `on_drag` with an empty body, which is what this replaces: that says «I drag, and do nothing», and what is meant is «this one is mine». It claims for every button, because a stroke is a stroke whichever one started it.
+    /// Not `on_drag` with an empty body: that says «I drag, and do nothing», and what is meant is «this one is mine». It claims for every button, because a stroke is a stroke whichever one started it.
     pub fn holds_stroke(mut self) -> Self {
         self.holds_stroke = true;
         self

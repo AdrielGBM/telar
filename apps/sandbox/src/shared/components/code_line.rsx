@@ -1,6 +1,5 @@
 [logic]
-// A one-line `.rsx` code snippet in a dark pill. Snippets use single quotes for string
-// literals (real `.rsx` uses double quotes) because a `"` would close the markup string early.
+// Snippets quote strings with single quotes because a `"` would close the markup string early.
 #[derive(Default)]
 pub struct Props {
     pub code: &'static str,

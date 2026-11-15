@@ -100,9 +100,7 @@ impl ViewGen<'_> {
 
     /// Builds a component call's props argument: `NameProps::props()`, one setter per attribute the author wrote, the `recipes` setters, `.build()`.
     ///
-    /// **This is where the second type system used to live.** The old form was a `NameProps { … }` literal, which meant the emitter had to know the callee's field types to write each value: eight lists on `ComponentSig` said which props were colours, strings, readings, predicates, owned strings or `Option`s, and whether the struct derived `Default` so the tail could be `..Default::default()`. Every one of those was re-deriving something rustc already knew, and for the shipped catalogue they were hand-mirrored and free to drift.
-    ///
-    /// A setter answers all of it. `into` on the callee's field decides whether a literal coerces, the field's own type decides whether a `$signal` means the handle or a reading, `Option` needs no `Some(…)` because `From<T> for Option<T>` is std's, and a prop nobody set keeps its declared default. The emitter spells names it read from the markup and knows nothing else.
+    /// A builder rather than a `NameProps { … }` literal, so the emitter never needs the callee's field types: a setter answers all of it. `into` on the callee's field decides whether a literal coerces, the field's own type decides whether a `$signal` means the handle or a reading, `Option` needs no `Some(…)` because `From<T> for Option<T>` is std's, and a prop nobody set keeps its declared default. The emitter spells names it read from the markup and knows nothing else.
     ///
     /// The root of a preview reads each of its [`Self::implicit_args`] through the preview's args, so a control can change it, and every call to the component under preview logs the calls its callbacks receive.
     fn component_props_arg(
@@ -222,11 +220,11 @@ impl ViewGen<'_> {
 
     /// One surface's classes, compiled into the amendment its setter takes.
     ///
-    /// This is the half of styling the DSL used to drop on the floor. An inline attr on a component call is a prop — that meaning is settled and stays. A class was the one thing you could write there that the transpiler parsed, accepted, and then silently ignored: `box @squared` reshapes the box and `menu @squared` reshaped nothing at all, with no error to say why.
+    /// An inline attr on a component call is a prop; a class reaches the component's principal surface, so `menu @squared` reshapes the menu as `box @squared` reshapes the box.
     ///
     /// Only the properties the class actually names are applied, as an amendment to the style the component worked out for itself. A class saying `radius:0` must not cost a menu its border, its shadow or its hover fill — rebuilding the whole `RectStyle` the way a `box` does would do exactly that, because a box's style has no author but the class.
     ///
-    /// A component with no principal surface — a layout, a fragment, a thing that paints three boxes and can't say which one you meant — has nothing a class could honestly mean. It used to be dropped there, silently, on the word of a table. Now the setter is emitted and rustc says there is no `style` prop, on the author's line: the same answer, given out loud.
+    /// A component with no principal surface — a layout, a fragment, a thing that paints three boxes and can't say which one you meant — has nothing a class could honestly mean. The setter is emitted anyway, so rustc says there is no `style` prop, on the author's line, rather than the class being dropped silently.
     fn class_surface_style(&self, classes: &[String]) -> Option<String> {
         // Reverse order so a later class wins the `find`, matching how `paint_attrs` resolves a box's classes.
         let props: Vec<&telar_parser::StyleProp> = classes

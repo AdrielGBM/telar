@@ -283,7 +283,7 @@ fn draw_underlines(
 
 /// Blits the text body at `rect` from the shaper's raster.
 ///
-/// Straight from the shaper's bytes, with no pixmap of its own. This used to keep a second cache here — the same premultiplied RGBA the shaper already held, copied into a `Pixmap` and stored again under the same key — which doubled what every cached label cost and, having neither a byte budget nor an admission rule, quietly kept the strings the shaper's admission had just decided were not worth keeping. `PixmapRef` borrows those bytes instead, so the copy and the cache both go.
+/// Straight from the shaper's bytes, with no pixmap of its own: `PixmapRef` borrows them, because a second cache here would double what every cached label costs and, outside the shaper's byte budget and admission rule, keep the strings that admission decided were not worth keeping.
 #[allow(clippy::too_many_arguments)]
 fn blit_body(
     pixmap: &mut tiny_skia::PixmapMut<'_>,

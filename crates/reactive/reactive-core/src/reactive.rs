@@ -73,7 +73,7 @@ impl<T: Clone + 'static> From<Memo<T>> for Reactive<T> {
     }
 }
 
-/// The literal a call site actually writes. Without it every `label:"Save"` would need a `.to_string()`, which is the six lines of preamble the old `string_fields` table existed to avoid.
+/// The literal a call site actually writes. Without it every `label:"Save"` would need a `.to_string()`.
 impl From<&'static str> for Reactive<String> {
     fn from(text: &'static str) -> Self {
         Self::of(move || text.to_string())

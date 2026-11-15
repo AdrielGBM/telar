@@ -23,7 +23,7 @@ pub trait ShapeStyle: Sized {
 
 /// A box's frame: what it is painted with, and how thick it is on each side.
 ///
-/// One value where a rect used to carry a [`Stroke`] beside a separate `BorderWidths` whose uniform case resolved against that stroke's `width` — so the thickness was defined in two places at once, and two of the stroke's four fields were dead: no rect path in either renderer has ever read `cap` or `join`. A `Stroke` still means all four things for a [`PathStyle`] and a line, where they all matter.
+/// The thickness is defined here and nowhere else, and a rect has no `cap` or `join` to set: a [`Stroke`] carries those for a [`PathStyle`] and a line, where they matter.
 ///
 /// Four numbers rather than one because a side of `0.0` is simply not there: a rule under a header, a divider down one edge. `Border::uniform` is the common case spelled once.
 #[derive(Debug, Clone, Copy, PartialEq)]

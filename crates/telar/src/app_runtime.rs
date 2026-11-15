@@ -4,7 +4,7 @@
 //!
 //! So there are two runtimes, and the runner drives whichever it was handed: [`LocalApp`] for a tree in this process, [`crate::hot::HotApp`] for one behind a dylib. This trait is the difference between them.
 //!
-//! **It used to be part of [`App`].** Fourteen `#[doc(hidden)]` methods sat on the trait an application implements, every one of them carrying a paragraph explaining that only the dylib-backed app overrides it — so what an author saw was eighteen methods of which four were theirs, and `impl App for Box<A>` redelegated all eighteen by hand. None of it was reachable from application code and none of it belonged in its way.
+//! **It is not part of [`App`]**, so the trait an application implements carries only the methods an author writes; nothing here is reachable from application code.
 
 use platform_core::{AppCtx, Event, RedrawWaker, SystemPreferences, WindowCommand, WindowConfig};
 use renderer_core::Color;

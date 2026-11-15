@@ -63,9 +63,9 @@ pub(crate) fn line_height(font_size: f32) -> f32 {
 
 /// The room a single-line box reserves for text of `font_size`.
 ///
-/// Two different questions hide behind one number. On a surface that can put an edge anywhere, a line box is a design decision — how much air this design puts around a line — and [`SINGLE_LINE_LEADING`] is the amount. On a surface that quantises, it is not a decision at all: a terminal draws one glyph per cell whatever size the text claims, so a line occupies a cell and nothing may be added to it. A 32px title given the design's leading would reserve three rows to paint a single one, which is how a heading used to push everything below it off the grid.
+/// Two different questions hide behind one number. On a surface that can put an edge anywhere, a line box is a design decision — how much air this design puts around a line — and [`SINGLE_LINE_LEADING`] is the amount. On a surface that quantises, it is not a decision at all: a terminal draws one glyph per cell whatever size the text claims, so a line occupies a cell and nothing may be added to it. A 32px title given the design's leading would reserve three rows to paint a single one, pushing everything below it off the grid.
 ///
-/// So the grid decides which question is being asked, and the desktop keeps the leading it always had.
+/// So the grid decides which question is being asked, and a surface that can put an edge anywhere keeps the design's leading.
 pub fn single_line_box(font_size: f32) -> f32 {
     if geometry_core::layout_grid().is_unit() {
         font_size * SINGLE_LINE_LEADING

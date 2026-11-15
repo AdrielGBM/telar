@@ -56,8 +56,8 @@ tl.sample(0.5); // the value halfway through the sequence, no clock involved
 between are slow motion, and `0.0` makes every animation jump straight to its end. A looping `Keyframes` has no
 end to jump to, so it holds instead: `Repeat::Loop` and `Repeat::PingPong` snap to the end of whichever step is
 in flight (the start of it, if `PingPong` is on its way back) and go quiet there, rather than freezing an
-indefinite repeat that keeps reporting itself active forever — which used to spin the frame loop at zero scale
-for nothing. That pause is not permanent: it clears the moment a tick sees a positive scale again, and playback
+indefinite repeat that keeps reporting itself active forever and spins the frame loop at zero scale for
+nothing. That pause is not permanent: it clears the moment a tick sees a positive scale again, and playback
 picks back up from exactly where it paused (re-establishing its own clock first, same as a fresh start, so the
 paused gap is never integrated as elapsed time). `Repeat::Once` is unaffected — it already has an end, and
 `0.0` simply jumps it there for good, same as `Animated` snapping to target.
@@ -132,7 +132,7 @@ separate optimisation, kept for when a measurement asks for it.
 
 ### D7. A frame clock is time that runs only while it is read
 
-Some motion is a function of time rather than a transition toward a target: an idle sway, a shimmer, a procedural drift. It used to be built from a looping linear `Keyframes` read as a clock, and the author had to restart and stop it by hand. `motion::FrameClock` is that clock as a primitive, driven by the same ticker as everything else (D1).
+Some motion is a function of time rather than a transition toward a target: an idle sway, a shimmer, a procedural drift. `motion::FrameClock` is that clock as a primitive, driven by the same ticker as everything else (D1), so the author never restarts or stops it by hand.
 
 ```rust
 let time = motion::use_frame_time_while(move || scene_active.get());

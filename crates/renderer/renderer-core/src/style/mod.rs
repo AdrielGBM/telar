@@ -42,7 +42,7 @@ pub enum TextAlign {
 
 /// How samples meet the pixel grid — for glyphs and for pictures alike.
 ///
-/// One property, because it is one question. It used to be two enums with no connection and disagreeing defaults: `Raster::{Smooth, Pixel}` for text and `Raster::{Nearest, Linear}` for images, so an application wanting a crisp pixel grid had to know both names and set both, everywhere. A pixel-art application says `raster:pixel` once and every glyph and every picture beneath it lands on whole pixels.
+/// One property for text and images, because it is one question: a pixel-art application says `raster:pixel` once and every glyph and every picture beneath it lands on whole pixels.
 ///
 /// An axis of the style, like weight or slant — not a mode the whole renderer enters. Shaping, wrapping, bidi and the font stack are the same either way; only where a sample lands and how its coverage is resolved change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -147,7 +147,7 @@ impl Clamp {
         matches!(self, Clamp::Lines { ellipsis: true, .. })
     }
 
-    /// A clamp to `max` lines, or [`None`](Clamp::None) when `max` is zero — the state that used to be representable and meaningless.
+    /// A clamp to `max` lines, or [`None`](Clamp::None) when `max` is zero, so a zero-line clamp is not representable.
     pub fn lines(max: u16, ellipsis: bool) -> Self {
         match NonZeroU16::new(max) {
             Some(max) => Clamp::Lines { max, ellipsis },

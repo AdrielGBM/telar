@@ -1,6 +1,6 @@
 //! RSX transpiler: converts a parsed [`RsxDocument`](telar_parser::RsxDocument) AST into compilable Rust source code that depends on `telar::*`.
 //!
-//! **Producing** the Rust is all this does. **Placing** it — the walk over `src/`, the output paths, the build/asset/catalog artifacts and the handshakes that decide whether one still answers — is `telar-project`, which is what every application's build actually needs and which no longer drags a code generator in behind it.
+//! **Producing** the Rust is all this does. **Placing** it — the walk over `src/`, the output paths, the build/asset/catalog artifacts and the handshakes that decide whether one still answers — is `telar-project`, which is what every application's build actually needs, kept apart so it does not drag a code generator in behind it.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 

@@ -18,8 +18,8 @@ default = []
 # never turned on. `telar-baker` enables it, so the cost is paid once per machine by the CLI and the editor
 # rather than by every application that writes `src:"…"`.
 #
-# The only thing left that reaches for `image` here. Decoding a bitmap at *runtime* is `telar-dynamic`'s
-# `ImageDecoder`, which calls `image` itself and carries the per-format knobs that used to live here.
+# The only thing that reaches for `image` here. Decoding a bitmap at *runtime* is `telar-dynamic`'s
+# `ImageDecoder`, which calls `image` itself and carries the per-format knobs.
 bake = ["dynamic-svg", "svg-text", "dep:image", "image/default-formats"]
 
 # usvg/resvg for the runtime dynamic SVG path (`from_str`). The build-time baker lives behind `bake`, not this.

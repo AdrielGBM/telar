@@ -9,9 +9,6 @@
 #[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
 #[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
 
-// A documented example block: a small title above its demo and snippet. Replaces the repeated
-// `col gap:8 > text "…" font_size:13 color:$theme.ink > …children…` scaffold used across every feature section,
-// so a block is one `example title:"…"` line plus its content instead of two lines of boilerplate.
 #[derive(::telar::Props)]
 pub struct ExampleProps {
     #[props(default)]
@@ -90,10 +87,10 @@ pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box
 pub const EXAMPLE_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--example--example"), "example", "Example", example_preview_0)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/example.rsx"), 22)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/example.rsx"), 19)
         .title("Sandbox/Example")
         .docs("A titled block that stacks a demo above its code snippet.")
-        .source("[preview \"Example\"]\nexample title:\"justify — distribute along the main axis\"\n    card gap:10\n        text \"The demo and its code snippet stack here.\" font_size:13 color:$theme.muted\n    code_line code:\"row justify:between\"", &[::telar::preview::SourceSpan::new(0, 224, 22)])
+        .source("[preview \"Example\"]\nexample title:\"justify — distribute along the main axis\"\n    card gap:10\n        text \"The demo and its code snippet stack here.\" font_size:13 color:$theme.muted\n    code_line code:\"row justify:between\"", &[::telar::preview::SourceSpan::new(0, 224, 19)])
         .props(<ExampleProps as ::telar::preview::HasPropsSchema>::schema)
         .args(&[::telar::preview::ArgSpec::new("title").default("\"justify — distribute along the main axis\"")])
         .layout(::telar::preview::Layout::Padded),

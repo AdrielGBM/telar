@@ -6,7 +6,7 @@ use std::sync::RwLock;
 
 use crate::message::Catalog;
 
-/// A `&'static Catalog` is immutable `&'static` data throughout, so sharing it across threads costs nothing beyond the lock this replaces it under.
+/// A `&'static Catalog` is immutable `&'static` data throughout, so sharing it across threads costs nothing beyond the lock it is replaced under.
 static INSTALLED: RwLock<Option<&'static Catalog>> = RwLock::new(None);
 
 /// Installs the catalog [`t`] and [`translate_with_override`](crate::translate_with_override) look in. Process-wide and replaceable — a language pack loaded later takes over from here on.

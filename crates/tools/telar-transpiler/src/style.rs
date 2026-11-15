@@ -59,7 +59,7 @@ pub fn generate_classes(
     out
 }
 
-/// What a class may carry beyond the layout keys: what a box paints with, and what flows down to the text below it. Anything else is a typo, and used to be dropped on the floor.
+/// What a class may carry beyond the layout keys: what a box paints with, and what flows down to the text below it. Anything else is a typo, and is refused rather than dropped.
 fn is_style_key(key: &str) -> bool {
     crate::view::is_paint_key(key)
         || crate::registry::is_inheritable_text_attr(key)
@@ -352,7 +352,7 @@ fn fixed_track(s: &str) -> Option<String> {
 
 /// Whether `value` names a colour this file can resolve, or the message naming what a colour may be.
 ///
-/// A bare name is a `[style]` constant and nothing else. It used to be three namespaces under one spelling, resolved by precedence — a constant, then a token of the theme trait, then *any* remaining name as a field on the theme — so a typo compiled to a field access and failed in rustc against code the author never wrote. `theme.x` is the theme's own spelling and now its only one.
+/// A bare name is a `[style]` constant and nothing else, so a typo is refused here rather than compiled to a theme field access that fails in rustc against code the author never wrote. `theme.x` is the theme's only spelling.
 pub fn color(value: &str) -> Result<(), String> {
     let v = value.trim();
     let v = crate::view::redundant_parens(v).unwrap_or(v);

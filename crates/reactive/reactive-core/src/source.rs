@@ -51,7 +51,7 @@ impl Source for bool {
 
 /// A value derived from another, recomputed when its source moves.
 ///
-/// **A derivation is a [`Memo`], never a signal written by an effect**, though the reason has changed. It used to be that an unbound `effect(…)` deregistered where it was made and the derived value never moved again. Both now belong to the owner that built them and live exactly as long, so what is left is the plain one: a memo *is* the derived value, where a signal written by an effect is a second copy of it that has to be kept in step.
+/// **A derivation is a [`Memo`], never a signal written by an effect**: a memo *is* the derived value, where a signal written by an effect is a second copy of it that has to be kept in step.
 pub fn derive<S, U>(source: S, map: impl Fn(S::Value) -> U + 'static) -> Memo<U>
 where
     S: Source + 'static,

@@ -8,7 +8,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::context::record_nodes;
 use crate::layout_item::{Child, LayoutItem, build_owned, make_child};
 
-/// Builds `child` with `theme` in force for it and for everything beneath it. `theme` is either a theme value held for the subtree's lifetime, or a [`ScopedTheme`] the caller keeps to switch the subtree later; switching it re-runs only readers inside the subtree, and the global [`set_theme`](theme_core::set_theme) no longer reaches them.
+/// Builds `child` with `theme` in force for it and for everything beneath it. `theme` is either a theme value held for the subtree's lifetime, or a [`ScopedTheme`] the caller keeps to switch the subtree later; switching it re-runs only readers inside the subtree, and the global [`set_theme`](theme_core::set_theme) does not reach them.
 pub fn provide_theme(
     theme: impl Into<ScopedTheme>,
     child: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,

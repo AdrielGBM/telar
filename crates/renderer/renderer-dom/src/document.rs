@@ -45,13 +45,13 @@ pub(crate) const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
 /// Marks the text a box is read by in place of what it draws, which a reader finds and the page does not show: see [`speak_names_in_place`].
 pub(crate) const SPOKEN_ATTRIBUTE: &str = "data-telar-spoken";
 
-/// What a document brings to an element that Telar never asked for: a button's border and its own font, a heading's margins, a link's colour and underline. A widget's style is the whole of what its box looks like, and the browser's idea of it is the difference between what layout computed and what the page shows — a button's 2px frame made every row of a list four pixels taller than the rect hit-testing reads.
+/// What a document brings to an element that Telar never asked for: a button's border and its own font, a heading's margins, a link's colour and underline. A widget's style is the whole of what its box looks like, and the browser's idea of it is the difference between what layout computed and what the page shows — a button's 2px frame would make every row of a list four pixels taller than the rect hit-testing reads.
 ///
 /// One rule rather than a declaration per box per frame, and the base font is the one the measurer assumes, so a paragraph is drawn in the face it was measured in.
 ///
-/// `color-scheme` is what dresses everything the browser draws itself and Telar cannot reach — the selection band, an autofill panel, the overlay scrollbar a nested document keeps. Declared here it follows the system, which is what an app that named no background of its own is doing too; one that named a colour overrides it from that colour (see [`Frame::background`]). `color` goes with it because the rule below makes every box inherit one: without it a box that draws no text of its own inherited the page's black, under a dark theme as much as a light one.
+/// `color-scheme` is what dresses everything the browser draws itself and Telar cannot reach — the selection band, an autofill panel, the overlay scrollbar a nested document keeps. Declared here it follows the system, which is what an app that named no background of its own is doing too; one that named a colour overrides it from that colour (see [`Frame::background`]). `color` goes with it because the rule below makes every box inherit one: without it a box that draws no text of its own would inherit the page's black, under a dark theme as much as a light one.
 ///
-/// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, layout never reserved it, and the sidebar came out fifteen pixels narrower than every rect hit-testing reads — with a horizontal scrollbar underneath for the fifteen pixels that no longer fitted. The scrolling stays the browser's; only the bar is Telar's, as it is on every other target.
+/// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, which layout never reserved, so the box would be narrower than every rect hit-testing reads, with a horizontal scrollbar underneath for what no longer fits. The scrolling stays the browser's; only the bar is Telar's, as it is on every other target.
 ///
 /// The outline goes only where Telar draws a ring of its own: a focusable box (`data-telar-focus`). Whatever else the browser walks Tab through — a link inside a paragraph, a scroll area Firefox makes focusable — keeps the browser's ring, since nothing else would show where the keyboard is. Forced colours drop the shadow Telar's ring is painted with, so there every focused element takes the browser's ring back, the field entry included.
 ///
@@ -78,7 +78,7 @@ pub(crate) const DOCUMENT_SCROLL_OVERRIDES: [(&str, &str); 3] = [
 
 /// Text a drag across this box must not select, because the drag means something else there.
 ///
-/// A document starts a selection under any drag that begins on selectable content, and sweeping one out of a margin and across a page is exactly what a person expects — so this is not for boxes at large. It is for the two kinds where a drag is already spoken for: a control, which is what a browser's own stylesheet says this about (`<button>`, `<input>`); and paint that is not a box at all — a scrollbar's thumb, a caret, a panel a shell fills behind its rail — which has nothing to select in the first place. Dragging the bar of a scroll area used to sweep a selection across everything it scrolled past.
+/// A document starts a selection under any drag that begins on selectable content, and sweeping one out of a margin and across a page is exactly what a person expects — so this is not for boxes at large. It is for the two kinds where a drag is already spoken for: a control, which is what a browser's own stylesheet says this about (`<button>`, `<input>`); and paint that is not a box at all — a scrollbar's thumb, a caret, a panel a shell fills behind its rail — which has nothing to select in the first place.
 const UNSELECTABLE: &str = "-webkit-user-select:none;user-select:none;";
 
 const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
@@ -1052,8 +1052,7 @@ impl Walk<'_> {
             }
             DrawCommand::PushClip { .. } if open.primary => {}
             DrawCommand::PushClip { radius, .. } => {
-                // A scroll area clips the same way, and the difference is the whole point: `hidden` cuts what does not fit, `auto` lets the compositor move it — and with it find-in-page, the keyboard, `scrollIntoView` and every anchor, none of which a transform can give back.
-                // `clip` rather than `hidden` for a cut: `hidden` makes the box a scroll container, and a sticky box inside it would stick to that box, which never scrolls, instead of to the scroll viewport Telar sticks it to.
+                // A scroll area takes `auto` so the compositor moves it (find-in-page, the keyboard, `scrollIntoView` and anchors come with it), and a cut takes `clip` rather than `hidden`, since `hidden` makes a scroll container that a sticky box inside would stick to instead of to the scroll viewport.
                 let overflow = if open.scrolls { "auto" } else { "clip" };
                 paint::declare(&mut open.style, "overflow", overflow);
                 if !radius.is_zero() {
@@ -1117,8 +1116,7 @@ impl Walk<'_> {
             style.push_str(UNSELECTABLE);
         }
         style.push_str(&element.layout);
-        // A box whose parent is the host, or the box a nested surface is drawn in, is a layout root: the application computed and placed it itself, so there is no parent expressing where it goes and the declarations alone would stack them. One of the two places the computed rect is used instead of what the box asked for; a layer fixed over the surface, placed against the viewport wherever its element ends up, is the other.
-        // The primary scroll is the exception: it stays in the flow and grows with its content, which is what makes the document tall enough to scroll, and it is at least the surface's height so a short page still fills it.
+        // A layout root (parent is the host or a nested surface's box) has no parent expressing where it goes, so it takes its computed rect, except the primary scroll, which stays in the flow so the document grows tall enough to scroll.
         if fixed_in_place_of.is_some() {
             self.fix_against_viewport(&mut style, element.rect);
         } else if primary {

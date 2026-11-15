@@ -1,8 +1,8 @@
 //! The `linear(…)` / `radial(…)` value a `fill:` may take.
 //!
-//! One value where six keys used to be — `gradient` naming the shape, `from`/`mid`/`to` the colours, `mid_pos` one of their positions and `radial_radius` the size. Three of those sat among the colour keys where they read as independent properties a box might have, and none of them meant anything without the other five.
+//! One value rather than separate keys for the shape, the colours, their positions and the radius, since none of those means anything without the others.
 //!
-//! The shape is CSS's: an optional leading modifier, then the stops. `linear(a, b)` runs top to bottom the way `linear-gradient` does; `linear(horizontal, a, b)` names the axis; `radial(70, a, b)` names the radius. A stop is a colour, or a colour and where it sits — `linear(a, b 0.3, c)` — and a stop with no position of its own takes its share of the run, which is what `mid_pos` defaulting to `0.5` was.
+//! The shape is CSS's: an optional leading modifier, then the stops. `linear(a, b)` runs top to bottom the way `linear-gradient` does; `linear(horizontal, a, b)` names the axis; `radial(70, a, b)` names the radius. A stop is a colour, or a colour and where it sits — `linear(a, b 0.3, c)` — and a stop with no position of its own takes its share of the run.
 
 /// A gradient value, resolved but for its colours: the caller still has to put each stop's colour through `color_expr`, which is the one thing this module cannot do without the view's scope.
 pub(crate) struct Gradient<'a> {

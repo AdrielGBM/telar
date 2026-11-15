@@ -28,7 +28,7 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
         cargo_args.push("--features".to_string());
         cargo_args.push(features.clone());
     }
-    // `--target` used to reach nothing here, so a check answered for the package's `default` whatever it was asked about: `--target tui` on a machine that cannot build a desktop stack failed before it read a line of the project, and one that could reported on a frontend the author was not working on.
+    // Without this a check answers for the package's `default` frontend whatever `--target` asked about.
     if let Some(target) = common.target {
         let selected = frontend_args(target, common.renderer, &cargo_args);
         cargo_args.extend(selected);

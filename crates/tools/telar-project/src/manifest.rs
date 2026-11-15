@@ -1,10 +1,6 @@
 //! `telar.toml`, as one schema.
 //!
-//! It was read in six places with six partial shapes: a raw `toml::Table` for `assets`, an ad-hoc lookup for `theme`, a third for `[telar.i18n]` and its two back-compat spellings, and a serde struct in the CLI that knew only `backend` and `dev`. Every one of them treated a key it did not recognise as absent, so nothing in the project could tell a setting that was off from a setting that was misspelled.
-//!
-//! That is not hypothetical. `cargo-telar`'s struct carries a comment recording the time it happened: the table was renamed `rsx` → `telar`, its reader kept looking for the old name, and because the field was `#[serde(default)]` a file writing `[telar]` parsed clean with every key in it ignored.
-//!
-//! So: one struct, `deny_unknown_fields` at **every** level, and a [`load`](TelarManifest::load) that says which key it could not place.
+//! One struct with `deny_unknown_fields` at **every** level, so a misspelled key is refused rather than read as a setting left off, and a [`load`](TelarManifest::load) that says which key it could not place.
 
 use std::path::{Path, PathBuf};
 
@@ -262,7 +258,7 @@ impl std::error::Error for ManifestError {
 impl TelarManifest {
     /// Reads `<package_root>/telar.toml`, over the workspace root's if there is one.
     ///
-    /// A package with no manifest gets the defaults — every setting here has one, and a project that configures nothing is the common case. A manifest that *exists* and cannot be understood is an error, which is the whole point: the alternative is what this replaces, where an unreadable file and a misspelled key both read as "not configured".
+    /// A package with no manifest gets the defaults — every setting here has one, and a project that configures nothing is the common case. A manifest that *exists* and cannot be understood is an error, so an unreadable file or a misspelled key never reads as "not configured".
     ///
     /// Settings are inherited key by key, so a workspace declares its theme, backend and catalogs once and a package overrides only what differs from its siblings. Every package of a workspace answering the same way is the common case, and saying it eight times is how the eight drift apart.
     ///

@@ -63,7 +63,7 @@ pub(crate) struct PathShadowCacheKey {
     blur_radius_bits: u32,
     spread_bits: u32,
     color: [u8; 4],
-    /// Whether the shadow fills, and under which rule. A path drawn only as a stroke casts a hollow shadow; the same path filled casts a solid one, and the two used to share an entry.
+    /// Whether the shadow fills, and under which rule. A path drawn only as a stroke casts a hollow shadow; the same path filled casts a solid one, so the two cannot share an entry.
     has_fill: bool,
     even_odd: bool,
     /// The stroke's width, cap, join and dash, or `None` when the path is not stroked. Width above all: a hairline and a ten-pixel stroke cast visibly different shadows from identical geometry.

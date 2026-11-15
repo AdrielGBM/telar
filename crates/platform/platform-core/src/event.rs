@@ -165,7 +165,7 @@ pub enum Event {
     ///
     /// The counterpart of [`Scrolled`](Self::Scrolled) rather than a variant of it, because it reports the opposite direction of causation. A wheel turn is an instruction: something asks to scroll and a widget decides what that means. This is a fact: it has already happened, the content is already drawn at the new offset, and the widget's own value is what needs correcting.
     ///
-    /// It exists for a target that owns scrolling — a document, where the browser scrolls on the compositor and gives back find-in-page, `scrollIntoView`, anchors and the keyboard that a transform never could. The widget still holds the offset, because hit-testing, anchored overlays and `visible_rect` all read it; it just no longer decides it.
+    /// It exists for a target that owns scrolling — a document, where the browser scrolls on the compositor and gives back find-in-page, `scrollIntoView`, anchors and the keyboard that a transform never could. The widget still holds the offset, because hit-testing, anchored overlays and `visible_rect` all read it; it just does not decide it.
     ///
     /// `box_id` is opaque here: the layer that emits it and the layer that answers it agree on what it names, and nothing in between needs to know.
     BoxScrolled {

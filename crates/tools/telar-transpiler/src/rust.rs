@@ -1,8 +1,8 @@
 //! What Rust code names, read by parsing it.
 //!
-//! Every value in `[view]` is Rust now, and the same questions keep coming up about it and about `[logic]`: which names in it are *free* — bound by the surrounding scope rather than by the code itself — and, given that, which of those a `move` closure has to clone in.
+//! Every value in `[view]` is Rust, and the same questions keep coming up about it and about `[logic]`: which names in it are *free* — bound by the surrounding scope rather than by the code itself — and, given that, which of those a `move` closure has to clone in.
 //!
-//! Both used to be answered by scanning the text for a word. That cannot tell a binding from a field, a method, or a path segment: with a local named `x`, `seat(&desk, id).x` looked like a use of it, and the emitted clone was a compile error against generated code. `syn` answers honestly, and it is the same parser rustc's front end uses, so the two agree by construction.
+//! Both are answered by parsing with `syn`, because scanning the text for a word cannot tell a binding from a field, a method, or a path segment: with a local named `x`, `seat(&desk, id).x` would look like a use of it, and the emitted clone would be a compile error against generated code.
 
 use std::collections::HashSet;
 

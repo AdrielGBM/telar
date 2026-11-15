@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::BuildFlavour;
 use crate::PreludeEntry;
 
-/// Bumped whenever the generated Rust changes shape in a way an older `telar-macros` cannot wire — a different output path convention, a preview const that is named differently, (at 2) previews being emitted only for the flavours that ask, (at 3) a `*.preview.rsx` emitting its previews in a module of its own, (at 4) every flavour emitting its previews, which retired the flavours that alone did, (at 5) a baked asset being read with `get` from the `released_static!` its module declares since asset format 6, (at 6) a preview entry naming its package through `PreviewEntry::package`, (at 7) a component taking one `props` argument, its children handed in as `Children::new` props in place of a second `Children` argument, (at 8) a bare word compiled to a value of `telar::kw` and the language set through `.lang`, or (at 9) a keyless reactive or `virtual` loop handing each row a signal of its item, built through `VirtualList::positional` and `VirtualList::measured_positional` for a virtual one. Any mismatch is refused with the command that rewrites it, as an artifact that no longer answers for its sources is.
+/// Bumped whenever the generated Rust changes shape in a way an older `telar-macros` cannot wire — an output path convention, a preview const's name or module, how a baked asset is read, how a component takes its props and children, how a loop hands each row its item. Any mismatch is refused with the command that rewrites it, as an artifact that no longer answers for its sources is.
 pub const BUILD_ARTIFACT_FORMAT: u32 = 9;
 
 /// One `.rsx` the artifact was written from.
@@ -137,7 +137,7 @@ pub fn write_build_index(
 
 /// Why the last `cargo telar transpile` produced nothing for a flavour, left where the macro can read it.
 ///
-/// The macro carries no transpiler, so when the index no longer answers it can only say that, not why. Without this record the reason lived and died in the CLI's stderr, and a build started any other way (a plain `cargo build`, the editor's own check) was told to re-run a command that would fail again.
+/// The macro carries no transpiler, so when the index no longer answers it can only say that, not why. Without this record the reason would live only in the CLI's stderr, and a build started any other way (a plain `cargo build`, the editor's own check) would be told to re-run a command that fails again.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildFailure {
     /// The `.rsx` the failure was recorded against, or `None` when it belongs to no source a path under `src/` can name, so no edit can be seen to have fixed it.

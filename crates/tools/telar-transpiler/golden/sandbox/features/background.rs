@@ -19,6 +19,7 @@
 pub struct BackgroundProps {}
 
 #[allow(dead_code)]
+// What crosses to a pool thread is plain `Send` work with no signals; the sleeps stand in for a query, a file read or a network round trip.
 fn slow_sum(n: u64) -> u64 {
     std::thread::sleep(Duration::from_millis(900));
     (1..=n).sum()
@@ -47,8 +48,7 @@ fn walk_project(out: Emitter<String>) {
         "geometry-core",
     ];
     for name in names {
-        // Nothing else can stop this loop: cancelling only drops the callback, so a long worker has to
-        // notice for itself. Without this check, Cancel would leave it running to the end unseen.
+        // Cancelling only drops the callback, so a long worker has to notice for itself or it runs to the end unseen.
         if out.is_cancelled() {
             return;
         }
@@ -58,6 +58,7 @@ fn walk_project(out: Emitter<String>) {
 }
 
 #[allow(dead_code)]
+// Outside `on_press` because a completion callback must *own* its signals, and the handler is an `Fn` that may run again, so it cannot hand its own captures away.
 fn on_computed(total: RwSignal<String>, busy: RwSignal<bool>) -> impl FnOnce(u64) {
     move |sum| {
         total.set(sum.to_string());
@@ -80,25 +81,15 @@ pub fn background(props: BackgroundProps) -> Result<Box<dyn LayoutItem>, LayoutE
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    // Everything below the line is what actually crosses to a pool thread: plain `Send` work, no signals.
-    // The sleeps stand in for the blocking a real kernel does — a query, a file read, a network round trip.
-
-    // The completion callbacks. They live here rather than inline in `on_press` because they must *own* their
-    // signals: the handler is an `Fn` and may run again, so it cannot hand its own captures away.
-
-    // --- UI state, all of it on this thread ---
-
     let busy = signal(false);
     let total = signal(String::from("—"));
 
     let scanning = signal(false);
     let found = signal(Vec::<String>::new());
-    // The handle has to outlive the press that made it, or Cancel would have nothing to cancel. `Task` is
-    // `!Send` and not `Clone`, so it parks in an `Rc<RefCell<_>>` the two handlers share.
+    // The handle outlives the press that made it so Cancel has something to cancel, and `Task` is `!Send` and not `Clone`, so both handlers share it through an `Rc<RefCell<_>>`.
     let scan = Rc::new(RefCell::new(None::<Task>));
 
-    // A spring the UI keeps animating *while* a worker blocks. If the work ran on this thread instead, this
-    // box would freeze — which is the entire reason the module exists.
+    // Keeps animating while a worker blocks; were the work on this thread, this box would freeze.
     let beat = motion::Animated::<f32>::new(1.0, motion::spring(170.0, 12.0));
 
     let __col_0 = {

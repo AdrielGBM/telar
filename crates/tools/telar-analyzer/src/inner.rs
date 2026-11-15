@@ -1,6 +1,6 @@
 //! The real rust-analyzer, run in this process over an in-memory LSP connection.
 //!
-//! It serves two masters. The `.rsx` side queries it directly (see [`crate::ra`]): the generated Rust reaches it as a `didChange` on the same ordered channel the query travels on, so a keystroke is analysed without the text ever touching disk — the cross-process bridge this replaces could not win that race, and answered hover and go-to-definition only. Everything the editor asks about real `.rs` files is passed through instead, which is what lets one rust-analyzer serve both and leaves the editor with a single index.
+//! It serves two masters. The `.rsx` side queries it directly (see [`crate::ra`]): the generated Rust reaches it as a `didChange` on the same ordered channel the query travels on, so a keystroke is analysed without the text ever touching disk, which no cross-process bridge could do without racing the query. Everything the editor asks about real `.rs` files is passed through instead, which is what lets one rust-analyzer serve both and leaves the editor with a single index.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

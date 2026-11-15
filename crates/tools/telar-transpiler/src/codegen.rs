@@ -15,7 +15,7 @@ use telar_parser::StyleClass;
 use telar_project::naming::{to_pascal_case, to_snake_case};
 use telar_project::{AssetContext, PreludeEntry};
 
-/// A parsed `Props` field: its name, its type, and any inline default expression (the `name: Type = expr` sugar). Whether it is `Option<...>` is no longer anyone's business here — the builder's `some` attribute answers that in the callee's own declaration.
+/// A parsed `Props` field: its name, its type, and any inline default expression (the `name: Type = expr` sugar). Whether it is `Option<...>` is not decided here: the builder's `some` attribute answers that in the callee's own declaration.
 struct ParsedField {
     name: String,
     ty: String,
@@ -299,7 +299,7 @@ pub struct TranspiledSource {
 ///
 /// Against no `[telar] prelude`: a file that belongs to a package is transpiled through [`crate::transpile_buffer`], which reads everything the package declares.
 ///
-/// **It takes no registry, and that is the point.** A call site used to need the callee's shape — which props it declared, which were optional, which took a closure, whether it accepted children — so every `.rsx` in the workspace had to be scanned before any one of them could be transpiled. Every component takes the same two arguments now, and the props builder answers the rest in the callee's own type, so a file transpiles knowing nothing but itself.
+/// **It takes no registry, and that is the point.** Every component takes the same two arguments, and the props builder answers the rest in the callee's own type, so a file transpiles knowing nothing but itself rather than after a scan of every `.rsx` in the workspace.
 pub fn transpile_source(
     source: &str,
     component_name: &str,
@@ -500,7 +500,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
 
     let push_items = |code: &mut Code| {
         for item in hoisted.iter().filter(|item| item.kind != ItemKind::Use) {
-            // The function these used to sit in allowed dead code, and an item only a `[preview]` or a test names is dead in every other build.
+            // An item only a `[preview]` or a test names is dead in every other build.
             let lint = match item.kind {
                 ItemKind::Macro => "#[allow(unused_macros)]\n",
                 _ => "#[allow(dead_code)]\n",

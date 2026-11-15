@@ -279,7 +279,7 @@ pub fn request(id: FocusId) {
 
 /// [`request`] for focus a *tap* is giving, which is the one case that should not draw a focus ring.
 ///
-/// The distinction CSS spent years arriving at as `:focus-visible`. A ring on every click is noise — the user already knows where they clicked — and the ring drawn anyway is why so many stylesheets used to turn outlines off altogether, taking the keyboard's only cue with them. Focus taken any other way (Tab, or an application focusing something itself) shows it.
+/// The distinction CSS spent years arriving at as `:focus-visible`. A ring on every click is noise — the user already knows where they clicked — and the ring drawn anyway is why so many stylesheets turn outlines off altogether, taking the keyboard's only cue with them. Focus taken any other way (Tab, or an application focusing something itself) shows it.
 pub fn request_from_pointer(id: FocusId) {
     take(id, true);
 }

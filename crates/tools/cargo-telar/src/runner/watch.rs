@@ -35,7 +35,7 @@ fn inject_feature(args: &mut Vec<String>, feature: &str) {
 
 /// The dylib build, from the binary's own invocation.
 ///
-/// Every argument comes along verbatim: the two halves are swapped into one process, and a dylib built from another feature set is an application the host cannot drive. It used to copy the flags it recognised, so `--target tui`, a `-F` on the command line or anything after `--` reached the binary and not the library beside it.
+/// Every argument comes along verbatim — `--target`, a `-F`, anything after `--` — because the two halves are swapped into one process, and a dylib built from another feature set is an application the host cannot drive.
 fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
     let mut lib_build_args = vec!["build".to_string(), "--lib".to_string()];
     lib_build_args.extend(args.iter().cloned());
@@ -81,7 +81,7 @@ impl WatchSet {
 }
 
 impl WatchScope for WatchSet {
-    /// Assets need no special handling any more: the macro emits an `include_bytes!` per baked asset, so cargo sees the edit as a real dependency, and the bake before each rebuild refreshes the artifact it reads.
+    /// Assets need no special handling: the macro emits an `include_bytes!` per baked asset, so cargo sees the edit as a real dependency, and the bake before each rebuild refreshes the artifact it reads.
     ///
     /// A manifest's directory is watched only for the manifest, so anything else changing beside it — a `Cargo.lock` cargo rewrote, an editor's swap file — is not an edit to the project.
     fn wants(&self, event: &notify::Event) -> bool {
@@ -777,7 +777,7 @@ impl HotMode {
 
     /// What the loop builds with, on top of the frontend `select_frontend` already named.
     ///
-    /// No window among them: `telar/dev` used to carry `desktop-bare` so that a project which declared no frontend still got one, and that window then rode along into `--target tui` — a terminal session linking winit for a frame it never draws. The frontend is the target's business now, and a build that names none reaches the same "no frontend to run on" panic `cargo telar build` has always produced.
+    /// No window among them, or it would ride along into `--target tui` and link a windowing stack for a frame it never draws: the frontend is the target's business, and a build that names none reaches the same "no frontend to run on" panic `cargo telar build` produces.
     fn features(&self) -> &'static [&'static str] {
         match self {
             HotMode::Dev => &["telar/dev"],
@@ -786,7 +786,7 @@ impl HotMode {
         }
     }
 
-    /// What the dylib half of the loop adds. Named on the build rather than pushed through `RUSTFLAGS` as a `--cfg`: rustflags are hashed into every unit in the graph, so the old spelling recompiled all four hundred dependencies on each switch between this loop and `cargo telar check`, to change three crates. Cargo tracks a feature just as well and scopes it to the crates that enable it.
+    /// What the dylib half of the loop adds. Named on the build rather than pushed through `RUSTFLAGS` as a `--cfg`: rustflags are hashed into every unit in the graph, so a `--cfg` would recompile every dependency on each switch between this loop and `cargo telar check`, where a feature is scoped to the crates that enable it.
     fn hot_features(&self) -> &'static [&'static str] {
         match self {
             HotMode::Dev => &["telar/dev", "telar/hot-reload"],

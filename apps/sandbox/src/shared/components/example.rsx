@@ -1,9 +1,6 @@
 [logic]
 use crate::shared::components::card::{CardProps, card};
 use crate::shared::components::code_line::{CodeLineProps, code_line};
-// A documented example block: a small title above its demo and snippet. Replaces the repeated
-// `col gap:8 > text "…" font_size:13 color:$theme.ink > …children…` scaffold used across every feature section,
-// so a block is one `example title:"…"` line plus its content instead of two lines of boilerplate.
 #[derive(Default)]
 pub struct Props {
     pub title: &'static str,

@@ -63,12 +63,12 @@ tui = [
 ]
 
 ## An Android `NativeActivity`, drawn by the GPU where there is one and the CPU where there is not. Opt-in
-## like every other frontend: `runtime` used to bring it in unconditionally, which linked winit and an
-## activity into terminal builds under Termux — ordinary command-line processes with no activity behind them.
+## like every other frontend, so a terminal build on Android, an ordinary command-line process with no
+## activity behind it, links no window system and no activity.
 android = ["android-bare", "hardware", "software"]
 
 ## A browser, drawing as a document: real elements laid out by CSS, measured with the browser's own
-## canvas. No GPU and no shaper, which is most of what a web build used to weigh.
+## canvas. No GPU and no shaper, which keeps a web build light.
 ##
 ## Only meaningful for a `wasm32` build. On a host it compiles only what a frame says the document is, the
 ## half `prerender` writes pages from; the browser itself is target-gated. A page that was prerendered is
@@ -171,10 +171,9 @@ system-theme = ["platform-desktop?/system-theme"]
 #! The devtools overlay is not among them. It is `telar-devtools`, which the application declares as an optional dependency of its own and `cargo telar dev` turns on by name; Cargo.lock pins an optional dependency of a workspace member whether or not a build enables it, so that declaration is the whole of its pinning.
 
 ## The host half of the dev loop, which loads the application from a dylib and swaps it on each rebuild. Injected
-## by `cargo telar dev`. Carries no frontend of its own:
-## it used to take `desktop-bare` so a project that declared none still got a window, and that window then
-## rode along into `--target tui` — a terminal session linking winit for a frame it never draws. `cargo telar`
-## names the frontend the target asked for instead, and this is the plumbing behind it.
+## by `cargo telar dev`. Carries no frontend of its own, or a window would ride along into `--target tui` — a
+## terminal session linking winit for a frame it never draws. `cargo telar` names the frontend the target asked
+## for, and this is the plumbing behind it.
 dev = [
     "runtime",
     "platform-core/dylib",
@@ -185,9 +184,9 @@ dev = [
 
 ## The dylib half of that loop, which only `cargo telar dev` turns on and only for a package that can produce
 ## one: `.rsx` signal declarations become keyed bindings whose values survive a swap, the runner exports the
-## symbols the host swaps through, and `[telar.dev.window]` reaches the window. It was a `--cfg` pushed
-## through `RUSTFLAGS`, which cargo hashes into every unit in the graph — so turning it on and off
-## recompiled every dependency rather than the three crates that read it.
+## symbols the host swaps through, and `[telar.dev.window]` reaches the window. A feature rather than a
+## `--cfg` in `RUSTFLAGS`, which cargo hashes into every unit in the graph, so turning it on and off
+## recompiles only the crates that read it.
 ##
 ## Takes `desktop-bare` because the host it builds *is* a window: `run_hot_reload_host` opens one and swaps the
 ## application inside it, and a terminal run has no such loop — it restarts the process instead.
@@ -198,8 +197,8 @@ hot-reload = ["dev", "desktop-bare", "telar-macros/hot-reload"]
 ## The one that matters, because without it a `[preview]` is not compiled into anything: the transpiler emits
 ## a build fn per block in every flavour, inside `__previews!`, which expands to nothing unless this is on. That
 ## is how a library compiled as a dependency carries its previews to an application. A build without it also has no
-## `telar::dev_entry` in its `run()` — which is why a shipped binary no longer answers `TELAR_TEST=1` from
-## whoever sets it, and no longer carries the preview harness or the markup of every block.
+## `telar::dev_entry` in its `run()`, so a shipped binary does not answer `TELAR_TEST=1` from whoever sets
+## it, and carries neither the preview harness nor the markup of every block.
 ##
 ## Carries no frontend of its own: a preview is built and laid out on a canvas of its own with no window, and a
 ## terminal application must not acquire a window on the way to being tested. It does carry the shaper,
@@ -345,8 +344,7 @@ platform-android = { workspace = true, optional = true }
 platform-headless = { workspace = true }
 renderer-record = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
-# ships in every binary. Nothing here covers an asset transport any more: `src/http_assets.test.rs` moved to
-# `telar-dynamic` along with the transport it exercises.
+# ships in every binary.
 telar = { path = ".", features = ["font-faces", "testing", "prerender", "previews"] }
 test-process = { workspace = true }
 

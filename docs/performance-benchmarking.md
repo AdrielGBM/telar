@@ -188,13 +188,11 @@ on device with the in-app `TELAR_PERF` instrumentation instead.
 
 ---
 
-## Driver scenes (re-creating the removed benchmark harness)
+## Driver scenes
 
-Stable in-app numbers need a scene that redraws steadily without manual input. The removed
-`apps/sandbox/src/bench.rs` booted directly into one of four scenes when `TELAR_BENCH` was set
-(bridged from `debug.telar.bench` on Android). To re-create it: add a module that `App::root()` checks
-first (`if let Some(bench) = build_bench_root() { return bench; }`), reading `std::env::var("TELAR_BENCH")`,
-and build one of:
+Stable in-app numbers need a scene that redraws steadily without manual input. To get one, add a module
+that `App::root()` checks first (`if let Some(bench) = build_bench_root() { return bench; }`), reading
+`std::env::var("TELAR_BENCH")`, and build one of:
 
 - **`heavy`** — ~800 static cells (`StyledContainer` + `Text`), nothing animating. Measures full-scene
   cost and the idle-blit path (a static scene stops producing render frames).

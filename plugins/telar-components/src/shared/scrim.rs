@@ -58,7 +58,7 @@ fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: DismissFn) {
 
 /// Hands the keyboard to the dialog on open and gives it back on close.
 ///
-/// Both halves matter and only together: now that a modal traps focus, opening one without moving the keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on a widget the user can no longer see. Given back only from inside the dialog or from nowhere, so a dialog whose action moved the keyboard elsewhere leaves it there, and only to a widget that survived the dialog.
+/// Both halves matter and only together: a modal traps focus, so opening one without moving the keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on a widget the user can no longer see. Given back only from inside the dialog or from nowhere, so a dialog whose action moved the keyboard elsewhere leaves it there, and only to a widget that survived the dialog.
 fn track_focus_handover(open: RwSignal<bool>, content: telar::NodeId) {
     let previous: Cell<Option<telar::focus::Remembered>> = Cell::new(None);
     let was_open = Cell::new(false);

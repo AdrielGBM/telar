@@ -390,8 +390,7 @@ fn watch_os(event_loop: &EventLoop<UserEvent>) {
     });
 }
 
-//
-// Every surface shares this one UI thread and one reactive runtime. Each surface's `EventHandler` carries its own `Surface` world and activates it around every lifecycle call, so they stay isolated without a thread apiece and a shared signal re-runs each surface's effects under its own context. The hardware backend still presents on its own per-surface render thread. Each dispatch is bracketed by the handler's own `new_events`/`about_to_wait`, so the batch depth always returns to 0 within one callback.
+// Every surface shares one UI thread and one reactive runtime, kept apart by each `EventHandler` activating its own `Surface` world around every lifecycle call; each dispatch is bracketed by the handler's own `new_events`/`about_to_wait`, so the batch depth always returns to 0 within one callback.
 
 // Enqueued from app code deep inside an event handler, where the `&ActiveEventLoop` needed to create a window is not available, and drained by the runner on its next `about_to_wait`.
 struct DynamicRequest {

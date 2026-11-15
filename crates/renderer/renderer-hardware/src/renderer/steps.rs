@@ -53,7 +53,6 @@ pub(super) enum DrawStep {
     },
 }
 
-// Everything the executor needs to open the new pass or composite the finished one.
 // Built for every layer of every frame; boxing the `BeginLayer` views to shrink it would add two heap allocations per layer in the hot path.
 #[allow(clippy::large_enum_variant)]
 pub(super) enum Boundary {
@@ -106,9 +105,7 @@ pub(super) struct LayerAccum {
     pub(super) blend: BlendMode,
     pub(super) begin_step_index: usize,
     pub(super) bounds: Option<Rect>,
-    // Just after the `PushLayer`, where the layer content starts.
     pub(super) command_start: usize,
-    // Captured at `PushLayer`, used to truncate on a cache hit.
     pub(super) instance_start: u32,
     pub(super) text_instance_start: u32,
     pub(super) line_instance_start: u32,
@@ -124,7 +121,6 @@ impl LayerAccum {
     }
 }
 
-// `Err((a, b))` hands both back when they cannot be merged.
 // Every adjacent pair that does not merge takes the `Err` path each frame, so boxing it would allocate on the common case.
 #[allow(clippy::result_large_err)]
 fn try_merge_steps(a: DrawStep, b: DrawStep) -> Result<DrawStep, (DrawStep, DrawStep)> {

@@ -517,7 +517,7 @@ impl ViewGen<'_> {
         } else {
             "new"
         };
-        // A branch with several children inside a `row` used to be wrapped in a hard-coded column, so the items stacked and overflowed the row.
+        // Follows the host's axis, or a branch with several children inside a `row` would stack and overflow it.
         let axis = if self.host_is_row() {
             "flex_row"
         } else {

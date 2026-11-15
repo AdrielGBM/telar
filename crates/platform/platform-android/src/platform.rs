@@ -213,7 +213,6 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
     cursor_position: (f64, f64),
-    // Last position of an active touch finger, used to emit Scrolled deltas from drag gestures.
     touch: TouchDrag,
     keys: KeyPairing<PhysicalKey>,
     app: AndroidApp,

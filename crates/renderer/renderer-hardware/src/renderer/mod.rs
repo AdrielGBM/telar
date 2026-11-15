@@ -480,8 +480,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         .await
     }
 
-    // Format, msaa, present and alpha are decided by the caller, since only the windowed path can query surface capabilities.
-    // The private join point of the windowed and offscreen constructors, which negotiate these parts differently; a struct would be built once only to be taken apart here.
+    // A struct for these parts would be built once only to be taken apart here, since the windowed and offscreen constructors negotiate them differently.
     #[allow(clippy::too_many_arguments)]
     async fn from_parts(
         instance: wgpu::Instance,

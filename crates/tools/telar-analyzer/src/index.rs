@@ -1,6 +1,6 @@
 //! Persistent, incremental `.rsx` symbol index for the workspace.
 //!
-//! `workspace/symbol` and cross-file component `references`/`rename` used to re-read and re-parse every `.rsx` on each query. This caches the per-file facts they need — the component (file stem, or the one a `*.preview.rsx` previews), its `[style]` `@classes`, and every component `<tag>` usage — and refreshes only the file that changed (the live buffer on each edit, disk on a watched-file event). One scan on first query; O(1) updates after.
+//! `workspace/symbol` and cross-file component `references`/`rename` would otherwise re-read and re-parse every `.rsx` on each query. This caches the per-file facts they need — the component (file stem, or the one a `*.preview.rsx` previews), its `[style]` `@classes`, and every component `<tag>` usage — and refreshes only the file that changed (the live buffer on each edit, disk on a watched-file event). One scan on first query; O(1) updates after.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

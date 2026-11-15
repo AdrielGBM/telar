@@ -186,7 +186,7 @@ where
 
 /// One frame's pass through `on_redraw`, opened once the frame is known to be due.
 ///
-/// Its fields are the ordering argument the pass used to make in prose. [`generation`](Self::generation) in particular is stamped after the reactive flush that settles this frame's commands, so a phase holding a `FramePass` cannot read a number describing the frame before it.
+/// Its fields carry the pass's ordering argument. [`generation`](Self::generation) in particular is stamped after the reactive flush that settles this frame's commands, so a phase holding a `FramePass` cannot read a number describing the frame before it.
 struct FramePass {
     /// The window's physical size this frame is composed for.
     size: (u32, u32),

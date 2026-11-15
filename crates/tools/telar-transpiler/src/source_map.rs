@@ -1,6 +1,6 @@
 //! The map from generated Rust back to the `.rsx` that produced it, and the single place that reads it.
 //!
-//! Two tools need this and they used to have half of it each. The editor got the whole map in memory and could underline the exact expression rustc complained about; the CLI got a sidecar carrying only the line numbers, so `cargo telar check` underlined whole lines however precise rustc had been. Persisting the other half is what closes that, and putting the mapping itself here is what keeps the two from drifting into two answers for the same question.
+//! The editor holds the map in memory and the CLI reads it from a sidecar, both with columns, so `cargo telar check` underlines the exact expression rustc complained about just as the editor does; the mapping itself lives here so the two cannot drift into two answers for the same question.
 
 use serde::{Deserialize, Serialize};
 use telar_parser::{Section, find_section_at};

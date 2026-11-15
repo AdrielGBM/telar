@@ -316,7 +316,7 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
         declare(out, "text-transform", style.text_case.css_name());
     }
     decoration_style(&style.decoration, &style.color, out);
-    // Always said, because the document's default is not Telar's. `normal` collapses a run of spaces to one and a newline to a space, so a source listing came out as a single line thousands of characters wide. What Telar means is `pre-wrap`. It is also what keeps the two engines agreeing on height: a document that collapsed newlines measured one line where layout had reserved twenty, and the scroll area went on believing there was content the browser no longer had.
+    // Always `pre-wrap`, because the document's default `normal` collapses spaces and newlines, which would turn a source listing into one line and leave the browser measuring one line where layout reserved twenty.
     declare(
         out,
         "white-space",
