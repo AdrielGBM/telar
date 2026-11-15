@@ -189,6 +189,14 @@ impl InputHandle {
     }
 }
 
+/// What a dropping [`InputHandle`] withdrew that owns closures.
+#[derive(Default)]
+struct Released {
+    gates: Vec<Gate>,
+    placements: Vec<(u64, Placement)>,
+    outsets: Vec<Outset>,
+}
+
 impl Drop for InputHandle {
     fn drop(&mut self) {
         if self.nodes.is_empty() {
@@ -197,20 +205,26 @@ impl Drop for InputHandle {
         self.home.with_entered(|| {
             let token = self.token;
             let nodes = std::mem::take(&mut self.nodes);
-            with_input(|r| {
+            // Dropped once the registry is released: a placement's closure can hold the last handle on content whose own handles withdraw from this registry as they drop.
+            let released = with_input(|r| {
+                let mut released = Released::default();
                 for node in nodes {
                     if r.answers.get(&node).is_some_and(|a| a.token == token) {
                         r.answers.remove(&node);
                     }
                     remove_declared(r, node, token);
                     if let Some(gates) = r.gates.get_mut(&node) {
-                        gates.retain(|gate| gate.token != token);
+                        released
+                            .gates
+                            .extend(gates.extract_if(.., |gate| gate.token == token));
                         if gates.is_empty() {
                             r.gates.remove(&node);
                         }
                     }
                     if let Some(placements) = r.placements.get_mut(&node) {
-                        placements.retain(|(owner, _)| *owner != token);
+                        released
+                            .placements
+                            .extend(placements.extract_if(.., |(owner, _)| *owner == token));
                         if placements.is_empty() {
                             r.placements.remove(&node);
                         }
@@ -219,10 +233,12 @@ impl Drop for InputHandle {
                         r.links.remove(&node);
                     }
                     if r.outsets.get(&node).is_some_and(|o| o.token == token) {
-                        r.outsets.remove(&node);
+                        released.outsets.extend(r.outsets.remove(&node));
                     }
                 }
+                released
             });
+            drop(released);
         });
     }
 }

@@ -277,7 +277,7 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
 
     let column = move || LayoutStyle::column().width(width).gap(gap(size));
     let picker_box = Container::new(column(), rows)?.styled_by(column);
-    shared::captioned(size, box_item(picker_box), label, width)
+    shared::captioned(size, box_item(picker_box), label, width, false)
 }
 
 /// The saturation (across) and brightness (up) of the current hue, dragged or stepped with the arrows.

@@ -748,6 +748,38 @@ impl StyledContainer {
         self
     }
 
+    /// Declares what a reader says after this control's name, role and state, as help rather than identity, and how to read it: the hint under a field, the message saying why what it holds is wrong. `None` says nothing; `Some` is said as it reads, empty or not. See [`focus::set_description`].
+    pub fn described(self, read: impl Fn() -> Option<String> + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_description(id, read);
+        }
+        self
+    }
+
+    /// Declares how to read whether what this field holds fails its checks. See [`focus::set_invalid`].
+    pub fn invalid(self, read: impl Fn() -> bool + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_invalid(id, read);
+        }
+        self
+    }
+
+    /// Declares how to read whether this field must be filled in. See [`focus::set_required`].
+    pub fn required(self, read: impl Fn() -> bool + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_required(id, read);
+        }
+        self
+    }
+
+    /// Declares how to read whether this field's value can be read, selected and copied but not changed. See [`focus::set_readonly`].
+    pub fn readonly(self, read: impl Fn() -> bool + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_readonly(id, read);
+        }
+        self
+    }
+
     /// Declares how this value control moves one step up or down when a reader asks it to, reporting whether the value could move: the same code its arrow keys run, so the two cannot disagree on what a step is. See [`focus::set_stepping`].
     pub fn stepped(self, step: impl Fn(focus::Step) -> bool + 'static) -> Self {
         if let Some(id) = self.focusable.id {

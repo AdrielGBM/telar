@@ -113,10 +113,10 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 enabled: e.enabled,
                 toggled: e.toggled,
                 value: e.value.clone(),
-                description: None,
-                invalid: false,
-                required: false,
-                readonly: false,
+                description: e.description.clone(),
+                invalid: e.invalid,
+                required: e.required,
+                readonly: e.readonly,
                 orientation: e.orientation,
                 expanded: e.expanded,
                 has_popup: e.has_popup,
@@ -1332,3 +1332,7 @@ mod action_tests;
 #[cfg(test)]
 #[path = "accessibility.value.test.rs"]
 mod value_tests;
+
+#[cfg(test)]
+#[path = "accessibility.help.test.rs"]
+mod help_tests;

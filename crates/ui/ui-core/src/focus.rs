@@ -103,6 +103,7 @@ struct Entry {
     /// A checked state, for the controls that have one. A closure and not a flag, for the same reason "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to get the answer that is true then.
     toggled: Option<Rc<dyn Fn() -> Toggle>>,
     value: Option<Rc<dyn Fn() -> Value>>,
+    help: Help,
     orientation: Option<Orientation>,
     outline: Outline,
     active_descendant: Option<Rc<dyn Fn() -> Option<FocusId>>>,
@@ -683,6 +684,7 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                     scrolls: None,
                     toggled: None,
                     value: None,
+                    help: Help::default(),
                     orientation: None,
                     outline: Outline::default(),
                     active_descendant: None,
@@ -1127,6 +1129,91 @@ pub fn set_value<V: Into<Value>>(id: FocusId, read: impl Fn() -> V + 'static) {
     });
 }
 
+/// What a reader says about a control beyond its name, its state and its value: the help that goes with it, and what it asks of what is entered into it. Each a closure, so a message that appears as the person types is heard without the control being rebuilt.
+#[derive(Clone, Default)]
+struct Help {
+    description: Option<Rc<dyn Fn() -> Option<String>>>,
+    invalid: Option<Rc<dyn Fn() -> bool>>,
+    required: Option<Rc<dyn Fn() -> bool>>,
+    readonly: Option<Rc<dyn Fn() -> bool>>,
+}
+
+/// [`Help`] read now.
+#[derive(Default)]
+struct HelpNow {
+    description: Option<String>,
+    invalid: bool,
+    required: bool,
+    readonly: bool,
+}
+
+impl Help {
+    fn now(&self) -> HelpNow {
+        let flag = |read: &Option<Rc<dyn Fn() -> bool>>| read.as_ref().is_some_and(|read| read());
+        HelpNow {
+            description: self.description.as_ref().and_then(|read| read()),
+            invalid: flag(&self.invalid),
+            required: flag(&self.required),
+            readonly: flag(&self.readonly),
+        }
+    }
+}
+
+fn set_help(id: FocusId, write: impl FnOnce(&mut Help)) {
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            write(&mut entry.help);
+        }
+    });
+}
+
+/// Declares what a reader says after `id`'s name, role and state, as help rather than identity, and how to read it now: the hint under a field, the message that says why what it holds is wrong, the text of a tooltip on it. `None` says nothing; `Some` is said as it reads, empty or not.
+pub fn set_description(id: FocusId, read: impl Fn() -> Option<String> + 'static) {
+    let read: Rc<dyn Fn() -> Option<String>> = Rc::new(read);
+    set_help(id, |help| help.description = Some(read));
+}
+
+/// Declares how to read whether what the field `id` holds fails its checks now, so a reader says so before the person moves on.
+pub fn set_invalid(id: FocusId, read: impl Fn() -> bool + 'static) {
+    let read: Rc<dyn Fn() -> bool> = Rc::new(read);
+    set_help(id, |help| help.invalid = Some(read));
+}
+
+/// Declares how to read whether the field `id` must be filled in now before what it belongs to can be submitted.
+pub fn set_required(id: FocusId, read: impl Fn() -> bool + 'static) {
+    let read: Rc<dyn Fn() -> bool> = Rc::new(read);
+    set_help(id, |help| help.required = Some(read));
+}
+
+/// Declares how to read whether the field `id` shows a value the person can read, select and copy but not change now. Unlike a disabled control it still takes focus.
+pub fn set_readonly(id: FocusId, read: impl Fn() -> bool + 'static) {
+    let read: Rc<dyn Fn() -> bool> = Rc::new(read);
+    set_help(id, |help| help.readonly = Some(read));
+}
+
+/// The controls registered at or inside `node` now, in the order they registered: what a box wrapped around a control it did not build, such as a tooltip around its trigger, says things about.
+pub fn controls_within(node: NodeId) -> Vec<FocusId> {
+    let placed: Vec<(FocusId, NodeId)> = with_focus_ref(|s| {
+        s.order
+            .iter()
+            .filter_map(|e| Some((e.id, e.node?)))
+            .collect()
+    });
+    placed
+        .into_iter()
+        .filter(|(_, at)| crate::input_region::is_inside(*at, node))
+        .map(|(id, _)| id)
+        .collect()
+}
+
+/// Whether a control at or inside `node` holds focus and shows it. Reactive, like [`is_focus_visible`]: what a hint that shows for the keyboard as it does for the pointer follows.
+pub fn shows_focus_within(node: NodeId) -> bool {
+    current().is_some_and(|id| {
+        is_focus_visible(id)
+            && node_of(id).is_some_and(|at| crate::input_region::is_inside(at, node))
+    })
+}
+
 /// Declares that the field `id` has a caret, and how to read where it and the selection are now, in the characters of what the field shows: what a reader follows while the field holds the keyboard.
 pub fn set_text_selection(id: FocusId, read: impl Fn() -> TextSelection + 'static) {
     let read: Rc<dyn Fn() -> TextSelection> = Rc::new(read);
@@ -1249,6 +1336,14 @@ pub struct Exposed {
     pub toggled: Option<Toggle>,
     /// Its value, for the controls that carry one.
     pub value: Option<Value>,
+    /// What it says after its name, role and state, as help rather than identity. See [`set_description`].
+    pub description: Option<String>,
+    /// Whether what it holds fails its checks. See [`set_invalid`].
+    pub invalid: bool,
+    /// Whether it must be filled in. See [`set_required`].
+    pub required: bool,
+    /// Whether its value can be read but not changed. See [`set_readonly`].
+    pub readonly: bool,
     pub orientation: Option<Orientation>,
     /// Whether a tree row with rows under it shows them; `None` for a leaf and for every other control.
     pub expanded: Option<bool>,
@@ -1277,6 +1372,7 @@ pub fn exposed() -> Vec<Exposed> {
             Role,
             Option<Rc<dyn Fn() -> Toggle>>,
             Option<Rc<dyn Fn() -> Value>>,
+            Help,
             Option<Orientation>,
             Outline,
             ActionSupport,
@@ -1291,6 +1387,7 @@ pub fn exposed() -> Vec<Exposed> {
                     e.role,
                     e.toggled.clone(),
                     e.value.clone(),
+                    e.help.clone(),
                     e.orientation,
                     e.outline.clone(),
                     e.actions.support(),
@@ -1311,7 +1408,7 @@ pub fn exposed() -> Vec<Exposed> {
         .into_iter()
         .filter(|(id, ..)| !idle.contains(id))
         .filter_map(
-            |(id, node, role, toggled, value, orientation, outline, supports)| {
+            |(id, node, role, toggled, value, help, orientation, outline, supports)| {
                 let node = node?;
                 let seen: Vec<ScopeView> = hiding
                     .iter()
@@ -1322,13 +1419,21 @@ pub fn exposed() -> Vec<Exposed> {
                         (*scope, showing.clone(), *traps && !owned)
                     })
                     .collect();
-                reachable(Some(node), &seen).then(|| Exposed {
+                if !reachable(Some(node), &seen) {
+                    return None;
+                }
+                let help = help.now();
+                Some(Exposed {
                     id,
                     node,
                     role,
                     enabled: !disabled_at(node),
                     toggled: toggled.as_ref().map(|read| read()),
                     value: value.as_ref().map(|read| read()),
+                    description: help.description,
+                    invalid: help.invalid,
+                    required: help.required,
+                    readonly: help.readonly,
                     orientation,
                     expanded: outline.expanded.as_ref().map(|read| read()),
                     has_popup: outline.has_popup,
@@ -1457,6 +1562,11 @@ pub(crate) fn describe(
     semantics.disabled = node_of(id).is_some_and(disabled_at);
     semantics.toggled = toggled_state(id);
     semantics.value = value_state(id);
+    let help = help_state(id);
+    semantics.description = help.description.map(Into::into);
+    semantics.invalid = help.invalid;
+    semantics.required = help.required;
+    semantics.readonly = help.readonly;
     semantics.orientation = orientation_state(id);
     semantics.expanded = expanded_state(id);
     semantics.has_popup = has_popup_state(id);
@@ -1669,6 +1779,13 @@ pub fn toggled_state(id: FocusId) -> Option<Toggle> {
 pub fn value_state(id: FocusId) -> Option<Value> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.value.clone()))?;
     Some(read())
+}
+
+/// The help `id` declared, read now; nothing said for a control that declared none. Read inside `view()` for the same reason as [`toggled_state`].
+fn help_state(id: FocusId) -> HelpNow {
+    with_focus(|s| s.entry(id).map(|e| e.help.clone()))
+        .map(|help| help.now())
+        .unwrap_or_default()
 }
 
 /// Where the caret and the selection of the field `id` are, read now; `None` for a control that declared no caret.

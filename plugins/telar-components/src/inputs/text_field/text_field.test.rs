@@ -544,7 +544,7 @@ mod multiline {
                 _ => None,
             })
             .expect("the count is drawn");
-        assert_eq!(over, use_theme_tokens().error());
+        assert_eq!(over, shared::error_ink());
     }
 
     #[test]

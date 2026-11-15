@@ -339,12 +339,13 @@ fn caption_column(size: ControlSize, width: f32) -> LayoutStyle {
     LayoutStyle::column().gap(spacing(size) * 0.75).width(width)
 }
 
-/// Stacks an optional small caption, at `size`, above `control`, or hands `control` back untouched when the label is empty. The counterpart of [`labelled_control`], which puts the label *beside* the control instead.
+/// Stacks an optional small caption, at `size`, above `control`, or hands `control` back untouched when the label is empty. A `required` control has a mark drawn after its caption, which a reader skips: it hears "required" from the control itself. The counterpart of [`labelled_control`], which puts the label *beside* the control instead.
 pub(crate) fn captioned(
     size: ControlSize,
     control: Box<dyn LayoutItem>,
     label: Reactive<String>,
     width: impl Into<Reactive<f32>>,
+    required: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     if label.get().is_empty() {
         return Ok(box_item(control));
@@ -357,15 +358,36 @@ pub(crate) fn captioned(
     )?;
     // The caption is a leaf, so its style is followed from the column that outlives it and owns the effect.
     let caption_node = caption.layout_node();
+    let caption_line = move || caption_box(control_text_size(size, caption_node, CAPTION_RATIO));
+    let heading: Box<dyn LayoutItem> = match required {
+        false => box_item(caption),
+        true => {
+            let mark = Text::declaring(
+                || REQUIRED_MARK.to_string(),
+                LayoutStyle::new(),
+                move |t| control_text(size, t, CAPTION_RATIO).with_color(error_ink()),
+            )?
+            .a11y_hidden();
+            style_follows(mark.layout_node(), caption_line);
+            let row = move || LayoutStyle::row().gap(gap_xs(size));
+            box_item(Container::new(row(), children![caption, mark])?.styled_by(row))
+        }
+    };
     let col = Container::new(
         caption_column(size, width.get()),
-        children![caption, control],
+        children![heading, control],
     )?
     .styled_by(move || caption_column(size, width.get()));
-    style_follows(caption_node, move || {
-        caption_box(control_text_size(size, caption_node, CAPTION_RATIO))
-    });
+    style_follows(caption_node, caption_line);
     Ok(box_item(col))
+}
+
+/// What follows the caption of a control that must be filled in.
+const REQUIRED_MARK: &str = "*";
+
+/// The theme's error colour taken toward the ink only as far as it must go to read at 4.5:1 on the surface: what a message saying something is wrong, and the frame and mark around what it is about, are drawn in.
+pub(crate) fn error_ink() -> Color {
+    readable_on(use_theme_tokens().error(), surface())
 }
 
 /// A control height of `size` tall whatever the box drawn in it, so a checkbox stands level with a button or a field of its size beside it.
@@ -608,7 +630,7 @@ pub(crate) fn shown_while(
     Ok(box_item(list))
 }
 
-/// What `build` makes, under a tooltip of `size` showing `text` and `shortcut` (empty for none): a control that is only a picture, or one whose binding is worth showing. A recipe because the tooltip builds its trigger where it places it, and again whenever it places it again, so whatever `build` draws from has to outlive one build: a `#[derive(Clone)]` struct of the parts with a `build(&self)`, moved in as `move || parts.build()`.
+/// What `build` makes, under a tooltip of `size` showing `text` and `shortcut` (empty for none): a control that is only a picture, or one whose binding is worth showing, already called `text` by a reader. A recipe because the tooltip builds its trigger where it places it, and again whenever it places it again, so whatever `build` draws from has to outlive one build: a `#[derive(Clone)]` struct of the parts with a `build(&self)`, moved in as `move || parts.build()`.
 pub(crate) fn hinted(
     build: impl Fn() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     size: ControlSize,
@@ -618,6 +640,7 @@ pub(crate) fn hinted(
     let mut props = crate::TooltipProps::props()
         .size(size)
         .text(text)
+        .names_trigger(true)
         .children(telar::Children::one(build))
         .build();
     props.shortcut = shortcut;

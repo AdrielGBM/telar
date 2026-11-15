@@ -1,14 +1,22 @@
-//! [`tooltip`]: a bubble anchored to its trigger while the pointer is over it.
+//! [`tooltip`]: a bubble anchored to its trigger while the pointer is over it or the keyboard is on it.
+
+use std::cell::Cell;
+use std::rc::Rc;
+use std::time::Duration;
 
 use telar::{
-    AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Overlay, Props, Reactive, ReactiveList, RectStyle, ShapeStyle, Side,
-    StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextStyle, TextWrap, amend_surface,
-    box_item, children, signal, use_theme_tokens,
+    AlignItems, BorderRadius, Children, Color, Container, DismissRegistration, JustifyContent,
+    LayoutError, LayoutItem, LayoutStyle, NodeId, Overlay, Props, Reactive, ReactiveList,
+    RectStyle, RwSignal, ShapeStyle, Side, StyledContainer, SurfaceAmendment, SurfaceStyle, Text,
+    TextStyle, TextWrap, Timer, amend_surface, box_item, children, effect, focus, on_cleanup,
+    pointer_position, run_after, signal, use_theme_tokens, visible_rect,
 };
 
 use crate::shared::{self, shown_chord};
 use telar::ControlSize;
+
+/// How long the bubble stays while the pointer stands in the gap between it and the trigger: long enough to cross it without the bubble closing under the pointer, short enough that a pointer that stops there does not hold it open.
+const LINGER: Duration = Duration::from_millis(150);
 
 /// Leading for the description line, the only one that wraps (`leading-snug`).
 const DESCRIPTION_LEADING: f32 = 1.375;
@@ -63,11 +71,14 @@ const BUBBLE_RATIO: f32 = 0.85;
 const SHORTCUT_RATIO: f32 = BUBBLE_RATIO * 0.9;
 const DESCRIPTION_RATIO: f32 = BUBBLE_RATIO * 0.92;
 
-/// A hover popup: wraps its `children` (the trigger) and, while the mouse is over it, shows a small `text` bubble anchored just below the trigger. Built on the `overlay` primitive's anchored variant (the bubble is portalled to the top layer and translated to the trigger's rect, so it escapes clipping and only itself blocks). High-level sugar; lives in `telar-components`, not the kernel.
+/// A hint: wraps its `children` (the trigger) and shows a small `text` bubble anchored beside it while the pointer is over the trigger or the bubble, and while the keyboard is on a control inside the trigger. Escape hides it without moving focus, and the keyboard moving to another control hides one the pointer raised, so the hint of the control just reached is not drawn over by it; either way it comes back once the pointer and the keyboard have left and return. What it says is the description a reader hears on the controls inside the trigger. Built on the `overlay` primitive's anchored variant (the bubble is portalled to the top layer and translated to the trigger's rect, so it escapes clipping and only itself blocks). High-level sugar; lives in `telar-components`, not the kernel.
 #[derive(Props)]
 pub struct TooltipProps {
     #[props(into, default)]
     pub text: Reactive<String>,
+    /// Whether `text` is already what a reader calls the trigger, as on a control that is only a picture named by the same words, so only [`description`](Self::description) is said as the trigger's description. Off by default: the trigger is described by `text`, then by `description`.
+    #[props(default = false)]
+    pub names_trigger: bool,
     /// The binding that does the same thing, written portably as [`telar::Chord`] reads it (`"Mod+S"`) and shown as the platform writes it (`⌘S` on a Mac, `Ctrl+S` elsewhere), pushed to the far side of the first line. `None` (the default) names none.
     ///
     /// A hint that names its own shortcut is how a keyboard gets learned — the pointer finds the control, and the bubble says which key would have got there first. Separate from `text` because it is *placed*, not worded: folded into the sentence it wraps with it and stops lining up down a toolbar.
@@ -98,10 +109,11 @@ pub struct TooltipProps {
     pub children: Children,
 }
 
-/// A bubble anchored to its trigger while the pointer is over it.
+/// A bubble anchored to its trigger while the pointer is over either or the keyboard is on the trigger, describing the controls inside the trigger to a reader.
 pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TooltipProps {
         text,
+        names_trigger,
         shortcut,
         description,
         side,
@@ -111,32 +123,73 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         stretch,
         children,
     } = props;
+    let said = Rc::new(described_as(
+        text.clone(),
+        description.clone(),
+        names_trigger,
+    ));
     let shortcut = shortcut.map(|shortcut| Reactive::of(move || shown_chord(&shortcut.get())));
     let trigger_content = children.build()?;
-    let hovered = signal(false);
 
     let mut trigger_style = LayoutStyle::row();
     if stretch {
         trigger_style = trigger_style.flex_grow(1.0).align_self_stretch();
     }
-    let hover_sink = hovered;
-    let trigger = StyledContainer::new(trigger_style, |_r| RectStyle::default(), trigger_content)?
-        .on_hover(move |over| hover_sink.set(over));
+    let trigger = StyledContainer::new(trigger_style, |_r| RectStyle::default(), trigger_content)?;
     let trigger_node = trigger.layout_node();
+    let pointer = Pointer::new(trigger_node);
+    let trigger = trigger.on_hover({
+        let pointer = pointer.clone();
+        move |over| pointer.over_trigger(over)
+    });
+    for control in focus::controls_within(trigger_node) {
+        let said = said.clone();
+        focus::set_description(control, move || said());
+    }
 
-    // The bubble is a fresh `text` each hover, with no children of its own to preserve, so keying on `hovered` mounts and disposes the anchored overlay like a reactive `if`. Both closures are re-erased to `Rc` so each remount can clone them into a fresh bubble.
+    let near = pointer.near;
+    let keyboard_on = move || focus::shows_focus_within(trigger_node);
+    let dismissed = signal(false);
+    effect(move || {
+        if !near.get() && !keyboard_on() && dismissed.peek() {
+            dismissed.set(false);
+        }
+    });
+    let last_focus = Cell::new(focus::current());
+    effect(move || {
+        let now = focus::current();
+        let moved_elsewhere = now != last_focus.replace(now)
+            && now.is_some_and(focus::is_focus_visible)
+            && !keyboard_on();
+        if moved_elsewhere && near.peek() {
+            dismissed.set(true);
+        }
+    });
+    {
+        let pointer = pointer.clone();
+        on_cleanup(move || pointer.forget());
+    }
+
+    // The bubble is a fresh `text` each time it shows, with no children of its own to preserve, so keying on whether it shows mounts and disposes the anchored overlay like a reactive `if`.
     let style: SurfaceStyle = style;
-    let key_hovered = hovered;
     let bubble = ReactiveList::new(
-        move || vec![key_hovered.get()],
-        |is_hovered: &bool| *is_hovered,
-        move |is_hovered| -> Result<Box<dyn LayoutItem>, LayoutError> {
-            if !is_hovered {
+        move || vec![!dismissed.get() && (near.get() || keyboard_on())],
+        |showing: &bool| *showing,
+        move |showing| -> Result<Box<dyn LayoutItem>, LayoutError> {
+            if !showing {
                 return Ok(box_item(Container::new(
                     LayoutStyle::new().width(0.0).height(0.0),
                     vec![],
                 )?));
             }
+            let dismissal =
+                DismissRegistration::within(trigger_node, Rc::new(move || dismissed.set(true)));
+            let left = pointer.clone();
+            on_cleanup(move || {
+                drop(dismissal);
+                left.bubble.set(None);
+                left.over_bubble(false);
+            });
             build_bubble(
                 size,
                 Content {
@@ -148,6 +201,7 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                 style.clone(),
                 side,
                 trigger_node,
+                pointer.clone(),
             )
         },
         0.0,
@@ -164,7 +218,92 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     )?))
 }
 
-/// Builds the bubble for the hovered state: a padded rounded chip with the tooltip `text`, anchored to the trigger where it is drawn, inside a NON-blocking overlay (a tooltip must not eat clicks on the page).
+/// What a reader hears after the trigger's name: `text` unless it already is that name, then `description`, a line each. `None` for a hint that names its trigger and has no `description`.
+fn described_as(
+    text: Reactive<String>,
+    description: Option<Reactive<String>>,
+    names_trigger: bool,
+) -> impl Fn() -> Option<String> {
+    move || {
+        let lines: Vec<String> = (!names_trigger)
+            .then(|| text.get())
+            .into_iter()
+            .chain(description.as_ref().map(Reactive::get))
+            .collect();
+        (!lines.is_empty()).then(|| lines.join("\n"))
+    }
+}
+
+/// Whether the pointer is near the hint: over the trigger or the bubble, or crossing the space between the two for less than [`LINGER`].
+struct Pointer {
+    trigger: NodeId,
+    bubble: Cell<Option<NodeId>>,
+    over_trigger: Cell<bool>,
+    over_bubble: Cell<bool>,
+    near: RwSignal<bool>,
+    linger: Cell<Option<Timer>>,
+    gone: Cell<bool>,
+}
+
+impl Pointer {
+    fn new(trigger: NodeId) -> Rc<Self> {
+        Rc::new(Self {
+            trigger,
+            bubble: Cell::new(None),
+            over_trigger: Cell::new(false),
+            over_bubble: Cell::new(false),
+            near: signal(false),
+            linger: Cell::new(None),
+            gone: Cell::new(false),
+        })
+    }
+
+    fn over_trigger(&self, over: bool) {
+        self.over_trigger.set(over);
+        self.settle();
+    }
+
+    fn over_bubble(&self, over: bool) {
+        self.over_bubble.set(over);
+        self.settle();
+    }
+
+    fn settle(&self) {
+        if self.gone.get() {
+            return;
+        }
+        let over = self.over_trigger.get() || self.over_bubble.get();
+        if over || !self.crossing() {
+            self.linger.take();
+            if self.near.peek() != over {
+                self.near.set(over);
+            }
+        } else if self.near.peek() {
+            let near = self.near;
+            self.linger
+                .set(Some(run_after(LINGER, move || near.set(false))));
+        }
+    }
+
+    /// Whether the pointer stands between the trigger and the bubble, off both: where it passes on its way from one to the other. One that left the surface is still where it last moved, inside what it left, so it is not crossing.
+    fn crossing(&self) -> bool {
+        let rects = (
+            visible_rect(self.trigger),
+            self.bubble.get().and_then(visible_rect),
+        );
+        let (Some((x, y)), (Some(trigger), Some(bubble))) = (pointer_position(), rects) else {
+            return false;
+        };
+        trigger.union(bubble).contains(x, y) && !trigger.contains(x, y) && !bubble.contains(x, y)
+    }
+
+    fn forget(&self) {
+        self.gone.set(true);
+        self.linger.take();
+    }
+}
+
+/// Builds the bubble for the showing state: a padded rounded chip with the tooltip `text`, anchored to the trigger where it is drawn, inside a NON-blocking overlay (a tooltip must not eat clicks on the page). The chip tells `pointer` when the pointer is over it, so moving onto the bubble keeps it open.
 fn build_bubble(
     size: ControlSize,
     content: Content,
@@ -172,6 +311,7 @@ fn build_bubble(
     style: SurfaceStyle,
     side: Side,
     trigger_node: telar::NodeId,
+    pointer: Rc<Pointer>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Laid out at the origin and translated to the trigger by the anchored overlay, rather than pushed there with a left margin: a margin eats the width the bubble had to lay out in, so a trigger near the right edge left it a 50px column. The translate happens after layout, when the real size is known, which is also what lets it flip and slide to stay on screen.
     let bubble = move || {
@@ -195,6 +335,8 @@ fn build_bubble(
         content.rows(size, ink)?,
     )?
     .styled_by(bubble);
+    pointer.bubble.set(Some(chip.layout_node()));
+    let chip = chip.on_hover(move |over| pointer.over_bubble(over));
     // A flex row, for the chip to hug: a `LayoutStyle::new()` is a CSS block, and a block child fills its containing block whatever `align_items` says — so every bubble came out at its 240px cap. Click-through, because a tooltip must not eat clicks on the page it is describing.
     let overlay = Overlay::anchored_click_through(
         LayoutStyle::row().align_items(AlignItems::START),

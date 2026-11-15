@@ -10,7 +10,6 @@ use telar::{
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, ModifiersState, NodeId, Props,
     Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextArea,
     TextStyle, TextWrap, amend_surface, box_item, children, focus::FocusId, signal, style_follows,
-    use_theme_tokens,
 };
 
 /// A field's width in ems when neither its call nor the theme names one: room for a sentence-long value.
@@ -122,6 +121,15 @@ pub struct TextFieldProps {
     /// The count the counter measures against, shown beside it and drawn in the theme's error colour once it is passed. `None` (the default) names no limit. Typing past it is not refused: the counter says so, and the form decides.
     #[props(some, default)]
     pub max_length: Option<usize>,
+    /// What is wrong with what the field holds, re-read whenever what it reads changes: `Some` draws the message under the box in the theme's error colour (taken toward the ink only as far as it must go to read at 4.5:1), says it to a reader as the field's description, marks the field invalid and draws its frame in the same colour; `None` (the default) is a field with nothing wrong now.
+    #[props(into, default)]
+    pub error: Reactive<Option<String>>,
+    /// Whether the field must be filled in: a reader is told so, and a mark after the caption shows it. Off by default.
+    #[props(default)]
+    pub required: bool,
+    /// Help drawn under the box in the quieter ink of a caption, re-read whenever what it reads changes, and said to a reader as the field's description while there is no [`error`](Self::error) to say instead. `None` (the default) draws none.
+    #[props(into, default)]
+    pub hint: Reactive<Option<String>>,
     /// The entered text's colour. `None` (the default) leaves the field in whatever the region around it is written in. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`/`outline`.
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
@@ -194,6 +202,9 @@ pub(crate) fn adorned_field(
         controls,
         style,
         focus_id,
+        error,
+        required,
+        hint,
     } = props;
     if let Some(max_rows) = max_rows.filter(|max_rows| *max_rows < rows) {
         return Err(LayoutError::Engine(format!(
@@ -254,6 +265,18 @@ pub(crate) fn adorned_field(
         published.set(Some(line_focus));
         telar::on_cleanup(move || published.set(None));
     }
+    let message = Message { error, hint };
+    {
+        let message = message.clone();
+        telar::focus::set_invalid(line_focus, move || message.error_now().is_some());
+    }
+    {
+        let message = message.clone();
+        telar::focus::set_description(line_focus, move || message.now());
+    }
+    if required {
+        telar::focus::set_required(line_focus, || true);
+    }
     let mut content: Vec<Box<dyn LayoutItem>> = Vec::new();
     if let Some(leading) = leading {
         content.push(icon_square(size, leading)?);
@@ -279,25 +302,92 @@ pub(crate) fn adorned_field(
                 .gap(shared::gap_sm(size)),
         }
     };
-    let box_ = StyledContainer::new(
-        arranged(),
-        move |_r| amend_surface(frame(), &style),
-        content,
-    )?
-    .frames_focus_of(line_focus)
-    .styled_by(arranged);
+    let paint = {
+        let message = message.clone();
+        move |_r| {
+            let framed = match message.error_now() {
+                Some(_) => frame().with_border(Border::uniform(
+                    shared::error_ink(),
+                    TextFieldTokens::current().border_width(),
+                )),
+                None => frame(),
+            };
+            amend_surface(framed, &style)
+        }
+    };
+    let box_ = StyledContainer::new(arranged(), paint, content)?
+        .frames_focus_of(line_focus)
+        .styled_by(arranged);
     style_follows(line_node, layout);
 
-    let field = shared::captioned(size, box_item(box_), label, Reactive::of(width))?;
-    if !counter {
+    let field = shared::captioned(size, box_item(box_), label, Reactive::of(width), required)?;
+    let note = message
+        .says_anything()
+        .then(|| noted(size, message))
+        .transpose()?;
+    let count = counter
+        .then(|| counted(size, value, max_length))
+        .transpose()?;
+    if note.is_none() && count.is_none() {
         return Ok((field, line_focus));
     }
-    let count = counted(size, value, max_length, width)?;
+    let row = move || {
+        LayoutStyle::row()
+            .width(width())
+            .justify_content(JustifyContent::END)
+            .align_items(AlignItems::START)
+            .gap(shared::gap_md(size))
+    };
+    let under = Container::new(row(), note.into_iter().chain(count).collect())?.styled_by(row);
     let column = Container::new(
         LayoutStyle::column().gap(shared::gap_xs(size)),
-        children![field, count],
+        children![field, under],
     )?;
     Ok((box_item(column), line_focus))
+}
+
+/// What a field says under its box about what it holds: what is wrong with it, or failing that the help that goes with it.
+#[derive(Clone)]
+struct Message {
+    error: Reactive<Option<String>>,
+    hint: Reactive<Option<String>>,
+}
+
+impl Message {
+    fn error_now(&self) -> Option<String> {
+        self.error.get()
+    }
+
+    /// What is said now: the error while there is one, the hint otherwise.
+    fn now(&self) -> Option<String> {
+        self.error_now().or_else(|| self.hint.get())
+    }
+
+    /// Whether the field can ever say anything under its box: a constant `None` for both never will, and takes no line at all.
+    fn says_anything(&self) -> bool {
+        let silent = |said: &Reactive<Option<String>>| matches!(said, Reactive::Const(None));
+        !(silent(&self.error) && silent(&self.hint))
+    }
+}
+
+/// The line under the box saying [`Message::now`], wrapping in the room the counter leaves it: a hint in a caption's quieter ink, an error in [`shared::error_ink`]. It takes no room while it says nothing.
+fn noted(size: ControlSize, message: Message) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let (said, styled, shown) = (message.clone(), message.clone(), message);
+    let text = Text::declaring(
+        move || said.now().unwrap_or_default(),
+        LayoutStyle::new()
+            .flex_grow(1.0)
+            .flex_shrink(1.0)
+            .min_width(0.0),
+        move |t| match styled.error_now() {
+            Some(_) => {
+                shared::control_text(size, t, shared::CAPTION_RATIO).with_color(shared::error_ink())
+            }
+            None => shared::quiet(size, t, shared::CAPTION_RATIO),
+        },
+    )?;
+    shared::displayed_while(text.layout_node(), move || shown.now().is_some());
+    Ok(box_item(text))
 }
 
 /// `adornment` centred in a square an icon wide, so the inset [`adornment_insets`] gives is the one the eye sees however narrow its mark is.
@@ -426,12 +516,11 @@ fn pad_y(size: ControlSize, node: NodeId) -> f32 {
     ((shared::control_height(size) - line_height(size, node)) / 2.0).max(0.0)
 }
 
-/// How many characters `value` holds, against `max` where there is one, at the end of a row as wide as the box, and in the theme's error colour once it is past `max`.
+/// How many characters `value` holds, against `max` where there is one, drawn in [`shared::error_ink`] once it is past `max`.
 fn counted(
     size: ControlSize,
     value: RwSignal<String>,
     max: Option<usize>,
-    width: impl Fn() -> f32 + Clone + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let count = move || value.with(|text| text.chars().count());
     let over = move || max.is_some_and(|max| count() > max);
@@ -449,22 +538,16 @@ fn counted(
             ),
         }
     };
-    let text = Text::declaring(shown, LayoutStyle::new(), move |t| {
+    let text = Text::declaring(shown, LayoutStyle::new().flex_shrink(0.0), move |t| {
         let text = shared::quiet(size, t, shared::CAPTION_RATIO);
         if over() {
-            text.with_color(use_theme_tokens().error())
+            text.with_color(shared::error_ink())
         } else {
             text
         }
     })?
     .a11y_label(said);
-    let row = move || {
-        LayoutStyle::row()
-            .width(width())
-            .justify_content(JustifyContent::END)
-    };
-    let counter = Container::new(row(), children![text])?.styled_by(row);
-    Ok(box_item(counter))
+    Ok(box_item(text))
 }
 
 /// A field box's paint before the caller's amendment.
@@ -479,3 +562,7 @@ pub(crate) fn frame() -> RectStyle {
 #[cfg(test)]
 #[path = "text_field.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "text_field.validity.test.rs"]
+mod validity_tests;

@@ -1,0 +1,43 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              element group
+                matrix 1,0,0,1,250,265
+                  text 0,1 30.03x14.28 "Email" size=11.9 family=sans-serif weight=400 color=#99a1b8ff lang=en
+                end
+              end
+              element group
+                matrix 1,0,0,1,282,265
+                  text 0,1 6x14.28 "*" size=11.9 family=sans-serif weight=400 color=#f06b70ff lang=en
+                end
+              end
+            end
+            element group
+              rect 250,288 300x32 fill=#12141cff border=1 border-color=#63697aff radius=10
+              element group
+                matrix 1,0,0,1,262,288
+                  clip 0,0 276x32
+                    text 0,8 276x16.8 "name@example.com" size=14 family=sans-serif weight=400 color=#ebedf5b3 line-height=1.2 wrap=none
+                  end
+                end
+              end
+            end
+          end
+          element group
+            element group
+              matrix 1,0,0,1,250,322
+                text 0,0 300x14.28 "Only used to send your receipt." size=11.9 family=sans-serif weight=400 color=#ebedf5b3 lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

@@ -101,6 +101,289 @@ fn hover_shows_bubble_and_leave_hides_it() {
     );
 }
 
+fn save_button() -> Children {
+    Children::one(|| crate::button(crate::ButtonProps::props().label("Save").build()))
+}
+
+fn mounted_with(props: TooltipProps) -> telar::testing::Scoped<ComponentList> {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let tree = telar::testing::scoped(|| {
+        let tooltip = tooltip(props).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[tooltip.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        ComponentList::new(tooltip)
+    });
+    let _ = tree.commands();
+    tree
+}
+
+fn the_save_button() -> telar::focus::Exposed {
+    telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == telar::Role::Button)
+        .expect("the trigger's button is exposed")
+}
+
+fn escape() -> telar::Event {
+    telar::testing::key_with(
+        telar::Key::Named(telar::NamedKey::Escape),
+        telar::ModifiersState::default(),
+    )
+}
+
+fn shows(tree: &ComponentList, text: &str) -> bool {
+    relayout_if_dirty();
+    find_text(&tree.commands(), text)
+}
+
+/// A hint the pointer alone can raise leaves out everyone on a keyboard: reaching the trigger with Tab shows it, and Escape puts it away while the keyboard stays where it was.
+#[test]
+fn the_keyboard_on_the_trigger_shows_the_hint_and_escape_hides_it_in_place() {
+    let mut tree = mounted_with(
+        TooltipProps::props()
+            .text("Writes the file")
+            .children(save_button())
+            .build(),
+    );
+    assert!(!shows(&tree, "Writes the file"));
+
+    let save = the_save_button().id;
+    telar::focus::request(save);
+    assert!(shows(&tree, "Writes the file"), "focus shows it");
+
+    telar::testing::route(&mut tree, &escape());
+    assert!(!shows(&tree, "Writes the file"), "Escape hides it");
+    assert_eq!(telar::focus::current(), Some(save), "focus did not move");
+
+    telar::focus::release(save);
+    telar::focus::request(save);
+    assert!(
+        shows(&tree, "Writes the file"),
+        "coming back to the trigger shows it again"
+    );
+    telar::focus::release(save);
+    assert!(!shows(&tree, "Writes the file"), "leaving it hides it");
+}
+
+/// A press focuses the button without a ring, and the hint follows the ring rather than focus, so a clicked button does not keep its hint after the pointer has gone.
+#[test]
+fn a_press_that_focuses_the_trigger_does_not_hold_the_hint_open() {
+    let tree = mounted_with(
+        TooltipProps::props()
+            .text("Writes the file")
+            .children(save_button())
+            .build(),
+    );
+    telar::focus::request_from_pointer(the_save_button().id);
+    assert!(!shows(&tree, "Writes the file"));
+}
+
+/// What the hint says is what a reader hears after the control's name, so the words a sighted user gets by hovering reach someone who cannot.
+#[test]
+fn the_trigger_is_described_by_what_the_hint_says() {
+    let _tree = mounted_with(
+        TooltipProps::props()
+            .text("Writes the file")
+            .description("Saves to the folder it came from")
+            .children(save_button())
+            .build(),
+    );
+    assert_eq!(
+        the_save_button().description.as_deref(),
+        Some("Writes the file\nSaves to the folder it came from")
+    );
+}
+
+/// A control that is only a picture is already called by its hint's words, and hearing them twice tells a reader nothing; only a sentence beyond them is its description.
+#[test]
+fn a_hint_that_names_its_trigger_describes_it_only_with_its_sentence() {
+    let tree = mounted_with(
+        TooltipProps::props()
+            .text("Save")
+            .names_trigger(true)
+            .children(save_button())
+            .build(),
+    );
+    assert_eq!(the_save_button().description, None);
+    drop(tree);
+
+    let _tree = mounted_with(
+        TooltipProps::props()
+            .text("Save")
+            .names_trigger(true)
+            .description("Saves to the folder it came from")
+            .children(save_button())
+            .build(),
+    );
+    assert_eq!(
+        the_save_button().description.as_deref(),
+        Some("Saves to the folder it came from")
+    );
+}
+
+/// Where the bubble draws `text`, on the surface.
+fn drawn_at(tree: &ComponentList, text: &str) -> telar::Rect {
+    let mut shifts = vec![(0.0f32, 0.0f32)];
+    for command in tree.commands().iter() {
+        match command {
+            DrawCommand::PushMatrix { matrix } => {
+                let (x, y) = shifts.last().copied().unwrap_or_default();
+                shifts.push((x + matrix[4], y + matrix[5]));
+            }
+            DrawCommand::PopMatrix => {
+                shifts.pop();
+            }
+            DrawCommand::Text {
+                text: drawn, rect, ..
+            } if drawn.as_ref() == text => {
+                let (x, y) = shifts.last().copied().unwrap_or_default();
+                return telar::Rect::new(rect.x + x, rect.y + y, rect.width, rect.height);
+            }
+            _ => {}
+        }
+    }
+    panic!("`{text}` is drawn")
+}
+
+/// Someone who needs the hint magnified or read more slowly moves the pointer onto it, and it has to stay while they do; it goes once the pointer has left both it and the trigger.
+#[test]
+fn the_hint_stays_while_the_pointer_is_over_it() {
+    let mut tree = mounted_with(
+        TooltipProps::props()
+            .text("Writes the file")
+            .children(save_button())
+            .build(),
+    );
+    let button = telar::visible_rect(the_save_button().node).expect("the button is laid out");
+    telar::testing::route(
+        &mut tree,
+        &moved(
+            button.x + button.width / 2.0,
+            button.y + button.height / 2.0,
+        ),
+    );
+    assert!(shows(&tree, "Writes the file"));
+
+    let words = drawn_at(&tree, "Writes the file");
+    telar::testing::route(
+        &mut tree,
+        &moved(words.x + words.width / 2.0, words.y + words.height / 2.0),
+    );
+    telar::testing::advance_time(LINGER * 2);
+    assert!(
+        shows(&tree, "Writes the file"),
+        "the pointer is on the hint"
+    );
+
+    telar::testing::route(&mut tree, &moved(9999.0, 9999.0));
+    assert!(!shows(&tree, "Writes the file"), "the pointer left both");
+}
+
+/// Between the trigger and the bubble lies a gap the pointer crosses on its way to the hint, and the hint may not close under it there; a pointer that stops in the gap lets it go shortly after.
+#[test]
+fn the_hint_waits_for_a_pointer_crossing_to_it() {
+    let mut tree = mounted_with(
+        TooltipProps::props()
+            .text("Writes the file")
+            .children(save_button())
+            .build(),
+    );
+    let button = telar::visible_rect(the_save_button().node).expect("the button is laid out");
+    let middle = button.x + button.width / 2.0;
+    telar::testing::route(&mut tree, &moved(middle, button.y + button.height / 2.0));
+    assert!(shows(&tree, "Writes the file"));
+
+    telar::testing::route(&mut tree, &moved(middle, button.y + button.height + 1.0));
+    assert!(shows(&tree, "Writes the file"), "on its way to the hint");
+
+    telar::testing::advance_time(LINGER);
+    assert!(
+        !shows(&tree, "Writes the file"),
+        "it stopped short of the hint"
+    );
+}
+
+/// The pointer leaving the surface from the trigger takes the hint with it at once.
+#[test]
+fn the_pointer_leaving_the_surface_takes_the_hint_with_it() {
+    let mut tree = mounted_with(
+        TooltipProps::props()
+            .text("Writes the file")
+            .children(save_button())
+            .build(),
+    );
+    let button = telar::visible_rect(the_save_button().node).expect("the button is laid out");
+    telar::testing::route(
+        &mut tree,
+        &moved(
+            button.x + button.width / 2.0,
+            button.y + button.height - 1.0,
+        ),
+    );
+    assert!(shows(&tree, "Writes the file"));
+
+    telar::testing::route(&mut tree, &telar::Event::CursorLeft);
+    assert!(!shows(&tree, "Writes the file"));
+}
+
+/// The pointer resting on one control while the keyboard reaches another would leave two hints drawn over each other; the one the keyboard just reached is the one that shows.
+#[test]
+fn the_keyboard_reaching_another_control_puts_away_the_hint_the_pointer_raised() {
+    let mut tree = mounted_with(
+        TooltipProps::props()
+            .text("Writes the file")
+            .children(save_button())
+            .build(),
+    );
+    let button = telar::visible_rect(the_save_button().node).expect("the button is laid out");
+    telar::testing::route(
+        &mut tree,
+        &moved(
+            button.x + button.width / 2.0,
+            button.y + button.height / 2.0,
+        ),
+    );
+    assert!(shows(&tree, "Writes the file"));
+
+    let elsewhere = telar::focus::next_id();
+    telar::focus::register_as(elsewhere, telar::focus::FocusKind::Widget);
+    telar::focus::request(elsewhere);
+    assert!(!shows(&tree, "Writes the file"));
+    telar::focus::unregister(elsewhere);
+}
+
+/// Escape puts away a hint the pointer raised as well, and it stays away while the pointer rests where it was.
+#[test]
+fn escape_hides_a_hint_the_pointer_raised() {
+    let mut tree = mounted_with(
+        TooltipProps::props()
+            .text("Writes the file")
+            .children(save_button())
+            .build(),
+    );
+    let button = telar::visible_rect(the_save_button().node).expect("the button is laid out");
+    let (x, y) = (
+        button.x + button.width / 2.0,
+        button.y + button.height / 2.0,
+    );
+    telar::testing::route(&mut tree, &moved(x, y));
+    assert!(shows(&tree, "Writes the file"));
+
+    telar::testing::route(&mut tree, &escape());
+    telar::testing::route(&mut tree, &moved(x + 1.0, y));
+    assert!(!shows(&tree, "Writes the file"));
+}
+
 /// The shape every hint in an application takes: the name, its binding pushed to the far edge, and a sentence under both. All three have to reach the bubble, because the reason the shortcut is a prop of its own is that folding it into the name loses exactly this arrangement.
 #[test]
 fn a_hint_shows_its_name_its_shortcut_and_its_description() {

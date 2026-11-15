@@ -32,8 +32,6 @@ element group
                   end
                 end
                 element group
-                  element group
-                  end
                 end
               end
             end
@@ -64,6 +62,8 @@ element group
                   end
                 end
                 element group
+                  element group
+                  end
                 end
               end
             end
@@ -73,13 +73,13 @@ element group
     end
   end
 end
-matrix 1,0,0,1,455,320
+matrix 1,0,0,1,371,320
   element group
-    rect 0,0 105x22 fill=#171a2eff radius=11
+    rect 0,0 120x22 fill=#171a2eff radius=11
     element group
       element group
         matrix 1,0,0,1,8,4
-          text 0,0 77x14.28 "Remove Logo" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+          text 0,0 92x14.28 "Remove Frame 1" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
         end
       end
       element group

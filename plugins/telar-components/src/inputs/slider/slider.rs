@@ -290,7 +290,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         commit(snap(min + t * (max - min)));
     });
 
-    shared::captioned(size, box_item(track), label, width)
+    shared::captioned(size, box_item(track), label, width, false)
 }
 
 #[cfg(test)]

@@ -1,0 +1,45 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              element group
+                matrix 1,0,0,1,250,265
+                  text 0,1 30.03x14.28 "Email" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
+                end
+              end
+              element group
+                matrix 1,0,0,1,282,265
+                  text 0,1 6x14.28 "*" size=11.9 family=sans-serif weight=400 color=#cc3342ff lang=en
+                end
+              end
+            end
+            element group
+              rect 250,288 300x32 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+              rect 252,290 296x28 border=1 border-color=#ffffffff radius=8
+              element group
+                matrix 1,0,0,1,262,288
+                  clip 0,0 276x32
+                    text 0,8 276x16.8 "ada.example.com" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
+                    rect 116.76,8 1.5x16.8 fill=#171a2eff
+                  end
+                end
+              end
+            end
+          end
+          element group
+            element group
+              matrix 1,0,0,1,250,322
+                text 0,0 300x14.28 "Enter an address with an @." size=11.9 family=sans-serif weight=400 color=#cc3342ff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

@@ -836,3 +836,57 @@ fn a_modal_overlay_marks_its_boxes_and_names_what_opened_it() {
     assert_eq!(modal_of(tip_node), None);
     ui_tree::set_element_capture(was);
 }
+
+/// Content that answers the pointer withdraws itself from the input registry as the anchored overlay holding it goes, while that overlay is withdrawing from the same registry: a hint that closes when the pointer leaves it.
+#[test]
+fn an_anchored_overlay_whose_content_answers_the_pointer_can_close() {
+    use crate::{ReactiveList, StyledContainer, box_item};
+
+    reset_layout_runtime();
+    let boxed = || {
+        StyledContainer::new(
+            LayoutStyle::new().width(50.0).height(20.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+    };
+    let trigger = boxed();
+    let trigger_node = trigger.layout_node();
+    let showing = signal(true);
+    let hovered = signal(false);
+    let tip = ReactiveList::new(
+        move || vec![showing.get()],
+        |showing: &bool| *showing,
+        move |showing| -> Result<Box<dyn LayoutItem>, LayoutError> {
+            if !showing {
+                return Ok(box_item(boxed()));
+            }
+            let content = boxed().on_hover(move |over| hovered.set(over));
+            Ok(box_item(Overlay::anchored_click_through(
+                LayoutStyle::new(),
+                vec![Box::new(content)],
+                trigger_node,
+                Side::Below,
+            )?))
+        },
+        0.0,
+    )
+    .unwrap();
+    let section = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![Box::new(trigger), Box::new(tip)],
+    )
+    .unwrap();
+    compute_layout(
+        section.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(section);
+    let _ = tree.commands();
+
+    showing.set(false);
+    let _ = tree.commands();
+}

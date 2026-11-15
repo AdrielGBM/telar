@@ -187,7 +187,11 @@ reading out of 100, and its `spinner` a progress bar with no value, which says t
 how far along it is; each is called what its call's `a11y_label:` names it. A `description` is what a reader says after
 the name, role and state, as help rather than identity: a field's hint, why it is invalid, a tooltip's text.
 `invalid`, `required` and `readonly` say that what a field holds fails its checks, that it must be filled in,
-and that it can be read but not changed.
+and that it can be read but not changed. A control declares them with `focus::set_description`,
+`set_invalid`, `set_required` and `set_readonly` (or `StyledContainer::described`, `invalid`, `required` and
+`readonly`), each read again whenever what it reads changes, and every target reads them from there. A
+`text_field` sets them from its `error`, `required` and `hint`, and a `tooltip` describes the controls in its
+trigger by what it says, showing for the keyboard as it does for the pointer and put away with Escape.
 
 | Target | Value | Description and validity |
 | --- | --- | --- |

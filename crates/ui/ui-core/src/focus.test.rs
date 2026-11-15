@@ -622,6 +622,40 @@ fn the_keyboard_is_left_within_a_region_while_inside_it_or_nowhere() {
     clear();
 }
 
+/// A box around controls it did not build finds them by where they are, and hears when the keyboard reaches one of them; a press that focuses one shows no ring, so it does not count.
+#[test]
+fn a_region_finds_its_controls_and_shows_focus_only_when_the_keyboard_is_inside() {
+    use crate::container::Container;
+    use crate::context::{compute_layout, reset_layout_runtime};
+    use crate::{LayoutItem, box_item};
+    use layout_core::{AvailableSpace, LayoutStyle};
+
+    reset_layout_runtime();
+    clear();
+    let inside = laid_out_box().on_focus(|_| {});
+    let inside_id = inside.focus_id().expect("focusable");
+    let region = Container::new(LayoutStyle::new(), vec![box_item(inside)]).unwrap();
+    let outside = laid_out_box().on_focus(|_| {});
+    let outside_id = outside.focus_id().expect("focusable");
+    compute_layout(
+        region.layout_node(),
+        AvailableSpace::Definite(50.0),
+        AvailableSpace::Definite(20.0),
+    )
+    .unwrap();
+    let region = region.layout_node();
+
+    assert_eq!(controls_within(region), vec![inside_id]);
+    assert!(!shows_focus_within(region), "nothing is focused");
+    request(inside_id);
+    assert!(shows_focus_within(region), "Tab reached the control inside");
+    request_from_pointer(inside_id);
+    assert!(!shows_focus_within(region), "a press shows no ring");
+    request(outside_id);
+    assert!(!shows_focus_within(region), "the keyboard went elsewhere");
+    clear();
+}
+
 fn three_stops() -> [FocusId; 3] {
     clear();
     let stops = [next_id(), next_id(), next_id()];
