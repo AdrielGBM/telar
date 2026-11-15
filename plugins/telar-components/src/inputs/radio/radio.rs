@@ -58,12 +58,12 @@ fn dot_style(size: ControlSize) -> LayoutStyle {
 /// One radio button in a group: a ring that fills its centre dot (and accents its border) while the bound `selected` signal equals this button's `value`; tapping the row sets `selected` to `value` (and fires `on_select`). A radio *group* is several `radio`s sharing one `selected` signal with different `value`s. High-level sugar over the primitives (`box` + `on_press` + a reactive fill); lives in `telar-components`, not the kernel. `selected` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal, so it never matches — a lone default radio), `Some` is the shared group signal.
 #[derive(Props)]
 pub struct RadioProps {
-    /// The group's bound selection. `None` (the default) is uncontrolled — the widget makes its own `signal(0)`.
+    /// The group's bound selection, `None` inside the signal while nothing is chosen. Leaving the prop out is uncontrolled — the widget makes its own signal.
     #[props(some, into, default)]
-    pub selected: Option<RwSignal<u32>>,
+    pub selected: Option<RwSignal<Option<usize>>>,
     /// This button's value: it is selected when `selected` equals it, and a tap sets `selected` to it.
     #[props(default)]
-    pub value: u32,
+    pub value: usize,
     #[props(into, default)]
     pub label: Reactive<String>,
     /// How large the radio is drawn: its ring, dot and label, and the control height its row stands at, as [`ControlSize`] works them out.
@@ -74,7 +74,7 @@ pub struct RadioProps {
     pub color: Reactive<Color>,
     /// Fires with this button's `value` when it becomes selected.
     #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(u32)>>,
+    pub on_select: Option<Rc<dyn Fn(usize)>>,
     /// Amends the paint of the ring — the radio's **principal surface** — selected and not. See [`telar::SurfaceStyle`] for when a theme token or [`RadioTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -91,14 +91,14 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         on_select,
         style,
     } = props;
-    let selected = selected.unwrap_or_else(|| signal(0u32));
+    let selected = selected.unwrap_or_else(|| signal(None));
 
     let dot_selected = selected;
     let dot_color = color.clone();
     let dot = StyledContainer::new(
         dot_style(size),
         move |r| {
-            let fill = if dot_selected.get() == value {
+            let fill = if dot_selected.get() == Some(value) {
                 shared::resolve(&dot_color, shared::accent)
             } else {
                 Color::TRANSPARENT
@@ -115,7 +115,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ring = StyledContainer::new(
         ring_style(size),
         move |r| {
-            let stroke = if ring_selected.get() == value {
+            let stroke = if ring_selected.get() == Some(value) {
                 shared::resolve(&color, shared::accent)
             } else {
                 shared::border()
@@ -140,9 +140,9 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         box_item(ring),
         label,
         Role::Radio,
-        move || announced.get() == value,
+        move || announced.get() == Some(value),
         move || {
-            select.set(value);
+            select.set(Some(value));
             if let Some(cb) = &on_select {
                 cb(value);
             }

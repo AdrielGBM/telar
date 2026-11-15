@@ -3,7 +3,7 @@ use crate::shared::components::card::{CardProps, card};
 use crate::shared::components::code_line::{CodeLineProps, code_line};
 use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
 use crate::shared::components::example::{ExampleProps, example};
-let tab = signal(0u32);
+let tab = signal(0usize);
 let open = signal(true);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

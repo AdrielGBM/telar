@@ -99,7 +99,7 @@ fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
 
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let item = menu(
         MenuProps::props()
@@ -138,7 +138,7 @@ fn escape_closes_a_menu_whose_trigger_holds_focus() {
 
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let item = menu(
         MenuProps::props()
@@ -170,7 +170,7 @@ fn escape_closes_a_menu_whose_trigger_holds_focus() {
 #[test]
 fn selecting_an_item_fires_on_select_and_closes() {
     crate::test_support::fresh_layout_runtime();
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let item = menu(
         MenuProps::props()
@@ -225,7 +225,7 @@ fn the_keyboard_steps_over_what_it_cannot_commit() {
 
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let structured = Children::new(|| {
         let mut items = Vec::new();
@@ -281,7 +281,7 @@ fn the_keyboard_steps_over_what_it_cannot_commit() {
 #[test]
 fn a_disabled_row_does_not_commit_on_a_tap() {
     crate::test_support::fresh_layout_runtime();
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let structured = Children::new(|| {
         let mut items = Vec::new();
@@ -337,7 +337,7 @@ fn char_key(c: char) -> Event {
 }
 
 /// Rename · Duplicate · Delete · [disabled] Deploy. Three rows share a first letter and the fourth is out of reach, which is the whole of what type-ahead has to tell apart.
-fn typeahead_menu(sink: Rc<Cell<Option<u32>>>) -> Box<dyn LayoutItem> {
+fn typeahead_menu(sink: Rc<Cell<Option<usize>>>) -> Box<dyn LayoutItem> {
     let structured = Children::new(|| {
         let mut items = Vec::new();
         for (label, disabled) in [
@@ -373,13 +373,13 @@ fn typeahead_menu(sink: Rc<Cell<Option<u32>>>) -> Box<dyn LayoutItem> {
 }
 
 /// Opens a menu from the keyboard, types `typed`, commits, and reports the index that committed.
-fn typed_pick(typed: &str) -> Option<u32> {
+fn typed_pick(typed: &str) -> Option<usize> {
     use telar::NamedKey;
 
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
     telar::testing::reset_keyboard();
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
 
     let mut tree = telar::testing::scoped(|| ComponentList::new(typeahead_menu(seen.clone())));
 
@@ -431,7 +431,7 @@ fn a_modified_character_is_not_a_search() {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
     telar::testing::reset_keyboard();
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
 
     telar::focus::focus_next();
@@ -1127,7 +1127,7 @@ fn a_row_comes_and_goes_with_what_it_acts_on_while_the_menu_is_open() {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
     let shown = signal(false);
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let structured = Children::new(move || {
         let mut items = Vec::new();

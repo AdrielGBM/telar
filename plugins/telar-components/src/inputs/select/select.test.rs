@@ -23,7 +23,7 @@ fn sizes() -> Children {
 #[test]
 fn builds_and_lays_out() {
     crate::test_support::fresh_layout_runtime();
-    let picked = signal(1u32);
+    let picked = signal(Some(1usize));
     let item = select(
         SelectProps::props()
             .selected(picked)
@@ -54,8 +54,8 @@ fn selecting_an_option_sets_the_signal_and_closes() {
     use std::rc::Rc;
 
     crate::test_support::fresh_layout_runtime();
-    let picked = signal(0u32);
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let picked = signal(Some(0usize));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let item = select(
         SelectProps::props()
@@ -93,7 +93,7 @@ fn selecting_an_option_sets_the_signal_and_closes() {
 
     assert_eq!(
         picked.get(),
-        2,
+        Some(2),
         "picking the third option sets the signal to 2"
     );
     assert_eq!(seen.get(), Some(2), "on_select fires with the picked index");
@@ -107,7 +107,7 @@ fn selecting_an_option_sets_the_signal_and_closes() {
 #[test]
 fn the_trigger_names_the_chosen_row_before_the_panel_has_ever_opened() {
     crate::test_support::fresh_layout_runtime();
-    let picked = signal(1u32);
+    let picked = signal(Some(1usize));
     let item = select(
         SelectProps::props()
             .selected(picked)
@@ -137,8 +137,8 @@ fn a_choice_can_be_disabled_which_a_list_of_strings_could_not_say() {
     use std::rc::Rc;
 
     crate::test_support::fresh_layout_runtime();
-    let picked = signal(0u32);
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let picked = signal(Some(0usize));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let rows = Children::new(|| {
         let mut items = Vec::new();
@@ -195,7 +195,7 @@ fn a_choice_can_be_disabled_which_a_list_of_strings_could_not_say() {
     route(&mut tree, &release(tx, oy));
 
     assert_eq!(seen.get(), None, "a disabled choice commits nothing");
-    assert_eq!(picked.get(), 0, "and leaves the bound signal alone");
+    assert_eq!(picked.get(), Some(0), "and leaves the bound signal alone");
 }
 
 /// Every string the tree draws, for asserting on what a trigger says.
@@ -240,7 +240,7 @@ fn drawn_rects(tree: &ComponentList) -> Vec<telar::Rect> {
 fn a_stretched_select_keeps_the_width_of_its_row_after_a_longer_pick() {
     use telar::LayoutStyle;
     crate::test_support::fresh_layout_runtime();
-    let picked = signal(0u32);
+    let picked = signal(Some(0usize));
     let item = select(
         SelectProps::props()
             .selected(picked)
@@ -275,7 +275,7 @@ fn a_stretched_select_keeps_the_width_of_its_row_after_a_longer_pick() {
     route(&mut tree, &release(20.0, oy));
     relayout_if_dirty();
 
-    assert_eq!(picked.get(), 2, "the long choice was picked");
+    assert_eq!(picked.get(), Some(2), "the long choice was picked");
     assert_eq!(field_rect.get().width, 136.0, "after the pick");
     assert_eq!(
         drawn_rects(&tree)[0].width,
@@ -291,7 +291,7 @@ fn stretched_selects_share_a_row_evenly_whatever_they_show() {
     crate::test_support::fresh_layout_runtime();
     let short = select(
         SelectProps::props()
-            .selected(signal(0u32))
+            .selected(signal(Some(0usize)))
             .stretch(true)
             .children(uneven())
             .build(),
@@ -299,7 +299,7 @@ fn stretched_selects_share_a_row_evenly_whatever_they_show() {
     .unwrap();
     let long = select(
         SelectProps::props()
-            .selected(signal(2u32))
+            .selected(signal(Some(2usize)))
             .stretch(true)
             .children(uneven())
             .build(),
@@ -362,7 +362,7 @@ fn a_stretched_select_in_a_content_sized_row_is_as_wide_as_what_it_shows() {
     crate::test_support::fresh_layout_runtime();
     let item = select(
         SelectProps::props()
-            .selected(signal(2u32))
+            .selected(signal(Some(2usize)))
             .stretch(true)
             .children(uneven())
             .build(),
@@ -411,7 +411,7 @@ fn many(count: u32) -> Children {
 #[test]
 fn a_tall_panel_is_capped_to_the_window_and_follows_the_keyboard() {
     crate::test_support::fresh_layout_runtime();
-    let picked = signal(0u32);
+    let picked = signal(Some(0usize));
     let item = select(
         SelectProps::props()
             .selected(picked)
@@ -459,7 +459,7 @@ fn a_tall_panel_is_capped_to_the_window_and_follows_the_keyboard() {
     route(&mut tree, &release(tx, last_visible));
     assert_eq!(
         picked.get(),
-        24,
+        Some(24),
         "the cursor on the last row scrolled it to the bottom of the panel"
     );
 }
@@ -564,7 +564,7 @@ fn the_rows_take_the_list_tokens_height_and_the_chosen_one_the_selection_wash() 
             ..crate::ListTokens::default()
         }),
     });
-    let tree = mounted(SelectProps::props().selected(signal(1u32)).build(), true);
+    let tree = mounted(SelectProps::props().selected(signal(Some(1usize))).build(), true);
     let options = crate::test_support::drawn(telar::focus::Role::Option);
     assert_eq!(options.len(), 3);
     assert!(options.iter().all(|row| row.height == 40.0), "{options:?}");
@@ -583,4 +583,41 @@ fn the_rows_take_the_list_tokens_height_and_the_chosen_one_the_selection_wash() 
     assert_eq!(rows.len(), 3, "{rows:?}");
     assert_eq!(rows[1].fill, Some(Paint::Solid(crate::shared::held_wash())));
     assert_eq!(rows[2].fill, None);
+}
+
+#[test]
+fn nothing_chosen_shows_the_placeholder_and_choosing_sets_the_index() {
+    crate::test_support::fresh_layout_runtime();
+    let picked: RwSignal<Option<usize>> = signal(None);
+    let item = select(
+        SelectProps::props()
+            .selected(picked)
+            .children(sizes())
+            .build(),
+    )
+    .unwrap();
+    compute_layout(
+        item.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let mut tree = ComponentList::new(item);
+    let _ = tree.commands();
+    assert!(telar::testing::find_text(&tree, "Select"));
+    assert_eq!(picked.get(), None);
+
+    let tx = (panel_width() / 2.0) as f64;
+    let ty = (crate::shared::control_height(telar::ControlSize::Regular) / 2.0) as f64;
+    route(&mut tree, &press(tx, ty));
+    route(&mut tree, &release(tx, ty));
+    relayout_if_dirty();
+    let oy = (crate::shared::control_height(telar::ControlSize::Regular)
+        + crate::shared::popup_offset(telar::ControlSize::Regular)
+        + panel_pad(telar::ControlSize::Regular)
+        + row_height(telar::ControlSize::Regular) / 2.0) as f64;
+    route(&mut tree, &press(tx, oy));
+    route(&mut tree, &release(tx, oy));
+    assert_eq!(picked.get(), Some(0));
+    assert!(telar::testing::find_text(&tree, "Small"));
 }

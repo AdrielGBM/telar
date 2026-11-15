@@ -112,7 +112,12 @@ fn labelled_fields() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
         }
         Ok(items)
     });
-    let size = select(SelectProps::props().children(sizes).build())?;
+    let size = select(
+        SelectProps::props()
+            .selected(telar::signal(Some(0)))
+            .children(sizes)
+            .build(),
+    )?;
     let size = Container::new(LayoutStyle::new(), vec![size])?.a11y_label(|| "Size");
     Ok(vec![box_item(speed), box_item(size)])
 }

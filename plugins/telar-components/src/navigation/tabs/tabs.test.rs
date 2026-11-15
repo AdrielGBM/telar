@@ -62,7 +62,7 @@ fn builds_and_lays_out() {
 #[test]
 fn pressing_the_last_tab_sets_selected_index() {
     crate::test_support::fresh_layout_runtime();
-    let selected = signal(0u32);
+    let selected = signal(0usize);
     let mut item = tabs(
         TabsProps::props()
             .items(vec!["One", "Two"])
@@ -255,8 +255,8 @@ fn a_reactive_label_follows_what_it_reads() {
 fn an_icon_tab_is_the_same_square_as_an_icon_button() {
     crate::test_support::fresh_layout_runtime();
     let tab_list = tab_list(
-        signal(0u32),
-        vec![Tab::new(0u32, "One").icon(telar::icon!("lucide:square"))],
+        signal(0usize),
+        vec![Tab::new(0usize, "One").icon(telar::icon!("lucide:square"))],
         Color::TRANSPARENT.into(),
         None,
         ControlSize::Regular,
@@ -439,13 +439,13 @@ const MANY: [&str; 6] = [
 ];
 
 /// Six tabs in a row `width` wide, the second chosen, laid out and drawn.
-fn strip_of(width: f32, selected: RwSignal<u32>) -> (ComponentList, NodeId) {
+fn strip_of(width: f32, selected: RwSignal<usize>) -> (ComponentList, NodeId) {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
     let item = tab_list(
         selected,
         MANY.iter()
-            .zip(0u32..)
+            .zip(0usize..)
             .map(|(name, i)| Tab::new(i, *name))
             .collect(),
         Color::TRANSPARENT.into(),
@@ -497,7 +497,7 @@ fn tabs_that_fit_stand_as_they_are_with_no_arrows() {
 
 #[test]
 fn an_arrow_chooses_the_tab_before_or_after_the_chosen_one() {
-    let selected = signal(0u32);
+    let selected = signal(0usize);
     let (mut tree, strip) = strip_of(220.0, selected);
     let strip = telar::track_layout(strip).unwrap().get();
     let first = tab_rects()[0];
@@ -526,7 +526,7 @@ fn an_arrow_chooses_the_tab_before_or_after_the_chosen_one() {
 
 #[test]
 fn the_tab_chosen_stands_in_the_middle_of_the_strip() {
-    let selected = signal(0u32);
+    let selected = signal(0usize);
     let (mut tree, strip) = strip_of(220.0, selected);
     let strip = telar::track_layout(strip).unwrap().get();
     selected.set(3);
@@ -542,7 +542,7 @@ fn the_tab_chosen_stands_in_the_middle_of_the_strip() {
 /// A mouse with one wheel moves the strip too, and moving it chooses nothing.
 #[test]
 fn the_wheel_moves_the_tabs_along_without_choosing_one() {
-    let selected = signal(0u32);
+    let selected = signal(0usize);
     let (mut tree, _) = strip_of(220.0, selected);
     let first = tab_rects()[0];
     route(

@@ -87,9 +87,9 @@ impl SelectTokens {
 /// Its choices are written as `item` children, the same pieces a `menu` is made of, so one can be disabled or carry an icon — which a list of strings could never say. What made that impossible for a select and not for a menu was the trigger: it has to name the current choice before the panel has ever been opened, and the rows only exist once it has. See `ListContext::declare`.
 #[derive(Props)]
 pub struct SelectProps {
-    /// The bound selection index. `None` (the default) makes the select uncontrolled — it owns an internal signal so it still tracks a choice, just not one the caller can read.
+    /// The bound selection index, `None` inside the signal while nothing is chosen and the trigger shows its placeholder. Leaving the prop out makes the select uncontrolled — it owns an internal signal so it still tracks a choice, just not one the caller can read.
     #[props(some, into, default)]
-    pub selected: Option<RwSignal<u32>>,
+    pub selected: Option<RwSignal<Option<usize>>>,
     /// How large the field and its list are drawn: the field's height, padding, value and caret, and the list's padding, width and offset, as [`ControlSize`] works them out. The choices are sized where they are written.
     #[props(default)]
     pub size: ControlSize,
@@ -98,7 +98,7 @@ pub struct SelectProps {
     pub color: Reactive<Color>,
     /// Fired with the picked index whenever a selection is made.
     #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(u32)>>,
+    pub on_select: Option<Rc<dyn Fn(usize)>>,
     /// Take the width the row offers instead of the fixed trigger width — what a form field wants, where a fixed-width control beside full-width ones reads as a mistake. The panel opens at that width too.
     #[props(default = false)]
     pub stretch: bool,
@@ -122,7 +122,7 @@ pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         children,
     } = props;
     // `None` selection is uncontrolled: own an internal signal so the trigger still tracks a choice.
-    let selected = selected.unwrap_or_else(|| signal(0u32));
+    let selected = selected.unwrap_or_else(|| signal(None));
     dropdown::dropdown(dropdown::Dropdown {
         placeholder: || strings::text(strings::SELECT),
         size,

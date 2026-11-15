@@ -53,7 +53,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
         .play(|canvas| {
-            let trigger = by_role(Role::ComboBox).named("Small");
+            let trigger = by_role(Role::ComboBox).named("Select");
             canvas.expect_expanded(trigger.clone(), false)?;
             canvas.click(trigger.clone())?;
             canvas.expect_expanded(trigger, true)?;
@@ -65,7 +65,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_toggled(by_role(Role::Option).named("Large"), true)
         }),
         preview!(select: SelectProps, "Bound selection", |p| {
-            let selected = p.signal("selected", 1u32);
+            let selected = p.signal("selected", Some(1usize));
             select(
                 SelectProps::props()
                     .selected(selected)
@@ -86,7 +86,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_expanded(by_role(Role::ComboBox).named("Large"), false)
         }),
         preview!(select: SelectProps, "Long list", |p| {
-            let selected = p.signal("selected", 0u32);
+            let selected = p.signal("selected", Some(0usize));
             select(
                 SelectProps::props()
                     .selected(selected)

@@ -4,8 +4,8 @@ use crate::shared::components::code_line::{CodeLineProps, code_line};
 use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
 use crate::shared::components::example::{ExampleProps, example};
 // The select binds a signal (the chosen index); the menu is stateless — each item is a one-shot action.
-let picked = signal(0u32);
-let action = signal(0u32);
+let picked = signal(Some(0usize));
+let action = signal(0usize);
 // Driven from the toggles below, so the disabled row and the ticked one can be seen changing.
 let cant_redo = signal(false);
 let ruler = signal(true);
@@ -24,7 +24,7 @@ col gap:20
                 item label:"Small"
                 item label:"Medium"
                 item label:"Large"
-            text "Size · {$picked}" font_size:14 color:$theme.muted
+            text "Size · {$picked.map_or(String::new(), |i| i.to_string())}" font_size:14 color:$theme.muted
         code_line code:"select selected:$picked / item label:'Small' / item label:'Medium'"
     example title:"menu — a click-triggered list of one-shot actions"
         card gap:10

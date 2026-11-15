@@ -20,8 +20,8 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     // The select binds a signal (the chosen index); the menu is stateless — each item is a one-shot action.
-    let picked = signal(0u32);
-    let action = signal(0u32);
+    let picked = signal(Some(0usize));
+    let action = signal(0usize);
     // Driven from the toggles below, so the disabled row and the ticked one can be seen changing.
     let cant_redo = signal(false);
     let ruler = signal(true);
@@ -70,7 +70,7 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let __text_0 = {
                                     let picked = picked.clone();
                                     Text::declaring(
-                                        move || format!("Size · {}", picked.get()),
+                                        move || format!("Size · {}", picked.get().map_or(String::new(), |i| i.to_string())),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?

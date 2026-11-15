@@ -180,7 +180,7 @@ pub struct MenuProps {
     pub size: ControlSize,
     /// Fired with the index of the row picked on the first panel, among its rows. A submenu's rows report to its own `on_select`.
     #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(u32)>>,
+    pub on_select: Option<Rc<dyn Fn(usize)>>,
     /// The colour a bordered trigger is framed in and the rows' washes are tinted with. `Color::TRANSPARENT` (the default) frames it in the theme accent and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -340,7 +340,7 @@ pub struct ContextMenuProps {
     pub around: Option<Rect>,
     /// Fired with the index of the row picked on the first panel, among its rows. A submenu's rows report to its own `on_select`.
     #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(u32)>>,
+    pub on_select: Option<Rc<dyn Fn(usize)>>,
     /// Run when the menu is done with: a row was picked, Escape was pressed, or the hand went elsewhere. The caller owns whether the menu exists, so this is how it says the answer is in.
     #[props(default = Rc::new(|| {}))]
     pub on_close: Rc<dyn Fn()>,

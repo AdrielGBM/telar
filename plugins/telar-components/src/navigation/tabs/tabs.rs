@@ -76,7 +76,7 @@ pub struct TabsProps {
     pub items: Vec<&'static str>,
     /// Bound active index. `None` (the default) is uncontrolled — the widget owns its own `signal(0)`.
     #[props(some, into, default)]
-    pub selected: Option<RwSignal<u32>>,
+    pub selected: Option<RwSignal<usize>>,
     /// Accent (active tab fill). `Color::TRANSPARENT` (the default) means "unset": falls back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -143,10 +143,10 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         style,
     } = props;
     // Uncontrolled: own the index so the bar still tracks the active tab when the caller binds no signal.
-    let selected = selected.unwrap_or_else(|| signal(0u32));
+    let selected = selected.unwrap_or_else(|| signal(0usize));
     let entries = items
         .into_iter()
-        .zip(0u32..)
+        .zip(0usize..)
         .map(|(name, index)| Tab::new(index, name))
         .collect();
     tab_row(size, selected, entries, color, label, style)

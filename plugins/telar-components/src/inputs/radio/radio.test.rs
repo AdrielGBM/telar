@@ -13,7 +13,7 @@ fn lay_out(node: NodeId) -> (f64, f64) {
 #[test]
 fn tap_sets_group_selection_to_value() {
     crate::test_support::fresh_layout_runtime();
-    let selected = signal(0u32);
+    let selected = signal(Some(0usize));
     let mut widget = radio(
         RadioProps::props()
             .selected(selected)
@@ -24,20 +24,20 @@ fn tap_sets_group_selection_to_value() {
     .unwrap();
     let (cx, cy) = lay_out(widget.layout_node());
 
-    assert_eq!(selected.get(), 0, "starts unselected (group is on 0)");
+    assert_eq!(selected.get(), Some(0), "starts unselected (group is on 0)");
     widget.on_event(&press(cx, cy));
     widget.on_event(&release(cx, cy));
-    assert_eq!(selected.get(), 2, "a tap selects this button's value");
+    assert_eq!(selected.get(), Some(2), "a tap selects this button's value");
 }
 
 #[test]
 fn on_select_reports_value() {
-    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     crate::test_support::fresh_layout_runtime();
     let mut widget = radio(
         RadioProps::props()
-            .selected(signal(0u32))
+            .selected(signal(Some(0usize)))
             .value(5)
             .on_select(Rc::new(move |v| sink.set(Some(v))))
             .build(),
@@ -87,7 +87,7 @@ fn ring_and_dot(item: Box<dyn LayoutItem>) -> Vec<(telar::Rect, RectStyle)> {
 
 fn chosen(style: Option<telar::SurfaceAmendment>) -> Box<dyn LayoutItem> {
     let mut props = RadioProps::props()
-        .selected(signal(1u32))
+        .selected(signal(Some(1usize)))
         .value(1)
         .label("Small")
         .build();
@@ -135,7 +135,7 @@ fn the_ring_and_its_dot_scale_with_the_radio_s_size() {
         crate::test_support::fresh_layout_runtime();
         let radio = radio(
             RadioProps::props()
-                .selected(signal(1u32))
+                .selected(signal(Some(1usize)))
                 .value(1)
                 .label("Small")
                 .size(size)
@@ -169,4 +169,23 @@ fn a_style_amendment_reshapes_the_ring() {
         BorderRadius::all(0.0),
         "the dot is not the principal surface"
     );
+}
+
+#[test]
+fn a_group_with_nothing_chosen_selects_the_tapped_value() {
+    crate::test_support::fresh_layout_runtime();
+    let selected: RwSignal<Option<usize>> = signal(None);
+    let mut widget = radio(
+        RadioProps::props()
+            .selected(selected)
+            .value(0)
+            .label("Small")
+            .build(),
+    )
+    .unwrap();
+    let (cx, cy) = lay_out(widget.layout_node());
+    assert_eq!(selected.get(), None);
+    widget.on_event(&press(cx, cy));
+    widget.on_event(&release(cx, cy));
+    assert_eq!(selected.get(), Some(0));
 }

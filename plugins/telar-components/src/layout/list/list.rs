@@ -121,11 +121,11 @@ pub(crate) enum Act {
 pub struct ListContext(Rc<ListState>);
 
 struct ListState {
-    pick: Rc<dyn Fn(u32)>,
+    pick: Rc<dyn Fn(usize)>,
     /// The keyboard cursor. Deliberately not the selection: moving it commits nothing.
-    highlighted: RwSignal<Option<u32>>,
+    highlighted: RwSignal<Option<usize>>,
     /// The bound choice, for a list that has one (`select`) rather than one-shot actions (`menu`).
-    selected: Option<RwSignal<u32>>,
+    selected: Option<RwSignal<Option<usize>>>,
     color: Reactive<Color>,
     rows: RefCell<Vec<Row>>,
     /// A cursor asked for before there was anything to put it on. Opening with the down arrow happens in a key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
@@ -150,9 +150,9 @@ struct Row {
 
 impl ListContext {
     pub(crate) fn new(
-        pick: Rc<dyn Fn(u32)>,
-        highlighted: RwSignal<Option<u32>>,
-        selected: Option<RwSignal<u32>>,
+        pick: Rc<dyn Fn(usize)>,
+        highlighted: RwSignal<Option<usize>>,
+        selected: Option<RwSignal<Option<usize>>>,
         color: Reactive<Color>,
     ) -> Self {
         Self(Rc::new(ListState {
@@ -171,8 +171,8 @@ impl ListContext {
 
     /// The list of one panel of a menu, whose rows move the cursor as the pointer rests on them, draw with the menu's tokens, and may open a submenu.
     pub(crate) fn menu(
-        pick: Rc<dyn Fn(u32)>,
-        highlighted: RwSignal<Option<u32>>,
+        pick: Rc<dyn Fn(usize)>,
+        highlighted: RwSignal<Option<usize>>,
         color: Reactive<Color>,
         cascade: Rc<crate::overlays::menu::menu_panel::Cascade>,
     ) -> Self {
@@ -222,9 +222,9 @@ impl ListContext {
     }
 
     /// What the row at `index` says right now, for a trigger that names the chosen one.
-    pub(crate) fn label_of(&self, index: u32) -> Option<String> {
+    pub(crate) fn label_of(&self, index: usize) -> Option<String> {
         // Cloned out of the borrow before it is called: a label may read a signal, and reading one can flush effects that come back through the registry.
-        let label = self.0.rows.borrow().get(index as usize)?.label.clone();
+        let label = self.0.rows.borrow().get(index)?.label.clone();
         Some(label.get())
     }
 
@@ -242,7 +242,7 @@ impl ListContext {
     }
 
     /// Registers a row and hands it the index it will commit. Called by each piece as it builds itself, so the order is the order they are written in.
-    pub(crate) fn claim(&self, reachable: Reactive<bool>, label: Reactive<String>) -> u32 {
+    pub(crate) fn claim(&self, reachable: Reactive<bool>, label: Reactive<String>) -> usize {
         let index = {
             let mut rows = self.0.rows.borrow_mut();
             rows.push(Row {
@@ -252,7 +252,7 @@ impl ListContext {
                 focus: Cell::new(None),
                 act: RefCell::new(None),
             });
-            rows.len() as u32 - 1
+            rows.len() - 1
         };
         // Outside the borrow: `set` flushes, and an effect that reads the cursor would re-enter the registry.
         if self.0.seed.get() && reachable.get() {
@@ -277,53 +277,53 @@ impl ListContext {
     }
 
     /// Tells the list where row `index` is drawn, the control a reader is pointed at for it, and what committing it from the keyboard does.
-    pub(crate) fn attach(&self, index: u32, node: NodeId, focus: FocusId, act: Act) {
-        if let Some(row) = self.0.rows.borrow().get(index as usize) {
+    pub(crate) fn attach(&self, index: usize, node: NodeId, focus: FocusId, act: Act) {
+        if let Some(row) = self.0.rows.borrow().get(index) {
             row.node.set(Some(node));
             row.focus.set(Some(focus));
             row.act.replace(Some(act));
         }
     }
 
-    pub(crate) fn node_of(&self, index: u32) -> Option<NodeId> {
-        self.0.rows.borrow().get(index as usize)?.node.get()
+    pub(crate) fn node_of(&self, index: usize) -> Option<NodeId> {
+        self.0.rows.borrow().get(index)?.node.get()
     }
 
     /// The control a reader is pointed at for the row at `index`.
-    pub(crate) fn focus_of(&self, index: u32) -> Option<FocusId> {
-        self.0.rows.borrow().get(index as usize)?.focus.get()
+    pub(crate) fn focus_of(&self, index: usize) -> Option<FocusId> {
+        self.0.rows.borrow().get(index)?.focus.get()
     }
 
     /// What committing the row at `index` from the keyboard does.
-    pub(crate) fn act_of(&self, index: u32) -> Option<Act> {
+    pub(crate) fn act_of(&self, index: usize) -> Option<Act> {
         self.0
             .rows
             .borrow()
-            .get(index as usize)?
+            .get(index)?
             .act
             .borrow()
             .clone()
     }
 
     /// Commits the row at `index` as a press on it would: the list's pick, then the row's own action.
-    pub(crate) fn commit(&self, index: u32) {
+    pub(crate) fn commit(&self, index: usize) {
         if let Some(Act::Run(act)) = self.act_of(index) {
             act();
         }
     }
 
-    pub(crate) fn highlighted(&self) -> RwSignal<Option<u32>> {
+    pub(crate) fn highlighted(&self) -> RwSignal<Option<usize>> {
         self.0.highlighted
     }
 
-    pub(crate) fn len(&self) -> u32 {
-        self.0.rows.borrow().len() as u32
+    pub(crate) fn len(&self) -> usize {
+        self.0.rows.borrow().len()
     }
 
     /// Moves the cursor `delta` places, passing over rows it may not stop on and wrapping at the ends.
     ///
     /// Skipping rather than stopping is what makes a disabled row and a separator the same thing to the keyboard: both are in the list and neither is a destination. Returns `None` when nothing in the list can be reached at all, which is the only case where an arrow key does nothing.
-    pub(crate) fn step(&self, from: Option<u32>, delta: i64) -> Option<u32> {
+    pub(crate) fn step(&self, from: Option<usize>, delta: i64) -> Option<usize> {
         let n = self.len() as i64;
         if n == 0 {
             return None;
@@ -338,16 +338,16 @@ impl ListContext {
         // At most one lap: a list whose every row is unreachable must not spin.
         (1..=n).find_map(|k| {
             let i = (start + delta.signum() * k).rem_euclid(n);
-            rows[i as usize].reachable.get().then_some(i as u32)
+            rows[i as usize].reachable.get().then_some(i as usize)
         })
     }
 
     /// The first row the keyboard may stop on, from whichever end `delta` starts at. What Home and End mean, and where a fresh cursor lands.
-    pub(crate) fn edge(&self, delta: i64) -> Option<u32> {
+    pub(crate) fn edge(&self, delta: i64) -> Option<usize> {
         self.step(None, delta)
     }
 
-    pub(crate) fn pick(&self, index: u32) {
+    pub(crate) fn pick(&self, index: usize) {
         (self.0.pick)(index);
     }
 
@@ -357,19 +357,18 @@ impl ListContext {
     }
 
     /// Extends the type-ahead query with `c` and returns the row it now names, or `None` when nothing matches. See [`TypeAhead::extend`] for why a repeated letter cycles and a refined query holds still.
-    pub(crate) fn type_ahead(&self, c: char, from: Option<u32>) -> Option<u32> {
+    pub(crate) fn type_ahead(&self, c: char, from: Option<usize>) -> Option<usize> {
         let needle = self.0.search.borrow_mut().extend(c);
         let rows = self.0.rows.borrow();
         needle
-            .find(from.map(|i| i as usize), rows.len(), |i| {
+            .find(from, rows.len(), |i| {
                 let row = &rows[i];
                 row.reachable.get().then(|| row.label.get())
             })
-            .map(|i| i as u32)
     }
 
     /// The pointer came to rest on row `index`. In a menu that is where the cursor goes, and it opens the submenu the row hangs or closes one another row had open; any other list leaves its cursor where the keyboard put it.
-    pub(crate) fn pointed(&self, index: u32) {
+    pub(crate) fn pointed(&self, index: usize) {
         if let Some(cascade) = &self.0.menu {
             self.0.highlighted.set_if_changed(Some(index));
             cascade.pointed(index, matches!(self.act_of(index), Some(Act::Opens)));
@@ -559,7 +558,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 pub(crate) fn styled_row(
     size: ControlSize,
     list: &Option<ListContext>,
-    index: Option<u32>,
+    index: Option<usize>,
     disabled: Reactive<bool>,
     content: Vec<Box<dyn LayoutItem>>,
 ) -> Result<StyledContainer, LayoutError> {
@@ -787,7 +786,7 @@ fn row_layout(size: ControlSize, look: RowLook) -> LayoutStyle {
 }
 
 impl ListContext {
-    pub(crate) fn present(&self, row: StyledContainer, index: u32, mark: Mark) -> StyledContainer {
+    pub(crate) fn present(&self, row: StyledContainer, index: usize, mark: Mark) -> StyledContainer {
         let highlighted = self.0.highlighted;
         let reach = move || {
             highlighted.set_if_changed(Some(index));
@@ -795,7 +794,7 @@ impl ListContext {
         match self.0.selected {
             Some(selected) => row
                 .presented(Role::Option, reach)
-                .toggled(move || selected.get() == index),
+                .toggled(move || selected.get() == Some(index)),
             None => row.presented(
                 match mark {
                     Mark::None => Role::MenuItem,
@@ -807,8 +806,8 @@ impl ListContext {
         }
     }
 
-    fn is_selected(&self, index: u32) -> bool {
-        self.0.selected.as_ref().is_some_and(|s| s.get() == index)
+    fn is_selected(&self, index: usize) -> bool {
+        self.0.selected.as_ref().is_some_and(|s| s.get() == Some(index))
     }
 
     fn highlight(&self) -> Color {
@@ -818,7 +817,7 @@ impl ListContext {
     }
 
     /// The chosen row keeps the selection's wash whatever else is on it, so the cursor or the pointer passing over it never makes it look less chosen than it is.
-    fn row_style(&self, index: u32) -> RectStyle {
+    fn row_style(&self, index: usize) -> RectStyle {
         // The keyboard cursor wears the hover paint on purpose: it says the same thing, and a look of its own would have the list report two different places at once.
         if self.is_selected(index) {
             row_paint(Some(tinted(&self.0.color, shared::held_wash())))
@@ -829,7 +828,7 @@ impl ListContext {
         }
     }
 
-    fn hover_style(&self, index: u32) -> RectStyle {
+    fn hover_style(&self, index: usize) -> RectStyle {
         match self.is_selected(index) {
             true => row_paint(Some(tinted(&self.0.color, shared::held_wash()))),
             false => row_paint(Some(self.highlight())),

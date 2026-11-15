@@ -526,8 +526,8 @@ fn the_labels_line_up_when_one_row_carries_a_tick() {
 fn a_submenu_reports_its_own_picks() {
     fresh_layout_runtime();
     focus::clear();
-    let picked: Rc<RefCell<Vec<u32>>> = Rc::default();
-    let top: Rc<RefCell<Vec<u32>>> = Rc::default();
+    let picked: Rc<RefCell<Vec<usize>>> = Rc::default();
+    let top: Rc<RefCell<Vec<usize>>> = Rc::default();
     let (sink, outer) = (picked.clone(), top.clone());
     let rows = Children::new(move || {
         let sink = sink.clone();

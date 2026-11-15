@@ -31,8 +31,6 @@ use crate::strings::{
 const NARROW: f32 = WORKBENCH_GRID * 11.0;
 const REGULAR: f32 = WORKBENCH_GRID * 17.0;
 const WIDE: f32 = WORKBENCH_GRID * 22.0;
-/// The index a select shows as nothing chosen.
-const NO_ROW: u32 = u32::MAX;
 
 /// The top bar's preview settings as one menu: the mode, locale, direction and background every canvas is shown in, each a row naming the one in use that opens a submenu of its choices, then reduced motion and high contrast, ticked while on.
 pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -476,19 +474,16 @@ fn choice_row<T: Clone + PartialEq + 'static>(
 
 impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
     fn inline(&self) -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let selected = signal(NO_ROW);
+        let selected = signal(None);
         let (shown, current) = (Rc::clone(&self.rows), Rc::clone(&self.current));
         effect(move || {
             let current = current();
-            let at = shown
-                .iter()
-                .position(|row| row.holds(&current))
-                .map_or(NO_ROW, |at| at as u32);
+            let at = shown.iter().position(|row| row.holds(&current));
             selected.set_if_changed(at);
         });
         let (picked, pick) = (Rc::clone(&self.rows), Rc::clone(&self.pick));
-        let on_select: Rc<dyn Fn(u32)> = Rc::new(move |at| {
-            if let Some(Row::Choice { value, .. }) = picked.get(at as usize) {
+        let on_select: Rc<dyn Fn(usize)> = Rc::new(move |at| {
+            if let Some(Row::Choice { value, .. }) = picked.get(at) {
                 pick(value.clone());
             }
         });

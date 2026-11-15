@@ -38,7 +38,7 @@ fn lay_out(item: Box<dyn LayoutItem>) -> ComponentList {
 
 pub fn select_placeholder() -> Vec<String> {
     reset();
-    let item = select(SelectProps::props().selected(signal(0u32)).build()).unwrap();
+    let item = select(SelectProps::props().selected(signal(Some(0usize))).build()).unwrap();
     drawn_text(&lay_out(item))
 }
 

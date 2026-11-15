@@ -33,9 +33,9 @@ fn settle(tree: &ComponentList) {
 }
 
 /// A select of `count` rows whose trigger stands `top` px down the window, opened from the keyboard.
-fn opened(count: u32, top: f32) -> (Scoped<ComponentList>, RwSignal<u32>) {
+fn opened(count: u32, top: f32) -> (Scoped<ComponentList>, RwSignal<Option<usize>>) {
     fresh_layout_runtime();
-    let picked = signal(0u32);
+    let picked = signal(Some(0usize));
     let mut tree = telar::testing::scoped(|| {
         let field = select(
             SelectProps::props()
@@ -115,7 +115,7 @@ fn a_long_list_is_capped_to_the_window_and_scrolls_to_the_cursor() {
     route(&mut tree, &release(x, y));
     assert_eq!(
         picked.get(),
-        39,
+        Some(39),
         "and the row drawn there is the one pressed"
     );
 }
@@ -139,7 +139,11 @@ fn a_dropdown_near_the_bottom_opens_above_its_trigger() {
     let (x, y) = centre(first);
     route(&mut tree, &press(x, y));
     route(&mut tree, &release(x, y));
-    assert_eq!(picked.get(), 0, "a flipped list answers where it is drawn");
+    assert_eq!(
+        picked.get(),
+        Some(0),
+        "a flipped list answers where it is drawn"
+    );
 }
 
 #[test]
@@ -219,7 +223,7 @@ fn every_way_of_closing_a_select_leaves_the_keyboard_on_it() {
     route(&mut tree, &press(x, y));
     route(&mut tree, &release(x, y));
     settle(&tree);
-    assert_eq!(picked.get(), 2);
+    assert_eq!(picked.get(), Some(2));
     assert_eq!(telar::focus::current(), Some(trigger), "after a pick");
 
     route(&mut tree, &named(NamedKey::Enter));
@@ -251,7 +255,7 @@ fn enter_and_space_on_an_open_select_confirm_the_highlighted_row() {
     route(&mut tree, &named(NamedKey::ArrowDown));
     route(&mut tree, &named(NamedKey::Enter));
     settle(&tree);
-    assert_eq!(picked.get(), 1);
+    assert_eq!(picked.get(), Some(1));
     assert!(!is_open(), "the pick shut the list");
 
     route(&mut tree, &named(NamedKey::Space));
@@ -260,7 +264,7 @@ fn enter_and_space_on_an_open_select_confirm_the_highlighted_row() {
     route(&mut tree, &named(NamedKey::ArrowDown));
     route(&mut tree, &named(NamedKey::Space));
     settle(&tree);
-    assert_eq!(picked.get(), 2);
+    assert_eq!(picked.get(), Some(2));
     assert!(!is_open());
 }
 
@@ -296,7 +300,7 @@ fn a_select_s_rows_are_options_that_say_which_one_is_chosen() {
 
     route(&mut tree, &named(NamedKey::Enter));
     settle(&tree);
-    assert_eq!(picked.get(), 1);
+    assert_eq!(picked.get(), Some(1));
     route(&mut tree, &named(NamedKey::Enter));
     settle(&tree);
     assert_eq!(
@@ -374,7 +378,7 @@ fn a_list_keeps_the_popup_offset_from_its_field_on_either_side() {
             ..crate::SelectTokens::default()
         }),
     });
-    let picked = signal(0u32);
+    let picked = signal(Some(0usize));
     let field = select(
         SelectProps::props()
             .selected(picked)

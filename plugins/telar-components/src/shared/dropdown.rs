@@ -194,8 +194,8 @@ pub(crate) struct Dropdown {
     /// The panel's rows, as the recipe for making them rather than the rows themselves — see [`Children`](telar::Children). Two things need it that way: the rows are remade on every open, and each one has to be built inside the [`ListContext`](crate::layout::list::list::ListContext) this scaffold provides.
     pub rows: Children,
     pub color: Reactive<Color>,
-    pub on_pick: Option<Rc<dyn Fn(u32)>>,
-    pub selected: RwSignal<u32>,
+    pub on_pick: Option<Rc<dyn Fn(usize)>>,
+    pub selected: RwSignal<Option<usize>>,
     pub stretch: bool,
     pub geometry: fn(ControlSize) -> Geometry,
     pub offset: fn(ControlSize) -> f32,
@@ -217,9 +217,9 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     } = props;
     let open = signal(false);
     // Not the same as what is selected: a select opens with its value under the cursor, and moving off it must not commit anything.
-    let highlighted: RwSignal<Option<u32>> = signal(None);
-    let pick: Rc<dyn Fn(u32)> = Rc::new(move |idx: u32| {
-        selected.set(idx);
+    let highlighted: RwSignal<Option<usize>> = signal(None);
+    let pick: Rc<dyn Fn(usize)> = Rc::new(move |idx: usize| {
+        selected.set(Some(idx));
         if let Some(cb) = &on_pick {
             cb(idx);
         }
@@ -239,7 +239,12 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     list.declare(&rows)?;
     let label = {
         let list = list.clone();
-        Reactive::of(move || list.label_of(selected.get()).unwrap_or_else(placeholder))
+        Reactive::of(move || {
+            selected
+                .get()
+                .and_then(|index| list.label_of(index))
+                .unwrap_or_else(placeholder)
+        })
     };
     // Key events are broadcast, so without this a bare Enter would open every select on the page.
     let trigger_focused = signal(false);
@@ -247,7 +252,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         let opening = !open.peek();
         if opening {
             // The cursor starts on what is already chosen, so the first arrow moves from there.
-            highlighted.set(Some(selected.peek()));
+            highlighted.set(selected.peek());
         }
         open.set(opening);
     });

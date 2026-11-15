@@ -32,7 +32,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_toggled(by_role(Role::Tab).named("Overview"), false)
         }),
         preview!(tabs: TabsProps, "Bound selection", |p| {
-            let selected = p.signal("selected", 0u32);
+            let selected = p.signal("selected", 0usize);
             tabs(
                 TabsProps::props()
                     .items(labels(4))

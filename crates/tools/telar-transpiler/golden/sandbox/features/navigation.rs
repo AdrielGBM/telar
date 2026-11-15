@@ -56,7 +56,7 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let tab = signal(0u32);
+    let tab = signal(0usize);
     let open = signal(true);
 
     // Following the address makes this stack the app's history: the browser's back and forward, a `--location` argument and an Android link all land on a pane.

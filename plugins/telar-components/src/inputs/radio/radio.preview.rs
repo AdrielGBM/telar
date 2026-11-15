@@ -12,10 +12,10 @@ const SIZES: [&str; 3] = ["Small", "Medium", "Large"];
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(radio: RadioProps, "Group", |p| {
-            let selected = p.signal("selected", 1u32);
+            let selected = p.signal("selected", Some(1usize));
             let color = p.arg("color", Color::TRANSPARENT);
             let size = p.arg("size", ControlSize::Regular);
-            let options = (0u32..)
+            let options = (0usize..)
                 .zip(SIZES)
                 .map(|(value, label)| {
                     radio(

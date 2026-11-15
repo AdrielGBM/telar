@@ -319,45 +319,52 @@ fn choice_editor(
     variants: &'static [&'static str],
     segmented: bool,
 ) -> Result<Editor, LayoutError> {
-    let bound = binding.bind(
-        0,
-        move |value| match value {
-            ArgValue::Choice(chosen) => variants
-                .iter()
-                .position(|variant| variant == chosen)
-                .and_then(|index| u32::try_from(index).ok()),
-            _ => None,
-        },
-        move |index| {
-            let variant = variants.get(usize::try_from(*index).ok()?)?;
-            Some(ArgValue::Choice((*variant).to_string()))
-        },
-    );
-    let name = binding.name;
-    let item = match segmented {
-        true => tabs(
-            TabsProps::props()
-                .items(variants.to_vec())
-                .selected(bound.shown)
-                .build(),
-        )?,
-        false => select(
-            SelectProps::props()
-                .selected(bound.shown)
-                .children(Children::new(move || {
-                    variants
-                        .iter()
-                        .map(|variant| item(ItemProps::props().label(*variant).build()))
-                        .collect()
-                }))
-                .build(),
-        )?
-        .a11y_label(move || name),
+    let position = move |value: &ArgValue| match value {
+        ArgValue::Choice(chosen) => Some(variants.iter().position(|variant| variant == chosen)),
+        _ => None,
     };
-    Ok(Editor {
-        item,
-        current: bound.current,
-    })
+    let variant_at = move |index: usize| {
+        let variant = variants.get(index)?;
+        Some(ArgValue::Choice((*variant).to_string()))
+    };
+    let name = binding.name;
+    let (item, current) = match segmented {
+        true => {
+            let bound = binding.bind(
+                0,
+                move |value| position(value).flatten(),
+                move |index| variant_at(*index),
+            );
+            let item = tabs(
+                TabsProps::props()
+                    .items(variants.to_vec())
+                    .selected(bound.shown)
+                    .build(),
+            )?;
+            (item, bound.current)
+        }
+        false => {
+            let bound = binding.bind(
+                None,
+                move |value| position(value),
+                move |index| variant_at((*index)?),
+            );
+            let item = select(
+                SelectProps::props()
+                    .selected(bound.shown)
+                    .children(Children::new(move || {
+                        variants
+                            .iter()
+                            .map(|variant| item(ItemProps::props().label(*variant).build()))
+                            .collect()
+                    }))
+                    .build(),
+            )?
+            .a11y_label(move || name);
+            (item, bound.current)
+        }
+    };
+    Ok(Editor { item, current })
 }
 
 /// The inner control, beside a switch that leaves the arg unset. Turning the switch off sets what the inner control shows.

@@ -3,10 +3,10 @@ use crate::shared::components::card::{CardProps, card};
 use crate::shared::components::code_line::{CodeLineProps, code_line};
 use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
 use crate::shared::components::example::{ExampleProps, example};
-// A bound bool for the checkbox, another for the toggle, and a u32 for the radio group's selection.
+// A bound bool for the checkbox, another for the toggle, and an optional index for the radio group's selection.
 let agree = signal(false);
 let notify = signal(true);
-let choice = signal(0u32);
+let choice = signal(Some(0usize));
 
 [view]
 col gap:20
@@ -23,8 +23,8 @@ col gap:20
         code_line code:"toggle checked:$notify label:'Email notifications'"
     example title:"radio — several buttons share one signal; each carries a distinct value"
         card gap:10
-            radio selected:$choice value:0u32 label:"Small"
-            radio selected:$choice value:1u32 label:"Medium"
-            radio selected:$choice value:2u32 label:"Large"
-            text "choice · {$choice}" font_size:14 color:$theme.muted
-        code_line code:"radio selected:$choice value:0u32 label:'Small'      (a group shares one signal)"
+            radio selected:$choice value:0 label:"Small"
+            radio selected:$choice value:1 label:"Medium"
+            radio selected:$choice value:2 label:"Large"
+            text "choice · {$choice.map_or(String::new(), |i| i.to_string())}" font_size:14 color:$theme.muted
+        code_line code:"radio selected:$choice value:0 label:'Small'      (a group shares one signal)"

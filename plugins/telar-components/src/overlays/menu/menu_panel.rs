@@ -69,7 +69,7 @@ pub(crate) struct Spec {
     /// The size of the menu or submenu that opens it, which its padding is drawn at.
     pub(crate) size: ControlSize,
     /// Fired with the index of the picked row among this panel's rows.
-    pub(crate) on_select: Option<Rc<dyn Fn(u32)>>,
+    pub(crate) on_select: Option<Rc<dyn Fn(usize)>>,
     pub(crate) anchoring: Anchored,
     pub(crate) width: f32,
     pub(crate) level: Level,
@@ -92,8 +92,8 @@ pub(crate) struct Built {
 /// The submenus hanging off one panel's rows, and what those rows reach the panel through.
 pub(crate) struct Cascade {
     config: Rc<Config>,
-    opened: RwSignal<Option<u32>>,
-    subs: RefCell<HashMap<u32, Sub>>,
+    opened: RwSignal<Option<usize>>,
+    subs: RefCell<HashMap<usize, Sub>>,
     /// Bumped when a submenu is first built, which is after the row that opens it says it is open.
     built: RwSignal<u64>,
     host: Host,
@@ -142,7 +142,7 @@ impl Cascade {
     }
 
     /// The pointer came to rest on row `index`: a submenu's row opens it, as every menu bar there has ever been does, and any other row closes the one that was open, which is what makes hovering back and forth across a list of them show one at a time.
-    pub(crate) fn pointed(&self, index: u32, opens: bool) {
+    pub(crate) fn pointed(&self, index: usize, opens: bool) {
         match opens {
             true => self.open(index, false),
             false if self.opened.peek().is_some_and(|open| open != index) => self.opened.set(None),
@@ -151,7 +151,7 @@ impl Cascade {
     }
 
     /// Opens the submenu hanging off row `index`, with the cursor on its first row when the keyboard opened it.
-    fn open(&self, index: u32, seed: bool) {
+    fn open(&self, index: usize, seed: bool) {
         let shown = self.opened.peek() == Some(index);
         if seed || !shown {
             let sub = self.subs.borrow().get(&index).cloned();
@@ -163,7 +163,7 @@ impl Cascade {
         self.opened.set_if_changed(Some(index));
     }
 
-    fn is_open(&self, index: u32) -> bool {
+    fn is_open(&self, index: usize) -> bool {
         self.opened.get() == Some(index)
     }
 
@@ -202,8 +202,8 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
         seed,
     } = spec;
     let cascade = Rc::new(Cascade::new(config.clone()));
-    let highlighted: RwSignal<Option<u32>> = signal(None);
-    let pick: Rc<dyn Fn(u32)> = {
+    let highlighted: RwSignal<Option<usize>> = signal(None);
+    let pick: Rc<dyn Fn(usize)> = {
         let close = config.close.clone();
         Rc::new(move |index| {
             close();
@@ -413,7 +413,7 @@ pub struct SubmenuProps {
     pub disabled: Reactive<bool>,
     /// Fired with the index of the row picked in the submenu, among its own rows.
     #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(u32)>>,
+    pub on_select: Option<Rc<dyn Fn(usize)>>,
     /// The rows of the menu it opens.
     #[props(default)]
     pub children: Children,
