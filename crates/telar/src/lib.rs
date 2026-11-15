@@ -5,7 +5,7 @@
 //! # Feature flags
 //!
 //! Enable one target and stop. The list below is long because nothing is bundled, not because a build
-//! carries it: a terminal app links about 160 crates where a desktop one links about 410.
+//! carries it: a terminal app links far fewer crates than a desktop one (see docs/targets.md).
 #![cfg_attr(
     feature = "document-features",
     doc = document_features::document_features!()

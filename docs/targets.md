@@ -10,15 +10,16 @@ and no row below that pays for another:
 
 | Your app runs in | `default = [...]` | Crates compiled |
 | --- | --- | --- |
-| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 398 |
-| The terminal it was launched from | `["tui"]` | 103 |
-| A browser, drawing as a document | `["web-dom"]` | 78 |
-| A browser, document **and** WebGPU canvas | `["web"]` | 211 |
-| Android | `["android"]` | 300 |
-| Nothing — draw commands in, pixels out | `["headless"]` | 175 |
+| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 432 |
+| The terminal it was launched from | `["tui"]` | 163 |
+| A browser, drawing as a document | `["web-dom"]` | 127 |
+| A browser, document **and** WebGPU canvas | `["web"]` | 256 |
+| Android | `["android"]` | 343 |
+| Nothing — draw commands in, pixels out | `["headless"]` | 214 |
 
-Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all`,
-so every platform's dependencies are in the figure at once. The spread is the point: a desktop build is
+Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all --prefix none`,
+so every platform's dependencies are in the figure at once. The figure is the number of distinct lines of that
+output, with the `(*)` repeat marks removed: `| sed 's/ (\*)$//' | sort -u | wc -l`. The spread is the point: a desktop build is
 mostly wgpu and its shader toolchain, and a terminal build links neither.
 
 `cargo telar new --target <name>` writes the manifest for you (`cargo telar init --target <name>` does the
@@ -73,7 +74,7 @@ cargo telar dev --target tui
 
 The same components, laid out in whole cells and drawn with box characters and colour. No window, no GPU
 and no glyph shaper — a terminal has its own font and Telar does not get a say in it, which is most of why
-this build is a third of a desktop one.
+this build is much smaller than a desktop one.
 
 Boxes, fills, strokes and text render; anything that needs subpixel geometry (gradients, shadows, arbitrary
 paths, images) is approximated or dropped, because a cell is the smallest thing a terminal can colour — a

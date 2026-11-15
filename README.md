@@ -113,18 +113,18 @@ cargo telar doctor     # check the toolchain
 
 Telar is a set of small crates behind one facade, and a build carries the target it named and nothing else:
 
-| Your app runs in | `default = [...]` | Crates compiled |
-| --- | --- | --- |
-| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 397 |
-| The terminal it was launched from | `["tui"]` | 102 |
-| A browser, drawing as a document | `["web-dom"]` | 77 |
-| A browser, document **and** WebGPU canvas | `["web"]` | 210 |
-| Android | `["android"]` | 299 |
-| Nothing — draw commands in, pixels out | `["headless"]` | 174 |
+| Your app runs in | `default = [...]` |
+| --- | --- |
+| A desktop window (Linux, macOS, Windows) | `["desktop"]` |
+| The terminal it was launched from | `["tui"]` |
+| A browser, drawing as a document | `["web-dom"]` |
+| A browser, document **and** WebGPU canvas | `["web"]` |
+| Android | `["android"]` |
+| Nothing — draw commands in, pixels out | `["headless"]` |
 
-Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all`, so every platform's dependencies are in the figure at once. Every row is complete on its own: naming it is the whole of the choice, and no row pays for another — a desktop build is mostly wgpu and its shader toolchain, and a terminal build links neither. Switching later is one word in `Cargo.toml`.
+Every row is complete on its own: naming it is the whole of the choice, and no row pays for another — a desktop build is mostly wgpu and its shader toolchain, and a terminal build links neither. Switching later is one word in `Cargo.toml`.
 
-Per-target guides, and how to ship two targets from one codebase, are in **[docs/targets.md](docs/targets.md)**.
+How many crates each target compiles, and how that is counted, is in **[docs/targets.md](docs/targets.md)**, along with per-target guides and how to ship two targets from one codebase.
 
 ### One value grammar
 

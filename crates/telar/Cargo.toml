@@ -26,18 +26,17 @@ default = ["desktop"]
 #! the choice. Most applications enable exactly one and never touch another feature on this page.
 #! `cargo telar new --target <name>` writes it for you.
 #!
-#! | Feature | Surface | Crates in the build graph |
-#! | --- | --- | --- |
-#! | `desktop` | A native window on Linux, macOS and Windows *(default)* | 397 |
-#! | `tui` | The terminal the app was launched from | 102 |
-#! | `web-dom` | A browser, drawing as a document | 77 |
-#! | `web` | A browser, document **and** WebGPU canvas | 210 |
-#! | `android` | An Android `NativeActivity` | 299 |
-#! | `headless` | No surface at all: draw commands in, pixels out | 174 |
+#! | Feature | Surface |
+#! | --- | --- |
+#! | `desktop` | A native window on Linux, macOS and Windows *(default)* |
+#! | `tui` | The terminal the app was launched from |
+#! | `web-dom` | A browser, drawing as a document |
+#! | `web` | A browser, document **and** WebGPU canvas |
+#! | `android` | An Android `NativeActivity` |
+#! | `headless` | No surface at all: draw commands in, pixels out |
 #!
-#! Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all`,
-#! so every platform's dependencies are in the figure at once. The spread is the point: nothing here is
-#! bundled, so a build carries the target it named and no other.
+#! The crates each feature compiles, and how they are counted, are in docs/targets.md. The spread is the point:
+#! nothing here is bundled, so a build carries the target it named and no other.
 
 ## A native window on Linux, macOS and Windows, drawn by the GPU where there is one and the CPU where
 ## there is not. Enabled by `default`.
