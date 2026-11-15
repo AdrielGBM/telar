@@ -138,8 +138,8 @@ author's stylesheet wins over a browser's default font.
 The surface opens in the configured family, and `set_font_family` moves it while the surface runs:
 
 ```rust
-telar::set_font_family(Some("JetBrains Mono".into())); // the active surface
-telar::set_font_family(None);                          // back to the platform's own
+telar::set_font_family(Some(FontFamily::named("JetBrains Mono"))); // the active surface
+telar::set_font_family(None);                                     // back to the platform's own
 ```
 
 Every text that inherits its style — every `text` in `.rsx`, every catalogue control — is measured and drawn
@@ -147,7 +147,7 @@ in the new family on the next frame. Nothing is reopened or rebuilt. `use_font_f
 
 | Item | What it is |
 | --- | --- |
-| `AppConfig::font_family` | What a surface opens in. A surface opened later carries its own configuration. |
+| `AppConfig::font_family` | What a surface opens in, an `Option<FontFamily>`: a generic is its variant (`FontFamily::Monospace`) and a face is `FontFamily::named("Inter")`, so no name is ever guessed to be a generic. A surface opened later carries its own configuration. |
 | `set_font_family(Option<FontFamily>)` | Moves the active surface's family. Call it inside the surface: from its tree, an effect it owns, or with the surface entered (`TextureUi::with_entered`). A tree built again on the surface keeps it. |
 | `use_font_family()` | Reactive read of the active surface's family, `None` while it is the platform's. |
 | `open_surface_font_family(Option<FontFamily>)` | What the runner tells a surface before it builds the tree. A host with no runner calls it to stand in for one. |

@@ -7,8 +7,8 @@ use platform_core::guest::{
 use std::time::Duration;
 
 use platform_core::{AccessAudit, Event, Location, SystemPreferences, WindowCommand, WindowConfig};
-use renderer_core::Color;
 use renderer_core::wire::{DrawList, Pixels};
+use renderer_core::{Color, FontFamily};
 use ui_tree::SegmentNodeInfo;
 
 use super::guest::{self, GuestApp};
@@ -56,7 +56,7 @@ platform_core::entry_table! {
         drain_window_commands: fn(*mut LentBytes<Vec<WindowCommand>>);
         set_location_history: fn(LentBytes<Vec<Location>>);
         open_title: fn(LentBytes<(String, String)>);
-        open_font_family: fn(LentBytes<Option<String>>);
+        open_font_family: fn(LentBytes<Option<FontFamily>>);
         navigate_back: fn(*mut bool);
         drain_tasks: fn();
         fire_timers: fn();

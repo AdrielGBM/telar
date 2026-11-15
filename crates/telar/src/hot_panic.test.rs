@@ -10,8 +10,8 @@ use std::sync::{Mutex, PoisonError};
 
 use telar::hot::{HotApp, load_hot_app};
 use telar::{
-    AppCtx, AppRuntime, Chord, Color, Event, EventResult, KeyboardConvention, PointerButton,
-    PointerSource, Size, TextStyle, set_keyboard_convention,
+    AppCtx, AppRuntime, Chord, Color, Event, EventResult, FontFamily, KeyboardConvention,
+    PointerButton, PointerSource, Size, TextStyle, set_keyboard_convention,
 };
 
 /// One at a time: both count what the process has mapped and what sits in the build directory.
@@ -203,7 +203,8 @@ fn a_face_a_hot_guest_adds_while_it_runs_reaches_the_host() {
     drop(tree);
     drop(app);
     telar::install_default_text_metrics();
-    let arriving = TextStyle::new(14.0, Color::BLACK).with_font_family("Arriving Face");
+    let arriving =
+        TextStyle::new(14.0, Color::BLACK).with_font_family(FontFamily::named("Arriving Face"));
     let (width, _) = telar::measure_text("Arrived", None, f32::INFINITY, &arriving);
     assert!(
         width > 0.0,

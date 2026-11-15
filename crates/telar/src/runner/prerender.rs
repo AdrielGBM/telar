@@ -98,7 +98,7 @@ pub fn prerender_page<A: App>(
     app.set_surface_size(size);
     app.set_location_history(&[location_of(&request.page)]);
     app.open_title(&window.title, &window.title);
-    app.open_font_family(font_family.as_deref());
+    app.open_font_family(font_family.as_ref());
     let mut tree = app.mount();
     app.set_surface_size(size);
     tree.on_event(&Event::WindowResized {

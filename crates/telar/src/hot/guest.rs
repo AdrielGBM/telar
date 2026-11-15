@@ -324,10 +324,12 @@ pub(super) unsafe extern "C" fn open_title(title: LentBytes<(String, String)>) -
     })
 }
 
-pub(super) unsafe extern "C" fn open_font_family(family: LentBytes<Option<String>>) -> CallOutcome {
+pub(super) unsafe extern "C" fn open_font_family(
+    family: LentBytes<Option<crate::FontFamily>>,
+) -> CallOutcome {
     guest_entry(|| {
-        let family: Option<String> = unsafe { family.read() };
-        crate::open_surface_font_family(family.as_deref().map(crate::FontFamily::from));
+        let family: Option<crate::FontFamily> = unsafe { family.read() };
+        crate::open_surface_font_family(family);
     })
 }
 

@@ -113,7 +113,7 @@ fn the_default_sans_serif_declares_nothing() {
 /// A bare name with no author-written fallback still degrades to sans-serif, as it always has.
 #[test]
 fn a_named_family_is_quoted_with_a_sans_serif_fallback() {
-    let style = TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::from("Iosevka"));
+    let style = TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::named("Iosevka"));
     let css = css_of(&style);
     assert!(
         css.contains(r#"font-family:"Iosevka",sans-serif;"#),
@@ -125,7 +125,7 @@ fn a_named_family_is_quoted_with_a_sans_serif_fallback() {
 #[test]
 fn a_family_name_with_a_quote_is_escaped() {
     let style =
-        TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::from(r#"Weird"Face"#));
+        TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::named(r#"Weird"Face"#));
     let css = css_of(&style);
     assert!(
         css.contains(r#"font-family:"Weird\"Face",sans-serif;"#),
@@ -136,7 +136,7 @@ fn a_family_name_with_a_quote_is_escaped() {
 #[test]
 fn a_family_name_cannot_end_its_string_and_add_declarations() {
     let style = TextStyle::new(12.0, Color::BLACK)
-        .with_font_family(FontFamily::from("Face\\\n;color:red</style>\u{1}"));
+        .with_font_family(FontFamily::named("Face\\\n;color:red</style>\u{1}"));
     let css = css_of(&style);
     assert!(
         css.contains(r#"font-family:"Face\\\a ;color:red\3c /style>\1 ",sans-serif;"#),
@@ -148,7 +148,7 @@ fn a_family_name_cannot_end_its_string_and_add_declarations() {
 #[test]
 fn a_stack_is_emitted_in_order_with_no_extra_fallback() {
     let style = TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::stack([
-        FontFamily::from("Iosevka"),
+        FontFamily::named("Iosevka"),
         FontFamily::Monospace,
     ]));
     let css = css_of(&style);

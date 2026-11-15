@@ -1161,7 +1161,7 @@ fn a_surface_opens_in_its_configured_family_and_follows_a_new_one() {
         Arc::new(services_core::NoPaths),
         crate::runner::font_config::FontSetup {
             faces: Vec::new(),
-            family: Some("Telar Configured Face".to_string()),
+            family: Some(renderer_core::FontFamily::named("Telar Configured Face")),
         },
         RendererBackend::Software,
         renderer_core::DebugSettings::default(),
@@ -1170,7 +1170,7 @@ fn a_surface_opens_in_its_configured_family_and_follows_a_new_one() {
     );
     let window = HeadlessWindow::new(200, 40);
     handler.remount(&window);
-    let configured = renderer_core::FontFamily::from("Telar Configured Face");
+    let configured = renderer_core::FontFamily::named("Telar Configured Face");
     assert_eq!(
         drawn_family(&handler),
         renderer_core::FontFamily::stack([configured, renderer_core::FontFamily::SansSerif])

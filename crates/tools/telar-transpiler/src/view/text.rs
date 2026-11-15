@@ -556,7 +556,7 @@ pub(super) fn font_settings_expr(attr: &Attr, kind: FontSetting, theme: ThemeAcc
 
 /// The family a `font_family:` names, as an expression `TextStyle::with_font_family` accepts.
 ///
-/// A bare or quoted generic (`monospace`, `"monospace"`) names its `FontFamily` variant either way — the DSL's names are Telar's own vocabulary, not CSS text kept apart by quoting. A quoted comma list (`"Inter, sans_serif"`) is an ordered fallback, [`registry::FONT_FAMILY_VALUES`] resolving each name that is one and `FontFamily::from` carrying the rest through as faces. Anything else — an unquoted expression that names no generic — is the author's own Rust: a `theme.font()` read, a `[logic]` binding, carried through because the families an application has are its own vocabulary and not one the DSL can enumerate.
+/// A bare or quoted generic (`monospace`, `"monospace"`) names its `FontFamily` variant either way — the DSL's names are Telar's own vocabulary, not CSS text kept apart by quoting. A quoted comma list (`"Inter, sans_serif"`) is an ordered fallback, [`registry::FONT_FAMILY_VALUES`] resolving each name that is one and `FontFamily::named` carrying the rest through as faces. Anything else — an unquoted expression that names no generic — is the author's own Rust: a `theme.font()` read, a `[logic]` binding, carried through because the families an application has are its own vocabulary and not one the DSL can enumerate.
 pub(super) fn font_family_expr(attr: &Attr) -> String {
     match &attr.value {
         Value::Quoted(text) => quoted_font_family_expr(text),
@@ -583,7 +583,7 @@ fn quoted_font_family_expr(text: &str) -> String {
         ),
         [one] => registry::keyword(registry::FONT_FAMILY_VALUES, one)
             .map(str::to_string)
-            .unwrap_or_else(|| format!("{one:?}")),
+            .unwrap_or_else(|| format!("FontFamily::named({one:?})")),
         many => {
             let pieces: Vec<String> = many
                 .iter()
@@ -594,11 +594,11 @@ fn quoted_font_family_expr(text: &str) -> String {
     }
 }
 
-/// One entry of a fallback list: a generic's constant, already a `FontFamily`, or a face name converted into one.
+/// One entry of a fallback list: a generic's constant, or a face called by its name.
 fn font_family_stack_piece(name: &str) -> String {
     match registry::keyword(registry::FONT_FAMILY_VALUES, name) {
         Some(variant) => variant.to_string(),
-        None => format!("{name:?}.into()"),
+        None => format!("FontFamily::named({name:?})"),
     }
 }
 

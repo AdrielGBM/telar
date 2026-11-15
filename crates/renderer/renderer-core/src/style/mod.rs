@@ -196,11 +196,21 @@ impl FontFamily {
             other => other,
         }
     }
-}
 
-impl<T: AsRef<str>> From<T> for FontFamily {
-    fn from(name: T) -> Self {
-        FontFamily::Named(name.as_ref().into())
+    /// The face called `name`, taken as a face's name whatever it spells: a generic is one of the bare variants, never a name, so `named("monospace")` asks for a face that is called that.
+    pub fn named(name: impl Into<Arc<str>>) -> FontFamily {
+        FontFamily::Named(name.into())
+    }
+
+    /// The faces this family names, in the order they are tried; the generics it falls back on are not among them.
+    pub fn named_faces(&self) -> Vec<&str> {
+        match self {
+            FontFamily::Named(name) => vec![name],
+            FontFamily::Stack(families) => {
+                families.iter().flat_map(FontFamily::named_faces).collect()
+            }
+            _ => Vec::new(),
+        }
     }
 }
 
@@ -395,8 +405,8 @@ impl TextStyle {
     }
 
     /// Shapes this text in `family` instead of the configured sans-serif face.
-    pub fn with_font_family(mut self, family: impl Into<FontFamily>) -> Self {
-        self.font_family = family.into();
+    pub fn with_font_family(mut self, family: FontFamily) -> Self {
+        self.font_family = family;
         self
     }
 

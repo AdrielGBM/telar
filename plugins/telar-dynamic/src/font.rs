@@ -14,7 +14,7 @@ use telar::{AssetDecoder, AssetError};
 /// let faces = AssetLoader::new(transport, Some(cache), Arc::new(FontDecoder));
 /// // In a view: the text renders in the platform's font until the face lands, then in the face.
 /// match faces.get("Inter").get() {
-///     AssetState::Ready(family) => style.with_font_family(family.to_string()),
+///     AssetState::Ready(family) => style.with_font_family(FontFamily::named(family)),
 ///     _ => style,
 /// }
 /// ```

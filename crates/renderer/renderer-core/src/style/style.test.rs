@@ -71,3 +71,23 @@ fn a_surface_fraction_offset_waits_for_the_surface() {
         Some(DecorationLength::Length(TextLength::Px(4.0)))
     );
 }
+
+#[test]
+fn a_named_family_is_a_face_even_when_it_spells_a_generic() {
+    assert_eq!(
+        FontFamily::named("monospace"),
+        FontFamily::Named("monospace".into())
+    );
+    assert_ne!(FontFamily::named("monospace"), FontFamily::Monospace);
+}
+
+#[test]
+fn the_faces_a_family_names_leave_out_its_generics() {
+    let family = FontFamily::stack([
+        FontFamily::named("Iosevka"),
+        FontFamily::Monospace,
+        FontFamily::named("Fira Code"),
+    ]);
+    assert_eq!(family.named_faces(), ["Iosevka", "Fira Code"]);
+    assert!(FontFamily::SansSerif.named_faces().is_empty());
+}

@@ -275,7 +275,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "\"Iosevka, monospace\" — a named face, falling back to the generic".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Iosevka".into(), FontFamily::Monospace])) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_family(FontFamily::stack([FontFamily::named("Iosevka"), FontFamily::Monospace])) },
                                     )?
                                 };
                                 __children.push(box_item(__text_19));
@@ -310,7 +310,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "Telar Test at 400 — a variable face from [[telar.fonts]]".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack([FontFamily::named("Telar Test"), FontFamily::SansSerif])) },
                                     )?
                                 };
                                 __children.push(box_item(__text_20));
@@ -318,7 +318,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "Telar Test at 800".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])).with_font_weight(800) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack([FontFamily::named("Telar Test"), FontFamily::SansSerif])).with_font_weight(800) },
                                     )?
                                 };
                                 __children.push(box_item(__text_21));
@@ -412,7 +412,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "Telar Test along its wght axis".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); let weight = weight.clone(); move |__inherited: TextStyle| __inherited.with_font_size(22.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])).with_font_variations({ __transition_0.retarget(FontVariations::new().with("wght", (weight()) as f32)); __transition_0.get() }) },
+                                        { let theme = theme.clone(); let weight = weight.clone(); move |__inherited: TextStyle| __inherited.with_font_size(22.0).with_color(theme.get().ink).with_font_family(FontFamily::stack([FontFamily::named("Telar Test"), FontFamily::SansSerif])).with_font_variations({ __transition_0.retarget(FontVariations::new().with("wght", (weight()) as f32)); __transition_0.get() }) },
                                     )?
                                 };
                                 __children.push(box_item(__text_25));
@@ -420,7 +420,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "Optical size 14 against 32".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])).with_font_variations(FontVariations::new().with("opsz", (14) as f32)) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack([FontFamily::named("Telar Test"), FontFamily::SansSerif])).with_font_variations(FontVariations::new().with("opsz", (14) as f32)) },
                                     )?
                                 };
                                 __children.push(box_item(__text_26));
@@ -428,7 +428,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "Optical size 32".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])).with_font_variations(FontVariations::new().with("opsz", (32) as f32)) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack([FontFamily::named("Telar Test"), FontFamily::SansSerif])).with_font_variations(FontVariations::new().with("opsz", (32) as f32)) },
                                     )?
                                 };
                                 __children.push(box_item(__text_27));

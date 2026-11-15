@@ -174,7 +174,7 @@ pub fn text_fit(props: TextFitProps) -> Result<Box<dyn LayoutItem>, LayoutError>
                                         || "Telar Test".to_string(),
                                         LayoutStyle::new(),
                                         move || FontFit::containing(0.8),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink).with_font_family(FontFamily::stack([FontFamily::named("Telar Test"), FontFamily::SansSerif])) },
                                     )?
                                 };
                                 __children.push(box_item(__text_5));

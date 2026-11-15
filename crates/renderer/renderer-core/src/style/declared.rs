@@ -173,8 +173,8 @@ impl Declared {
         self
     }
 
-    pub fn with_font_family(mut self, family: impl Into<FontFamily>) -> Self {
-        self.font_family = Some(family.into());
+    pub fn with_font_family(mut self, family: FontFamily) -> Self {
+        self.font_family = Some(family);
         self
     }
 

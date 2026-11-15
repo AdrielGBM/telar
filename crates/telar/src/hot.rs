@@ -370,9 +370,9 @@ impl crate::app_runtime::AppRuntime for HotApp {
         );
     }
 
-    fn open_font_family(&self, family: Option<&str>) {
+    fn open_font_family(&self, family: Option<&renderer_core::FontFamily>) {
         self.library()
-            .send(&family.map(str::to_owned), |entries, family| unsafe {
+            .send(&family.cloned(), |entries, family| unsafe {
                 (entries.open_font_family)(family)
             });
     }

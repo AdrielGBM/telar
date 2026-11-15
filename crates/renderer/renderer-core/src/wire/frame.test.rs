@@ -49,7 +49,7 @@ fn gradient() -> Paint {
 fn text_style() -> TextStyle {
     TextStyle::new(15.0, gradient())
         .with_font_family(FontFamily::stack([
-            FontFamily::from("Inter"),
+            FontFamily::named("Inter"),
             FontFamily::Monospace,
         ]))
         .with_font_weight(650)
@@ -87,7 +87,7 @@ fn spans() -> Arc<[Span]> {
                 .with_font_weight(700)
                 .with_font_style(FontStyle::Italic)
                 .with_color(RED)
-                .with_font_family("Fira Code")
+                .with_font_family(FontFamily::named("Fira Code"))
                 .with_font_size(TextLength::Em(1.25))
                 .with_letter_spacing(TextLength::SurfaceWidth(0.01))
                 .with_raster(Raster::Smooth)

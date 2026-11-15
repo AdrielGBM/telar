@@ -15,7 +15,7 @@
 use geometry_core::{Rect, Size, Transform};
 use layout_core::LayoutError;
 use platform_core::Event;
-use renderer_core::{Color, FontFamily, RenderBackend, RendererError};
+use renderer_core::{Color, RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
 use renderer_hardware::gpu::wgpu;
 use ui_core::{EventResult, LayoutItem, SurfaceCanvas};
@@ -108,7 +108,7 @@ impl TextureUi {
 
         let pixel_ratio = pixel_ratio.max(f32::MIN_POSITIVE);
         let canvas = SurfaceCanvas::new(logical_size(width, height, pixel_ratio), || {
-            ui_core::open_surface_font_family(family.map(FontFamily::from));
+            ui_core::open_surface_font_family(family);
             build()
         })?;
 

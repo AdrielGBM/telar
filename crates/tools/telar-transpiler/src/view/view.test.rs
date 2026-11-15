@@ -1500,7 +1500,8 @@ fn a_text_can_name_the_face_it_shapes_in() {
     let src = "[view]\ntext \"x\" font_family:\"LanaPixel\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     assert!(
-        out.rust_code.contains(r#".with_font_family("LanaPixel")"#),
+        out.rust_code
+            .contains(r#".with_font_family(FontFamily::named("LanaPixel"))"#),
         "{}",
         out.rust_code
     );
@@ -1509,7 +1510,7 @@ fn a_text_can_name_the_face_it_shapes_in() {
 /// The families an application has are its own vocabulary, so an unquoted value is carried through the way a `theme.` read or a `[logic]` binding is everywhere else.
 #[test]
 fn an_unquoted_family_is_the_authors_own_expression() {
-    let src = "[logic]\nlet face = \"LanaPixel\";\n[view]\ntext \"x\" font_family:face\n";
+    let src = "[logic]\nlet face = FontFamily::named(\"LanaPixel\");\n[view]\ntext \"x\" font_family:face\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     assert!(
         out.rust_code.contains(".with_font_family(face)"),
@@ -1563,7 +1564,7 @@ fn a_quoted_comma_list_becomes_an_ordered_stack() {
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     assert!(
         out.rust_code.contains(
-            r#".with_font_family(FontFamily::stack(["Iosevka".into(), FontFamily::Monospace]))"#
+            r#".with_font_family(FontFamily::stack([FontFamily::named("Iosevka"), FontFamily::Monospace]))"#
         ),
         "{}",
         out.rust_code

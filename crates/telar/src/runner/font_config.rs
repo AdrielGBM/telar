@@ -10,7 +10,7 @@ pub struct FontSetup {
     /// The faces to load.
     pub faces: Vec<renderer_core::FontAsset>,
     /// What this surface's text shapes in where nothing above it names a family: the root of its text cascade, seeded as the surface opens and changed while it runs with [`set_font_family`](crate::set_font_family). A property of *this* surface, so a second one built later renders in its own rather than in whichever was configured last.
-    pub family: Option<String>,
+    pub family: Option<renderer_core::FontFamily>,
 }
 
 // Pulled once from the injected paths provider. Owned, so it can move into the background renderer-build thread; empty on desktop.

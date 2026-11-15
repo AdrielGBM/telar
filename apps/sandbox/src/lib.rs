@@ -27,7 +27,7 @@ fn app_config() -> telar::AppConfig {
         config.fonts.push(telar::FontAsset::embedded(include_bytes!(
             "../assets/fonts/DejaVuSans.ttf"
         )));
-        config.font_family = Some("DejaVu Sans".to_string());
+        config.font_family = Some(telar::FontFamily::named("DejaVu Sans"));
     }
     config
 }

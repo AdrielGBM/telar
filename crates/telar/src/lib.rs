@@ -257,7 +257,7 @@ pub const SHAPES_TEXT: bool = cfg!(feature = "shaper");
 
 /// Whether `family` names a font installed on this system.
 ///
-/// Both [`AppConfig::font_family`](crate::AppConfig::font_family) and [`TextStyle::with_font_family`](crate::TextStyle::with_font_family) take any name and fall back silently when the family is not installed, so this is how an application warns instead. Answered by the database the text shaper already loaded — asking it costs nothing, where a second `fontdb` is a full system font scan and a second answer that can disagree with the one the text is shaped in.
+/// Both [`AppConfig::font_family`](crate::AppConfig::font_family) and [`TextStyle::with_font_family`](crate::TextStyle::with_font_family) take any face by name ([`FontFamily::named`](crate::FontFamily::named)) and fall back silently when it is not installed, so this is how an application warns instead. Answered by the database the text shaper already loaded — asking it costs nothing, where a second `fontdb` is a full system font scan and a second answer that can disagree with the one the text is shaped in.
 #[cfg(feature = "shaper")]
 pub fn font_family_available(family: &str) -> bool {
     renderer_text::font_family_available(family)

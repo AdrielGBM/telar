@@ -41,12 +41,7 @@ pub fn run_previews(
     if snapshots.is_none() {
         crate::runner::install_preview_text_metrics(config);
     }
-    ui_core::open_surface_font_family(
-        config
-            .font_family
-            .as_deref()
-            .map(renderer_core::FontFamily::from),
-    );
+    ui_core::open_surface_font_family(config.font_family.clone());
     if let Some(duplicates) = duplicate_ids(&entries) {
         run.errors.extend(duplicates.lines().map(str::to_string));
     }

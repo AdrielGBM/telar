@@ -154,8 +154,8 @@ pub trait AppRuntime: 'static {
     }
 
     /// Tells the surface the family its configuration names, in the store its text cascade starts from; see [`open_surface_font_family`](crate::open_surface_font_family).
-    fn open_font_family(&self, family: Option<&str>) {
-        ui_core::open_surface_font_family(family.map(renderer_core::FontFamily::from));
+    fn open_font_family(&self, family: Option<&renderer_core::FontFamily>) {
+        ui_core::open_surface_font_family(family.cloned());
     }
 
     /// One back as the user means it; see [`navigate_back`](crate::navigate_back).

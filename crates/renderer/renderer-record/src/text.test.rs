@@ -89,7 +89,7 @@ fn text_names_its_face_size_and_ink_and_a_span_only_what_it_changes() {
         rect: Rect::new(16.0, 12.0, 120.0, 20.0),
         style: Arc::new(
             TextStyle::new(14.0, Color::BLACK)
-                .with_font_family("Telar Test")
+                .with_font_family(FontFamily::named("Telar Test"))
                 .with_letter_spacing(0.5),
         ),
     }];

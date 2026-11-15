@@ -46,7 +46,7 @@ fn hash_text_style_changes_with_anything_that_changes_the_glyphs() {
     let variants = [
         base.clone(),
         base.clone().with_font_weight(700),
-        base.clone().with_font_family("Inter"),
+        base.clone().with_font_family(FontFamily::named("Inter")),
         base.clone()
             .with_font_variations(FontVariations::new().with("wght", 420.0)),
         base.clone()

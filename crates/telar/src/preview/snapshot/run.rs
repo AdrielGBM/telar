@@ -37,7 +37,12 @@ impl Snapshots {
     ) -> Result<Self, SnapshotError> {
         renderer_text::fonts::install_only(
             config.fonts.clone(),
-            config.font_family.iter().cloned().collect(),
+            config
+                .font_family
+                .iter()
+                .flat_map(renderer_core::FontFamily::named_faces)
+                .map(str::to_string)
+                .collect(),
         )
         .map_err(SnapshotError::Fonts)?;
         platform_core::set_keyboard_convention(platform_core::KeyboardConvention::Pc);

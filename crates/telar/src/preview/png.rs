@@ -20,12 +20,7 @@ pub fn run_preview_png(
         std::process::exit(1);
     }
     crate::runner::install_preview_text_metrics(&config);
-    ui_core::open_surface_font_family(
-        config
-            .font_family
-            .as_deref()
-            .map(renderer_core::FontFamily::from),
-    );
+    ui_core::open_surface_font_family(config.font_family.clone());
     let viewport = Size::new(
         config.window.width.max(1) as f32,
         config.window.height.max(1) as f32,

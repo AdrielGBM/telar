@@ -73,7 +73,7 @@ fn a_declared_text_style_reaches_the_draw_command_intact() {
         .with_letter_spacing(0.5)
         .with_raster(Raster::Pixel)
         .with_text_wrap(TextWrap::NoWrap)
-        .with_font_family("Some Face");
+        .with_font_family(FontFamily::named("Some Face"));
 
     let expected = declared.clone();
     let style = resolved(move || {
@@ -240,7 +240,7 @@ fn a_themes_root_row_reaches_a_text_that_declares_nothing() {
     impl telar::ThemeTokens for Serif {
         fn root(&self) -> telar::Declared {
             telar::Declared::default()
-                .with_font_family("Iosevka")
+                .with_font_family(FontFamily::named("Iosevka"))
                 .with_line_height(1.75)
         }
     }
@@ -250,7 +250,7 @@ fn a_themes_root_row_reaches_a_text_that_declares_nothing() {
         box_item(Text::declaring(|| "themed".to_string(), LayoutStyle::new(), |t| t).unwrap())
     });
 
-    assert_eq!(style.font_family, FontFamily::from("Iosevka"));
+    assert_eq!(style.font_family, FontFamily::named("Iosevka"));
     assert_eq!(style.line_height, telar::LineHeight::Times(1.75));
     assert_eq!(
         style.font_size, 14.0,

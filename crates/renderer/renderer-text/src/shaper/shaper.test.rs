@@ -44,7 +44,7 @@ fn every_generic_resolves_to_a_concrete_cosmic_family() {
 fn a_stack_falls_to_the_next_member_whose_face_is_missing() {
     let mut sh = TextShaper::new();
     let mut cache = rustc_hash::FxHashMap::default();
-    let missing = FontFamily::from("Definitely Not An Installed Face 9182");
+    let missing = FontFamily::named("Definitely Not An Installed Face 9182");
     let stack = FontFamily::stack([missing, FontFamily::Monospace]);
     assert_eq!(
         resolve_cosmic_family(&stack, &mut sh.font_system, &mut cache),
@@ -62,7 +62,7 @@ fn a_stack_uses_its_first_member_when_every_member_exists() {
     let Some(installed) = installed else {
         return;
     };
-    let stack = FontFamily::stack([FontFamily::from(installed.as_str()), FontFamily::Monospace]);
+    let stack = FontFamily::stack([FontFamily::named(installed.as_str()), FontFamily::Monospace]);
     assert_eq!(
         resolve_cosmic_family(&stack, &mut sh.font_system, &mut cache),
         Family::Name(installed.as_str())
@@ -75,8 +75,8 @@ fn a_generic_at_the_end_always_wins() {
     let mut sh = TextShaper::new();
     let mut cache = rustc_hash::FxHashMap::default();
     let stack = FontFamily::stack([
-        FontFamily::from("Also Not Installed Anywhere 4471"),
-        FontFamily::from("Nor This One Either 5582"),
+        FontFamily::named("Also Not Installed Anywhere 4471"),
+        FontFamily::named("Nor This One Either 5582"),
         FontFamily::Serif,
     ]);
     assert_eq!(
@@ -304,8 +304,12 @@ fn text_style_bits_default_unchanged_and_spacing_perturbs() {
         bits_pixel, bits_default,
         "the raster grid must perturb the bits, or a smooth raster is served to a pixel style"
     );
-    let bits_family = text_style_bits(&base.clone().with_font_family("LanaPixel"));
-    let bits_other = text_style_bits(&base.clone().with_font_family("Inter"));
+    let bits_family = text_style_bits(
+        &base
+            .clone()
+            .with_font_family(FontFamily::named("LanaPixel")),
+    );
+    let bits_other = text_style_bits(&base.clone().with_font_family(FontFamily::named("Inter")));
     assert_ne!(
         bits_family, bits_default,
         "a named family must perturb the bits"
@@ -685,7 +689,7 @@ fn a_named_family_shapes_in_that_face() {
         height: 1000.0,
     };
     let face_of = |sh: &mut TextShaper, family: &str| {
-        let style = TextStyle::new(16.0, Color::BLACK).with_font_family(family);
+        let style = TextStyle::new(16.0, Color::BLACK).with_font_family(FontFamily::named(family));
         let buffer = make_buffer(
             &mut sh.font_system,
             &mut sh.family_availability,

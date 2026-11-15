@@ -1,7 +1,7 @@
 //! The configuration an application starts with: its window, its fonts and its renderer.
 
 use platform_core::WindowConfig;
-use renderer_core::FontAsset;
+use renderer_core::{FontAsset, FontFamily};
 
 #[derive(Clone, Default)]
 /// What an application starts with: its window, its fonts and its renderer backend.
@@ -13,7 +13,7 @@ pub struct AppConfig {
     /// The family this surface's text shapes in where nothing above it names one — a shell's theme font. `None` keeps the platform's own. Loading a face with `fonts` does not choose it; this does.
     ///
     /// It seeds the root of the surface's text cascade as the surface opens, and [`set_font_family`](crate::set_font_family) moves it while the surface runs. A property of *this* configuration, so a second surface built later renders in its own family rather than in whichever one was configured last. Text declares its own with `font_family:` or [`TextStyle::with_font_family`](crate::TextStyle::with_font_family); a text given a whole style with [`Text::new`](crate::Text::new) opts out of the cascade, and with it out of this.
-    pub font_family: Option<String>,
+    pub font_family: Option<FontFamily>,
 }
 
 impl AppConfig {
