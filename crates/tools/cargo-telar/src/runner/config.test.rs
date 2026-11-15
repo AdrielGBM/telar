@@ -3,11 +3,14 @@ use super::*;
 /// A manifest as `resolve_package` would have read it, without a directory to read it from.
 fn resolved(manifest: &str) -> ResolvedPackage {
     let parsed: ManifestView = cargo_manifest(manifest).view().unwrap();
+    let package = parsed.package.unwrap();
     ResolvedPackage {
         workspace_root: PathBuf::new(),
         package_dir: PathBuf::new(),
         features: parsed.features.clone(),
-        package: parsed.package,
+        name: package.name.clone(),
+        version: "1.0.0".to_string(),
+        package,
         workspace_package: None,
         produces_cdylib: false,
         default_run: None,
@@ -360,7 +363,7 @@ fn the_watch_feature_becomes_telar_watch_without_a_prelude_entry() {
 }
 
 fn workshop_refusal(package: &str) -> Option<String> {
-    missing_workshop(&resolve_package(&["-p", package].map(str::to_string)))
+    missing_workshop(&resolve_package(&["-p", package].map(str::to_string)).unwrap())
 }
 
 #[test]
@@ -381,4 +384,57 @@ fn a_package_without_the_workshop_is_refused_with_the_command_that_adds_it() {
 #[test]
 fn a_package_that_declares_the_workshop_is_not_refused() {
     assert_eq!(workshop_refusal("catalogue"), None);
+}
+
+fn package_in(manifest: &str) -> (tempfile::TempDir, Result<ResolvedPackage, PackageError>) {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("Cargo.toml"), manifest).unwrap();
+    let resolved = resolve_package_in(dir.path().to_path_buf());
+    (dir, resolved)
+}
+
+#[test]
+fn a_package_resolves_to_its_own_name_and_version() {
+    let (_dir, resolved) = package_in("[package]\nname = \"gallery\"\nversion = \"2.4.1\"\n");
+    let resolved = resolved.unwrap();
+    assert_eq!(resolved.name, "gallery");
+    assert_eq!(resolved.version, "2.4.1");
+}
+
+#[test]
+fn a_version_inherited_from_the_workspace_resolves_to_the_workspace_one() {
+    let (_dir, resolved) = package_in(
+        "[workspace]\n[workspace.package]\nversion = \"3.1.0\"\n[package]\nname = \"gallery\"\nversion.workspace = true\n",
+    );
+    assert_eq!(resolved.unwrap().version, "3.1.0");
+}
+
+#[test]
+fn a_malformed_manifest_is_reported_with_its_parse_error() {
+    let (dir, resolved) = package_in("[package\nname = \"gallery\"\n");
+    let message = resolved.err().expect("a malformed manifest").to_string();
+    assert!(
+        message.contains(&dir.path().join("Cargo.toml").display().to_string()),
+        "{message}"
+    );
+}
+
+#[test]
+fn a_package_without_a_version_is_refused_instead_of_given_one() {
+    let (_dir, resolved) = package_in("[package]\nname = \"gallery\"\n");
+    let message = resolved.err().expect("no version").to_string();
+    assert!(message.contains("`gallery` has no `version`"), "{message}");
+}
+
+#[test]
+fn a_manifest_without_a_package_is_refused() {
+    let (_dir, resolved) = package_in("[workspace]\nmembers = []\n");
+    assert!(matches!(resolved, Err(PackageError::NoPackage { .. })));
+}
+
+#[test]
+fn a_directory_without_a_manifest_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let resolved = resolve_package_in(dir.path().to_path_buf());
+    assert!(matches!(resolved, Err(PackageError::NoManifest { .. })));
 }

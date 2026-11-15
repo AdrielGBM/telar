@@ -206,7 +206,7 @@ fn every_feature_the_loop_injects_is_one_a_project_can_lock() {
 }
 
 fn devtools_for(package: &str, devtools: Option<bool>) -> Option<String> {
-    let resolved = resolve_package(&["-p", package].map(str::to_string));
+    let resolved = resolve_package(&["-p", package].map(str::to_string)).unwrap();
     let mut config = TelarSection::default();
     config.dev.devtools = devtools;
     devtools_feature(&resolved, &config)
@@ -264,7 +264,7 @@ fn the_tooling_features_ride_along_with_the_telar_ones() {
 fn workshop_for(mode: HotMode, package: &str) -> Option<String> {
     workshop_feature(
         &mode,
-        &resolve_package(&["-p", package].map(str::to_string)),
+        &resolve_package(&["-p", package].map(str::to_string)).unwrap(),
     )
 }
 

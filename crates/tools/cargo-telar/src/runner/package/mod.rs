@@ -74,7 +74,7 @@ fn run_release_build(cargo_args: Vec<String>, config: TelarSection) -> (PathBuf,
         std::process::exit(1);
     }
 
-    let resolved = resolve_package(&rest);
+    let resolved = resolve_package(&rest).unwrap_or_else(|error| error.exit());
     match artifacts::binary(
         report.artifacts(),
         &resolved.package_dir,
@@ -97,7 +97,7 @@ fn release_build_args(cargo_args: &[String]) -> Vec<String> {
 
 pub(crate) fn build_desktop_dir(cargo_args: Vec<String>, config: TelarSection) -> ! {
     let (bin_path, resolved) = run_release_build(cargo_args, config);
-    let package_name = resolved.name();
+    let package_name = resolved.name.clone();
 
     let dist_dir = dist_dir(&resolved.workspace_root).join(&package_name);
     stage_desktop_dir(&dist_dir, &bin_path, &resolved.package_dir, &package_name);

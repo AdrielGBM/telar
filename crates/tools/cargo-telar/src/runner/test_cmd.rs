@@ -60,7 +60,7 @@ pub(super) fn run_test_cmd(args: TestArgs) -> ! {
         let selected = frontend_args(target, renderer, &cargo_args);
         cargo_args.extend(selected);
     }
-    let resolved = resolve_package(&cargo_args);
+    let resolved = resolve_package(&cargo_args).unwrap_or_else(|error| error.exit());
     let section = load_config(&cargo_args);
     let target_dir = telar_project::find_target_dir(&resolved.workspace_root);
     config::warn_if_tooling_unlocked(&cargo_args, &[TEST_FEATURE]);

@@ -153,14 +153,12 @@ pub(crate) fn read_package_manifest_in(dir: &Path) -> Option<CargoPackage> {
     read_manifest_in(dir)?.package
 }
 
-pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
-    read_package_manifest_in(&find_package_dir(args))
-}
-
 pub(crate) struct ResolvedPackage {
     pub(crate) workspace_root: PathBuf,
     pub(crate) package_dir: PathBuf,
-    pub(crate) package: Option<CargoPackage>,
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) package: CargoPackage,
     // Read once here rather than per getter, since a member that inherits one field usually inherits several.
     pub(crate) workspace_package: Option<CargoWorkspacePackage>,
     // Hot reload dlopens the package's own cdylib, and without `crate-type = ["cdylib", ..]` cargo never emits one, so the dylib build is dead weight and the runner falls back to process restart.
@@ -171,32 +169,11 @@ pub(crate) struct ResolvedPackage {
 }
 
 impl ResolvedPackage {
-    // Falls back to cargo's default "app" binary name when the manifest can't be read.
-    pub(crate) fn name(&self) -> String {
-        self.package
-            .as_ref()
-            .map(|p| p.name.clone())
-            .unwrap_or_else(|| "app".to_string())
-    }
-
-    pub(crate) fn version(&self) -> String {
-        self.package
-            .as_ref()
-            .and_then(|p| {
-                p.version
-                    .resolve(|| self.workspace_package.as_ref()?.version.clone())
-            })
-            .unwrap_or_else(|| "0.1.0".to_string())
-    }
-
     // Debian's `Maintainer` and Cargo's `authors` share the `Name <email>` shape, so the manifest is the one source. There is no honest default: a placeholder address ships inside the package.
     pub(crate) fn maintainer(&self) -> Option<Maintainer> {
         self.package
-            .as_ref()
-            .and_then(|p| {
-                p.authors
-                    .resolve(|| Some(self.workspace_package.as_ref()?.authors.clone()))
-            })
+            .authors
+            .resolve(|| Some(self.workspace_package.as_ref()?.authors.clone()))
             .and_then(|authors| authors.first().cloned())
             .map(|value| Maintainer {
                 value,
@@ -206,10 +183,9 @@ impl ResolvedPackage {
     }
 
     pub(crate) fn description(&self) -> Option<String> {
-        self.package.as_ref().and_then(|p| {
-            p.description
-                .resolve(|| self.workspace_package.as_ref()?.description.clone())
-        })
+        self.package
+            .description
+            .resolve(|| self.workspace_package.as_ref()?.description.clone())
     }
 
     /// Whether the package's `default` turns `wanted` on, in either spelling and through however many of its own features it takes to get there.
@@ -246,7 +222,7 @@ impl ResolvedPackage {
         if !self.features.contains_key(wanted) {
             return FrontendFeature::Telar(format!("telar/{wanted}"));
         }
-        let name = self.name();
+        let name = &self.name;
         let mut named = vec![format!("{name}/{wanted}")];
         named.extend(
             feature_list(self.features.get(DEFAULT))
@@ -404,7 +380,7 @@ pub(crate) fn missing_workshop(resolved: &ResolvedPackage) -> Option<String> {
     if telar_project::declares_optional_dependency(&resolved.package_dir, workshop) {
         return None;
     }
-    let package = resolved.name();
+    let package = &resolved.name;
     Some(format!(
         "`{package}` declares no optional `{workshop}` dependency, which `cargo telar preview` shows the previews in. Add it with `cargo add -p {package} {workshop} --optional`."
     ))
@@ -613,42 +589,93 @@ pub(crate) struct Maintainer {
     pub(crate) source: MaintainerSource,
 }
 
+/// Why the package a command is about could not be resolved.
+#[derive(Debug)]
+pub(crate) enum PackageError {
+    NoManifest { dir: PathBuf },
+    Manifest(telar_project::ManifestError),
+    Invalid { path: PathBuf, message: String },
+    NoPackage { path: PathBuf },
+    NoVersion { path: PathBuf, name: String },
+}
+
+impl PackageError {
+    pub(crate) fn exit(self) -> ! {
+        eprintln!("[cargo-telar] {self}");
+        std::process::exit(2);
+    }
+}
+
+impl std::fmt::Display for PackageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoManifest { dir } => write!(f, "no Cargo.toml in {}", dir.display()),
+            Self::Manifest(error) => error.fmt(f),
+            Self::Invalid { path, message } => write!(f, "{}: {message}", path.display()),
+            Self::NoPackage { path } => write!(f, "{} declares no `[package]`", path.display()),
+            Self::NoVersion { path, name } => write!(
+                f,
+                "{}: package `{name}` has no `version`, and the workspace declares none to inherit",
+                path.display()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for PackageError {}
+
+const CARGO_MANIFEST: &str = "Cargo.toml";
+
 // Resolved in a single pass, so the packaging paths stop re-deriving them at each call site.
-pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
-    let dir = find_package_dir(args);
+pub(crate) fn resolve_package(args: &[String]) -> Result<ResolvedPackage, PackageError> {
+    resolve_package_in(find_package_dir(args))
+}
+
+pub(crate) fn resolve_package_in(dir: PathBuf) -> Result<ResolvedPackage, PackageError> {
     let workspace_root = telar_project::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
-    let cargo_manifest = CargoManifest::read(&dir);
-    let default_run = cargo_manifest
-        .as_ref()
-        .and_then(CargoManifest::default_run)
-        .map(str::to_string);
-    let manifest = cargo_manifest.and_then(|manifest| manifest.view::<ManifestView>().ok());
+    let path = dir.join(CARGO_MANIFEST);
+    let cargo_manifest = CargoManifest::load(&dir)
+        .map_err(PackageError::Manifest)?
+        .ok_or_else(|| PackageError::NoManifest { dir: dir.clone() })?;
+    let default_run = cargo_manifest.default_run().map(str::to_string);
+    let manifest = cargo_manifest
+        .view::<ManifestView>()
+        .map_err(|e| PackageError::Invalid {
+            path: path.clone(),
+            message: e.to_string(),
+        })?;
     let produces_cdylib = manifest
+        .lib
         .as_ref()
-        .and_then(|m| m.lib.as_ref())
         .is_some_and(|lib| lib.crate_type.iter().any(|kind| kind == "cdylib"));
     // The member's own manifest when it is also the workspace root, so a single-crate project inherits from itself without a second read.
     let workspace_package = if workspace_root == dir {
-        manifest.as_ref()
+        manifest.workspace.as_ref().and_then(|w| w.package.clone())
     } else {
         None
     }
-    .and_then(|m| m.workspace.as_ref())
-    .and_then(|w| w.package.clone())
     .or_else(|| read_manifest_in(&workspace_root)?.workspace?.package);
-    let features = manifest
-        .as_ref()
-        .map(|m| m.features.clone())
-        .unwrap_or_default();
-    ResolvedPackage {
+    let package = manifest
+        .package
+        .ok_or_else(|| PackageError::NoPackage { path: path.clone() })?;
+    let version = package
+        .version
+        .resolve(|| workspace_package.as_ref()?.version.clone())
+        .ok_or_else(|| PackageError::NoVersion {
+            path,
+            name: package.name.clone(),
+        })?;
+    Ok(ResolvedPackage {
         workspace_root,
         package_dir: dir,
-        package: manifest.and_then(|m| m.package),
+        name: package.name.clone(),
+        version,
+        package,
         workspace_package,
         produces_cdylib,
-        features,
+        features: manifest.features,
         default_run,
-    }
+    })
 }
 
 // Shared by the Android package id and macOS bundle id defaults, which are otherwise distinct.

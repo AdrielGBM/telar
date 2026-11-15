@@ -112,7 +112,7 @@ pub(crate) fn build_web_site(
         release, renderer, ..
     } = *build;
     let (_android, rest) = split_android_flag(cargo_args);
-    let resolved = resolve_package(&rest);
+    let resolved = resolve_package(&rest).unwrap_or_else(|error| error.exit());
     let package_root = find_package_dir(&rest);
     // Assembled beside the output and swapped in whole, so the output only ever holds one build: every name in it is either this build's or gone, and a server reading it mid-build sees the last build rather than half of this one.
     let (out, staging) = match build.out {
@@ -154,7 +154,7 @@ pub(crate) fn build_web_site(
     recreate_dir(&staging)?;
 
     let locale = page_locale(config.default_locale());
-    let site = Site::new(&config.web, &package_root, &resolved.name())?;
+    let site = Site::new(&config.web, &package_root, &resolved.name.clone())?;
     let host = config.web.host();
     run_wasm_bindgen(&module, &staging)?;
     optimise(&staging.join(format!("{BUNDLE}_bg.wasm")), release);
@@ -164,7 +164,7 @@ pub(crate) fn build_web_site(
         &config.web,
         &config.fonts,
         &Shell {
-            app_name: &resolved.name(),
+            app_name: &resolved.name.clone(),
             renderer,
             locale: &locale,
             site: &site,
@@ -202,7 +202,7 @@ pub(crate) fn build_web_site(
     };
     images::ship_images(
         &staging,
-        &images::local_crates(&resolved.workspace_root, &resolved.name())?,
+        &images::local_crates(&resolved.workspace_root, &resolved.name.clone())?,
     )?;
     ship_icon_notice(&staging, &package_root)?;
     match host {

@@ -83,8 +83,8 @@ pub(crate) fn build_nsis(cargo_args: Vec<String>, config: TelarSection) -> ! {
         std::process::exit(2);
     }
     let (bin_path, resolved) = run_release_build(cargo_args, config);
-    let package_name = resolved.name();
-    let version = resolved.version();
+    let package_name = resolved.name.clone();
+    let version = resolved.version.clone();
 
     let dist_dir = dist_dir(&resolved.workspace_root);
     let installer_path = dist_dir.join(format!("{package_name}_{version}_setup.exe"));

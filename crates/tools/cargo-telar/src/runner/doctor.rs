@@ -7,8 +7,8 @@ use telar_project::{MANIFEST_FILENAME, TelarManifest, TelarSection};
 
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
 use super::config::{
-    WEB_PROFILE_TOML, find_package_dir, has_web_profile, missing_devtools_note, missing_workshop,
-    moved_features_hint_for, resolve_package,
+    PackageError, ResolvedPackage, WEB_PROFILE_TOML, find_package_dir, has_web_profile,
+    missing_devtools_note, missing_workshop, moved_features_hint_for, resolve_package,
 };
 
 struct Doctor {
@@ -157,25 +157,39 @@ pub(crate) fn run_doctor_cmd() -> ! {
     if let Some(hint) = moved_features_hint_for(&package_dir) {
         doc.warn("moved telar features", &hint.replace('\n', "\n      "));
     }
-    let resolved = resolve_package(&[]);
-    if telar_project::declares_optional_dependency(
-        &resolved.package_dir,
-        telar_project::DEVTOOLS_PACKAGE,
-    ) {
-        doc.ok(
-            "devtools overlay",
-            "`telar-devtools` is an optional dependency, which `cargo telar dev` and `cargo telar preview` turn on",
-        );
-    } else if resolved.package.is_some() {
-        doc.warn("devtools overlay", &missing_devtools_note(&resolved.name()));
-    }
-    match missing_workshop(&resolved) {
-        None => doc.ok(
-            "preview workshop",
-            "`telar-workshop` is an optional dependency, which `cargo telar preview` turns on",
-        ),
-        Some(problem) if resolved.package.is_some() => doc.warn("preview workshop", &problem),
-        Some(_) => {}
+    let resolved = match resolve_package(&[]) {
+        Ok(resolved) => Some(resolved),
+        Err(PackageError::NoPackage { path }) => {
+            doc.info(
+                "package",
+                &format!("{} declares no `[package]`", path.display()),
+            );
+            None
+        }
+        Err(error) => {
+            doc.fail("package", &error.to_string());
+            None
+        }
+    };
+    if let Some(resolved) = &resolved {
+        if telar_project::declares_optional_dependency(
+            &resolved.package_dir,
+            telar_project::DEVTOOLS_PACKAGE,
+        ) {
+            doc.ok(
+                "devtools overlay",
+                "`telar-devtools` is an optional dependency, which `cargo telar dev` and `cargo telar preview` turn on",
+            );
+        } else {
+            doc.warn("devtools overlay", &missing_devtools_note(&resolved.name));
+        }
+        match missing_workshop(resolved) {
+            None => doc.ok(
+                "preview workshop",
+                "`telar-workshop` is an optional dependency, which `cargo telar preview` turns on",
+            ),
+            Some(problem) => doc.warn("preview workshop", &problem),
+        }
     }
     match telar_project::previews_include_problems(&package_dir) {
         Ok(problems) if !problems.is_empty() => {
@@ -204,7 +218,7 @@ pub(crate) fn run_doctor_cmd() -> ! {
         }
         Ok(_) | Err(_) => {}
     }
-    if resolved.targets_web() {
+    if let Some(resolved) = resolved.filter(ResolvedPackage::targets_web) {
         if has_web_profile(&resolved.workspace_root) {
             doc.ok("[profile.web]", "present");
         } else {

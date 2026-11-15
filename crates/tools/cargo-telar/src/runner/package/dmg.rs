@@ -59,8 +59,8 @@ pub(crate) fn build_dmg(cargo_args: Vec<String>, config: TelarSection) -> ! {
         std::process::exit(2);
     }
     let (bin_path, resolved) = run_release_build(cargo_args, config);
-    let package_name = resolved.name();
-    let version = resolved.version();
+    let package_name = resolved.name.clone();
+    let version = resolved.version.clone();
 
     let dist_dir = dist_dir(&resolved.workspace_root);
     let staging = dist_dir.join("dmg-staging");

@@ -119,7 +119,7 @@ fn stage_deb(
 
 pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
     // Resolved before the build: failing on a missing manifest field after a full release compile wastes the one thing the author cannot get back.
-    let manifest = resolve_package(&cargo_args);
+    let manifest = resolve_package(&cargo_args).unwrap_or_else(|error| error.exit());
     let Some(maintainer) = manifest.maintainer() else {
         eprintln!(
             "[cargo-telar] --format deb needs a maintainer. Add `authors = [\"Name <email>\"]` to the package's Cargo.toml."
@@ -127,7 +127,7 @@ pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
         std::process::exit(1);
     };
     let manifest_description = manifest.description();
-    let checked = validate_package_name(&manifest.name())
+    let checked = validate_package_name(&manifest.name)
         .and(
             manifest_description
                 .as_deref()
@@ -139,8 +139,8 @@ pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
         std::process::exit(1);
     }
     let (bin_path, resolved) = run_release_build(cargo_args, config);
-    let package_name = resolved.name();
-    let version = resolved.version();
+    let package_name = resolved.name.clone();
+    let version = resolved.version.clone();
     let description = resolved
         .description()
         .unwrap_or_else(|| format!("{package_name} (built with rsx)"));

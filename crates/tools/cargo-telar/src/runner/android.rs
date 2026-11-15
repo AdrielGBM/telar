@@ -6,7 +6,7 @@ use std::process::Command;
 use telar_project::protocol::RENDERER_BACKEND_VAR;
 
 use super::config::{
-    TelarSection, default_app_id, read_package_manifest, resolve_package, split_android_flag,
+    ResolvedPackage, TelarSection, default_app_id, resolve_package, split_android_flag,
 };
 use super::package::{apk_notice_path, copy_icon_notice, dist_dir};
 
@@ -27,18 +27,14 @@ pub(crate) fn resolve_ndk_root() -> Option<String> {
     Some(versions.last()?.path().to_string_lossy().into_owned())
 }
 
-fn android_package_id(args: &[String]) -> String {
-    let pkg = read_package_manifest(args);
-    if let Some(id) = pkg
+fn android_package_id(resolved: &ResolvedPackage) -> String {
+    resolved
+        .package
+        .metadata
         .as_ref()
-        .and_then(|p| p.metadata.as_ref())
         .and_then(|m| m.android.as_ref())
-        .and_then(|a| a.package.as_deref())
-    {
-        return id.to_owned();
-    }
-    let crate_name = pkg.map(|p| p.name).unwrap_or_else(|| "app".to_string());
-    default_app_id(&crate_name)
+        .and_then(|a| a.package.clone())
+        .unwrap_or_else(|| default_app_id(&resolved.name))
 }
 
 // cargo-apk takes no `--message-format`, so it reports no artifact to read the APK's path from; it is rebuilt from the profile flag every caller here passes.
@@ -49,13 +45,11 @@ fn apk_profile(args: &[String]) -> &'static str {
     }
 }
 
-fn apk_path(args: &[String]) -> PathBuf {
-    let resolved = resolve_package(args);
-    let profile = apk_profile(args);
+fn apk_path(resolved: &ResolvedPackage, args: &[String]) -> PathBuf {
     telar_project::find_target_dir(&resolved.workspace_root)
-        .join(profile)
+        .join(apk_profile(args))
         .join("apk")
-        .join(format!("{}.apk", resolved.name()))
+        .join(format!("{}.apk", resolved.name))
 }
 
 fn is_keystore_path_key(key: &str) -> bool {
@@ -112,7 +106,8 @@ pub(crate) fn make_android_cmd(cargo_args: Vec<String>, config: TelarSection) ->
 }
 
 pub(crate) fn android_install_and_launch(args: &[String]) {
-    let apk = apk_path(args);
+    let resolved = resolve_package(args).unwrap_or_else(|error| error.exit());
+    let apk = apk_path(&resolved, args);
     let status = Command::new("adb")
         .args(["install", "-r", apk.to_str().unwrap_or_default()])
         .status()
@@ -121,7 +116,7 @@ pub(crate) fn android_install_and_launch(args: &[String]) {
         std::process::exit(status.code().unwrap_or(1));
     }
 
-    let package_id = android_package_id(args);
+    let package_id = android_package_id(&resolved);
     let component = format!("{package_id}/android.app.NativeActivity");
     let status = Command::new("adb")
         .args(["shell", "am", "start", "-n", &component])
@@ -166,8 +161,8 @@ pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarSectio
         std::process::exit(status.code().unwrap_or(1));
     }
 
-    let apk = apk_path(&rest);
-    let resolved = resolve_package(&rest);
+    let resolved = resolve_package(&rest).unwrap_or_else(|error| error.exit());
+    let apk = apk_path(&resolved, &rest);
     let dist_dir = dist_dir(&resolved.workspace_root);
     let _ = std::fs::create_dir_all(&dist_dir);
     if !apk.exists() {
@@ -185,7 +180,7 @@ pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarSectio
     eprintln!("[cargo-telar] Packaged APK at {}", dest.display());
     if let Some(notice) = copy_icon_notice(
         &resolved.package_dir,
-        &apk_notice_path(&dist_dir, &resolved.name()),
+        &apk_notice_path(&dist_dir, &resolved.name.clone()),
     ) {
         eprintln!(
             "[cargo-telar] The licence notice of its icons is beside it, at {}: an APK carries only the `assets` directory its manifest names, so ship the notice with it or show it in the app.",

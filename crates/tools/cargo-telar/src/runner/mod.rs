@@ -302,7 +302,8 @@ fn hold_workshop(args: &PreviewArgs) -> Option<HeldWorkshop> {
         return Some(HeldWorkshop::default());
     }
     let common = &args.hot.common;
-    let resolved = resolve_package(&build_cargo_args(&common.package, false, &None));
+    let resolved = resolve_package(&build_cargo_args(&common.package, false, &None))
+        .unwrap_or_else(|error| error.exit());
     if let Some(refusal) = missing_workshop(&resolved) {
         eprintln!("[cargo-telar] error: {refusal}");
         std::process::exit(1);
@@ -310,7 +311,7 @@ fn hold_workshop(args: &PreviewArgs) -> Option<HeldWorkshop> {
     if args.build.is_some() {
         return Some(HeldWorkshop::default());
     }
-    let (root, package) = (&resolved.workspace_root, resolved.name());
+    let (root, package) = (&resolved.workspace_root, resolved.name.clone());
     if common.target == Some(Target::Web) {
         return match ServerClaim::claim(&workshop_server_file(root, &package)) {
             Ok(claim) => Some(HeldWorkshop {
@@ -515,6 +516,7 @@ fn build_cargo_args(
 fn frontend_args(target: Target, renderer: WebRenderer, cargo_args: &[String]) -> Vec<String> {
     let mut args = Vec::new();
     resolve_package(cargo_args)
+        .unwrap_or_else(|error| error.exit())
         .frontend_feature(target.feature(renderer))
         .push_to(&mut args);
     args
@@ -537,7 +539,9 @@ fn select_frontend(
     }
     match target {
         Some(target) => target == Target::Tui,
-        None => resolve_package(cargo_args).defaults_to_terminal(),
+        None => resolve_package(cargo_args)
+            .unwrap_or_else(|error| error.exit())
+            .defaults_to_terminal(),
     }
 }
 

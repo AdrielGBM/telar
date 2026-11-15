@@ -154,7 +154,11 @@ impl PageWatch {
     ) -> Result<Self, telar_project::ManifestError> {
         let package_root = find_package_dir(cargo_args);
         Ok(Self::new(
-            WatchSet::collect(&resolve_package(cargo_args).workspace_root)?,
+            WatchSet::collect(
+                &resolve_package(cargo_args)
+                    .unwrap_or_else(|error| error.exit())
+                    .workspace_root,
+            )?,
             &config.web.template_path(&package_root).0,
             &config.web.public_dir(&package_root).0,
         ))

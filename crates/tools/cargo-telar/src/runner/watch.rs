@@ -808,7 +808,7 @@ fn devtools_feature(resolved: &ResolvedPackage, config: &TelarSection) -> Option
     if config.dev.devtools == Some(false) {
         return None;
     }
-    let package = resolved.name();
+    let package = resolved.name.clone();
     if !telar_project::declares_optional_dependency(&resolved.package_dir, DEVTOOLS_PACKAGE) {
         eprintln!("[cargo-telar] {}", missing_devtools_note(&package));
         return None;
@@ -819,7 +819,7 @@ fn devtools_feature(resolved: &ResolvedPackage, config: &TelarSection) -> Option
 /// The package's own feature for the workshop `cargo telar preview` shows the previews in, or `None` in a dev session. A package that does not declare it was refused before the preview built anything ([`missing_workshop`](super::config::missing_workshop)).
 fn workshop_feature(mode: &HotMode, resolved: &ResolvedPackage) -> Option<String> {
     mode.is_preview()
-        .then(|| format!("{}/{WORKSHOP_PACKAGE}", resolved.name()))
+        .then(|| format!("{}/{WORKSHOP_PACKAGE}", resolved.name.clone()))
 }
 
 fn with_tooling<'a>(features: &[&'a str], tooling: &[&'a str]) -> Vec<&'a str> {
@@ -829,7 +829,10 @@ fn with_tooling<'a>(features: &[&'a str], tooling: &[&'a str]) -> Vec<&'a str> {
 /// `args` with what a browser build of `mode` turns on: [`HotMode::web_features`] and, for a preview, the package's workshop. Not its devtools: a page draws no overlay, and the workshop brings the panels it reuses itself.
 pub(crate) fn with_web_features(mode: &HotMode, mut args: Vec<String>) -> Vec<String> {
     warn_if_tooling_unlocked(&args, mode.web_features());
-    let workshop = workshop_feature(mode, &resolve_package(&args));
+    let workshop = workshop_feature(
+        mode,
+        &resolve_package(&args).unwrap_or_else(|error| error.exit()),
+    );
     for feature in mode
         .web_features()
         .iter()
@@ -919,7 +922,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     } = opts;
 
     let (android, rest) = split_android_flag(args);
-    let resolved = resolve_package(&rest);
+    let resolved = resolve_package(&rest).unwrap_or_else(|error| error.exit());
     let tooling_features: Vec<String> = devtools_feature(&resolved, &config)
         .into_iter()
         .chain(workshop_feature(&mode, &resolved))
@@ -970,7 +973,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     if !no_hot_reload && !hot_reload {
         eprintln!(
             "[cargo-telar] Hot reload off: `{}` declares no `[lib] crate-type = [\"cdylib\", ..]`. Restarting the process on change instead.",
-            resolved.name()
+            resolved.name.clone()
         );
     }
     warn_if_tooling_unlocked(

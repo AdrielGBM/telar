@@ -45,7 +45,7 @@ fn stage_appdir(appdir: &Path, bin_path: &Path, package_dir: &Path, package_name
 
 pub(crate) fn build_appimage(cargo_args: Vec<String>, config: TelarSection) -> ! {
     let (bin_path, resolved) = run_release_build(cargo_args, config);
-    let package_name = resolved.name();
+    let package_name = resolved.name.clone();
     // appimagetool wants the host arch label (x86_64/aarch64), which is exactly what Rust reports.
     let arch = std::env::consts::ARCH;
 
