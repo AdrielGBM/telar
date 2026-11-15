@@ -16,14 +16,17 @@ pub(crate) const COPY: &str = "copy";
 pub(crate) const DECREASE: &str = "decrease";
 pub(crate) const DISMISS: &str = "dismiss";
 pub(crate) const DRAWER: &str = "drawer";
+pub(crate) const ERROR: &str = "error";
 pub(crate) const EXTERNAL_LINK: &str = "external_link";
 pub(crate) const HEX: &str = "hex";
 pub(crate) const HUE: &str = "hue";
 pub(crate) const INCREASE: &str = "increase";
+pub(crate) const INFORMATION: &str = "information";
 pub(crate) const MAXIMIZE: &str = "maximize";
 pub(crate) const MINIMIZE: &str = "minimize";
 pub(crate) const NO_RESULTS: &str = "no_results";
 pub(crate) const NOTHING_TO_SHOW: &str = "nothing_to_show";
+pub(crate) const NOTICE: &str = "notice";
 pub(crate) const NOTIFICATIONS: &str = "notifications";
 pub(crate) const OPACITY: &str = "opacity";
 pub(crate) const RESIZE: &str = "resize";
@@ -35,7 +38,10 @@ pub(crate) const SATURATION_BRIGHTNESS: &str = "saturation_brightness";
 pub(crate) const SEARCH: &str = "search";
 pub(crate) const SEARCH_COMMANDS: &str = "search_commands";
 pub(crate) const SELECT: &str = "select";
+pub(crate) const SUCCESS: &str = "success";
 pub(crate) const THEN: &str = "then";
+pub(crate) const TITLED_NOTICE: &str = "titled_notice";
+pub(crate) const WARNING: &str = "warning";
 pub(crate) const WINDOW: &str = "window";
 
 static CATALOG: Catalog = Catalog {
@@ -173,6 +179,14 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
+            key: ERROR,
+            messages: &[
+                ("ar", Message::Plain("خطأ")),
+                ("en", Message::Plain("Error")),
+                ("es", Message::Plain("Error")),
+            ],
+        },
+        Entry {
             key: EXTERNAL_LINK,
             messages: &[
                 (
@@ -214,6 +228,14 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
+            key: INFORMATION,
+            messages: &[
+                ("ar", Message::Plain("معلومة")),
+                ("en", Message::Plain("Information")),
+                ("es", Message::Plain("Información")),
+            ],
+        },
+        Entry {
             key: MAXIMIZE,
             messages: &[
                 ("ar", Message::Plain("تكبير")),
@@ -243,6 +265,23 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("لا يوجد شيء لعرضه")),
                 ("en", Message::Plain("Nothing to show")),
                 ("es", Message::Plain("No hay nada que mostrar")),
+            ],
+        },
+        Entry {
+            key: NOTICE,
+            messages: &[
+                (
+                    "ar",
+                    Message::Format(&[Part::Arg("tone"), Part::Lit(": "), Part::Arg("message")]),
+                ),
+                (
+                    "en",
+                    Message::Format(&[Part::Arg("tone"), Part::Lit(": "), Part::Arg("message")]),
+                ),
+                (
+                    "es",
+                    Message::Format(&[Part::Arg("tone"), Part::Lit(": "), Part::Arg("message")]),
+                ),
             ],
         },
         Entry {
@@ -350,6 +389,14 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
+            key: SUCCESS,
+            messages: &[
+                ("ar", Message::Plain("نجاح")),
+                ("en", Message::Plain("Success")),
+                ("es", Message::Plain("Éxito")),
+            ],
+        },
+        Entry {
             key: THEN,
             messages: &[
                 (
@@ -368,6 +415,49 @@ static CATALOG: Catalog = Catalog {
                         Part::Arg("next"),
                     ]),
                 ),
+            ],
+        },
+        Entry {
+            key: TITLED_NOTICE,
+            messages: &[
+                (
+                    "ar",
+                    Message::Format(&[
+                        Part::Arg("tone"),
+                        Part::Lit(": "),
+                        Part::Arg("title"),
+                        Part::Lit(". "),
+                        Part::Arg("message"),
+                    ]),
+                ),
+                (
+                    "en",
+                    Message::Format(&[
+                        Part::Arg("tone"),
+                        Part::Lit(": "),
+                        Part::Arg("title"),
+                        Part::Lit(". "),
+                        Part::Arg("message"),
+                    ]),
+                ),
+                (
+                    "es",
+                    Message::Format(&[
+                        Part::Arg("tone"),
+                        Part::Lit(": "),
+                        Part::Arg("title"),
+                        Part::Lit(". "),
+                        Part::Arg("message"),
+                    ]),
+                ),
+            ],
+        },
+        Entry {
+            key: WARNING,
+            messages: &[
+                ("ar", Message::Plain("تحذير")),
+                ("en", Message::Plain("Warning")),
+                ("es", Message::Plain("Advertencia")),
             ],
         },
         Entry {

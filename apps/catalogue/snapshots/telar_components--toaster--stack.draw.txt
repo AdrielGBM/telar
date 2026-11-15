@@ -55,7 +55,7 @@ element group
           end
         end
       end
-      element group
+      element alert
         rect 420,525 364x60 fill=#ffffffff border=1 border-color=#dbdeedff radius=12
         element group
           rect 432,537 2x36 fill=#cc3342ff radius=1

@@ -623,7 +623,7 @@ fn controlling(nodes: &[Node], found: &mut Vec<Controlling>) {
     }
 }
 
-/// Makes inert whatever the topmost modal layer of each surface shuts out, as Telar's focus shuts Tab out of it: everything the surface draws but the layer and the control it was opened from, which stay with every box they are in, the rest taking `inert` as high up as it can. A dialog inside the layer says it is modal.
+/// Makes inert whatever the topmost modal layer of each surface shuts out, as Telar's focus shuts Tab out of it: everything the surface draws but the layer, the control it was opened from and every live region, which stay with every box they are in, the rest taking `inert` as high up as it can; only the controls inside a live region go inert. A dialog inside the layer says it is modal.
 ///
 /// The topmost layer is the last drawn, which is the one the keyboard is held in: a list a field inside a dialog opened shuts the dialog out too.
 fn shut_out_behind_modal_layers(roots: &mut [Node]) {
@@ -695,6 +695,10 @@ fn shut_out(
         if kept(node) {
             continue;
         }
+        if announces(node) {
+            shut_out_stops(node);
+            continue;
+        }
         match &mut node.content {
             Content::Children { children, .. } if holds_any(children, kept) => {
                 shut_out(children, kept, in_layer)
@@ -704,9 +708,29 @@ fn shut_out(
     }
 }
 
+/// Whether a reader is told of changes inside the box unasked, which a modal layer does not stop: a notice arriving while a dialog is up is still heard.
+fn announces(node: &BoxNode) -> bool {
+    node.described.live.is_some()
+}
+
+/// Makes inert the controls inside a live region a modal layer shuts out, and nothing else of it: what it says is still announced, and what it offers is out of reach with the rest of the page.
+fn shut_out_stops(node: &mut BoxNode) {
+    let Content::Children { children, .. } = &mut node.content else {
+        return;
+    };
+    for child in children.iter_mut().filter_map(Node::as_box_mut) {
+        if is_stop(child) {
+            child.described.inert = true;
+        } else {
+            shut_out_stops(child);
+        }
+    }
+}
+
 fn holds_any(nodes: &[Node], kept: &impl Fn(&BoxNode) -> bool) -> bool {
     nodes.iter().filter_map(Node::as_box).any(|node| {
         kept(node)
+            || announces(node)
             || matches!(&node.content, Content::Children { children, .. } if holds_any(children, kept))
     })
 }

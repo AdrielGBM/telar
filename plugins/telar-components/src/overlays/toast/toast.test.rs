@@ -18,6 +18,36 @@ struct Mounted {
 
 impl Mounted {
     fn new(placement: ToastPlacement, max_visible: u32) -> Self {
+        Self::mount(placement, max_visible, Ok)
+    }
+
+    /// A toaster beside a dialog's layer, up while the signal handed back reads true.
+    fn beside_a_modal_layer() -> (Self, RwSignal<bool>) {
+        let open = std::cell::OnceCell::new();
+        let mounted = Self::mount(ToastPlacement::BottomEnd, 3, |toaster| {
+            let up = *open.get_or_init(|| signal(false));
+            let dialog = Container::new(
+                LayoutStyle::new().width(200.0).height(100.0),
+                children![Text::declaring(
+                    || "Accept the terms".to_string(),
+                    LayoutStyle::new(),
+                    |t| shared::control_text(ControlSize::Regular, t, 1.0),
+                )?],
+            )?
+            .role(Role::Dialog);
+            let layer = telar::Overlay::toggleable(LayoutStyle::new(), children![dialog], move || {
+                up.get()
+            })?;
+            Ok(box_item(Container::column(vec![toaster, box_item(layer)])?))
+        });
+        (mounted, *open.get().expect("the layer was built"))
+    }
+
+    fn mount(
+        placement: ToastPlacement,
+        max_visible: u32,
+        around: impl FnOnce(Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    ) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::set_locale("en");
         telar::focus::clear();
@@ -32,11 +62,24 @@ impl Mounted {
         )
         .unwrap();
         let mut mounted = Self {
-            tree: ComponentList::new(item),
+            tree: ComponentList::new(around(item).unwrap()),
             queue,
         };
         mounted.settle();
         mounted
+    }
+
+    fn nodes(&self) -> Vec<telar::AccessNode> {
+        telar::inspect::snapshot(&self.tree.commands())
+    }
+
+    /// The node a reader hears by `name`, and the role of the node it sits in.
+    fn heard(&self, name: &str) -> Option<(Role, Option<Role>)> {
+        let nodes = self.nodes();
+        nodes
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| (node.role, node.parent.map(|parent| nodes[parent].role)))
     }
 
     fn settle(&mut self) {
@@ -352,4 +395,107 @@ fn a_style_amendment_restyles_every_notice() {
     let (_, paint) = card(&tree);
     assert_eq!(paint.fill, Some(ink.into()));
     assert!(paint.border.is_some(), "the notice's own frame is kept");
+}
+
+#[test]
+fn a_notice_with_an_action_waits_for_it_however_long_that_takes() {
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 3);
+    mounted.queue.push(
+        Toast::new("Deleted")
+            .lasting(Duration::from_secs(1))
+            .with_action("Undo", || {}),
+    );
+    mounted.settle();
+    mounted.after(Toast::DEFAULT_DURATION * 10);
+    assert!(mounted.shows("Deleted"));
+    assert!(mounted.shows("Undo"));
+}
+
+#[test]
+fn a_modal_layer_up_holds_every_clock() {
+    let (mut mounted, layer) = Mounted::beside_a_modal_layer();
+    mounted
+        .queue
+        .push(Toast::new("Read me").lasting(Duration::from_secs(1)));
+    mounted.settle();
+    mounted.after(Duration::from_millis(600));
+
+    layer.set(true);
+    mounted.settle();
+    mounted.after(Duration::from_secs(5));
+    assert!(mounted.shows("Read me"));
+
+    layer.set(false);
+    mounted.settle();
+    mounted.after(Duration::from_millis(300));
+    assert!(
+        mounted.shows("Read me"),
+        "the time the layer was up does not count"
+    );
+    mounted.after(Duration::from_millis(200));
+    assert!(!mounted.shows("Read me"));
+}
+
+#[test]
+fn a_notice_arriving_behind_a_modal_layer_is_announced_and_its_buttons_are_out_of_reach() {
+    let (mut mounted, layer) = Mounted::beside_a_modal_layer();
+    layer.set(true);
+    mounted.settle();
+    mounted
+        .queue
+        .push(Toast::new("Saved").tone(ToastTone::Success));
+    mounted.settle();
+
+    assert_eq!(
+        mounted.heard("Success: Saved"),
+        Some((Role::Label, Some(Role::Status)))
+    );
+    assert!(
+        mounted.nodes().iter().all(|node| node.role != Role::Button),
+        "the dialog holds the keyboard"
+    );
+
+    layer.set(false);
+    mounted.settle();
+    assert!(
+        mounted
+            .nodes()
+            .iter()
+            .any(|node| node.role == Role::Button && node.name == "Dismiss")
+    );
+}
+
+#[test]
+fn a_warning_or_an_error_interrupts_and_every_notice_says_its_tone() {
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 4);
+    mounted.queue.push(
+        Toast::new("The file could not be written.")
+            .titled("Save failed")
+            .tone(ToastTone::Error),
+    );
+    mounted
+        .queue
+        .push(Toast::new("The disk is almost full.").tone(ToastTone::Warning));
+    mounted.queue.push(Toast::new("A new version is available."));
+    mounted
+        .queue
+        .push(Toast::new("Your changes are saved.").tone(ToastTone::Success));
+    mounted.settle();
+
+    assert_eq!(
+        mounted.heard("Error: Save failed. The file could not be written."),
+        Some((Role::Label, Some(Role::Alert)))
+    );
+    assert_eq!(
+        mounted.heard("Warning: The disk is almost full."),
+        Some((Role::Label, Some(Role::Alert)))
+    );
+    assert_eq!(
+        mounted.heard("Information: A new version is available."),
+        Some((Role::Label, Some(Role::Status)))
+    );
+    assert_eq!(
+        mounted.heard("Success: Your changes are saved."),
+        Some((Role::Label, Some(Role::Status)))
+    );
 }

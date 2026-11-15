@@ -1950,6 +1950,41 @@ fn a_modal_layer_in_a_nested_surface_shuts_out_only_that_surface() {
     assert!(!inert(nested[1]));
 }
 
+/// A live region is announced whatever modal layer is up, so a notice arriving behind a dialog is still heard; the buttons on it go inert with the rest of the page.
+#[test]
+fn a_live_region_behind_a_modal_layer_is_still_announced() {
+    for live in [Role::Status, Role::Alert] {
+        let commands = [
+            open(1, Semantics::group()),
+            open(2, Semantics::of(Role::Button)),
+            DrawCommand::PopElement,
+            open(3, Semantics::of(live)),
+            open(4, Semantics::group()),
+            DrawCommand::PopElement,
+            open(5, Semantics::of(Role::Button)),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            open(10, modal_layer(10, None)),
+            DrawCommand::PopElement,
+        ];
+        let frame = describe_frame(&commands, None, &mut Fixed, false);
+        let page = roots(&frame)[0];
+        assert!(!inert(page), "{live:?}");
+        let [beside, region] = children(page)[..] else {
+            panic!("a button and the live region");
+        };
+        assert!(inert(beside));
+        assert!(!inert(region));
+        assert!(attribute(region, "aria-live").is_some());
+        let [words, button] = children(region)[..] else {
+            panic!("what the region says and a button on it");
+        };
+        assert!(!inert(words));
+        assert!(inert(button));
+    }
+}
+
 fn pieces(node: &BoxNode) -> &[PaintNode] {
     match &node.content {
         Content::Children { pieces, .. } => pieces,

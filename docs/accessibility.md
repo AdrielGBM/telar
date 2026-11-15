@@ -248,11 +248,30 @@ The control a layer was opened from stays (`Overlay::owned_by`): a menu button k
 and a select's combobox keeps the keyboard and points at the option its cursor is on. A tooltip, a toast and a
 layer fixed over the page hold nothing and shut nothing out.
 
+A live region stays too: a box whose role is `status`, `log` or `alert`, and what it says, are read whatever layer
+is up, so a notice arriving while a dialog is open is still announced. Only what it says stays: the controls
+inside it, a notice's action and dismiss buttons among them, are out of reach with the rest of the page, as Tab
+already has them.
+
 | Target | While a modal layer is up |
 | --- | --- |
-| Browser, document (`web-dom`) | `inert` on every box of the surface beside the layer and the control it was opened from, written as high up as it can go: the page's outermost box, or the boxes beside the path down to the control. A `dialog` inside the layer says `aria-modal="true"`. Both go when it closes. A layer in a surface drawn inside a frame shuts out only that surface, since each surface holds its own keyboard. |
-| Desktop | The controls behind it were already left out of the AccessKit tree; the text and the named boxes behind it are left out too, and a dialog inside it is AccessKit `modal`. |
-| Terminal | The reading is the same snapshot, so what is behind it is not in the reading. |
+| Browser, document (`web-dom`) | `inert` on every box of the surface beside the layer, the control it was opened from and the live regions, written as high up as it can go: the page's outermost box, or the boxes beside the path down to them. Inside a live region only its controls go inert. A `dialog` inside the layer says `aria-modal="true"`. Both go when it closes. A layer in a surface drawn inside a frame shuts out only that surface, since each surface holds its own keyboard. |
+| Desktop | The controls behind it were already left out of the AccessKit tree; the text and the named boxes behind it are left out too, but for those inside a live region, and a dialog inside it is AccessKit `modal`. |
+| Terminal | The reading is the same snapshot, so what is behind it is not in the reading, but for what a live region says. |
+
+## Notices
+
+A `toaster`'s stack is a `status`, named by the localized `Notifications`, there before any notice arrives so a
+reader hears each one as it comes. A notice's `ToastTone` is a closed set: `Info` and `Success` are heard when the
+reader is next quiet, as part of the stack; `Warning` and `Error` make the notice an `alert`, heard at once over
+what the reader is saying (`Role::live` reads assertive). The tone is part of what is heard, not only the colour of
+the stripe: the notice is read as its name, the tone's localized word then its title and message, as in
+`Error: Save failed. The file could not be written.`
+
+A notice with an action (`ToastEnd::Action`) never puts itself away: reaching its button can take a reader longer
+than any timeout. One on a clock (`ToastEnd::After`) holds it while the pointer rests on the stack, while the
+keyboard is on one of its buttons, and while a modal layer is up (`focus::modal_layer_up`), so a notice that
+arrives behind a dialog is still there when the dialog closes.
 
 In a play the page behind a modal layer is not in the tree either; a tap that puts the layer away is
 `click_outside` (see [previews.md](previews.md#play)).
@@ -495,7 +514,7 @@ tree listed in reading order: each `AccessNode` names the node it sits in by `pa
 before that node's next sibling, so reading the list in order is reading the tree depth first. A node sits in the
 nearest box around it, along the frame's element nesting, that is a node itself: a control, a box the application
 named, a box that says where it sits, or a box given no name whose role is a structure — a `tablist`, `tabpanel`,
-`menu`, `listbox`, `tree`, `grid`, `row`, `toolbar`, `list`, `dialog`, `status`, `log`, `article` or a landmark
+`menu`, `listbox`, `tree`, `grid`, `row`, `toolbar`, `list`, `dialog`, `status`, `log`, `alert`, `article` or a landmark
 (`banner`, `navigation`, `main`, `complementary`, `contentinfo`, `search`) — as long as it holds a node; holding
 none, it is left out. A box whose role an application said with `role:` on a call (`a11y_role`) is such a node for any role a call may say but `group` — a `listitem`, an unnamed `section` or `form` included — since a role said on purpose is never scaffolding; one a widget gave its own wrapper is a node only as above. The boxes between them, plain groups and scroll areas, are not nodes. AccessKit gets each landmark as its own role (`search` as `Search`), `status` and `log` as polite live regions and `alert` as an assertive one. A box named as a group
 reads as a label beside what it groups rather than around it. A heading given no name is a node too, as the

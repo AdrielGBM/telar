@@ -1155,6 +1155,77 @@ fn a_modal_layer_that_is_up_keeps_a_reader_inside_it() {
     assert!(nodes.iter().all(|n| n.role != Role::Dialog && !n.modal));
 }
 
+/// A live region is read whatever modal layer is up, so a notice arriving behind a dialog is still announced, an alert as one; a button on it is out of reach with the rest of the page, and so is its label.
+#[test]
+fn a_live_region_behind_a_modal_layer_is_still_read() {
+    use crate::{Overlay, WindowRoot, relayout_if_dirty};
+
+    for live in [Role::Status, Role::Alert] {
+        reset_layout_runtime();
+        focus::clear();
+        let words = |text: &'static str| {
+            box_item(
+                Text::new(
+                    move || text.to_string(),
+                    LayoutStyle::new().width(120.0).height(16.0),
+                    || TextStyle::new(12.0, renderer_core::Color::BLACK),
+                )
+                .unwrap(),
+            )
+        };
+        let undo = StyledContainer::new(
+            LayoutStyle::new().width(60.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![words("Undo")],
+        )
+        .unwrap()
+        .control(Role::Button)
+        .on_press(|| {});
+        let region = StyledContainer::new(
+            LayoutStyle::new().flex_column(),
+            |_r| RectStyle::default(),
+            vec![words("File deleted"), box_item(undo)],
+        )
+        .unwrap()
+        .role(live);
+        let dialog = StyledContainer::new(
+            LayoutStyle::new().width(200.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![words("Accept the terms")],
+        )
+        .unwrap()
+        .role(Role::Dialog);
+        let layer = Overlay::new(LayoutStyle::new(), vec![box_item(dialog)]).unwrap();
+        let page = Container::new(
+            LayoutStyle::new().flex_column(),
+            vec![words("Background notes"), box_item(region), box_item(layer)],
+        )
+        .unwrap();
+        crate::set_surface_size(geometry_core::Size::new(400.0, 300.0));
+        let mut tree = ui_tree::ComponentList::new(WindowRoot::wrapping(Box::new(page)).unwrap());
+        tree.on_event(&Event::WindowResized {
+            width: 400,
+            height: 300,
+        });
+        relayout_if_dirty();
+
+        let nodes = snapshot(&tree.commands());
+        assert!(!read_on_its_own(&nodes, "Background notes"), "{nodes:#?}");
+        let region = nodes
+            .iter()
+            .position(|n| n.role == live)
+            .unwrap_or_else(|| panic!("the {live:?} region is read: {nodes:#?}"));
+        assert!(
+            nodes
+                .iter()
+                .any(|n| n.name == "File deleted" && n.parent == Some(region)),
+            "what it says is read inside it: {nodes:#?}"
+        );
+        assert!(names_of(&nodes, Role::Button).is_empty(), "{nodes:#?}");
+        assert!(!nodes.iter().any(|n| n.name == "Undo"), "{nodes:#?}");
+    }
+}
+
 /// An item scrolled out of view is drawn where its text may land on another control; it is named by the text it draws, wherever that is.
 #[test]
 fn a_control_is_named_by_its_text_wherever_scrolling_put_it() {

@@ -93,6 +93,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
     let focused = focus::current();
     let layers = focus::ModalLayers::now();
     let modal = |role: Role, node: NodeId| role == Role::Dialog && layers.holds(node);
+    let shut_out = |node: NodeId| layers.behind(node) && !reading.announced.contains(&node);
 
     let mut named_controls = vec![false; controls.len()];
     let mut found: Vec<Found> = controls
@@ -192,7 +193,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
             })
         })
         .chain(reading.text.iter().cloned())
-        .filter(|piece| !piece.drawn_in.is_some_and(|node| layers.behind(node)));
+        .filter(|piece| !piece.drawn_in.is_some_and(shut_out));
 
     let mut drawn_values = vec![String::new(); controls.len()];
     for piece in pieces {
@@ -263,7 +264,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         reading
             .stated
             .iter()
-            .filter(|stated| !layers.behind(stated.node))
+            .filter(|stated| !shut_out(stated.node))
             .filter_map(|stated| {
                 let rect = visible_rect(stated.node).filter(|rect| area(*rect) > 0.0)?;
                 let node = AccessNode {
@@ -279,7 +280,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         reading
             .structures
             .iter()
-            .filter(|structure| !layers.behind(structure.node))
+            .filter(|structure| !shut_out(structure.node))
             .filter_map(|structure| {
                 let rect = visible_rect(structure.node).filter(|rect| area(*rect) > 0.0)?;
                 let node = AccessNode {
@@ -295,7 +296,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
             .titled
             .iter()
             .zip(titles)
-            .filter(|(titled, _)| !layers.behind(titled.node))
+            .filter(|(titled, _)| !shut_out(titled.node))
             .filter_map(|(titled, mut words)| {
                 let rect = visible_rect(titled.node).filter(|rect| area(*rect) > 0.0)?;
                 words.sort_by_key(|(at, _)| *at);
@@ -379,6 +380,7 @@ fn holds_structure(role: Role) -> bool {
             | Role::Dialog
             | Role::Status
             | Role::Log
+            | Role::Alert
             | Role::Banner
             | Role::Navigation
             | Role::Main
@@ -845,6 +847,8 @@ struct Open {
     replaced: bool,
     /// How far the element and the boxes around it are moved from their places in the flow by sticking, on screen.
     shift: (f32, f32),
+    /// Whether the element is inside a live region and outside every control in it: see [`Reading::announced`].
+    announced: bool,
 }
 
 /// One frame, as a reader meets it: the annotations resolved along its element nesting, with everything under a hidden box already gone.
@@ -867,6 +871,8 @@ struct Reading {
     shifts: FxHashMap<NodeId, (f32, f32)>,
     /// The innermost element around each surface drawn directly inside the frame, in draw order.
     surfaces_in: Vec<Option<NodeId>>,
+    /// Every element inside a box whose role is a live region ([`Role::live`]) and outside every control in it, the region's own box included: what a modal layer leaves in the tree, so a notice arriving behind it is still announced while its buttons stay out of reach with the rest.
+    announced: FxHashSet<NodeId>,
 }
 
 impl Reading {
@@ -905,6 +911,7 @@ impl Reading {
                 node: innermost,
                 replaced,
                 shift: outer_shift,
+                announced,
             } = open.last().cloned().unwrap_or_default();
             let in_control = control.is_some();
             match command {
@@ -1011,6 +1018,12 @@ impl Reading {
                         }
                         _ => named,
                     };
+                    let is_stop = element.semantics.role.is_control()
+                        || element.semantics.focusable.is_some();
+                    let announced = !is_stop && (announced || role.live().is_some());
+                    if announced {
+                        reading.announced.insert(node);
+                    }
                     reading.scopes.insert(node, inner.clone());
                     open.push(Open {
                         scope: inner,
@@ -1024,6 +1037,7 @@ impl Reading {
                         node: Some(node),
                         replaced: inner_replaced,
                         shift,
+                        announced,
                     });
                 }
                 DrawCommand::PopElement => {

@@ -166,6 +166,8 @@ struct FocusState {
     reach: RwSignal<u64>,
     // Bumped when an entry joins or leaves the order, so a scroll area re-reads whether a stop inside it takes its own away.
     roster: RwSignal<u64>,
+    // Bumped when a scope is registered or withdrawn, so a caller asking whether a modal layer is up hears of one built after it asked.
+    layers: RwSignal<u64>,
     guard_installed: bool,
     // The one request still waiting for its batch to settle, stamped so a request that lost to a later give, blur or request does not act when it is finally judged.
     deferred: Option<(u64, FocusId)>,
@@ -198,6 +200,7 @@ impl FocusState {
             text_entries: FxHashSet::default(),
             reach: signal(0),
             roster: signal(0),
+            layers: signal(0),
             guard_installed: false,
             deferred: None,
             requests: 0,
@@ -657,9 +660,16 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
 }
 
 fn roster_changed() {
-    let roster = with_focus_ref(|s| s.roster);
-    if roster.is_alive() {
-        roster.set(roster.peek().wrapping_add(1));
+    bump(with_focus_ref(|s| s.roster));
+}
+
+fn layers_changed() {
+    bump(with_focus_ref(|s| s.layers));
+}
+
+fn bump(revision: RwSignal<u64>) {
+    if revision.is_alive() {
+        revision.set(revision.peek().wrapping_add(1));
     }
 }
 
@@ -677,7 +687,7 @@ pub fn register_scope_because(
     traps: bool,
     reason: ScopeReason,
 ) -> ScopeId {
-    with_focus(|s| {
+    let id = with_focus(|s| {
         let id = ScopeId(s.next_scope);
         s.next_scope += 1;
         s.scopes.push(Scope {
@@ -689,7 +699,9 @@ pub fn register_scope_because(
             owner: None,
         });
         id
-    })
+    });
+    layers_changed();
+    id
 }
 
 /// Names the control `scope` was opened from, so a reader keeps being told about it while the scope holds focus inside itself.
@@ -706,6 +718,7 @@ pub fn set_scope_owner(scope: ScopeId, owner: NodeId) {
 /// Withdraws a scope registered with [`register_scope`].
 pub fn unregister_scope(id: ScopeId) {
     with_focus(|s| s.scopes.retain(|scope| scope.id != id));
+    layers_changed();
 }
 
 /// Removes `id` from the tab order and drops its focus if it held it. A focusable widget calls this on drop, so a destroyed widget never lingers in traversal or as the focused id.
@@ -739,6 +752,9 @@ pub(crate) fn forget_nodes() {
     }
     if !entries.is_empty() {
         roster_changed();
+    }
+    if !scopes.is_empty() {
+        layers_changed();
     }
     // Dropped outside the slot: a closure they hold may own a widget whose teardown reaches back into it.
     drop((entries, scopes));
@@ -1499,6 +1515,14 @@ fn stepped_to(order: &[FocusId], from: Option<FocusId>, dir: isize) -> isize {
 
 fn releases() -> bool {
     with_focus_ref(|s| s.boundary == FocusBoundary::Release) && !trapped()
+}
+
+/// Whether a layer that holds the keyboard inside itself is up on the active surface: a dialog, a drawer, an open menu or the list a select opens. Reactive: the caller runs again when such a layer is built, withdrawn, shown or put away.
+///
+/// What something on a clock waits on, so a notice does not leave while the reader is held inside a dialog and cannot reach it.
+pub fn modal_layer_up() -> bool {
+    with_focus_ref(|s| s.layers).get();
+    trapped()
 }
 
 /// Whether a modal is up and holding focus inside itself.

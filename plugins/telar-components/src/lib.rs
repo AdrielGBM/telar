@@ -109,8 +109,8 @@ pub use overlays::menu::menu::{
 pub use overlays::menu::menu_panel::{SubmenuProps, submenu};
 pub use overlays::modal::modal::{ModalProps, ModalTokens, modal};
 pub use overlays::toast::toast::{
-    Toast, ToastAction, ToastId, ToastPlacement, ToastTokens, ToasterProps, Toasts, show_toast,
-    toaster, toasts,
+    Toast, ToastAction, ToastEnd, ToastId, ToastPlacement, ToastTokens, ToastTone, ToasterProps,
+    Toasts, show_toast, toaster, toasts,
 };
 pub use overlays::tooltip::tooltip::{TooltipProps, TooltipTokens, tooltip};
 pub use shared::DOUBLE_CLICK;

@@ -1,4 +1,4 @@
-//! [`toaster`]: the stack of short notices an application posts with [`show_toast`] or [`Toasts::push`], each of which puts itself away after a while.
+//! [`toaster`]: the stack of short notices an application posts with [`show_toast`] or [`Toasts::push`], each put away when its time is up, its action is pressed or it is dismissed.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -9,7 +9,7 @@ use telar::{
     Accessible, AlignItems, Border, BorderRadius, BoxText, Container, FixedLayer, JustifyContent,
     LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle, RwSignal,
     ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface, box_item,
-    children, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
+    children, detached, effect, focus, focus::Role, on_cleanup, run_after, signal, style_follows,
 };
 
 use crate::shared;
@@ -68,16 +68,70 @@ pub struct ToastAction {
     pub run: Rc<dyn Fn()>,
 }
 
-/// One notice: what it says, what it is about, how long it stays and what can be done about it.
+/// What a notice is about: the colour of its stripe, the word a reader hears before it, and whether it interrupts what a reader is saying.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ToastTone {
+    /// Worth knowing, with nothing to do about it.
+    #[default]
+    Info,
+    /// Done, or gone well.
+    Success,
+    /// Worth a look before it becomes a problem. Interrupts a reader.
+    Warning,
+    /// Failed. Interrupts a reader.
+    Error,
+}
+
+impl ToastTone {
+    /// The theme's colour of this intent, which the stripe is drawn in.
+    pub fn tone(self) -> Tone {
+        match self {
+            ToastTone::Info => Tone::Info,
+            ToastTone::Success => Tone::Success,
+            ToastTone::Warning => Tone::Warning,
+            ToastTone::Error => Tone::Danger,
+        }
+    }
+
+    /// The role a notice of this tone takes: [`Role::Alert`], announced at once over what a reader is saying, for a warning or an error; `None` for one heard when the reader is next quiet, as everything in the stack's status is.
+    pub fn role(self) -> Option<Role> {
+        match self {
+            ToastTone::Info | ToastTone::Success => None,
+            ToastTone::Warning | ToastTone::Error => Some(Role::Alert),
+        }
+    }
+
+    /// The word a reader hears before the notice, in the locale in force.
+    fn word(self) -> String {
+        strings::text(match self {
+            ToastTone::Info => strings::INFORMATION,
+            ToastTone::Success => strings::SUCCESS,
+            ToastTone::Warning => strings::WARNING,
+            ToastTone::Error => strings::ERROR,
+        })
+    }
+}
+
+/// What puts a notice away, besides its dismiss button.
+#[derive(Clone)]
+pub enum ToastEnd {
+    /// Its time being up: it shows this long, not counting the time the pointer rests on the stack, the keyboard spends on its buttons or a modal layer is up.
+    After(Duration),
+    /// Nothing: it stays until it is dismissed, for one that asks something of the reader.
+    Dismissed,
+    /// Its action being pressed. Never its time being up, since reaching the button can take a reader longer than any notice lasts.
+    Action(ToastAction),
+}
+
+/// One notice: what it says, what it is about and what puts it away.
 #[derive(Clone)]
 pub struct Toast {
     pub message: Arc<str>,
     pub title: Option<Arc<str>>,
-    /// What the notice is about, in the colour of its stripe. A new notice is [`Tone::Info`]; every tone draws the stripe in its own colour, `Accent` in the theme's primary and `Neutral` in its muted grey.
-    pub tone: Tone,
-    /// How long it shows before putting itself away, not counting the time the pointer rests on the stack or the keyboard spends on its buttons. `None` keeps it until it is dismissed.
-    pub duration: Option<Duration>,
-    pub action: Option<ToastAction>,
+    /// A new notice is [`ToastTone::Info`].
+    pub tone: ToastTone,
+    /// A new notice puts itself away after [`DEFAULT_DURATION`](Self::DEFAULT_DURATION).
+    pub end: ToastEnd,
 }
 
 impl Toast {
@@ -88,9 +142,8 @@ impl Toast {
         Self {
             message: message.into(),
             title: None,
-            tone: Tone::Info,
-            duration: Some(Self::DEFAULT_DURATION),
-            action: None,
+            tone: ToastTone::Info,
+            end: ToastEnd::After(Self::DEFAULT_DURATION),
         }
     }
 
@@ -99,28 +152,45 @@ impl Toast {
         self
     }
 
-    pub fn tone(mut self, tone: Tone) -> Self {
+    pub fn tone(mut self, tone: ToastTone) -> Self {
         self.tone = tone;
         self
     }
 
+    /// Puts the notice away after `duration`, in place of whatever put it away before, an action included.
     pub fn lasting(mut self, duration: Duration) -> Self {
-        self.duration = Some(duration);
+        self.end = ToastEnd::After(duration);
         self
     }
 
     /// Keeps the notice until it is dismissed, for one that asks something of the reader.
     pub fn until_dismissed(mut self) -> Self {
-        self.duration = None;
+        self.end = ToastEnd::Dismissed;
         self
     }
 
+    /// Gives the notice a button that runs `run` and puts it away, and keeps the notice until that is pressed or it is dismissed.
     pub fn with_action(mut self, label: impl Into<Arc<str>>, run: impl Fn() + 'static) -> Self {
-        self.action = Some(ToastAction {
+        self.end = ToastEnd::Action(ToastAction {
             label: label.into(),
             run: Rc::new(run),
         });
         self
+    }
+
+    /// What a reader hears for the notice: its tone's word, then its title and its message.
+    fn spoken(&self) -> String {
+        let tone = self.tone.word();
+        match &self.title {
+            Some(title) => strings::text_with(
+                strings::TITLED_NOTICE,
+                &[("tone", &tone), ("title", title), ("message", &self.message)],
+            ),
+            None => strings::text_with(
+                strings::NOTICE,
+                &[("tone", &tone), ("message", &self.message)],
+            ),
+        }
     }
 }
 
@@ -257,9 +327,9 @@ impl ToastPlacement {
     }
 }
 
-/// Where the notices of a [`Toasts`] queue show: a stack against one edge of the surface, over the page and out of its scroll, announced to a reader as each one arrives.
+/// Where the notices of a [`Toasts`] queue show: a stack against one edge of the surface, over the page and out of its scroll, announced to a reader as each one arrives, a dialog or a menu up or not.
 ///
-/// Mount one per surface. Each notice puts itself away when its time is up, and the pointer resting on the stack or the keyboard on one of its buttons holds every clock until it leaves. Notices past [`max_visible`](Self::max_visible) wait their turn rather than push the oldest out unread.
+/// Mount one per surface. A notice on a clock puts itself away when its time is up, and the pointer resting on the stack, the keyboard on one of its buttons or a modal layer up holds every clock until it leaves. Notices past [`max_visible`](Self::max_visible) wait their turn rather than push the oldest out unread.
 #[derive(Props)]
 pub struct ToasterProps {
     /// The queue to show. `None` (the default) shows the shared one [`show_toast`] posts to.
@@ -302,6 +372,10 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         size,
     };
     let held = Rc::new(Hold::default());
+    effect({
+        let held = held.clone();
+        move || held.modal(focus::modal_layer_up())
+    });
 
     let shown = move || {
         let mut shown: Vec<Posted> = queue
@@ -360,11 +434,12 @@ impl Width {
     }
 }
 
-/// What holds the clock of every shown notice, so the one being read or acted on never closes under it: the pointer resting on the stack, or the keyboard on one of its buttons.
+/// What holds the clock of every shown notice, so the one being read or acted on never closes under it: the pointer resting on the stack, the keyboard on one of its buttons, or a modal layer up that keeps the keyboard and a reader from reaching it.
 #[derive(Default)]
 struct Hold {
     pointer: Cell<bool>,
     keyboard: Cell<bool>,
+    modal: Cell<bool>,
     clocks: RefCell<Vec<(ToastId, Timer)>>,
 }
 
@@ -379,8 +454,13 @@ impl Hold {
         self.apply();
     }
 
+    fn modal(&self, held: bool) {
+        self.modal.set(held);
+        self.apply();
+    }
+
     fn is_held(&self) -> bool {
-        self.pointer.get() || self.keyboard.get()
+        self.pointer.get() || self.keyboard.get() || self.modal.get()
     }
 
     fn apply(&self) {
@@ -417,7 +497,7 @@ fn notice(
     let Posted { id, toast } = entry;
     let dismiss = Rc::new(move || queue.dismiss(id));
 
-    if let Some(duration) = toast.duration {
+    if let ToastEnd::After(duration) = toast.end {
         let clock = run_after(duration, {
             let dismiss = dismiss.clone();
             move || dismiss()
@@ -448,11 +528,14 @@ fn notice(
             .min_width(0.0)
             .gap(shared::gap_xs(size))
     };
-    let text = Container::new(column(), words)?.styled_by(column);
+    let text = Container::new(column(), words)?.styled_by(column).a11y_label({
+        let toast = toast.clone();
+        move || toast.spoken()
+    });
 
     let mut parts: Vec<Box<dyn LayoutItem>> =
-        vec![stripe(size, toast.tone.clone())?, box_item(text)];
-    if let Some(action) = toast.action.clone() {
+        vec![stripe(size, toast.tone.tone())?, box_item(text)];
+    if let ToastEnd::Action(action) = toast.end.clone() {
         let dismiss = dismiss.clone();
         let label = action.label.clone();
         parts.push(text_button(
@@ -488,7 +571,10 @@ fn notice(
         parts,
     )?
     .styled_by(card_box);
-    Ok(box_item(card))
+    Ok(box_item(match toast.tone.role() {
+        Some(role) => card.role(role),
+        None => card,
+    }))
 }
 
 /// A notice's paint before the caller's amendment.

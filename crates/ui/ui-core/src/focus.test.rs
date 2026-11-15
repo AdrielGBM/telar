@@ -430,6 +430,32 @@ fn inside_a_modal_that_holds_focus_tab_is_kept() {
     unregister_scope(scope);
 }
 
+/// A caller waiting on modal layers hears of one built after it first asked, of it being put away and shown again, and of it going; a layer that holds nothing in is no modal one.
+#[test]
+fn modal_layer_up_follows_layers_built_shown_and_withdrawn() {
+    use crate::LayoutItem;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    crate::context::reset_layout_runtime();
+    clear();
+    let heard = Rc::new(RefCell::new(Vec::new()));
+    reactive_core::effect({
+        let heard = heard.clone();
+        move || heard.borrow_mut().push(modal_layer_up())
+    });
+    let node = laid_out_box().layout_node();
+    let tooltip = register_scope(node, || true, false);
+    let open = reactive_core::signal(true);
+    let dialog = register_scope(node, move || open.get(), true);
+    open.set(false);
+    open.set(true);
+    unregister_scope(dialog);
+    unregister_scope(tooltip);
+    let mut heard = heard.borrow().clone();
+    heard.dedup();
+    assert_eq!(heard, [false, true, false, true, false]);
+}
+
 #[test]
 fn a_host_focus_move_becomes_telar_s() {
     use crate::LayoutItem;
