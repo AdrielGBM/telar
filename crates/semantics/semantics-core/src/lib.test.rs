@@ -1,4 +1,5 @@
 use super::*;
+use std::num::NonZeroU32;
 
 #[test]
 fn a_role_reads_back_as_the_name_it_was_written_with() {
@@ -57,7 +58,7 @@ fn the_words_an_author_reaches_for_first_point_at_the_role_they_mean() {
     assert_eq!(Role::parse("sidebar"), Some(Role::Complementary));
     assert_eq!(Role::parse("header"), Some(Role::Banner));
     assert_eq!(Role::parse("footer"), Some(Role::ContentInfo));
-    assert_eq!(Role::parse("h2"), Some(Role::Heading(2)));
+    assert_eq!(Role::parse("h2"), Some(Role::Heading(HeadingLevel::Two)));
 }
 
 #[test]
@@ -229,9 +230,9 @@ fn a_tree_row_carries_its_openness_and_its_place_beside_its_selection() {
         toggled: Some(Toggle::On),
         expanded: Some(false),
         position: Some(SetPosition {
-            level: 2,
-            position: 3,
-            size: 7,
+            level: NonZeroU32::new(2).unwrap(),
+            position: NonZeroU32::new(3).unwrap(),
+            size: NonZeroU32::new(7).unwrap(),
         }),
         ..Semantics::of(Role::TreeItem)
     };
@@ -387,7 +388,12 @@ fn an_item_says_only_the_numbers_its_role_takes() {
         assert_eq!(role.positioning(), Some(Positioning::InSet), "{role:?}");
     }
     assert_eq!(Role::Row.positioning(), Some(Positioning::GridRow));
-    for role in [Role::Heading(2), Role::Button, Role::Grid, Role::GridCell] {
+    for role in [
+        Role::Heading(HeadingLevel::Two),
+        Role::Button,
+        Role::Grid,
+        Role::GridCell,
+    ] {
         assert_eq!(role.positioning(), None, "{role:?}");
     }
 }
@@ -425,7 +431,7 @@ fn only_the_roles_that_describe_a_box_can_be_said_from_outside_it() {
         Role::Section,
         Role::Form,
         Role::Search,
-        Role::Heading(2),
+        Role::Heading(HeadingLevel::Two),
         Role::ListItem,
         Role::Status,
         Role::Log,
@@ -461,12 +467,12 @@ fn a_said_role_replaces_only_a_group_or_a_region() {
     assert_eq!(Role::Group.annotated(navigation), Role::Navigation);
     assert_eq!(Role::Section.annotated(navigation), Role::Navigation);
     assert_eq!(
-        Role::Group.annotated(Some(Role::Heading(3))),
-        Role::Heading(3)
+        Role::Group.annotated(Some(Role::Heading(HeadingLevel::Three))),
+        Role::Heading(HeadingLevel::Three)
     );
     for made in [
         Role::Button,
-        Role::Heading(1),
+        Role::Heading(HeadingLevel::One),
         Role::List,
         Role::ScrollArea,
         Role::Drawing,

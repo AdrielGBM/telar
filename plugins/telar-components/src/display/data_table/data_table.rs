@@ -3,6 +3,7 @@
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
+use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -390,9 +391,9 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
 /// The row on `line` of a grid of `rows` rows under its header, as the grid counts its lines: the header first.
 fn line_place(line: usize, rows: usize) -> SetPosition {
     SetPosition {
-        level: 1,
-        position: line as u32 + 1,
-        size: rows as u32 + 1,
+        level: NonZeroU32::MIN,
+        position: NonZeroU32::MIN.saturating_add(line as u32),
+        size: NonZeroU32::MIN.saturating_add(rows as u32),
     }
 }
 

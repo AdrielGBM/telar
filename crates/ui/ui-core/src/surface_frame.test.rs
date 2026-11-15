@@ -1171,7 +1171,7 @@ fn word(text: &'static str, style: LayoutStyle) -> crate::Text {
 }
 
 fn handle_of(canvas: &SurfaceCanvas) -> u64 {
-    canvas.surface().handle().raw()
+    canvas.surface().handle().raw().get()
 }
 
 #[test]

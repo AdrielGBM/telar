@@ -1,4 +1,6 @@
 use geometry_core::Rect;
+use platform_core::HeadingLevel;
+use std::num::NonZeroU32;
 
 use super::*;
 
@@ -295,9 +297,9 @@ fn a_tree_row_says_it_is_chosen_open_and_where_it_sits() {
         toggled: Some(Toggle::On),
         expanded: Some(true),
         position: Some(platform_core::SetPosition {
-            level: 2,
-            position: 3,
-            size: 5,
+            level: NonZeroU32::new(2).unwrap(),
+            position: NonZeroU32::new(3).unwrap(),
+            size: NonZeroU32::new(5).unwrap(),
         }),
         ..node(Some(4), Role::TreeItem, "Buttons")
     };
@@ -539,7 +541,7 @@ mod from_a_screen {
             |_| RectStyle::default(),
             vec![box_item(words("Settings")?)],
         )?
-        .role(platform_core::Role::Heading(1));
+        .role(platform_core::Role::Heading(HeadingLevel::One));
         let save = button("Save")?;
         let source = link("Source code", || external("https://example.com/telar"))?;
         let about = link("About", || Location::root().segment("about"))?;
@@ -690,7 +692,8 @@ mod from_a_screen {
             )?
             .a11y_role(platform_core::Role::Navigation)
             .a11y_label(|| "Places");
-            let title = words("Recent")?.a11y_role(platform_core::Role::Heading(3));
+            let title =
+                words("Recent")?.a11y_role(platform_core::Role::Heading(HeadingLevel::Three));
             let save = button("Save")?.a11y_role(platform_core::Role::Navigation);
             let column = Container::new(
                 LayoutStyle::new().flex_column().gap(12.0),
@@ -1138,9 +1141,9 @@ fn an_item_publishes_only_the_numbers_its_role_takes() {
     let placed = |role: Role| {
         let item = AccessNode {
             position: Some(platform_core::SetPosition {
-                level: 1,
-                position: 3,
-                size: 40,
+                level: NonZeroU32::MIN,
+                position: NonZeroU32::new(3).unwrap(),
+                size: NonZeroU32::new(40).unwrap(),
             }),
             ..node(Some(4), role, "Item")
         };
@@ -1174,9 +1177,9 @@ fn a_dialog_in_a_modal_layer_is_published_modal() {
 fn a_header_row_with_no_name_is_a_row_with_its_index() {
     let header_row = AccessNode {
         position: Some(platform_core::SetPosition {
-            level: 1,
-            position: 1,
-            size: 501,
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::MIN,
+            size: NonZeroU32::new(501).unwrap(),
         }),
         ..node(None, Role::Row, "")
     };
@@ -1203,9 +1206,9 @@ fn inside(parent: usize, node: AccessNode) -> AccessNode {
 fn row_at(id: u64, position: u32, size: u32) -> AccessNode {
     AccessNode {
         position: Some(platform_core::SetPosition {
-            level: 1,
-            position,
-            size,
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::new(position).unwrap(),
+            size: NonZeroU32::new(size).unwrap(),
         }),
         ..node(Some(id), Role::Row, "")
     }
@@ -1296,9 +1299,9 @@ fn a_grid_of_rows_that_say_no_place_counts_them() {
 fn a_set_says_its_size_where_its_items_agree_on_it() {
     let item = |id: u64, role: Role, level: u32, position: u32, size: u32| AccessNode {
         position: Some(platform_core::SetPosition {
-            level,
-            position,
-            size,
+            level: NonZeroU32::new(level).unwrap(),
+            position: NonZeroU32::new(position).unwrap(),
+            size: NonZeroU32::new(size).unwrap(),
         }),
         ..node(Some(id), role, "Item")
     };
@@ -1347,7 +1350,7 @@ fn every_role_said_from_outside_is_published_as_the_role_a_reader_knows() {
         (Role::Section, AkRole::Section),
         (Role::Form, AkRole::Form),
         (Role::Search, AkRole::Search),
-        (Role::Heading(4), AkRole::Heading),
+        (Role::Heading(HeadingLevel::Four), AkRole::Heading),
         (Role::ListItem, AkRole::ListItem),
         (Role::Status, AkRole::Status),
         (Role::Log, AkRole::Log),
@@ -1572,4 +1575,20 @@ fn an_empty_field_has_one_empty_run() {
             .map(|selection| selection.focus.character_index),
         Some(0)
     );
+}
+
+/// AccessKit counts a heading's level from zero and a reader from one, so the level published is the one the terminal reading says, one lower.
+#[test]
+fn every_heading_is_published_at_the_level_a_reader_says() {
+    for level in HeadingLevel::ALL {
+        let heading = node(None, Role::Heading(level), "Title");
+        let update = tree_update(std::slice::from_ref(&heading), "Window", None);
+        let published = update.nodes[0].1.level().map(|level| level + 1);
+        assert_eq!(
+            platform_core::accessibility::transcript(&[heading]),
+            format!("Title, heading, level {}", published.unwrap_or_default()),
+            "{level:?}"
+        );
+        assert_eq!(published, Some(usize::from(level.get())), "{level:?}");
+    }
 }

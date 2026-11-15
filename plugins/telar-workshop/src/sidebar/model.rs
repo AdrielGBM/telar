@@ -67,8 +67,10 @@ fn path_to(nodes: &[TreeNode], id: &str, path: &mut Vec<Arc<str>>) -> bool {
 
 fn matches(query: &str, entry: &PreviewEntry) -> bool {
     query.split_whitespace().all(|token| {
-        [entry.package, entry.title, entry.name]
+        entry
+            .package
             .into_iter()
+            .chain([entry.title, entry.name])
             .chain(entry.tags.iter().copied())
             .any(|field| fuzzy_match(token, field).is_some())
     })
@@ -86,8 +88,8 @@ fn segments(entry: &PreviewEntry, by_package: bool) -> Vec<&'static str> {
     if path.is_empty() {
         path.push(entry.component);
     }
-    if by_package && !entry.package.is_empty() {
-        path.insert(0, entry.package);
+    if by_package && let Some(package) = entry.package {
+        path.insert(0, package);
     }
     path
 }

@@ -1,5 +1,6 @@
 use geometry_core::Rect;
 use layout_core::{LayoutStyle, SizeDimension};
+use std::num::NonZeroU64;
 
 use super::*;
 
@@ -996,29 +997,29 @@ fn a_kept_inner_recording_hands_its_nodes_only_to_an_enclosing_recording_that_ow
 /// Node ids are per surface, so a recording opened on one surface must not free an id minted on another — it names a different node there.
 #[test]
 fn a_recording_never_frees_a_node_built_on_another_surface() {
-    use reactive_core::{SurfaceHandle, with_current_surface};
+    use reactive_core::{SurfaceHandle, enter_surface, with_current_surface};
 
     type Worlds = (LayoutContext, ParentsContext);
     fn enter(handle: SurfaceHandle, worlds: &Worlds, run: &mut dyn FnMut()) {
-        with_current_surface(handle, || {
+        with_current_surface(Some(handle), || {
             worlds.0.with_entered(|| worlds.1.with_entered(run))
         });
     }
-    let (a, b) = (SurfaceHandle::from_raw(1), SurfaceHandle::from_raw(2));
+    let (a, b) = (handle(1), handle(2));
     let a_worlds: &'static Worlds =
         Box::leak(Box::new((LayoutContext::new(), ParentsContext::new())));
     let b_worlds: &'static Worlds =
         Box::leak(Box::new((LayoutContext::new(), ParentsContext::new())));
     reactive_core::set_surface_enter_hook(move |handle, run| match handle {
-        h if h == a => enter(a, a_worlds, run),
-        h if h == b => enter(b, b_worlds, run),
+        h if h == Some(a) => enter(a, a_worlds, run),
+        h if h == Some(b) => enter(b, b_worlds, run),
         _ => run(),
     });
 
-    let (b_loose, b_kept) = a.with_entered(|| {
+    let (b_loose, b_kept) = enter_surface(Some(a), || {
         let (a_survivor, _) = new_leaf(LayoutStyle::new()).unwrap();
         let recording = record_nodes();
-        let (b_loose, b_kept) = b.with_entered(|| {
+        let (b_loose, b_kept) = enter_surface(Some(b), || {
             let (loose, _) = new_leaf(LayoutStyle::new()).unwrap();
             let inner = record_nodes();
             let (kept, _) = new_leaf(LayoutStyle::new()).unwrap();
@@ -1033,7 +1034,7 @@ fn a_recording_never_frees_a_node_built_on_another_surface() {
         assert_eq!(live_node_count(), 1);
         (b_loose, b_kept)
     });
-    b.with_entered(|| {
+    enter_surface(Some(b), || {
         assert!(track_layout(b_loose).is_some());
         assert!(track_layout(b_kept).is_some());
         assert_eq!(live_node_count(), 2);
@@ -1566,4 +1567,8 @@ fn set_children_under_a_dead_parent_errs_silently() {
     remove_node(parent);
 
     assert!(set_children(parent, &[child]).is_err());
+}
+
+fn handle(id: u64) -> SurfaceHandle {
+    SurfaceHandle::from_raw(NonZeroU64::new(id).expect("a surface id counts from one"))
 }

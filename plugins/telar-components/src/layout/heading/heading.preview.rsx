@@ -1,7 +1,7 @@
 [logic]
 use crate::metrics;
 use telar::preview::by_role;
-use telar::{ControlSize, Role};
+use telar::{ControlSize, HeadingLevel, Role};
 
 [previews "Layout/Heading" layout:centered]
 
@@ -14,6 +14,6 @@ col gap:(metrics::gap_md(ControlSize::Regular))
         heading text:"Heading {level}" level:level
 
 [play]
-for level in 1..=6u8 {
-    canvas.expect(by_role(Role::Heading(level)).named(format!("Heading {level}")))?;
+for level in HeadingLevel::ALL {
+    canvas.expect(by_role(Role::Heading(level)).named(format!("Heading {}", level.get())))?;
 }

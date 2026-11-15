@@ -595,7 +595,7 @@ impl Component for Spliced {
             30.0,
             [
                 RenderNode::Primitive(DrawCommand::PushMatrix {
-                    matrix: geometry_core::Transform::scale_around(2.0, 2.0, 0.0, 0.0).to_array(),
+                    transform: geometry_core::Transform::scale_around(2.0, 2.0, 0.0, 0.0),
                 }),
                 self.inner.boundary(),
                 RenderNode::Primitive(DrawCommand::PopMatrix),

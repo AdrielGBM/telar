@@ -67,13 +67,17 @@ fn an_id_with_characters_a_path_cannot_hold_is_encoded() {
 }
 
 fn listed(id: &str, title: &str) -> ListedPreview {
-    from_package("", id, title)
+    ListedPreview {
+        id: id.to_string(),
+        package: None,
+        title: title.to_string(),
+    }
 }
 
 fn from_package(package: &str, id: &str, title: &str) -> ListedPreview {
     ListedPreview {
         id: id.to_string(),
-        package: package.to_string(),
+        package: Some(package.to_string()),
         title: title.to_string(),
     }
 }
@@ -148,7 +152,7 @@ fn a_title_is_cut_into_trimmed_groups_and_has_one_canonical_form() {
         (" / ", vec![]),
     ] {
         assert_eq!(title_path(title).collect::<Vec<_>>(), path, "{title}");
-        assert_eq!(docs_key("", title), path.join("/"), "{title}");
+        assert_eq!(docs_key(None, title), path.join("/"), "{title}");
     }
 }
 
@@ -181,8 +185,11 @@ fn a_docs_page_stands_under_the_package_of_its_previews() {
             vec!["docs", "telar-components", "Inputs", "Button"],
         ]
     );
-    assert_eq!(docs_key("app", "Inputs / Button"), "app/Inputs/Button");
-    assert_eq!(docs_key("app", " / "), "");
+    assert_eq!(
+        docs_key(Some("app"), "Inputs / Button"),
+        "app/Inputs/Button"
+    );
+    assert_eq!(docs_key(Some("app"), " / "), "");
 }
 
 #[test]

@@ -6,8 +6,8 @@ use geometry_core::Rect;
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
 pub use semantics_core::{
-    CurrentKind, HasPopup, Live, Modal, NumericValue, NumericValueError, Orientation, Positioning,
-    Role, SetPosition, SortDirection, Toggle, ToggleKind, Value,
+    CurrentKind, HasPopup, HeadingLevel, Live, Modal, NumericValue, NumericValueError, Orientation,
+    Positioning, Role, SetPosition, SortDirection, Toggle, ToggleKind, Value,
 };
 
 /// One thing a screen reader can land on.
@@ -162,7 +162,7 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
             out.push_str(role);
         }
         if let Role::Heading(level) = node.role {
-            out.push_str(&format!(", level {level}"));
+            out.push_str(&format!(", level {}", level.get()));
         }
         if let Some(words) = node
             .value

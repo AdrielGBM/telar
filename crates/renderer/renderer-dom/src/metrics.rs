@@ -177,7 +177,7 @@ fn wrap(text: &str, max_width: f32, style: &TextStyle) -> (f32, usize) {
         TextWrap::NoWrap => crate::wrap::unbroken(text, width),
         TextWrap::Wrap => crate::wrap::greedy(text, column(max_width, style), width),
     };
-    if let Some(max) = style.clamp.max_lines() {
+    if let Some(max) = style.clamp.map(|clamp| clamp.max_lines()) {
         lines = lines.min(max);
     }
     (widest, lines.max(1))
@@ -197,7 +197,7 @@ fn column(max_width: f32, style: &TextStyle) -> f32 {
 fn ink(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
     let line = line_height(style);
     let baseline = baseline(style);
-    let shown = style.clamp.max_lines().unwrap_or(usize::MAX);
+    let shown = style.clamp.map_or(usize::MAX, |clamp| clamp.max_lines());
     let mut index = 0usize;
     let mut extent: Option<(f32, f32)> = None;
     crate::wrap::each_line(

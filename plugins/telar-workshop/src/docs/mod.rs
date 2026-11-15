@@ -38,7 +38,7 @@ pub(crate) fn docs(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutE
                 .into_iter()
                 .collect()
         },
-        |component: &(&'static str, &'static str)| *component,
+        |component: &(Option<&'static str>, &'static str)| *component,
         move |(package, title)| page(&building, package, title),
     )?;
     Ok(box_item(docs))
@@ -47,7 +47,7 @@ pub(crate) fn docs(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutE
 /// The page of the component `package` lists under `title`, which empties the action log as it opens.
 fn page(
     state: &WorkshopState,
-    package: &'static str,
+    package: Option<&'static str>,
     title: &'static str,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let entries: Vec<PreviewEntry> = state

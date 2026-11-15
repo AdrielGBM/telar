@@ -367,7 +367,7 @@ pub fn text_style(style: &TextStyle, root_font_size: f32, out: &mut String) {
         // `break-word` rather than `anywhere`: both break a word wider than the box between grapheme clusters as the measurers do, but `anywhere` also shrinks the min-content width to one cluster where the measurers keep the widest word.
         declare(out, "overflow-wrap", "break-word");
     }
-    if let Some(max) = style.clamp.max_lines() {
+    if let Some(max) = style.clamp.map(|clamp| clamp.max_lines()) {
         // The only cross-browser line clamp there is, and it needs all four declarations to work.
         declare(out, "display", "-webkit-box");
         declare(out, "-webkit-box-orient", "vertical");

@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::BTreeSet;
+use std::num::NonZeroU32;
 
 use telar::testing::{centre, lay_out, named, press, release, route};
 
@@ -361,13 +362,13 @@ fn each_row_built_says_its_index_among_all_the_rows() {
         mounted
             .of_role(Role::Row)
             .into_iter()
-            .map(|row| row.position.map(|place| place.position))
+            .map(|row| row.position.map(|place| place.position.get()))
             .collect()
     };
     let sizes: Vec<Option<u32>> = mounted
         .of_role(Role::Row)
         .into_iter()
-        .map(|row| row.position.map(|place| place.size))
+        .map(|row| row.position.map(|place| place.size.get()))
         .collect();
     assert!(sizes.iter().all(|size| *size == Some(501)), "{sizes:?}");
     assert_eq!(
@@ -876,7 +877,7 @@ fn a_wrapping_column_grows_its_row_to_hold_its_lines_and_the_header_keeps_its_he
     let cells = mounted.of_role(Role::GridCell);
     let body: Vec<_> = rows
         .iter()
-        .filter(|row| row.position.map(|place| place.position) != Some(1))
+        .filter(|row| row.position.map(|place| place.position.get()) != Some(1))
         .collect();
     assert_eq!(
         body[0].rect.height, row_height,
@@ -1008,11 +1009,11 @@ fn a_wrapping_table_s_rows_say_their_index_among_all_the_rows() {
     assert_eq!(
         places
             .iter()
-            .max_by_key(|place| place.map(|place| place.position)),
+            .max_by_key(|place| place.map(|place| place.position.get())),
         Some(&Some(SetPosition {
-            level: 1,
-            position: 301,
-            size: 301,
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::new(301).unwrap(),
+            size: NonZeroU32::new(301).unwrap(),
         }))
     );
 }
@@ -1077,7 +1078,7 @@ fn the_header_row_is_still_read_once_the_rows_have_scrolled_under_it() {
     let header = nodes
         .iter()
         .position(|node| {
-            node.role == Role::Row && node.position.is_some_and(|place| place.position == 1)
+            node.role == Role::Row && node.position.is_some_and(|place| place.position.get() == 1)
         })
         .unwrap_or_else(|| {
             panic!(
@@ -1090,7 +1091,10 @@ fn the_header_row_is_still_read_once_the_rows_have_scrolled_under_it() {
             )
         });
     assert_eq!(nodes[header].id, None, "the header row is no control");
-    assert_eq!(nodes[header].position.map(|place| place.size), Some(501));
+    assert_eq!(
+        nodes[header].position.map(|place| place.size.get()),
+        Some(501)
+    );
     let grid = nodes[header]
         .parent
         .expect("the header row sits in the grid");
@@ -1145,7 +1149,7 @@ fn a_table_reads_as_a_grid_of_rows_that_hold_their_cells() {
         .map(|&row| {
             (
                 nodes[row].role,
-                nodes[row].position.map(|place| place.position),
+                nodes[row].position.map(|place| place.position.get()),
             )
         })
         .collect();

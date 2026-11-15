@@ -4,10 +4,11 @@
 
 use std::borrow::Cow;
 use std::cell::{Cell, OnceCell, Ref, RefCell};
+use std::num::NonZeroU64;
 use std::rc::Rc;
 
 use geometry_core::{BoxModel, Insets, Rect, Size, Transform};
-use reactive_core::effect;
+use reactive_core::{SurfaceHandle, effect, enter_surface, enter_surface_if_alive};
 use renderer_core::DrawCommand;
 
 use crate::component::Component;
@@ -236,9 +237,9 @@ impl Segment {
             };
             let stratum = enclosing.max(*own_stratum);
             match cmd {
-                DrawCommand::PushMatrix { matrix } => {
+                DrawCommand::PushMatrix { transform } => {
                     let parent = top(&matrices, stratum);
-                    matrices[stratum.index()].push(Transform::from_array(*matrix).then(parent));
+                    matrices[stratum.index()].push(transform.then(parent));
                 }
                 DrawCommand::PopMatrix => {
                     let stack = &mut matrices[stratum.index()];
@@ -247,7 +248,7 @@ impl Segment {
                     }
                 }
                 DrawCommand::PushSurface { surface } => {
-                    surfaces.push(reactive_core::SurfaceHandle::from_raw(*surface));
+                    surfaces.push(NonZeroU64::new(*surface).map(SurfaceHandle::from_raw));
                 }
                 DrawCommand::PopSurface => {
                     surfaces.pop();
@@ -290,17 +291,18 @@ impl Segment {
 }
 
 /// Runs `f` in the world of the innermost surface the walk is inside, or in the one active now outside every surface: entering the innermost alone sets every world it has.
-fn within<R>(surfaces: &[reactive_core::SurfaceHandle], f: impl FnOnce() -> R) -> R {
+fn within<R>(surfaces: &[Option<SurfaceHandle>], f: impl FnOnce() -> R) -> R {
     match surfaces.last() {
-        Some(surface) => surface.with_entered(f),
-        None => f(),
+        Some(Some(surface)) => enter_surface(Some(*surface), f),
+        Some(None) | None => f(),
     }
 }
 
 /// [`within`] for a read of a box by its id, which means nothing outside the world that numbered it: `None` inside a surface with no world on this thread, one torn down or one drawn by a world this process cannot enter.
-fn within_world<R>(surfaces: &[reactive_core::SurfaceHandle], f: impl FnOnce() -> R) -> Option<R> {
+fn within_world<R>(surfaces: &[Option<SurfaceHandle>], f: impl FnOnce() -> R) -> Option<R> {
     match surfaces.last() {
-        Some(surface) => surface.with_entered_if_alive(f),
+        Some(Some(surface)) => enter_surface_if_alive(Some(*surface), f),
+        Some(None) => None,
         None => Some(f()),
     }
 }
@@ -367,7 +369,9 @@ fn flatten_segment(
                 for child in children.into_iter().rev() {
                     stack.push(Step::Node(child));
                 }
-                emit_command!(DrawCommand::PushMatrix { matrix });
+                emit_command!(DrawCommand::PushMatrix {
+                    transform: Transform::from_array(matrix)
+                });
             }
             RenderNode::Clip {
                 rect,

@@ -35,8 +35,8 @@ impl CellMetrics {
                 u16::MAX
             },
             wrap: style.text_wrap == TextWrap::Wrap,
-            max_lines: style.clamp.max_lines().map(|n| n as u16),
-            ellipsis: style.clamp.ellipsis(),
+            max_lines: style.clamp.map(|clamp| clamp.max.get()),
+            ellipsis: style.clamp.is_some_and(|clamp| clamp.ellipsis),
         }
     }
 

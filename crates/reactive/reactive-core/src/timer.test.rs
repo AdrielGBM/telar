@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::num::NonZeroU64;
 use std::rc::Rc;
 
 use super::*;
@@ -170,7 +171,7 @@ fn callbacks_run_in_one_batch() {
 
 #[test]
 fn a_callback_runs_in_the_surface_it_was_scheduled_from() {
-    let entered = Rc::new(Cell::new(SurfaceHandle::NONE));
+    let entered = Rc::new(Cell::new(None::<SurfaceHandle>));
     set_surface_enter_hook({
         let entered = entered.clone();
         move |surface, run| {
@@ -180,8 +181,8 @@ fn a_callback_runs_in_the_surface_it_was_scheduled_from() {
             set_current_surface(previous);
         }
     });
-    let previous = set_current_surface(SurfaceHandle::from_raw(7));
-    let seen = Rc::new(Cell::new(SurfaceHandle::NONE));
+    let previous = set_current_surface(Some(handle(7)));
+    let seen = Rc::new(Cell::new(None::<SurfaceHandle>));
     let _timer = run_after(DELAY, {
         let seen = seen.clone();
         move || seen.set(current_surface())
@@ -189,20 +190,20 @@ fn a_callback_runs_in_the_surface_it_was_scheduled_from() {
     set_current_surface(previous);
 
     pass(DELAY);
-    assert_eq!(seen.get(), SurfaceHandle::from_raw(7));
-    assert_eq!(entered.get(), SurfaceHandle::from_raw(7));
+    assert_eq!(seen.get(), Some(handle(7)));
+    assert_eq!(entered.get(), Some(handle(7)));
 }
 
 #[test]
 fn cancelling_a_surface_cancels_only_its_timers() {
     let (mine, done) = counter();
-    let previous = set_current_surface(SurfaceHandle::from_raw(3));
+    let previous = set_current_surface(Some(handle(3)));
     let _mine = run_after(DELAY, done);
     set_current_surface(previous);
     let (theirs, done) = counter();
     let _theirs = run_after(DELAY, done);
 
-    cancel_timers_for(SurfaceHandle::from_raw(3));
+    cancel_timers_for(handle(3));
     pass(DELAY);
     assert_eq!((mine.get(), theirs.get()), (0, 1));
 }
@@ -236,11 +237,11 @@ fn releasing_a_thread_drops_the_callbacks_of_its_pending_timers() {
 #[test]
 fn a_disposed_surfaces_timer_never_fires() {
     let (fired, done) = counter();
-    let previous = set_current_surface(SurfaceHandle::from_raw(5));
+    let previous = set_current_surface(Some(handle(5)));
     let timer = run_after(DELAY, done);
     set_current_surface(previous);
 
-    crate::dispose_surface(SurfaceHandle::from_raw(5));
+    crate::dispose_surface(handle(5));
     pass(DELAY);
     assert_eq!(fired.get(), 0);
     assert!(!timer.is_pending(), "its callback is dropped once due");
@@ -282,4 +283,8 @@ fn pausing_and_resuming_a_wait_too_long_to_reach_does_not_panic_or_fire() {
     assert_eq!(until_next_timer(), None);
     pass(DELAY);
     assert_eq!(fired.get(), 0);
+}
+
+fn handle(id: u64) -> SurfaceHandle {
+    SurfaceHandle::from_raw(NonZeroU64::new(id).expect("a surface id counts from one"))
 }

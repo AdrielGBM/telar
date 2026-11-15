@@ -27,10 +27,10 @@ use runtime::set_current_surface;
 pub use runtime::{
     FlushNotifyHandle, OpenBatch, OwnerGuard, OwnerId, PanicCatch, PanicPayload, SurfaceHandle,
     after_settle, batch, context_provided_here, current_owner, current_surface, dispose_owner,
-    dispose_surface, dispose_surface_owners, find_context, in_surface_world, live_effect_count,
-    live_owner_count, live_signal_count, on_cleanup, owner_scope, owner_within, provide_context,
-    reset_runtime, root_scope, set_flush_notify, set_panic_catch, set_surface_enter_hook,
-    with_context, with_current_surface, with_owner,
+    dispose_surface, dispose_surface_owners, enter_surface, enter_surface_if_alive, find_context,
+    in_surface_world, live_effect_count, live_owner_count, live_signal_count, on_cleanup,
+    owner_scope, owner_within, provide_context, reset_runtime, root_scope, set_flush_notify,
+    set_panic_catch, set_surface_enter_hook, with_context, with_current_surface, with_owner,
 };
 pub use signal::{ReadSignal, RwSignal, signal};
 pub use source::{Source, derive, derive_pair};

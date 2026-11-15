@@ -9,11 +9,9 @@ pub use wgpu;
 
 use crate::renderer::SHARED_GPU;
 use renderer_core::{ExternalTexture, ImageData, RendererError};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
-const UNSET: u8 = u8::MAX;
-static POWER: AtomicU8 = AtomicU8::new(UNSET);
+static POWER: Mutex<Option<wgpu::PowerPreference>> = Mutex::new(None);
 
 /// Which adapter to open the process's device on. Takes effect only before that device exists — the first renderer, or the first [`open`], settles it for the process, and a later call warns and does nothing.
 ///
@@ -27,18 +25,13 @@ pub fn prefer(power: wgpu::PowerPreference) {
         );
         return;
     }
-    POWER.store(power as u8, Ordering::Relaxed);
+    *POWER.lock().unwrap_or_else(PoisonError::into_inner) = Some(power);
 }
 
 pub(crate) fn preference() -> wgpu::PowerPreference {
-    if let Some(asked) = wgpu::PowerPreference::from_env() {
-        return asked;
-    }
-    match POWER.load(Ordering::Relaxed) {
-        0 => wgpu::PowerPreference::None,
-        2 => wgpu::PowerPreference::HighPerformance,
-        _ => wgpu::PowerPreference::LowPower,
-    }
+    wgpu::PowerPreference::from_env()
+        .or(*POWER.lock().unwrap_or_else(PoisonError::into_inner))
+        .unwrap_or(wgpu::PowerPreference::LowPower)
 }
 
 /// The adapter `instance` offers under [`preference`], with no adapter to offer told apart from a request that failed, so a caller can fall back or skip on the one and report the other.

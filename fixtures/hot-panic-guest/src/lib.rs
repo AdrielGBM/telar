@@ -131,7 +131,7 @@ impl App for Fixture {
     fn window_config(&self) -> Option<WindowConfig> {
         let save = Chord::parse("Mod+S").expect("the shortcut parses");
         Some(WindowConfig {
-            title: save.to_string(),
+            title: Some(save.to_string()),
             ..WindowConfig::default()
         })
     }

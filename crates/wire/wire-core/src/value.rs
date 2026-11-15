@@ -1,6 +1,7 @@
 //! How the standard types every value is built from are spelled: scalars, text, paths, options, results, sequences, ranges and durations.
 
 use std::borrow::Cow;
+use std::num::{NonZeroU16, NonZeroU32};
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -44,6 +45,32 @@ impl Wire for u32 {
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         r.varint_u32()
+    }
+}
+
+impl Shaped for NonZeroU16 {
+    const SHAPE: u64 = shape_named("NonZeroU16");
+}
+
+impl Wire for NonZeroU16 {
+    fn put(&self, w: &mut Writer) {
+        self.get().put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        NonZeroU16::new(u16::take(r)?).ok_or(WireError::Invalid("a zero where none may be"))
+    }
+}
+
+impl Shaped for NonZeroU32 {
+    const SHAPE: u64 = shape_named("NonZeroU32");
+}
+
+impl Wire for NonZeroU32 {
+    fn put(&self, w: &mut Writer) {
+        self.get().put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        NonZeroU32::new(u32::take(r)?).ok_or(WireError::Invalid("a zero where none may be"))
     }
 }
 

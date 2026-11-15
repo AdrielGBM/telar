@@ -3,6 +3,7 @@
 #[path = "test_common.rs"]
 mod common;
 
+use std::num::NonZeroU16;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -52,19 +53,19 @@ fn visual_check_png() {
         &mut cmds,
         "lines:2 (clamp, no ellipsis)",
         120.0,
-        TextStyle::new(14.0, ink).with_clamp(2, false),
+        TextStyle::new(14.0, ink).with_clamp(NonZeroU16::new(2).unwrap(), false),
     );
     block(
         &mut cmds,
         "lines:2 ellipsis",
         210.0,
-        TextStyle::new(14.0, ink).with_clamp(2, true),
+        TextStyle::new(14.0, ink).with_clamp(NonZeroU16::new(2).unwrap(), true),
     );
     block(
         &mut cmds,
         "lines:1 ellipsis (single-line truncation)",
         300.0,
-        TextStyle::new(14.0, ink).with_clamp(1, true),
+        TextStyle::new(14.0, ink).with_clamp(NonZeroU16::MIN, true),
     );
 
     r.begin_frame(w, h, 1.0, 0).unwrap();

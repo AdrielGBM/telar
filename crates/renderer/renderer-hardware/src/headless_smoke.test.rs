@@ -1081,7 +1081,7 @@ fn scrolling_window(offset: f32, tooltip: bool) -> Vec<DrawCommand> {
             radius: Default::default(),
         },
         DrawCommand::PushMatrix {
-            matrix: [1.0, 0.0, 0.0, 1.0, 170.0, 70.0 - offset],
+            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 170.0, 70.0 - offset]),
         },
     ];
     for row in 0..20 {

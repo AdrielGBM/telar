@@ -59,7 +59,7 @@ impl<T: Clone + 'static> GestureTransaction for Transaction<T> {
 struct Live {
     id: u64,
     // The surface whose events may cancel it: Escape or a press on one window says nothing about a stroke in another.
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
     button: PointerButton,
     cancel: Rc<dyn Fn()>,
 }

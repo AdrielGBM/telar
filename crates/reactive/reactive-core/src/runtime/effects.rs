@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use super::owner::deliver_panic;
 
-use super::surface::current_surface;
+use super::surface::{current_surface, enter_surface};
 use super::{EffectEntry, EffectId, RUNTIME, Runtime, SignalId};
 
 /// Runs `f` with no observer, so nothing it reads subscribes whichever effect is running.
@@ -295,7 +295,7 @@ fn run(id: EffectId, mode: Run) {
     }
     let _guard = PopGuard(owner_depth);
     // Re-enter this effect's surface, so its layout, overlay and focus resolve against the surface that built it even when the write that scheduled it came from another. Outside the runtime borrow, and inert for a single-surface app.
-    let outcome = surface.with_entered(|| catch_unwind(AssertUnwindSafe(|| callback())));
+    let outcome = enter_surface(surface, || catch_unwind(AssertUnwindSafe(|| callback())));
     drop(_guard);
     RUNTIME.with(|rt| rt.borrow_mut().record_run(id));
     if let Err(payload) = outcome {

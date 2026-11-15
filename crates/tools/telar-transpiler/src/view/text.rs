@@ -41,7 +41,7 @@ impl ViewGen<'_> {
         let mut hoists: Vec<String> = Vec::new();
         // Regression: the class reached a container and stopped there, so `@heading { font_size: 22 }` compiled and did nothing.
         let attrs = self.effective_attrs(el);
-        let style = self.text_style(&attrs, &transitions, &mut hoists);
+        let style = self.text_style(&attrs, &transitions, &mut hoists, &mut errors);
         let fit = fit_closure(self, &attrs, &mut errors);
         let (constructor, fit_arg) = fit_constructor("Text::declaring", "Text::fitting", fit, &pad);
 
@@ -88,7 +88,7 @@ impl ViewGen<'_> {
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         let attrs = self.effective_attrs(el);
-        let style = self.text_style(&attrs, &transitions, &mut hoists);
+        let style = self.text_style(&attrs, &transitions, &mut hoists, &mut errors);
         let layout_style = text_layout_style(&attrs, self.theme_access);
         let fit = fit_closure(self, &attrs, &mut errors);
         let (constructor, fit_arg) = fit_constructor("Text::runs", "Text::runs_fitting", fit, &pad);
@@ -283,6 +283,7 @@ impl ViewGen<'_> {
         attrs: &[Attr],
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
+        errors: &mut Vec<String>,
     ) -> String {
         let mut modifiers =
             self.inheritable_modifiers(attrs, transitions, hoists, StyleTarget::Text);
@@ -294,11 +295,12 @@ impl ViewGen<'_> {
             .map(|a| a.value.text().trim().to_string())
             .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&format!(
-                ".with_clamp({}, {})",
-                crate::style::format_integer(&lines, self.theme_access),
-                asserted("ellipsis")
-            ));
+            match clamp_lines(&lines, self.theme_access) {
+                Ok(max) => {
+                    modifiers.push_str(&format!(".with_clamp({max}, {})", asserted("ellipsis")))
+                }
+                Err(message) => errors.push(message),
+            }
         }
 
         let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
@@ -751,6 +753,26 @@ fn fit_length(value: &str, theme: ThemeAccess) -> Result<String, String> {
         return Ok(format!("TextLength::Px({})", crate::style::format_f32(px)));
     }
     Ok(super::signals::substitute_reads(value, theme))
+}
+
+/// The line count `lines:` clamps to, as the `NonZeroU16` a clamp takes: a whole number written out is checked here, so a clamp to no line is the build's error rather than no clamp, and anything else is an expression that yields one.
+fn clamp_lines(value: &str, theme: ThemeAccess) -> Result<String, String> {
+    if !value.chars().all(|c| c.is_ascii_digit()) {
+        return Ok(crate::style::format_integer(value, theme));
+    }
+    match value.parse::<u16>() {
+        Ok(0) => Err(
+            "`lines:0` clamps the text to no line: count at least one, or leave `lines` off"
+                .to_string(),
+        ),
+        Ok(lines) => Ok(format!(
+            "const {{ ::core::num::NonZeroU16::new({lines}).unwrap() }}"
+        )),
+        Err(_) => Err(format!(
+            "`lines:{value}` is more lines than a clamp counts, {} at most",
+            u16::MAX
+        )),
+    }
 }
 
 /// The closure a fitted `text` is built with, or `None` when it names no fit (or a fit that is an error, pushed onto `errors`).

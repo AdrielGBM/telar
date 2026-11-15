@@ -65,12 +65,12 @@ const _: () = {
 ///
 /// `font_family`/`line_height`/`letter_spacing`/`raster` do not fit that layout losslessly. With all of them at their defaults the packed value is returned verbatim, and anything else folds every axis into a 32-bit hash.
 pub fn text_style_bits(style: &TextStyle) -> u32 {
-    let lines = style.clamp.max_lines().unwrap_or(0).min(255) as u32;
+    let lines = style.clamp.map_or(0, |clamp| clamp.max_lines()).min(255) as u32;
     let packed = WEIGHT.put(super::drawn_weight(style) as u32)
         | FONT_STYLE.put(style.font_style as u32)
         | TEXT_ALIGN.put(style.text_align as u32)
         | MAX_LINES.put(lines)
-        | ELLIPSIS.put(style.clamp.ellipsis() as u32)
+        | ELLIPSIS.put(style.clamp.is_some_and(|clamp| clamp.ellipsis) as u32)
         | NO_WRAP.put((style.text_wrap == TextWrap::NoWrap) as u32);
     if style.font_family == FontFamily::SansSerif
         && style.line_height == LineHeight::Natural

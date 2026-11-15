@@ -110,7 +110,7 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
             return;
         };
         let nodes = self.handler.accessibility();
-        let title = self.config.title.clone();
+        let title = self.config.shown_title().to_owned();
         let lang = self.handler.root_language();
         adapter.update_if_active(|| {
             crate::accessibility::tree_update(&nodes, &title, lang.as_deref())
@@ -260,7 +260,7 @@ fn create_window_from_config(
     let mut attributes = WindowAttributes::default()
         // Shown once the accessibility adapter is attached, which has to happen before the window is ever visible.
         .with_visible(false)
-        .with_title(config.title.as_str())
+        .with_title(config.shown_title())
         .with_inner_size(winit::dpi::LogicalSize::new(config.width, config.height))
         .with_resizable(config.is_resizable)
         .with_decorations(config.has_decorations)
@@ -594,7 +594,7 @@ impl WinitMultiRunner {
             #[cfg(feature = "a11y")]
             a11y_nodes: Vec::new(),
             #[cfg(feature = "a11y")]
-            title: config.title.clone(),
+            title: config.shown_title().to_owned(),
         };
         if resume_now {
             let preferences = self.preferences.current(&surface.window);

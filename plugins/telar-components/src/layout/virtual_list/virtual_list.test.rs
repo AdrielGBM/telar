@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::num::NonZeroU32;
 use telar::testing::{key_with, lay_out, named, press, release, route};
 
 use telar::{AccessNode, ComponentList, DrawCommand, Event, relayout_if_dirty};
@@ -184,7 +185,8 @@ fn option_at(position: u32) -> telar::focus::FocusId {
     telar::focus::exposed()
         .into_iter()
         .find(|exposed| {
-            exposed.role == Role::Option && exposed.position.map(|p| p.position) == Some(position)
+            exposed.role == Role::Option
+                && exposed.position.map(|p| p.position.get()) == Some(position)
         })
         .unwrap_or_else(|| panic!("an option at {position}"))
         .id
@@ -302,9 +304,9 @@ fn each_option_built_says_its_place_among_all_the_rows() {
     };
     let at = |position: u32| {
         Some(SetPosition {
-            level: 1,
-            position,
-            size: 200,
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::new(position).unwrap(),
+            size: NonZeroU32::new(200).unwrap(),
         })
     };
     let first = places(&mounted);
@@ -829,9 +831,9 @@ fn a_wrapping_list_s_options_say_their_place_among_all_the_rows() {
     assert_eq!(
         places.last(),
         Some(&Some(SetPosition {
-            level: 1,
-            position: 200,
-            size: 200,
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::new(200).unwrap(),
+            size: NonZeroU32::new(200).unwrap(),
         }))
     );
 }

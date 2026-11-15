@@ -67,7 +67,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     let window = window.titled_or(app_name);
     let mut handler = boot.handler::<WinitWindow, D>(
         Box::new(initial_app),
-        &window.title,
+        window.shown_title(),
         super::host::SurfaceRenderer::builtin(),
     );
     handler.focus_boundary = platform.focus_boundary();

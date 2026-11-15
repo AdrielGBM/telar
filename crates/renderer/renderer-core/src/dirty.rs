@@ -259,8 +259,8 @@ impl Replay {
     ) -> Visit {
         let mut closed = None;
         match cmd {
-            DrawCommand::PushMatrix { matrix } => {
-                self.state.push_matrix(*matrix);
+            DrawCommand::PushMatrix { transform } => {
+                self.state.push_matrix(*transform);
                 self.matrices += 1;
             }
             DrawCommand::PopMatrix => {

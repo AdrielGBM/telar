@@ -1,3 +1,6 @@
+use geometry_core::Transform;
+use renderer_core::HeadingLevel;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -348,9 +351,9 @@ fn a_tree_row_writes_its_selection_its_openness_and_its_place() {
     let branch = Semantics {
         expanded: Some(false),
         position: Some(platform_core::SetPosition {
-            level: 1,
-            position: 2,
-            size: 4,
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::new(2).unwrap(),
+            size: NonZeroU32::new(4).unwrap(),
         }),
         ..Semantics::of(Role::TreeItem).in_state(false, Some(Toggle::On), false)
     };
@@ -549,7 +552,7 @@ fn a_box_inside_a_drawing_transforms_and_cuts_itself_where_it_stands() {
             radius: renderer_core::BorderRadius::zero(),
         },
         DrawCommand::PushMatrix {
-            matrix: [1.5, 0.0, 0.0, 1.5, -28.0, -234.0],
+            transform: Transform::from_array([1.5, 0.0, 0.0, 1.5, -28.0, -234.0]),
         },
         filled(at),
         DrawCommand::PopMatrix,
@@ -585,12 +588,12 @@ fn artwork_inside_a_drawing_keeps_its_own_coordinates() {
             Rect::new(40.0, 300.0, 100.0, 100.0),
         ),
         DrawCommand::PushMatrix {
-            matrix: [2.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+            transform: Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]),
         },
         filled(Rect::new(10.0, 10.0, 20.0, 20.0)),
         DrawCommand::PopMatrix,
         DrawCommand::PushMatrix {
-            matrix: [2.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+            transform: Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]),
         },
         filled(Rect::new(0.0, 0.0, 100.0, 100.0)),
         DrawCommand::PopMatrix,
@@ -610,7 +613,7 @@ fn a_matrix_around_a_frame_at_the_corner_is_already_the_boxs_own() {
         &[
             open_at(1, Semantics::group(), Rect::new(200.0, 100.0, 100.0, 50.0)),
             DrawCommand::PushMatrix {
-                matrix: [1.5, 0.0, 0.0, 1.5, 0.0, -12.5],
+                transform: Transform::from_array([1.5, 0.0, 0.0, 1.5, 0.0, -12.5]),
             },
             filled(Rect::new(0.0, 0.0, 100.0, 50.0)),
             DrawCommand::PopMatrix,
@@ -1767,9 +1770,9 @@ fn placed_attributes(role: Role, position: SetPosition) -> Vec<(&'static str, St
 #[test]
 fn an_item_writes_only_the_numbers_its_role_takes() {
     let third_of_forty = SetPosition {
-        level: 1,
-        position: 3,
-        size: 40,
+        level: NonZeroU32::MIN,
+        position: NonZeroU32::new(3).unwrap(),
+        size: NonZeroU32::new(40).unwrap(),
     };
     let place = |level: Option<&str>| {
         level
@@ -1806,7 +1809,11 @@ fn an_item_writes_only_the_numbers_its_role_takes() {
         placed_attributes(Role::Row, third_of_forty),
         [("aria-rowindex", "3".to_string())]
     );
-    for role in [Role::Button, Role::Heading(2), Role::GridCell] {
+    for role in [
+        Role::Button,
+        Role::Heading(HeadingLevel::Two),
+        Role::GridCell,
+    ] {
         assert_eq!(placed_attributes(role, third_of_forty), [], "{role:?}");
     }
 }
@@ -1819,9 +1826,9 @@ fn a_grid_counts_the_rows_its_built_rows_say_it_has() {
             id,
             Semantics {
                 position: Some(SetPosition {
-                    level: 1,
-                    position,
-                    size: 41,
+                    level: NonZeroU32::MIN,
+                    position: NonZeroU32::new(position).unwrap(),
+                    size: NonZeroU32::new(41).unwrap(),
                 }),
                 ..Semantics::of(Role::Row)
             },

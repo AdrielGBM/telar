@@ -1,6 +1,7 @@
 use super::*;
 use geometry_core::CellSize;
 use renderer_core::{Clamp, Color};
+use std::num::NonZeroU16;
 
 fn style() -> TextStyle {
     TextStyle::new(14.0, renderer_core::Paint::Solid(Color::WHITE))
@@ -41,7 +42,10 @@ fn an_unbounded_probe_does_not_wrap() {
 #[test]
 fn a_clamp_caps_the_height() {
     let mut s = style();
-    s.clamp = Clamp::lines(1, true);
+    s.clamp = Some(Clamp {
+        max: NonZeroU16::MIN,
+        ellipsis: true,
+    });
     let (_, h) = metrics().measure("the quick brown fox", None, 10.0 * 8.0, &s);
     assert_eq!(h, 16.0);
 }
@@ -70,7 +74,10 @@ fn ink_starts_at_the_top_and_spans_the_rows_drawn() {
 #[test]
 fn ink_skips_the_lines_a_clamp_hides() {
     let mut s = style();
-    s.clamp = Clamp::lines(1, true);
+    s.clamp = Some(Clamp {
+        max: NonZeroU16::MIN,
+        ellipsis: true,
+    });
     assert_eq!(
         metrics().ink_bounds("the quick brown fox", 10.0 * 8.0, &s),
         (0.0, 16.0)
@@ -94,7 +101,10 @@ fn laid_lines_begin_where_the_painter_breaks_each_line() {
 #[test]
 fn laid_lines_ignore_the_clamp() {
     let mut s = style();
-    s.clamp = Clamp::lines(1, true);
+    s.clamp = Some(Clamp {
+        max: NonZeroU16::MIN,
+        ellipsis: true,
+    });
     assert_eq!(
         line_starts("the quick brown fox", 10.0 * 8.0, &s),
         vec![0, 10]

@@ -117,7 +117,7 @@ macro_rules! surface_local {
 
             /// Makes the *ambient* instance — the one that exists before any surface is built, and the only world a single-surface app ever has — live while `f` runs, as [`with_entered`](Self::with_entered) does a surface's.
             ///
-            /// What the reactive flush needs for an effect owned by [`SurfaceHandle::NONE`](crate::SurfaceHandle::NONE): it was registered outside any surface, so its world is this one, and running it against whichever surface happened to be entered when the signal fired would resolve its layout, overlays and focus in somebody else's. Reachable as soon as one app has both — a window tree that never built a surface and a second tree that did.
+            /// What the reactive flush needs for an effect owned by no surface: it was registered outside every surface, so its world is this one, and running it against whichever surface happened to be entered when the signal fired would resolve its layout, overlays and focus in somebody else's. Reachable as soon as one app has both — a window tree that never built a surface and a second tree that did.
             pub fn with_ambient_entered<R>(f: impl ::std::ops::FnOnce() -> R) -> R {
                 let ambient = $slot.with(|cell| {
                     $crate::SurfaceSlot::ambient(cell, || $crate::detached(|| $init), || $slot.with($crate::SurfaceSlot::release))

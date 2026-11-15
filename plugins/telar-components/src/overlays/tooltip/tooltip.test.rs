@@ -236,9 +236,9 @@ fn drawn_at(tree: &ComponentList, text: &str) -> telar::Rect {
     let mut shifts = vec![(0.0f32, 0.0f32)];
     for command in tree.commands().iter() {
         match command {
-            DrawCommand::PushMatrix { matrix } => {
+            DrawCommand::PushMatrix { transform } => {
                 let (x, y) = shifts.last().copied().unwrap_or_default();
-                shifts.push((x + matrix[4], y + matrix[5]));
+                shifts.push((x + transform.e, y + transform.f));
             }
             DrawCommand::PopMatrix => {
                 shifts.pop();
@@ -602,8 +602,8 @@ fn name_span_beside(side: Side, direction: telar::Direction) -> (f32, f32) {
     let mut span = None;
     for command in tree.commands().iter() {
         match command {
-            DrawCommand::PushMatrix { matrix } => {
-                shifts.push(shifts.last().copied().unwrap_or(0.0) + matrix[4]);
+            DrawCommand::PushMatrix { transform } => {
+                shifts.push(shifts.last().copied().unwrap_or(0.0) + transform.e);
             }
             DrawCommand::PopMatrix => {
                 shifts.pop();

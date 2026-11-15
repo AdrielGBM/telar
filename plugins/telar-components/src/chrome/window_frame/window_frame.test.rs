@@ -302,13 +302,13 @@ fn mark_centre(tree: &telar::ComponentList) -> (f64, f64) {
         .iter()
         .position(|command| matches!(command, telar::DrawCommand::Path { .. }))
         .expect("the mark is drawn");
-    let (telar::DrawCommand::Path { data, .. }, telar::DrawCommand::PushMatrix { matrix }) =
+    let (telar::DrawCommand::Path { data, .. }, telar::DrawCommand::PushMatrix { transform }) =
         (&commands[at], &commands[at - 1])
     else {
         panic!("the mark is not drawn under its own translation");
     };
     let (x, y) = centre(data.bounds().expect("the mark has extent"));
-    (x + matrix[4] as f64, y + matrix[5] as f64)
+    (x + transform.e as f64, y + transform.f as f64)
 }
 
 #[test]

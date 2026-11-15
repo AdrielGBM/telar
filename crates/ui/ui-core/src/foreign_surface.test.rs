@@ -181,7 +181,7 @@ fn a_foreign_key_is_never_a_surface_handle() {
     let before = Surface::new();
     let (_fake, boundary) = foreign(Vec::new());
     let after = Surface::new();
-    let handles = [before.handle().raw(), after.handle().raw()];
+    let handles = [before.handle().raw().get(), after.handle().raw().get()];
 
     assert!(!handles.contains(&boundary.key()));
     assert!(handles[0] < boundary.key() && boundary.key() < handles[1]);
@@ -449,7 +449,7 @@ fn a_box_event_reaches_the_foreign_world_by_the_name_it_knows_its_surface_by() {
     );
     assert_eq!(boundary.foreign_event(&inside(nested)), Some(inside(guest)));
     assert_eq!(
-        boundary.foreign_event(&inside(Surface::new().handle().raw())),
+        boundary.foreign_event(&inside(Surface::new().handle().raw().get())),
         None
     );
     assert_eq!(boundary.foreign_event(&focused), None);

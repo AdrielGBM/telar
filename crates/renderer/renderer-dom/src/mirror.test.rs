@@ -7,8 +7,8 @@ use std::cell::RefCell;
 use geometry_core::{Rect, Size};
 use layout_core::LayoutStyle;
 use platform_core::{
-    AccessNode, ActionSupport, Event, EventHandler, NumericValue, Platform, Role, Toggle, Value,
-    WindowConfig,
+    AccessNode, ActionSupport, Event, EventHandler, HeadingLevel, NumericValue, Platform, Role,
+    Toggle, Value, WindowConfig,
 };
 use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use reactive_core::{RwSignal, signal};
@@ -92,7 +92,7 @@ fn settings() -> Vec<AccessNode> {
             modal: true,
             ..node(Role::Dialog, "Settings", None)
         },
-        node(Role::Heading(2), "Account", Some(0)),
+        node(Role::Heading(HeadingLevel::Two), "Account", Some(0)),
         AccessNode {
             toggled: Some(Toggle::On),
             ..control(1, Role::CheckBox, "Remember me", Some(0))

@@ -30,7 +30,7 @@ pub use destination::{CurrentKind, Destination};
 pub use keys::ConsumedKeys;
 pub use location::Location;
 pub use modal::Modal;
-pub use outline::{Positioning, SetPosition};
+pub use outline::{HeadingLevel, Positioning, SetPosition};
 pub use reading::{NumericValue, NumericValueError, Orientation, SortDirection, Value};
 pub use uri::{
     DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, RouteAddress, Uri, UriError, allow_uri_scheme,
@@ -65,8 +65,8 @@ pub enum Role {
     Form,
     /// A form whose purpose is searching.
     Search,
-    /// A heading, and how deep. `1` is the screen's own title.
-    Heading(u8),
+    /// A heading, and how deep.
+    Heading(HeadingLevel),
     /// A list of comparable things, and one of them.
     List,
     ListItem,
@@ -371,12 +371,12 @@ impl Role {
             "section" => Self::Section,
             "form" => Self::Form,
             "search" => Self::Search,
-            "heading" | "h1" => Self::Heading(1),
-            "h2" => Self::Heading(2),
-            "h3" => Self::Heading(3),
-            "h4" => Self::Heading(4),
-            "h5" => Self::Heading(5),
-            "h6" => Self::Heading(6),
+            "heading" | "h1" => Self::Heading(HeadingLevel::One),
+            "h2" => Self::Heading(HeadingLevel::Two),
+            "h3" => Self::Heading(HeadingLevel::Three),
+            "h4" => Self::Heading(HeadingLevel::Four),
+            "h5" => Self::Heading(HeadingLevel::Five),
+            "h6" => Self::Heading(HeadingLevel::Six),
             "list" => Self::List,
             "listitem" | "item" => Self::ListItem,
             "scrollarea" => Self::ScrollArea,

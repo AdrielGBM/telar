@@ -77,7 +77,7 @@ impl<'a> Painter<'a> {
 
     fn one(&mut self, command: &DrawCommand) {
         match command {
-            DrawCommand::PushMatrix { matrix } => self.state.push_matrix(*matrix),
+            DrawCommand::PushMatrix { transform } => self.state.push_matrix(*transform),
             DrawCommand::PopMatrix => self.state.pop_matrix(),
             DrawCommand::PushClip { rect, .. } => {
                 // The radius is dropped: a cell is either inside the clip or outside it, and there is no sub-cell coverage in which a rounded corner could mean anything.

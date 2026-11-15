@@ -2,6 +2,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
+use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -303,7 +304,7 @@ impl PartialEq for Flat {
 impl Flat {
     fn of(items: &[TreeNode], open: &HashSet<Arc<str>>) -> Self {
         let mut rows = Vec::new();
-        push_level(&mut rows, items, open, 1, None);
+        push_level(&mut rows, items, open, NonZeroU32::MIN, None);
         Self(Rc::new(rows))
     }
 }
@@ -312,23 +313,31 @@ fn push_level(
     rows: &mut Vec<Rc<Row>>,
     nodes: &[TreeNode],
     open: &HashSet<Arc<str>>,
-    level: u32,
+    level: NonZeroU32,
     parent: Option<usize>,
 ) {
-    let size = nodes.len() as u32;
+    let Some(size) = NonZeroU32::new(nodes.len() as u32) else {
+        return;
+    };
     for (i, node) in nodes.iter().enumerate() {
         let at = rows.len();
         rows.push(Rc::new(Row {
             node: node.clone(),
             position: SetPosition {
                 level,
-                position: i as u32 + 1,
+                position: NonZeroU32::MIN.saturating_add(i as u32),
                 size,
             },
             parent,
         }));
         if node.is_branch() && open.contains(&node.id) {
-            push_level(rows, &node.children, open, level + 1, Some(at));
+            push_level(
+                rows,
+                &node.children,
+                open,
+                level.saturating_add(1),
+                Some(at),
+            );
         }
     }
 }
@@ -726,10 +735,10 @@ fn caret_column(size: ControlSize, line: f32) -> LayoutStyle {
         .justify_content(JustifyContent::CENTER)
 }
 
-fn row_box(level: u32, places: &RowPlaces) -> LayoutStyle {
+fn row_box(level: NonZeroU32, places: &RowPlaces) -> LayoutStyle {
     let tokens = TreeViewTokens::current();
     let size = places.size();
-    let indent = level.saturating_sub(1) as f32 * tokens.indent(size);
+    let indent = (level.get() - 1) as f32 * tokens.indent(size);
     places.sized(
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)

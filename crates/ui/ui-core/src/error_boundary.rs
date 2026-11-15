@@ -10,7 +10,7 @@ use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{
     OwnerId, PanicCatch, PanicPayload, RwSignal, SurfaceHandle, current_owner, current_surface,
-    dispose_owner, owner_scope, set_panic_catch, signal, with_owner,
+    dispose_owner, enter_surface, owner_scope, set_panic_catch, signal, with_owner,
 };
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -168,7 +168,7 @@ fn catch_for(
     state: Weak<RefCell<BoundaryState>>,
     version: RwSignal<u64>,
     outer: Option<OwnerId>,
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
 ) -> PanicCatch {
     PanicCatch::Handle(Rc::new(move |payload| {
         let Some(state) = state.upgrade() else {
@@ -178,8 +178,9 @@ fn catch_for(
             return Ok(());
         };
         let failure = BuildFailure::Panicked(panic_message(&payload));
-        let replaced = surface
-            .with_entered(|| with_owner(outer, || attempt(Box::new(move || fallback(failure)))));
+        let replaced = enter_surface(surface, || {
+            with_owner(outer, || attempt(Box::new(move || fallback(failure))))
+        });
         let (container, failed) = {
             let mut st = state.borrow_mut();
             (st.node, st.child.take())

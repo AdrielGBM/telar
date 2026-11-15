@@ -633,7 +633,7 @@ where
                     self.draw_state.pop_clip();
                     self.clip_shapes.pop();
                 }
-                DrawCommand::PushMatrix { matrix } => self.draw_state.push_matrix(*matrix),
+                DrawCommand::PushMatrix { transform } => self.draw_state.push_matrix(*transform),
                 DrawCommand::PopMatrix => self.draw_state.pop_matrix(),
                 DrawCommand::PushLayer {
                     opacity,

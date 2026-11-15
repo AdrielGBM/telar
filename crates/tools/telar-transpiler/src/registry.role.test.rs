@@ -16,7 +16,11 @@ fn every_spelling_is_one_the_vocabulary_answers_to() {
 fn every_spelling_is_emitted_as_the_role_it_parses_to() {
     for (name, variant) in role_values() {
         let parsed = semantics_core::Role::parse(name).expect("a known spelling");
-        assert_eq!(format!("{parsed:?}"), *variant, "`{name}`");
+        assert_eq!(
+            format!("{parsed:?}"),
+            variant.replace("::telar::HeadingLevel::", ""),
+            "`{name}`"
+        );
     }
 }
 

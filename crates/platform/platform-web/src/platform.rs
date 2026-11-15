@@ -254,7 +254,7 @@ impl Platform for WebPlatform {
                 .map_err(PlatformError)?,
         };
         prepare_host(&host, &self.config);
-        dom::document().set_title(&config.title);
+        dom::document().set_title(config.shown_title());
 
         if let Some(base) = dom::asset_base(self.config.page.assets_meta) {
             platform_core::set_asset_base(&base);

@@ -5,6 +5,7 @@
 //! Asserted on `DrawCommand`s rather than pixels, which is the distinction that makes the net useful: a resolved `TextStyle` is directly comparable, where a screenshot answers "does this look right" and never "which weight did it decide on". Every number here is a *current* value, not a desired one — a change to any of them is either a regression or a decision, and both should have to be made on purpose.
 
 use renderer_core::TextWrap;
+use std::num::NonZeroU16;
 use telar::testing::mount;
 use telar::{
     Color, Component, Container, DrawCommand, FontFamily, LayoutItem, LayoutStyle, Raster,
@@ -53,7 +54,7 @@ fn an_undeclared_text_style_resolves_to_these_exact_values() {
     assert_eq!(style.font_weight, 400);
     assert_eq!(style.font_style, telar::FontStyle::Normal);
     assert_eq!(style.text_align, TextAlign::Start);
-    assert_eq!(style.clamp, telar::Clamp::None);
+    assert_eq!(style.clamp, None);
     assert_eq!(style.line_height, telar::LineHeight::Natural);
     assert_eq!(style.letter_spacing, 0.0);
     assert_eq!(style.raster, Raster::Smooth);
@@ -68,7 +69,7 @@ fn a_declared_text_style_reaches_the_draw_command_intact() {
         .with_font_weight(700)
         .with_font_style(telar::FontStyle::Italic)
         .with_text_align(TextAlign::Center)
-        .with_clamp(2, true)
+        .with_clamp(NonZeroU16::new(2).unwrap(), true)
         .with_line_height(1.5)
         .with_letter_spacing(0.5)
         .with_raster(Raster::Pixel)

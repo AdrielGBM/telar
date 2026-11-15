@@ -622,9 +622,9 @@ pub const PREVIEW_LIST_FILE_VAR: &str = "TELAR_PREVIEW_LIST_FILE";
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ListedPreview {
     pub id: String,
-    /// The package the preview is written in. Empty when unknown.
+    /// The package the preview is written in, `None` when unknown.
     #[serde(default)]
-    pub package: String,
+    pub package: Option<String>,
     /// The `Group/Title` path the preview is listed under.
     pub title: String,
 }
@@ -638,19 +638,15 @@ pub fn title_path(title: &str) -> impl Iterator<Item = &str> {
 }
 
 /// Where the docs page of the component `package` lists under `title` stands below `docs`: the package, unless it is unknown, then the title's [`title_path`]. Empty when the title is, which has no docs page.
-pub fn docs_path<'a>(package: &'a str, title: &'a str) -> Vec<&'a str> {
+pub fn docs_path<'a>(package: Option<&'a str>, title: &'a str) -> Vec<&'a str> {
     let title: Vec<&str> = title_path(title).collect();
     if title.is_empty() {
         return title;
     }
-    (!package.is_empty())
-        .then_some(package)
-        .into_iter()
-        .chain(title)
-        .collect()
+    package.into_iter().chain(title).collect()
 }
 
-pub fn docs_key(package: &str, title: &str) -> String {
+pub fn docs_key(package: Option<&str>, title: &str) -> String {
     docs_path(package, title).join("/")
 }
 
@@ -666,7 +662,7 @@ pub fn workshop_pages(previews: &[ListedPreview]) -> Vec<PageLocation> {
         for kind in ["preview", "matrix"] {
             add(page_at([kind, preview.id.as_str()]));
         }
-        let docs = docs_path(&preview.package, &preview.title);
+        let docs = docs_path(preview.package.as_deref(), &preview.title);
         if !docs.is_empty() {
             add(page_at(std::iter::once("docs").chain(docs)));
         }

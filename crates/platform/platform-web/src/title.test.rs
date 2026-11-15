@@ -45,7 +45,7 @@ fn the_page_is_titled_as_the_window_opens_and_renamed_with_it() {
         ..WebPlatformConfig::default()
     };
     let window = WindowConfig {
-        title: "Portfolio".to_string(),
+        title: Some("Portfolio".to_string()),
         ..WindowConfig::default()
     };
     WebPlatform::with_host(host, config)

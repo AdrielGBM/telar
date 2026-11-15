@@ -1,5 +1,6 @@
 use crate::context::reset_layout_runtime;
 use std::cell::Cell;
+use std::num::NonZeroU32;
 use std::rc::Rc;
 
 use layout_core::AvailableSpace;
@@ -2435,9 +2436,9 @@ fn a_presented_box_is_announced_but_a_tap_leaves_focus_alone() {
     let sink = pressed.clone();
     let open = reactive_core::signal(false);
     let place = focus::SetPosition {
-        level: 2,
-        position: 1,
-        size: 3,
+        level: NonZeroU32::new(2).unwrap(),
+        position: NonZeroU32::MIN,
+        size: NonZeroU32::new(3).unwrap(),
     };
     let mut row = laid_out_box()
         .presented(focus::Role::TreeItem, || {})
@@ -2469,9 +2470,9 @@ fn a_presented_box_is_announced_but_a_tap_leaves_focus_alone() {
 fn a_box_that_is_no_control_says_where_it_sits() {
     focus::clear();
     let place = focus::SetPosition {
-        level: 1,
-        position: 1,
-        size: 41,
+        level: NonZeroU32::MIN,
+        position: NonZeroU32::MIN,
+        size: NonZeroU32::new(41).unwrap(),
     };
     let mut header = laid_out_box().role(focus::Role::Row).positioned(place);
     settle(&mut header);
@@ -2481,7 +2482,7 @@ fn a_box_that_is_no_control_says_where_it_sits() {
     assert_eq!(said.focusable, None);
     assert_eq!(semantics_of(&laid_out_box()).position, None);
 
-    let rows = reactive_core::signal(41);
+    let rows = reactive_core::signal(NonZeroU32::new(41).unwrap());
     let mut header = laid_out_box()
         .role(focus::Role::Row)
         .positioned_by(move || focus::SetPosition {
@@ -2490,9 +2491,9 @@ fn a_box_that_is_no_control_says_where_it_sits() {
         });
     settle(&mut header);
     assert_eq!(semantics_of(&header).position, Some(place));
-    rows.set(3);
+    rows.set(NonZeroU32::new(3).unwrap());
     assert_eq!(
-        semantics_of(&header).position.map(|place| place.size),
+        semantics_of(&header).position.map(|place| place.size.get()),
         Some(3),
         "re-read as the table's rows change"
     );

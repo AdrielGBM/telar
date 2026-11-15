@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use geometry_core::{Insets, Rect};
@@ -319,7 +320,7 @@ fn window_configs() -> [WindowConfig; 3] {
     [
         WindowConfig::default(),
         WindowConfig {
-            title: "Editor".into(),
+            title: Some("Editor".into()),
             width: 1280,
             height: 720,
             min_size: Some((320, 240)),
@@ -387,9 +388,9 @@ fn node() -> AccessNode {
         orientation: Some(Orientation::Horizontal),
         expanded: Some(false),
         position: Some(SetPosition {
-            level: 2,
-            position: 1,
-            size: 9,
+            level: NonZeroU32::new(2).unwrap(),
+            position: NonZeroU32::MIN,
+            size: NonZeroU32::new(9).unwrap(),
         }),
         active_descendant: Some(6),
         controls: Some(7),

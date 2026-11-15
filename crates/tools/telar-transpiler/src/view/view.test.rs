@@ -598,13 +598,34 @@ fn text_lines_and_ellipsis() {
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
-    assert!(code.contains(".with_clamp(2, true)"), "{code}");
+    assert!(
+        code.contains(".with_clamp(const { ::core::num::NonZeroU16::new(2).unwrap() }, true)"),
+        "{code}"
+    );
 
     let unclamped = "[view]\ntext \"Long copy here\" ellipsis\n";
     let code = crate::transpile_source(unclamped, "demo", None, None)
         .unwrap()
         .rust_code;
     assert!(!code.contains("with_clamp"), "{code}");
+}
+
+#[test]
+fn a_clamp_to_no_line_is_refused_rather_than_read_as_no_clamp() {
+    for (lines, refusal) in [
+        ("0", "`lines:0` clamps the text to no line"),
+        ("70000", "`lines:70000` is more lines than a clamp counts"),
+    ] {
+        let src = format!("[view]\ntext \"Long copy here\" lines:{lines} ellipsis\n");
+        let code = crate::transpile_source(&src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("with_clamp"), "{code}");
+        assert!(
+            code.contains("compile_error!") && code.contains(refusal),
+            "{code}"
+        );
+    }
 }
 
 #[test]
@@ -1381,7 +1402,7 @@ fn the_one_spelling_of_each_still_works() {
         ("[view]\ncol wrap\n    text \"x\"\n", ".flex_wrap()"),
         (
             "[view]\ntext \"x\" lines:2 ellipsis\n",
-            ".with_clamp(2, true)",
+            ".with_clamp(const { ::core::num::NonZeroU16::new(2).unwrap() }, true)",
         ),
         (
             "[view]\ngrid cols(240 1fr)\n    text \"x\"\n",
@@ -2075,10 +2096,10 @@ fn a_text_describes_itself_as_a_heading_by_name_or_by_expression() {
     for (src, expected) in [
         (
             "[view]\ntext \"x\" role:h2\n",
-            ".a11y_role(::telar::Role::Heading(2))",
+            ".a11y_role(::telar::Role::Heading(::telar::HeadingLevel::Two))",
         ),
         (
-            "[logic]\nlet level = 3u8;\n[view]\ntext \"x\" role:(Role::Heading(level))\n",
+            "[logic]\nlet level = HeadingLevel::Three;\n[view]\ntext \"x\" role:(Role::Heading(level))\n",
             ".a11y_role(Role::Heading(level))",
         ),
     ] {
@@ -2104,8 +2125,7 @@ fn a_text_refuses_a_role_that_is_not_a_heading() {
 /// A box's role worked out from state only describes the box: a control's role is written by name, where the build can check what goes with it.
 #[test]
 fn a_box_role_given_as_an_expression_describes_the_box() {
-    let src =
-        "[logic]\nlet level = 2u8;\n[view]\ncol role:(Role::Heading(level))\n    text \"x\"\n";
+    let src = "[logic]\nlet level = HeadingLevel::Two;\n[view]\ncol role:(Role::Heading(level))\n    text \"x\"\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;

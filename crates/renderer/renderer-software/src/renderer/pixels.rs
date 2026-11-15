@@ -86,7 +86,7 @@ pub(super) fn compute_layer_bounds(
     let surface = Rect::new(0.0, 0.0, window_w as f32, window_h as f32);
     for (index, cmd) in commands.iter().enumerate() {
         match cmd {
-            DrawCommand::PushMatrix { matrix } => state.push_matrix(*matrix),
+            DrawCommand::PushMatrix { transform } => state.push_matrix(*transform),
             DrawCommand::PopMatrix => state.pop_matrix(),
             DrawCommand::PushClip { rect, .. } => {
                 state.push_clip(transform_clip_rect(state.cumulative_matrix, *rect));

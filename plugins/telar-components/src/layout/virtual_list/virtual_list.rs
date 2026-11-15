@@ -2,6 +2,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
+use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -402,9 +403,9 @@ fn choosable(rows: &[ListRow]) -> Vec<Arc<str>> {
 /// The place of the row at `index` among all `count` rows, which a reader cannot count from the rows that are built.
 fn place(index: usize, count: usize) -> SetPosition {
     SetPosition {
-        level: 1,
-        position: index as u32 + 1,
-        size: count as u32,
+        level: NonZeroU32::MIN,
+        position: NonZeroU32::MIN.saturating_add(index as u32),
+        size: NonZeroU32::new(count as u32).expect("a row is one of the rows counted"),
     }
 }
 

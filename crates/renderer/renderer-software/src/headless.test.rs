@@ -207,7 +207,7 @@ fn dense_ui() -> Vec<DrawCommand> {
         radius: BorderRadius::zero(),
     });
     cmds.push(DrawCommand::PushMatrix {
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 56.0],
+        transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 0.0, 56.0]),
     });
 
     let cols = 5;
@@ -243,7 +243,7 @@ fn dense_ui() -> Vec<DrawCommand> {
                 style: panel_border.clone(),
             });
             cmds.push(DrawCommand::PushMatrix {
-                matrix: [1.0, 0.0, 0.0, 1.0, x + 16.0, y + 16.0],
+                transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, x + 16.0, y + 16.0]),
             });
             cmds.push(DrawCommand::Path {
                 data: icon.clone(),
@@ -342,7 +342,7 @@ fn clip_composes_with_active_matrix() {
     let red = Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(220, 40, 40)));
     let cmds = vec![
         DrawCommand::PushMatrix {
-            matrix: [1.0, 0.0, 0.0, 1.0, 100.0, 80.0],
+            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 100.0, 80.0]),
         },
         DrawCommand::PushClip {
             rect: Rect::new(0.0, 0.0, 40.0, 30.0),
@@ -415,7 +415,7 @@ fn axis_aligned_scene_is_pixel_exact_on_every_platform() {
         },
         DrawCommand::PopClip,
         DrawCommand::PushMatrix {
-            matrix: [1.0, 0.0, 0.0, 1.0, 32.0, 32.0],
+            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 32.0, 32.0]),
         },
         DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 16.0, 16.0),
@@ -480,7 +480,9 @@ fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
 
         let mut cmds = Vec::new();
         if let Some(matrix) = matrix {
-            cmds.push(DrawCommand::PushMatrix { matrix });
+            cmds.push(DrawCommand::PushMatrix {
+                transform: Transform::from_array(matrix),
+            });
         }
         cmds.push(DrawCommand::Text {
             spans: None,

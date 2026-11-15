@@ -8,9 +8,9 @@ use wire_core::{
 };
 
 use crate::{
-    ConsumedKeys, CurrentKind, Destination, Focusable, ForcedColors, HasPopup, Location, Modal,
-    NumericValue, Orientation, Role, RouteAddress, Semantics, SetPosition, SortDirection, Toggle,
-    Uri, UriError, Value,
+    ConsumedKeys, CurrentKind, Destination, Focusable, ForcedColors, HasPopup, HeadingLevel,
+    Location, Modal, NumericValue, Orientation, Role, RouteAddress, Semantics, SetPosition,
+    SortDirection, Toggle, Uri, UriError, Value,
 };
 
 wire_enum!(Role {
@@ -65,6 +65,14 @@ wire_enum!(Role {
     KeyboardInput = 48,
     Alert = 49,
     RadioGroup = 50,
+});
+wire_enum!(HeadingLevel {
+    One = 1,
+    Two = 2,
+    Three = 3,
+    Four = 4,
+    Five = 5,
+    Six = 6,
 });
 wire_enum!(Toggle {
     Off = 0,

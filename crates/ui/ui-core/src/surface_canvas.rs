@@ -346,7 +346,7 @@ impl SurfaceCanvas {
     pub fn boundary(&self) -> RenderNode {
         RenderNode::group([
             RenderNode::Primitive(DrawCommand::PushSurface {
-                surface: self.surface.handle().raw(),
+                surface: self.surface.handle().raw().get(),
             }),
             self.tree.boundary(),
             RenderNode::Primitive(DrawCommand::PopSurface),
@@ -362,7 +362,7 @@ impl SurfaceCanvas {
         else {
             return EventResult::Ignored;
         };
-        if *surface != self.surface.handle().raw() {
+        if *surface != self.surface.handle().raw().get() {
             return self.dispatch_own(event);
         }
         self.dispatch_box_event(inner)

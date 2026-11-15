@@ -255,8 +255,8 @@ impl SourceSpan {
 pub struct PreviewEntry {
     /// `<crate>--<component>--<slug(name)>`: stable across builds, and what deep links and snapshot files are named by.
     pub id: &'static str,
-    /// The package the preview is written in, as `Cargo.toml` names it: what a workshop showing the previews of more than one package lists it under, and what its docs address starts with. Empty when unknown.
-    pub package: &'static str,
+    /// The package the preview is written in, as `Cargo.toml` names it: what a workshop showing the previews of more than one package lists it under, and what its docs address starts with. `None` when unknown.
+    pub package: Option<&'static str>,
     /// The `Group/Title` path the preview is listed under. Defaults to [`Self::component`].
     pub title: &'static str,
     /// Prose about the component, shown at the top of its docs page: the body of a `.rsx` file's `[previews]` section, which every preview of the file carries. Empty when there is none.
@@ -309,7 +309,7 @@ impl PreviewEntry {
     ) -> Self {
         Self {
             id,
-            package: "",
+            package: None,
             title: component,
             docs: "",
             component,
@@ -335,7 +335,10 @@ impl PreviewEntry {
 
     /// This entry with `package` as the package it is written in.
     pub const fn package(self, package: &'static str) -> Self {
-        Self { package, ..self }
+        Self {
+            package: Some(package),
+            ..self
+        }
     }
 
     /// The `Group/Title` path to list the preview under.

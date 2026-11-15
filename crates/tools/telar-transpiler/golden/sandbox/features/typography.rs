@@ -481,7 +481,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped.".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted).with_clamp(2, false) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted).with_clamp(const { ::core::num::NonZeroU16::new(2).unwrap() }, false) },
                                     )?
                                 };
                                 __children.push(box_item(__text_30));
@@ -489,7 +489,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "With ellipsis the truncated tail is replaced by a … so it reads as intentionally cut rather than abruptly clipped at the boundary.".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_clamp(2, true) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_clamp(const { ::core::num::NonZeroU16::new(2).unwrap() }, true) },
                                     )?
                                 };
                                 __children.push(box_item(__text_31));
@@ -497,7 +497,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     Text::declaring(
                                         || "A single-line label that ellipsizes when it runs out of room in its box.".to_string(),
                                         LayoutStyle::new().max_width(300.0),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary).with_clamp(1, true) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary).with_clamp(const { ::core::num::NonZeroU16::new(1).unwrap() }, true) },
                                     )?
                                 };
                                 __children.push(box_item(__text_32));

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use telar::HeadingLevel;
 
 use telar::testing::{Scoped, scoped};
 use telar::{
@@ -71,12 +72,12 @@ fn a_heading_is_sized_by_its_level_against_the_text_around_it() {
 /// A level outside the outline is the nearest one in it.
 #[test]
 fn a_level_out_of_range_is_read_as_the_nearest_heading() {
-    for (level, expected) in [(0, 1), (9, 6)] {
+    for (level, expected) in [(0, HeadingLevel::One), (9, HeadingLevel::Six)] {
         crate::test_support::fresh_layout_runtime();
         let roles = exposed_roles(&drawn(|| titled(level)));
         assert!(
             roles.contains(&Role::Heading(expected)),
-            "level {level} is read as h{expected}: {roles:?}"
+            "level {level} is read as {expected:?}: {roles:?}"
         );
     }
 }

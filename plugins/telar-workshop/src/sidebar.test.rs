@@ -458,7 +458,7 @@ fn previews_of_more_than_one_package_are_listed_under_their_package_in_the_order
 fn previews_of_one_package_are_listed_without_it() {
     let one_package = packaged_entries()
         .into_iter()
-        .filter(|entry| entry.package == "kit")
+        .filter(|entry| entry.package == Some("kit"))
         .collect();
     let sidebar = Mounted::new(one_package);
     assert!(!sidebar.drawn("kit"));

@@ -358,16 +358,17 @@ fn make_cased_buffer(
     style: &TextStyle,
 ) -> Buffer {
     let buffer = shape_buffer(font_system, family_availability, text, spans, rect, style);
-    let Some(max) = style.clamp.max_lines() else {
+    let Some(clamp) = style.clamp else {
         return buffer;
     };
     let line_starts = visual_line_starts(&buffer);
+    let max = clamp.max_lines();
     if line_starts.len() <= max {
         return buffer;
     }
     let cut = line_starts[max].min(text.len());
     let head = text[..cut].trim_end();
-    if !style.clamp.ellipsis() {
+    if !clamp.ellipsis {
         let clipped = clip_spans(spans, head.len());
         return shape_buffer(
             font_system,

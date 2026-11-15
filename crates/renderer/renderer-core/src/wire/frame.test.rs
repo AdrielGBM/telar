@@ -1,10 +1,11 @@
 use std::cell::Cell;
+use std::num::{NonZeroU16, NonZeroU32};
 use std::sync::Arc;
 
 use geometry_core::{Point, Rect, Transform};
 use semantics_core::{
-    ConsumedKeys, Destination, HasPopup, Location, Modal, NumericValue, Orientation, SetPosition,
-    SortDirection, Toggle, Uri, Value,
+    ConsumedKeys, Destination, HasPopup, HeadingLevel, Location, Modal, NumericValue, Orientation,
+    SetPosition, SortDirection, Toggle, Uri, Value,
 };
 
 use super::*;
@@ -55,7 +56,7 @@ fn text_style() -> TextStyle {
         .with_font_weight(650)
         .with_font_style(FontStyle::Oblique)
         .with_text_align(TextAlign::Justify)
-        .with_clamp(3, true)
+        .with_clamp(NonZeroU16::new(3).unwrap(), true)
         .with_line_height(1.4)
         .with_letter_spacing(0.25)
         .with_raster(Raster::Pixel)
@@ -120,7 +121,7 @@ fn spans() -> Arc<[Span]> {
 
 fn semantics() -> Semantics {
     Semantics {
-        role: Role::Heading(3),
+        role: Role::Heading(HeadingLevel::Three),
         label: Some("Settings".into()),
         description: Some("Where the app is set up".into()),
         link: Some(Destination::anchor("settings")),
@@ -146,9 +147,9 @@ fn semantics() -> Semantics {
         orientation: Some(Orientation::Vertical),
         expanded: Some(true),
         position: Some(SetPosition {
-            level: 2,
-            position: 4,
-            size: 9,
+            level: NonZeroU32::new(2).unwrap(),
+            position: NonZeroU32::new(4).unwrap(),
+            size: NonZeroU32::new(9).unwrap(),
         }),
         active_descendant: Some(41),
         controls: Some(u64::MAX),
@@ -256,7 +257,7 @@ fn every_command() -> Vec<DrawCommand> {
             radius: BorderRadius::all(8.0),
         },
         DrawCommand::PushMatrix {
-            matrix: [1.0, 0.1, -0.1, 1.0, 20.0, -3.5],
+            transform: Transform::from_array([1.0, 0.1, -0.1, 1.0, 20.0, -3.5]),
         },
         DrawCommand::PushLayer {
             opacity: 0.75,

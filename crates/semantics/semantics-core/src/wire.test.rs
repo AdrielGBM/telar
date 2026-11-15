@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use wire_core::{Wire, decode, encode};
@@ -71,9 +72,9 @@ fn every_reading_value_round_trips() {
     });
     round_trip(NumericValue::new(-1.0..=1.0, 0.25).expect("a reading within its range"));
     round_trip(SetPosition {
-        level: 2,
-        position: 3,
-        size: 40,
+        level: NonZeroU32::new(2).unwrap(),
+        position: NonZeroU32::new(3).unwrap(),
+        size: NonZeroU32::new(40).unwrap(),
     });
     round_trip(Modal {
         layer: 7,
@@ -139,7 +140,7 @@ fn a_link_that_is_no_uri_at_all_is_malformed() {
 
 fn every_field_set() -> Semantics {
     Semantics {
-        role: Role::Heading(3),
+        role: Role::Heading(HeadingLevel::Three),
         label: Some(Arc::from("Title")),
         description: Some(Arc::from("The page's own title")),
         link: Some(Destination::anchor("top")),
@@ -165,9 +166,9 @@ fn every_field_set() -> Semantics {
         orientation: Some(Orientation::Vertical),
         expanded: Some(true),
         position: Some(SetPosition {
-            level: 1,
-            position: 2,
-            size: 3,
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::new(2).unwrap(),
+            size: NonZeroU32::new(3).unwrap(),
         }),
         active_descendant: Some(4),
         controls: Some(5),
@@ -222,7 +223,7 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
         Role::Section,
         Role::Form,
         Role::Search,
-        Role::Heading(1),
+        Role::Heading(HeadingLevel::One),
         Role::List,
         Role::ListItem,
         Role::ScrollArea,
@@ -265,7 +266,7 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
         Role::RadioGroup,
     ];
     let mut bytes: Vec<u8> = roles.iter().flat_map(encode).collect();
-    bytes.extend(encode(&Role::Heading(6)));
+    bytes.extend(encode(&Role::Heading(HeadingLevel::Six)));
     for value in [Orientation::Horizontal, Orientation::Vertical] {
         bytes.extend(encode(&value));
     }
@@ -286,9 +287,9 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
         &NumericValue::new(-1.0..=1.0, 0.25).expect("a reading within its range"),
     ));
     bytes.extend(encode(&SetPosition {
-        level: 2,
-        position: 3,
-        size: 40,
+        level: NonZeroU32::new(2).unwrap(),
+        position: NonZeroU32::new(3).unwrap(),
+        size: NonZeroU32::new(40).unwrap(),
     }));
     bytes.extend(encode(&Modal {
         layer: 7,

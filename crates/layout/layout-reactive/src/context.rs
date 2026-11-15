@@ -99,13 +99,13 @@ reactive_core::dropless_thread_local! {
 /// The surface is part of a recording's claim because node ids are per-surface: a write during a build can flush an effect on another surface, and the ids that effect mints name nodes in a tree this recording cannot free.
 struct Recording {
     root: Option<OwnerId>,
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
     nodes: Vec<(NodeId, Option<OwnerId>)>,
 }
 
 impl Recording {
     /// Only a node built under the recording's owner is its own: a write during a build can flush effects elsewhere in the tree, and what they create is not the build's to free.
-    fn claims(&self, surface: SurfaceHandle, owner: Option<OwnerId>) -> bool {
+    fn claims(&self, surface: Option<SurfaceHandle>, owner: Option<OwnerId>) -> bool {
         if surface != self.surface {
             return false;
         }
@@ -213,7 +213,7 @@ impl Drop for NodeRecording {
             return;
         }
         // A surface torn down while this was open took its tree with it, and its ids now name nodes in whichever tree is active.
-        recording.surface.with_entered_if_alive(|| {
+        reactive_core::enter_surface_if_alive(recording.surface, || {
             for (node, _) in recording.nodes {
                 remove_node(node);
             }
@@ -347,14 +347,14 @@ pub fn on_relayout(hook: impl Fn() + 'static) -> RelayoutHook {
 #[must_use = "the hook is withdrawn as soon as this handle drops"]
 pub struct RelayoutHook {
     id: u64,
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
 }
 
 impl Drop for RelayoutHook {
     fn drop(&mut self) {
         let id = self.id;
         // A surface torn down first took its hooks with it, and the world active now is not this hook's.
-        self.surface.with_entered_if_alive(|| {
+        reactive_core::enter_surface_if_alive(self.surface, || {
             with_runtime(|rt| rt.relayout_hooks.retain(|(hook, _)| *hook != id));
         });
     }

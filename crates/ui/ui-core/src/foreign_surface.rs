@@ -251,7 +251,7 @@ reactive_core::dropless_thread_local! {
 
 /// A key from the counter surface handles come from, so no foreign key is ever a surface's.
 fn mint() -> u64 {
-    crate::surface_context::next_handle().raw()
+    crate::surface_context::next_handle().raw().get()
 }
 
 /// The key marking the surface the foreign surface at `owner` numbers `guest`, while its frames carry it.

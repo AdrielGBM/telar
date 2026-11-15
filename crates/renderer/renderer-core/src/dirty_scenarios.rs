@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 
 use crate::{
     BlendMode, BorderRadius, Color, DrawCommand, Element, ElementId, ImageData, ImageFill,
@@ -221,7 +221,7 @@ fn window(offset: f32, tooltip_y: Option<f32>) -> Vec<DrawCommand> {
         open(2),
         clip(320.0, 100.0, 1200.0, 1000.0, 0.0),
         DrawCommand::PushMatrix {
-            matrix: [1.0, 0.0, 0.0, 1.0, 320.0, 100.0 - offset],
+            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 320.0, 100.0 - offset]),
         },
         open(3),
     ];
@@ -263,7 +263,7 @@ fn notifications(offset: f32) -> Vec<DrawCommand> {
         open(2),
         clip(2840.0, 200.0, 820.0, 1000.0, 0.0),
         DrawCommand::PushMatrix {
-            matrix: [1.0, 0.0, 0.0, 1.0, 2840.0, 200.0 - offset],
+            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 2840.0, 200.0 - offset]),
         },
         open(3),
     ];

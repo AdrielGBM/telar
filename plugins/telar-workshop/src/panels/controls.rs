@@ -1,5 +1,6 @@
 //! The controls panel: one row per arg of the selected preview, with its editor, type, default and doc.
 
+use std::num::NonZeroU16;
 use std::rc::Rc;
 
 use telar::Variant;
@@ -24,7 +25,7 @@ use crate::strings::{
 };
 
 const DOC_MIN_WIDTH: f32 = 160.0;
-const DOC_LINES: u16 = 2;
+const DOC_LINES: NonZeroU16 = NonZeroU16::new(2).unwrap();
 
 const ARG_EXAMPLES: &[Example] = &[
     Example {

@@ -66,7 +66,7 @@ fn the_id_names_the_crate_the_tag_and_the_slugged_name() {
 
 #[test]
 fn the_package_is_the_one_the_preview_is_written_in() {
-    assert_eq!(primary().package, env!("CARGO_PKG_NAME"));
+    assert_eq!(primary().package, Some(env!("CARGO_PKG_NAME")));
 }
 
 #[test]

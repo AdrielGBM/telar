@@ -85,10 +85,10 @@ impl DrawState {
     }
 
     #[inline]
-    pub fn push_matrix(&mut self, matrix: [f32; 6]) {
+    pub fn push_matrix(&mut self, transform: Transform) {
         self.transform_stack.push(self.cumulative_matrix);
-        // Compose cumulative ∘ matrix: `a.then(b)` yields `b ∘ a`, so `matrix.then(cumulative)` maps a local point through `matrix` first, then the accumulated parent chain.
-        self.cumulative_matrix = Transform::from_array(matrix)
+        // Compose cumulative ∘ transform: `a.then(b)` yields `b ∘ a`, so `transform.then(cumulative)` maps a local point through `transform` first, then the accumulated parent chain.
+        self.cumulative_matrix = transform
             .then(Transform::from_array(self.cumulative_matrix))
             .to_array();
     }
@@ -127,7 +127,7 @@ where
     let mut state = DrawState::new();
     for cmd in cmds {
         match cmd {
-            DrawCommand::PushMatrix { matrix } => state.push_matrix(*matrix),
+            DrawCommand::PushMatrix { transform } => state.push_matrix(*transform),
             DrawCommand::PopMatrix => state.pop_matrix(),
             _ => {}
         }

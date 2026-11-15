@@ -7,6 +7,7 @@ use geometry_core::Rect;
 use renderer_core::FontFamily;
 use renderer_core::TextWrap;
 use renderer_core::{Color, Declared, Span, TextStyle};
+use std::num::NonZeroU16;
 
 // Every generic resolves to the cosmic-text family fontdb actually indexes it under, deterministically — `SystemUi` has no such face and so takes the same route `SansSerif` always has. A bare generic never queries the database at all: `family_exists` treats every generic as always resolvable.
 #[test]
@@ -190,14 +191,20 @@ fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
         return;
     }
 
-    let clamped = shaped(&mut sh, &base.clone().with_clamp(2, false));
+    let clamped = shaped(
+        &mut sh,
+        &base.clone().with_clamp(NonZeroU16::new(2).unwrap(), false),
+    );
     assert_eq!(
         clamped.layout_runs().count(),
         2,
         "max_lines(2) must leave two visual lines"
     );
 
-    let elided = shaped(&mut sh, &base.clone().with_clamp(2, true));
+    let elided = shaped(
+        &mut sh,
+        &base.clone().with_clamp(NonZeroU16::new(2).unwrap(), true),
+    );
     assert_eq!(
         elided.layout_runs().count(),
         2,
@@ -241,7 +248,10 @@ fn a_clamp_that_cuts_a_later_paragraph_keeps_every_earlier_paragraph_whole() {
         return;
     }
 
-    let max = u16::try_from(first_runs + 2).expect("a label wraps to a handful of lines");
+    let max = u16::try_from(first_runs + 2)
+        .ok()
+        .and_then(NonZeroU16::new)
+        .expect("a label wraps to a handful of lines");
     for ellipsis in [false, true] {
         let clamped = make_buffer(
             &mut sh.font_system,
@@ -274,7 +284,12 @@ fn max_lines_clamps_the_measured_height() {
     if single <= 0.0 || wrapped <= single * 2.0 {
         return;
     }
-    let (_, clamped) = sh.measure_text(text, None, 90.0, &base.with_clamp(2, false));
+    let (_, clamped) = sh.measure_text(
+        text,
+        None,
+        90.0,
+        &base.with_clamp(NonZeroU16::new(2).unwrap(), false),
+    );
     assert!(
         clamped < wrapped,
         "max_lines must shrink the measured height: wrapped={wrapped} clamped={clamped}"
@@ -721,7 +736,7 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
         width: 90.0,
         height: 10_000.0,
     };
-    let base = TextStyle::new(16.0, Color::BLACK).with_clamp(2, true);
+    let base = TextStyle::new(16.0, Color::BLACK).with_clamp(NonZeroU16::new(2).unwrap(), true);
     let spans = [Span::new(0..5, Declared::default().with_font_weight(700))];
 
     let plain = make_buffer(

@@ -79,7 +79,7 @@ fn titles_of(location: &str, locale: &str, switch_to: Option<&'static str>) -> V
         switched: Cell::new(false),
     };
     let config = AppConfig::from(WindowConfig {
-        title: "Portfolio".to_string(),
+        title: Some("Portfolio".to_string()),
         ..WindowConfig::default()
     });
     run_with_platform::<_, _, ()>(

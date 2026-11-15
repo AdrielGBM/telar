@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::num::{NonZeroU16, NonZeroU32};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -92,6 +93,20 @@ fn a_surrogate_is_no_char() {
 }
 
 #[test]
+fn a_non_zero_count_round_trips_and_refuses_zero() {
+    round_trip(NonZeroU16::MAX);
+    round_trip(NonZeroU32::MIN);
+    assert_eq!(
+        decode::<NonZeroU16>(&encode(&0u16)),
+        Err(WireError::Invalid("a zero where none may be"))
+    );
+    assert_eq!(
+        decode::<NonZeroU32>(&encode(&0u32)),
+        Err(WireError::Invalid("a zero where none may be"))
+    );
+}
+
+#[test]
 fn bytes_left_after_the_value_are_refused() {
     let mut bytes = encode(&7u64);
     bytes.push(0);
@@ -179,6 +194,8 @@ fn the_bytes_of_every_primitive_are_pinned_to_the_wire_version() {
     u64::MAX.put(&mut w);
     i32::MIN.put(&mut w);
     usize::MAX.put(&mut w);
+    NonZeroU16::MAX.put(&mut w);
+    NonZeroU32::MAX.put(&mut w);
     (-0.5f32).put(&mut w);
     f64::MIN_POSITIVE.put(&mut w);
     '🙂'.put(&mut w);

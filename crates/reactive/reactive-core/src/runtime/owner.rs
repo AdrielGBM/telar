@@ -8,7 +8,7 @@ use std::rc::Rc;
 use rustc_hash::FxHashMap;
 
 use super::flush::{batch, flush_when_settled};
-use super::surface::current_surface;
+use super::surface::{current_surface, enter_surface};
 use super::{EffectId, RUNTIME, Runtime, SignalId, SurfaceHandle};
 use crate::runtime::effects::deregister_effect;
 
@@ -50,14 +50,14 @@ pub(crate) struct OwnerEntry {
     /// What this owner tells everything below it, keyed by type. Empty for almost every owner: only a scope that provides something ever reaches the allocator for this.
     context: FxHashMap<TypeId, Rc<dyn Any>>,
     catch: Option<PanicCatch>,
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
     /// Made inside [`detached`](reactive_local::detached): a root no surface's teardown frees, because what it holds is reached for long after the surface active when it was made, which `surface` still names so its own teardown runs there.
     detached: bool,
 }
 
 impl OwnerEntry {
     // A 10k-row list is 10k of these, so an owner holding nothing must not reach the allocator.
-    fn new(parent: Option<OwnerKey>, surface: SurfaceHandle) -> Self {
+    fn new(parent: Option<OwnerKey>, surface: Option<SurfaceHandle>) -> Self {
         OwnerEntry {
             parent,
             children: Vec::new(),
@@ -71,7 +71,7 @@ impl OwnerEntry {
         }
     }
 
-    fn root(surface: SurfaceHandle) -> Self {
+    fn root(surface: Option<SurfaceHandle>) -> Self {
         OwnerEntry {
             detached: reactive_local::is_detached(),
             ..OwnerEntry::new(None, surface)
@@ -173,7 +173,7 @@ pub(crate) fn attach_effect(rt: &mut Runtime, id: EffectId) {
     }
 }
 
-/// The owner a creation right now belongs to, minting the active surface's root (including the ambient `SurfaceHandle::NONE`) if the stack is empty so nothing created outside a scope ends up unowned; `None` means only [`detached`](reactive_local::detached) state.
+/// The owner a creation right now belongs to, minting the active surface's root (including the ambient world's) if the stack is empty so nothing created outside a scope ends up unowned; `None` means only [`detached`](reactive_local::detached) state.
 fn owning(rt: &mut Runtime) -> Option<&mut OwnerEntry> {
     let id = owning_id(rt)?;
     rt.owners.get_mut(id)
@@ -423,7 +423,7 @@ fn tear_down(id: OwnerKey, panicked: &mut Option<PanicPayload>) {
     // One wave, not one per withdrawal: `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N nodes outside a batch is N invalidations across the tree.
     batch(|| {
         for owner in &mut torn {
-            owner.surface.with_entered(|| {
+            enter_surface(owner.surface, || {
                 for cleanup in std::mem::take(&mut owner.cleanups) {
                     contain(panicked, cleanup);
                 }
@@ -432,7 +432,7 @@ fn tear_down(id: OwnerKey, panicked: &mut Option<PanicPayload>) {
     });
 
     for owner in &mut torn {
-        owner.surface.with_entered(|| {
+        enter_surface(owner.surface, || {
             for effect in std::mem::take(&mut owner.effects) {
                 contain(panicked, || deregister_effect(effect));
             }
@@ -453,9 +453,7 @@ fn tear_down(id: OwnerKey, panicked: &mut Option<PanicPayload>) {
                 .map(|storage| storage.value)
                 .collect()
         });
-        owner
-            .surface
-            .with_entered(|| contain(panicked, || drop(removed)));
+        enter_surface(owner.surface, || contain(panicked, || drop(removed)));
     }
 }
 
@@ -514,8 +512,8 @@ pub fn dispose_surface(surface: SurfaceHandle) {
     let mut panicked = None;
     {
         let _disposing = Disposing::enter();
-        contain(&mut panicked, || dispose_surface_owners(surface));
-        let world = RUNTIME.with(|rt| rt.borrow_mut().worlds.remove(&surface));
+        contain(&mut panicked, || dispose_surface_owners(Some(surface)));
+        let world = RUNTIME.with(|rt| rt.borrow_mut().worlds.remove(&Some(surface)));
         if let Some(world) = world {
             contain(&mut panicked, || dispose_owner(world.into()));
         }
@@ -524,13 +522,14 @@ pub fn dispose_surface(surface: SurfaceHandle) {
     resume_unless_unwinding(panicked);
 }
 
-/// Whether [`dispose_surface`] has already torn this surface down. [`SurfaceHandle::NONE`], the ambient surface, is never disposed.
-pub(crate) fn is_surface_disposed(surface: SurfaceHandle) -> bool {
-    !surface.is_none() && RUNTIME.with(|rt| rt.borrow().disposed_surfaces.contains(&surface))
+/// Whether [`dispose_surface`] has already torn this surface down. The ambient world, `None`, is never disposed.
+pub(crate) fn is_surface_disposed(surface: Option<SurfaceHandle>) -> bool {
+    surface
+        .is_some_and(|surface| RUNTIME.with(|rt| rt.borrow().disposed_surfaces.contains(&surface)))
 }
 
 /// Disposes every owner root belonging to a surface, leaving its world standing: see [`dispose_surface`].
-pub fn dispose_surface_owners(surface: SurfaceHandle) {
+pub fn dispose_surface_owners(surface: Option<SurfaceHandle>) {
     let roots: Vec<OwnerKey> = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         rt.roots.remove(&surface);

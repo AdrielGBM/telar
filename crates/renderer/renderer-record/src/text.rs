@@ -164,8 +164,8 @@ fn write_command(out: &mut String, command: &DrawCommand) {
             let _ = write!(out, "clip {}", rect(*r));
             write_radius(out, "radius", *radius);
         }
-        DrawCommand::PushMatrix { matrix } => {
-            let _ = write!(out, "matrix {}", list(matrix));
+        DrawCommand::PushMatrix { transform } => {
+            let _ = write!(out, "matrix {}", list(&transform.to_array()));
         }
         DrawCommand::PushLayer {
             opacity,
@@ -238,7 +238,7 @@ fn text_fields(style: &TextStyle) -> Vec<(&'static str, String)> {
             TextAlign::Justify => Some("justify".into()),
         },
     );
-    if let Clamp::Lines { max, ellipsis } = style.clamp {
+    if let Some(Clamp { max, ellipsis }) = style.clamp {
         add("clamp", Some(max.to_string()));
         add("ellipsis", ellipsis.then(|| "true".into()));
     }

@@ -86,9 +86,9 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 radius.bottom_left.to_bits().hash(h);
             }
             DrawCommand::PopClip => 6u8.hash(h),
-            DrawCommand::PushMatrix { matrix } => {
+            DrawCommand::PushMatrix { transform } => {
                 7u8.hash(h);
-                for v in matrix {
+                for v in transform.to_array() {
                     v.to_bits().hash(h);
                 }
             }

@@ -312,8 +312,8 @@ In a play the page behind a modal layer is not in the tree either; a tap that pu
 
 A list or a tree that builds only the rows on screen leaves a reader counting a screenful, so each row it builds
 says where it sits among them all: from Rust `StyledContainer::positioned(SetPosition { level, position, size })`,
-counted from one, or `positioned_by(|| …)` for a box that is no control and whose place changes, such as the header
-row of a table. A target says only the numbers the row's role takes (`Role::positioning`):
+each a `NonZeroU32` counted from one, or `positioned_by(|| …)` for a box that is no control and whose place
+changes, such as the header row of a table. A target says only the numbers the row's role takes (`Role::positioning`):
 
 | Role | Browser, document (`web-dom`) | Desktop | Terminal reading |
 | --- | --- | --- | --- |

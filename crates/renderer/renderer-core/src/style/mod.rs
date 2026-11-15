@@ -122,37 +122,19 @@ impl TextShadow {
 
 /// How text ends when it does not fit.
 ///
-/// One decision, so one type. Split across a `max_lines: Option<u16>` and an `ellipsis: bool` it had two states that meant nothing and were accepted anyway: an ellipsis with no line limit, which the clamp returns before ever consulting, and a limit of zero lines, which three separate call sites each defended against with the same `.filter(|&n| n > 0)`. Neither is representable now, and the three filters are gone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Clamp {
-    #[default]
-    None,
-    Lines {
-        max: NonZeroU16,
-        /// Mark the cut with `…` rather than letting the text stop mid-word.
-        ellipsis: bool,
-    },
+/// One decision, so one type, and text that is not clamped has none: [`TextStyle::clamp`] is `None`. An ellipsis with no line limit and a limit of zero lines are not representable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Clamp {
+    /// The most lines the text takes.
+    pub max: NonZeroU16,
+    /// Mark the cut with `…` rather than letting the text stop mid-word.
+    pub ellipsis: bool,
 }
 
 impl Clamp {
     /// The line limit, for the shaper's "did this overflow" question.
-    pub fn max_lines(self) -> Option<usize> {
-        match self {
-            Clamp::None => None,
-            Clamp::Lines { max, .. } => Some(max.get() as usize),
-        }
-    }
-
-    pub fn ellipsis(self) -> bool {
-        matches!(self, Clamp::Lines { ellipsis: true, .. })
-    }
-
-    /// A clamp to `max` lines, or [`None`](Clamp::None) when `max` is zero, so a zero-line clamp is not representable.
-    pub fn lines(max: u16, ellipsis: bool) -> Self {
-        match NonZeroU16::new(max) {
-            Some(max) => Clamp::Lines { max, ellipsis },
-            None => Clamp::None,
-        }
+    pub fn max_lines(self) -> usize {
+        usize::from(self.max.get())
     }
 }
 
@@ -229,8 +211,8 @@ pub struct TextStyle {
     /// The slant of the face. See [`FontStyle`].
     pub font_style: FontStyle,
     pub text_align: TextAlign,
-    /// How the text ends when it does not fit. See [`Clamp`].
-    pub clamp: Clamp,
+    /// How the text ends when it does not fit, or `None` for text that takes every line it needs. See [`Clamp`].
+    pub clamp: Option<Clamp>,
     /// The height of a line, as a multiple of `font_size`. See [`LineHeight`].
     pub line_height: LineHeight,
     /// Extra advance in logical pixels added after each glyph. `0.0` uses the font's natural advances.
@@ -261,7 +243,7 @@ impl TextStyle {
             font_weight: 400,
             font_style: FontStyle::Normal,
             text_align: TextAlign::Start,
-            clamp: Clamp::None,
+            clamp: None,
             line_height: LineHeight::Natural,
             letter_spacing: 0.0,
             raster: Raster::Smooth,
@@ -426,9 +408,9 @@ impl TextStyle {
         self
     }
 
-    /// Clamps the text to `max` lines, marking the cut with `…` when `ellipsis`. A `max` of zero is no clamp.
-    pub fn with_clamp(mut self, max: u16, ellipsis: bool) -> Self {
-        self.clamp = Clamp::lines(max, ellipsis);
+    /// Clamps the text to `max` lines, marking the cut with `…` when `ellipsis`.
+    pub fn with_clamp(mut self, max: NonZeroU16, ellipsis: bool) -> Self {
+        self.clamp = Some(Clamp { max, ellipsis });
         self
     }
 

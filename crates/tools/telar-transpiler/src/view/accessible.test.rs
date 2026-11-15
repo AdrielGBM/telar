@@ -208,7 +208,7 @@ fn a_component_call_says_a_describing_role_of_its_item() {
     let code = transpile("col\n    heading text:\"Recent\" role:h2\n    card role:nav\n");
     assert!(!code.contains("compile_error!"), "{code}");
     assert!(
-        code.contains(".a11y_role(::telar::Role::Heading(2))"),
+        code.contains(".a11y_role(::telar::Role::Heading(::telar::HeadingLevel::Two))"),
         "{code}"
     );
     assert!(

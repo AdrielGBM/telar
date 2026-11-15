@@ -161,7 +161,7 @@ telar::__previews! {
             let tree = mounted(&entry, &ctx);
             assert_eq!(testing::texts(&tree), ["Presses · 0"]);
             let framed = tree.commands().iter().any(|command| {
-                matches!(command, DrawCommand::PushMatrix { matrix } if matrix[4..] == [12.0, 12.0])
+                matches!(command, DrawCommand::PushMatrix { transform } if (transform.e, transform.f) == (12.0, 12.0))
             });
             assert!(framed, "the text sits inside the frame's padding");
             assert_eq!(ctx.args().states()[0].binding, ArgBinding::Live);

@@ -1,6 +1,7 @@
 //! One cell of the matrix: its coordinates, what its play, its accessibility checks and its last snapshot came to, and the preview, mounted the first time the cell scrolls into view on a canvas of its own in the cell's environment, with its play run there.
 
 use std::cell::RefCell;
+use std::num::NonZeroU16;
 use std::rc::Rc;
 
 use telar::preview::a11y::Severity;
@@ -346,7 +347,10 @@ fn details(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErr
                         let text = Text::declaring(
                             move || line.clone(),
                             LayoutStyle::new().max_width(CELL_WIDTH),
-                            |text| workbench_muted(workbench_mono(text)).with_clamp(1, true),
+                            |text| {
+                                workbench_muted(workbench_mono(text))
+                                    .with_clamp(NonZeroU16::MIN, true)
+                            },
                         )?;
                         Ok(vec![box_item(text)])
                     }))

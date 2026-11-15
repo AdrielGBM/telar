@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::num::NonZeroU64;
 use std::rc::Rc;
 use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
@@ -73,13 +74,14 @@ fn completion_reenters_the_spawning_surface() {
         set_current_surface(prev);
     });
 
-    let seen = Rc::new(std::cell::Cell::new(SurfaceHandle::NONE));
+    let seen = Rc::new(std::cell::Cell::new(None::<SurfaceHandle>));
     let sink = Rc::clone(&seen);
-    SurfaceHandle::from_raw(7)
-        .with_entered(|| spawn_task(|| (), move |()| sink.set(current_surface())));
+    crate::enter_surface(Some(handle(7)), || {
+        spawn_task(|| (), move |()| sink.set(current_surface()))
+    });
 
-    SurfaceHandle::from_raw(9).with_entered(|| drain_until(|| !seen.get().is_none()));
-    assert_eq!(seen.get(), SurfaceHandle::from_raw(7));
+    crate::enter_surface(Some(handle(9)), || drain_until(|| !seen.get().is_none()));
+    assert_eq!(seen.get(), Some(handle(7)));
 }
 
 #[test]
@@ -215,11 +217,11 @@ fn a_disposed_surfaces_task_never_runs() {
     let _serial = serial();
     let ran = Rc::new(std::cell::Cell::new(false));
     let sink = Rc::clone(&ran);
-    let previous = set_current_surface(SurfaceHandle::from_raw(11));
+    let previous = set_current_surface(Some(handle(11)));
     let task = spawn_task(|| (), move |()| sink.set(true));
     set_current_surface(previous);
 
-    crate::dispose_surface(SurfaceHandle::from_raw(11));
+    crate::dispose_surface(handle(11));
     drain_until(|| !task.is_pending());
     assert!(!ran.get(), "its callback was dropped, not run");
 }
@@ -228,13 +230,13 @@ fn a_disposed_surfaces_task_never_runs() {
 #[test]
 fn a_stream_whose_surface_goes_away_inside_its_item_is_stopped() {
     let _serial = serial();
-    let surface = SurfaceHandle::from_raw(12);
+    let surface = handle(12);
     let seen = Rc::new(std::cell::Cell::new(0u32));
     let sink = Rc::clone(&seen);
     let (resume_tx, resume_rx) = std::sync::mpsc::channel();
     let (stopped_tx, stopped_rx) = std::sync::mpsc::channel();
 
-    let previous = set_current_surface(surface);
+    let previous = set_current_surface(Some(surface));
     let task = spawn_stream(
         move |out| {
             out.emit(1u32);
@@ -268,4 +270,8 @@ fn a_stream_whose_surface_goes_away_inside_its_item_is_stopped() {
         1,
         "nothing is delivered after its surface went away"
     );
+}
+
+fn handle(id: u64) -> SurfaceHandle {
+    SurfaceHandle::from_raw(NonZeroU64::new(id).expect("a surface id counts from one"))
 }

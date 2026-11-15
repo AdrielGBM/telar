@@ -38,7 +38,7 @@ where
     for (id, config) in surfaces {
         let (window, fonts) = split_config(config);
         let window = window.titled_or(app_name);
-        opened.insert(id, (fonts, window.title.clone()));
+        opened.insert(id, (fonts, window.shown_title().to_owned()));
         window_configs.push((id, window));
     }
     let app_name = app_name.to_owned();
@@ -95,7 +95,7 @@ where
     );
     let mut handler = boot.handler::<W, ()>(
         Box::new(app),
-        &window.titled_or(app_name).title,
+        window.titled_or(app_name).shown_title(),
         super::host::SurfaceRenderer::builtin(),
     );
     handler.surface = Some(ui_core::Surface::new());

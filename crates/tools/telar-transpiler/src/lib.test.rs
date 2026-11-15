@@ -1246,7 +1246,7 @@ fn a_cursor_that_reads_a_signal_keeps_reading_it() {
 #[test]
 fn a_computed_number_reaches_the_property_it_was_written_on() {
     let out = transpile_source(
-        "[logic]\nconst REACH: f32 = 18.0;\n[view]\nbox drag_threshold:(REACH * 0.5) line_height:(UNIT / 11.0)\n    text \"long\" lines:(rows + 1)\n",
+        "[logic]\nconst REACH: f32 = 18.0;\n[view]\nbox drag_threshold:(REACH * 0.5) line_height:(UNIT / 11.0)\n    text \"long\" lines:(rows.saturating_add(1))\n",
         "demo",
         None,
         None,
@@ -1262,7 +1262,7 @@ fn a_computed_number_reaches_the_property_it_was_written_on() {
         "so is a line height:\n{code}"
     );
     assert!(
-        code.contains(".with_clamp(rows + 1,"),
+        code.contains(".with_clamp(rows.saturating_add(1),"),
         "and a count stays a count, not a float:\n{code}"
     );
 }

@@ -93,7 +93,7 @@ fn a_paths_geometry_is_drawn_where_layout_put_it() {
     let mut translation = None;
     for command in commands.iter() {
         match command {
-            DrawCommand::PushMatrix { matrix } => translation = Some((matrix[4], matrix[5])),
+            DrawCommand::PushMatrix { transform } => translation = Some((transform.e, transform.f)),
             DrawCommand::Path { .. } => break,
             _ => {}
         }

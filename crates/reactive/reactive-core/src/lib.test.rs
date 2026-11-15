@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::num::NonZeroU64;
 use std::rc::Rc;
 
 use super::*;
@@ -21,14 +22,16 @@ fn effect_runs_under_its_own_surface_context() {
     let entered_hook = Rc::clone(&entered);
     set_surface_enter_hook(move |handle, run| {
         let prev = set_current_surface(handle);
-        entered_hook.borrow_mut().push(handle.raw());
+        entered_hook
+            .borrow_mut()
+            .extend(handle.map(|handle| handle.raw().get()));
         run();
         set_current_surface(prev);
     });
 
     let trigger = signal(0i32);
     let read = trigger.read_only();
-    SurfaceHandle::from_raw(1).with_entered(|| {
+    crate::enter_surface(Some(handle(1)), || {
         effect(move || {
             read.get();
         });
@@ -36,7 +39,7 @@ fn effect_runs_under_its_own_surface_context() {
 
     entered.borrow_mut().clear();
 
-    SurfaceHandle::from_raw(2).with_entered(|| trigger.set(1));
+    crate::enter_surface(Some(handle(2)), || trigger.set(1));
 
     assert!(
         entered.borrow().contains(&1),
@@ -458,4 +461,8 @@ fn set_if_changed_notifies_only_on_change() {
     assert_eq!(runs.get(), 1, "an equal write does not rerun subscribers");
     value.set_if_changed(2);
     assert_eq!(runs.get(), 2, "a different write reruns subscribers");
+}
+
+fn handle(id: u64) -> SurfaceHandle {
+    SurfaceHandle::from_raw(NonZeroU64::new(id).expect("a surface id counts from one"))
 }

@@ -2,6 +2,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
+use renderer_core::HeadingLevel;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -121,7 +122,10 @@ fn a_picture_is_read_only_when_it_is_named() {
 #[wasm_bindgen_test]
 fn a_named_heading_stays_a_heading() {
     let heading = rendered(&[
-        open(20, Semantics::of(Role::Heading(1)).with_label("Welcome")),
+        open(
+            20,
+            Semantics::of(Role::Heading(HeadingLevel::One)).with_label("Welcome"),
+        ),
         text("W"),
         DrawCommand::PopElement,
     ]);
@@ -247,7 +251,7 @@ fn a_role_said_from_outside_is_the_element_a_group_becomes_and_never_a_controls(
     let places = Container::new(LayoutStyle::new(), vec![box_item(words("Home"))])
         .expect("the column builds")
         .a11y_role(Role::Navigation);
-    let title = words("Recent").a11y_role(Role::Heading(2));
+    let title = words("Recent").a11y_role(Role::Heading(HeadingLevel::Two));
     let save = StyledContainer::new(
         LayoutStyle::new(),
         |_| renderer_core::RectStyle::default(),

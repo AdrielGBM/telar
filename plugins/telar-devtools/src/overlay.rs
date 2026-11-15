@@ -151,7 +151,7 @@ impl Overlay {
 
     /// The canvas's handle, which marks its frame inside the window's: its element ids name its own boxes, not the app's.
     pub fn surface(&self) -> u64 {
-        self.canvas.surface().handle().raw()
+        self.canvas.surface().handle().raw().get()
     }
 
     pub fn is_dirty(&self) -> bool {

@@ -260,12 +260,12 @@ pub(crate) fn run_settled() {
             if super::is_surface_disposed(surface) {
                 continue;
             }
-            surface.with_entered(f);
+            super::enter_surface(surface, f);
         }
     }
 }
 
-type Settle = (SurfaceHandle, Box<dyn FnOnce()>);
+pub(crate) type Settle = (Option<SurfaceHandle>, Box<dyn FnOnce()>);
 
 /// What a panicking settle callback left unrun, put back at the front of the queue so the next settle point runs it, in order. Dropping it would lose work its caller was promised, with nothing to say so.
 struct UnrunSettled(std::vec::IntoIter<Settle>);

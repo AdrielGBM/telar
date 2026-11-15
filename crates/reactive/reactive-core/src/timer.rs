@@ -12,7 +12,7 @@ use std::time::Duration;
 use rustc_hash::FxHashMap;
 use web_time::Instant;
 
-use crate::runtime::{SurfaceHandle, current_surface, is_surface_disposed};
+use crate::runtime::{SurfaceHandle, current_surface, enter_surface, is_surface_disposed};
 
 type TimerId = u64;
 
@@ -25,7 +25,7 @@ enum Clock {
 struct PendingTimer {
     clock: Clock,
     callback: Box<dyn FnOnce()>,
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
 }
 
 #[derive(Default)]
@@ -226,7 +226,7 @@ pub fn fire_timers() {
             if is_surface_disposed(timer.surface) {
                 continue;
             }
-            timer.surface.with_entered(timer.callback);
+            enter_surface(timer.surface, timer.callback);
         }
     });
 }
@@ -264,7 +264,7 @@ pub fn cancel_timers_for(surface: SurfaceHandle) {
         let ids: Vec<TimerId> = registry
             .pending
             .iter()
-            .filter(|(_, timer)| timer.surface == surface)
+            .filter(|(_, timer)| timer.surface == Some(surface))
             .map(|(id, _)| *id)
             .collect();
         ids.iter()

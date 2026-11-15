@@ -2,6 +2,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
+use renderer_core::HeadingLevel;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -251,7 +252,7 @@ fn page(variant: &Variant) -> Vec<DrawCommand> {
         ),
         boxed(
             HEADING,
-            Semantics::of(Role::Heading(1)).with_anchor("inicio"),
+            Semantics::of(Role::Heading(HeadingLevel::One)).with_anchor("inicio"),
             "",
             Rect::new(0.0, 0.0, 640.0, 40.0),
         ),

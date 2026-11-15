@@ -8,14 +8,15 @@
 //!
 //! And a frame paints at its own level too, outside every element: an application's shell fills the panel its rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is drawn — see [`Walk::paint_at_surface_level`]. So does a surface nested in the frame, inside the box it is drawn in.
 
+use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use geometry_core::{Insets, Rect};
+use geometry_core::{Insets, Rect, Transform};
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
 use platform_core::{
-    AccessNode, Destination, HasPopup, NumericValue, Orientation, Positioning, SetPosition,
-    SortDirection,
+    AccessNode, Destination, HasPopup, HeadingLevel, NumericValue, Orientation, Positioning,
+    SetPosition, SortDirection,
 };
 use renderer_core::{
     BlendMode, Color, CurrentKind, DrawCommand, Editing, Element, Focusable, ForcedColors,
@@ -88,8 +89,6 @@ pub(crate) const DOCUMENT_SCROLL_OVERRIDES: [(&str, &str); 3] = [
 ///
 /// A document starts a selection under any drag that begins on selectable content, and sweeping one out of a margin and across a page is exactly what a person expects — so this is not for boxes at large. It is for the two kinds where a drag is already spoken for: a control, which is what a browser's own stylesheet says this about (`<button>`, `<input>`); and paint that is not a box at all — a scrollbar's thumb, a caret, a panel a shell fills behind its rail — which has nothing to select in the first place.
 const UNSELECTABLE: &str = "-webkit-user-select:none;user-select:none;";
-
-const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
 /// What the walk has to ask of the document it is describing.
 pub(crate) trait Surface {
@@ -244,7 +243,7 @@ pub(crate) struct Described {
     /// Where an item sits, and which of those numbers its role takes.
     pub position: Option<(Positioning, SetPosition)>,
     /// How many rows a grid has, its header's included, as the rows it holds say.
-    pub row_count: Option<u32>,
+    pub row_count: Option<NonZeroU32>,
     /// Which way the rows are sorted by the column a header names.
     pub sort: Option<SortDirection>,
     /// Whether a list box, a grid or a tree lets more than one of its items be chosen at once.
@@ -395,7 +394,11 @@ impl Described {
         })
     }
 
-    fn placed(&self, kinds: &[Positioning], number: impl Fn(SetPosition) -> u32) -> Option<String> {
+    fn placed(
+        &self,
+        kinds: &[Positioning],
+        number: impl Fn(SetPosition) -> NonZeroU32,
+    ) -> Option<String> {
         self.position
             .filter(|(kind, _)| kinds.contains(kind))
             .map(|(_, position)| number(position).to_string())
@@ -1129,9 +1132,9 @@ impl Walk<'_> {
                 }
             }
             // A matrix moves whatever it wraps, and which that is only becomes clear inside it. A widget that transforms itself draws its own box in there; a scroll area wraps its content and nothing else.
-            DrawCommand::PushMatrix { matrix } => {
-                if *matrix != IDENTITY {
-                    open.moved = Some(*matrix);
+            DrawCommand::PushMatrix { transform } => {
+                if *transform != Transform::IDENTITY {
+                    open.moved = Some(transform.to_array());
                 }
             }
             // Artwork reaches a document as an SVG, so one that arrives in a box means a widget drew geometry without saying its box was a drawing.
@@ -1928,10 +1931,10 @@ fn draw(
             drawing.open_clip_on_surface(*rect, *radius)
         }
         DrawCommand::PushClip { rect, radius } => drawing.open_clip(*rect, *radius),
-        DrawCommand::PushMatrix { matrix } if opens_onto_own_frame(rest, box_rect) => {
-            drawing.open_matrix_on_surface(*matrix)
+        DrawCommand::PushMatrix { transform } if opens_onto_own_frame(rest, box_rect) => {
+            drawing.open_matrix_on_surface(transform.to_array())
         }
-        DrawCommand::PushMatrix { matrix } => drawing.open_matrix(*matrix),
+        DrawCommand::PushMatrix { transform } => drawing.open_matrix(transform.to_array()),
         DrawCommand::PushLayer {
             opacity,
             blend,
@@ -1966,12 +1969,12 @@ pub(crate) fn tag_of(role: &Role) -> &'static str {
         Role::Drawing => "svg",
         Role::KeyboardInput => "kbd",
         Role::Heading(level) => match level {
-            1 => "h1",
-            2 => "h2",
-            3 => "h3",
-            4 => "h4",
-            5 => "h5",
-            _ => "h6",
+            HeadingLevel::One => "h1",
+            HeadingLevel::Two => "h2",
+            HeadingLevel::Three => "h3",
+            HeadingLevel::Four => "h4",
+            HeadingLevel::Five => "h5",
+            HeadingLevel::Six => "h6",
         },
         _ => "div",
     }

@@ -1,3 +1,4 @@
+use renderer_core::HeadingLevel;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -34,7 +35,7 @@ fn page() -> Vec<DrawCommand> {
         ),
         open(
             8,
-            Semantics::of(Role::Heading(1)),
+            Semantics::of(Role::Heading(HeadingLevel::One)),
             "",
             Rect::new(0.0, 0.0, 800.0, 40.0),
         ),
@@ -82,6 +83,32 @@ fn every_box_is_the_element_its_role_is_and_names_the_box_it_stands_for() {
         "{}",
         written.markup
     );
+}
+
+#[test]
+fn every_heading_is_the_element_of_its_own_level() {
+    for level in HeadingLevel::ALL {
+        let written = prerender(
+            &[
+                open(
+                    1,
+                    Semantics::of(Role::Heading(level)),
+                    "",
+                    Rect::new(0.0, 0.0, 800.0, 40.0),
+                ),
+                text("Title", Rect::new(0.0, 0.0, 800.0, 40.0)),
+                DrawCommand::PopElement,
+            ],
+            None,
+        );
+        let tag = format!("h{}", level.get());
+        assert!(
+            written.markup.starts_with(&format!("<{tag} "))
+                && written.markup.ends_with(&format!("</{tag}>")),
+            "{level:?}: {}",
+            written.markup
+        );
+    }
 }
 
 #[test]

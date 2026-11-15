@@ -18,8 +18,8 @@ pub(crate) type ReadRun = Rc<dyn Fn(usize) -> Option<Destination>>;
 reactive_core::dropless_thread_local! {
     static ANCHORS: released FxHashMap<Arc<str>, Reveal> = FxHashMap::default();
     // Keyed by surface too: every surface mints node ids from its own counter, so a node id alone names a different box in each.
-    static LINKS: released FxHashMap<(SurfaceHandle, NodeId), (u64, ReadDestination)> = FxHashMap::default();
-    static RUNS: released FxHashMap<(SurfaceHandle, NodeId), (u64, ReadRun)> = FxHashMap::default();
+    static LINKS: released FxHashMap<(Option<SurfaceHandle>, NodeId), (u64, ReadDestination)> = FxHashMap::default();
+    static RUNS: released FxHashMap<(Option<SurfaceHandle>, NodeId), (u64, ReadRun)> = FxHashMap::default();
     static PENDING: released Option<Arc<str>> = const { None };
     static REVEALER_INSTALLED: Cell<bool> = const { Cell::new(false) };
     static NEXT_TOKEN: Cell<u64> = const { Cell::new(1) };

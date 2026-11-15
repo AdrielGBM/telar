@@ -1,3 +1,6 @@
+use geometry_core::Transform;
+use renderer_core::HeadingLevel;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use layout_core::NodeId;
@@ -429,7 +432,7 @@ fn a_label_moved_into_place_by_a_matrix_names_its_control() {
 
     let frame = [
         DrawCommand::PushMatrix {
-            matrix: [1.0, 0.0, 0.0, 1.0, 10.0, 105.0],
+            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 10.0, 105.0]),
         },
         text_at("Save", rect(0.0, 0.0, 40.0, 16.0)),
         DrawCommand::PopMatrix,
@@ -1344,9 +1347,9 @@ fn a_control_is_named_by_its_text_wherever_scrolling_put_it() {
 
 fn placed(position: u32, size: u32) -> platform_core::SetPosition {
     platform_core::SetPosition {
-        level: 1,
-        position,
-        size,
+        level: NonZeroU32::MIN,
+        position: NonZeroU32::new(position).unwrap(),
+        size: NonZeroU32::new(size).unwrap(),
     }
 }
 
@@ -1386,7 +1389,13 @@ fn an_unnamed_box_that_says_where_it_sits_is_read_for_its_place() {
         ui_tree::set_element_capture(was);
         let read: Vec<(Role, &str, Option<u32>)> = nodes
             .iter()
-            .map(|n| (n.role, n.name.as_str(), n.position.map(|p| p.position)))
+            .map(|n| {
+                (
+                    n.role,
+                    n.name.as_str(),
+                    n.position.map(|p| p.position.get()),
+                )
+            })
             .collect();
         assert_eq!(
             read,
@@ -1562,7 +1571,7 @@ fn a_grid_holds_its_rows_and_each_row_its_cells() {
     let rows: Vec<usize> = platform_core::accessibility::children_of(&nodes, Some(grid)).collect();
     let places: Vec<Option<u32>> = rows
         .iter()
-        .map(|&row| nodes[row].position.map(|place| place.position))
+        .map(|&row| nodes[row].position.map(|place| place.position.get()))
         .collect();
     assert_eq!(places, [Some(1), Some(2), Some(3)]);
     assert!(rows.iter().all(|&row| nodes[row].role == Role::Row));
@@ -1592,9 +1601,9 @@ fn a_list_box_holds_its_options() {
         .map(|(i, fruit)| {
             box_item(
                 presented(Role::Option, vec![box_item(words(fruit))]).positioned(SetPosition {
-                    level: 1,
-                    position: i as u32 + 1,
-                    size: 2,
+                    level: NonZeroU32::MIN,
+                    position: NonZeroU32::new(i as u32 + 1).unwrap(),
+                    size: NonZeroU32::new(2).unwrap(),
                 }),
             )
         })
@@ -1885,7 +1894,7 @@ fn a_heading_given_no_name_is_named_by_its_text() {
         vec![box_item(words("Release")), box_item(words("notes"))],
     )
     .unwrap()
-    .role(Role::Heading(2));
+    .role(Role::Heading(HeadingLevel::Two));
     let root = Container::new(
         LayoutStyle::new().flex_column(),
         vec![box_item(heading), box_item(words("Below"))],
@@ -1895,7 +1904,10 @@ fn a_heading_given_no_name_is_named_by_its_text() {
     let nodes = snapshot_of(root);
     assert_eq!(
         held(&nodes, None),
-        [(Role::Heading(2), "Release notes"), (Role::Label, "Below")]
+        [
+            (Role::Heading(HeadingLevel::Two), "Release notes"),
+            (Role::Label, "Below")
+        ]
     );
     assert_eq!(
         platform_core::accessibility::transcript(&nodes),
@@ -1933,12 +1945,15 @@ fn a_heading_is_named_by_the_names_inside_it_and_holds_its_links() {
         vec![box_item(word), box_item(line)],
     )
     .unwrap()
-    .role(Role::Heading(1));
+    .role(Role::Heading(HeadingLevel::One));
     let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(heading)]).unwrap();
 
     let nodes = snapshot_of(root);
     assert_listed_as_a_tree(&nodes);
-    assert_eq!(held(&nodes, None), [(Role::Heading(1), "Te read more")]);
+    assert_eq!(
+        held(&nodes, None),
+        [(Role::Heading(HeadingLevel::One), "Te read more")]
+    );
     assert_eq!(held(&nodes, Some(0)), [(Role::Link, "more")]);
 }
 
@@ -1957,11 +1972,14 @@ fn a_heading_around_a_control_leaves_the_control_its_words() {
     .on_press(|| {});
     let heading = Container::new(LayoutStyle::new(), vec![box_item(button)])
         .unwrap()
-        .role(Role::Heading(3));
+        .role(Role::Heading(HeadingLevel::Three));
     let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(heading)]).unwrap();
 
     let nodes = snapshot_of(root);
-    assert_eq!(held(&nodes, None), [(Role::Heading(3), "")]);
+    assert_eq!(
+        held(&nodes, None),
+        [(Role::Heading(HeadingLevel::Three), "")]
+    );
     assert_eq!(held(&nodes, Some(0)), [(Role::Button, "Open")]);
 }
 
@@ -1977,7 +1995,7 @@ fn a_role_said_from_outside_is_read_over_a_group_and_never_over_a_control() {
     )
     .unwrap()
     .a11y_role(Role::Navigation);
-    let title = words("Recent").a11y_role(Role::Heading(2));
+    let title = words("Recent").a11y_role(Role::Heading(HeadingLevel::Two));
     let button = StyledContainer::new(
         LayoutStyle::new(),
         |_r| RectStyle::default(),
@@ -1998,7 +2016,7 @@ fn a_role_said_from_outside_is_read_over_a_group_and_never_over_a_control() {
         held(&nodes, None),
         [
             (Role::Navigation, ""),
-            (Role::Heading(2), "Recent"),
+            (Role::Heading(HeadingLevel::Two), "Recent"),
             (Role::Button, "Save"),
         ]
     );
@@ -2020,7 +2038,7 @@ fn every_role_said_from_outside_is_read_natively() {
         Role::Section,
         Role::Form,
         Role::Search,
-        Role::Heading(2),
+        Role::Heading(HeadingLevel::Two),
         Role::ListItem,
         Role::Status,
         Role::Log,

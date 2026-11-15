@@ -1,6 +1,7 @@
 //! A frame drawn as pixels, told to assistive technology as a document nobody sees.
 
 use std::cell::Cell;
+use std::num::NonZeroU32;
 use std::rc::Rc;
 
 use platform_core::{AccessAction, AccessNode, Event, Role};
@@ -336,7 +337,7 @@ fn pointed_at(nodes: &[AccessNode]) -> (Vec<u64>, Vec<u64>) {
 }
 
 /// How many rows each grid has, as a row of it that says where it sits says: what a virtualised grid knows and does not build.
-fn row_counts(nodes: &[AccessNode]) -> Vec<Option<u32>> {
+fn row_counts(nodes: &[AccessNode]) -> Vec<Option<NonZeroU32>> {
     let mut counts = vec![None; nodes.len()];
     for node in nodes {
         let Some(place) = node

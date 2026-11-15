@@ -4,6 +4,7 @@
 //!
 //! Almost nothing here is authored per widget, and that is the design. The set of controls is the focus registry's own tab order, so the reader and the keyboard cannot come to different conclusions about what is on screen. The name is taken from **the text the widget actually draws inside itself**, which is how it reads to everyone else and needs no second copy that can fall out of step with the first. What an application does author — a name, a language, a box a reader skips — is resolved along the frame's own element nesting, the same nesting a document backend turns into elements.
 
+use std::num::NonZeroU64;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use platform_core::{
 use renderer_core::DrawCommand;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use reactive_core::SurfaceHandle;
+use reactive_core::{SurfaceHandle, enter_surface_if_alive};
 
 use crate::focus;
 use crate::input_region::{hit_rect, visible_rect};
@@ -1230,7 +1231,10 @@ pub struct NestedSurface {
 impl NestedSurface {
     /// Runs `f` with the surface's world active, as reading what it drew needs; `None` without running it once the surface is gone, when its boxes mean nothing on this thread.
     pub fn with_entered<R>(&self, f: impl FnOnce() -> R) -> Option<R> {
-        SurfaceHandle::from_raw(self.surface).with_entered_if_alive(f)
+        enter_surface_if_alive(
+            Some(SurfaceHandle::from_raw(NonZeroU64::new(self.surface)?)),
+            f,
+        )
     }
 
     /// Where the frame shows `rect`, given in the surface's coordinates.

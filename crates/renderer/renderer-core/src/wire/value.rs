@@ -229,6 +229,7 @@ impl Wire for Span {
 }
 
 wire_struct!(ImageSlice { insets, scale });
+wire_struct!(Clamp { max, ellipsis });
 
 wire_enum!(GradientKind {
     Linear { start, end } = 0,
@@ -278,41 +279,6 @@ impl Wire for Dash {
         let len = r.len()?;
         let lengths: Vec<f32> = (0..len).map(|_| f32::take(r)).collect::<Result<_, _>>()?;
         Dash::new(&lengths, f32::take(r)?).ok_or(WireError::Invalid("dash pattern"))
-    }
-}
-
-impl Shaped for Clamp {
-    const SHAPE: u64 = {
-        let hash = fold(fold(shape_named("Clamp"), b"None"), &[0]);
-        let hash = fold(fold(hash, b"Lines"), &[1]);
-        fold_shape(fold_shape(hash, u16::SHAPE), bool::SHAPE)
-    };
-}
-
-impl Wire for Clamp {
-    fn put(&self, w: &mut Writer) {
-        match self {
-            Clamp::None => w.u8(0),
-            Clamp::Lines { max, ellipsis } => {
-                w.u8(1);
-                max.get().put(w);
-                ellipsis.put(w);
-            }
-        }
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        match r.u8()? {
-            0 => Ok(Clamp::None),
-            1 => {
-                let max = std::num::NonZeroU16::new(u16::take(r)?)
-                    .ok_or(WireError::Invalid("a clamp to zero lines"))?;
-                Ok(Clamp::Lines {
-                    max,
-                    ellipsis: bool::take(r)?,
-                })
-            }
-            tag => Err(WireError::Tag { of: "Clamp", tag }),
-        }
     }
 }
 

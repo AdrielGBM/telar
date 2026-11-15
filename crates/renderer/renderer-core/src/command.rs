@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use geometry_core::{Point, Rect};
+use geometry_core::{Point, Rect, Transform};
 
 use crate::{
     BlendMode, BorderRadius, Element, ImageData, ImageFill, PathData, PathStyle, Raster, RectStyle,
@@ -59,7 +59,7 @@ pub enum DrawCommand {
     },
     PopClip,
     PushMatrix {
-        matrix: [f32; 6],
+        transform: Transform,
     },
     PopMatrix,
     PushLayer {
@@ -159,9 +159,10 @@ impl PartialEq for DrawCommand {
                 },
             ) => r1 == r2 && br1 == br2,
             (DrawCommand::PopClip, DrawCommand::PopClip) => true,
-            (DrawCommand::PushMatrix { matrix: m1 }, DrawCommand::PushMatrix { matrix: m2 }) => {
-                m1 == m2
-            }
+            (
+                DrawCommand::PushMatrix { transform: m1 },
+                DrawCommand::PushMatrix { transform: m2 },
+            ) => m1 == m2,
             (DrawCommand::PopMatrix, DrawCommand::PopMatrix) => true,
             (
                 DrawCommand::PushLayer {

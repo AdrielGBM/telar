@@ -1,4 +1,4 @@
-use reactive_core::{current_surface, effect, signal};
+use reactive_core::{SurfaceHandle, current_surface, effect, signal};
 
 use super::Surface;
 
@@ -41,21 +41,17 @@ fn effect_reenters_its_surface_layout_world() {
     let a = Surface::new();
     let b = Surface::new();
     assert_ne!(a.handle(), b.handle());
-    assert!(
-        !a.handle().is_none(),
-        "the effect reached its own surface's layout world"
-    );
 
     let shared = signal(0i32);
 
-    let ran_under: Rc<RefCell<Vec<u64>>> = Rc::new(RefCell::new(Vec::new()));
+    let ran_under: Rc<RefCell<Vec<Option<SurfaceHandle>>>> = Rc::new(RefCell::new(Vec::new()));
     let ran_c = Rc::clone(&ran_under);
     let read = shared.read_only();
     let a_node = a.with_entered(|| {
         let (node, _) = new_leaf(LayoutStyle::new().width(10.0).height(10.0)).unwrap();
         effect(move || {
             read.get();
-            ran_c.borrow_mut().push(current_surface().raw());
+            ran_c.borrow_mut().push(current_surface());
         });
         node
     });
@@ -67,7 +63,7 @@ fn effect_reenters_its_surface_layout_world() {
     });
     assert_eq!(
         ran_under.borrow().as_slice(),
-        &[a.handle().raw()],
+        &[Some(a.handle())],
         "A's effect must run under A's surface, not B's"
     );
 
@@ -181,14 +177,14 @@ fn global_signal_reruns_all_surfaces_each_under_its_context() {
 
     let global = signal(0i32);
 
-    let log: Rc<RefCell<Vec<(char, u64)>>> = Rc::new(RefCell::new(Vec::new()));
+    let log = Rc::new(RefCell::new(Vec::<(char, Option<SurfaceHandle>)>::new()));
 
     let log_a = Rc::clone(&log);
     let read_a = global.read_only();
     a.with_entered(|| {
         effect(move || {
             read_a.get();
-            log_a.borrow_mut().push(('a', current_surface().raw()));
+            log_a.borrow_mut().push(('a', current_surface()));
         })
     });
 
@@ -197,7 +193,7 @@ fn global_signal_reruns_all_surfaces_each_under_its_context() {
     b.with_entered(|| {
         effect(move || {
             read_b.get();
-            log_b.borrow_mut().push(('b', current_surface().raw()));
+            log_b.borrow_mut().push(('b', current_surface()));
         })
     });
 
@@ -207,11 +203,11 @@ fn global_signal_reruns_all_surfaces_each_under_its_context() {
 
     let entries = log.borrow().clone();
     assert!(
-        entries.contains(&('a', a.handle().raw())),
+        entries.contains(&('a', Some(a.handle()))),
         "A's effect must re-run under A: {entries:?}"
     );
     assert!(
-        entries.contains(&('b', b.handle().raw())),
+        entries.contains(&('b', Some(b.handle()))),
         "B's effect must re-run under B: {entries:?}"
     );
 }
@@ -614,13 +610,13 @@ fn nested_surfaces_each_resolve_their_own_world_and_restore_the_one_around_them(
     a.with_entered(|| {
         let (in_a, _) = new_leaf(LayoutStyle::new().width(2.0)).unwrap();
         b.with_entered(|| {
-            assert_eq!(current_surface(), b.handle());
+            assert_eq!(current_surface(), Some(b.handle()));
             assert!(
                 track_layout(in_a).is_none(),
                 "b's tree does not know a's node"
             );
         });
-        assert_eq!(current_surface(), a.handle());
+        assert_eq!(current_surface(), Some(a.handle()));
         assert!(track_layout(in_a).is_some(), "a's tree is live again");
     });
     assert!(current_surface().is_none());
@@ -643,7 +639,7 @@ fn an_unwinding_entry_restores_the_surface_around_it() {
         }));
         std::panic::set_hook(quiet);
         assert!(outcome.is_err());
-        assert_eq!(current_surface(), outer.handle());
+        assert_eq!(current_surface(), Some(outer.handle()));
         assert!(track_layout(in_outer).is_some());
     });
     assert!(current_surface().is_none());
@@ -678,7 +674,7 @@ fn an_effect_that_drops_the_last_handle_to_its_surface_finishes_in_its_world() {
 
     close.set(true);
 
-    assert_eq!(finished_inside.get(), Some((handle, true)));
+    assert_eq!(finished_inside.get(), Some((Some(handle), true)));
     assert!(
         Surface::find(handle).is_none(),
         "the surface went once the effect returned"

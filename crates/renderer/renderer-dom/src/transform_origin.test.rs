@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use i18n_core::Direction;
 use renderer_core::{
     Color, DrawCommand, Element, ElementId, RectStyle, RenderBackend, Semantics, ShapeStyle,
@@ -53,7 +53,9 @@ fn scaled_from(origin: TransformOrigin) -> Rect {
         DrawCommand::PushElement {
             element: Arc::new(Element::new(ElementId(1), Semantics::group(), "", BOX)),
         },
-        DrawCommand::PushMatrix { matrix },
+        DrawCommand::PushMatrix {
+            transform: Transform::from_array(matrix),
+        },
         DrawCommand::Rect {
             rect: BOX,
             style: Arc::new(RectStyle::default().with_fill(Color::WHITE)),
@@ -194,7 +196,9 @@ fn a_box_inside_a_drawing_scales_about_its_own_start() {
         DrawCommand::PushElement {
             element: Arc::new(Element::new(ElementId(2), Semantics::group(), "", BELOW)),
         },
-        DrawCommand::PushMatrix { matrix },
+        DrawCommand::PushMatrix {
+            transform: Transform::from_array(matrix),
+        },
         DrawCommand::Rect {
             rect: BELOW,
             style: Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(200, 30, 40))),
@@ -226,7 +230,7 @@ fn artwork_scaled_by_its_own_transform_stays_in_its_canvas() {
             )),
         },
         DrawCommand::PushMatrix {
-            matrix: [2.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+            transform: Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]),
         },
         DrawCommand::Rect {
             rect: Rect::new(10.0, 10.0, 20.0, 20.0),

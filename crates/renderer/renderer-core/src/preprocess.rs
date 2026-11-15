@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use geometry_core::Transform;
 use rustc_hash::FxHashMap;
 
 use crate::style::Scale;
@@ -125,16 +126,13 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             radius: (*radius).scale(sf),
         },
         DrawCommand::PopClip => DrawCommand::PopClip,
-        DrawCommand::PushMatrix { matrix } => DrawCommand::PushMatrix {
-            // Only the translation components (e, f at 4-5) are scaled; the linear part stays since sf*(a*x + c*y + e) = a*(sf*x) + c*(sf*y) + sf*e.
-            matrix: [
-                matrix[0],
-                matrix[1],
-                matrix[2],
-                matrix[3],
-                matrix[4] * sf,
-                matrix[5] * sf,
-            ],
+        DrawCommand::PushMatrix { transform } => DrawCommand::PushMatrix {
+            // Only the translation (e, f) is scaled; the linear part stays since sf*(a*x + c*y + e) = a*(sf*x) + c*(sf*y) + sf*e.
+            transform: Transform {
+                e: transform.e * sf,
+                f: transform.f * sf,
+                ..*transform
+            },
         },
         DrawCommand::PopMatrix => DrawCommand::PopMatrix,
         DrawCommand::PushLayer {

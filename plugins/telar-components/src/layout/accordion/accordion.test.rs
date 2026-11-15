@@ -166,8 +166,8 @@ fn header_paint_at(
     let title = commands
         .iter()
         .find_map(|command| match command {
-            telar::DrawCommand::PushMatrix { matrix } => {
-                shift = matrix[4];
+            telar::DrawCommand::PushMatrix { transform } => {
+                shift = transform.e;
                 None
             }
             telar::DrawCommand::Text { rect, .. } => Some(rect.x + shift),

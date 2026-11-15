@@ -11,7 +11,7 @@ fn the_app_window_config_wins_over_the_dev_overrides() {
         }
         fn window_config(&self) -> Option<platform_core::WindowConfig> {
             Some(platform_core::WindowConfig {
-                title: "from the app".to_string(),
+                title: Some("from the app".to_string()),
                 ..Default::default()
             })
         }
@@ -24,15 +24,15 @@ fn the_app_window_config_wins_over_the_dev_overrides() {
     }
 
     let dev_window = platform_core::WindowConfig {
-        title: "from cargo telar dev".to_string(),
+        title: Some("from cargo telar dev".to_string()),
         ..Default::default()
     };
     assert_eq!(
-        resolved_window(dev_window.clone(), &Opinionated, "pkg").title,
+        resolved_window(dev_window.clone(), &Opinionated, "pkg").shown_title(),
         "from the app"
     );
     assert_eq!(
-        resolved_window(dev_window, &Indifferent, "pkg").title,
+        resolved_window(dev_window, &Indifferent, "pkg").shown_title(),
         "from cargo telar dev"
     );
 }
@@ -46,7 +46,7 @@ fn a_window_nobody_titled_is_named_after_the_package() {
         }
     }
     assert_eq!(
-        resolved_window(platform_core::WindowConfig::default(), &Silent, "my-app").title,
+        resolved_window(platform_core::WindowConfig::default(), &Silent, "my-app").shown_title(),
         "my-app"
     );
 }
@@ -78,7 +78,7 @@ fn the_window_cargo_telar_dev_encodes_is_the_window_the_app_opens() {
 
     let mut window = platform_core::WindowConfig::default();
     super::apply(overrides, &mut window);
-    assert_eq!(window.title, "dev");
+    assert_eq!(window.title.as_deref(), Some("dev"));
     assert_eq!((window.width, window.height), (640, 480));
     assert!(!window.has_decorations);
     assert!(!window.is_resizable);

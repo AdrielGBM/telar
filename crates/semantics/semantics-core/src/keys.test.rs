@@ -1,4 +1,5 @@
 use super::*;
+use crate::HeadingLevel;
 
 #[test]
 fn a_set_survives_being_written_down_and_read_back() {
@@ -125,7 +126,7 @@ const ALL_ROLES: [Role; 45] = [
     Role::Section,
     Role::Form,
     Role::Search,
-    Role::Heading(1),
+    Role::Heading(HeadingLevel::One),
     Role::List,
     Role::ListItem,
     Role::ScrollArea,

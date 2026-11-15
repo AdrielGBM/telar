@@ -5,7 +5,7 @@ use crate::{
     BlendMode, Border, BorderRadius, Color, Element, ElementId, FontMetrics, Gradient, ImageData,
     ImageFill, Paint, Raster, RectStyle, Semantics, Shadow, ShapeStyle, TextStyle,
 };
-use geometry_core::{Point, Rect};
+use geometry_core::{Point, Rect, Transform};
 use std::sync::Arc;
 
 fn rect_cmd(x: f32, y: f32, w: f32, h: f32) -> DrawCommand {
@@ -43,7 +43,7 @@ fn clip(x: f32, y: f32, w: f32, h: f32, radius: f32) -> DrawCommand {
 
 fn translate(x: f32, y: f32) -> DrawCommand {
     DrawCommand::PushMatrix {
-        matrix: [1.0, 0.0, 0.0, 1.0, x, y],
+        transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, x, y]),
     }
 }
 
@@ -586,7 +586,7 @@ fn a_change_under_a_nested_matrix_dirties_both_positions() {
 #[test]
 fn a_matrix_that_keeps_the_bounds_but_flips_the_content_still_dirties() {
     let flip = DrawCommand::PushMatrix {
-        matrix: [-1.0, 0.0, 0.0, 1.0, 20.0, 0.0],
+        transform: Transform::from_array([-1.0, 0.0, 0.0, 1.0, 20.0, 0.0]),
     };
     let old = vec![
         translate(0.0, 0.0),

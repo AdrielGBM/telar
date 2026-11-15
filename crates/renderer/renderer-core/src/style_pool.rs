@@ -44,8 +44,7 @@ pub fn hash_text_style(s: &TextStyle) -> u64 {
     h.write_u16(s.font_weight);
     h.write_u8(s.font_style as u8);
     h.write_u8(s.text_align as u8);
-    h.write_u32(s.clamp.max_lines().unwrap_or(0) as u32);
-    h.write_u8(u8::from(s.clamp.ellipsis()));
+    s.clamp.hash(&mut h);
     h.write_u32(s.line_height.factor().map_or(0, f32::to_bits));
     h.write_u32(s.letter_spacing.to_bits());
     h.write_u8(u8::from(s.raster == Raster::Pixel));

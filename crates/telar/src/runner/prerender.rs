@@ -97,7 +97,7 @@ pub fn prerender_page<A: App>(
     let size = geometry_core::Size::new(surface.width as f32, surface.height as f32);
     app.set_surface_size(size);
     app.set_location_history(&[location_of(&request.page)]);
-    app.open_title(&window.title, &window.title);
+    app.open_title(window.shown_title(), window.shown_title());
     app.open_font_family(font_family.as_ref());
     let mut tree = app.mount();
     app.set_surface_size(size);

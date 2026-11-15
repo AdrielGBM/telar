@@ -1433,8 +1433,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 DrawCommand::PopClip => {
                     current_scissor = self.close_clip(&mut clip_stack, current_scissor);
                 }
-                DrawCommand::PushMatrix { matrix } => {
-                    self.draw_state.push_matrix(*matrix);
+                DrawCommand::PushMatrix { transform } => {
+                    self.draw_state.push_matrix(*transform);
                 }
                 DrawCommand::PopMatrix => {
                     self.draw_state.pop_matrix();

@@ -224,7 +224,8 @@ fn a_hot_guest_shows_shortcuts_for_the_keyboard_its_host_matches() {
         let title = app
             .window_config()
             .expect("the guest titles its window with a shortcut")
-            .title;
+            .title
+            .expect("the guest names its title");
         let save = Chord::parse("Mod+S").expect("the shortcut parses");
         assert_eq!(title, save.text(convention), "{convention:?}");
     }

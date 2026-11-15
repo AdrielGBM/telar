@@ -1,3 +1,4 @@
+use geometry_core::Transform;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -181,7 +182,7 @@ fn a_matrix_moves_what_is_drawn_under_it() {
         &mut buf,
         &[
             DrawCommand::PushMatrix {
-                matrix: [1.0, 0.0, 0.0, 1.0, 8.0 * 3.0, 16.0],
+                transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 8.0 * 3.0, 16.0]),
             },
             text_cmd("hi", Rect::new(0.0, 0.0, 8.0 * 2.0, 16.0)),
             DrawCommand::PopMatrix,

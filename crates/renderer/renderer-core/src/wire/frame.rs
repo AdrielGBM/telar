@@ -90,7 +90,7 @@ impl Shaped for DrawList {
         let hash = fold_command!(hash, PATH, Path { data, style });
         let hash = fold_command!(hash, PUSH_CLIP, PushClip { rect, radius });
         let hash = fold_command!(hash, POP_CLIP, PopClip);
-        let hash = fold_command!(hash, PUSH_MATRIX, PushMatrix { matrix });
+        let hash = fold_command!(hash, PUSH_MATRIX, PushMatrix { transform });
         let hash = fold_command!(hash, POP_MATRIX, PopMatrix);
         let hash = fold_command!(
             hash,
@@ -289,9 +289,9 @@ fn put_command(
             radius.put(w);
         }
         DrawCommand::PopClip => w.u8(POP_CLIP),
-        DrawCommand::PushMatrix { matrix } => {
+        DrawCommand::PushMatrix { transform } => {
             w.u8(PUSH_MATRIX);
-            matrix.put(w);
+            transform.put(w);
         }
         DrawCommand::PopMatrix => w.u8(POP_MATRIX),
         DrawCommand::PushLayer {
@@ -529,7 +529,7 @@ fn take_command(
         }
         POP_CLIP => DrawCommand::PopClip,
         PUSH_MATRIX => DrawCommand::PushMatrix {
-            matrix: Wire::take(r)?,
+            transform: Wire::take(r)?,
         },
         POP_MATRIX => DrawCommand::PopMatrix,
         PUSH_LAYER => {

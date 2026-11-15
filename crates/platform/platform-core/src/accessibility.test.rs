@@ -1,4 +1,6 @@
+use crate::HeadingLevel;
 use geometry_core::Rect;
+use std::num::NonZeroU32;
 
 use super::*;
 
@@ -214,9 +216,9 @@ fn a_list_of_several_choices_says_so() {
 fn an_item_says_where_it_sits() {
     let place = |position, size| {
         Some(SetPosition {
-            level: 2,
-            position,
-            size,
+            level: NonZeroU32::new(2).unwrap(),
+            position: NonZeroU32::new(position).unwrap(),
+            size: NonZeroU32::new(size).unwrap(),
         })
     };
     let mut header = node(Role::Row, "");
@@ -262,11 +264,21 @@ fn a_transcript_indents_each_node_under_the_one_it_sits_in() {
 fn a_heading_is_read_with_its_level() {
     assert_eq!(
         transcript(&[
-            node(Role::Heading(1), "Settings"),
-            node(Role::Heading(3), "Privacy")
+            node(Role::Heading(HeadingLevel::One), "Settings"),
+            node(Role::Heading(HeadingLevel::Three), "Privacy")
         ]),
         "Settings, heading, level 1\nPrivacy, heading, level 3"
     );
+}
+
+#[test]
+fn every_heading_is_read_at_the_level_it_counts() {
+    for level in HeadingLevel::ALL {
+        assert_eq!(
+            transcript(&[node(Role::Heading(level), "Title")]),
+            format!("Title, heading, level {}", level.get())
+        );
+    }
 }
 
 /// A mixed checkbox and a mixed toggle button say so; a selection cannot be partial, so a mixed one is said as not selected.

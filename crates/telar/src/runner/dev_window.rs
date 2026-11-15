@@ -48,7 +48,7 @@ fn apply(overrides: telar_project::WindowSection, config: &mut platform_core::Wi
         position,
     } = overrides;
     if let Some(title) = title {
-        config.title = title;
+        config.title = Some(title);
     }
     if let Some(width) = width {
         config.width = width;

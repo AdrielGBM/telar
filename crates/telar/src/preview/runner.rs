@@ -109,7 +109,7 @@ fn write_listing(entries: &[PreviewEntry], file: &str) {
         .iter()
         .map(|entry| ListedPreview {
             id: entry.id.to_string(),
-            package: entry.package.to_string(),
+            package: entry.package.map(str::to_string),
             title: entry.title.to_string(),
         })
         .collect();

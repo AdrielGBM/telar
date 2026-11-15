@@ -69,10 +69,16 @@ fn boxed_handler_forwards_accessibility() {
 
 #[test]
 fn a_window_without_a_title_takes_the_fallback_and_a_titled_one_keeps_its_own() {
-    assert_eq!(WindowConfig::default().titled_or("my-app").title, "my-app");
+    assert_eq!(
+        WindowConfig::default().titled_or("my-app").title.as_deref(),
+        Some("my-app")
+    );
     let titled = WindowConfig {
-        title: "Portfolio".to_string(),
+        title: Some("Portfolio".to_string()),
         ..Default::default()
     };
-    assert_eq!(titled.titled_or("my-app").title, "Portfolio");
+    assert_eq!(
+        titled.titled_or("my-app").title.as_deref(),
+        Some("Portfolio")
+    );
 }

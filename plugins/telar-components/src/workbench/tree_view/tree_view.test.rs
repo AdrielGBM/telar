@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::num::NonZeroU32;
 
 use telar::testing::{key_with, lay_out, named, press, release, route};
 use telar::{ComponentList, DrawCommand, Event, Rect, relayout_if_dirty};
@@ -189,25 +190,25 @@ fn the_open_branches_decide_which_rows_show_and_where_each_sits() {
     assert_eq!(
         place(1),
         SetPosition {
-            level: 2,
-            position: 1,
-            size: 2
+            level: NonZeroU32::new(2).unwrap(),
+            position: NonZeroU32::MIN,
+            size: NonZeroU32::new(2).unwrap()
         }
     );
     assert_eq!(
         place(3),
         SetPosition {
-            level: 3,
-            position: 2,
-            size: 2
+            level: NonZeroU32::new(3).unwrap(),
+            position: NonZeroU32::new(2).unwrap(),
+            size: NonZeroU32::new(2).unwrap()
         }
     );
     assert_eq!(
         place(5),
         SetPosition {
-            level: 1,
-            position: 2,
-            size: 3
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::new(2).unwrap(),
+            size: NonZeroU32::new(3).unwrap()
         }
     );
     assert_eq!(
@@ -537,9 +538,9 @@ fn every_row_says_it_is_a_tree_item_selected_open_and_where_it_sits() {
         .collect();
     let place = |level, position, size| {
         Some(SetPosition {
-            level,
-            position,
-            size,
+            level: NonZeroU32::new(level).unwrap(),
+            position: NonZeroU32::new(position).unwrap(),
+            size: NonZeroU32::new(size).unwrap(),
         })
     };
     for expected in [
@@ -905,9 +906,9 @@ fn a_wrapping_tree_s_rows_say_where_they_sit() {
     assert_eq!(
         last,
         Some(SetPosition {
-            level: 1,
-            position: 100,
-            size: 100,
+            level: NonZeroU32::MIN,
+            position: NonZeroU32::new(100).unwrap(),
+            size: NonZeroU32::new(100).unwrap(),
         })
     );
 }
@@ -928,7 +929,10 @@ fn the_tree_holds_every_row_it_shows() {
         .filter(|node| node.parent == Some(at))
         .map(|node| {
             assert_eq!(node.role, Role::TreeItem, "{node:?}");
-            (node.name.as_str(), node.position.map(|place| place.level))
+            (
+                node.name.as_str(),
+                node.position.map(|place| place.level.get()),
+            )
         })
         .collect();
     assert_eq!(

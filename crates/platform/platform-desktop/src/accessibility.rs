@@ -4,6 +4,8 @@
 //!
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
+use std::num::NonZeroU32;
+
 use accesskit::{
     Action, ActionData, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Invalid,
     Live as AkLive, Node, NodeId, Orientation as AkOrientation, Rect as AkRect, Role as AkRole,
@@ -145,9 +147,8 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
                 Live::Assertive => AkLive::Assertive,
             });
         }
-        // AccessKit counts from zero.
         if let Role::Heading(level) = node.role {
-            ak.set_level(usize::from(level.saturating_sub(1)));
+            ak.set_level(usize::from(level.get() - 1));
         }
         if let Some((kind, place)) = node
             .position
@@ -155,13 +156,11 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         {
             match kind {
                 Positioning::Nested => {
-                    ak.set_level(place.level.saturating_sub(1) as usize);
-                    ak.set_position_in_set(place.position.saturating_sub(1) as usize);
+                    ak.set_level(from_zero(place.level));
+                    ak.set_position_in_set(from_zero(place.position));
                 }
-                Positioning::InSet => {
-                    ak.set_position_in_set(place.position.saturating_sub(1) as usize)
-                }
-                Positioning::GridRow => ak.set_row_index(place.position.saturating_sub(1) as usize),
+                Positioning::InSet => ak.set_position_in_set(from_zero(place.position)),
+                Positioning::GridRow => ak.set_row_index(from_zero(place.position)),
             }
         }
         if node.multiselectable {
@@ -221,7 +220,7 @@ fn say_what_it_holds(ak: &mut Node, nodes: &[AccessNode], children: &[Vec<usize>
             };
             let said = rows()
                 .filter_map(|row| nodes[row].position)
-                .map(|place| place.size as usize)
+                .map(|place| place.size.get() as usize)
                 .max();
             ak.set_row_count(said.unwrap_or(rows().count()));
             let columns = rows()
@@ -260,7 +259,7 @@ fn say_what_it_holds(ak: &mut Node, nodes: &[AccessNode], children: &[Vec<usize>
     if let Some(first) = sizes.next()
         && sizes.all(|other| other == first)
     {
-        ak.set_size_of_set(first.1 as usize);
+        ak.set_size_of_set(first.1.get() as usize);
     }
 }
 
@@ -283,7 +282,7 @@ fn row_index(nodes: &[AccessNode], children: &[Vec<usize>], row: usize) -> Optio
         return None;
     }
     if let Some(place) = node.position {
-        return Some(place.position.saturating_sub(1) as usize);
+        return Some(from_zero(place.position));
     }
     let grid = node.parent.filter(|&grid| nodes[grid].role == Role::Grid)?;
     children[grid]
@@ -292,6 +291,11 @@ fn row_index(nodes: &[AccessNode], children: &[Vec<usize>], row: usize) -> Optio
         .filter(|&sibling| nodes[sibling].role == Role::Row)
         .position(|sibling| sibling == row)
 }
+/// A count from one as AccessKit counts it, from zero.
+fn from_zero(counted: NonZeroU32) -> usize {
+    (counted.get() - 1) as usize
+}
+
 /// The node a control goes by: its id in the snapshot, which a surface nested in the window qualifies with its handle in the high half.
 fn control_id(focus_id: u64) -> NodeId {
     NodeId(focus_id)

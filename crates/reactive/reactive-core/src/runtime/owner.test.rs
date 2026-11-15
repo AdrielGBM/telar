@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::num::NonZeroU64;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 
@@ -76,10 +77,10 @@ fn a_panic_mid_build_leaves_the_stack_where_it_found_it() {
 
 #[test]
 fn a_surface_disposes_the_owner_roots_stamped_with_it() {
-    let surface = SurfaceHandle::from_raw(41);
-    // With no enter hook installed, `SurfaceHandle::with_entered` leaves the current surface alone, so the stamp is set directly.
+    let surface = handle(41);
+    // With no enter hook installed, `enter_surface` leaves the current surface alone, so the stamp is set directly.
     let held = {
-        let previous = crate::set_current_surface(surface);
+        let previous = crate::set_current_surface(Some(surface));
         let scope = owner_scope();
         let held = create_signal_storage(4i32);
         drop(scope);
@@ -93,7 +94,7 @@ fn a_surface_disposes_the_owner_roots_stamped_with_it() {
         elsewhere
     };
 
-    dispose_surface_owners(surface);
+    dispose_surface_owners(Some(surface));
 
     assert!(
         !alive(held),
@@ -104,11 +105,11 @@ fn a_surface_disposes_the_owner_roots_stamped_with_it() {
 
 #[test]
 fn a_root_scope_opened_inside_another_belongs_to_its_surface_and_not_to_that_scope() {
-    let surface = SurfaceHandle::from_raw(42);
+    let surface = handle(42);
     let outer = owner_scope();
     provide_context(7u8);
     let (held, saw_context) = {
-        let previous = crate::set_current_surface(surface);
+        let previous = crate::set_current_surface(Some(surface));
         let scope = root_scope();
         let held = create_signal_storage(1i32);
         let saw_context = with_context::<u8, _>(|_| ()).is_some();
@@ -129,16 +130,16 @@ fn a_root_scope_opened_inside_another_belongs_to_its_surface_and_not_to_that_sco
         "disposing the caller's scope leaves the surface's root alone"
     );
 
-    dispose_surface_owners(surface);
+    dispose_surface_owners(Some(surface));
     assert!(!alive(held), "the surface takes its root scope with it");
 }
 
 /// A process-wide cache first reached during one window's build: closing that window must not free what every other window still reads from it.
 #[test]
 fn an_owner_opened_detached_outlives_the_surface_that_was_active() {
-    let first = SurfaceHandle::from_raw(43);
-    let second = SurfaceHandle::from_raw(44);
-    let previous = crate::set_current_surface(first);
+    let first = handle(43);
+    let second = handle(44);
+    let previous = crate::set_current_surface(Some(first));
     let cache = crate::detached(|| owner_scope().id());
     let cached = with_owner(Some(cache), || signal(String::from("cached")));
     let rooted = {
@@ -151,7 +152,7 @@ fn an_owner_opened_detached_outlives_the_surface_that_was_active() {
     };
 
     dispose_surface(first);
-    crate::set_current_surface(second);
+    crate::set_current_surface(Some(second));
 
     assert!(
         !rooted.is_alive(),
@@ -410,4 +411,8 @@ fn a_panic_catch_replaced_or_torn_down_drops_after_the_runtime_borrow() {
     drop(scope);
     dispose_owner(owner);
     assert!(torn.borrow().is_some());
+}
+
+fn handle(id: u64) -> SurfaceHandle {
+    SurfaceHandle::from_raw(NonZeroU64::new(id).expect("a surface id counts from one"))
 }

@@ -159,7 +159,7 @@ impl Platform for HeadlessPlatform {
         if let Some(sink) = &self.title_sink {
             window.record_titles_into(sink.clone());
         }
-        window.set_title(&config.title);
+        window.set_title(config.shown_title());
         if let Some(seat) = &self.seat {
             window.attach_to(seat.clone(), self.surface);
         }
@@ -260,7 +260,7 @@ impl MultiSurfacePlatform for HeadlessPlatform {
         let mut states: Vec<(SurfaceId, HeadlessWindow, H)> = Vec::with_capacity(surfaces.len());
         for (id, config) in surfaces {
             let window = HeadlessWindow::new(config.width, config.height);
-            window.set_title(&config.title);
+            window.set_title(config.shown_title());
             if let Some(seat) = &self.seat {
                 window.attach_to(seat.clone(), id);
             }

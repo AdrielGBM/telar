@@ -38,7 +38,10 @@ pub(crate) use signals::{
 pub(crate) use site_cell::{HeldAt, SiteCell};
 #[cfg(test)]
 pub(crate) use surface::set_current_surface;
-pub use surface::{SurfaceHandle, current_surface, set_surface_enter_hook, with_current_surface};
+pub use surface::{
+    SurfaceHandle, current_surface, enter_surface, enter_surface_if_alive, set_surface_enter_hook,
+    with_current_surface,
+};
 
 // Versioned, not raw arena indices: a freed slot is handed straight back, so under a plain index a handle outliving its signal addressed whatever moved in — same type, same index, wrong signal, no panic.
 slotmap::new_key_type! {
@@ -49,7 +52,7 @@ slotmap::new_key_type! {
 pub(crate) struct EffectEntry {
     pub(crate) callback: Rc<dyn Fn()>,
     // The surface active when this effect was registered; the flush re-enters it before running the callback, so a cross-surface write resolves the effect against its own surface's world.
-    pub(crate) surface: SurfaceHandle,
+    pub(crate) surface: Option<SurfaceHandle>,
     /// The owner active at registration, re-entered for each run so a re-run creates and registers under the scope that built it rather than under whatever the flush happens to be inside.
     pub(crate) owner: Option<OwnerKey>,
     /// The memo this effect recomputes, if it is one; memos run in height order, before every user effect.
@@ -79,9 +82,9 @@ pub(crate) struct Runtime {
     pub(crate) owners: SlotMap<OwnerKey, owner::OwnerEntry>,
     pub(crate) owner_stack: Vec<OwnerKey>,
     /// The owner everything created outside every scope belongs to, one per surface, minted on demand.
-    pub(crate) roots: FxHashMap<SurfaceHandle, OwnerKey>,
+    pub(crate) roots: FxHashMap<Option<SurfaceHandle>, OwnerKey>,
     /// The owner a surface's own worlds belong to, disposed after everything else on the surface: see [`in_surface_world`](owner::in_surface_world).
-    pub(crate) worlds: FxHashMap<SurfaceHandle, OwnerKey>,
+    pub(crate) worlds: FxHashMap<Option<SurfaceHandle>, OwnerKey>,
     /// Every surface [`dispose_surface`](owner::dispose_surface) has torn down, so a callback queued against one before it settles (see [`after_settle`](flush::after_settle)) can tell its surface is gone rather than running under whatever world happens to be active. Surface ids are never reused, so this only grows.
     pub(crate) disposed_surfaces: FxHashSet<SurfaceHandle>,
     pub(crate) effects: SlotMap<EffectId, EffectEntry>,
@@ -96,7 +99,7 @@ pub(crate) struct Runtime {
     subscriber_scratch: Vec<EffectId>,
     flush_callbacks: Vec<(u64, Rc<dyn Fn()>)>,
     /// Work that waits for every write so far to reach its effects: see [`after_settle`](flush::after_settle).
-    pub(crate) settle_queue: Vec<(SurfaceHandle, Box<dyn FnOnce()>)>,
+    pub(crate) settle_queue: Vec<flush::Settle>,
     next_flush_callback_id: u64,
     /// How many teardowns are in flight. Non-zero means the arenas are mid-surgery — see `owner::Disposing` — and `flush` stays out until it is back to zero.
     pub(crate) disposing: usize,

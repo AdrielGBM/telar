@@ -178,7 +178,8 @@ impl TryFrom<String> for WindowPosition {
 #[derive(Debug, Clone)]
 /// What a window is opened with: its title, size, decorations and transparency.
 pub struct WindowConfig {
-    pub title: String,
+    /// The title it opens with, `None` when the configuration names none and the window is untitled.
+    pub title: Option<String>,
     pub width: u32,
     pub height: u32,
     pub min_size: Option<(u32, u32)>,
@@ -194,17 +195,20 @@ pub struct WindowConfig {
 impl WindowConfig {
     /// This configuration, titled `fallback` when it names no title of its own.
     pub fn titled_or(mut self, fallback: &str) -> Self {
-        if self.title.is_empty() {
-            self.title = fallback.to_owned();
-        }
+        self.title.get_or_insert_with(|| fallback.to_owned());
         self
+    }
+
+    /// The title the window shows: its own, or none.
+    pub fn shown_title(&self) -> &str {
+        self.title.as_deref().unwrap_or_default()
     }
 }
 
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            title: String::new(),
+            title: None,
             width: 800,
             height: 600,
             min_size: None,

@@ -2,10 +2,11 @@
 //!
 //! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, theme mode and high contrast it overrides the thread's with. Several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::with_entered`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
-//! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and entering it is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
+//! Single-window apps never build a `Surface`: the reactive current-surface stays `None`, every effect captures no surface, and entering none is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
 use std::cell::Cell;
 use std::collections::HashMap;
+use std::num::NonZeroU64;
 use std::rc::{Rc, Weak};
 
 use i18n_core::LocaleContext;
@@ -16,7 +17,7 @@ use platform_core::WindowCommandContext;
 use preferences_core::HighContrastContext;
 use reactive_core::{
     SurfaceHandle, cancel_tasks_for, cancel_timers_for, current_surface, dispose_surface,
-    in_surface_world, set_surface_enter_hook, with_current_surface,
+    enter_surface_if_alive, in_surface_world, set_surface_enter_hook, with_current_surface,
 };
 use theme_core::ModeContext;
 use ui_tree::OverlayContext;
@@ -96,8 +97,9 @@ impl Surface {
         install_enter_hook();
         let handle = next_handle();
         // Built in the surface's own world rather than detached, so what the worlds hold is freed when the surface drops instead of never.
-        let world =
-            with_current_surface(handle, || in_surface_world(|| Self::fresh_worlds(handle)));
+        let world = with_current_surface(Some(handle), || {
+            in_surface_world(|| Self::fresh_worlds(handle))
+        });
         let surface = Rc::new(world);
         SURFACES.with(|s| s.borrow_mut().insert(handle, Rc::downgrade(&surface)));
         surface
@@ -122,16 +124,16 @@ impl Surface {
     }
 
     fn enter(&self, run: &mut dyn FnMut()) {
-        with_current_surface(self.handle, || self.enter_worlds(run));
+        with_current_surface(Some(self.handle), || self.enter_worlds(run));
     }
 
     /// Runs `run` with the ambient world active — the one that exists before any [`Surface`] is built.
     ///
-    /// A single-window app never builds a surface, so its whole tree is owned by [`SurfaceHandle::NONE`] and its effects have to re-enter *this*. Without it they run against whichever surface happened to be entered when the signal fired, which is a live case as soon as one app has both — a window tree that never built a surface and a [`TextureUi`] that did.
+    /// A single-window app never builds a surface, so its whole tree is owned by no surface and its effects have to re-enter *this*. Without it they run against whichever surface happened to be entered when the signal fired, which is a live case as soon as one app has both — a window tree that never built a surface and a [`TextureUi`] that did.
     ///
     /// [`TextureUi`]: https://docs.rs/telar/latest/telar/struct.TextureUi.html
     fn enter_ambient(run: &mut dyn FnMut()) {
-        with_current_surface(SurfaceHandle::NONE, || Self::enter_ambient_worlds(run));
+        with_current_surface(None, || Self::enter_ambient_worlds(run));
     }
 }
 
@@ -154,19 +156,19 @@ impl Drop for Surface {
 ///
 /// A per-surface registry is reached through the active world, and a widget is dropped wherever its last handle lets go: a tree torn down on another surface's turn would otherwise withdraw its focus stops, input regions and overlays from that surface's world, and leave its own behind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct HomeSurface(SurfaceHandle);
+pub(crate) struct HomeSurface(Option<SurfaceHandle>);
 
 impl HomeSurface {
     pub(crate) fn here() -> Self {
         Self(current_surface())
     }
 
-    /// Runs `f` with the surface entered, or returns `None` without running it once the surface is torn down. See [`SurfaceHandle::with_entered_if_alive`].
+    /// Runs `f` with the surface entered, or returns `None` without running it once the surface is torn down. See [`enter_surface_if_alive`].
     pub(crate) fn with_entered<R>(self, f: impl FnOnce() -> R) -> Option<R> {
-        self.0.with_entered_if_alive(f)
+        enter_surface_if_alive(self.0, f)
     }
 
-    pub(crate) fn handle(self) -> SurfaceHandle {
+    pub(crate) fn handle(self) -> Option<SurfaceHandle> {
         self.0
     }
 }
@@ -174,15 +176,17 @@ impl HomeSurface {
 reactive_core::dropless_thread_local! {
     // Weak, not Rc: an Rc would keep every surface alive forever and its unregistering `Drop` would never run.
     static SURFACES: released HashMap<SurfaceHandle, Weak<Surface>> = HashMap::new();
-    // Handle 0 is `SurfaceHandle::NONE`, the ambient world, so real surfaces start at 1.
-    static NEXT_HANDLE: Cell<u64> = const { Cell::new(1) };
+    static NEXT_HANDLE: Cell<NonZeroU64> = const { Cell::new(NonZeroU64::MIN) };
     static HOOK_INSTALLED: Cell<bool> = const { Cell::new(false) };
 }
 
 pub(crate) fn next_handle() -> SurfaceHandle {
     NEXT_HANDLE.with(|c| {
         let id = c.get();
-        c.set(id + 1);
+        c.set(
+            id.checked_add(1)
+                .expect("a thread mints fewer surfaces than a u64 counts"),
+        );
         SurfaceHandle::from_raw(id)
     })
 }
@@ -194,9 +198,9 @@ fn install_enter_hook() {
             return;
         }
         set_surface_enter_hook(|handle, run| {
-            if handle.is_none() {
+            let Some(handle) = handle else {
                 return Surface::enter_ambient(run);
-            }
+            };
             match Surface::find(handle) {
                 Some(surface) => surface.enter(run),
                 // Torn down while a stale effect was still scheduled: there is no world to enter, and guessing one would run it against a stranger's.

@@ -928,7 +928,7 @@ fn a_box_hovered_under_an_overlay_hears_the_pointer_move_onto_it() {
 }
 
 thread_local! {
-    static DROPPED_UNDER: Cell<Option<reactive_core::SurfaceHandle>> = const { Cell::new(None) };
+    static DROPPED_UNDER: Cell<Option<Option<reactive_core::SurfaceHandle>>> = const { Cell::new(None) };
 }
 
 /// Notes which surface is active when it is dropped.
@@ -973,7 +973,7 @@ fn a_dropped_handler_drops_its_tree_inside_its_surface() {
 
     drop(handler);
 
-    assert_eq!(DROPPED_UNDER.with(Cell::get), Some(handle));
+    assert_eq!(DROPPED_UNDER.with(Cell::get), Some(Some(handle)));
 }
 
 #[test]

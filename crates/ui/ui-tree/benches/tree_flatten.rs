@@ -4,7 +4,7 @@ use std::hint::black_box;
 use std::rc::Rc;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use telar_ui_tree::{Component, ComponentList, NodeVec, RenderNode, Segment, SegmentRoot};
@@ -192,7 +192,7 @@ fn bench_scroll_tick(c: &mut Criterion) {
             b.iter(|| {
                 o += 1.0;
                 cached[mtx_idx] = renderer_core::DrawCommand::PushMatrix {
-                    matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -o],
+                    transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 0.0, -o]),
                 };
                 black_box(cached.len());
             });

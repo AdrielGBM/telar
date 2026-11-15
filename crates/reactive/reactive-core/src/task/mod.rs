@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use rustc_hash::FxHashMap;
 
-use crate::runtime::{SurfaceHandle, current_surface, is_surface_disposed};
+use crate::runtime::{SurfaceHandle, current_surface, enter_surface, is_surface_disposed};
 
 type TaskId = u64;
 type Waker = Arc<dyn Fn() + Send + Sync>;
@@ -79,7 +79,7 @@ impl Mailbox {
 
 struct PendingTask {
     callback: Callback,
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
     cancelled: Arc<AtomicBool>,
 }
 
@@ -148,7 +148,10 @@ impl Task {
     }
 }
 
-fn register(surface: SurfaceHandle, callback: Callback) -> (TaskId, Arc<Mailbox>, Arc<AtomicBool>) {
+fn register(
+    surface: Option<SurfaceHandle>,
+    callback: Callback,
+) -> (TaskId, Arc<Mailbox>, Arc<AtomicBool>) {
     TASKS.with(|t| {
         let mut registry = t.borrow_mut();
         let id = registry.next_id;
@@ -318,12 +321,12 @@ pub fn drain_tasks() {
                 Message::Item(value) => value,
                 Message::End => {
                     if let Callback::Stream { end, .. } = task.callback {
-                        task.surface.with_entered(end);
+                        enter_surface(task.surface, end);
                     }
                     continue;
                 }
             };
-            let still_open = task.surface.with_entered(|| match task.callback {
+            let still_open = enter_surface(task.surface, || match task.callback {
                 Callback::Once(run) => {
                     run(value);
                     None
@@ -358,7 +361,7 @@ pub fn cancel_tasks_for(surface: SurfaceHandle) {
         let ids: Vec<TaskId> = registry
             .pending
             .iter()
-            .filter(|(_, task)| task.surface == surface)
+            .filter(|(_, task)| task.surface == Some(surface))
             .map(|(id, _)| *id)
             .collect();
         ids.iter()

@@ -1,5 +1,6 @@
 use layout_core::LayoutStyle;
 use reactive_core::{dispose_owner, owner_scope, signal};
+use renderer_core::HeadingLevel;
 use renderer_core::{Color, Element, TextStyle};
 use ui_tree::{Component, RenderNode};
 
@@ -139,13 +140,13 @@ fn a_said_role_makes_a_group_a_region_and_leaves_a_control_alone() {
         .a11y_role(Role::Navigation);
     let pressed = as_document(|| captured(&pressed.view()));
     assert_eq!(pressed[0].semantics.role, Role::Button);
-    let title = letter("Settings").a11y_role(Role::Heading(2));
+    let title = letter("Settings").a11y_role(Role::Heading(HeadingLevel::Two));
     assert_eq!(
         peek(title.layout_node()).and_then(|a| a.role),
-        Some(Role::Heading(2))
+        Some(Role::Heading(HeadingLevel::Two))
     );
     let title = as_document(|| captured(&title.view()));
-    assert_eq!(title[0].semantics.role, Role::Heading(2));
+    assert_eq!(title[0].semantics.role, Role::Heading(HeadingLevel::Two));
 }
 
 #[test]

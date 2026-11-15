@@ -3,6 +3,7 @@
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
+use telar::HeadingLevel;
 
 use telar::testing::{CanvasTextMetrics, DomRenderer};
 use telar::{
@@ -128,7 +129,7 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
         |_| RectStyle::default(),
         vec![box_item(words("Settings")?)],
     )?
-    .role(Role::Heading(1));
+    .role(Role::Heading(HeadingLevel::One));
     let save = button(
         ButtonProps::props()
             .label("Save")

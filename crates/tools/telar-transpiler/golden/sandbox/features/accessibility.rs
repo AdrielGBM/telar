@@ -55,7 +55,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                                         let __text_0 = __text_0.a11y_hidden();
                                         __children.push(box_item(__text_0));
                                     }
-                                    Container::new(LayoutStyle::new().flex_row().gap(4.0), __children)?.role(::telar::Role::Heading(2))
+                                    Container::new(LayoutStyle::new().flex_row().gap(4.0), __children)?.role(::telar::Role::Heading(::telar::HeadingLevel::Two))
                                 };
                                 let __row_0 = __row_0.a11y_label(|| "Telar");
                                 __children.push(box_item(__row_0));

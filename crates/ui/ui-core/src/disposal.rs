@@ -9,7 +9,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 use layout_core::NodeId;
 use reactive_core::{
-    OwnerId, PanicPayload, SurfaceHandle, current_surface, dispose_owner, owner_scope,
+    OwnerId, PanicPayload, SurfaceHandle, current_surface, dispose_owner, enter_surface,
+    enter_surface_if_alive, owner_scope,
 };
 
 use crate::context::{layout_generation, record_nodes, remove_node};
@@ -23,7 +24,7 @@ reactive_core::dropless_thread_local! {
 struct Retired {
     owner: Option<OwnerId>,
     nodes: Vec<NodeId>,
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
     generation: u64,
 }
 
@@ -42,7 +43,7 @@ pub(crate) fn retire(owner: Option<OwnerId>, node: NodeId) {
 pub struct OwnedBuild {
     owner: OwnerId,
     roots: Vec<NodeId>,
-    surface: SurfaceHandle,
+    surface: Option<SurfaceHandle>,
     generation: u64,
 }
 
@@ -157,10 +158,10 @@ fn free(retired: Retired, panicked: &mut Option<PanicPayload>) {
     } = retired;
     // Owner before node: a node freed first has its id back in circulation while the owner still points at it, which lands the cascade on whatever the id names next.
     if let Some(owner) = owner {
-        surface.with_entered(|| contain(panicked, || dispose_owner(owner)));
+        enter_surface(surface, || contain(panicked, || dispose_owner(owner)));
     }
     // A node id names a node only in its own surface's tree, a batch may be freed on another surface's turn, and a surface torn down first or a reset took its tree with it.
-    surface.with_entered_if_alive(|| {
+    enter_surface_if_alive(surface, || {
         if layout_generation() == generation {
             for node in nodes {
                 contain(panicked, || remove_node(node));

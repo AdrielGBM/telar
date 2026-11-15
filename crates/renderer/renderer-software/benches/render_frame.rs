@@ -1,5 +1,6 @@
 //! Baseline for the software backend's `render_frame` on a dense, HiDPI-sized UI frame, captured before `render_frame` is decomposed. Runs fully headless (offscreen `Pixmap`, no window/softbuffer) so it works in environments with only a GPU render node and no display server.
 
+use geometry_core::Transform;
 use std::hint::black_box;
 use std::sync::Arc;
 
@@ -86,7 +87,7 @@ fn dense_ui() -> Vec<DrawCommand> {
         radius: BorderRadius::zero(),
     });
     cmds.push(DrawCommand::PushMatrix {
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 56.0],
+        transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 0.0, 56.0]),
     });
 
     let cols = 5;
@@ -122,7 +123,7 @@ fn dense_ui() -> Vec<DrawCommand> {
                 style: panel_border.clone(),
             });
             cmds.push(DrawCommand::PushMatrix {
-                matrix: [1.0, 0.0, 0.0, 1.0, x + 16.0, y + 16.0],
+                transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, x + 16.0, y + 16.0]),
             });
             cmds.push(DrawCommand::Path {
                 data: icon.clone(),

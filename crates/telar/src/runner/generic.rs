@@ -110,7 +110,7 @@ where
     let location = location.or_else(|| platform.location_source().map(LocationBinding::new));
     let mut handler = boot.handler::<P::Window, D>(
         Box::new(crate::app_runtime::LocalApp(app)),
-        &window.title,
+        window.shown_title(),
         renderer,
     );
     handler.focus_boundary = platform.focus_boundary();
