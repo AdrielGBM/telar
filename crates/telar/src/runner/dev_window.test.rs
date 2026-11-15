@@ -54,10 +54,9 @@ fn a_window_nobody_titled_is_named_after_the_package() {
 #[cfg(feature = "hot-reload")]
 #[test]
 fn the_window_cargo_telar_dev_encodes_is_the_window_the_app_opens() {
+    use platform_core::{FullscreenMode, WindowPosition};
     use telar_project::WindowSection;
-    use telar_project::protocol::{
-        FullscreenMode, WindowPosition, dev_window_env, dev_window_from_env,
-    };
+    use telar_project::protocol::{dev_window_env, dev_window_from_env};
 
     let section = WindowSection {
         title: Some("dev".to_string()),
@@ -67,7 +66,7 @@ fn the_window_cargo_telar_dev_encodes_is_the_window_the_app_opens() {
         resizable: Some(false),
         transparent: Some(true),
         fullscreen: Some(FullscreenMode::Borderless),
-        position: Some(WindowPosition::At { x: 10, y: -20 }),
+        position: Some(WindowPosition::At(10, -20)),
     };
     let env = dev_window_env(&section);
     let overrides = dev_window_from_env(|name| {

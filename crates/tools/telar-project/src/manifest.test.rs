@@ -1,3 +1,5 @@
+use platform_core::{FullscreenMode, WindowPosition};
+
 use super::*;
 
 fn package(name: &str, manifest: Option<&str>) -> PathBuf {
@@ -130,7 +132,7 @@ fn the_dev_window_reads_its_fullscreen_mode_and_position() {
         .window
         .expect("the window table is there");
     assert_eq!(window.fullscreen, Some(FullscreenMode::Exclusive));
-    assert_eq!(window.position, Some(WindowPosition::At { x: 10, y: -20 }));
+    assert_eq!(window.position, Some(WindowPosition::At(10, -20)));
 }
 
 #[test]
@@ -227,7 +229,7 @@ fn a_package_dev_window_overrides_the_workspace_window_key_by_key() {
             width: Some(1024),
             height: Some(600),
             fullscreen: Some(FullscreenMode::Exclusive),
-            position: Some(WindowPosition::At { x: 10, y: 20 }),
+            position: Some(WindowPosition::At(10, 20)),
             ..WindowSection::default()
         })
     );

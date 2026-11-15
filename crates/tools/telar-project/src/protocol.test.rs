@@ -1,3 +1,5 @@
+use platform_core::{FullscreenMode, WindowPosition};
+
 use super::*;
 
 #[test]
@@ -350,7 +352,7 @@ fn a_dev_window_with_every_key_set_reads_back_from_its_env_vars() {
         resizable: Some(true),
         transparent: Some(false),
         fullscreen: Some(FullscreenMode::Borderless),
-        position: Some(WindowPosition::At { x: -10, y: 20 }),
+        position: Some(WindowPosition::At(-10, 20)),
     };
     assert_eq!(read_back(&window), Ok(window));
 }
@@ -379,11 +381,8 @@ fn every_fullscreen_mode_reads_back_from_its_env_var() {
 fn every_kind_of_window_position_reads_back_from_its_env_var() {
     for position in [
         WindowPosition::Centered,
-        WindowPosition::At { x: 0, y: 0 },
-        WindowPosition::At {
-            x: i32::MIN,
-            y: i32::MAX,
-        },
+        WindowPosition::At(0, 0),
+        WindowPosition::At(i32::MIN, i32::MAX),
     ] {
         let window = WindowSection {
             position: Some(position),

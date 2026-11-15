@@ -1,14 +1,67 @@
 //! What a window is, what drives one, and the traits a backend implements to supply both.
 
+use serde::Deserialize;
+
 use crate::{Event, PlatformError};
 
-#[derive(Debug, Clone, Default, PartialEq)]
+/// A window option spelled in a way none of its values is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownWindowOption {
+    pub value: String,
+    /// The values that are accepted, as a sentence names them.
+    pub expected: String,
+}
+
+impl std::fmt::Display for UnknownWindowOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unknown value `{}`, expected {}",
+            self.value, self.expected
+        )
+    }
+}
+
+impl std::error::Error for UnknownWindowOption {}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
 /// How a window goes fullscreen, or that it does not.
 pub enum FullscreenMode {
     #[default]
     Disabled,
     Borderless,
     Exclusive,
+}
+
+impl FullscreenMode {
+    pub const ALL: [Self; 3] = [Self::Disabled, Self::Borderless, Self::Exclusive];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Borderless => "borderless",
+            Self::Exclusive => "exclusive",
+        }
+    }
+
+    pub fn parse(word: &str) -> Result<Self, UnknownWindowOption> {
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.as_str() == word)
+            .ok_or_else(|| UnknownWindowOption {
+                value: word.to_string(),
+                expected: "`disabled`, `borderless` or `exclusive`".to_string(),
+            })
+    }
+}
+
+impl TryFrom<String> for FullscreenMode {
+    type Error = UnknownWindowOption;
+
+    fn try_from(word: String) -> Result<Self, Self::Error> {
+        Self::parse(&word)
+    }
 }
 
 /// The pointer shape over a window. In a modeller the cursor *is* the mode indicator — whether the next press orbits, resizes a panel or places a point — so the set covers the gestures a desktop app arms rather than the platform's full catalogue.
@@ -82,12 +135,44 @@ impl ResizeEdge {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
-/// Where a window opens: centred on its monitor, or at absolute coordinates.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
+/// Where a window opens: centred on its monitor, or at absolute coordinates. Spelled `"centered"` or `"<x>,<y>"` in text.
 pub enum WindowPosition {
     #[default]
     Centered,
     At(i32, i32),
+}
+
+impl WindowPosition {
+    const CENTERED: &str = "centered";
+
+    pub fn encode(self) -> String {
+        match self {
+            Self::Centered => Self::CENTERED.to_string(),
+            Self::At(x, y) => format!("{x},{y}"),
+        }
+    }
+
+    pub fn parse(text: &str) -> Result<Self, UnknownWindowOption> {
+        if text == Self::CENTERED {
+            return Ok(Self::Centered);
+        }
+        text.split_once(',')
+            .and_then(|(x, y)| Some(Self::At(x.trim().parse().ok()?, y.trim().parse().ok()?)))
+            .ok_or_else(|| UnknownWindowOption {
+                value: text.to_string(),
+                expected: format!("`{}` or `<x>,<y>`", Self::CENTERED),
+            })
+    }
+}
+
+impl TryFrom<String> for WindowPosition {
+    type Error = UnknownWindowOption;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        Self::parse(&text)
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -3,6 +3,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use platform_core::{FullscreenMode, UnknownWindowOption, WindowPosition};
 use serde::{Deserialize, Serialize};
 
 use crate::{PageLocation, WindowSection};
@@ -26,6 +27,15 @@ impl fmt::Display for UnknownValue {
 }
 
 impl std::error::Error for UnknownValue {}
+
+impl From<UnknownWindowOption> for UnknownValue {
+    fn from(option: UnknownWindowOption) -> Self {
+        Self {
+            value: option.value,
+            expected: option.expected,
+        }
+    }
+}
 
 /// The one of `all` that `as_str` spells as `word`.
 pub(crate) fn parse_word<T: Copy>(
@@ -82,83 +92,6 @@ impl TryFrom<String> for RendererBackend {
 
     fn try_from(word: String) -> Result<Self, Self::Error> {
         Self::parse(&word)
-    }
-}
-
-/// Whether the dev window covers the screen.
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
-#[serde(try_from = "String")]
-pub enum FullscreenMode {
-    Disabled,
-    Borderless,
-    Exclusive,
-}
-
-impl FullscreenMode {
-    pub const ALL: [Self; 3] = [Self::Disabled, Self::Borderless, Self::Exclusive];
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Disabled => "disabled",
-            Self::Borderless => "borderless",
-            Self::Exclusive => "exclusive",
-        }
-    }
-
-    pub fn parse(word: &str) -> Result<Self, UnknownValue> {
-        parse_word(&Self::ALL, Self::as_str, word)
-    }
-}
-
-impl TryFrom<String> for FullscreenMode {
-    type Error = UnknownValue;
-
-    fn try_from(word: String) -> Result<Self, Self::Error> {
-        Self::parse(&word)
-    }
-}
-
-/// Where the dev window opens: `"centered"`, or `"<x>,<y>"` in screen coordinates.
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
-#[serde(try_from = "String")]
-pub enum WindowPosition {
-    Centered,
-    At { x: i32, y: i32 },
-}
-
-impl WindowPosition {
-    const CENTERED: &str = "centered";
-
-    pub fn encode(self) -> String {
-        match self {
-            Self::Centered => Self::CENTERED.to_string(),
-            Self::At { x, y } => format!("{x},{y}"),
-        }
-    }
-
-    pub fn parse(text: &str) -> Result<Self, UnknownValue> {
-        if text == Self::CENTERED {
-            return Ok(Self::Centered);
-        }
-        text.split_once(',')
-            .and_then(|(x, y)| {
-                Some(Self::At {
-                    x: x.trim().parse().ok()?,
-                    y: y.trim().parse().ok()?,
-                })
-            })
-            .ok_or_else(|| UnknownValue {
-                value: text.to_string(),
-                expected: format!("`{}` or `<x>,<y>`", Self::CENTERED),
-            })
-    }
-}
-
-impl TryFrom<String> for WindowPosition {
-    type Error = UnknownValue;
-
-    fn try_from(text: String) -> Result<Self, Self::Error> {
-        Self::parse(&text)
     }
 }
 
@@ -292,13 +225,18 @@ pub fn dev_window_from_env(
     })
 }
 
-fn decoded<T>(
+fn decoded<T, E: Into<UnknownValue>>(
     var: &impl Fn(&str) -> Option<String>,
     name: &'static str,
-    decode: fn(&str) -> Result<T, UnknownValue>,
+    decode: fn(&str) -> Result<T, E>,
 ) -> Result<Option<T>, EnvError> {
     var(name)
-        .map(|text| decode(&text).map_err(|error| EnvError { var: name, error }))
+        .map(|text| {
+            decode(&text).map_err(|error| EnvError {
+                var: name,
+                error: error.into(),
+            })
+        })
         .transpose()
 }
 

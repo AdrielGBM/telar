@@ -25,6 +25,7 @@ semantics-core = { workspace = true }
 wire-core = { workspace = true }
 
 raw-window-handle = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

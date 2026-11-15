@@ -91,7 +91,7 @@ pub use system_preferences::{
 pub use text_input::{Ime, TextInput};
 pub use window::{
     Cursor, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, ResizeEdge, SurfaceId,
-    Window, WindowConfig, WindowPosition, window_waker,
+    UnknownWindowOption, Window, WindowConfig, WindowPosition, window_waker,
 };
 pub use window_command::{
     WindowCommand, WindowCommandContext, push_window_command, take_window_commands,

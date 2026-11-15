@@ -37,8 +37,6 @@ pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfi
 
 #[cfg(feature = "hot-reload")]
 fn apply(overrides: telar_project::WindowSection, config: &mut platform_core::WindowConfig) {
-    use telar_project::protocol::{FullscreenMode, WindowPosition};
-
     let telar_project::WindowSection {
         title,
         width,
@@ -68,17 +66,10 @@ fn apply(overrides: telar_project::WindowSection, config: &mut platform_core::Wi
         config.is_transparent = transparent;
     }
     if let Some(fullscreen) = fullscreen {
-        config.fullscreen = match fullscreen {
-            FullscreenMode::Disabled => platform_core::FullscreenMode::Disabled,
-            FullscreenMode::Borderless => platform_core::FullscreenMode::Borderless,
-            FullscreenMode::Exclusive => platform_core::FullscreenMode::Exclusive,
-        };
+        config.fullscreen = fullscreen;
     }
     if let Some(position) = position {
-        config.position = match position {
-            WindowPosition::Centered => platform_core::WindowPosition::Centered,
-            WindowPosition::At { x, y } => platform_core::WindowPosition::At(x, y),
-        };
+        config.position = position;
     }
 }
 

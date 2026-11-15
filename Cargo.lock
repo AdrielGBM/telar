@@ -6168,6 +6168,7 @@ dependencies = [
  "libc",
  "libloading",
  "raw-window-handle",
+ "serde",
  "telar-geometry-core",
  "telar-reactive-local",
  "telar-semantics-core",
@@ -6272,6 +6273,7 @@ dependencies = [
  "serde_json",
  "telar-fs-atomic",
  "telar-icons-core",
+ "telar-platform-core",
  "telar-renderer-core",
  "toml",
 ]

@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use platform_core::{FullscreenMode, WindowPosition};
 use serde::Deserialize;
 
 use crate::assets::{AssetKind, IdBaking};
@@ -11,7 +12,7 @@ use crate::fonts::FontDeclaration;
 use crate::icons::{IconMode, IconsSection};
 use crate::prelude::PreludeEntry;
 use crate::previews::PreviewsSection;
-use crate::protocol::{FullscreenMode, RendererBackend, WindowPosition};
+use crate::protocol::RendererBackend;
 use crate::web::{OgImage, ThemeColor, WebHost};
 
 /// The file this describes, in the package root.
