@@ -1,4 +1,4 @@
-use telar::{NodeId, signal};
+use telar::{Accessible, NodeId, signal};
 
 use super::*;
 
@@ -153,6 +153,71 @@ fn the_bar_scales_with_its_size() {
             "{size:?}"
         );
     }
+}
+
+fn named_bar(value: f32) -> telar::testing::Scoped<telar::ComponentList> {
+    crate::test_support::fresh_layout_runtime();
+    telar::testing::scoped(|| {
+        let widget = progress(ProgressProps::props().value(value).width(200.0).build())
+            .unwrap()
+            .a11y_label(|| "Upload");
+        lay_out(widget.layout_node());
+        telar::ComponentList::new(widget)
+    })
+}
+
+/// A reader hears the bar as what it is, what it was called and how far it has filled, though the keyboard never stops at it.
+#[test]
+fn a_reader_hears_the_bar_its_name_and_how_far_it_has_filled() {
+    let tree = named_bar(0.4);
+    let node = telar::inspect::snapshot(&tree.commands())
+        .into_iter()
+        .find(|node| node.role == Role::ProgressBar)
+        .expect("the bar is read");
+    assert_eq!(node.name, "Upload");
+    let reading = node
+        .value
+        .as_ref()
+        .and_then(telar::Value::reading)
+        .expect("the bar carries a number");
+    assert!((reading.now - 40.0).abs() < 1e-3, "{reading:?}");
+    assert_eq!((reading.min, reading.max), (0.0, 100.0));
+    assert_eq!(node.id, None, "no keyboard stop");
+}
+
+/// Which edges of the track the fill of a bar 40% full touches on a surface reading `direction`: its left, its right.
+fn fill_touches(direction: Direction) -> (bool, bool) {
+    telar::set_direction(direction);
+    let tree = named_bar(0.4);
+    let mut drawn = Vec::new();
+    telar::for_each_with_matrix(&tree.commands(), |command, matrix| {
+        if let telar::DrawCommand::Rect { rect, .. } = command {
+            drawn.push(telar::transform_clip_rect(matrix, *rect));
+        }
+    });
+    telar::set_direction(Direction::Ltr);
+    let [track, fill] = drawn[..] else {
+        panic!("the track and its fill are drawn: {drawn:?}");
+    };
+    let near = |a: f32, b: f32| (a - b).abs() < 0.5;
+    (
+        near(fill.x, track.x),
+        near(fill.x + fill.width, track.x + track.width),
+    )
+}
+
+#[test]
+fn the_fill_starts_at_the_inline_start_of_the_track() {
+    assert_eq!(
+        fill_touches(Direction::Ltr),
+        (true, false),
+        "from the left on a left-to-right surface"
+    );
+    assert_eq!(
+        fill_touches(Direction::Rtl),
+        (false, true),
+        "from the right on a right-to-left one"
+    );
 }
 
 #[test]

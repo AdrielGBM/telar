@@ -288,3 +288,61 @@ fn increment_on_a_slider_raises_its_value_by_one_step() {
         "a slider that takes no value is left where it was"
     );
 }
+
+fn bar(filled: RwSignal<f64>) -> StyledContainer {
+    StyledContainer::new(
+        LayoutStyle::new().width(100.0).height(8.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .role(Role::ProgressBar)
+    .valued(move || NumericValue {
+        now: filled.get(),
+        min: 0.0,
+        max: 100.0,
+    })
+}
+
+/// A box the keyboard never stops at still says what it shows, named or not, on a target that builds a document and on one that does not: how far a bar has filled, re-read as it fills.
+#[test]
+fn a_box_that_is_no_control_carries_its_value() {
+    for capturing in [false, true] {
+        let was = ui_tree::set_element_capture(capturing);
+        reset_layout_runtime();
+        focus::clear();
+        let filled = signal(40.0);
+        let tree = mounted(vec![
+            box_item(bar(filled).a11y_label(|| "Upload")),
+            box_item(bar(filled)),
+        ]);
+        let bars = |tree: &ComponentList| -> Vec<(String, Option<f64>, bool)> {
+            read(tree)
+                .into_iter()
+                .filter(|node| node.role == Role::ProgressBar)
+                .map(|node| {
+                    let now = node.value.as_ref().and_then(Value::reading).map(|r| r.now);
+                    (node.name, now, node.id.is_some())
+                })
+                .collect()
+        };
+        let before = bars(&tree);
+        filled.set(70.0);
+        let after = bars(&tree);
+        ui_tree::set_element_capture(was);
+
+        assert_eq!(
+            before,
+            [
+                ("Upload".to_string(), Some(40.0), false),
+                (String::new(), Some(40.0), false),
+            ],
+            "capturing elements: {capturing}"
+        );
+        assert_eq!(
+            after.iter().map(|(_, now, _)| *now).collect::<Vec<_>>(),
+            [Some(70.0), Some(70.0)],
+            "capturing elements: {capturing}"
+        );
+    }
+}

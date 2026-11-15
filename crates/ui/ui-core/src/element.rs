@@ -27,38 +27,31 @@ pub(crate) fn for_target(
     role: renderer_core::Role,
     document: impl FnOnce() -> Arc<Element>,
 ) -> Arc<Element> {
-    for_placed_target(node, role, || None, document)
+    for_stated_target(node, role, |semantics| semantics, document)
 }
 
-/// [`for_target`] for a box that is no control and says where it sits among the items of its set: the place travels with the role, since the snapshot reads it along the same nesting and a box that only says where it sits is announced for it. `place` is read only where the document is not built, which reads it itself.
-pub(crate) fn for_placed_target(
+/// [`for_target`] for a box that is no control and says something of itself a reader cannot see, such as where it sits among the items of its set or how far a bar has filled: what `state` adds to the role travels with it, since the snapshot reads it along the same nesting and a box that only says so is announced for it. `state` is read only where the document is not built, which reads it itself.
+pub(crate) fn for_stated_target(
     node: NodeId,
     role: renderer_core::Role,
-    place: impl FnOnce() -> Option<platform_core::SetPosition>,
+    state: impl FnOnce(Semantics) -> Semantics,
     document: impl FnOnce() -> Arc<Element>,
 ) -> Arc<Element> {
     if ui_tree::element_capture() {
         document()
     } else {
-        identity_as(node, role, place())
+        identity_as(node, state(Semantics::of(role)))
     }
 }
 
 pub(crate) fn identity(node: NodeId) -> Arc<Element> {
-    identity_as(node, renderer_core::Role::Group, None)
+    identity_as(node, Semantics::of(renderer_core::Role::Group))
 }
 
-fn identity_as(
-    node: NodeId,
-    role: renderer_core::Role,
-    position: Option<platform_core::SetPosition>,
-) -> Arc<Element> {
+fn identity_as(node: NodeId, semantics: Semantics) -> Arc<Element> {
     Arc::new(Element::new(
         ElementId(node.into()),
-        Semantics {
-            position,
-            ..Semantics::of(role)
-        },
+        semantics,
         "",
         Rect::default(),
     ))

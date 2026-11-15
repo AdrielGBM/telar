@@ -90,6 +90,28 @@ fn a_spinner_stands_as_tall_as_a_control_of_its_size_and_scales_its_token() {
     }
 }
 
+/// A reader hears a spinner as a progress bar with no reading, which says the work is under way and not how far it has got, under the name its call gave it.
+#[test]
+fn a_reader_hears_a_named_progress_bar_with_no_reading() {
+    use telar::Accessible;
+    telar::set_theme(Plain::default());
+    crate::test_support::fresh_layout_runtime();
+    let tree = telar::testing::scoped(|| {
+        let widget = spinner(SpinnerProps::props().build())
+            .unwrap()
+            .a11y_label(|| "Saving");
+        lay_out(widget.layout_node());
+        telar::ComponentList::new(widget)
+    });
+    let node = telar::inspect::snapshot(&tree.commands())
+        .into_iter()
+        .find(|node| node.role == Role::ProgressBar)
+        .expect("the spinner is read");
+    assert_eq!(node.name, "Saving");
+    assert_eq!(node.value, None, "indeterminate");
+    assert_eq!(node.id, None, "no keyboard stop");
+}
+
 #[test]
 fn a_style_amendment_reshapes_the_ring() {
     telar::set_theme(Plain::default());

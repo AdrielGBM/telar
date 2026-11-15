@@ -214,6 +214,8 @@ pub struct StyledContainer {
     hit_outset: Option<Rc<dyn Fn() -> Insets>>,
     // Where a box that is no control sits; a control keeps it in the focus order with the rest of its state.
     position: Option<Rc<dyn Fn() -> focus::SetPosition>>,
+    // What a box that is no control shows, such as how far a bar has filled; a control keeps it in the focus order.
+    value: Option<Rc<dyn Fn() -> Value>>,
 }
 
 impl StyledContainer {
@@ -267,6 +269,7 @@ impl StyledContainer {
             current: None,
             hit_outset: None,
             position: None,
+            value: None,
         }
     }
 
@@ -298,18 +301,26 @@ impl StyledContainer {
         ));
         semantics.click_through = !self.occludes();
         // Read inside `view()`, so what a reader is told and what is drawn are the same frame.
-        if let Some(id) = self.focusable.id {
-            let declared = self.focusable.consumes.as_ref().map(|keys| keys());
-            focus::describe(id, &mut semantics, declared);
+        match self.focusable.id {
+            Some(id) => {
+                let declared = self.focusable.consumes.as_ref().map(|keys| keys());
+                focus::describe(id, &mut semantics, declared);
+            }
+            None => semantics.disabled = focus::disabled_at(self.node),
         }
         semantics.position = semantics
             .position
             .or_else(|| self.position.as_ref().map(|read| read()));
-        semantics.disabled = self.is_disabled();
+        semantics.value = semantics
+            .value
+            .or_else(|| self.value.as_ref().map(|read| read()));
         if let Some(link) = &self.link {
             semantics = match link() {
                 Some(destination) => semantics.linking_to(destination),
-                None => semantics.with_role(renderer_core::Role::Link),
+                None => renderer_core::Semantics {
+                    disabled: true,
+                    ..semantics.with_role(renderer_core::Role::Link)
+                },
             };
             semantics.current = self.is_current();
         }
@@ -717,10 +728,13 @@ impl StyledContainer {
         self
     }
 
-    /// Declares the value this box carries, so a reader says where a slider stands or what a field holds and not only that it is one: a [`NumericValue`](platform_core::NumericValue) or a [`Value`]. The counterpart of [`toggled`](Self::toggled) for a control whose state is a value.
-    pub fn valued<V: Into<Value>>(self, read: impl Fn() -> V + 'static) -> Self {
-        if let Some(id) = self.focusable.id {
-            focus::set_value(id, read);
+    /// Declares the value this box carries, so a reader says where a slider stands, what a field holds or how far a bar has filled, and not only that it is one: a [`NumericValue`](platform_core::NumericValue) or a [`Value`]. The counterpart of [`toggled`](Self::toggled) for a box whose state is a value.
+    ///
+    /// Any box may carry one, not only a control: a progress bar the keyboard never stops at still says how far along it is.
+    pub fn valued<V: Into<Value>>(mut self, read: impl Fn() -> V + 'static) -> Self {
+        match self.focusable.id {
+            Some(id) => focus::set_value(id, read),
+            None => self.value = Some(Rc::new(move || read().into())),
         }
         self
     }
@@ -1313,10 +1327,14 @@ impl StyledContainer {
                 }
                 None => crate::element::identity(self.node),
             },
-            _ => crate::element::for_placed_target(
+            _ => crate::element::for_stated_target(
                 self.node,
                 crate::element::role_of(self.role, self.press.activates()),
-                || self.position.as_ref().map(|read| read()),
+                |semantics| renderer_core::Semantics {
+                    position: self.position.as_ref().map(|read| read()),
+                    value: self.value.as_ref().map(|read| read()),
+                    ..semantics
+                },
                 || self.element(),
             ),
         }

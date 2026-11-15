@@ -184,6 +184,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 named_box: Some(NamedBox {
                     node: named.node,
                     wraps: wrapped_control(named, &controls),
+                    value: named.value.clone(),
                 }),
                 drawn_at: Some(named.opened_at),
                 drawn_in: Some(named.node),
@@ -236,6 +237,10 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                     lang: piece.lang.as_deref().map(str::to_string),
                     url: piece.url,
                     position: piece.position,
+                    value: piece
+                        .named_box
+                        .as_ref()
+                        .and_then(|named| named.value.clone()),
                     modal: piece.drawn_in.is_some_and(|node| modal(piece.role, node)),
                     ..unaddressed(piece.role, piece.text, piece.rect)
                 };
@@ -256,16 +261,17 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
 
     found.extend(
         reading
-            .placed
+            .stated
             .iter()
-            .filter(|placed| !layers.behind(placed.node))
-            .filter_map(|placed| {
-                let rect = visible_rect(placed.node).filter(|rect| area(*rect) > 0.0)?;
+            .filter(|stated| !layers.behind(stated.node))
+            .filter_map(|stated| {
+                let rect = visible_rect(stated.node).filter(|rect| area(*rect) > 0.0)?;
                 let node = AccessNode {
-                    position: Some(placed.position),
-                    ..unaddressed(placed.role, String::new(), rect)
+                    position: stated.position,
+                    value: stated.value.clone(),
+                    ..unaddressed(stated.role, String::new(), rect)
                 };
-                Some(Found::holding(node, placed.node, &reading))
+                Some(Found::holding(node, stated.node, &reading))
             }),
     );
 
@@ -313,7 +319,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
     }
 }
 
-/// A node nothing addresses and that carries no state, as text, a named box and a placed box begin before saying what sets each apart.
+/// A node nothing addresses and that carries no state, as text, a named box and a stated box begin before saying what sets each apart.
 fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
     AccessNode {
         id: None,
@@ -426,7 +432,10 @@ impl Found {
 
     /// Whether a reader is told about it for what it says itself, rather than only for the nodes it holds.
     fn speaks(&self) -> bool {
-        self.node.id.is_some() || !self.node.name.is_empty() || self.node.position.is_some()
+        self.node.id.is_some()
+            || !self.node.name.is_empty()
+            || self.node.position.is_some()
+            || self.node.value.is_some()
     }
 }
 
@@ -624,6 +633,7 @@ struct NamedBox {
     node: NodeId,
     /// The control, by its place among the snapshot's controls, that the box only wraps and whose name it therefore is.
     wraps: Option<usize>,
+    value: Option<Value>,
 }
 
 impl Piece {
@@ -673,6 +683,8 @@ struct Named {
     role: Role,
     /// Where it sits among the items of its set, as its role says it.
     position: Option<SetPosition>,
+    /// What it shows, such as how far a bar has filled.
+    value: Option<Value>,
     /// The named box this one sits in, by its place in [`Reading::named`].
     enclosing: Option<usize>,
     /// The box named by its content that this one sits directly in, by its place in [`Reading::titled`], whose name this one's is part of when it has no role of its own.
@@ -685,11 +697,12 @@ struct Named {
     drew_beside_controls: bool,
 }
 
-/// A box given no name that says where it sits among items a reader cannot count, such as the header row of a grid whose rows are not all built. Its place is what it has to say, so it is a node of its own; the controls and the text inside it are read inside it as they would be without it, and none of them becomes its name.
-struct Placed {
+/// A box given no name that says what a reader cannot see for itself: where it sits among items a reader cannot count, such as the header row of a grid whose rows are not all built, or the value it shows, such as how far a bar has filled. That is what it has to say, so it is a node of its own; the controls and the text inside it are read inside it as they would be without it, and none of them becomes its name.
+struct Stated {
     node: NodeId,
     role: Role,
-    position: SetPosition,
+    position: Option<SetPosition>,
+    value: Option<Value>,
 }
 
 /// A box given no name that a reader names by the words drawn in it, in draw order: see [`is_named_by_content`].
@@ -839,7 +852,7 @@ struct Open {
 struct Reading {
     scopes: FxHashMap<NodeId, Scope>,
     named: Vec<Named>,
-    placed: Vec<Placed>,
+    stated: Vec<Stated>,
     structures: Vec<Structure>,
     titled: Vec<Titled>,
     text: Vec<Piece>,
@@ -933,17 +946,18 @@ impl Reading {
                         .semantics
                         .position
                         .filter(|_| role.positioning().is_some());
+                    // A control's value is read from the focus order, so one that order leaves out, being out of reach, is not read here either.
+                    let value = element
+                        .semantics
+                        .value
+                        .clone()
+                        .filter(|_| element.semantics.focusable.is_none());
                     if annotation.label.is_none() && !inner.hidden && !controls.contains(&node) {
-                        match position {
-                            Some(position) => reading.placed.push(Placed {
-                                node,
-                                role,
-                                position,
-                            }),
-                            None if holds_structure(role) => {
+                        match (position, value.clone()) {
+                            (None, None) if holds_structure(role) => {
                                 reading.structures.push(Structure { node, role })
                             }
-                            None if is_named_by_content(role) => {
+                            (None, None) if is_named_by_content(role) => {
                                 reading.titled.push(Titled {
                                     node,
                                     role,
@@ -952,10 +966,16 @@ impl Reading {
                                 });
                                 inner_titled = Some(reading.titled.len() - 1);
                             }
-                            None if said_as_structure(role, annotation.role) => {
+                            (None, None) if said_as_structure(role, annotation.role) => {
                                 reading.structures.push(Structure { node, role })
                             }
-                            None => {}
+                            (None, None) => {}
+                            (position, value) => reading.stated.push(Stated {
+                                node,
+                                role,
+                                position,
+                                value,
+                            }),
                         }
                     }
                     if let Some(parent) = innermost {
@@ -978,6 +998,7 @@ impl Reading {
                                 lang: inner.lang.clone(),
                                 role,
                                 position,
+                                value,
                                 enclosing: named,
                                 titled,
                                 opened_at: at,

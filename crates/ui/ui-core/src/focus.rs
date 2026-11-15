@@ -1204,7 +1204,7 @@ pub struct Exposed {
 ///
 /// Deliberately the same `reachable` the keyboard walks, so the two can never disagree about what is on screen — with one distinction Tab has no use for: a control kept out of reach by being *disabled* is reported as present and unavailable, where one inside a closed dialog is not reported at all.
 pub fn exposed() -> Vec<Exposed> {
-    let (order, scopes) = with_focus_ref(|s| {
+    let (order, (hiding, owners)) = with_focus_ref(|s| {
         // Called after the borrow drops: reading a state closure can read a signal, and that can flush effects back through this very slot.
         type Row = (
             FocusId,
@@ -1232,25 +1232,14 @@ pub fn exposed() -> Vec<Exposed> {
                 )
             })
             .collect();
-        type ScopeRow = (
-            NodeId,
-            Rc<dyn Fn() -> bool>,
-            bool,
-            ScopeReason,
-            Option<NodeId>,
-        );
-        let scopes: Vec<ScopeRow> = s
+        let hiding: (Vec<ScopeView>, Vec<Option<NodeId>>) = s
             .scopes
             .iter()
-            .map(|sc| (sc.node, sc.showing.clone(), sc.traps, sc.reason, sc.owner))
-            .collect();
-        (order, scopes)
+            .filter(|sc| sc.reason == ScopeReason::NotShowing)
+            .map(|sc| ((sc.node, sc.showing.clone(), sc.traps), sc.owner))
+            .unzip();
+        (order, hiding)
     });
-    let (hiding, owners): (Vec<ScopeView>, Vec<Option<NodeId>>) = scopes
-        .iter()
-        .filter(|(_, _, _, reason, _)| *reason == ScopeReason::NotShowing)
-        .map(|(node, showing, traps, _, owner)| ((*node, showing.clone(), *traps), *owner))
-        .unzip();
     let idle = idle_scrollers(&hiding);
 
     order
@@ -1272,11 +1261,7 @@ pub fn exposed() -> Vec<Exposed> {
                     id,
                     node,
                     role,
-                    enabled: !scopes.iter().any(|(scope, showing, _, reason, _)| {
-                        *reason == ScopeReason::Disabled
-                            && !showing()
-                            && crate::input_region::is_inside(node, *scope)
-                    }),
+                    enabled: !disabled_at(node),
                     toggled: toggled.as_ref().map(|read| read()),
                     value: value.as_ref().map(|read| read()),
                     orientation,
@@ -1295,6 +1280,20 @@ pub fn exposed() -> Vec<Exposed> {
             },
         )
         .collect()
+}
+
+/// Whether `node` is disabled now, by itself or by any box it sits inside: a control in a disabled wrapper is as unavailable as the wrapper, and says so to every reader.
+pub(crate) fn disabled_at(node: NodeId) -> bool {
+    let lineage: FxHashSet<NodeId> = crate::input_region::lineage(node).collect();
+    // Only the wrappers around `node` are read, so a box re-emits when one of them is disabled and not when any other box is.
+    let around: Vec<Rc<dyn Fn() -> bool>> = with_focus_ref(|s| {
+        s.scopes
+            .iter()
+            .filter(|sc| sc.reason == ScopeReason::Disabled && lineage.contains(&sc.node))
+            .map(|sc| sc.showing.clone())
+            .collect()
+    });
+    around.iter().any(|enabled| !enabled())
 }
 
 /// The scopes that hold the keyboard inside themselves while they show, read once for a reader walking a whole frame: what keeps a box that is not a control out of what a reader is told, by the rule [`exposed`] keeps a control out by.
@@ -1383,13 +1382,14 @@ pub fn left_within(node: NodeId) -> bool {
     }
 }
 
-/// Writes into `semantics` everything the focus order knows of the control `id`: whether it holds focus, the state and number it carries, what it opens, where it sits, the row its cursor rests on, and how the keyboard reaches it.
+/// Writes into `semantics` everything the focus order knows of the control `id`: whether it holds focus, whether it or a box around it is disabled, the state and number it carries, what it opens, where it sits, the row its cursor rests on, and how the keyboard reaches it.
 pub(crate) fn describe(
     id: FocusId,
     semantics: &mut renderer_core::Semantics,
     declared: Option<ConsumedKeys>,
 ) {
     semantics.focused = is_focused(id);
+    semantics.disabled = node_of(id).is_some_and(disabled_at);
     semantics.toggled = toggled_state(id);
     semantics.value = value_state(id);
     semantics.orientation = orientation_state(id);

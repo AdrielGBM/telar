@@ -3,8 +3,8 @@
 use std::time::Duration;
 use telar::{
     AlignItems, Border, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props,
-    Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item,
-    box_transform, children,
+    Reactive, RectStyle, Role, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface,
+    box_item, box_transform, children,
     motion::{Easing, Keyframes, Repeat},
 };
 
@@ -59,6 +59,8 @@ pub struct SpinnerProps {
 }
 
 /// An indeterminate ring, for work with no bound value to show.
+///
+/// A reader hears it as a progress bar with no reading, which says the work is under way and not how far along it is, called what the call's `a11y_label` names it.
 pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SpinnerProps {
         color,
@@ -115,7 +117,8 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         },
         children![rotor],
     )?
-    .styled_by(ring_box);
+    .styled_by(ring_box)
+    .role(Role::ProgressBar);
 
     Ok(box_item(track))
 }

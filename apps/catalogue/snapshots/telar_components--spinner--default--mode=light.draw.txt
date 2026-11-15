@@ -4,7 +4,7 @@ element group
   element group
     element group
       element group
-        element group
+        element progressbar
           rect 384,284 32x32 border=3.84 border-color=#616680ff radius=16
           element group
             matrix 1,0,0,1,0,0

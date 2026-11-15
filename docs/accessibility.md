@@ -148,6 +148,11 @@ Enter or Space it declares.
 From Rust, the same box is `StyledContainer::control(role)` followed by `.toggled(|| …)`; the disclosure in
 the catalogue's accordion uses the same flag for expanded.
 
+A control inside a box that is disabled (`StyledContainer::disabled`) is disabled with it, the way a form's
+fields are inside a disabled fieldset: it is no Tab stop, a reader cannot activate it, and every target says it
+is unavailable, as `aria-disabled` in a document, AccessKit's disabled state on the desktop and in the snapshot
+the lint reads.
+
 | Target | Role | State |
 | --- | --- | --- |
 | Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button (either one `mixed` when partly on), `aria-selected` on a tab or an option, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
@@ -160,7 +165,7 @@ A reader's request reaches a control through the focus order, not through the ke
 of `AccessAction`s carried out by `focus::perform`: `Focus` moves the keyboard to it; `Activate` (a desktop
 reader's `Click`) runs the control's activation, the code a tap on it runs, which the control registered as it
 was built (`focus::set_activation`), so a control whose key handler answers Enter its own way is still
-pressed, and one that is disabled or out of reach is not; `ScrollIntoView` brings it into view in every scroll
+pressed, and one that is disabled, by itself or by a box around it, or out of reach is not; `ScrollIntoView` brings it into view in every scroll
 it sits in. A value control steps by `Increment` and `Decrement` through the same code as its arrow keys
 (`focus::set_stepping`, `StyledContainer::stepped`), as the catalogue's `slider`, `handle` and `scrub_field` do,
 and one that takes a value whole registers `SetValue` (`focus::set_assignment`, `StyledContainer::assigned`),
@@ -176,7 +181,10 @@ desktop and `, current` in the terminal's reading; see [docs/links.md](links.md#
 
 A control can also say what it shows and how it stands. Its value is a `Value`: `Number` for a slider, a spin
 button or a splitter, with the words a reader says for it where the bare number would not ("Medium" for 2 of 3),
-or `Text` for what a field holds and the choice a select has made. A `description` is what a reader says after
+or `Text` for what a field holds and the choice a select has made. A box the keyboard never stops at carries
+one the same way (`StyledContainer::valued`): the catalogue's `progress` is a progress bar standing at its
+reading out of 100, and its `spinner` a progress bar with no value, which says the work is under way and not
+how far along it is; each is called what its call's `a11y_label:` names it. A `description` is what a reader says after
 the name, role and state, as help rather than identity: a field's hint, why it is invalid, a tooltip's text.
 `invalid`, `required` and `readonly` say that what a field holds fails its checks, that it must be filled in,
 and that it can be read but not changed.

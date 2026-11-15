@@ -23,7 +23,7 @@ element group
           element group
             rect 354,288 83x24 fill=#3d8ce614 border=1 border-color=#00000000 radius=6
             element group
-              element group
+              element progressbar
                 rect 362,294 12x12 border=1.44 border-color=#616680ff radius=6
                 element group
                   matrix 1,0,0,1,0,0

@@ -1,8 +1,9 @@
 //! [`progress`]: a determinate bar filled to a bound value.
 
 use telar::{
-    BorderRadius, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, Rect, RectStyle,
-    ShapeStyle, StyledContainer, SurfaceAmendment, Transform, amend_surface, box_item, children,
+    BorderRadius, Color, Direction, LayoutError, LayoutItem, LayoutStyle, NumericValue, Props,
+    Reactive, Rect, RectStyle, Role, ShapeStyle, StyledContainer, SurfaceAmendment, Transform,
+    amend_surface, box_item, children,
 };
 
 use crate::shared;
@@ -45,7 +46,7 @@ impl ProgressTokens {
     }
 }
 
-/// A determinate 0.0..=1.0 progress bar: a rounded track with an accent fill scaled by `value`. Sibling of `slider` minus the drag/thumb — the fill reuses the same "absolute_fill child, scaled from the left edge" technique (see `slider`'s fill) since a progress bar is a slider whose value the app drives instead of the pointer. `value` is a closure so a reading derived from several services can drive it, and so an unbound bar reads a flat zero rather than owning a signal nobody can write.
+/// A determinate 0.0..=1.0 progress bar: a rounded track with an accent fill scaled by `value`. Sibling of `slider` minus the drag/thumb — the fill reuses the same "absolute_fill child, scaled from one edge" technique (see `slider`'s fill) since a progress bar is a slider whose value the app drives instead of the pointer, and it fills from the inline start: the left edge on a left-to-right surface, the right edge on a right-to-left one. `value` is a closure so a reading derived from several services can drive it, and so an unbound bar reads a flat zero rather than owning a signal nobody can write.
 #[derive(Props)]
 pub struct ProgressProps {
     /// Progress, normalized to 0.0..=1.0 (out-of-range inputs are clamped on read, not here).
@@ -77,6 +78,8 @@ pub struct ProgressProps {
 }
 
 /// A determinate bar filled to a bound value.
+///
+/// A reader hears it as a progress bar standing at its reading out of 100, called what the call's `a11y_label` names it.
 pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ProgressProps {
         value,
@@ -89,7 +92,9 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
         style,
     } = props;
 
-    // An `absolute_fill` child, so it exactly overlays the track, scaled horizontally from the left edge — cheaper than relaying out a narrower box on every update. `box_transform` only pivots scale on the rect centre, so the raw matrix is needed to pin the left edge.
+    let filled = move || value.get().clamp(0.0, 1.0);
+
+    // An `absolute_fill` child, so it exactly overlays the track, scaled horizontally from the edge the reading starts at — cheaper than relaying out a narrower box on every update. `box_transform` only pivots scale on the rect centre, so the raw matrix is needed to pin that edge.
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |r| {
@@ -99,9 +104,15 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
         },
         vec![],
     )?
-    .with_transform(move |r| {
-        let v = value.get().clamp(0.0, 1.0);
-        Some(Transform::scale_around(v, 1.0, r.x, r.y + r.height / 2.0).to_array())
+    .with_transform({
+        let filled = filled.clone();
+        move |r| {
+            let start = match telar::use_direction() {
+                Direction::Ltr => r.x,
+                Direction::Rtl => r.x + r.width,
+            };
+            Some(Transform::scale_around(filled(), 1.0, start, r.y + r.height / 2.0).to_array())
+        }
     });
 
     // A stretched bar takes the parent's width: a px track inside a card is either short of its edge or past it, and the card is what decides how wide a reading should read.
@@ -125,7 +136,13 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
         },
         children![fill],
     )?
-    .styled_by(track_box);
+    .styled_by(track_box)
+    .role(Role::ProgressBar)
+    .valued(move || NumericValue {
+        now: f64::from(filled()) * 100.0,
+        min: 0.0,
+        max: 100.0,
+    });
     Ok(box_item(track))
 }
 

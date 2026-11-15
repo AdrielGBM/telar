@@ -4,7 +4,7 @@ element group
   element group
     element group
       element group
-        element group
+        element progressbar
           rect 288,296 224x8 fill=#99a1b8ff radius=4
           element group
             matrix 0.6,0,0,1,115.2,0

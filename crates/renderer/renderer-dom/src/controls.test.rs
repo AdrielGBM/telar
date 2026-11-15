@@ -90,6 +90,25 @@ fn scrolling_tree(name: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError
     Ok(box_item(tree))
 }
 
+/// What `box disabled:true` around `button label:"…"` builds: a box the application disabled, holding a control that says nothing of it itself.
+fn disabled_wrapper(name: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let button = StyledContainer::new(
+        LayoutStyle::new().width(60.0).height(24.0),
+        |_| RectStyle::default(),
+        vec![],
+    )?
+    .on_press(|| {})
+    .control(Role::Button)
+    .a11y_label(move || name);
+    let wrapper = StyledContainer::new(
+        LayoutStyle::new().flex_row(),
+        |_| RectStyle::default(),
+        vec![box_item(button)],
+    )?
+    .disabled(|| true);
+    Ok(box_item(wrapper))
+}
+
 fn mount() {
     if PAGE.with(|page| page.borrow().is_some()) {
         return;
@@ -105,6 +124,7 @@ fn mount() {
             stateful(Role::Switch, "Reduce motion", "≈", calm).expect("the switch builds"),
             stateful(Role::Button, "Bold", "B", bold).expect("the toggle button builds"),
             scrolling_tree("Files").expect("the tree builds"),
+            disabled_wrapper("Send").expect("the disabled wrapper builds"),
         ],
     )
     .expect("the column builds");
@@ -239,6 +259,21 @@ fn a_switch_is_checked_and_a_toggle_button_pressed() {
     assert_eq!(bold.get_attribute("aria-pressed"), Some(pressed));
     assert_eq!(bold.get_attribute("aria-checked"), None);
     assert_eq!(bold.get_attribute("tabindex").as_deref(), Some("0"));
+}
+
+#[wasm_bindgen_test]
+fn a_control_inside_a_disabled_box_says_it_is_disabled() {
+    render();
+    let send = PAGE.with(|page| {
+        page.borrow()
+            .as_ref()
+            .expect("mounted")
+            .host
+            .query_selector("[aria-label=\"Send\"]")
+            .expect("a valid selector")
+            .expect("the button is in the document")
+    });
+    assert_eq!(send.get_attribute("aria-disabled").as_deref(), Some("true"));
 }
 
 #[wasm_bindgen_test]

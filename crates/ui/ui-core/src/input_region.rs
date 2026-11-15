@@ -320,7 +320,12 @@ fn tracked_logical_parent(node: NodeId) -> Option<NodeId> {
 }
 
 pub(crate) fn is_inside(node: NodeId, ancestor: NodeId) -> bool {
-    std::iter::successors(Some(node), |&at| logical_parent(at)).any(|at| at == ancestor)
+    lineage(node).any(|at| at == ancestor)
+}
+
+/// `node` and every box it was declared inside, innermost first.
+pub(crate) fn lineage(node: NodeId) -> impl Iterator<Item = NodeId> {
+    std::iter::successors(Some(node), |&at| logical_parent(at))
 }
 
 /// Where `node` falls in document order: the root it hangs from, and its place among its siblings at each level below that root. Content linked to the box that declares it — a scroll's, an overlay's — is that box's first child.
