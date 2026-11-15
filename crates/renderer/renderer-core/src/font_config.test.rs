@@ -32,12 +32,29 @@ fn sources_compare_by_content_across_kinds_of_the_same_kind_only() {
 fn the_builder_records_what_the_declaration_said() {
     let asset = FontAsset::embedded(b"face")
         .named("Telar Test")
-        .with_weight(FontWeight::range(100, 900))
+        .with_weight(FontWeight::range(100, 900).unwrap())
         .with_style(FontStyle::Italic)
         .with_axis(FontAxis::new(*b"wght", 100.0, 900.0));
     assert_eq!(asset.family.as_deref(), Some("Telar Test"));
-    assert_eq!(asset.weight, FontWeight::range(100, 900));
+    assert_eq!(asset.weight, FontWeight::range(100, 900).unwrap());
     assert_eq!(asset.style, FontStyle::Italic);
     assert_eq!(asset.axes, vec![FontAxis::new(*b"wght", 100.0, 900.0)]);
-    assert_eq!(FontAsset::file("a.ttf").weight, FontWeight::fixed(400));
+    assert_eq!(FontAsset::file("a.ttf").weight, FontWeight::default());
+}
+
+#[test]
+fn a_reversed_or_out_of_range_weight_is_an_error() {
+    let reversed = FontWeight::range(700, 300).unwrap_err();
+    assert_eq!((reversed.min, reversed.max), (700, 300));
+    assert!(FontWeight::range(0, 400).is_err());
+    assert!(FontWeight::range(400, 1001).is_err());
+    assert!(FontWeight::fixed(0).is_err());
+    assert!(FontWeight::fixed(1001).is_err());
+}
+
+#[test]
+fn a_valid_weight_reads_back_its_bounds() {
+    let weight = FontWeight::range(1, 1000).unwrap();
+    assert_eq!((weight.min(), weight.max()), (1, 1000));
+    assert_eq!(FontWeight::fixed(700).unwrap().min(), 700);
 }

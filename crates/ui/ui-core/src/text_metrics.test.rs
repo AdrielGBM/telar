@@ -29,7 +29,7 @@ fn a_face_that_lands_runs_whatever_measured_text_again() {
     renderer_text::fonts::add_faces(vec![
         FontAsset::embedded(TEST_FACE)
             .named("Telar Arriving Face")
-            .with_weight(FontWeight::range(100, 900)),
+            .with_weight(FontWeight::range(100, 900).unwrap()),
     ]);
     assert!(renderer_core::text_metrics_generation() > generation);
     assert_eq!(

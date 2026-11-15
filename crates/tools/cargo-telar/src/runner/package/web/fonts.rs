@@ -62,7 +62,8 @@ pub(crate) fn declare_fonts(
 
 /// One `@font-face` rule.
 pub(crate) fn font_face(font: &FontDeclaration, url: &str) -> String {
-    let (min, max) = font.weight_range();
+    let weight = font.weight().expect("checked when the manifest was read");
+    let (min, max) = (weight.min(), weight.max());
     let weight = match min == max {
         true => min.to_string(),
         false => format!("{min} {max}"),

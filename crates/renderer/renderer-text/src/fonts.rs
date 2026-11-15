@@ -370,7 +370,7 @@ pub fn install_test_face() -> Result<Arc<Fonts>, ExclusiveFontsError> {
         vec![
             FontAsset::embedded(TEST_FACE)
                 .named(TEST_FAMILY)
-                .with_weight(FontWeight::range(100, 900)),
+                .with_weight(FontWeight::range(100, 900).expect("a valid weight range")),
         ],
         vec![TEST_FAMILY.to_string()],
     )
@@ -674,7 +674,7 @@ fn declare(info: &mut fontdb::FaceInfo, asset: &FontAsset, family: &str) {
         FontStyle::Italic => fontdb::Style::Italic,
         FontStyle::Oblique => fontdb::Style::Oblique,
     };
-    info.weight = fontdb::Weight(info.weight.0.clamp(asset.weight.min, asset.weight.max));
+    info.weight = fontdb::Weight(info.weight.0.clamp(asset.weight.min(), asset.weight.max()));
 }
 
 #[cfg(test)]

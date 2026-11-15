@@ -52,7 +52,24 @@ impl Wire for FontSource {
     }
 }
 
-wire_struct!(FontWeight { min, max });
+impl Shaped for FontWeight {
+    const SHAPE: u64 = {
+        let hash = fold_shape(fold(shape_named("FontWeight"), b"min"), u16::SHAPE);
+        fold_shape(fold(hash, b"max"), u16::SHAPE)
+    };
+}
+
+impl Wire for FontWeight {
+    fn put(&self, w: &mut Writer) {
+        self.min().put(w);
+        self.max().put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        let (min, max) = (u16::take(r)?, u16::take(r)?);
+        FontWeight::range(min, max).map_err(|_| WireError::Invalid("font weight"))
+    }
+}
+
 wire_struct!(FontAxis { tag, min, max });
 wire_struct!(FontAsset {
     source,

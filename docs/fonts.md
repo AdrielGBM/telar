@@ -121,7 +121,7 @@ let natural = memo(move || {
 let config = telar::AppConfig::default().with_fonts([
     telar::FontAsset::embedded(include_bytes!("../assets/fonts/Display.ttf"))
         .named("Display")
-        .with_weight(telar::FontWeight::range(100, 900)),
+        .with_weight(telar::FontWeight::range(100, 900)?),
 ]);
 ```
 

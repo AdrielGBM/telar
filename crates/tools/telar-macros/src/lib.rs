@@ -1200,7 +1200,8 @@ fn families_without_sfnt_face(
 fn font_asset_tokens(font: &telar_project::FontDeclaration, path: &Path) -> TokenStream2 {
     let path = path.to_string_lossy().to_string();
     let family = &font.family;
-    let (min, max) = font.weight_range();
+    let weight = font.weight().expect("checked when the manifest was read");
+    let (min, max) = (weight.min(), weight.max());
     let style = Ident::new(
         match font.style {
             telar_project::FontStyleDeclaration::Normal => "Normal",
@@ -1215,7 +1216,7 @@ fn font_asset_tokens(font: &telar_project::FontDeclaration, path: &Path) -> Toke
     quote! {
         ::telar::FontAsset::embedded(include_bytes!(#path))
             .named(#family)
-            .with_weight(::telar::FontWeight::range(#min, #max))
+            .with_weight(::telar::FontWeight::range(#min, #max).expect("checked when the manifest was read"))
             .with_style(::telar::FontStyle::#style)
             #(#axes)*
     }

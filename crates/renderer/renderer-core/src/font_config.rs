@@ -131,26 +131,45 @@ impl PartialEq for FontSource {
 /// The weights a face covers: one for a static face, a range for a variable one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontWeight {
+    min: u16,
+    max: u16,
+}
+
+/// A weight range outside `1..=1000` or running from high to low.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("the weight must be between 1 and 1000, low to high; it is {min}..{max}")]
+pub struct WeightRangeError {
     pub min: u16,
     pub max: u16,
 }
 
 impl FontWeight {
-    pub const fn fixed(weight: u16) -> Self {
-        Self {
-            min: weight,
-            max: weight,
+    const VALID: std::ops::RangeInclusive<u16> = 1..=1000;
+
+    pub fn fixed(weight: u16) -> Result<Self, WeightRangeError> {
+        Self::range(weight, weight)
+    }
+
+    pub fn range(min: u16, max: u16) -> Result<Self, WeightRangeError> {
+        if Self::VALID.contains(&min) && Self::VALID.contains(&max) && min <= max {
+            Ok(Self { min, max })
+        } else {
+            Err(WeightRangeError { min, max })
         }
     }
 
-    pub const fn range(min: u16, max: u16) -> Self {
-        Self { min, max }
+    pub const fn min(self) -> u16 {
+        self.min
+    }
+
+    pub const fn max(self) -> u16 {
+        self.max
     }
 }
 
 impl Default for FontWeight {
     fn default() -> Self {
-        Self::fixed(400)
+        Self { min: 400, max: 400 }
     }
 }
 

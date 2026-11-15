@@ -6271,6 +6271,7 @@ dependencies = [
  "serde_json",
  "telar-fs-atomic",
  "telar-icons-core",
+ "telar-renderer-core",
  "toml",
 ]
 

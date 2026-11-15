@@ -14,7 +14,7 @@ fn sources() -> FontSources {
         faces: vec![
             FontAsset::bytes(FACE.to_vec())
                 .named("Telar Test")
-                .with_weight(FontWeight::range(100, 900))
+                .with_weight(FontWeight::range(100, 900).unwrap())
                 .with_style(FontStyle::Italic)
                 .with_axis(FontAxis::new(*b"wght", 100.0, 900.0)),
             FontAsset::file("fonts/Inter.ttf"),
@@ -91,4 +91,14 @@ fn the_bytes_of_the_font_vocabulary_are_pinned_to_the_wire_version() {
         None,
     ];
     wire_core::assert_golden!("src/wire/fonts_golden/exclusive.hex", &encode(&answers));
+}
+
+#[test]
+fn a_weight_range_that_runs_backwards_does_not_decode() {
+    let mut bytes = encode(&700u16);
+    bytes.extend(encode(&300u16));
+    assert_eq!(
+        decode::<FontWeight>(&bytes),
+        Err(WireError::Invalid("font weight"))
+    );
 }

@@ -13,6 +13,7 @@ repository = { workspace = true }
 [dependencies]
 fs-atomic = { workspace = true }
 icons-core = { workspace = true }
+renderer-core = { workspace = true }
 
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

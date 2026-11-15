@@ -53,7 +53,7 @@ fn the_database_only_grows_and_every_shaper_takes_a_face_that_arrives() {
     let arrived = add_faces(vec![
         FontAsset::embedded(TEST_FACE)
             .named("Telar Declared")
-            .with_weight(FontWeight::range(100, 900)),
+            .with_weight(FontWeight::range(100, 900).unwrap()),
     ]);
     assert_eq!(
         arrived.families(),
@@ -92,7 +92,7 @@ fn the_database_only_grows_and_every_shaper_takes_a_face_that_arrives() {
     let again = add_faces(vec![
         FontAsset::embedded(TEST_FACE)
             .named("Telar Declared")
-            .with_weight(FontWeight::range(100, 900)),
+            .with_weight(FontWeight::range(100, 900).unwrap()),
     ]);
     assert!(Arc::ptr_eq(&arrived, &again));
     assert_eq!(
@@ -114,7 +114,7 @@ fn a_declared_family_style_and_weight_are_what_the_face_answers_to() {
     let asset = FontAsset::embedded(TEST_FACE)
         .named("Display")
         .with_style(renderer_core::FontStyle::Italic)
-        .with_weight(FontWeight::fixed(700));
+        .with_weight(FontWeight::fixed(700).unwrap());
     let ids = load_asset(&mut db, &asset);
     let face = db.face(ids[0]).unwrap();
     assert_eq!(face.families[0].0, "Display");
@@ -137,7 +137,7 @@ fn families_are_listed_sorted_once_each_without_the_ones_a_platform_hides() {
             &mut db,
             &FontAsset::embedded(TEST_FACE)
                 .named(family)
-                .with_weight(FontWeight::fixed(weight)),
+                .with_weight(FontWeight::fixed(weight).unwrap()),
         );
     }
     assert_eq!(listed_families(&db), ["Alpha", "Display"]);
@@ -152,7 +152,7 @@ fn only_the_faces_given_are_loaded_and_the_default_face_is_routed_to_the_first()
         vec![
             FontAsset::embedded(TEST_FACE)
                 .named("Snapshot Face")
-                .with_weight(FontWeight::range(100, 900)),
+                .with_weight(FontWeight::range(100, 900).unwrap()),
         ]
     };
     let mut slot = None;

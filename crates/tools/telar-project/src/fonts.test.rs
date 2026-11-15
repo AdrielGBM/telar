@@ -2,6 +2,14 @@ use crate::TelarManifest;
 
 use super::*;
 
+#[test]
+fn a_manifest_weight_reports_the_error_the_weight_type_gives() {
+    let error = FontWeight::range(900, 100).unwrap_err().to_string();
+    let problems = declared("weight = [900, 100]").problems();
+    assert_eq!(problems.len(), 1);
+    assert!(problems[0].ends_with(&error), "{problems:?}");
+}
+
 fn parse(toml: &str) -> Vec<FontDeclaration> {
     toml::from_str::<TelarManifest>(toml).unwrap().telar.fonts
 }
@@ -34,7 +42,7 @@ fn every_key_of_a_face_round_trips() {
     );
     assert_eq!(fonts.len(), 2);
     let display = &fonts[0];
-    assert_eq!(display.weight_range(), (100, 900));
+    assert_eq!(display.weight(), FontWeight::range(100, 900));
     assert_eq!(display.style, FontStyleDeclaration::Italic);
     assert_eq!(display.stretch_range(), Some((75.0, 125.0)));
     assert_eq!(display.display, FontDisplay::Optional);
@@ -47,7 +55,7 @@ fn every_key_of_a_face_round_trips() {
     assert!(display.problems().is_empty());
 
     let mono = &fonts[1];
-    assert_eq!(mono.weight_range(), (500, 500));
+    assert_eq!(mono.weight(), FontWeight::fixed(500));
     assert_eq!(mono.style, FontStyleDeclaration::Normal);
     assert_eq!(mono.display, FontDisplay::Swap);
     assert!(!mono.format().is_sfnt());
@@ -56,10 +64,10 @@ fn every_key_of_a_face_round_trips() {
 #[test]
 fn the_weight_defaults_to_the_wght_axis_and_then_to_regular() {
     assert_eq!(
-        declared("axes = { wght = [300, 700] }").weight_range(),
-        (300, 700)
+        declared("axes = { wght = [300, 700] }").weight(),
+        FontWeight::range(300, 700)
     );
-    assert_eq!(declared("").weight_range(), (400, 400));
+    assert_eq!(declared("").weight(), FontWeight::fixed(400));
 }
 
 #[test]

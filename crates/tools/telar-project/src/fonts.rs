@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use renderer_core::{FontWeight, WeightRangeError};
 use serde::Deserialize;
 
 /// One face file and what it answers to.
@@ -125,16 +126,15 @@ impl FontDeclaration {
         FontFormat::of(&self.src).expect("checked when the manifest was read")
     }
 
-    /// The weights the face covers, as `(min, max)`.
-    pub fn weight_range(&self) -> (u16, u16) {
+    /// The weights the face covers, or why they are not a valid range.
+    pub fn weight(&self) -> Result<FontWeight, WeightRangeError> {
         match self.weight {
-            Some(WeightDeclaration::Fixed(weight)) => (weight, weight),
-            Some(WeightDeclaration::Range([min, max])) => (min, max),
-            None => self
-                .axes
-                .get("wght")
-                .map(|[min, max]| (*min as u16, *max as u16))
-                .unwrap_or((400, 400)),
+            Some(WeightDeclaration::Fixed(weight)) => FontWeight::fixed(weight),
+            Some(WeightDeclaration::Range([min, max])) => FontWeight::range(min, max),
+            None => match self.axes.get("wght") {
+                Some([min, max]) => FontWeight::range(*min as u16, *max as u16),
+                None => Ok(FontWeight::default()),
+            },
         }
     }
 
@@ -156,11 +156,8 @@ impl FontDeclaration {
                 self.src
             ));
         }
-        let (min, max) = self.weight_range();
-        if !(1..=1000).contains(&min) || !(1..=1000).contains(&max) || min > max {
-            problems.push(format!(
-                "{at}: the weight must be between 1 and 1000, low to high; it is {min}..{max}"
-            ));
+        if let Err(error) = self.weight() {
+            problems.push(format!("{at}: {error}"));
         }
         for (tag, [low, high]) in &self.axes {
             if tag.len() != 4 || !tag.bytes().all(|b| b.is_ascii_graphic()) {
