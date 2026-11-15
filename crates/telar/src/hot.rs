@@ -504,11 +504,7 @@ pub(crate) fn listen_hot_reload(port: u16) -> HotLink {
             let reader = std::io::BufReader::new(stream);
             for line in reader.lines() {
                 let Ok(line) = line else { break };
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
-                let Some(event) = HotEvent::parse(line) else {
+                let Some(event) = HotEvent::parse(&line) else {
                     continue;
                 };
                 if tx.send(event).is_err() {

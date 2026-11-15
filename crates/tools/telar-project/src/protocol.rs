@@ -432,14 +432,14 @@ impl HotReply {
     }
 }
 
-/// `message` as one field of a channel line: backslashes doubled, line breaks and tabs written as `\n` and `\t`, carriage returns dropped. Escaped rather than replaced: a code frame is full of `|`, so a ` | ` separator would be cut apart at every gutter.
+/// `message` as one field of a channel line: backslashes doubled, line breaks, carriage returns and tabs written as `\n`, `\r` and `\t`. Escaped rather than replaced: a code frame is full of `|`, so a ` | ` separator would be cut apart at every gutter.
 pub fn escape_lines(message: &str) -> String {
     // Backslashes first, or an escape already in the message would decode as a line break.
     message
         .replace('\\', "\\\\")
         .replace('\n', "\\n")
         .replace('\t', "\\t")
-        .replace('\r', "")
+        .replace('\r', "\\r")
 }
 
 /// Undoes [`escape_lines`]. A trailing lone backslash cannot come from it and is passed through rather than dropped, so a malformed message is still shown.
@@ -453,6 +453,7 @@ pub fn unescape_lines(message: &str) -> String {
         }
         match chars.next() {
             Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
             Some('t') => out.push('\t'),
             Some('\\') => out.push('\\'),
             Some(other) => {

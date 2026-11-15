@@ -310,7 +310,7 @@ fn heard_from(line: &str) -> Option<Heard> {
 fn hear_out(stream: TcpStream, heard_tx: &mpsc::Sender<Heard>) {
     for line in BufReader::new(stream).lines() {
         let Ok(line) = line else { break };
-        if let Some(heard) = heard_from(line.trim())
+        if let Some(heard) = heard_from(&line)
             && heard_tx.send(heard).is_err()
         {
             break;

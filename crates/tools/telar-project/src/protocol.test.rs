@@ -280,6 +280,7 @@ fn each_hot_event_survives_the_channel_as_one_line() {
     let events = [
         HotEvent::Reload(PathBuf::from("/t/debug/libapp.so")),
         HotEvent::Reload(PathBuf::from("/t/odd\nerr:forged\\dir/libapp.so")),
+        HotEvent::Reload(PathBuf::from("/t/odd\rdir/libapp.so ")),
         HotEvent::BuildError("error: expected `;`\n --> src/app.rs:4".into()),
         HotEvent::Goto("/preview/demo--card--a?args=label:%22Hi%22".into()),
         HotEvent::Goto("/preview/a\nfocus".into()),
@@ -287,7 +288,7 @@ fn each_hot_event_survives_the_channel_as_one_line() {
     ];
     for event in events {
         let line = event.line().expect("a text path has a line");
-        assert!(!line.contains('\n'), "one line per event: {line:?}");
+        assert!(!line.contains(['\n', '\r']), "one line per event: {line:?}");
         assert_eq!(HotEvent::parse(&line), Some(event));
     }
 }
