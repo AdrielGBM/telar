@@ -254,7 +254,7 @@ struct LiveSurface<'a> {
 }
 
 impl Surface for LiveSurface<'_> {
-    fn hold_document_scroll(&mut self, id: u64) {
+    fn hold_document_scroll(&mut self, id: renderer_core::ElementId) {
         match self.document_scroll.as_ref() {
             Some(held) => held.follow(id),
             None => {
@@ -1019,7 +1019,7 @@ fn watch_scroll(
 
 fn report_scroll(node: &web_sys::Element, key: BoxKey) {
     platform_core::post_event(key.event(platform_core::Event::BoxScrolled {
-        box_id: key.id,
+        box_id: key.element(),
         x: node.scroll_left() as f32,
         y: node.scroll_top() as f32,
     }));
@@ -1031,7 +1031,9 @@ pub(crate) fn focus_box_of(element: &web_sys::Element) -> Option<BoxKey> {
 }
 
 fn post_focused(key: BoxKey) {
-    platform_core::post_event(key.event(platform_core::Event::BoxFocused { box_id: key.id }));
+    platform_core::post_event(key.event(platform_core::Event::BoxFocused {
+        box_id: key.element(),
+    }));
 }
 
 /// Reports where the document moves focus on its own — its own Tab order — so the app's focus follows it.

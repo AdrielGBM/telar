@@ -2,8 +2,10 @@
 //!
 //! Here rather than in the UI layer for the same reason [`Event`](crate::Event) is: it is the vocabulary the two ends share. The UI declares roles and names; the platform's accessibility API — AccessKit on the desktop — is what turns them into something a screen reader can read. Neither end owns the words.
 
+use std::num::NonZeroU64;
+
 use geometry_core::Rect;
-use semantics_core::LocaleTag;
+use semantics_core::{LocaleTag, SurfaceKey};
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
 pub use semantics_core::{
@@ -11,13 +13,56 @@ pub use semantics_core::{
     Orientation, Positioning, Role, SetPosition, SortDirection, Toggle, ToggleKind, Value,
 };
 
+/// An opaque focus identity, one per focusable widget, as the surface that registered the widget numbers it.
+///
+/// Here rather than in the UI layer because it is what a snapshot names a control by, and so what a screen reader's request names it by on its way back.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+pub struct FocusId(pub u64);
+
+/// Names a control in a snapshot: its [`FocusId`] in the surface that holds it, and the key of that surface when it is one nested in the frame the snapshot was read from.
+///
+/// Every surface numbers its controls from its own counter, so a focus id alone names a control of the window as readily as one of a nested surface; the key is what tells them apart. A surface nested deeper is named by its own key, so the struct stays flat however deep the nesting goes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct AccessId {
+    /// The surface the control belongs to; `None` for one of the surface the snapshot was read from.
+    pub surface: Option<SurfaceKey>,
+    /// The control's focus id in that surface.
+    pub id: FocusId,
+}
+
+impl AccessId {
+    const ID_BITS: u32 = 32;
+    const ID_MASK: u64 = (1 << Self::ID_BITS) - 1;
+
+    /// A control of the surface the snapshot was read from.
+    pub fn own(id: FocusId) -> Self {
+        Self { surface: None, id }
+    }
+
+    /// The id as one integer, for a platform whose accessibility layer names a node by one: the surface key above the low 32 bits, the focus id in them.
+    ///
+    /// Both are counters that stay far below `1 << 31`, so the top bit is always clear and a platform may keep it for nodes of its own.
+    pub fn to_bits(self) -> u64 {
+        let surface = self.surface.map_or(0, |key| key.0.get());
+        (surface << Self::ID_BITS) | (self.id.0 & Self::ID_MASK)
+    }
+
+    /// The id [`to_bits`](Self::to_bits) wrote as `bits`.
+    pub fn from_bits(bits: u64) -> Self {
+        Self {
+            surface: NonZeroU64::new(bits >> Self::ID_BITS).map(SurfaceKey),
+            id: FocusId(bits & Self::ID_MASK),
+        }
+    }
+}
+
 /// One thing a screen reader can land on.
 ///
 /// A snapshot is a list of these that is also a tree: each node names the one it sits in by [`parent`](Self::parent), and comes after it and before that one's next sibling. Read in order, the list is the reading order a reader walks; read by its parents, it is the nesting a reader steps into — a grid's rows and their cells, a list box's options, a dialog's content.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AccessNode {
     /// A stable identity within this window for as long as the widget lives. `None` for text that is not a control, which nothing needs to address.
-    pub id: Option<u64>,
+    pub id: Option<AccessId>,
     /// The node this one sits in, by its place in the same snapshot, which is always before this one. `None` for a node the window holds directly.
     pub parent: Option<usize>,
     pub role: Role,
@@ -50,9 +95,9 @@ pub struct AccessNode {
     /// The level, and the place among its siblings, of an item a reader cannot count for itself: a row of a virtualised tree.
     pub position: Option<SetPosition>,
     /// The [`id`](Self::id) of the node in this snapshot that the keyboard's cursor rests on while this one keeps focus: the row of a tree, the item of a toolbar. A reader announces it as though it held focus itself.
-    pub active_descendant: Option<u64>,
+    pub active_descendant: Option<AccessId>,
     /// The [`id`](Self::id) of the node in this snapshot whose content this one decides: the list a combobox opens, the menu a button drops.
-    pub controls: Option<u64>,
+    pub controls: Option<AccessId>,
     /// What the node opens: the menu a menu button drops, the list a combobox opens. `None` for a node that opens nothing.
     pub has_popup: Option<HasPopup>,
     /// The chord that runs the same command as the node, in `aria-keyshortcuts` syntax (`Control+Shift+Z`). `None` for a node with no such key.

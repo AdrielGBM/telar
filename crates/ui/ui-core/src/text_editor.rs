@@ -912,7 +912,7 @@ impl Editor {
         };
         let caret_rect = placed.caret_rect(caret_at, affinity);
         self.drawn_caret.set(Some(TextInput {
-            field: self.id,
+            field: self.id.0,
             caret: caret_rect,
             secret: self.mask().is_some(),
         }));

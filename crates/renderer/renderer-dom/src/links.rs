@@ -47,13 +47,15 @@ fn stays_in_the_app(
         Some(run) => {
             let owner = BoxKey::parse(&anchor.get_attribute(crate::runs::RUN_BOX_ATTRIBUTE)?)?;
             owner.event(platform_core::Event::RunActivated {
-                box_id: owner.id,
+                box_id: owner.element(),
                 run: run.parse().ok()?,
             })
         }
         None => {
             let key = crate::reconcile::focus_box_of(&anchor)?;
-            key.event(platform_core::Event::BoxActivated { box_id: key.id })
+            key.event(platform_core::Event::BoxActivated {
+                box_id: key.element(),
+            })
         }
     };
     let anchor = anchor.dyn_into::<web_sys::HtmlAnchorElement>().ok()?;

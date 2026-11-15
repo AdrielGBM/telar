@@ -18,7 +18,8 @@ use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-const NESTED: u64 = 7;
+const NESTED: renderer_core::SurfaceKey =
+    renderer_core::SurfaceKey(std::num::NonZeroU64::new(7).unwrap());
 const FRAME: u64 = 1;
 const ROOT: u64 = 1;
 const BUTTON: u64 = 2;
@@ -207,7 +208,7 @@ fn recorded() -> Vec<Event> {
 fn a_box_of_the_nested_surface_is_an_element_apart_from_the_windows_box_of_the_same_id() {
     render();
     let frame = by("data-telar-id", &FRAME.to_string());
-    let root = by("data-telar-id", &format!("{NESTED}-{ROOT}"));
+    let root = by("data-telar-id", &format!("{}-{ROOT}", NESTED.0));
     assert!(
         !frame.is_same_node(Some(root.as_ref())),
         "the window's box and the surface's root are two elements"
@@ -217,7 +218,7 @@ fn a_box_of_the_nested_surface_is_an_element_apart_from_the_windows_box_of_the_s
             .is_some_and(|parent| parent.is_same_node(Some(frame.as_ref()))),
         "the surface's root is inside the box it is drawn in"
     );
-    let inside = by("data-telar-id", &format!("{NESTED}-{BUTTON}"));
+    let inside = by("data-telar-id", &format!("{}-{BUTTON}", NESTED.0));
     let outside = by("data-telar-id", &BUTTON.to_string());
     assert!(!inside.is_same_node(Some(outside.as_ref())));
     let (placed, frame_rect) = (
@@ -236,17 +237,21 @@ async fn focus_on_a_box_of_the_nested_surface_reaches_the_app_inside_that_surfac
     render();
     next_frames().await;
     recorded();
-    by("data-telar-focus", &format!("{NESTED}-{BUTTON}"))
+    by("data-telar-focus", &format!("{}-{BUTTON}", NESTED.0))
         .focus()
         .expect("the surface's button takes focus");
     next_frames().await;
     let events = recorded();
     assert!(
-        events.contains(&in_nested(Event::BoxFocused { box_id: BUTTON })),
+        events.contains(&in_nested(Event::BoxFocused {
+            box_id: renderer_core::ElementId(BUTTON)
+        })),
         "{events:?}"
     );
     assert!(
-        !events.contains(&Event::BoxFocused { box_id: BUTTON }),
+        !events.contains(&Event::BoxFocused {
+            box_id: renderer_core::ElementId(BUTTON)
+        }),
         "the window's box of the same id is not the one focused: {events:?}"
     );
 
@@ -256,7 +261,9 @@ async fn focus_on_a_box_of_the_nested_surface_reaches_the_app_inside_that_surfac
     next_frames().await;
     let events = recorded();
     assert!(
-        events.contains(&Event::BoxFocused { box_id: BUTTON }),
+        events.contains(&Event::BoxFocused {
+            box_id: renderer_core::ElementId(BUTTON)
+        }),
         "{events:?}"
     );
 }
@@ -271,14 +278,16 @@ async fn a_link_of_the_nested_surface_is_followed_inside_that_surface() {
     init.set_cancelable(true);
     let click =
         web_sys::MouseEvent::new_with_mouse_event_init_dict("click", &init).expect("a click");
-    by("data-telar-focus", &format!("{NESTED}-{LINK}"))
+    by("data-telar-focus", &format!("{}-{LINK}", NESTED.0))
         .dispatch_event(&click)
         .expect("dispatched");
     assert!(click.default_prevented(), "the app follows the link itself");
     next_frames().await;
     let events = recorded();
     assert!(
-        events.contains(&in_nested(Event::BoxActivated { box_id: LINK })),
+        events.contains(&in_nested(Event::BoxActivated {
+            box_id: renderer_core::ElementId(LINK)
+        })),
         "{events:?}"
     );
 }
@@ -288,12 +297,12 @@ async fn a_scroll_of_a_box_of_the_nested_surface_reaches_the_app_inside_that_sur
     render();
     next_frames().await;
     recorded();
-    by("data-telar-id", &format!("{NESTED}-{SCROLLER}")).set_scroll_top(30);
+    by("data-telar-id", &format!("{}-{SCROLLER}", NESTED.0)).set_scroll_top(30);
     next_frames().await;
     let events = recorded();
     assert!(
         events.contains(&in_nested(Event::BoxScrolled {
-            box_id: SCROLLER,
+            box_id: renderer_core::ElementId(SCROLLER),
             x: 0.0,
             y: 30.0,
         })),

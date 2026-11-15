@@ -225,7 +225,7 @@ fn activated() -> Vec<u64> {
         std::mem::take(&mut *recorded.borrow_mut())
             .into_iter()
             .filter_map(|event| match event {
-                Event::BoxActivated { box_id } => Some(box_id),
+                Event::BoxActivated { box_id } => Some(box_id.0),
                 _ => None,
             })
             .collect()
@@ -395,7 +395,7 @@ async fn a_link_inside_a_paragraph_is_an_anchor_and_a_plain_click_comes_back_as_
         std::mem::take(&mut *recorded.borrow_mut())
             .into_iter()
             .filter_map(|event| match event {
-                Event::RunActivated { box_id, run } => Some((box_id, run)),
+                Event::RunActivated { box_id, run } => Some((box_id.0, run)),
                 _ => None,
             })
             .collect()

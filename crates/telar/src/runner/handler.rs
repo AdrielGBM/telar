@@ -1286,7 +1286,11 @@ where
         self.entered_ref(|_| i18n_core::use_locale())
     }
 
-    fn on_accessibility_action(&mut self, id: u64, action: platform_core::AccessAction) {
+    fn on_accessibility_action(
+        &mut self,
+        id: platform_core::AccessId,
+        action: platform_core::AccessAction,
+    ) {
         self.entered(|this| {
             this.follow_box_event(&Event::AccessAction { id, action });
         });

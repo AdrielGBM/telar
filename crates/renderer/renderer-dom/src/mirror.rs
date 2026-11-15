@@ -4,7 +4,7 @@ use std::cell::Cell;
 use std::num::NonZeroU32;
 use std::rc::Rc;
 
-use platform_core::{AccessAction, AccessNode, Event, Role};
+use platform_core::{AccessAction, AccessId, AccessNode, Event, Role};
 use rustc_hash::FxHashMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -40,7 +40,7 @@ pub struct AccessMirror {
 struct Shown {
     element: web_sys::Element,
     tag: &'static str,
-    id: Option<u64>,
+    id: Option<AccessId>,
     text: Option<web_sys::Text>,
 }
 
@@ -132,11 +132,11 @@ impl AccessMirror {
             described.is_active_descendant = node.id.is_some_and(|id| pointed_at.0.contains(&id));
             described.is_controlled = node.id.is_some_and(|id| pointed_at.1.contains(&id));
             described.row_count = row_counts[index];
-            let key = BoxKey::from(node.id.unwrap_or_default());
+            let key = BoxKey::from(node.id.map_or(0, AccessId::to_bits));
             for (name, value) in described.attributes(key) {
                 patch_attribute(&shown.element, name, value.as_deref());
             }
-            let id = node.id.map(|id| id.to_string());
+            let id = node.id.map(|id| id.to_bits().to_string());
             patch_attribute(&shown.element, NODE_ATTRIBUTE, id.as_deref());
             let around = node.parent.and_then(|parent| nodes.get(parent));
             patch_attribute(&shown.element, "style", Some(&placement(node, around)));
@@ -168,7 +168,7 @@ impl AccessMirror {
         document: &web_sys::Document,
         nodes: &[AccessNode],
     ) -> (Vec<Shown>, Vec<Shown>) {
-        let mut controls: FxHashMap<u64, Shown> = FxHashMap::default();
+        let mut controls: FxHashMap<AccessId, Shown> = FxHashMap::default();
         let mut unaddressed: Vec<Option<Shown>> = Vec::new();
         for shown in self.elements.drain(..) {
             match shown.id {
@@ -326,7 +326,7 @@ fn nesting(nodes: &[AccessNode]) -> (Vec<usize>, Vec<Vec<usize>>) {
 }
 
 /// The ids of the nodes some node's cursor rests on, and of the nodes some node controls: each takes an `id` to be pointed at by.
-fn pointed_at(nodes: &[AccessNode]) -> (Vec<u64>, Vec<u64>) {
+fn pointed_at(nodes: &[AccessNode]) -> (Vec<AccessId>, Vec<AccessId>) {
     (
         nodes
             .iter()
@@ -359,17 +359,21 @@ fn row_counts(nodes: &[AccessNode]) -> Vec<Option<NonZeroU32>> {
 }
 
 /// The control the element an event reached stands for, or the one nearest around it.
-fn node_of(event: &web_sys::Event) -> Option<u64> {
+fn node_of(event: &web_sys::Event) -> Option<AccessId> {
     let element = event
         .target()?
         .dyn_into::<web_sys::Element>()
         .ok()?
         .closest(&format!("[{NODE_ATTRIBUTE}]"))
         .ok()??;
-    element.get_attribute(NODE_ATTRIBUTE)?.parse().ok()
+    element
+        .get_attribute(NODE_ATTRIBUTE)?
+        .parse()
+        .ok()
+        .map(AccessId::from_bits)
 }
 
-fn post(id: u64, action: AccessAction) {
+fn post(id: AccessId, action: AccessAction) {
     platform_core::post_event(Event::AccessAction { id, action });
 }
 

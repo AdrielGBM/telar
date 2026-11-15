@@ -6,7 +6,7 @@ use geometry_core::{Point, Rect, Transform};
 
 use crate::{
     BlendMode, BorderRadius, Element, ImageData, ImageFill, PathData, PathStyle, Raster, RectStyle,
-    Span, Stroke, TextStyle,
+    Span, Stroke, SurfaceKey, TextStyle,
 };
 
 /// How a layer takes part in a mask: one subtree deciding how much of another shows.
@@ -76,9 +76,9 @@ pub enum DrawCommand {
         element: Arc<Element>,
     },
     PopElement,
-    /// A marker, like [`PushElement`](Self::PushElement): everything until the matching [`PopSurface`](Self::PopSurface) is the frame of another surface drawn inside this one, whose element ids name its own boxes rather than this surface's. `surface` is that surface's handle in the runtime that drew the stream, so whoever reads the boxes inside can read them in their own world. A rasteriser draws nothing for either.
+    /// A marker, like [`PushElement`](Self::PushElement): everything until the matching [`PopSurface`](Self::PopSurface) is the frame of another surface drawn inside this one, whose element ids name its own boxes rather than this surface's. `surface` is the key that surface goes by in the runtime that drew the stream, so whoever reads the boxes inside can read them in their own world. A rasteriser draws nothing for either.
     PushSurface {
-        surface: u64,
+        surface: SurfaceKey,
     },
     PopSurface,
 }

@@ -498,7 +498,7 @@ fn a_focused_tree_names_the_row_its_cursor_rests_on() {
     let nodes = snapshot(&[]);
     let said = tree_node(&nodes);
     assert!(said.focused, "focus stays on the tree");
-    assert_eq!(said.active_descendant, Some(rows[1]));
+    assert_eq!(said.active_descendant, Some(AccessId::own(rows[1])));
     let read = platform_core::accessibility::transcript(&nodes);
     assert!(
         read.ends_with("\ntreeitem, focused") && !read.contains("tree, focused"),
@@ -554,7 +554,10 @@ fn a_combobox_names_the_list_it_controls() {
             .cloned()
             .expect("the combobox is exposed")
     };
-    assert_eq!(combobox(&snapshot(&[])).controls, Some(list_id));
+    assert_eq!(
+        combobox(&snapshot(&[])).controls,
+        Some(AccessId::own(list_id))
+    );
     target.set(gone);
     assert_eq!(combobox(&snapshot(&[])).controls, None);
     focus::clear();
@@ -1095,8 +1098,9 @@ fn text_clipped_to_nothing_is_not_announced() {
 
 #[test]
 fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
+    let key = |n: u64| SurfaceKey(std::num::NonZeroU64::new(n).unwrap());
     let node = AccessNode {
-        id: Some(3),
+        id: Some(AccessId::own(focus::FocusId(3))),
         parent: None,
         role: Role::Button,
         name: "Inside".to_string(),
@@ -1129,18 +1133,16 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         commands: 0..0,
         placement: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
     };
-    let placed = nested(7).place(node.clone()).id.expect("an id");
+    let inside = AccessId {
+        surface: Some(key(7)),
+        id: focus::FocusId(3),
+    };
+    assert_eq!(nested(key(7)).place(node.clone()).id, Some(inside));
     assert_eq!(
-        AccessTarget::of(placed),
-        AccessTarget::Nested { surface: 7, id: 3 }
+        nested(key(2)).place(nested(key(7)).place(node)).id,
+        Some(inside),
+        "a surface nested deeper keeps its own key in the id"
     );
-    let deeper = nested(2).place(nested(7).place(node)).id.expect("an id");
-    assert_eq!(
-        AccessTarget::of(deeper),
-        AccessTarget::Nested { surface: 7, id: 3 },
-        "a surface nested deeper keeps its own handle in the id"
-    );
-    assert_eq!(AccessTarget::of(3), AccessTarget::Own(3));
 }
 
 /// While a modal layer is up a reader keeps to it, as Tab does: the page's text under it is not read, the layer's is, and a dialog in it is modal. The control it was opened from is still read by what it draws, and closing the layer gives the page back.

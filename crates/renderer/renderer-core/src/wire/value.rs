@@ -8,11 +8,11 @@ use wire_core::{
 
 use crate::{
     BlendMode, Border, BorderKind, Clamp, Color, Dash, Declared, DecorationLength, DecorationLine,
-    DecorationMetric, Editing, Element, ElementId, FillRule, FontFamily, FontFeatures, FontStyle,
-    FontTag, FontVariations, Gradient, GradientKind, GradientStops, ImageFill, ImageSlice,
-    LayerMask, LineCap, LineHeight, LineJoin, Linked, Paint, PathData, PathStyle, PathVerb,
-    Picture, PictureFit, Raster, RectStyle, Shadow, Span, Stroke, TextAlign, TextCase,
-    TextDecoration, TextLength, TextShadow, TextStyle, TextWrap,
+    DecorationMetric, Editing, Element, FillRule, FontFamily, FontFeatures, FontStyle, FontTag,
+    FontVariations, Gradient, GradientKind, GradientStops, ImageFill, ImageSlice, LayerMask,
+    LineCap, LineHeight, LineJoin, Linked, Paint, PathData, PathStyle, PathVerb, Picture,
+    PictureFit, Raster, RectStyle, Shadow, Span, Stroke, TextAlign, TextCase, TextDecoration,
+    TextLength, TextShadow, TextStyle, TextWrap,
 };
 
 wire_enum!(TextAlign {
@@ -439,19 +439,6 @@ impl Wire for Editing {
         let focus = usize::take(r)?;
         let caret = Wire::take(r)?;
         Ok(Editing::new(text, anchor, focus, caret, bool::take(r)?))
-    }
-}
-
-impl Shaped for ElementId {
-    const SHAPE: u64 = fold_shape(shape_named("ElementId"), u64::SHAPE);
-}
-
-impl Wire for ElementId {
-    fn put(&self, w: &mut Writer) {
-        self.0.put(w);
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        u64::take(r).map(ElementId)
     }
 }
 

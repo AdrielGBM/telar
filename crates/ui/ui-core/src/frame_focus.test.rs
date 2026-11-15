@@ -90,7 +90,7 @@ fn the_stop_reports_the_drawn_surfaces_caret_where_the_surface_around_shows_it()
     assert_eq!(
         crate::text_input(),
         Some(input(
-            7u64.rotate_left(32) ^ stop.id(),
+            7u64.rotate_left(32) ^ stop.id().0,
             Rect::new(30.0, 28.0, 2.0, 20.0)
         ))
     );

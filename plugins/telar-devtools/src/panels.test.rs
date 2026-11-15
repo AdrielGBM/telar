@@ -60,7 +60,7 @@ fn walk() -> Vec<SegmentNodeInfo> {
 
 fn access_node(name: &str, role: Role, rect: Rect) -> AccessNode {
     AccessNode {
-        id: Some(1),
+        id: Some(telar::AccessId::own(telar::FocusId(1))),
         parent: None,
         role,
         name: name.to_owned(),

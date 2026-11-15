@@ -93,8 +93,8 @@ fn every_reading_value_round_trips() {
         size: NonZeroU32::new(40).unwrap(),
     });
     round_trip(Modal {
-        layer: 7,
-        opened_from: Some(9),
+        layer: ElementId(7),
+        opened_from: Some(ElementId(9)),
     });
     round_trip(Focusable {
         tab_stop: true,
@@ -184,14 +184,14 @@ fn every_field_set() -> Semantics {
             position: NonZeroU32::new(2).unwrap(),
             size: NonZeroU32::new(3).unwrap(),
         }),
-        active_descendant: Some(4),
-        controls: Some(5),
+        active_descendant: Some(ElementId(4)),
+        controls: Some(ElementId(5)),
         has_popup: Some(HasPopup::ListBox),
         keyboard_shortcut: Some(Arc::from("Control+S")),
         sort: Some(SortDirection::Descending),
         multiselectable: true,
         modal: Some(Modal {
-            layer: 1,
+            layer: ElementId(1),
             opened_from: None,
         }),
     }
@@ -328,8 +328,8 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
         size: NonZeroU32::new(40).unwrap(),
     }));
     bytes.extend(encode(&Modal {
-        layer: 7,
-        opened_from: Some(9),
+        layer: ElementId(7),
+        opened_from: Some(ElementId(9)),
     }));
     for keys in [
         ConsumedKeys::TAB,

@@ -5,7 +5,7 @@ use crate::{ConsumedKeys, Key, ModifiersState, NamedKey, Role};
 
 fn field_node(focused: bool) -> AccessNode {
     AccessNode {
-        id: Some(7),
+        id: Some(AccessId::own(crate::FocusId(7))),
         parent: None,
         role: Role::Button,
         name: "Field".to_owned(),
@@ -40,7 +40,7 @@ fn field_node(focused: bool) -> AccessNode {
 struct Field {
     focused: bool,
     tabs: u32,
-    actions: Vec<(u64, AccessAction)>,
+    actions: Vec<(AccessId, AccessAction)>,
 }
 
 impl ReportsSurface for Field {
@@ -48,7 +48,7 @@ impl ReportsSurface for Field {
         vec![field_node(self.focused)]
     }
 
-    fn perform_access_action(&mut self, id: u64, action: AccessAction) {
+    fn perform_access_action(&mut self, id: AccessId, action: AccessAction) {
         self.actions.push((id, action));
     }
 
@@ -156,9 +156,21 @@ fn every_answer_crosses_as_what_the_surface_said() {
         assert!(!asks(|holds| (SERVED.holds_focus)(surface, holds)));
 
         let action = AccessAction::SetValue(crate::Value::Text("42".into()));
-        (SERVED.access_action)(surface, 7, LentBytes::lend(&wire_core::encode(&action)));
+        let nested = AccessId {
+            surface: Some(crate::SurfaceKey(std::num::NonZeroU64::new(3).unwrap())),
+            id: crate::FocusId(7),
+        };
+        (SERVED.access_action)(
+            surface,
+            nested.to_bits(),
+            LentBytes::lend(&wire_core::encode(&action)),
+        );
         (SERVED.blur)(surface);
-        assert_eq!(surface.get().actions, [(7, action)]);
+        assert_eq!(
+            surface.get().actions,
+            [(nested, action)],
+            "a control of a nested surface crosses as the same id"
+        );
         surface.release();
     }
 }

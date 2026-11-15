@@ -312,7 +312,9 @@ impl Play {
                 access
                     .snapshot
                     .iter()
-                    .find(|node| node.id.is_some() && node.id == holder)
+                    .find(|node| {
+                        node.id.is_some() && node.id == holder.map(platform_core::AccessId::own)
+                    })
                     .cloned()
             });
             if let Some(node) = node {

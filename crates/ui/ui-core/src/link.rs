@@ -158,16 +158,16 @@ impl Drop for AnchorRegistration {
 }
 
 /// Follows the link on the box `box_id` names, for a surface that activated it by itself (see [`Event::BoxActivated`](platform_core::Event::BoxActivated)). `false` when the box is gone, is no link, or has nowhere to go right now.
-pub fn activate_box(box_id: u64) -> bool {
-    let key = (current_surface(), NodeId::from(box_id));
+pub fn activate_box(box_id: renderer_core::ElementId) -> bool {
+    let key = (current_surface(), NodeId::from(box_id.0));
     let read = LINKS.with(|links| links.borrow().get(&key).map(|(_, read)| read.clone()));
     read.and_then(|read| read())
         .is_some_and(|destination| follow(&destination))
 }
 
 /// Follows the link on span `run` of the text whose box is `box_id`, for a surface that activated it by itself (see [`Event::RunActivated`](platform_core::Event::RunActivated)). `false` when the text is gone or that span links nowhere.
-pub fn activate_run(box_id: u64, run: u32) -> bool {
-    let key = (current_surface(), NodeId::from(box_id));
+pub fn activate_run(box_id: renderer_core::ElementId, run: u32) -> bool {
+    let key = (current_surface(), NodeId::from(box_id.0));
     let read = RUNS.with(|runs| runs.borrow().get(&key).map(|(_, read)| read.clone()));
     read.and_then(|read| read(run as usize))
         .is_some_and(|destination| follow(&destination))

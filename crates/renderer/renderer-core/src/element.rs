@@ -8,15 +8,9 @@ use geometry_core::{Insets, Rect};
 
 /// What a box *is* and what to call it. Shared with the platform layer rather than defined here: the desktop announcing a checkbox and a document drawing one are describing the same box, and two vocabularies for that is how they came to disagree.
 pub use semantics_core::{
-    Annotation, ConsumedKeys, CurrentKind, Destination, Focusable, ForcedColors, HeadingLevel,
-    Link, Modal, Role, Semantics, Toggle, ToggleKind, Value,
+    Annotation, ConsumedKeys, CurrentKind, Destination, ElementId, Focusable, ForcedColors,
+    HeadingLevel, Link, Modal, Role, Semantics, SurfaceKey, Toggle, ToggleKind, Value,
 };
-
-/// Identifies one box across frames.
-///
-/// The layout node's own id: it is created with the widget, lives as long as it, and is already the thing every other layer uses to name that box. Minting a second identity would only be one more thing to keep in step.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct ElementId(pub u64);
 
 /// One box in a frame: what it is, what it was asked for, and what to call it.
 ///

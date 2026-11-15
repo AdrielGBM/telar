@@ -51,7 +51,7 @@ fn a_platform_reads_the_page_offset_the_surface_reported() {
     reset_layout_runtime();
     let mut page = ScrollPage::new(tall_box()).unwrap();
     page.relayout(400.0, 300.0);
-    let id = element_of(&page.view()).id.0;
+    let id = element_of(&page.view()).id;
     page.on_event(&Event::BoxScrolled {
         box_id: id,
         x: 0.0,
@@ -76,7 +76,7 @@ fn a_platform_moving_the_page_asks_the_surface_in_the_next_frame() {
         "a drawing made again before the frame ships carries it too"
     );
     page.on_event(&Event::BoxScrolled {
-        box_id: element.id.0,
+        box_id: element.id,
         x: 0.0,
         y: 500.0,
     });
@@ -95,7 +95,7 @@ fn a_reveal_reaches_a_surface_that_holds_the_content() {
     let content_node = content.layout_node();
     let mut page = ScrollPage::new(content).unwrap();
     page.relayout(400.0, 300.0);
-    let id = element_of(&page.view()).id.0;
+    let id = element_of(&page.view()).id;
     page.on_event(&Event::BoxScrolled {
         box_id: id,
         x: 0.0,

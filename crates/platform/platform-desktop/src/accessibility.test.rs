@@ -1,12 +1,16 @@
 use geometry_core::Rect;
-use platform_core::{HeadingLevel, Link};
-use std::num::NonZeroU32;
+use platform_core::{FocusId, HeadingLevel, Link, SurfaceKey};
+use std::num::{NonZeroU32, NonZeroU64};
 
 use super::*;
 
+fn own(id: u64) -> AccessId {
+    AccessId::own(FocusId(id))
+}
+
 fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
     AccessNode {
-        id,
+        id: id.map(own),
         parent: None,
         role,
         name: name.to_string(),
@@ -103,7 +107,7 @@ fn a_request_maps_back_to_the_control_that_claimed_it() {
     };
     assert_eq!(
         requested_action(&request, &nodes),
-        Some((7, AccessAction::Activate))
+        Some((own(7), AccessAction::Activate))
     );
 
     let stale = ActionRequest {
@@ -131,12 +135,18 @@ fn a_request_maps_back_to_the_control_that_claimed_it() {
 /// A control of the window and one of a surface nested in it with the same focus id, read before a label: each is a node of its own, apart from the label and the window, and a request for either comes back to the id the snapshot gave it.
 #[test]
 fn a_nested_surfaces_control_and_the_windows_own_never_share_a_node() {
-    let own = 5;
-    let nested = (1 << 32) | own;
+    let window_own = own(5);
+    let nested = AccessId {
+        surface: Some(SurfaceKey(NonZeroU64::MIN)),
+        id: FocusId(5),
+    };
     let nodes = vec![
         node(None, Role::Label, "Above"),
-        node(Some(own), Role::Button, "Own"),
-        node(Some(nested), Role::Button, "Nested"),
+        node(Some(5), Role::Button, "Own"),
+        AccessNode {
+            id: Some(nested),
+            ..node(None, Role::Button, "Nested")
+        },
     ];
     let update = tree_update(&nodes, "Editor", None);
     let ids: Vec<NodeId> = update.nodes.iter().map(|(id, _)| *id).collect();
@@ -148,7 +158,7 @@ fn a_nested_surfaces_control_and_the_windows_own_never_share_a_node() {
     );
     assert!(distinct.contains(&ROOT));
 
-    for (index, id) in [(1, own), (2, nested)] {
+    for (index, id) in [(1, window_own), (2, nested)] {
         let request = ActionRequest {
             action: Action::Focus,
             target_tree: TreeId::ROOT,
@@ -353,13 +363,16 @@ fn a_control_publishes_what_it_opens() {
 fn a_focused_tree_names_the_row_its_cursor_is_on() {
     let tree = AccessNode {
         focused: true,
-        active_descendant: Some(5),
+        active_descendant: Some(own(5)),
         ..node(Some(3), Role::Tree, "Files")
     };
     let row = node(Some(5), Role::TreeItem, "docs");
     let update = tree_update(&[tree.clone(), row], "Explorer", None);
-    assert_eq!(update.nodes[0].1.active_descendant(), Some(control_id(5)));
-    assert_eq!(update.focus, control_id(3), "focus stays on the tree");
+    assert_eq!(
+        update.nodes[0].1.active_descendant(),
+        Some(control_id(own(5)))
+    );
+    assert_eq!(update.focus, control_id(own(3)), "focus stays on the tree");
 
     let update = tree_update(&[tree], "Explorer", None);
     assert_eq!(update.nodes[0].1.active_descendant(), None);
@@ -370,8 +383,8 @@ fn a_focused_tree_names_the_row_its_cursor_is_on() {
 fn an_open_combobox_names_the_list_it_controls() {
     let combobox = AccessNode {
         focused: true,
-        controls: Some(7),
-        active_descendant: Some(8),
+        controls: Some(own(7)),
+        active_descendant: Some(own(8)),
         ..node(Some(3), Role::ComboBox, "Size")
     };
     let list = node(Some(7), Role::ListBox, "Size");
@@ -380,8 +393,11 @@ fn an_open_combobox_names_the_list_it_controls() {
         ..node(Some(8), Role::Option, "Large")
     };
     let update = tree_update(&[combobox.clone(), list, row], "Form", None);
-    assert_eq!(update.nodes[0].1.controls(), [control_id(7)]);
-    assert_eq!(update.nodes[0].1.active_descendant(), Some(control_id(8)));
+    assert_eq!(update.nodes[0].1.controls(), [control_id(own(7))]);
+    assert_eq!(
+        update.nodes[0].1.active_descendant(),
+        Some(control_id(own(8)))
+    );
     assert_eq!(update.nodes[1].1.role(), AkRole::ListBox);
     assert_eq!(update.nodes[2].1.role(), AkRole::ListBoxOption);
     assert_eq!(
@@ -399,12 +415,12 @@ fn an_open_combobox_names_the_list_it_controls() {
 fn a_chosen_tab_names_the_panel_it_controls() {
     let tab = AccessNode {
         toggled: Some(Toggle::On),
-        controls: Some(9),
+        controls: Some(own(9)),
         ..node(Some(4), Role::Tab, "Pricing")
     };
     let panel = node(Some(9), Role::TabPanel, "Pricing");
     let update = tree_update(&[tab, panel], "Settings", None);
-    assert_eq!(update.nodes[0].1.controls(), [control_id(9)]);
+    assert_eq!(update.nodes[0].1.controls(), [control_id(own(9))]);
     assert_eq!(update.nodes[1].1.role(), AkRole::TabPanel);
     assert_eq!(update.nodes[1].1.label(), Some("Pricing"));
 }
@@ -419,7 +435,7 @@ fn a_radio_group_is_published_around_its_radios() {
     };
     let update = tree_update(&[group, radio], "Form", None);
     assert_eq!(update.nodes[0].1.role(), AkRole::RadioGroup);
-    assert_eq!(update.nodes[0].1.children(), [control_id(5)]);
+    assert_eq!(update.nodes[0].1.children(), [control_id(own(5))]);
     assert_eq!(update.nodes[1].1.role(), AkRole::RadioButton);
 }
 
@@ -770,7 +786,7 @@ mod from_a_screen {
             .into_iter()
             .find(|node| node.name == name && node.id.is_some())
             .unwrap_or_else(|| panic!("{name:?} is a control"));
-        focus::request(node.id.expect("a control has an id"));
+        focus::request(node.id.expect("a control has an id").id);
     }
 
     /// A switch and a toggle button written as a box with a role: each says its state, and Space or Enter on it presses it the way a tap does, which the next tree reports.
@@ -1245,20 +1261,20 @@ fn each_node_is_a_child_of_the_one_it_sits_in() {
     ];
     let update = tree_update(&nodes, "Explorer", None);
     let window = update_of(&update, ROOT);
-    assert_eq!(window.children(), [label_id(0), control_id(1)]);
+    assert_eq!(window.children(), [label_id(0), control_id(own(1))]);
     assert_eq!(
-        update_of(&update, control_id(1)).children(),
-        [control_id(2), control_id(5)]
+        update_of(&update, control_id(own(1))).children(),
+        [control_id(own(2)), control_id(own(5))]
     );
     assert_eq!(
-        update_of(&update, control_id(2)).children(),
-        [control_id(3), control_id(4)]
+        update_of(&update, control_id(own(2))).children(),
+        [control_id(own(3)), control_id(own(4))]
     );
     assert_eq!(
-        update_of(&update, control_id(5)).children(),
-        [control_id(6), control_id(7)]
+        update_of(&update, control_id(own(5))).children(),
+        [control_id(own(6)), control_id(own(7))]
     );
-    assert!(update_of(&update, control_id(6)).children().is_empty());
+    assert!(update_of(&update, control_id(own(6))).children().is_empty());
 }
 
 /// A grid says how many rows it has from what its rows say, though only some are built, and how many columns from its widest row; each cell says its column and its row's place.
@@ -1274,15 +1290,18 @@ fn a_grid_says_its_counts_and_each_cell_its_place() {
         inside(4, node(Some(7), Role::GridCell, "4 KB")),
     ];
     let update = tree_update(&nodes, "Explorer", None);
-    let grid = update_of(&update, control_id(1));
+    let grid = update_of(&update, control_id(own(1)));
     assert_eq!(grid.row_count(), Some(501));
     assert_eq!(grid.column_count(), Some(2));
-    assert_eq!(update_of(&update, control_id(5)).row_index(), Some(39));
-    let size = update_of(&update, control_id(7));
+    assert_eq!(update_of(&update, control_id(own(5))).row_index(), Some(39));
+    let size = update_of(&update, control_id(own(7)));
     assert_eq!(size.column_index(), Some(1));
     assert_eq!(size.row_index(), Some(39));
-    assert_eq!(update_of(&update, control_id(3)).column_index(), Some(0));
-    assert_eq!(update_of(&update, control_id(3)).row_index(), Some(0));
+    assert_eq!(
+        update_of(&update, control_id(own(3))).column_index(),
+        Some(0)
+    );
+    assert_eq!(update_of(&update, control_id(own(3))).row_index(), Some(0));
 }
 
 /// A grid whose rows say no place counts the rows it holds, and each row's place is its place among them.
@@ -1296,9 +1315,9 @@ fn a_grid_of_rows_that_say_no_place_counts_them() {
         inside(3, node(Some(5), Role::GridCell, "Alan")),
     ];
     let update = tree_update(&nodes, "Scores", None);
-    assert_eq!(update_of(&update, control_id(1)).row_count(), Some(2));
-    assert_eq!(update_of(&update, control_id(4)).row_index(), Some(1));
-    assert_eq!(update_of(&update, control_id(5)).row_index(), Some(1));
+    assert_eq!(update_of(&update, control_id(own(1))).row_count(), Some(2));
+    assert_eq!(update_of(&update, control_id(own(4))).row_index(), Some(1));
+    assert_eq!(update_of(&update, control_id(own(5))).row_index(), Some(1));
 }
 
 /// A list box says how many options it has from what its options say, which a virtualised list builds only some of; a tree whose rows sit at different levels in sets of different sizes leaves each row's set to its level.
@@ -1321,9 +1340,15 @@ fn a_set_says_its_size_where_its_items_agree_on_it() {
         inside(3, item(6, Role::TreeItem, 2, 1, 5)),
     ];
     let update = tree_update(&nodes, "Window", None);
-    assert_eq!(update_of(&update, control_id(1)).size_of_set(), Some(300));
-    assert_eq!(update_of(&update, control_id(4)).size_of_set(), None);
-    assert_eq!(update_of(&update, control_id(3)).position_in_set(), Some(7));
+    assert_eq!(
+        update_of(&update, control_id(own(1))).size_of_set(),
+        Some(300)
+    );
+    assert_eq!(update_of(&update, control_id(own(4))).size_of_set(), None);
+    assert_eq!(
+        update_of(&update, control_id(own(3))).position_in_set(),
+        Some(7)
+    );
 }
 
 /// A node grafted from a nested tree keeps the focus id it is addressed by, wherever it now sits, and its active descendant still names it.
@@ -1332,16 +1357,16 @@ fn a_nested_node_keeps_its_id_and_its_active_descendant() {
     let nodes = [
         AccessNode {
             focused: true,
-            active_descendant: Some(3),
+            active_descendant: Some(own(3)),
             ..node(Some(1), Role::Tree, "Files")
         },
         inside(0, node(Some(3), Role::TreeItem, "src")),
     ];
     let update = tree_update(&nodes, "Window", None);
-    assert_eq!(update.focus, control_id(1));
-    let tree = update_of(&update, control_id(1));
-    assert_eq!(tree.active_descendant(), Some(control_id(3)));
-    assert_eq!(tree.children(), [control_id(3)]);
+    assert_eq!(update.focus, control_id(own(1)));
+    let tree = update_of(&update, control_id(own(1)));
+    assert_eq!(tree.active_descendant(), Some(control_id(own(3))));
+    assert_eq!(tree.children(), [control_id(own(3))]);
 }
 
 #[test]
@@ -1414,11 +1439,11 @@ fn a_slider_that_steps_claims_and_receives_its_steps() {
 
     assert_eq!(
         requested_action(&request(stepping.0, Action::Increment, None), &nodes),
-        Some((9, AccessAction::Increment))
+        Some((own(9), AccessAction::Increment))
     );
     assert_eq!(
         requested_action(&request(stepping.0, Action::Decrement, None), &nodes),
-        Some((9, AccessAction::Decrement))
+        Some((own(9), AccessAction::Decrement))
     );
     assert_eq!(
         requested_action(
@@ -1430,7 +1455,7 @@ fn a_slider_that_steps_claims_and_receives_its_steps() {
             &nodes
         ),
         Some((
-            9,
+            own(9),
             AccessAction::SetValue(Value::from(
                 NumericValue::new(0.0..=1.0, 0.75).expect("a reading within its range")
             ))
@@ -1515,7 +1540,7 @@ fn a_reader_placing_a_fields_caret_names_a_place_in_its_text() {
     assert_eq!(
         requested_action(&placed, &nodes),
         Some((
-            3,
+            own(3),
             AccessAction::SetSelection(TextSelection {
                 anchor: 1,
                 focus: 7,
@@ -1529,7 +1554,7 @@ fn a_reader_placing_a_fields_caret_names_a_place_in_its_text() {
     );
     assert_eq!(
         requested_action(&written, &nodes),
-        Some((3, AccessAction::SetValue(Value::Text("verde".into()))))
+        Some((own(3), AccessAction::SetValue(Value::Text("verde".into()))))
     );
 }
 

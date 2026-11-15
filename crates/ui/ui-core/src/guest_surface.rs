@@ -80,10 +80,10 @@ impl<E: Entries<Upper = UpperTable>> ForeignSurface for GuestSurface<E> {
         })
     }
 
-    fn perform_access_action(&self, id: u64, action: AccessAction) {
+    fn perform_access_action(&self, id: platform_core::AccessId, action: AccessAction) {
         let action = encode(&action);
         self.call(|entries, surface| unsafe {
-            (entries.report().access_action)(surface, id, LentBytes::lend(&action))
+            (entries.report().access_action)(surface, id.to_bits(), LentBytes::lend(&action))
         });
     }
 

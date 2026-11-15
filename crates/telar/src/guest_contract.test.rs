@@ -24,7 +24,7 @@ use telar::{
     Transform, WindowCommand, compute_layout, focus,
 };
 use telar_embed::{LoadedEmbed, load_embedded};
-use ui_core::accessibility::{AccessTarget, perform_action};
+use ui_core::accessibility::perform_action;
 
 #[global_allocator]
 static ALLOCATOR: tagged_alloc::Tagged = tagged_alloc::Tagged(0x686f_7374_5f68_6f73);
@@ -69,10 +69,7 @@ fn a_hot_guest_with_an_allocator_of_its_own_runs_reloads_and_unloads() {
         let window = telar::inspect::snapshot(&tree.frame());
         let save = control(&window, focus::Role::Button);
         assert!(
-            matches!(
-                AccessTarget::of(save.id.expect("a control")),
-                AccessTarget::Nested { .. }
-            ),
+            save.id.expect("a control").surface.is_some(),
             "the window reads the guest's button under an id of the guest's surface"
         );
         let field = control(&window, focus::Role::TextInput)
@@ -239,10 +236,10 @@ fn an_embedded_guests_surface_is_read_acted_on_and_typed_into_where_the_host_dra
         "{field:?}"
     );
     let button = control(&window, focus::Role::Button);
-    assert!(matches!(
-        AccessTarget::of(button.id.expect("a control")),
-        AccessTarget::Nested { surface, .. } if surface == embed.boundary().key()
-    ));
+    assert_eq!(
+        button.id.expect("a control").surface,
+        Some(embed.boundary().key())
+    );
     perform_action(
         button.id.expect("a control"),
         platform_core::AccessAction::Activate,

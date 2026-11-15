@@ -157,7 +157,9 @@ fn a_surface_nobody_can_enter_any_more_is_left_out_rather_than_read_in_the_wrong
     crate::reset_layout_runtime();
     crate::focus::clear();
     let commands = vec![
-        crate::DrawCommand::PushSurface { surface: u64::MAX },
+        crate::DrawCommand::PushSurface {
+            surface: crate::SurfaceKey(std::num::NonZeroU64::MAX),
+        },
         crate::DrawCommand::Text {
             text: "Gone".into(),
             spans: None,

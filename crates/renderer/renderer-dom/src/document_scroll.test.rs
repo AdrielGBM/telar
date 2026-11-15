@@ -26,7 +26,7 @@ static SCROLLED: Mutex<Vec<(u64, f32, f32)>> = Mutex::new(Vec::new());
 fn listen_for_box_scrolls() {
     platform_core::set_event_sink(Arc::new(|event| {
         if let Event::BoxScrolled { box_id, x, y } = event {
-            SCROLLED.lock().unwrap().push((box_id, x, y));
+            SCROLLED.lock().unwrap().push((box_id.0, x, y));
         }
     }));
     SCROLLED.lock().unwrap().clear();

@@ -43,8 +43,8 @@ pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, for_each_with_matrix, transform_clip_rect};
 pub use element::{
     Annotation, ConsumedKeys, CurrentKind, Destination, Editing, Element, ElementId, Focusable,
-    ForcedColors, HeadingLevel, Link, Modal, Picture, PictureFit, Role, Semantics, Toggle,
-    ToggleKind, Value,
+    ForcedColors, HeadingLevel, Link, Modal, Picture, PictureFit, Role, Semantics, SurfaceKey,
+    Toggle, ToggleKind, Value,
 };
 pub use error::RendererError;
 pub use font_config::{

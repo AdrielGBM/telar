@@ -15,12 +15,13 @@ use std::sync::Arc;
 use geometry_core::{Insets, Rect, Transform};
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
 use platform_core::{
-    AccessNode, Destination, HasPopup, HeadingLevel, NumericValue, Orientation, Positioning,
-    SetPosition, SortDirection,
+    AccessId, AccessNode, Destination, HasPopup, HeadingLevel, NumericValue, Orientation,
+    Positioning, SetPosition, SortDirection,
 };
 use renderer_core::{
-    BlendMode, Color, CurrentKind, DrawCommand, Editing, Element, Focusable, ForcedColors,
-    ImageData, Link, Modal, Picture, Role, TextStyle, Toggle, ToggleKind, Value,
+    BlendMode, Color, CurrentKind, DrawCommand, Editing, Element, ElementId, Focusable,
+    ForcedColors, ImageData, Link, Modal, Picture, Role, SurfaceKey, TextStyle, Toggle, ToggleKind,
+    Value,
 };
 
 use crate::box_key::BoxKey;
@@ -93,7 +94,7 @@ const UNSELECTABLE: &str = "-webkit-user-select:none;user-select:none;";
 /// What the walk has to ask of the document it is describing.
 pub(crate) trait Surface {
     /// Box `id` is the surface's primary scroll this frame, which the document scrolls for it.
-    fn hold_document_scroll(&mut self, id: u64);
+    fn hold_document_scroll(&mut self, id: ElementId);
 
     /// Where the surface's origin is in the viewport while the document scrolls the page; `None` while it does not, and a box placed against the surface is then placed inside the host.
     fn fixed_origin(&mut self) -> Option<(f32, f32)>;
@@ -249,13 +250,13 @@ pub(crate) struct Described {
     /// Whether a list box, a grid or a tree lets more than one of its items be chosen at once.
     pub multiselectable: bool,
     /// The box that its cursor rests on, as the element says it. Written as nothing itself: it is resolved into [`active_descendant`](Self::active_descendant) once that box turns up inside this one, or inside the box it controls.
-    pub descendant_box: Option<u64>,
+    pub descendant_box: Option<ElementId>,
     /// The `id` of the element this one's cursor rests on, once that element is in the frame.
     pub active_descendant: Option<String>,
     /// Whether a box holding focus points at this one with `aria-activedescendant`, which takes an `id` to point at.
     pub is_active_descendant: bool,
     /// The box whose content this one decides, as the element says it: resolved into [`controls`](Self::controls) once that box turns up anywhere in the frame.
-    pub controls_box: Option<u64>,
+    pub controls_box: Option<ElementId>,
     /// The `id` of the element this one controls, once that element is in the frame.
     pub controls: Option<String>,
     /// Whether a box points at this one with `aria-controls`, which takes an `id` to point at.
@@ -637,11 +638,11 @@ fn controlling(nodes: &[Node], found: &mut Vec<Controlling>) {
             let surface = node.key.surface;
             found.push(Controlling {
                 owner: node.key,
-                target: BoxKey::new(surface, target),
+                target: BoxKey::new(surface, target.0),
                 cursor: described
                     .descendant_box
                     .filter(|_| described.active_descendant.is_none())
-                    .map(|cursor| BoxKey::new(surface, cursor)),
+                    .map(|cursor| BoxKey::new(surface, cursor.0)),
             });
         }
         if let Content::Children { children, .. } = &node.content {
@@ -656,7 +657,7 @@ fn controlling(nodes: &[Node], found: &mut Vec<Controlling>) {
 fn shut_out_behind_modal_layers(roots: &mut [Node]) {
     let mut layers = Vec::new();
     modal_layers(roots, &mut layers);
-    let mut topmost: Vec<(Option<u64>, Modal)> = Vec::new();
+    let mut topmost: Vec<(Option<SurfaceKey>, Modal)> = Vec::new();
     for (surface, modal) in layers.into_iter().rev() {
         if !topmost.iter().any(|(seen, _)| *seen == surface) {
             topmost.push((surface, modal));
@@ -668,7 +669,8 @@ fn shut_out_behind_modal_layers(roots: &mut [Node]) {
         };
         let kept = |node: &BoxNode| {
             in_layer(node)
-                || (node.key.surface == surface && Some(node.key.id) == modal.opened_from)
+                || (node.key.surface == surface
+                    && Some(ElementId(node.key.id)) == modal.opened_from)
         };
         if let Some(level) = surface_level(roots, surface) {
             shut_out(level, &kept, &in_layer);
@@ -676,7 +678,7 @@ fn shut_out_behind_modal_layers(roots: &mut [Node]) {
     }
 }
 
-fn modal_layers(nodes: &[Node], found: &mut Vec<(Option<u64>, Modal)>) {
+fn modal_layers(nodes: &[Node], found: &mut Vec<(Option<SurfaceKey>, Modal)>) {
     for node in nodes.iter().filter_map(Node::as_box) {
         if let Some(modal) = node.modal {
             found.push((node.key.surface, modal));
@@ -688,7 +690,7 @@ fn modal_layers(nodes: &[Node], found: &mut Vec<(Option<u64>, Modal)>) {
 }
 
 /// The top level of `surface` among `nodes`: the frame's own for the window, and for a nested surface the children of the box it is drawn in.
-fn surface_level(nodes: &mut [Node], surface: Option<u64>) -> Option<&mut [Node]> {
+fn surface_level(nodes: &mut [Node], surface: Option<SurfaceKey>) -> Option<&mut [Node]> {
     if surface.is_none() {
         return Some(nodes);
     }
@@ -890,13 +892,13 @@ struct Walk<'a> {
 
 /// A surface nested in the frame, as the walk entered it.
 struct Entered {
-    handle: u64,
+    handle: SurfaceKey,
     /// How many elements were open where it began, the host included: a box opened with as many open is one of its layout roots.
     base: usize,
 }
 
 impl Walk<'_> {
-    fn enter_surface(&mut self, handle: u64) {
+    fn enter_surface(&mut self, handle: SurfaceKey) {
         if let Some(open) = self.open.last_mut() {
             open.holds_surface = true;
         }
@@ -1167,7 +1169,7 @@ impl Walk<'_> {
         if primary {
             self.primary = Some(element.id.0);
             self.arrival_margin = element.arrival_margin;
-            self.surface.hold_document_scroll(element.id.0);
+            self.surface.hold_document_scroll(element.id);
         }
         let scrolls = element.scrolls && !primary;
         let drawing = matches!(element.semantics.role, Role::Drawing) && element.picture.is_none();
@@ -1278,7 +1280,7 @@ impl Walk<'_> {
             .filter_map(|open| open.node.as_mut())
             .find(|owner| {
                 owner.key.surface == node.key.surface
-                    && owner.described.descendant_box == Some(node.key.id)
+                    && owner.described.descendant_box == Some(ElementId(node.key.id))
             })
         else {
             return;
@@ -1525,7 +1527,7 @@ fn links(runs: &[Run]) -> bool {
 }
 
 /// Whether `node`, a box of the surface `surface`, draws words outside every control that a reader can be told to skip and is not yet.
-fn draws_words(node: &BoxNode, surface: Option<u64>) -> bool {
+fn draws_words(node: &BoxNode, surface: Option<SurfaceKey>) -> bool {
     if node.key.surface != surface || is_stop(node) || is_out_of_sight(node) {
         return false;
     }
@@ -1545,7 +1547,7 @@ fn draws_words(node: &BoxNode, surface: Option<u64>) -> bool {
 }
 
 /// Whether a reader finds something in `node` besides words: a control, a stop of the keyboard, a name, a place in a set, a link, or a surface of its own.
-fn holds_more_than_words(node: &BoxNode, surface: Option<u64>) -> bool {
+fn holds_more_than_words(node: &BoxNode, surface: Option<SurfaceKey>) -> bool {
     if node.key.surface != surface {
         return true;
     }
@@ -1582,7 +1584,7 @@ fn is_stop(node: &BoxNode) -> bool {
 }
 
 /// Takes the words `node` draws outside its controls away from readers: a box that holds nothing else is hidden whole, and one that holds more stays, its own words skipped.
-fn mute(node: &mut BoxNode, surface: Option<u64>) {
+fn mute(node: &mut BoxNode, surface: Option<SurfaceKey>) {
     match &mut node.content {
         Content::Text { text, runs, muted } => *muted = is_mutable(text, runs.as_deref()),
         Content::Drawing(_) => {}
@@ -1766,7 +1768,7 @@ pub(crate) fn describe_access_node(node: &AccessNode) -> Described {
     let label = Some(node.name.as_str())
         .filter(|name| !name.is_empty() && !names_with_its_text(&node.role));
     let link = node.role.link().filter(|_| node.enabled);
-    let pointed_at = |id: u64| format!("{BOX_ID_PREFIX}{}", BoxKey::from(id));
+    let pointed_at = |id: AccessId| format!("{BOX_ID_PREFIX}{}", BoxKey::from(id.to_bits()));
     Described {
         role: element_role(&node.role, tag, label.is_some()),
         label: label.map(str::to_string),

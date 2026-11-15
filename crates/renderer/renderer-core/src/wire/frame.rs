@@ -550,7 +550,7 @@ fn take_command(
         },
         POP_ELEMENT => DrawCommand::PopElement,
         PUSH_SURFACE => DrawCommand::PushSurface {
-            surface: u64::take(r)?,
+            surface: Wire::take(r)?,
         },
         POP_SURFACE => DrawCommand::PopSurface,
         tag => return Err(WireError::Tag { of: "command", tag }.into()),

@@ -99,7 +99,11 @@ fn a_reader_activating_a_row_presses_it_and_the_list_keeps_the_keyboard() {
         pressed,
     } = focused_list();
 
-    perform_action(rows[1], platform_core::AccessAction::Activate, unrouted);
+    perform_action(
+        AccessId::own(rows[1]),
+        platform_core::AccessAction::Activate,
+        unrouted,
+    );
     assert_eq!(*pressed.borrow(), [1], "the row's own press ran, once");
     assert_eq!(focus::current(), Some(id), "focus stayed on the list");
     assert_eq!(
@@ -128,7 +132,11 @@ fn a_reader_moving_to_a_row_moves_the_list_s_cursor_and_presses_nothing() {
         pressed,
     } = focused_list();
 
-    perform_action(rows[2], platform_core::AccessAction::Focus, unrouted);
+    perform_action(
+        AccessId::own(rows[2]),
+        platform_core::AccessAction::Focus,
+        unrouted,
+    );
     assert_eq!(focus::current(), Some(id));
     assert_eq!(focus::active_descendant_state(id), Some(rows[2]));
     assert!(pressed.borrow().is_empty());
@@ -169,9 +177,13 @@ fn counted_button(disabled: bool) -> (StyledContainer, Rc<Cell<u32>>) {
 fn a_reader_activating_a_button_presses_it_once_and_gives_it_focus() {
     let (mut button, presses) = counted_button(false);
     let id = button.focus_id().expect("a control has an id");
-    perform_action(id, platform_core::AccessAction::Activate, |event| {
-        button.on_event(event);
-    });
+    perform_action(
+        AccessId::own(id),
+        platform_core::AccessAction::Activate,
+        |event| {
+            button.on_event(event);
+        },
+    );
     assert_eq!(presses.get(), 1);
     assert_eq!(focus::current(), Some(id));
 }
@@ -180,7 +192,7 @@ fn a_reader_activating_a_button_presses_it_once_and_gives_it_focus() {
 fn a_reader_cannot_activate_a_disabled_control() {
     let (button, presses) = counted_button(true);
     perform_action(
-        button.focus_id().expect("a control has an id"),
+        AccessId::own(button.focus_id().expect("a control has an id")),
         platform_core::AccessAction::Activate,
         unrouted,
     );
@@ -272,7 +284,7 @@ fn a_reader_cannot_activate_a_control_inside_a_disabled_box() {
 
     fieldset.off.set(false);
     perform_action(
-        fieldset.save,
+        AccessId::own(fieldset.save),
         platform_core::AccessAction::Activate,
         |event| {
             fieldset.tree.on_event(event);

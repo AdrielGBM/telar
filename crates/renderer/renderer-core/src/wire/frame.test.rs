@@ -14,7 +14,7 @@ use crate::{
     FillRule, Focusable, FontFamily, FontFeatures, FontStyle, FontTag, FontVariations, Gradient,
     ImageData, ImageFill, ImageSlice, Insets, LayerMask, LineCap, LineJoin, Linked, Paint,
     PathData, PathStyle, Picture, PictureFit, Raster, RectStyle, Role, Semantics, Shadow,
-    ShapeStyle, Span, Stroke, TextAlign, TextCase, TextLength, TextStyle, TextWrap,
+    ShapeStyle, Span, Stroke, SurfaceKey, TextAlign, TextCase, TextLength, TextStyle, TextWrap,
 };
 
 const RED: Color = Color {
@@ -153,15 +153,15 @@ fn semantics() -> Semantics {
             position: NonZeroU32::new(4).unwrap(),
             size: NonZeroU32::new(9).unwrap(),
         }),
-        active_descendant: Some(41),
-        controls: Some(u64::MAX),
+        active_descendant: Some(ElementId(41)),
+        controls: Some(ElementId(u64::MAX)),
         has_popup: Some(HasPopup::ListBox),
         keyboard_shortcut: Some("Ctrl+K".into()),
         sort: Some(SortDirection::Descending),
         multiselectable: true,
         modal: Some(Modal {
-            layer: 3,
-            opened_from: Some(8),
+            layer: ElementId(3),
+            opened_from: Some(ElementId(8)),
         }),
     }
 }
@@ -250,7 +250,9 @@ fn every_command() -> Vec<DrawCommand> {
         fill_rule: FillRule::EvenOdd,
     };
     vec![
-        DrawCommand::PushSurface { surface: 5 },
+        DrawCommand::PushSurface {
+            surface: SurfaceKey(std::num::NonZeroU64::new(5).unwrap()),
+        },
         DrawCommand::PushElement {
             element: Arc::new(element()),
         },

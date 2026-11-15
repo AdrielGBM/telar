@@ -382,7 +382,10 @@ fn focus_order_follows_tab_and_not_the_order_the_frame_draws_in() {
         .tab_order
         .iter()
         .map(|stop| {
-            let node = access.snapshot.iter().find(|node| node.id == Some(stop.id));
+            let node = access
+                .snapshot
+                .iter()
+                .find(|node| node.id == Some(crate::AccessId::own(stop.id)));
             node.map_or("", |node| node.name.as_str())
         })
         .collect();

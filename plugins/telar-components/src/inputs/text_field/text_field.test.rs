@@ -517,7 +517,10 @@ mod multiline {
     fn a_press_low_in_an_empty_area_still_lands_in_it() {
         let mut mounted = Mounted::new(TextFieldProps::props().rows(4));
         mounted.click_area();
-        assert_eq!(focus::current(), mounted.area().id);
+        assert_eq!(
+            focus::current().map(telar::AccessId::own),
+            mounted.area().id
+        );
         mounted.type_text("hi");
         assert_eq!(mounted.value.get(), "hi");
     }

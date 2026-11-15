@@ -15,8 +15,8 @@ use renderer_core::Focusable;
 use rustc_hash::FxHashSet;
 use ui_tree::EventResult;
 
-/// An opaque focus identity, one per focusable widget. Allocate with [`next_id`].
-pub type FocusId = u64;
+/// Allocated with [`next_id`].
+pub use platform_core::FocusId;
 
 /// What kind of widget a focusable is, as far as the keyboard is concerned.
 ///
@@ -217,7 +217,7 @@ pub(crate) enum Travel {
 impl FocusState {
     fn new(boundary: FocusBoundary) -> Self {
         Self {
-            next_id: 1,
+            next_id: FocusId(1),
             next_scope: 1,
             focused: signal(None),
             pointer_focus: signal(false),
@@ -262,7 +262,7 @@ fn focused_signal() -> RwSignal<Option<FocusId>> {
 pub fn next_id() -> FocusId {
     with_focus(|s| {
         let id = s.next_id;
-        s.next_id += 1;
+        s.next_id = FocusId(id.0 + 1);
         id
     })
 }
@@ -1596,8 +1596,12 @@ pub(crate) fn describe(
     semantics.position = position_state(id);
     semantics.sort = sort_state(id);
     semantics.multiselectable = multiselectable_state(id);
-    semantics.active_descendant = active_descendant_state(id).and_then(node_of).map(u64::from);
-    semantics.controls = controls_state(id).and_then(node_of).map(u64::from);
+    semantics.active_descendant = active_descendant_state(id)
+        .and_then(node_of)
+        .map(|node| renderer_core::ElementId(node.into()));
+    semantics.controls = controls_state(id)
+        .and_then(node_of)
+        .map(|node| renderer_core::ElementId(node.into()));
     semantics.focusable = Some(focusable_of(id, semantics.role.clone(), declared));
 }
 
@@ -1631,12 +1635,14 @@ pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> 
 /// Follows a focus move the surface made on its own to the box `box_id` names (see [`Event::BoxFocused`]), reporting whether Telar's focus changed.
 ///
 /// Taken as keyboard focus, so the ring shows. A box already focused is left alone: the move that reports it may be the echo of a tap that focused it first, and re-taking it would turn that tap's ring on.
-pub fn follow_box(box_id: u64) -> bool {
+pub fn follow_box(box_id: renderer_core::ElementId) -> bool {
     // A presented control never holds focus: the document focusing a tapped row must not take focus from the tree that drives it.
     let found = with_focus_ref(|s| {
         s.order
             .iter()
-            .find(|e| e.stop.holds_focus() && e.node.is_some_and(|node| u64::from(node) == box_id))
+            .find(|e| {
+                e.stop.holds_focus() && e.node.is_some_and(|node| u64::from(node) == box_id.0)
+            })
             .map(|e| e.id)
     });
     let Some(id) = found else {

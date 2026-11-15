@@ -653,7 +653,7 @@ async fn a_link_and_the_keyboard_work_on_a_page_taken_over() {
     assert!(
         recorded()
             .iter()
-            .any(|event| matches!(event, Event::BoxActivated { box_id } if *box_id == LINK))
+            .any(|event| matches!(event, Event::BoxActivated { box_id } if *box_id == renderer_core::ElementId(LINK)))
     );
 
     button.focus().expect("the button takes focus");
@@ -673,7 +673,7 @@ async fn a_link_and_the_keyboard_work_on_a_page_taken_over() {
     assert!(
         events
             .iter()
-            .any(|event| matches!(event, Event::BoxFocused { box_id } if *box_id == BUTTON)),
+            .any(|event| matches!(event, Event::BoxFocused { box_id } if *box_id == renderer_core::ElementId(BUTTON))),
         "{events:?}"
     );
     assert!(
@@ -773,20 +773,20 @@ async fn the_reader_s_scroll_and_focus_survive_the_take_over() {
     assert!(
         events
             .iter()
-            .any(|event| matches!(event, Event::BoxFocused { box_id } if *box_id == TOP_LINK)),
+            .any(|event| matches!(event, Event::BoxFocused { box_id } if *box_id == renderer_core::ElementId(TOP_LINK))),
         "{events:?}"
     );
     assert!(
         events.iter().any(|event| matches!(
             event,
-            Event::BoxScrolled { box_id, y, .. } if *box_id == PANE && *y == 50.0
+            Event::BoxScrolled { box_id, y, .. } if *box_id == renderer_core::ElementId(PANE) && *y == 50.0
         )),
         "{events:?}"
     );
     assert!(
         events.iter().any(|event| matches!(
             event,
-            Event::BoxScrolled { box_id, y, .. } if *box_id == PAGE && *y == 600.0
+            Event::BoxScrolled { box_id, y, .. } if *box_id == renderer_core::ElementId(PAGE) && *y == 600.0
         )),
         "{events:?}"
     );

@@ -7,13 +7,14 @@ use geometry_core::{Insets, Rect};
 use wire_core::{Wire, WireError, decode, encode};
 
 use crate::{
-    AccessAction, AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation,
+    AccessAction, AccessAudit, AccessId, AccessNode, AccessRule, AccessSeverity, AccessViolation,
     ActionSupport, ColorScheme, Cursor, Destination, DragActions, DragData, DragIcon, DragOutcome,
-    DropAction, DropAnswer, DroppedData, Event, FullscreenMode, HasPopup, HistoryStep,
-    HistoryUpdate, Ime, Key, KeyboardConvention, Link, Location, MimeType, ModifiersState,
-    NamedKey, NumericValue, Orientation, OutgoingDrag, PointerButton, PointerSource, ResizeEdge,
-    Role, ScrollDelta, SetPosition, SortDirection, SystemPreferences, TextInput, TextScale,
-    TextSelection, Toggle, Value, WindowCommand, WindowConfig, WindowPosition,
+    DropAction, DropAnswer, DroppedData, ElementId, Event, FocusId, FullscreenMode, HasPopup,
+    HistoryStep, HistoryUpdate, Ime, Key, KeyboardConvention, Link, Location, MimeType,
+    ModifiersState, NamedKey, NumericValue, Orientation, OutgoingDrag, PointerButton,
+    PointerSource, ResizeEdge, Role, ScrollDelta, SetPosition, SortDirection, SurfaceKey,
+    SystemPreferences, TextInput, TextScale, TextSelection, Toggle, Value, WindowCommand,
+    WindowConfig, WindowPosition,
 };
 
 fn round_trip<T: Wire + PartialEq + Debug>(value: T) {
@@ -132,47 +133,54 @@ fn every_event() -> Vec<Event> {
             y: 0.0,
         },
         Event::BoxScrolled {
-            box_id: 42,
+            box_id: ElementId(42),
             x: 0.0,
             y: 120.0,
         },
         Event::ScrollEnded { x: 5.0, y: 6.0 },
-        Event::BoxFocused { box_id: 3 },
+        Event::BoxFocused {
+            box_id: ElementId(3),
+        },
         Event::FocusLeftBoxes,
-        Event::BoxActivated { box_id: 4 },
-        Event::RunActivated { box_id: 5, run: 2 },
+        Event::BoxActivated {
+            box_id: ElementId(4),
+        },
+        Event::RunActivated {
+            box_id: ElementId(5),
+            run: 2,
+        },
         Event::InSurface {
-            surface: 9,
+            surface: key(9),
             event: Box::new(Event::InSurface {
-                surface: 10,
+                surface: key(10),
                 event: Box::new(Event::AccessAction {
-                    id: 11,
+                    id: own(11),
                     action: AccessAction::Activate,
                 }),
             }),
         },
         Event::AccessAction {
-            id: 12,
+            id: own(12),
             action: AccessAction::Focus,
         },
         Event::AccessAction {
-            id: 13,
+            id: own(13),
             action: AccessAction::Increment,
         },
         Event::AccessAction {
-            id: 13,
+            id: own(13),
             action: AccessAction::Decrement,
         },
         Event::AccessAction {
-            id: 14,
+            id: own(14),
             action: AccessAction::SetValue(Value::Text("añil".into())),
         },
         Event::AccessAction {
-            id: 14,
+            id: own(14),
             action: AccessAction::ScrollIntoView,
         },
         Event::AccessAction {
-            id: 14,
+            id: own(14),
             action: AccessAction::SetSelection(TextSelection {
                 anchor: 4,
                 focus: 1,
@@ -378,9 +386,17 @@ fn the_field_taking_text_and_the_keyboard_convention_round_trip() {
     round_trip(KeyboardConvention::Pc);
 }
 
+fn own(id: u64) -> AccessId {
+    AccessId::own(FocusId(id))
+}
+
+fn key(key: u64) -> SurfaceKey {
+    SurfaceKey(std::num::NonZeroU64::new(key).unwrap())
+}
+
 fn node() -> AccessNode {
     AccessNode {
-        id: Some(4),
+        id: Some(own(4)),
         parent: Some(0),
         role: Role::TreeItem,
         name: "Fila".into(),
@@ -404,8 +420,11 @@ fn node() -> AccessNode {
             position: NonZeroU32::MIN,
             size: NonZeroU32::new(9).unwrap(),
         }),
-        active_descendant: Some(6),
-        controls: Some(7),
+        active_descendant: Some(own(6)),
+        controls: Some(AccessId {
+            surface: Some(key(2)),
+            id: FocusId(7),
+        }),
         has_popup: Some(HasPopup::Menu),
         keyboard_shortcut: Some("Control+Shift+Z".into()),
         sort: Some(SortDirection::Ascending),

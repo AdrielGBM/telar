@@ -465,11 +465,11 @@ fn a_host_focus_move_becomes_telar_s() {
     register_at(id, FocusKind::Widget, node);
     clear();
 
-    assert!(follow_box(u64::from(node)));
+    assert!(follow_box(renderer_core::ElementId(node.into())));
     assert_eq!(current(), Some(id));
     assert!(is_focus_visible(id), "a Tab the host walked shows the ring");
     assert!(
-        !follow_box(u64::from(node)),
+        !follow_box(renderer_core::ElementId(node.into())),
         "the move reported for focus already there changes nothing"
     );
 }
@@ -483,7 +483,7 @@ fn a_host_focus_move_echoing_a_tap_keeps_the_ring_off() {
     register_at(id, FocusKind::Widget, node);
 
     request_from_pointer(id);
-    follow_box(u64::from(node));
+    follow_box(renderer_core::ElementId(node.into()));
     assert!(is_focused(id));
     assert!(!is_focus_visible(id));
 }
@@ -494,7 +494,7 @@ fn a_host_focus_move_to_no_known_box_changes_nothing() {
     register_as(id, FocusKind::Widget);
     request(id);
 
-    assert!(!follow_box(u64::MAX));
+    assert!(!follow_box(renderer_core::ElementId(u64::MAX)));
     assert_eq!(current(), Some(id));
 }
 

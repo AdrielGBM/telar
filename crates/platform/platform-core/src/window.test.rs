@@ -22,7 +22,7 @@ impl EventHandler<TestWindow> for TestHandler {
     fn on_redraw(&mut self, _window: &TestWindow) {}
     fn accessibility(&self) -> Vec<crate::AccessNode> {
         vec![crate::AccessNode {
-            id: Some(1),
+            id: Some(crate::AccessId::own(crate::FocusId(1))),
             parent: None,
             role: crate::Role::Button,
             name: "test button".to_string(),

@@ -348,7 +348,7 @@ impl SurfaceCanvas {
     pub fn boundary(&self) -> RenderNode {
         RenderNode::group([
             RenderNode::Primitive(DrawCommand::PushSurface {
-                surface: self.surface.handle().raw().get(),
+                surface: renderer_core::SurfaceKey(self.surface.handle().raw()),
             }),
             self.tree.boundary(),
             RenderNode::Primitive(DrawCommand::PopSurface),
@@ -364,7 +364,7 @@ impl SurfaceCanvas {
         else {
             return EventResult::Ignored;
         };
-        if *surface != self.surface.handle().raw().get() {
+        if *surface != renderer_core::SurfaceKey(self.surface.handle().raw()) {
             return self.dispatch_own(event);
         }
         self.dispatch_box_event(inner)
@@ -400,7 +400,11 @@ impl SurfaceCanvas {
     }
 
     /// Carries out a screen reader's `action` on the control `id` names in [`access_snapshot`](Self::access_snapshot). See [`accessibility::perform_action`](crate::accessibility::perform_action).
-    pub fn perform_access_action(&self, id: u64, action: platform_core::AccessAction) {
+    pub fn perform_access_action(
+        &self,
+        id: platform_core::AccessId,
+        action: platform_core::AccessAction,
+    ) {
         self.with_entered(|| {
             crate::accessibility::perform_action(id, action, |event| {
                 self.dispatch_own(event);

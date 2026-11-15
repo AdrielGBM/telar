@@ -6,22 +6,24 @@ use std::rc::{Rc, Weak};
 
 use geometry_core::Transform;
 use layout_core::NodeId;
-use platform_core::{AccessAction, AccessAudit, AccessNode, ConsumedKeys, Event, TextInput};
+use platform_core::{
+    AccessAction, AccessAudit, AccessId, AccessNode, ConsumedKeys, Event, FocusId, SurfaceKey,
+    TextInput,
+};
 use renderer_core::{Color, DrawCommand};
 use rustc_hash::{FxHashMap, FxHashSet};
 use ui_tree::RenderNode;
 
-use crate::accessibility::NESTED_ID_SHIFT;
 use crate::focus::Keyboard;
 use crate::frame_focus::{FrameFocus, Inside, Stop};
 
 /// What a surface drawn here by a world this process cannot enter reports back about itself, each answer in the surface's own coordinates and its own ids, and what it does with the keyboard of the one focus stop the host keeps for it ([`ForeignBoundary::focus_stop`]).
 pub trait ForeignSurface {
-    /// What a screen reader is told about the surface, as [`accessibility::snapshot`](crate::accessibility::snapshot) reads one surface: a control's id is its own focus id below `1 << 32`, or one a surface nested in it qualified with its handle, in its own numbering.
+    /// What a screen reader is told about the surface, as [`accessibility::snapshot`](crate::accessibility::snapshot) reads one surface: a control of a surface nested in it is named by the key it gives that surface, in its own numbering.
     fn access_snapshot(&self) -> Vec<AccessNode>;
 
     /// Carries out a screen reader's `action` on the control `id` names in its [`access_snapshot`](Self::access_snapshot), as [`accessibility::perform_action`](crate::accessibility::perform_action) does for the surface entered.
-    fn perform_access_action(&self, id: u64, action: AccessAction);
+    fn perform_access_action(&self, id: AccessId, action: AccessAction);
 
     /// Where the field that holds its keyboard has its caret, or `None` while no field does, as [`text_input`](crate::text_input) reports it for the surface entered.
     fn text_input(&self) -> Option<TextInput>;
@@ -50,7 +52,7 @@ pub trait ForeignSurface {
 
 /// A [`ForeignSurface`] registered on this thread under a key no surface handle takes, while this lives: what marks its frame where the host draws it, so every reader of the host's frame reads that frame as the foreign surface's.
 pub struct ForeignBoundary {
-    key: u64,
+    key: SurfaceKey,
     source: Weak<dyn ForeignSurface>,
 }
 
@@ -73,8 +75,8 @@ impl ForeignBoundary {
         Self { key, source }
     }
 
-    /// The key its frame is marked with, which [`DrawCommand::PushSurface`] carries as a surface handle.
-    pub fn key(&self) -> u64 {
+    /// The key its frame is marked with, which [`DrawCommand::PushSurface`] carries.
+    pub fn key(&self) -> SurfaceKey {
         self.key
     }
 
@@ -129,7 +131,7 @@ impl ForeignBoundary {
         })
     }
 
-    fn nested_key(&self, guest: u64) -> u64 {
+    fn nested_key(&self, guest: SurfaceKey) -> SurfaceKey {
         nested_key_of(self.key, guest).unwrap_or_else(|| {
             let key = mint();
             REGISTRY.with(|registry| {
@@ -170,7 +172,7 @@ impl ForeignBoundary {
 }
 
 /// Gives the focus stop of the foreign surface `key` marks, or of the one a surface `key` marks is nested in, focus once something inside holds it, as a screen reader's action there may have moved it.
-pub(crate) fn follow_focus_inside(key: u64) {
+pub(crate) fn follow_focus_inside(key: SurfaceKey) {
     let stop = REGISTRY.with(|registry| {
         let registry = registry.borrow();
         let owner = registry.get(&key)?.owner;
@@ -238,24 +240,24 @@ impl Drop for ForeignBoundary {
 /// One key of the registry: a foreign surface's own, or one marking a surface nested in it.
 struct Registered {
     /// The key of the foreign surface it belongs to; its own for the foreign surface itself.
-    owner: u64,
-    /// The handle the foreign world gave a surface nested in it; `None` for the foreign surface itself.
-    guest: Option<u64>,
+    owner: SurfaceKey,
+    /// The key the foreign world gave a surface nested in it; `None` for the foreign surface itself.
+    guest: Option<SurfaceKey>,
     source: Weak<dyn ForeignSurface>,
     stop: Weak<Stop>,
 }
 
 reactive_core::dropless_thread_local! {
-    static REGISTRY: released FxHashMap<u64, Registered> = FxHashMap::default();
+    static REGISTRY: released FxHashMap<SurfaceKey, Registered> = FxHashMap::default();
 }
 
 /// A key from the counter surface handles come from, so no foreign key is ever a surface's.
-fn mint() -> u64 {
-    crate::surface_context::next_handle().raw().get()
+fn mint() -> SurfaceKey {
+    SurfaceKey(crate::surface_context::next_handle().raw())
 }
 
 /// The key marking the surface the foreign surface at `owner` numbers `guest`, while its frames carry it.
-pub(crate) fn nested_key_of(owner: u64, guest: u64) -> Option<u64> {
+pub(crate) fn nested_key_of(owner: SurfaceKey, guest: SurfaceKey) -> Option<SurfaceKey> {
     REGISTRY.with(|registry| {
         registry
             .borrow()
@@ -266,12 +268,12 @@ pub(crate) fn nested_key_of(owner: u64, guest: u64) -> Option<u64> {
 }
 
 /// Whether `key` marks a foreign surface, or a surface nested in one.
-pub(crate) fn is_foreign(key: u64) -> bool {
+pub(crate) fn is_foreign(key: SurfaceKey) -> bool {
     REGISTRY.with(|registry| registry.borrow().contains_key(&key))
 }
 
 /// The foreign surface `key` marks, while it is registered and alive; `None` for a key marking a surface nested in one.
-pub(crate) fn source(key: u64) -> Option<Rc<dyn ForeignSurface>> {
+pub(crate) fn source(key: SurfaceKey) -> Option<Rc<dyn ForeignSurface>> {
     REGISTRY.with(|registry| {
         let registry = registry.borrow();
         let registered = registry.get(&key).filter(|r| r.guest.is_none())?;
@@ -280,13 +282,13 @@ pub(crate) fn source(key: u64) -> Option<Rc<dyn ForeignSurface>> {
 }
 
 /// The foreign surface a control with `id` in the surface `key` marks belongs to, with the id that surface knows the control by.
-pub(crate) fn target(key: u64, id: u64) -> Option<(Rc<dyn ForeignSurface>, u64)> {
+pub(crate) fn target(key: SurfaceKey, id: FocusId) -> Option<(Rc<dyn ForeignSurface>, AccessId)> {
     REGISTRY.with(|registry| {
         let registry = registry.borrow();
         let registered = registry.get(&key)?;
-        let own = match registered.guest {
-            Some(guest) => (guest << NESTED_ID_SHIFT) | id,
-            None => id,
+        let own = AccessId {
+            surface: registered.guest,
+            id,
         };
         Some((registered.source.upgrade()?, own))
     })

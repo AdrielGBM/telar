@@ -495,7 +495,7 @@ fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
     );
 
     dev.on_access(&[telar::AccessNode {
-        id: Some(4),
+        id: Some(telar::AccessId::own(telar::FocusId(4))),
         parent: None,
         role: telar::Role::Button,
         name: String::new(),

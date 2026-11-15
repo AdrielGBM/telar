@@ -101,7 +101,7 @@ fn a_query_brings_a_clear_button_that_empties_the_field_and_keeps_the_keyboard_t
     assert!(
         focus::tab_order()
             .iter()
-            .all(|stop| Some(stop.id) != clear.id),
+            .all(|stop| Some(telar::AccessId::own(stop.id)) != clear.id),
         "the button is no Tab stop: Escape does the same"
     );
 
@@ -111,7 +111,10 @@ fn a_query_brings_a_clear_button_that_empties_the_field_and_keeps_the_keyboard_t
     assert_eq!(mounted.value.get(), "");
     assert_eq!(*mounted.log.borrow(), ["clear"]);
     assert!(mounted.node(Role::Button).is_none());
-    assert_eq!(focus::current(), mounted.field().id);
+    assert_eq!(
+        focus::current().map(telar::AccessId::own),
+        mounted.field().id
+    );
 }
 
 #[test]
@@ -123,13 +126,13 @@ fn escape_clears_a_query_and_only_then_lets_the_field_go() {
     assert_eq!(mounted.value.get(), "");
     assert_eq!(*mounted.log.borrow(), ["clear"]);
     assert_eq!(
-        focus::current(),
+        focus::current().map(telar::AccessId::own),
         mounted.field().id,
         "the first Escape only clears"
     );
     mounted.send(named(NamedKey::Escape));
     assert_ne!(
-        focus::current(),
+        focus::current().map(telar::AccessId::own),
         mounted.field().id,
         "with nothing to clear, Escape leaves the field"
     );

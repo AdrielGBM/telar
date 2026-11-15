@@ -184,7 +184,7 @@ fn the_cursor_a_control_points_at_reaches_the_element() {
 
     assert_eq!(
         elements(&tree)[0].semantics.active_descendant,
-        Some(u64::from(target_node))
+        Some(renderer_core::ElementId(target_node.into()))
     );
     focus::clear();
 }
@@ -358,10 +358,13 @@ fn a_control_names_the_list_it_controls_and_points_into_it() {
 
     let combobox = &elements(&tree)[1];
     assert_eq!(combobox.semantics.role, Role::ComboBox);
-    assert_eq!(combobox.semantics.controls, Some(u64::from(list_node)));
+    assert_eq!(
+        combobox.semantics.controls,
+        Some(renderer_core::ElementId(list_node.into()))
+    );
     assert_eq!(
         combobox.semantics.active_descendant,
-        Some(u64::from(row_node))
+        Some(renderer_core::ElementId(row_node.into()))
     );
 
     open.set(false);

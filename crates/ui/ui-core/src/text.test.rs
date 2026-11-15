@@ -545,7 +545,10 @@ fn a_tap_on_a_link_run_follows_it() {
     assert_eq!(location_history(), vec![Location::root()]);
     assert_eq!(tap(&mut text, x), EventResult::Handled);
     assert_eq!(location_history(), vec![Location::root(), team.clone()]);
-    assert!(crate::link::activate_run(text.layout_node().into(), 0));
+    assert!(crate::link::activate_run(
+        renderer_core::ElementId(text.layout_node().into()),
+        0
+    ));
 }
 
 /// A size written as a fraction of the surface follows the surface, and the text is measured again at the new size.

@@ -126,7 +126,7 @@ impl Mounted {
     }
 
     fn button_id(&self, name: &str) -> telar::focus::FocusId {
-        self.node(name).id.expect("a button holds focus")
+        self.node(name).id.expect("a button holds focus").id
     }
 }
 

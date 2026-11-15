@@ -4,7 +4,6 @@
 
 use std::borrow::Cow;
 use std::cell::{Cell, OnceCell, Ref, RefCell};
-use std::num::NonZeroU64;
 use std::rc::Rc;
 
 use geometry_core::{BoxModel, Insets, Rect, Size, Transform};
@@ -248,7 +247,7 @@ impl Segment {
                     }
                 }
                 DrawCommand::PushSurface { surface } => {
-                    surfaces.push(NonZeroU64::new(*surface).map(SurfaceHandle::from_raw));
+                    surfaces.push(Some(SurfaceHandle::from_raw(surface.0)));
                 }
                 DrawCommand::PopSurface => {
                     surfaces.pop();

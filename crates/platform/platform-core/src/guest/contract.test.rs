@@ -160,7 +160,7 @@ impl crate::guest::ReportsSurface for u32 {
         Vec::new()
     }
 
-    fn perform_access_action(&mut self, _: u64, _: crate::AccessAction) {}
+    fn perform_access_action(&mut self, _: crate::AccessId, _: crate::AccessAction) {}
 
     fn text_input(&self) -> Option<crate::TextInput> {
         None

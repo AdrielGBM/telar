@@ -1,6 +1,6 @@
 use geometry_core::Rect;
 use platform_core::guest::{ReportsSurface, guest_entry};
-use platform_core::{AccessAction, Key, ModifiersState, NamedKey, Role};
+use platform_core::{AccessAction, AccessId, Key, ModifiersState, NamedKey, Role};
 
 use super::*;
 
@@ -8,7 +8,7 @@ use super::*;
 #[derive(Default)]
 pub struct Field {
     focused: bool,
-    actions: Vec<(u64, AccessAction)>,
+    actions: Vec<(AccessId, AccessAction)>,
     panics: bool,
 }
 
@@ -16,7 +16,7 @@ impl ReportsSurface for Field {
     fn access_snapshot(&self) -> Vec<AccessNode> {
         assert!(!self.panics, "the guest's snapshot panicked");
         vec![AccessNode {
-            id: Some(3),
+            id: Some(AccessId::own(platform_core::FocusId(3))),
             parent: None,
             role: Role::TextInput,
             name: "Name".to_owned(),
@@ -46,7 +46,7 @@ impl ReportsSurface for Field {
         }]
     }
 
-    fn perform_access_action(&mut self, id: u64, action: AccessAction) {
+    fn perform_access_action(&mut self, id: AccessId, action: AccessAction) {
         self.actions.push((id, action));
     }
 
@@ -155,7 +155,10 @@ fn the_host_reads_what_the_instance_reports_of_its_surface() {
         Some(Rect::new(4.0, 2.0, 1.0, 16.0))
     );
 
-    surface.perform_access_action(3, AccessAction::Increment);
+    surface.perform_access_action(
+        AccessId::own(platform_core::FocusId(3)),
+        AccessAction::Increment,
+    );
     assert!(surface.tab(&tab()), "Tab past its one field leaves it");
     assert!(!surface.holds_focus());
     surface.arrive(true);
@@ -163,7 +166,10 @@ fn the_host_reads_what_the_instance_reports_of_its_surface() {
     assert!(!surface.holds_focus());
     assert_eq!(
         unsafe { field.get() }.actions,
-        [(3, AccessAction::Increment)]
+        [(
+            AccessId::own(platform_core::FocusId(3)),
+            AccessAction::Increment
+        )]
     );
     unsafe { field.release() };
 }
@@ -174,7 +180,10 @@ fn a_forgotten_instance_reports_nothing_and_takes_nothing() {
     let (_library, field, surface) = loaded();
     surface.forget();
     assert!(!surface.arrive(false));
-    surface.perform_access_action(3, AccessAction::Increment);
+    surface.perform_access_action(
+        AccessId::own(platform_core::FocusId(3)),
+        AccessAction::Increment,
+    );
     assert!(surface.access_snapshot().is_empty());
     assert_eq!(surface.text_input(), None);
     let field = unsafe { field.get() };

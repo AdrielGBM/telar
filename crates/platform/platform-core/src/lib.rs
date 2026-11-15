@@ -38,9 +38,9 @@ mod wire;
 
 pub use access_audit::{AccessAudit, AccessRule, AccessSeverity, AccessViolation};
 pub use accessibility::{
-    AccessAction, AccessNode, ActionSupport, CurrentKind, HasPopup, HeadingLevel, Link, Live,
-    Modal, NumericValue, NumericValueError, Orientation, Positioning, Role, SetPosition,
-    SortDirection, TextSelection, Toggle, ToggleKind, Value,
+    AccessAction, AccessId, AccessNode, ActionSupport, CurrentKind, FocusId, HasPopup,
+    HeadingLevel, Link, Live, Modal, NumericValue, NumericValueError, Orientation, Positioning,
+    Role, SetPosition, SortDirection, TextSelection, Toggle, ToggleKind, Value,
 };
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_base, asset_url, set_asset_base};
@@ -85,7 +85,7 @@ pub use primary_scroll::{
     scroll_primary_to,
 };
 pub use route::Route;
-pub use semantics_core::{LocaleTag, LocaleTagError, Location, locale_tag};
+pub use semantics_core::{ElementId, LocaleTag, LocaleTagError, Location, SurfaceKey, locale_tag};
 pub use surface_conventions::SurfaceConventions;
 pub use system_preferences::{
     ColorScheme, SystemPreferences, TextScale, UnknownColorScheme, locales_from_env,

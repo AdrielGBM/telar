@@ -394,7 +394,9 @@ async fn a_box_the_browser_focuses_is_reported_as_focused() {
     next_frames().await;
     let events = recorded();
     assert!(
-        events.contains(&Event::BoxFocused { box_id: SLIDER }),
+        events.contains(&Event::BoxFocused {
+            box_id: renderer_core::ElementId(SLIDER)
+        }),
         "{events:?}"
     );
 }
@@ -462,7 +464,9 @@ async fn focus_moved_between_boxes_stays_the_app_s() {
     next_frames().await;
     let events = recorded();
     assert!(!events.contains(&Event::FocusLeftBoxes), "{events:?}");
-    assert!(events.contains(&Event::BoxFocused { box_id: BUTTON }));
+    assert!(events.contains(&Event::BoxFocused {
+        box_id: renderer_core::ElementId(BUTTON)
+    }));
 }
 
 #[wasm_bindgen_test]

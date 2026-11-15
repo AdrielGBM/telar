@@ -6,6 +6,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use geometry_core::Insets;
+use platform_core::ElementId;
 use platform_core::primary_scroll::DOCUMENT_SCROLL_ATTRIBUTE;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -15,7 +16,7 @@ use crate::document::{ARRIVAL_ID, DOCUMENT_SCROLL_OVERRIDES, arrival_rule};
 /// The document scroll while one box holds it. Dropping it gives the host back as it was found.
 pub(crate) struct DocumentScroll {
     host: web_sys::HtmlElement,
-    box_id: Rc<Cell<u64>>,
+    box_id: Rc<Cell<ElementId>>,
     listener: Closure<dyn FnMut(web_sys::Event)>,
     found: Vec<(&'static str, String)>,
     /// Where the document was when the scroll was taken, until the frame that took it has finished changing the page.
@@ -26,7 +27,7 @@ pub(crate) struct DocumentScroll {
 
 impl DocumentScroll {
     /// Hands the document scroll to box `id`, reporting where the document already is so a page scrolled before the app loaded stays where the reader put it.
-    pub(crate) fn hold(host: &web_sys::HtmlElement, id: u64) -> Self {
+    pub(crate) fn hold(host: &web_sys::HtmlElement, id: ElementId) -> Self {
         let style = host.style();
         // A host served already scrolling as the document carries the overrides because the page was written that way, not because its author set them, so giving it back takes them off.
         let served = host.has_attribute(DOCUMENT_SCROLL_ATTRIBUTE);
@@ -113,7 +114,7 @@ impl DocumentScroll {
     }
 
     /// Moves the document scroll to box `id`, a page rebuilt under the same surface.
-    pub(crate) fn follow(&self, id: u64) {
+    pub(crate) fn follow(&self, id: ElementId) {
         if self.box_id.replace(id) != id {
             report(id);
         }
@@ -161,11 +162,11 @@ fn settle(scroll_to: Option<(f32, f32)>) {
     }
 }
 
-fn report(box_id: u64) {
+fn report(box_id: ElementId) {
     report_at(box_id, offset());
 }
 
-fn report_at(box_id: u64, (x, y): (f64, f64)) {
+fn report_at(box_id: ElementId, (x, y): (f64, f64)) {
     platform_core::post_event(platform_core::Event::BoxScrolled {
         box_id,
         x: x as f32,

@@ -9,7 +9,7 @@ use platform_core::{
 };
 use reactive_core::{RwSignal, signal};
 use renderer_core::{DrawCommand, RectStyle, TextStyle};
-use ui_core::accessibility::{AccessTarget, perform_action, snapshot};
+use ui_core::accessibility::{perform_action, snapshot};
 use ui_core::focus::{self, FocusId, FocusKind, Role};
 use ui_core::{
     Container, DropTarget, EventResult, Input, LayoutItem, StyledContainer, compute_layout,
@@ -216,10 +216,7 @@ fn the_guests_controls_are_read_where_the_host_draws_them_under_ids_of_their_own
     for role in [Role::TextInput, Role::Button] {
         let node = read(&nodes, role.clone());
         assert!(
-            matches!(
-                AccessTarget::of(node.id.expect("a control")),
-                AccessTarget::Nested { surface, .. } if surface == key
-            ),
+            node.id.expect("a control").surface == Some(key),
             "{role:?} is named as the guest's"
         );
     }
@@ -470,7 +467,7 @@ fn only_a_press_on_the_guest_gives_its_stop_the_hosts_focus() {
 fn a_box_event_for_a_surface_the_guest_no_longer_draws_reaches_nothing() {
     let host = Host::new();
     let stale = Event::InSurface {
-        surface: u64::MAX >> 33,
+        surface: platform_core::SurfaceKey(std::num::NonZeroU64::new(u64::MAX >> 33).unwrap()),
         event: Box::new(Event::FocusLeftBoxes),
     };
     host.embed.foreign_surface().arrive(false);

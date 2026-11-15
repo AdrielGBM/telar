@@ -153,9 +153,9 @@ impl Overlay {
         self.canvas.frame_commands()
     }
 
-    /// The canvas's handle, which marks its frame inside the window's: its element ids name its own boxes, not the app's.
-    pub fn surface(&self) -> u64 {
-        self.canvas.surface().handle().raw().get()
+    /// The canvas's key, which marks its frame inside the window's: its element ids name its own boxes, not the app's.
+    pub fn surface(&self) -> telar::SurfaceKey {
+        telar::SurfaceKey(self.canvas.surface().handle().raw())
     }
 
     pub fn is_dirty(&self) -> bool {

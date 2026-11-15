@@ -1,5 +1,7 @@
 //! The input and lifecycle events every backend translates its own into.
 
+use semantics_core::{ElementId, SurfaceKey};
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// A key with a name rather than a character: the arrows, the modifiers, Enter, Escape and the rest.
 pub enum NamedKey {
@@ -171,9 +173,9 @@ pub enum Event {
     ///
     /// It exists for a target that owns scrolling — a document, where the browser scrolls on the compositor and gives back find-in-page, `scrollIntoView`, anchors and the keyboard that a transform never could. The widget still holds the offset, because hit-testing, anchored overlays and `visible_rect` all read it; it just does not decide it.
     ///
-    /// `box_id` is opaque here: the layer that emits it and the layer that answers it agree on what it names, and nothing in between needs to know.
+    /// `box_id` is the box's element id in the surface the event reaches.
     BoxScrolled {
-        box_id: u64,
+        box_id: ElementId,
         x: f32,
         y: f32,
     },
@@ -188,7 +190,7 @@ pub enum Event {
     ///
     /// A fact, like [`BoxScrolled`](Self::BoxScrolled): focus has already moved, and the app's own idea of it is what needs correcting. `box_id` names the box the same way.
     BoxFocused {
-        box_id: u64,
+        box_id: ElementId,
     },
     /// The surface moved the keyboard out of every box on its own — a document tabbing past the app, to content beside it, or to something inside the app that is no box, such as a link inside a paragraph — so no box holds it now.
     ///
@@ -198,27 +200,27 @@ pub enum Event {
     ///
     /// A fact, like [`BoxFocused`](Self::BoxFocused): the surface has already decided the activation was the app's to handle, and the app follows the box's destination.
     BoxActivated {
-        box_id: u64,
+        box_id: ElementId,
     },
     /// The surface followed a link inside a text by itself — a document whose `<a>` for a run of a paragraph was clicked — and this is the text's box and which of its spans (see `Span::link`) it was.
     ///
     /// The run's counterpart of [`BoxActivated`](Self::BoxActivated): the app follows that span's destination.
     RunActivated {
-        box_id: u64,
+        box_id: ElementId,
         run: u32,
     },
     /// A box event about a box inside a surface nested in this one, which the frame it is drawn in passes on into it.
     ///
     /// Each surface numbers its boxes from its own counter, so a box id alone would name a box of this surface as readily as one of the frame's: the event carries the surface the frame drew, as the `PushSurface` marker around the box named it, and `event` is the box event in that surface's own terms. A surface nested deeper is reached the same way, by the frames along the way.
     InSurface {
-        surface: u64,
+        surface: SurfaceKey,
         event: Box<Event>,
     },
-    /// A screen reader asked a control to do something, as [`EventHandler::on_accessibility_action`](crate::EventHandler::on_accessibility_action) does: `id` is the control's id in the surface the event reaches.
+    /// A screen reader asked a control to do something, as [`EventHandler::on_accessibility_action`](crate::EventHandler::on_accessibility_action) does: `id` names the control as a snapshot of the surface the event reaches does.
     ///
     /// A reader names a control of a nested surface by the id the window's snapshot gave it, which says which surface it is in; the request travels there inside [`InSurface`](Self::InSurface), as this, with the id that surface knows it by.
     AccessAction {
-        id: u64,
+        id: crate::AccessId,
         action: crate::AccessAction,
     },
     /// The part of the surface the system keeps for itself changed: status and navigation bars, a notch, rounded corners, a browser's own chrome over a page drawn to its edges. Logical units, measured in from each edge. Sent before the first frame where the platform knows, and again whenever it moves.

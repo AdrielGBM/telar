@@ -139,7 +139,7 @@ fn a_reader_sets_a_fields_text_and_its_selection() {
     let tree = mounted(vec![box_item(input)]);
 
     perform_action(
-        id,
+        AccessId::own(id),
         AccessAction::SetValue(Value::Text("añil\nazul".into())),
         unrouted,
     );
@@ -147,7 +147,7 @@ fn a_reader_sets_a_fields_text_and_its_selection() {
 
     focus::request(id);
     perform_action(
-        id,
+        AccessId::own(id),
         AccessAction::SetSelection(TextSelection {
             anchor: 3,
             focus: 1,
@@ -268,14 +268,14 @@ fn increment_on_a_slider_raises_its_value_by_one_step() {
     };
     assert!(the(&read(&tree), Role::Slider).supports.step);
 
-    perform_action(id, AccessAction::Increment, unrouted);
+    perform_action(AccessId::own(id), AccessAction::Increment, unrouted);
     assert!((now(&tree) - 0.6).abs() < 1e-9);
-    perform_action(id, AccessAction::Decrement, unrouted);
+    perform_action(AccessId::own(id), AccessAction::Decrement, unrouted);
     assert!((now(&tree) - 0.5).abs() < 1e-9);
     assert_eq!(stepped.get(), 2);
 
     perform_action(
-        id,
+        AccessId::own(id),
         AccessAction::SetValue(Value::Text("loud".into())),
         unrouted,
     );

@@ -4,6 +4,21 @@ use std::num::NonZeroU32;
 
 use super::*;
 
+/// A platform that names a node by one integer gets the control back as the same id, whichever surface holds it, and a nested surface's control never takes the id of the window's own control with the same focus id.
+#[test]
+fn an_access_id_round_trips_through_the_integer_a_platform_names_it_by() {
+    let own = AccessId::own(FocusId(3));
+    let nested = AccessId {
+        surface: Some(SurfaceKey(NonZeroU64::new(7).unwrap())),
+        id: FocusId(3),
+    };
+    for id in [own, nested] {
+        assert_eq!(AccessId::from_bits(id.to_bits()), id);
+        assert_eq!(id.to_bits() >> 63, 0, "the top bit is left to the platform");
+    }
+    assert_ne!(own.to_bits(), nested.to_bits());
+}
+
 fn node(role: Role, name: &str) -> AccessNode {
     AccessNode {
         id: None,
@@ -172,22 +187,23 @@ fn a_current_link_says_so() {
 /// A tree keeps focus while its cursor walks the rows, and a reader says the row the cursor is on rather than the tree around it.
 #[test]
 fn focus_is_read_on_the_row_a_focused_tree_s_cursor_rests_on() {
+    let own = |id: u64| Some(crate::AccessId::own(crate::FocusId(id)));
     let row = |id: u64, name: &str| {
         let mut node = node(Role::TreeItem, name);
-        node.id = Some(id);
+        node.id = own(id);
         node
     };
     let mut tree = node(Role::Tree, "Files");
-    tree.id = Some(1);
+    tree.id = own(1);
     tree.focused = true;
-    tree.active_descendant = Some(3);
+    tree.active_descendant = own(3);
     let nodes = [tree.clone(), row(2, "src"), row(3, "docs")];
     assert_eq!(
         transcript(&nodes),
         "Files, tree\nsrc, treeitem\ndocs, treeitem, focused"
     );
 
-    tree.active_descendant = Some(9);
+    tree.active_descendant = own(9);
     assert_eq!(
         transcript(&[tree, row(2, "src")]),
         "Files, tree, focused\nsrc, treeitem",

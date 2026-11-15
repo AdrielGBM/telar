@@ -11,7 +11,7 @@ use super::*;
 struct Fixed;
 
 impl Surface for Fixed {
-    fn hold_document_scroll(&mut self, _id: u64) {}
+    fn hold_document_scroll(&mut self, _id: ElementId) {}
 
     fn fixed_origin(&mut self) -> Option<(f32, f32)> {
         None
@@ -828,7 +828,7 @@ fn a_container_points_at_the_row_its_cursor_rests_on() {
                 open(
                     1,
                     Semantics {
-                        active_descendant: Some(cursor),
+                        active_descendant: Some(ElementId(cursor)),
                         ..Semantics::of(Role::Tree)
                     },
                 ),
@@ -1185,7 +1185,7 @@ fn a_live_region_writes_how_urgently_it_is_announced() {
 struct Offset;
 
 impl Surface for Offset {
-    fn hold_document_scroll(&mut self, _id: u64) {}
+    fn hold_document_scroll(&mut self, _id: ElementId) {}
 
     fn fixed_origin(&mut self) -> Option<(f32, f32)> {
         None
@@ -1208,7 +1208,7 @@ impl Surface for Offset {
     }
 }
 
-const NESTED: u64 = 7;
+const NESTED: SurfaceKey = SurfaceKey(std::num::NonZeroU64::new(7).unwrap());
 
 /// `content`, the frame of surface [`NESTED`], drawn in the window's box 1.
 fn framed(content: Vec<DrawCommand>) -> Vec<DrawCommand> {
@@ -1359,7 +1359,7 @@ fn only_box_of(frame: &Frame, id: u64) -> &BoxNode {
 #[test]
 fn a_cursor_points_only_at_a_row_of_its_own_surface() {
     let tree = Semantics {
-        active_descendant: Some(2),
+        active_descendant: Some(ElementId(2)),
         ..Semantics::of(Role::Tree)
     };
     let frame = describe_frame(
@@ -1411,7 +1411,7 @@ fn a_nested_surface_never_takes_the_document_scroll() {
 
 #[test]
 fn a_drawing_in_a_nested_surface_names_its_definitions_apart_from_the_windows() {
-    let drawing = |surface: Option<u64>| {
+    let drawing = |surface: Option<SurfaceKey>| {
         let gradient = renderer_core::ShapeStyle::with_fill(
             renderer_core::RectStyle::default(),
             renderer_core::Paint::Gradient(renderer_core::Gradient::linear(
@@ -1526,7 +1526,7 @@ fn roots(frame: &Frame) -> Vec<&BoxNode> {
 #[test]
 fn a_tab_names_the_panel_it_controls_and_radios_sit_in_their_group() {
     let tab = Semantics {
-        controls: Some(4),
+        controls: Some(ElementId(4)),
         ..Semantics::of(Role::Tab).in_state(false, Some(Toggle::On), false)
     };
     let mut panel = Semantics::of(Role::TabPanel);
@@ -1573,8 +1573,8 @@ fn a_tab_names_the_panel_it_controls_and_radios_sit_in_their_group() {
 #[test]
 fn a_combobox_names_the_list_it_controls_and_points_into_it() {
     let combobox = Semantics {
-        controls: Some(3),
-        active_descendant: Some(5),
+        controls: Some(ElementId(3)),
+        active_descendant: Some(ElementId(5)),
         ..Semantics::of(Role::ComboBox)
     };
     let frame = describe_frame(
@@ -1647,7 +1647,7 @@ fn a_controlled_box_before_its_control_or_with_an_anchor_is_named_too() {
             open(
                 2,
                 Semantics {
-                    controls: Some(3),
+                    controls: Some(ElementId(3)),
                     ..Semantics::of(Role::Button)
                 },
             ),
@@ -1677,8 +1677,8 @@ fn a_control_naming_a_box_the_frame_did_not_draw_names_nothing() {
             open(
                 2,
                 Semantics {
-                    controls: Some(9),
-                    active_descendant: Some(4),
+                    controls: Some(ElementId(9)),
+                    active_descendant: Some(ElementId(4)),
                     ..Semantics::of(Role::ComboBox)
                 },
             ),
@@ -1704,7 +1704,7 @@ fn a_control_names_only_a_box_of_its_own_surface() {
             open(
                 1,
                 Semantics {
-                    controls: Some(2),
+                    controls: Some(ElementId(2)),
                     ..Semantics::of(Role::ComboBox)
                 },
             ),
@@ -1888,7 +1888,10 @@ fn a_grid_counts_the_rows_its_built_rows_say_it_has() {
 
 fn modal_layer(layer: u64, opened_from: Option<u64>) -> Semantics {
     Semantics {
-        modal: Some(Modal { layer, opened_from }),
+        modal: Some(Modal {
+            layer: ElementId(layer),
+            opened_from: opened_from.map(ElementId),
+        }),
         ..Semantics::group()
     }
 }

@@ -94,7 +94,7 @@ fn the_chosen_tab_controls_the_panel_and_the_panel_is_called_by_it() {
 fn a_document_is_told_the_chosen_tab_controls_the_panel_s_box() {
     let was = telar::testing::set_element_capture(true);
     let (tree, panel) = page(signal(0usize));
-    let controls: Vec<Option<u64>> = tree
+    let controls: Vec<Option<telar::ElementId>> = tree
         .commands()
         .iter()
         .filter_map(|command| match command {
@@ -105,7 +105,7 @@ fn a_document_is_told_the_chosen_tab_controls_the_panel_s_box() {
         })
         .collect();
     telar::testing::set_element_capture(was);
-    assert_eq!(controls, [Some(u64::from(panel)), None]);
+    assert_eq!(controls, [Some(telar::ElementId(panel.into())), None]);
 }
 
 #[test]
@@ -130,9 +130,15 @@ fn tab_goes_from_the_chosen_tab_into_the_panel_s_content() {
     let (tree, _) = page(signal(1usize));
     let nodes = read(&tree);
     focus::focus_next();
-    assert_eq!(focus::current(), named(&nodes, Role::Tab, "Pricing").id);
+    assert_eq!(
+        focus::current().map(telar::AccessId::own),
+        named(&nodes, Role::Tab, "Pricing").id
+    );
     focus::focus_next();
-    assert_eq!(focus::current(), named(&nodes, Role::Button, "More").id);
+    assert_eq!(
+        focus::current().map(telar::AccessId::own),
+        named(&nodes, Role::Button, "More").id
+    );
     focus::clear();
 }
 
@@ -142,8 +148,11 @@ fn a_reader_moving_to_the_panel_reaches_its_first_control() {
     let (tree, _) = page(signal(0usize));
     let nodes = read(&tree);
     let panel = panel_of(&nodes).id.expect("the panel has an id");
-    assert!(focus::perform(panel, focus::AccessAction::Focus));
-    assert_eq!(focus::current(), named(&nodes, Role::Button, "More").id);
+    assert!(focus::perform(panel.id, focus::AccessAction::Focus));
+    assert_eq!(
+        focus::current().map(telar::AccessId::own),
+        named(&nodes, Role::Button, "More").id
+    );
     focus::clear();
 }
 
@@ -152,7 +161,7 @@ fn a_reader_moving_to_the_panel_reaches_its_first_control() {
 fn a_press_on_the_panel_s_empty_room_takes_the_keyboard_away() {
     let (tree, panel) = page(signal(0usize));
     let nodes = read(&tree);
-    focus::request(named(&nodes, Role::Tab, "Overview").id.unwrap());
+    focus::request(named(&nodes, Role::Tab, "Overview").id.unwrap().id);
     let room = telar::track_layout(panel).unwrap().get();
     focus::blur_from_pointer(room.x + room.width - 4.0, room.y + room.height - 4.0);
     assert_eq!(focus::current(), None);

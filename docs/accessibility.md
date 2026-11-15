@@ -569,8 +569,9 @@ holds its rows and each row its cells; the grid says its row count — from the 
 hears every row of a table that builds a screenful — and its column count, each row its index, and each cell its
 column and its row's index. A set whose items agree on its size, such as the options of a list box, says it on the
 list, where AccessKit reads it; a tree whose rows sit at several levels leaves each row's level and place to say it.
-A control keeps its focus id as its node id wherever it sits, so focus and the row a tree's cursor rests on stay the
-same nodes between updates.
+A control is named by its `AccessId` wherever it sits — its focus id, with the key of the nested surface that holds
+it, if any — and AccessKit is handed the one integer `AccessId::to_bits` makes of it, so focus and the row a tree's
+cursor rests on stay the same nodes between updates.
 
 Siblings are in reading order, by where they show — of two at the same corner the larger first — except that a box
 held at the edge of a scrolled view (`sticky`) is read where the flow puts it rather than where it shows. A table's

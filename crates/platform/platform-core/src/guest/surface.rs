@@ -3,14 +3,14 @@
 use super::contract::TypeLayout;
 use super::lent::{Handle, LentBytes};
 use super::outcome::{CallOutcome, guest_entry};
-use crate::{AccessAction, AccessNode, ConsumedKeys, Event, TextInput};
+use crate::{AccessAction, AccessId, AccessNode, ConsumedKeys, Event, TextInput};
 
 /// The guest's side of a surface its host draws as a foreign one, each answer in the surface's own coordinates and ids. The host keeps one focus stop for the surface, so exactly one side has a focus owner: focus arrives from the host, moves inside on Tab, leaves on Tab past either end, and is cleared when the stop loses it.
 pub trait ReportsSurface: 'static {
-    /// A control's id is its own focus id below `1 << 32`, or one a surface nested in it qualified with its handle.
+    /// A control of a surface nested in this one is named by the key this surface gives the nested one.
     fn access_snapshot(&self) -> Vec<AccessNode>;
 
-    fn perform_access_action(&mut self, id: u64, action: AccessAction);
+    fn perform_access_action(&mut self, id: AccessId, action: AccessAction);
 
     fn text_input(&self) -> Option<TextInput>;
 
@@ -104,7 +104,7 @@ unsafe extern "C" fn access_action<T: ReportsSurface>(
 ) -> CallOutcome {
     guest_entry(|| {
         let action: AccessAction = unsafe { action.read() };
-        unsafe { surface.get() }.perform_access_action(id, action);
+        unsafe { surface.get() }.perform_access_action(AccessId::from_bits(id), action);
     })
 }
 

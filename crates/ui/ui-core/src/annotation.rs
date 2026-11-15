@@ -99,7 +99,7 @@ fn forget(node: NodeId, generation: u64) {
 pub(crate) fn mark_modal(node: NodeId, layer: NodeId) {
     slot(node).update(|annotation| {
         annotation.modal = Some(Modal {
-            layer: layer.into(),
+            layer: renderer_core::ElementId(layer.into()),
             opened_from: None,
         })
     });
@@ -112,7 +112,7 @@ pub(crate) fn modal_opened_from(node: NodeId, owner: NodeId) {
     };
     annotation.update(|annotation| {
         if let Some(modal) = &mut annotation.modal {
-            modal.opened_from = Some(owner.into());
+            modal.opened_from = Some(renderer_core::ElementId(owner.into()));
         }
     });
 }

@@ -3,7 +3,7 @@ use crate::Rect;
 
 fn node(role: Role, name: &str) -> AccessNode {
     AccessNode {
-        id: Some(1),
+        id: Some(crate::AccessId::own(crate::FocusId(1))),
         parent: None,
         role,
         name: name.to_string(),

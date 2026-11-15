@@ -348,7 +348,9 @@ fn the_reset_is_the_stylesheet_the_running_app_would_install() {
 fn a_nested_surfaces_own_paint_is_written_among_its_roots_in_draw_order() {
     let commands = [
         open(1, Semantics::group(), "", Rect::new(0.0, 0.0, 200.0, 100.0)),
-        DrawCommand::PushSurface { surface: 7 },
+        DrawCommand::PushSurface {
+            surface: renderer_core::SurfaceKey(std::num::NonZeroU64::new(7).unwrap()),
+        },
         open(1, Semantics::group(), "", Rect::new(0.0, 0.0, 200.0, 100.0)),
         DrawCommand::PopElement,
         DrawCommand::Rect {

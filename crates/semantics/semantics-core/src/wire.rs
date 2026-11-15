@@ -2,15 +2,17 @@
 //!
 //! A link crosses as text and is parsed again on arrival, so the host's own URI policy is the one that decides: a link to a scheme the host refuses arrives as no link at all, and the box that carried it still arrives and still draws. That is [`take_link`]'s whole difference from an ordinary option.
 
+use std::num::NonZeroU64;
+
 use wire_core::{
     Reader, Shaped, Wire, WireError, Writer, fold, fold_fields, fold_shape, shape_named, wire_enum,
     wire_struct,
 };
 
 use crate::{
-    ConsumedKeys, CurrentKind, Destination, Focusable, ForcedColors, HasPopup, HeadingLevel, Link,
-    LocaleTag, Location, Modal, NumericValue, Orientation, Role, RouteAddress, Semantics,
-    SetPosition, SortDirection, Toggle, Uri, UriError, Value,
+    ConsumedKeys, CurrentKind, Destination, ElementId, Focusable, ForcedColors, HasPopup,
+    HeadingLevel, Link, LocaleTag, Location, Modal, NumericValue, Orientation, Role, RouteAddress,
+    Semantics, SetPosition, SortDirection, SurfaceKey, Toggle, Uri, UriError, Value,
 };
 
 wire_enum!(Role {
@@ -296,6 +298,34 @@ pub fn take_link(r: &mut Reader<'_>) -> Result<Option<Destination>, WireError> {
             });
         }
     })
+}
+
+impl Shaped for ElementId {
+    const SHAPE: u64 = fold_shape(shape_named("ElementId"), u64::SHAPE);
+}
+
+impl Wire for ElementId {
+    fn put(&self, w: &mut Writer) {
+        self.0.put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        u64::take(r).map(ElementId)
+    }
+}
+
+impl Shaped for SurfaceKey {
+    const SHAPE: u64 = fold_shape(shape_named("SurfaceKey"), u64::SHAPE);
+}
+
+impl Wire for SurfaceKey {
+    fn put(&self, w: &mut Writer) {
+        self.0.get().put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        NonZeroU64::new(u64::take(r)?)
+            .map(SurfaceKey)
+            .ok_or(WireError::Invalid("a surface key of zero"))
+    }
 }
 
 impl Shaped for Link {

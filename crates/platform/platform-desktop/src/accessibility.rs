@@ -13,8 +13,9 @@ use accesskit::{
     TreeId, TreeInfo, TreeUpdate,
 };
 use platform_core::{
-    AccessAction, AccessNode, ActionSupport, CurrentKind, HasPopup, Live, LocaleTag, NumericValue,
-    Orientation, Positioning, Role, SortDirection, TextSelection, Toggle, ToggleKind, Value,
+    AccessAction, AccessId, AccessNode, ActionSupport, CurrentKind, HasPopup, Live, LocaleTag,
+    NumericValue, Orientation, Positioning, Role, SortDirection, TextSelection, Toggle, ToggleKind,
+    Value,
 };
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
@@ -47,7 +48,7 @@ pub(crate) fn tree_update(
         .enumerate()
         .map(|(index, control)| control.unwrap_or_else(|| label_id(index)))
         .collect();
-    let control_named = |id: u64| {
+    let control_named = |id: AccessId| {
         nodes
             .iter()
             .position(|other| other.id == Some(id))
@@ -302,14 +303,14 @@ fn from_zero(counted: NonZeroU32) -> usize {
     (counted.get() - 1) as usize
 }
 
-/// The node a control goes by: its id in the snapshot, which a surface nested in the window qualifies with its handle in the high half.
-fn control_id(focus_id: u64) -> NodeId {
-    NodeId(focus_id)
+/// The node a control goes by: its id in the snapshot, as the one integer [`AccessId::to_bits`] makes of it.
+fn control_id(id: AccessId) -> NodeId {
+    NodeId(id.to_bits())
 }
 
-/// Whether a control's id is clear of the ids the platform gives its own nodes; one that is not, from a surface handle past `1 << 31`, is read as a label, which nothing addresses.
-fn is_control_id(focus_id: u64) -> bool {
-    focus_id & OWN == 0
+/// Whether a control's id is clear of the ids the platform gives its own nodes; one that is not, from a surface key past `1 << 31`, is read as a label, which nothing addresses.
+fn is_control_id(id: AccessId) -> bool {
+    id.to_bits() & OWN == 0
 }
 
 /// The node of the label read at `index` in the snapshot.
@@ -506,11 +507,11 @@ fn character_at(runs: &[TextRun], position: TextPosition) -> Option<(usize, usiz
 pub(crate) fn requested_action(
     request: &ActionRequest,
     nodes: &[AccessNode],
-) -> Option<(u64, AccessAction)> {
-    let id = request.target_node.0;
-    if !is_control_id(id) {
+) -> Option<(AccessId, AccessAction)> {
+    if request.target_node.0 & OWN != 0 {
         return None;
     }
+    let id = AccessId::from_bits(request.target_node.0);
     let target = nodes.iter().position(|n| n.id == Some(id))?;
     let action = match (request.action, &request.data) {
         (Action::Focus, _) => AccessAction::Focus,

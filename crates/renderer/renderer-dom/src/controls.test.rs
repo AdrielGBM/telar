@@ -210,7 +210,7 @@ fn focus_on(name: &str) {
         .find(|node| node.name == name)
         .and_then(|node| node.id)
         .unwrap_or_else(|| panic!("{name:?} is a control"));
-    focus::request(id);
+    focus::request(id.id);
     render();
 }
 

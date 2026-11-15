@@ -295,7 +295,7 @@ impl ReportsSurface for GuestInstance {
         self.instance.canvas.access_snapshot()
     }
 
-    fn perform_access_action(&mut self, id: u64, action: AccessAction) {
+    fn perform_access_action(&mut self, id: platform_core::AccessId, action: AccessAction) {
         self.instance.canvas.perform_access_action(id, action);
     }
 

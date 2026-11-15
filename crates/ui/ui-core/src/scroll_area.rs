@@ -1401,7 +1401,7 @@ impl Component for LayoutScrollArea {
     fn on_event(&mut self, event: &Event) -> EventResult {
         // The surface already performed the scroll, so what needs correcting is this widget's idea of where the content is.
         if let Event::BoxScrolled { box_id, x, y } = event
-            && *box_id == u64::from(self.leaf.node)
+            && *box_id == renderer_core::ElementId(self.leaf.node.into())
         {
             self.core.follow(*x, *y);
             return EventResult::Handled;

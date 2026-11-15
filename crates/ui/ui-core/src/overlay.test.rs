@@ -823,8 +823,8 @@ fn a_modal_overlay_marks_its_boxes_and_names_what_opened_it() {
             .expect("the box is drawn")
     };
     let layer = Some(Modal {
-        layer: first_node.into(),
-        opened_from: Some(trigger_node.into()),
+        layer: renderer_core::ElementId(first_node.into()),
+        opened_from: Some(renderer_core::ElementId(trigger_node.into())),
     });
     assert_eq!(modal_of(first_node), layer);
     assert_eq!(

@@ -17,13 +17,13 @@ use wire_core::{
 
 use crate::guest::RawHandles;
 use crate::{
-    AccessAction, AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation,
+    AccessAction, AccessAudit, AccessId, AccessNode, AccessRule, AccessSeverity, AccessViolation,
     ActionSupport, ColorScheme, Cursor, DragActions, DragData, DragIcon, DragOffer, DragOutcome,
-    DropAction, DropAnswer, DroppedData, Event, FocusBoundary, FullscreenMode, HistoryStep,
-    HistoryUpdate, Ime, Key, KeyboardConvention, LocationFormat, MimeType, ModifiersState,
-    NamedKey, OutgoingDrag, PointerButton, PointerSource, Representation, ResizeEdge, ScrollDelta,
-    SurfaceConventions, SystemPreferences, TextInput, TextScale, TextSelection, WindowCommand,
-    WindowConfig, WindowPosition,
+    DropAction, DropAnswer, DroppedData, Event, FocusBoundary, FocusId, FullscreenMode,
+    HistoryStep, HistoryUpdate, Ime, Key, KeyboardConvention, LocationFormat, MimeType,
+    ModifiersState, NamedKey, OutgoingDrag, PointerButton, PointerSource, Representation,
+    ResizeEdge, ScrollDelta, SurfaceConventions, SystemPreferences, TextInput, TextScale,
+    TextSelection, WindowCommand, WindowConfig, WindowPosition,
 };
 
 wire_enum!(NamedKey {
@@ -352,6 +352,20 @@ wire_struct!(AccessViolation {
     message,
     rect
 });
+impl Shaped for FocusId {
+    const SHAPE: u64 = fold_shape(shape_named("FocusId"), u64::SHAPE);
+}
+
+impl Wire for FocusId {
+    fn put(&self, w: &mut Writer) {
+        self.0.put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        u64::take(r).map(FocusId)
+    }
+}
+
+wire_struct!(AccessId { surface, id });
 wire_struct!(AccessNode {
     id,
     parent,

@@ -189,7 +189,7 @@ fn tab_named(tree: &ComponentList, name: &str) -> telar::focus::FocusId {
     telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .find(|node| node.role == Role::Tab && node.name == name)
-        .and_then(|node| node.id)
+        .and_then(|node| node.id.map(|id| id.id))
         .unwrap_or_else(|| panic!("a tab named {name}"))
 }
 

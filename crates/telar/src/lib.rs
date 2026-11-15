@@ -139,7 +139,8 @@ pub use app::App;
 pub use app_config::AppConfig;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation, AppCtx, RedrawWaker,
+    AccessAudit, AccessId, AccessNode, AccessRule, AccessSeverity, AccessViolation, AppCtx,
+    ElementId, FocusId, RedrawWaker, SurfaceKey,
 };
 // For a backend author driving a handler by hand. An application implements `App` and names neither.
 #[cfg(feature = "runtime")]

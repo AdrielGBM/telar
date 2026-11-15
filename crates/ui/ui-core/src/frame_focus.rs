@@ -181,7 +181,7 @@ fn nested_text_input(
 ) -> Option<TextInput> {
     let input = TextInput {
         // Every surface numbers its fields from the same start, so the drawn surface's field is told apart by the stop that holds it.
-        field: inside.field.rotate_left(32) ^ owner,
+        field: inside.field.rotate_left(32) ^ owner.0,
         caret: renderer_core::transform_clip_rect(placement.to_array(), inside.caret),
         secret: inside.secret,
     };

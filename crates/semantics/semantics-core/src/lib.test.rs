@@ -294,7 +294,7 @@ fn a_reading_is_compared_by_its_numbers() {
 #[test]
 fn the_box_a_cursor_rests_on_is_part_of_what_a_container_says() {
     let on = |row: Option<u64>| Semantics {
-        active_descendant: row,
+        active_descendant: row.map(ElementId),
         ..Semantics::of(Role::Tree)
     };
     assert_eq!(Semantics::default().active_descendant, None);
@@ -311,7 +311,7 @@ fn the_box_a_cursor_rests_on_is_part_of_what_a_container_says() {
                 ..Annotation::default()
             })
             .active_descendant,
-        Some(4),
+        Some(ElementId(4)),
         "naming the container keeps where its cursor is"
     );
 }
@@ -425,8 +425,8 @@ fn an_item_says_only_the_numbers_its_role_takes() {
 fn a_modal_layer_is_said_by_an_annotation_and_is_part_of_what_the_box_is() {
     let layer = Annotation {
         modal: Some(Modal {
-            layer: 3,
-            opened_from: Some(7),
+            layer: ElementId(3),
+            opened_from: Some(ElementId(7)),
         }),
         ..Annotation::default()
     };

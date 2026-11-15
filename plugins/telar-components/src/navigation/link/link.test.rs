@@ -139,7 +139,11 @@ fn a_press_runs_its_handler_and_the_keyboard_reaches_it() {
 
     focus::clear();
     focus::focus_next();
-    assert_eq!(focus::current(), the_link(&tree).id, "Tab reaches it");
+    assert_eq!(
+        focus::current().map(telar::AccessId::own),
+        the_link(&tree).id,
+        "Tab reaches it"
+    );
     route(&mut tree, &named(telar::NamedKey::Enter));
     assert_eq!(pressed.get(), 2, "and Enter presses it");
 }

@@ -2579,7 +2579,7 @@ fn a_control_names_the_presented_box_its_cursor_rests_on() {
         false => cursor.get().map(|at| rows[at].0),
     });
 
-    let element_of = |at: usize| Some(u64::from(rows[at].1));
+    let element_of = |at: usize| Some(renderer_core::ElementId(rows[at].1.into()));
     assert_eq!(semantics_of(&tree).active_descendant, element_of(0));
     cursor.set(Some(1));
     assert_eq!(semantics_of(&tree).active_descendant, element_of(1));
@@ -2598,11 +2598,15 @@ fn a_control_names_the_presented_box_its_cursor_rests_on() {
 fn the_document_focusing_a_presented_box_does_not_move_focus_to_it() {
     focus::clear();
     let row = laid_out_box().presented(focus::Role::TreeItem, || {});
-    assert!(!focus::follow_box(u64::from(row.layout_node())));
+    assert!(!focus::follow_box(renderer_core::ElementId(
+        row.layout_node().into()
+    )));
     assert_eq!(focus::current(), None);
 
     let button = laid_out_box().control(focus::Role::Button);
-    assert!(focus::follow_box(u64::from(button.layout_node())));
+    assert!(focus::follow_box(renderer_core::ElementId(
+        button.layout_node().into()
+    )));
     assert_eq!(focus::current(), button.focus_id());
     focus::clear();
 }

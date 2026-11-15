@@ -514,7 +514,9 @@ struct InWorldless {
 impl Component for InWorldless {
     fn view(&self) -> RenderNode {
         RenderNode::group([
-            RenderNode::Primitive(DrawCommand::PushSurface { surface: 9 }),
+            RenderNode::Primitive(DrawCommand::PushSurface {
+                surface: renderer_core::SurfaceKey(std::num::NonZeroU64::new(9).unwrap()),
+            }),
             Boxed { node: self.node }.view(),
             RenderNode::Primitive(DrawCommand::PopSurface),
         ])

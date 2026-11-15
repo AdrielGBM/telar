@@ -19,7 +19,7 @@ pub struct SurfaceHandle {
 }
 
 impl SurfaceHandle {
-    /// The handle a raw id names on this thread, for the surface layer minting handles and for reading one back out of a draw command, which carries it as a plain integer.
+    /// The handle a raw id names on this thread, for the surface layer minting handles and for reading one back out of the surface key a draw command carries.
     #[doc(hidden)]
     pub const fn from_raw(id: NonZeroU64) -> Self {
         Self {
@@ -28,7 +28,7 @@ impl SurfaceHandle {
         }
     }
 
-    /// The raw id, as a draw command carries it. It means something only on this thread.
+    /// The raw id, as the surface key a draw command carries holds it. It means something only on this thread.
     pub const fn raw(self) -> NonZeroU64 {
         self.id
     }

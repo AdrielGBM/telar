@@ -99,7 +99,7 @@ impl ReportsSurface for HotTree {
         ui_core::accessibility::snapshot(&self.tree.list.commands())
     }
 
-    fn perform_access_action(&mut self, id: u64, action: AccessAction) {
+    fn perform_access_action(&mut self, id: platform_core::AccessId, action: AccessAction) {
         self.on_event(&Event::AccessAction { id, action });
     }
 

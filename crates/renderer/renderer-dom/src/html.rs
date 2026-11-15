@@ -92,7 +92,7 @@ struct PageAtRest {
 }
 
 impl Surface for PageAtRest {
-    fn hold_document_scroll(&mut self, _id: u64) {
+    fn hold_document_scroll(&mut self, _id: renderer_core::ElementId) {
         self.scrolling = true;
     }
 

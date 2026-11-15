@@ -543,7 +543,7 @@ struct Stop<'a> {
 
 /// The stops `tab_order` names that stand for a box; a focus id that belongs to no widget has nothing to show or tell.
 fn tab_stops<'a>(tab_order: &[TabStop], snapshot: &'a [AccessNode], walk: &Walk) -> Vec<Stop<'a>> {
-    let read: HashMap<u64, &AccessNode> = snapshot
+    let read: HashMap<platform_core::AccessId, &AccessNode> = snapshot
         .iter()
         .filter_map(|node| node.id.map(|id| (id, node)))
         .collect();
@@ -554,7 +554,7 @@ fn tab_stops<'a>(tab_order: &[TabStop], snapshot: &'a [AccessNode], walk: &Walk)
             Some(Stop {
                 role: stop.role.clone(),
                 placed: walk.boxes.get(&node).copied(),
-                read: read.get(&stop.id).copied(),
+                read: read.get(&platform_core::AccessId::own(stop.id)).copied(),
             })
         })
         .collect()

@@ -255,7 +255,7 @@ mod described {
             self.handler.root_language()
         }
 
-        fn on_accessibility_action(&mut self, id: u64, action: AccessAction) {
+        fn on_accessibility_action(&mut self, id: platform_core::AccessId, action: AccessAction) {
             self.handler.on_accessibility_action(id, action);
         }
 

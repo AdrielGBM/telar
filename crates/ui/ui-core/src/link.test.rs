@@ -251,7 +251,9 @@ fn a_document_follows_its_own_links_and_reports_them_back() {
     let was = ui_tree::set_element_capture(true);
     tap(&mut link);
     assert_eq!(location_history(), vec![Location::root()]);
-    assert!(activate_box(link.layout_node().into()));
+    assert!(activate_box(renderer_core::ElementId(
+        link.layout_node().into()
+    )));
     ui_tree::set_element_capture(was);
     assert_eq!(location_history(), vec![Location::root(), projects()]);
     drop(link);
@@ -260,7 +262,7 @@ fn a_document_follows_its_own_links_and_reports_them_back() {
 #[test]
 fn a_box_that_is_gone_has_no_link_to_activate() {
     let link = link_to(Destination::Route(projects()));
-    let id: u64 = link.layout_node().into();
+    let id = renderer_core::ElementId(link.layout_node().into());
     drop(link);
     assert!(!activate_box(id));
 }
@@ -344,10 +346,10 @@ fn a_link_dropped_on_another_surfaces_turn_leaves_that_surfaces_namesake_alone()
     let leaving = home.with_entered(|| link_to(Destination::Route(projects())));
     away.with_entered(|| {
         let staying = link_to(Destination::Route(projects()));
-        let id: u64 = staying.layout_node().into();
+        let id = renderer_core::ElementId(staying.layout_node().into());
         assert_eq!(
             id,
-            u64::from(leaving.layout_node()),
+            renderer_core::ElementId(leaving.layout_node().into()),
             "the two surfaces must really collide on ids, or this proves nothing"
         );
 
@@ -367,11 +369,11 @@ fn a_link_dropped_on_another_surfaces_turn_leaves_that_surfaces_namesake_alone()
 #[test]
 fn a_link_outliving_a_layout_reset_leaves_the_new_trees_link_alone() {
     let stale = link_to(Destination::Route(projects()));
-    let stale_id: u64 = stale.layout_node().into();
+    let stale_id = renderer_core::ElementId(stale.layout_node().into());
     let fresh = link_to(Destination::Route(projects()));
     assert_eq!(
         stale_id,
-        u64::from(fresh.layout_node()),
+        renderer_core::ElementId(fresh.layout_node().into()),
         "the reset must recycle the id, or this proves nothing"
     );
 
@@ -399,7 +401,10 @@ fn runs_outliving_a_layout_reset_leave_the_new_trees_runs_alone() {
 
     unregister_runs(HomeSurface::here(), node, stale);
 
-    assert!(activate_run(7, 0), "the new text's runs are still there");
+    assert!(
+        activate_run(renderer_core::ElementId(7), 0),
+        "the new text's runs are still there"
+    );
     unregister_runs(HomeSurface::here(), node, fresh);
-    assert!(!activate_run(7, 0));
+    assert!(!activate_run(renderer_core::ElementId(7), 0));
 }

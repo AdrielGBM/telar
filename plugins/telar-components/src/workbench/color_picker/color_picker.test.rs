@@ -148,7 +148,7 @@ impl Mounted {
             .node(role, name)
             .and_then(|node| node.id)
             .expect("a focusable control");
-        focus::request(id);
+        focus::request(id.id);
         self.settle();
     }
 
@@ -156,7 +156,7 @@ impl Mounted {
         let held = focus::current();
         telar::inspect::snapshot(&self.tree.commands())
             .into_iter()
-            .find(|node| node.id.is_some() && node.id == held)
+            .find(|node| node.id.is_some() && node.id == held.map(telar::AccessId::own))
             .map(|node| node.name)
             .unwrap_or_default()
     }
@@ -237,6 +237,7 @@ fn each_axis_of_the_area_steps_on_its_own() {
             .node(Role::Slider, name)
             .and_then(|node| node.id)
             .expect("a focusable slider")
+            .id
     };
     assert_eq!(reading(&mounted, "Saturation"), 50.0);
     assert_eq!(reading(&mounted, "Brightness"), 50.0);

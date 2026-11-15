@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 mod colours;
 mod destination;
+mod ids;
 mod keys;
 mod locale_tag;
 mod location;
@@ -31,6 +32,7 @@ pub use colours::ForcedColors;
 pub use icu_locale_core as __icu;
 
 pub use destination::{CurrentKind, Destination};
+pub use ids::{ElementId, SurfaceKey};
 pub use keys::ConsumedKeys;
 pub use locale_tag::{LocaleTag, LocaleTagError};
 pub use location::Location;
@@ -578,10 +580,10 @@ pub struct Semantics {
     pub expanded: Option<bool>,
     /// Where an item sits in its hierarchy and among its siblings. `None` where a reader can count that for itself.
     pub position: Option<SetPosition>,
-    /// The box under this one, by its element id, that the keyboard's cursor rests on while focus stays here: the row of a tree, the item of a toolbar. `None` where there is no cursor, or its box is not built.
-    pub active_descendant: Option<u64>,
-    /// The box, by its element id, whose content this one decides: the list a combobox opens, the panel a menu button drops. Its [`active_descendant`](Self::active_descendant) may rest inside that box rather than under this one. `None` where it controls nothing, or that box is not built.
-    pub controls: Option<u64>,
+    /// The box under this one, that the keyboard's cursor rests on while focus stays here: the row of a tree, the item of a toolbar. `None` where there is no cursor, or its box is not built.
+    pub active_descendant: Option<ElementId>,
+    /// The box whose content this one decides: the list a combobox opens, the panel a menu button drops. Its [`active_descendant`](Self::active_descendant) may rest inside that box rather than under this one. `None` where it controls nothing, or that box is not built.
+    pub controls: Option<ElementId>,
     /// What the box opens: the menu a menu button drops, the list a combobox opens. `None` where it opens nothing.
     pub has_popup: Option<HasPopup>,
     /// The chord that runs the same command as the box, in `aria-keyshortcuts` syntax. `None` where it declared none.

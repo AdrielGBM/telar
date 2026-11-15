@@ -6,7 +6,7 @@ use platform_core::{AccessAction, ConsumedKeys, Event, Role};
 use ui_tree::{Component, ComponentList, EventResult};
 
 use super::*;
-use crate::accessibility::{AccessTarget, NestedSurface, perform_action, snapshot};
+use crate::accessibility::{NestedSurface, perform_action, snapshot};
 use crate::container::Container;
 use crate::context::{compute_layout, reset_layout_runtime};
 use crate::layout_item::LayoutItem;
@@ -18,7 +18,7 @@ const AT: (f32, f32) = (30.0, 50.0);
 #[derive(Default)]
 struct Fake {
     nodes: Vec<AccessNode>,
-    actions: RefCell<Vec<(u64, AccessAction)>>,
+    actions: RefCell<Vec<(AccessId, AccessAction)>>,
     input: Cell<Option<TextInput>>,
     focused: Cell<Option<u32>>,
 }
@@ -30,7 +30,7 @@ impl ForeignSurface for Fake {
         self.nodes.clone()
     }
 
-    fn perform_access_action(&self, id: u64, action: AccessAction) {
+    fn perform_access_action(&self, id: AccessId, action: AccessAction) {
         self.actions.borrow_mut().push((id, action));
         self.focused.set(Some(0));
     }
@@ -72,7 +72,15 @@ impl ForeignSurface for Fake {
     }
 }
 
-fn button(id: u64, name: &str) -> AccessNode {
+fn key(n: u64) -> SurfaceKey {
+    SurfaceKey(std::num::NonZeroU64::new(n).unwrap())
+}
+
+fn own(id: u64) -> AccessId {
+    AccessId::own(FocusId(id))
+}
+
+fn button(id: AccessId, name: &str) -> AccessNode {
     AccessNode {
         id: Some(id),
         parent: None,
@@ -146,17 +154,17 @@ fn host_world() {
 #[test]
 fn a_foreign_surface_is_read_as_it_reports_itself_where_the_frame_shows_it() {
     host_world();
-    let (_fake, boundary) = foreign(vec![button(3, "Inside")]);
+    let (_fake, boundary) = foreign(vec![button(own(3), "Inside")]);
     let frame = host_frame(&boundary, Vec::new());
 
     let inside = read(&frame, "Inside").expect("the foreign surface's control is read");
     assert_eq!(inside.rect, Rect::new(AT.0, AT.1, 20.0, 10.0));
     assert_eq!(
-        AccessTarget::of(inside.id.expect("an id")),
-        AccessTarget::Nested {
-            surface: boundary.key(),
-            id: 3
-        },
+        inside.id,
+        Some(AccessId {
+            surface: Some(boundary.key()),
+            id: FocusId(3)
+        }),
         "its id is qualified with the boundary's key"
     );
 }
@@ -164,14 +172,14 @@ fn a_foreign_surface_is_read_as_it_reports_itself_where_the_frame_shows_it() {
 #[test]
 fn a_readers_action_on_a_foreign_control_reaches_the_foreign_surface() {
     host_world();
-    let (fake, boundary) = foreign(vec![button(3, "Inside")]);
+    let (fake, boundary) = foreign(vec![button(own(3), "Inside")]);
     let frame = host_frame(&boundary, Vec::new());
     let id = read(&frame, "Inside").and_then(|node| node.id).unwrap();
 
     perform_action(id, platform_core::AccessAction::Activate, |event| {
         panic!("nothing travels through the host's tree: {event:?}")
     });
-    assert_eq!(*fake.actions.borrow(), [(3, AccessAction::Activate)]);
+    assert_eq!(*fake.actions.borrow(), [(own(3), AccessAction::Activate)]);
 }
 
 #[test]
@@ -179,20 +187,19 @@ fn a_foreign_key_is_never_a_surface_handle() {
     let before = Surface::new();
     let (_fake, boundary) = foreign(Vec::new());
     let after = Surface::new();
-    let handles = [before.handle().raw().get(), after.handle().raw().get()];
+    let handles = [
+        SurfaceKey(before.handle().raw()),
+        SurfaceKey(after.handle().raw()),
+    ];
 
     assert!(!handles.contains(&boundary.key()));
     assert!(handles[0] < boundary.key() && boundary.key() < handles[1]);
-    assert!(
-        boundary.key() >> NESTED_ID_SHIFT == 0,
-        "the key fits where a qualified id carries it"
-    );
 }
 
 #[test]
 fn a_dropped_boundary_reports_nothing_and_takes_no_action() {
     host_world();
-    let (fake, boundary) = foreign(vec![button(3, "Inside")]);
+    let (fake, boundary) = foreign(vec![button(own(3), "Inside")]);
     let frame = host_frame(&boundary, Vec::new());
     let id = read(&frame, "Inside").and_then(|node| node.id).unwrap();
     let key = boundary.key();
@@ -223,8 +230,11 @@ fn a_dropped_boundary_reports_nothing_and_takes_no_action() {
 #[test]
 fn a_surface_nested_in_a_foreign_one_is_marked_and_addressed_under_a_key_of_its_own() {
     host_world();
-    let guest = 1;
-    let nested_id = (guest << NESTED_ID_SHIFT) | 4;
+    let guest = key(1);
+    let nested_id = AccessId {
+        surface: Some(guest),
+        id: FocusId(4),
+    };
     let (fake, boundary) = foreign(vec![button(nested_id, "Deeper")]);
     let frame = host_frame(
         &boundary,
@@ -234,7 +244,7 @@ fn a_surface_nested_in_a_foreign_one_is_marked_and_addressed_under_a_key_of_its_
         ],
     );
 
-    let marked: Vec<u64> = frame
+    let marked: Vec<SurfaceKey> = frame
         .iter()
         .filter_map(|command| match command {
             DrawCommand::PushSurface { surface } => Some(*surface),
@@ -249,10 +259,10 @@ fn a_surface_nested_in_a_foreign_one_is_marked_and_addressed_under_a_key_of_its_
 
     let id = read(&frame, "Deeper").and_then(|node| node.id).unwrap();
     assert_eq!(
-        AccessTarget::of(id),
-        AccessTarget::Nested {
-            surface: inner,
-            id: 4
+        id,
+        AccessId {
+            surface: Some(inner),
+            id: FocusId(4)
         }
     );
     perform_action(id, platform_core::AccessAction::Focus, |event| {
@@ -303,7 +313,7 @@ fn the_focus_stop_tells_the_input_method_where_the_foreign_caret_is() {
     );
     focus::request(stop.id());
     let input = crate::text_input().expect("the caret of the field inside");
-    assert_eq!(input.field, 7u64.rotate_left(32) ^ stop.id());
+    assert_eq!(input.field, 7u64.rotate_left(32) ^ stop.id().0);
     assert_eq!(input.caret, Rect::new(30.0, 28.0, 2.0, 20.0));
 }
 
@@ -418,7 +428,7 @@ fn focus_taken_inside_brings_the_stop_focus_and_a_dropped_stop_clears_it() {
 #[test]
 fn a_box_event_reaches_the_foreign_world_by_the_name_it_knows_its_surface_by() {
     host_world();
-    let guest = 1;
+    let guest = key(1);
     let (_fake, boundary) = foreign(Vec::new());
     let frame = host_frame(
         &boundary,
@@ -435,7 +445,9 @@ fn a_box_event_reaches_the_foreign_world_by_the_name_it_knows_its_surface_by() {
         })
         .nth(1)
         .expect("the nested surface is marked");
-    let focused = Event::BoxFocused { box_id: 9 };
+    let focused = Event::BoxFocused {
+        box_id: renderer_core::ElementId(9),
+    };
     let inside = |surface| Event::InSurface {
         surface,
         event: Box::new(focused.clone()),
@@ -447,7 +459,7 @@ fn a_box_event_reaches_the_foreign_world_by_the_name_it_knows_its_surface_by() {
     );
     assert_eq!(boundary.foreign_event(&inside(nested)), Some(inside(guest)));
     assert_eq!(
-        boundary.foreign_event(&inside(Surface::new().handle().raw().get())),
+        boundary.foreign_event(&inside(SurfaceKey(Surface::new().handle().raw()))),
         None
     );
     assert_eq!(boundary.foreign_event(&focused), None);
@@ -473,7 +485,7 @@ fn a_frame_the_foreign_surface_fills_is_marked_whole() {
 #[test]
 fn a_readers_move_into_the_foreign_surface_brings_its_stop_the_keys() {
     host_world();
-    let (fake, boundary) = foreign(vec![button(3, "Inside")]);
+    let (fake, boundary) = foreign(vec![button(own(3), "Inside")]);
     let (_row, before, node, _after) = host_row();
     let stop = boundary.focus_stop(node, || Transform::IDENTITY);
     focus::request(before);
@@ -576,7 +588,7 @@ fn a_stop_keeps_following_its_focus_once_the_scope_that_registered_it_is_gone() 
 #[test]
 fn a_readers_move_after_the_stop_is_dropped_requests_no_ghost_stop() {
     host_world();
-    let (fake, boundary) = foreign(vec![button(3, "Inside")]);
+    let (fake, boundary) = foreign(vec![button(own(3), "Inside")]);
     let (_row, before, node, _after) = host_row();
     let stop = boundary.focus_stop(node, || Transform::IDENTITY);
     let frame = host_frame(&boundary, Vec::new());

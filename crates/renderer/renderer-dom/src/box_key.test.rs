@@ -1,6 +1,10 @@
-use platform_core::Event;
+use std::num::NonZeroU64;
+
+use platform_core::{ElementId, Event, SurfaceKey};
 
 use super::*;
+
+const NESTED: SurfaceKey = SurfaceKey(NonZeroU64::new(3).unwrap());
 
 #[test]
 fn a_window_box_is_written_as_its_bare_id() {
@@ -11,7 +15,7 @@ fn a_window_box_is_written_as_its_bare_id() {
 
 #[test]
 fn a_box_of_a_nested_surface_is_written_with_its_surface() {
-    let key = BoxKey::new(Some(3), 42);
+    let key = BoxKey::new(Some(NESTED), 42);
     assert_eq!(key.to_string(), "3-42");
     assert_eq!(BoxKey::parse("3-42"), Some(key));
 }
@@ -25,13 +29,24 @@ fn what_no_key_wrote_is_no_key() {
 
 #[test]
 fn a_box_event_reaches_the_window_as_it_is_or_inside_the_surface_that_numbered_the_box() {
-    let focused = |key: BoxKey| key.event(Event::BoxFocused { box_id: key.id });
-    assert_eq!(focused(BoxKey::from(42)), Event::BoxFocused { box_id: 42 });
+    let focused = |key: BoxKey| {
+        key.event(Event::BoxFocused {
+            box_id: key.element(),
+        })
+    };
     assert_eq!(
-        focused(BoxKey::new(Some(3), 42)),
+        focused(BoxKey::from(42)),
+        Event::BoxFocused {
+            box_id: ElementId(42)
+        }
+    );
+    assert_eq!(
+        focused(BoxKey::new(Some(NESTED), 42)),
         Event::InSurface {
-            surface: 3,
-            event: Box::new(Event::BoxFocused { box_id: 42 }),
+            surface: NESTED,
+            event: Box::new(Event::BoxFocused {
+                box_id: ElementId(42),
+            }),
         }
     );
 }

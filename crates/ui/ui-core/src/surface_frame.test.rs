@@ -1173,8 +1173,8 @@ fn word(text: &'static str, style: LayoutStyle) -> crate::Text {
     .unwrap()
 }
 
-fn handle_of(canvas: &SurfaceCanvas) -> u64 {
-    canvas.surface().handle().raw().get()
+fn handle_of(canvas: &SurfaceCanvas) -> renderer_core::SurfaceKey {
+    renderer_core::SurfaceKey(canvas.surface().handle().raw())
 }
 
 #[test]
@@ -1281,7 +1281,10 @@ fn a_reader_hears_a_frames_controls_by_their_own_names_where_the_frame_shows_the
         .find(|node| node.role == focus::Role::Button)
         .expect("the frame's button is announced");
     assert_eq!(button.name, "Inside");
-    let window_ids: Vec<u64> = focus::exposed().iter().map(|exposed| exposed.id).collect();
+    let window_ids: Vec<platform_core::AccessId> = focus::exposed()
+        .iter()
+        .map(|exposed| platform_core::AccessId::own(exposed.id))
+        .collect();
     assert!(
         button.id.is_some_and(|id| !window_ids.contains(&id)),
         "its id is told apart from every id of the window's"
@@ -1318,10 +1321,10 @@ fn a_box_event_for_a_box_in_a_frame_reaches_it_in_the_frames_world() {
         .unwrap(),
     );
     let window = framed_window(&canvas, no_focusable());
-    let box_id = u64::from(inner_node.get().expect("the target was built"));
+    let box_id = renderer_core::ElementId(inner_node.get().expect("the target was built").into());
 
     window.send(Event::InSurface {
-        surface: handle_of(&canvas) + 1,
+        surface: renderer_core::SurfaceKey(handle_of(&canvas).0.checked_add(1).unwrap()),
         event: Box::new(Event::BoxFocused { box_id }),
     });
     window.frame();
@@ -1374,7 +1377,7 @@ fn a_box_event_reaches_a_frame_inside_an_overlay_of_a_frame() {
         .unwrap(),
     );
     let window = framed_window(&outer, no_focusable());
-    let box_id = u64::from(inner_node.get().expect("the target was built"));
+    let box_id = renderer_core::ElementId(inner_node.get().expect("the target was built").into());
 
     window.send(Event::InSurface {
         surface: handle_of(&inner),

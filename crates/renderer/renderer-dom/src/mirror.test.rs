@@ -78,7 +78,7 @@ fn node(role: Role, name: &str, parent: Option<usize>) -> AccessNode {
 
 fn control(id: u64, role: Role, name: &str, parent: Option<usize>) -> AccessNode {
     AccessNode {
-        id: Some(id),
+        id: Some(platform_core::AccessId::own(platform_core::FocusId(id))),
         ..node(role, name, parent)
     }
 }
@@ -322,7 +322,7 @@ fn host() -> web_sys::HtmlElement {
     APP.with(|app| app.borrow().as_ref().expect("mounted").host.clone())
 }
 
-fn publish_id() -> u64 {
+fn publish_id() -> platform_core::FocusId {
     APP.with(|app| {
         let app = app.borrow();
         ui_core::accessibility::snapshot(&app.as_ref().expect("mounted").tree.commands())
@@ -330,6 +330,7 @@ fn publish_id() -> u64 {
             .find(|node| node.name == "Publish")
             .and_then(|node| node.id)
             .expect("Publish is a control")
+            .id
     })
 }
 
