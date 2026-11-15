@@ -84,6 +84,8 @@ pub enum Role {
     Link,
     /// Carries a checked state that is part of what it is, not of what it looks like.
     CheckBox,
+    /// The set [`Radio`](Self::Radio)s are chosen from, and what names the set: one stop in the tab order, walked with the arrows.
+    RadioGroup,
     /// One of a set where choosing it unchooses the others.
     Radio,
     /// A checkbox that reads as a switch: on or off rather than ticked or not.
@@ -266,6 +268,7 @@ impl Role {
             Self::Button => "button",
             Self::Link => "link",
             Self::CheckBox => "checkbox",
+            Self::RadioGroup => "radiogroup",
             Self::Radio => "radio",
             Self::Switch => "switch",
             Self::TabList => "tablist",
@@ -375,6 +378,7 @@ impl Role {
             "button" => Self::Button,
             "link" => Self::Link,
             "checkbox" => Self::CheckBox,
+            "radiogroup" => Self::RadioGroup,
             "radio" => Self::Radio,
             "switch" | "toggle" => Self::Switch,
             "tablist" => Self::TabList,

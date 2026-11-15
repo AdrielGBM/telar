@@ -215,6 +215,7 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             }
         },
     )
+    .map(box_item)
 }
 
 #[cfg(test)]

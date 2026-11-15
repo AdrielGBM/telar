@@ -46,7 +46,7 @@ card role:article a11y_label:"Release notes"
 
 Every other role is a build error on the call's line. A role a person operates (`button`, `switch`, `tab`,
 `option`, `slider`, …) decides how the keyboard reaches the box and what pressing it does, which only the component
-that wires the press can keep true. A `list`, `grid`, `tree`, `menu`, `listbox`, `tablist` or `toolbar` promises what
+that wires the press can keep true. A `list`, `grid`, `tree`, `menu`, `listbox`, `tablist`, `radiogroup` or `toolbar` promises what
 the boxes inside it are, and a `dialog`, `scrollarea` or `drawing` changes how the box is reached or drawn; the
 component's insides are not the call's to see. Those stay the component's to say from its own root —
 `split_pane`'s `region` takes the landmark its pane is.
@@ -213,9 +213,9 @@ cursor is on it. The command palette's results are a `listbox` named "Commands" 
 controls; there nothing is chosen until it runs, so the option the cursor is on is the selected one.
 
 Two relations carry the rest, from Rust `StyledContainer::controls(|| …)` and `active_descendant(|| …)`
-(a scroll area takes the second, a `text_field` both as props): the list a control opened, and the row its
-cursor rests on while focus stays where it is. The row may sit inside the control or inside the list it
-controls.
+(a scroll area takes the second, a `text_field` both as props): the list a control opened, or the panel a
+chosen tab shows (see [Tabs and radio groups](#tabs-and-radio-groups)), and the row its cursor rests on while
+focus stays where it is. The row may sit inside the control or inside the list it controls.
 
 | Target | `controls` | `active_descendant` |
 | --- | --- | --- |
@@ -230,6 +230,33 @@ A control that opens a list also says which kind, so a reader names it before it
 select's combobox. It never changes; whether the list is open now is `expanded(|| …)`. It is
 `aria-haspopup="menu"` or `"listbox"` in a document, AccessKit `has_popup` on the desktop, and `, has menu` or
 `, has listbox` in the terminal's reading (`File, button, has menu, collapsed`).
+
+## Tabs and radio groups
+
+A set of tabs, a `radio_group` and a row of `swatches` are each read as one set and reached as one Tab stop, on
+the chosen item or the first while none is chosen; the arrows move focus from item to item and choose the one
+they reach, so a reader announces each as it is reached (see
+[keyboard.md](keyboard.md#groups-that-are-one-tab-stop)). Every item is a control of its own that holds focus,
+unlike the rows a cursor walks, and a reader moving to an item gives it focus without choosing it.
+
+| Set | Its box | Its items |
+| --- | --- | --- |
+| `tabs`, `tab_list` | `tablist`, named by `label` | `tab`, `selected` while chosen |
+| `radio_group` | `radiogroup`, named by `label` | `radio`, named by its item, `checked` while chosen |
+| `swatches` | `radiogroup` | `radio`, named by its entry in `names`, `checked` while chosen |
+
+The content a tab shows sits in a `tab_panel`, joined to its row by a `TabPanelLink` handed to both
+(`TabsProps::panel`, `tab_list`'s `panel`, `TabPanelProps::link`). The panel is a `tabpanel` called by the
+chosen tab's name, holding what it shows, and the chosen tab `controls` it, so a reader can go from the tab to
+what it shows; a tab not chosen controls nothing, since its content is not built. The panel is no Tab stop:
+Tab goes from the chosen tab to the first control inside it, and a reader asking to move to the panel takes the
+keyboard there too.
+
+| Target | The tab and its panel |
+| --- | --- |
+| Browser, document (`web-dom`) | `aria-controls` on the chosen tab naming the panel's `id`; the panel a `role="tabpanel"` element with `aria-label` and `tabindex="-1"`. |
+| Desktop | AccessKit `controls` on the chosen tab; the panel a `TabPanel` node holding its content. |
+| Terminal | The panel is read as `Pricing, tabpanel`, its content inside it; the relation is not in the reading. |
 
 ## What a modal layer shuts out
 
@@ -513,7 +540,7 @@ The desktop tree has the structure a reader steps into. The snapshot (`ui_core::
 tree listed in reading order: each `AccessNode` names the node it sits in by `parent`, and comes after it and
 before that node's next sibling, so reading the list in order is reading the tree depth first. A node sits in the
 nearest box around it, along the frame's element nesting, that is a node itself: a control, a box the application
-named, a box that says where it sits, or a box given no name whose role is a structure — a `tablist`, `tabpanel`,
+named, a box that says where it sits, or a box given no name whose role is a structure — a `tablist`, `tabpanel`, `radiogroup`,
 `menu`, `listbox`, `tree`, `grid`, `row`, `toolbar`, `list`, `dialog`, `status`, `log`, `alert`, `article` or a landmark
 (`banner`, `navigation`, `main`, `complementary`, `contentinfo`, `search`) — as long as it holds a node; holding
 none, it is left out. A box whose role an application said with `role:` on a call (`a11y_role`) is such a node for any role a call may say but `group` — a `listitem`, an unnamed `section` or `form` included — since a role said on purpose is never scaffolding; one a widget gave its own wrapper is a node only as above. The boxes between them, plain groups and scroll areas, are not nodes. AccessKit gets each landmark as its own role (`search` as `Search`), `status` and `log` as polite live regions and `alert` as an assertive one. A box named as a group

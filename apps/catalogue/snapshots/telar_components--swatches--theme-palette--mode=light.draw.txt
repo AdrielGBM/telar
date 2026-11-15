@@ -4,7 +4,7 @@ element group
   element group
     element group
       element group
-        element group
+        element radiogroup
           element radio
             rect 340,288 24x24
             element group

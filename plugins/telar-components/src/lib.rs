@@ -69,7 +69,7 @@ pub use feedback::spinner::spinner::{SpinnerProps, SpinnerTokens, spinner};
 pub use inputs::button::button::{ButtonProps, ButtonTokens, button};
 pub use inputs::checkbox::checkbox::{CheckboxProps, CheckboxTokens, checkbox};
 pub use inputs::handle::handle::{HandleProps, HandleTokens, ToPoint, ToValue, handle};
-pub use inputs::radio::radio::{RadioProps, RadioTokens, radio};
+pub use inputs::radio_group::radio_group::{RadioGroupProps, RadioTokens, radio_group};
 pub use inputs::scrub_field::scrub_field::{
     Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field,
 };
@@ -96,6 +96,7 @@ pub use layout::virtual_list::virtual_list::{
     ListRow, RowBuilder, RowHandler, VirtualListProps, virtual_list,
 };
 pub use navigation::link::link::{LinkProps, LinkTarget, LinkTokens, link};
+pub use navigation::tabs::tab_panel::{TabPanelLink, TabPanelProps, tab_panel};
 pub use navigation::tabs::tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
 pub use overlays::command_palette::command_palette::{
     Command, CommandPaletteProps, CommandPaletteTokens, RunHandler, command_palette,

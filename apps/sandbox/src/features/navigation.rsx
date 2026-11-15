@@ -4,6 +4,7 @@ use crate::shared::components::code_line::{CodeLineProps, code_line};
 use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
 use crate::shared::components::example::{ExampleProps, example};
 let tab = signal(0usize);
+let pages = TabPanelLink::new();
 let open = signal(true);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -47,17 +48,18 @@ let depth = memo(move || panes.depth());
 
 [view]
 col gap:20
-    doc_header kicker:"NAVIGATION" title:"Tabs, accordion & address" desc:"tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components."
-    example title:"tabs — a bound index; swap panels with reactive ifs"
+    doc_header kicker:"NAVIGATION" title:"Tabs, accordion & address" desc:"tabs is a bound selected-index bar, one Tab stop walked with the arrows; a TabPanelLink joins it to the tab_panel whose content reactive ifs swap. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components."
+    example title:"tabs — a bound index, and the panel it shows"
         card gap:10
-            tabs selected:$tab items:vec!["Overview","Pricing","Team"]
-            if $tab == 0
-                text "Overview — what the product does." font_size:14 color:$theme.ink
-            if $tab == 1
-                text "Pricing — plans and limits." font_size:14 color:$theme.ink
-            if $tab == 2
-                text "Team — who is behind it." font_size:14 color:$theme.ink
-        code_line code:"tabs selected:$tab items:vec!['Overview','Pricing','Team']"
+            tabs selected:$tab items:vec!["Overview","Pricing","Team"] panel:(pages.clone())
+            tab_panel link:(pages.clone())
+                if $tab == 0
+                    text "Overview — what the product does." font_size:14 color:$theme.ink
+                if $tab == 1
+                    text "Pricing — plans and limits." font_size:14 color:$theme.ink
+                if $tab == 2
+                    text "Team — who is behind it." font_size:14 color:$theme.ink
+        code_line code:"tabs selected:$tab items:vec!['Overview','Pricing','Team'] panel:(pages.clone())   >   tab_panel link:(pages.clone())"
     example title:"accordion — a collapsible section, open bound to a signal"
         card gap:10
             accordion title:"Shipping details" open:$open

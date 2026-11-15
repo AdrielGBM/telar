@@ -214,6 +214,7 @@ fn moment_switch(
         tabs,
         None,
         Some(strings::reactive(SNAPSHOT_MOMENT)),
+        None,
         ControlSize::Regular,
     )
 }
@@ -302,6 +303,7 @@ fn mode_switch(review: &SnapshotReview) -> Result<Box<dyn LayoutItem>, LayoutErr
         ],
         None,
         Some(strings::reactive(SNAPSHOT_COMPARE)),
+        None,
         ControlSize::Regular,
     )
 }

@@ -36,8 +36,8 @@ mod menu;
 mod modal;
 #[path = "../feedback/progress/progress.preview.rs"]
 mod progress;
-#[path = "../inputs/radio/radio.preview.rs"]
-mod radio;
+#[path = "../inputs/radio_group/radio_group.preview.rs"]
+mod radio_group;
 #[path = "../layout/reorder_zones/reorder_zones.preview.rs"]
 mod reorder_zones;
 #[path = "../layout/reorderable/reorderable.preview.rs"]
@@ -98,7 +98,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(select::previews());
     entries.extend(checkbox::previews());
     entries.extend(toggle::previews());
-    entries.extend(radio::previews());
+    entries.extend(radio_group::previews());
     entries.extend(slider::previews());
     entries.extend(scrub_field::previews());
     entries.extend(swatches::previews());

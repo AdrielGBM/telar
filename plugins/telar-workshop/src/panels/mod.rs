@@ -12,13 +12,14 @@ use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, Children, Container, LayoutError, LayoutItem, LayoutStyle, Memo,
-    Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, ShapeStyle, StyledContainer, box_item,
-    children, effect, memo, signal, track_layout,
+    AlignItems, Children, Container, LayoutError, LayoutItem, LayoutStyle, Memo, Reactive,
+    ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, StyledContainer, box_item, effect, memo,
+    signal, track_layout,
 };
 use telar::{ControlSize, Variant};
 use telar_components::{
-    ButtonProps, IconButtonProps, ItemProps, Tab, button, icon_button, item, metrics, tab_list,
+    ButtonProps, IconButtonProps, ItemProps, Tab, TabPanelLink, TabPanelProps, button, icon_button,
+    item, metrics, tab_list, tab_panel,
 };
 use telar_devtools::{
     WORKBENCH_GRID, accessibility_panel, inspection_toggles, inspector_panel, use_workbench_tokens,
@@ -48,9 +49,10 @@ const TABS: [PanelTab; 6] = [
 
 /// What fills the panels pane the shell sizes.
 pub(crate) fn panels(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let link = TabPanelLink::new();
     let panels = Container::new(
         LayoutStyle::column().flex_grow(1.0).min_height(0.0),
-        vec![header(state)?, divider()?, body(state)?],
+        vec![header(state, link.clone())?, divider()?, body(state, link)?],
     )?;
     Ok(box_item(panels))
 }
@@ -60,7 +62,7 @@ const HEADER_PAD: f32 = WORKBENCH_GRID;
 pub(crate) const HEADER_HEIGHT: f32 = WORKBENCH_GRID * 5.0;
 
 /// The tabs, and what acts on the panel shown at the strip's end. Where the two do not fit side by side the tools fold behind one menu before the tabs give up any room, so the tabs only scroll once the tools have gone.
-fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn header(state: &WorkshopState, link: TabPanelLink) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let shown = state.panel_tab();
     let laid = signal(None::<RwSignal<Rect>>);
     let tabs_width = signal(0.0_f32);
@@ -80,7 +82,7 @@ fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         true => LayoutStyle::row().flex_shrink(1.0).min_width(0.0),
         false => LayoutStyle::row().flex_shrink(0.0),
     };
-    let tabs = Container::new(tabs_box(), vec![strip(state)?])?.styled_by(tabs_box);
+    let tabs = Container::new(tabs_box(), vec![strip(state, link)?])?.styled_by(tabs_box);
     let tabs_rect = track_layout(tabs.layout_node()).expect("the tabs are laid out");
     effect(move || {
         let width = tabs_rect.get().width;
@@ -148,7 +150,7 @@ fn unfold_on_a_tab(state: &WorkshopState) {
     });
 }
 
-fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn strip(state: &WorkshopState, link: TabPanelLink) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let tabs = TABS
         .into_iter()
         .map(|tab| {
@@ -176,6 +178,7 @@ fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         tabs,
         None,
         Some(strings::reactive(PANELS)),
+        Some(link),
         ControlSize::Regular,
     )
 }
@@ -307,7 +310,17 @@ fn switch_row(label: &'static str, on: RwSignal<bool>) -> Result<Box<dyn LayoutI
     )
 }
 
-fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn body(state: &WorkshopState, link: TabPanelLink) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let state = state.clone();
+    tab_panel(
+        TabPanelProps::props()
+            .link(link)
+            .children(Children::one(move || shown_panel(&state)))
+            .build(),
+    )
+}
+
+fn shown_panel(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let shown = state.panel_tab();
     let building = state.clone();
     let panel = ReactiveList::with_style(
@@ -323,10 +336,7 @@ fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             PanelTab::Snapshot => snapshot::panel(&building),
         },
     )?;
-    let body = Container::new(workbench_fill(), children![panel])?
-        .role(Role::TabPanel)
-        .a11y_label(move || strings::text(tab_key(shown.get())));
-    Ok(box_item(body))
+    Ok(box_item(panel))
 }
 
 /// Puts every arg of the selected preview back to its default, offered only while one holds something else.

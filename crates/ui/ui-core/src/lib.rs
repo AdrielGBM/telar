@@ -59,6 +59,7 @@ mod press;
 mod reactive_list;
 mod rect;
 mod reorder;
+mod roving;
 mod row_keys;
 mod scroll_area;
 mod scroll_page;
@@ -164,6 +165,7 @@ pub use presence::{Presence, Transition, exits_in_flight};
 pub use reactive_list::ReactiveList;
 pub use rect::Rectangle;
 pub use reorder::{Axis, apply_move, insertion_index};
+pub use roving::{RovingAxis, RovingGroup};
 pub use scroll_area::{LayoutScrollArea, ScrollViewport, ScrollbarStyle};
 pub use scroll_page::ScrollPage;
 pub use scroll_timeline::{

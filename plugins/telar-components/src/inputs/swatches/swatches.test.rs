@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::testing::{named, press, release};
-use telar::{Component, ComponentList, DrawCommand, LayoutItem, NamedKey, Rect, signal};
+use telar::{Component, ComponentList, ConsumedKeys, DrawCommand, LayoutItem, NamedKey, Rect, signal};
 
 use super::*;
 
@@ -53,10 +53,12 @@ fn tap(item: &mut Box<dyn LayoutItem>, at: (f64, f64)) {
     item.on_event(&release(at.0, at.1));
 }
 
-fn focus_swatch(index: u32) {
-    for _ in 0..=index {
-        telar::focus::focus_next();
-    }
+fn focused_swatch() -> Option<usize> {
+    let focused = telar::focus::current()?;
+    telar::focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::Radio)
+        .position(|exposed| exposed.id == focused)
 }
 
 fn key(item: &mut Box<dyn LayoutItem>, k: NamedKey) {
@@ -90,24 +92,65 @@ fn an_unselected_state_stays_unselected_until_pressed() {
 }
 
 #[test]
-fn arrows_move_the_selection_and_clamp_at_both_ends() {
+fn the_row_is_one_tab_stop_landing_on_the_chosen_swatch() {
+    let (_item, _) = build(signal(Some(2u32)), &Rc::default());
+    telar::focus::focus_next();
+    assert_eq!(focused_swatch(), Some(2));
+    let stops = telar::focus::tab_order()
+        .into_iter()
+        .filter(|stop| stop.role == Role::Radio)
+        .count();
+    assert_eq!(stops, 1);
+}
+
+#[test]
+fn the_arrows_move_focus_and_the_selection_and_wrap_at_both_ends() {
     let selected = signal(Some(2u32));
     let seen = Rc::default();
     let (mut item, _) = build(selected, &seen);
-    focus_swatch(2);
+    telar::focus::focus_next();
 
     key(&mut item, NamedKey::ArrowRight);
-    assert_eq!(selected.peek(), Some(3));
+    assert_eq!((selected.peek(), focused_swatch()), (Some(3), Some(3)));
     key(&mut item, NamedKey::ArrowDown);
-    assert_eq!(selected.peek(), Some(3), "clamped at the last swatch");
-
+    assert_eq!(
+        (selected.peek(), focused_swatch()),
+        (Some(0), Some(0)),
+        "past the last swatch comes the first"
+    );
     key(&mut item, NamedKey::ArrowLeft);
+    assert_eq!(selected.peek(), Some(3), "and before the first, the last");
     key(&mut item, NamedKey::ArrowUp);
-    assert_eq!(selected.peek(), Some(1));
-    key(&mut item, NamedKey::ArrowLeft);
-    key(&mut item, NamedKey::ArrowLeft);
-    assert_eq!(selected.peek(), Some(0), "clamped at the first swatch");
-    assert_eq!(seen.borrow().first(), Some(&3));
+    assert_eq!((selected.peek(), focused_swatch()), (Some(2), Some(2)));
+    assert_eq!(*seen.borrow(), vec![3, 0, 3, 2]);
+}
+
+/// A right-to-left row lays its first swatch out on the right, so Right walks back toward it.
+#[test]
+fn right_in_a_right_to_left_surface_moves_to_the_swatch_laid_out_on_its_right() {
+    let selected = signal(Some(2u32));
+    let (mut item, _) = build(selected, &Rc::default());
+    telar::set_direction(telar::Direction::Rtl);
+    telar::focus::focus_next();
+    key(&mut item, NamedKey::ArrowRight);
+    telar::set_direction(telar::Direction::Ltr);
+    assert_eq!((selected.peek(), focused_swatch()), (Some(1), Some(1)));
+}
+
+#[test]
+fn the_swatches_are_radios_of_one_group() {
+    let (item, _) = build(signal(Some(1u32)), &Rc::default());
+    let nodes = telar::inspect::snapshot(&ComponentList::new(item).commands());
+    let group = nodes
+        .iter()
+        .position(|node| node.role == Role::RadioGroup)
+        .unwrap_or_else(|| panic!("a radio group: {nodes:?}"));
+    let radios: Vec<_> = nodes
+        .iter()
+        .filter(|node| node.role == Role::Radio)
+        .map(|node| node.parent)
+        .collect();
+    assert_eq!(radios, vec![Some(group); 4]);
 }
 
 #[test]
@@ -115,7 +158,7 @@ fn home_and_end_select_the_first_and_last() {
     let selected = signal(Some(1u32));
     let seen = Rc::default();
     let (mut item, _) = build(selected, &seen);
-    focus_swatch(1);
+    telar::focus::focus_next();
 
     key(&mut item, NamedKey::End);
     assert_eq!(selected.peek(), Some(3));
@@ -257,18 +300,18 @@ fn a_style_amendment_reshapes_every_swatch() {
     );
 }
 
+/// With none chosen, Tab lands on the first swatch, which Space or Enter picks.
 #[test]
 fn enter_and_space_pick_the_focused_swatch() {
-    let selected = signal(None::<u32>);
-    let seen = Rc::new(RefCell::new(Vec::new()));
-    let (mut item, _) = build(selected, &seen);
-    focus_swatch(2);
-    key(&mut item, NamedKey::Enter);
-    assert_eq!(selected.get(), Some(2));
-    telar::focus::focus_next();
-    key(&mut item, NamedKey::Space);
-    assert_eq!(selected.get(), Some(3));
-    assert_eq!(*seen.borrow(), vec![2, 3]);
+    for activation in [NamedKey::Enter, NamedKey::Space] {
+        let selected = signal(None::<u32>);
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let (mut item, _) = build(selected, &seen);
+        telar::focus::focus_next();
+        key(&mut item, activation.clone());
+        assert_eq!(selected.get(), Some(0), "{activation:?}");
+        assert_eq!(*seen.borrow(), vec![0], "{activation:?}");
+    }
 }
 
 #[test]

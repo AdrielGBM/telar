@@ -25,7 +25,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let choice = signal(Some(0usize));
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Form controls").desc("checkbox, toggle, and radio are components (from the components feature, not base tags). Each binds a signal two-way: the widget renders from it and a tap writes it back. A radio group is several radios sharing one signal, each with its own value.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Form controls").desc("checkbox, toggle, and radio_group are components (from the components feature, not base tags). Each binds a signal two-way: the widget renders from it and a tap or a key writes it back. A radio group is one Tab stop; the arrows move between its options and choose them.").build())?;
         let __node_1 = {
             let __recipe_children = Children::new(
                 {
@@ -120,12 +120,8 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_11 = radio(RadioProps::props().selected(choice.clone()).value(::telar::Int(0)).label("Small").build())?;
+                                let __node_11 = radio_group(RadioGroupProps::props().selected(choice.clone()).items(vec!["Small","Medium","Large"]).label("Size").build())?;
                                 __children.push(box_item(__node_11));
-                                let __node_12 = radio(RadioProps::props().selected(choice.clone()).value(::telar::Int(1)).label("Medium").build())?;
-                                __children.push(box_item(__node_12));
-                                let __node_13 = radio(RadioProps::props().selected(choice.clone()).value(::telar::Int(2)).label("Large").build())?;
-                                __children.push(box_item(__node_13));
                                 let __text_2 = {
                                     let choice = choice.clone();
                                     Text::declaring(
@@ -142,13 +138,13 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_10));
-                    let __node_14 = code_line(CodeLineProps::props().code("radio selected:$choice value:0 label:'Small'      (a group shares one signal)").build())?;
-                    __children.push(box_item(__node_14));
+                    let __node_12 = code_line(CodeLineProps::props().code("radio_group selected:$choice items:vec!['Small','Medium','Large'] label:'Size'").build())?;
+                    __children.push(box_item(__node_12));
                     Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("radio — several buttons share one signal; each carries a distinct value").children(__recipe_children).build())?
+            example(ExampleProps::props().title("radio_group — one signal holding the chosen index, or none").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9])?
     };

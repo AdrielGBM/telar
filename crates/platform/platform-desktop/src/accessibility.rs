@@ -351,6 +351,7 @@ fn role_of(role: Role) -> AkRole {
         Role::Link => AkRole::Link,
         Role::CheckBox => AkRole::CheckBox,
         Role::Radio => AkRole::RadioButton,
+        Role::RadioGroup => AkRole::RadioGroup,
         Role::Switch => AkRole::Switch,
         Role::Tab => AkRole::Tab,
         Role::TabList => AkRole::TabList,

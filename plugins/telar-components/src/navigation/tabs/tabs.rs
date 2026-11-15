@@ -1,17 +1,15 @@
 //! [`tabs`]: a row of pills selecting one index, and [`tab_list`], the same row selecting any value.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
-use telar::focus::{self, FocusId};
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Color, ConsumedKeys, Container, IconName,
-    JustifyContent, Key, KeyNav, KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea,
-    LayoutStyle, NodeId, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    SurfaceAmendment, Text, TextStyle, amend_surface, box_item, current_direction, effect,
-    focus::Role, key_nav_apply, signal, track_layout,
+    Accessible, AlignItems, BorderRadius, Children, Color, Container, IconName, JustifyContent,
+    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Props, Reactive, Rect,
+    RectStyle, RovingAxis, RovingGroup, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Text, TextStyle, amend_surface, box_item, effect, focus::Role, signal, track_layout,
 };
 
+use crate::navigation::tabs::tab_panel::TabPanelLink;
 use crate::workbench::icon_button::icon_button::picture;
 use crate::shared;
 use telar::ControlSize;
@@ -64,11 +62,7 @@ fn bar(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row().gap(shared::gap_sm(size))
 }
 
-const TAB_KEYS: ConsumedKeys = ConsumedKeys::HORIZONTAL_ARROWS
-    .with(ConsumedKeys::EDGES)
-    .with(ConsumedKeys::ACTIVATION);
-
-/// A horizontal tab bar: one button per label, driving a `selected` index. Renders only the row of tab buttons — the matching content panel is the caller's responsibility (typically the DSL's reactive `if selected == i`, mirroring the sandbox's own nav-button/section-switch split). Modelled on `select.rs`'s items/selected handling, but rendered inline (a row) rather than as an anchored overlay. High-level sugar over the primitives; lives in `telar-components`, not the kernel.
+/// A horizontal tab bar: one button per label, driving a `selected` index. The row is one stop in the tab order, landing on the chosen tab; the arrows (following the writing direction), Home and End move focus and the choice along it. Renders only the row of tab buttons: the content is the caller's to switch, inside a [`tab_panel`](crate::tab_panel) joined to the row by the same [`TabPanelLink`].
 #[derive(Props)]
 pub struct TabsProps {
     /// The tab labels, rendered in order.
@@ -83,6 +77,9 @@ pub struct TabsProps {
     /// What a reader calls the set of tabs: "Settings sections". `None` (the default) leaves the list unnamed.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
+    /// The panel the chosen tab's content is shown in, which the chosen tab controls and which is called by its name. `None` (the default) is a row that switches something no panel holds.
+    #[props(some, default)]
+    pub panel: Option<TabPanelLink>,
     /// How large the bar is drawn: each tab's height, padding and name, the gaps between them and the arrows that scroll them, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
@@ -139,6 +136,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         selected,
         color,
         label,
+        panel,
         size,
         style,
     } = props;
@@ -149,44 +147,101 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         .zip(0usize..)
         .map(|(name, index)| Tab::new(index, name))
         .collect();
-    tab_row(size, selected, entries, color, label, style)
+    let row = Row {
+        size,
+        color,
+        label,
+        panel,
+        style,
+    };
+    tab_row(row, selected, entries)
 }
 
 /// The row of pills behind [`tabs`], selecting any `Copy` value instead of an index, so a caller whose selection is an enum binds it directly.
 ///
-/// While one tab holds focus the arrows (following the writing direction), Home and End move the selection and focus along the row, wrapping at either end. Drawn at `size`, as [`TabsProps::size`] says. Positional rather than a props struct, since props take no type parameter and the selection here is the caller's own `T`.
+/// The row is one stop in the tab order, landing on the chosen tab; while a tab holds focus the arrows (following the writing direction), Home and End move focus and the selection along the row, wrapping at either end. Drawn at `size`, as [`TabsProps::size`] says, and joined to the [`tab_panel`](crate::tab_panel) `panel` names, as [`TabsProps::panel`] is. Positional rather than a props struct, since props take no type parameter and the selection here is the caller's own `T`.
 pub fn tab_list<T>(
     selected: RwSignal<T>,
     entries: Vec<Tab<T>>,
     color: Option<Reactive<Color>>,
     label: Option<Reactive<String>>,
+    panel: Option<TabPanelLink>,
     size: ControlSize,
 ) -> Result<Box<dyn LayoutItem>, LayoutError>
 where
     T: Copy + PartialEq + 'static,
 {
-    tab_row(size, selected, entries, color, label, None)
+    let row = Row {
+        size,
+        color,
+        label,
+        panel,
+        style: None,
+    };
+    tab_row(row, selected, entries)
+}
+
+/// What a row of tabs is drawn and joined with, whatever it selects.
+struct Row {
+    size: ControlSize,
+    color: Option<Reactive<Color>>,
+    label: Option<Reactive<String>>,
+    panel: Option<TabPanelLink>,
+    style: Option<SurfaceAmendment>,
 }
 
 fn tab_row<T>(
-    size: ControlSize,
+    row: Row,
     selected: RwSignal<T>,
     entries: Vec<Tab<T>>,
-    color: Option<Reactive<Color>>,
-    label: Option<Reactive<String>>,
-    style: Option<SurfaceAmendment>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError>
 where
     T: Copy + PartialEq + 'static,
 {
+    let Row {
+        size,
+        color,
+        label,
+        panel,
+        style,
+    } = row;
     let values: Rc<[T]> = entries.iter().map(|entry| entry.value).collect();
-    let focus_ids: Rc<RefCell<Vec<FocusId>>> = Rc::default();
+    let chosen = {
+        let values = Rc::clone(&values);
+        move || {
+            let at = selected.get();
+            values.iter().position(|value| *value == at)
+        }
+    };
+    if let Some(panel) = &panel {
+        let names: Vec<Reactive<String>> = entries.iter().map(|entry| entry.label.clone()).collect();
+        let chosen = chosen.clone();
+        panel.name_by(move || {
+            chosen()
+                .and_then(|at| names.get(at))
+                .map(Reactive::get)
+                .unwrap_or_default()
+        });
+    }
+    let group = {
+        let values = Rc::clone(&values);
+        RovingGroup::new(RovingAxis::Horizontal, chosen, move |at| {
+            selected.set(values[at])
+        })
+    };
     let paint = Paint { color, style };
     let mut tab_items: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(entries.len());
     for (index, entry) in entries.into_iter().enumerate() {
-        tab_items.push(tab(
-            size, selected, entry, index, &paint, &values, &focus_ids,
-        )?);
+        let button = TabButton {
+            size,
+            selected,
+            entry,
+            index,
+            paint: paint.clone(),
+            group: group.clone(),
+            panel: panel.clone(),
+        };
+        tab_items.push(tab(button)?);
     }
 
     let nodes: Rc<[NodeId]> = tab_items.iter().map(|tab| tab.layout_node()).collect();
@@ -367,29 +422,13 @@ fn arrow<T: Copy + PartialEq + 'static>(
     Ok(box_item(arrow))
 }
 
-fn tab<T>(
-    size: ControlSize,
-    selected: RwSignal<T>,
-    entry: Tab<T>,
-    index: usize,
-    paint: &Paint,
-    values: &Rc<[T]>,
-    focus_ids: &Rc<RefCell<Vec<FocusId>>>,
-) -> Result<Box<dyn LayoutItem>, LayoutError>
+fn tab<T>(button: TabButton<T>) -> Result<Box<dyn LayoutItem>, LayoutError>
 where
     T: Copy + PartialEq + 'static,
 {
-    let hint = (entry.icon.is_some() || entry.shortcut.is_some())
-        .then(|| (entry.label.clone(), entry.shortcut.clone()));
-    let button = TabButton {
-        size,
-        selected,
-        entry,
-        index,
-        paint: paint.clone(),
-        values: Rc::clone(values),
-        focus_ids: Rc::clone(focus_ids),
-    };
+    let hint = (button.entry.icon.is_some() || button.entry.shortcut.is_some())
+        .then(|| (button.entry.label.clone(), button.entry.shortcut.clone()));
+    let size = button.size;
     if let Some((text, shortcut)) = hint {
         return shared::hinted(
             move || button.build(),
@@ -409,8 +448,8 @@ struct TabButton<T: 'static> {
     entry: Tab<T>,
     index: usize,
     paint: Paint,
-    values: Rc<[T]>,
-    focus_ids: Rc<RefCell<Vec<FocusId>>>,
+    group: RovingGroup,
+    panel: Option<TabPanelLink>,
 }
 
 impl<T> TabButton<T>
@@ -424,8 +463,8 @@ where
             entry,
             index,
             paint,
-            values,
-            focus_ids,
+            group,
+            panel,
         } = self.clone();
         let Tab {
             value,
@@ -458,7 +497,7 @@ where
         .hover_style(move |_r| hover.surface(selected.get() == value, State::Hovered))
         .active_style(move |_r| press.surface(selected.get() == value, State::Pressed))
         .control(Role::Tab)
-        .consumes_keys(|| TAB_KEYS)
+        .roving(&group, index)
         .toggled(move || selected.get() == value)
         .on_press(move || selected.set(value))
         .a11y_label(move || name.get());
@@ -466,24 +505,13 @@ where
             Some(chord) => tab.keyboard_shortcut(move || chord.get()),
             None => tab,
         };
-        if let Some(id) = tab.focus_id() {
-            let mut ids = focus_ids.borrow_mut();
-            // A rebuilt tab takes its own place rather than a new one, so the arrows still land on the tab at each index.
-            match ids.get_mut(index) {
-                Some(placed) => *placed = id,
-                None => ids.push(id),
+        let tab = match panel {
+            Some(panel) => {
+                tab.controls(move || panel.panel().filter(|_| selected.get() == value))
             }
-        }
-        Ok(box_item(tab.on_focused_key(move |key: &Key| {
-            let Some(next) = step(index, values.len(), key) else {
-                return false;
-            };
-            selected.set(values[next]);
-            if let Some(id) = focus_ids.borrow().get(next) {
-                focus::request(*id);
-            }
-            true
-        })))
+            None => tab,
+        };
+        Ok(box_item(tab))
     }
 }
 
@@ -524,20 +552,6 @@ where
             }
         }),
     )
-}
-
-/// The tab `key` moves to from the one at `at` among `count`, or `None` for a key that is not along the row.
-fn step(at: usize, count: usize, key: &Key) -> Option<usize> {
-    let movement = KeyNav::default()
-        .horizontal()
-        .reading(current_direction())
-        .interpret(key)?;
-    match movement {
-        KeyNavMove::Next | KeyNavMove::Previous | KeyNavMove::First | KeyNavMove::Last => {
-            (count > 0).then(|| key_nav_apply(at, count, movement))
-        }
-        _ => None,
-    }
 }
 
 /// Which of its paints a tab is showing.

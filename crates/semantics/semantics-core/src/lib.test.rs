@@ -16,6 +16,7 @@ fn a_role_reads_back_as_the_name_it_was_written_with() {
         "listitem",
         "button",
         "checkbox",
+        "radiogroup",
         "radio",
         "switch",
         "tablist",

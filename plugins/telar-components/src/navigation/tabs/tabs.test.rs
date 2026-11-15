@@ -1,6 +1,6 @@
 use telar::testing::{named, press, release, route};
 use telar::{
-    AvailableSpace, Component, ComponentList, Direction, DrawCommand, NamedKey, NodeId,
+    AvailableSpace, Component, ComponentList, ConsumedKeys, Direction, DrawCommand, NamedKey, NodeId,
     compute_layout, new_container,
 };
 
@@ -138,6 +138,7 @@ fn focused_row(selected: RwSignal<Page>) -> ComponentList {
         pages(),
         None,
         None,
+        None,
         ControlSize::Regular,
     )
     .unwrap();
@@ -183,16 +184,71 @@ fn focus_follows_the_selection_so_the_next_key_continues_from_there() {
     assert_eq!(selected.get(), Page::Third);
 }
 
+/// The name of the tab holding focus.
+fn focused_tab(tree: &ComponentList) -> Option<String> {
+    telar::relayout_if_dirty();
+    telar::inspect::snapshot(&tree.commands())
+        .into_iter()
+        .find(|node| node.role == Role::Tab && node.focused)
+        .map(|node| node.name)
+}
+
+fn tab_named(tree: &ComponentList, name: &str) -> telar::focus::FocusId {
+    telar::inspect::snapshot(&tree.commands())
+        .into_iter()
+        .find(|node| node.role == Role::Tab && node.name == name)
+        .and_then(|node| node.id)
+        .unwrap_or_else(|| panic!("a tab named {name}"))
+}
+
 #[test]
-fn enter_and_space_select_the_focused_tab() {
+fn the_arrows_move_focus_with_the_selection() {
     let selected = signal(Page::First);
     let mut tree = focused_row(selected);
+    route(&mut tree, &named(NamedKey::ArrowRight));
+    assert_eq!(focused_tab(&tree).as_deref(), Some("Second"));
+    route(&mut tree, &named(NamedKey::End));
+    assert_eq!(focused_tab(&tree).as_deref(), Some("Third"));
+}
+
+#[test]
+fn tab_enters_the_row_once_on_the_chosen_tab_and_leaves_it_on_the_next_press() {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let row = tab_list(
+        signal(Page::Second),
+        pages(),
+        None,
+        None,
+        None,
+        ControlSize::Regular,
+    )
+    .unwrap();
+    let after = crate::button(crate::ButtonProps::props().label("After").build()).unwrap();
+    let root = telar::Container::new(LayoutStyle::column(), vec![row, after]).unwrap();
+    lay_out(root.layout_node());
+    let tree = ComponentList::new(telar::box_item(root));
     telar::focus::focus_next();
-    route(&mut tree, &named(NamedKey::Enter));
-    assert_eq!(selected.get(), Page::Second);
+    assert_eq!(focused_tab(&tree).as_deref(), Some("Second"));
     telar::focus::focus_next();
-    route(&mut tree, &named(NamedKey::Space));
-    assert_eq!(selected.get(), Page::Third);
+    assert_eq!(focused_tab(&tree), None, "the next Tab leaves the row");
+    telar::focus::focus_prev();
+    assert_eq!(focused_tab(&tree).as_deref(), Some("Second"));
+    telar::focus::clear();
+}
+
+/// A reader can move to a tab that is not chosen; Enter or Space then chooses it.
+#[test]
+fn enter_and_space_select_the_focused_tab() {
+    for activation in [NamedKey::Enter, NamedKey::Space] {
+        let selected = signal(Page::First);
+        let mut tree = focused_row(selected);
+        let third = tab_named(&tree, "Third");
+        assert!(telar::focus::perform(third, telar::focus::AccessAction::Focus));
+        assert_eq!(selected.get(), Page::First, "{activation:?}");
+        route(&mut tree, &named(activation.clone()));
+        assert_eq!(selected.get(), Page::Third, "{activation:?}");
+    }
 }
 
 #[test]
@@ -213,6 +269,7 @@ fn a_trailing_item_is_drawn_but_not_part_of_the_tabs_name() {
     let item = tab_list(
         selected,
         vec![Tab::new(Page::First, "Actions").trailing(count_badge())],
+        None,
         None,
         None,
         ControlSize::Regular,
@@ -239,6 +296,7 @@ fn a_reactive_label_follows_what_it_reads() {
         vec![Tab::new(Page::First, word)],
         None,
         None,
+        None,
         ControlSize::Regular,
     )
     .unwrap();
@@ -257,6 +315,7 @@ fn an_icon_tab_is_the_same_square_as_an_icon_button() {
     let tab_list = tab_list(
         signal(0usize),
         vec![Tab::new(0usize, "One").icon(telar::icon!("lucide:square"))],
+        None,
         None,
         None,
         ControlSize::Regular,
@@ -387,6 +446,7 @@ fn a_tab_list_stands_its_tabs_at_its_size() {
             pages(),
             None,
             None,
+            None,
             size,
         )
         .unwrap();
@@ -408,6 +468,7 @@ fn a_trailing_item_keeps_a_gap_from_the_name() {
     let item = tab_list(
         signal(Page::First),
         vec![Tab::new(Page::First, "Actions").trailing(count_badge())],
+        None,
         None,
         None,
         ControlSize::Regular,
@@ -448,6 +509,7 @@ fn strip_of(width: f32, selected: RwSignal<usize>) -> (ComponentList, NodeId) {
             .zip(0usize..)
             .map(|(name, i)| Tab::new(i, *name))
             .collect(),
+        None,
         None,
         None,
         ControlSize::Regular,
@@ -573,35 +635,31 @@ fn count_badge() -> Children {
     })
 }
 
-/// A tab under a tooltip is a recipe the tooltip may run again; a rebuilt tab takes its own place among the ones the arrows walk instead of adding one.
+/// An icon tab is built inside the tooltip that names it, and is walked by the arrows like any other.
 #[test]
-fn a_tab_built_again_keeps_its_place_among_the_arrows() {
+fn the_arrows_walk_tabs_drawn_as_icons() {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let focus_ids: Rc<RefCell<Vec<FocusId>>> = Rc::default();
-    let values: Rc<[Page]> = [Page::First, Page::Second].into();
-    let button = |index: usize, value: Page, name: &'static str| TabButton {
-        size: ControlSize::Regular,
-        selected: signal(Page::First),
-        entry: Tab::new(value, name),
-        index,
-        paint: Paint {
-            color: None,
-            style: None,
-        },
-        values: Rc::clone(&values),
-        focus_ids: Rc::clone(&focus_ids),
-    };
-    let first = button(0, Page::First, "One");
-    let _built = first.build().unwrap();
-    let rebuilt = first.build().unwrap();
-    let _second = button(1, Page::Second, "Two").build().unwrap();
-    assert_eq!(focus_ids.borrow().len(), 2);
-    let rebuilt_id = telar::focus::exposed()
-        .into_iter()
-        .find(|exposed| exposed.node == rebuilt.layout_node())
-        .map(|exposed| exposed.id);
-    assert_eq!(focus_ids.borrow().first().copied(), rebuilt_id);
+    let selected = signal(Page::First);
+    let item = tab_list(
+        selected,
+        pages()
+            .into_iter()
+            .map(|tab| tab.icon(telar::icon!("lucide:square")))
+            .collect(),
+        None,
+        None,
+        None,
+        ControlSize::Regular,
+    )
+    .unwrap();
+    lay_out(item.layout_node());
+    let mut tree = ComponentList::new(item);
+    telar::focus::focus_next();
+    route(&mut tree, &named(NamedKey::ArrowRight));
+    assert_eq!(selected.get(), Page::Second);
+    assert_eq!(focused_tab(&tree).as_deref(), Some("Second"));
+    telar::focus::clear();
 }
 
 #[test]

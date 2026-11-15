@@ -384,6 +384,35 @@ fn an_open_combobox_names_the_list_it_controls() {
     assert!(update.nodes[0].1.controls().is_empty());
 }
 
+/// The chosen tab names the panel it shows as what it controls, and the panel is published as a tab panel under its tab's name.
+#[test]
+fn a_chosen_tab_names_the_panel_it_controls() {
+    let tab = AccessNode {
+        toggled: Some(Toggle::On),
+        controls: Some(9),
+        ..node(Some(4), Role::Tab, "Pricing")
+    };
+    let panel = node(Some(9), Role::TabPanel, "Pricing");
+    let update = tree_update(&[tab, panel], "Settings", None);
+    assert_eq!(update.nodes[0].1.controls(), [control_id(9)]);
+    assert_eq!(update.nodes[1].1.role(), AkRole::TabPanel);
+    assert_eq!(update.nodes[1].1.label(), Some("Pricing"));
+}
+
+#[test]
+fn a_radio_group_is_published_around_its_radios() {
+    let group = node(None, Role::RadioGroup, "Size");
+    let radio = AccessNode {
+        parent: Some(0),
+        toggled: Some(Toggle::On),
+        ..node(Some(5), Role::Radio, "Large")
+    };
+    let update = tree_update(&[group, radio], "Form", None);
+    assert_eq!(update.nodes[0].1.role(), AkRole::RadioGroup);
+    assert_eq!(update.nodes[0].1.children(), [control_id(5)]);
+    assert_eq!(update.nodes[1].1.role(), AkRole::RadioButton);
+}
+
 mod from_a_screen {
     use std::cell::Cell;
     use std::rc::Rc;

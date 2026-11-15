@@ -43,8 +43,9 @@ pressed only by the Space or Enter it keeps, so a `role:slider` with `on_press` 
 button declaring `consumes_keys:enter` is pressed by Enter alone. A link keeps neither and is still followed
 on Enter where no document does it.
 
-A control's own `on_key` hears its keys first, and the press answers only what the handler leaves. Tabs and
-swatches walk with the arrows and are chosen by Enter and Space; a dropdown trigger takes Enter and Space to
+A control's own `on_key` hears its keys first, and the press answers only what the handler leaves. An item of
+a [group that is one Tab stop](#groups-that-are-one-tab-stop) is walked with the arrows its handler leaves, and
+a tab or a radio a reader moved to is chosen by Enter and Space; a dropdown trigger takes Enter and Space to
 confirm its highlighted row while its list is open, and leaves them to the press, which opens it, while it is
 shut.
 
@@ -73,6 +74,33 @@ buttons written as boxes with a role.
 
 The result reaches the renderer as `Semantics::focusable`: whether Tab stops on the box right now, and the
 set it keeps. A box that cannot hold focus has `None`.
+
+## Groups that are one Tab stop
+
+A set of tabs, a radio group and a row of swatches are each one control made of several, and Tab treats each
+as one: it lands on the chosen item, or on the first while none is chosen, and the next Tab leaves the set.
+Inside, the arrows move focus from item to item and choose the item they reach, wrapping at either end, and
+Home and End go to the first and the last:
+
+| Group | Arrows |
+| --- | --- |
+| `tabs`, `tab_list` | Left, Right |
+| `radio_group`, `swatches` | all four: Right and Down toward the last item, Left and Up toward the first |
+
+Left and Right follow the surface's writing direction (`use_direction`), so in a right-to-left surface, where
+the first item is laid out on the right, Right moves toward the first item and Left toward the last.
+
+Each item is a control that holds focus itself, so a reader follows the arrows as it follows Tab. That is what
+sets these apart from a toolbar or a tree, which keep focus on themselves while a cursor walks items that never
+hold it. Only one item is a Tab stop at a time, and the stop moves with focus: the item holding focus is the
+stop, and while focus is outside the set the chosen item is. A press, or a reader moving to an item, gives
+that item focus directly. On web-dom only the stop has `tabindex="0"` and the other items `-1`, so the
+browser's own Tab walk enters and leaves the set the same way.
+
+A group of one's own is a `RovingGroup` (re-exported as `telar::RovingGroup`), made with the `RovingAxis` its
+arrows walk, a closure reading which item is chosen and one choosing an item, and joined by each item with
+`StyledContainer::roving(&group, index)` after `control`. The item keeps the axis's arrows, Home and End on top
+of the keys it declares.
 
 ## Scroll areas
 

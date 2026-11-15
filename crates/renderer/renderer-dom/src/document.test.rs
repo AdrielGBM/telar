@@ -1507,6 +1507,53 @@ fn roots(frame: &Frame) -> Vec<&BoxNode> {
     frame.children.iter().filter_map(Node::as_box).collect()
 }
 
+/// The chosen tab names the panel it shows by the panel's `id`, and the panel is a `tabpanel` called by its tab's name; the radios of a set sit in a `radiogroup`.
+#[test]
+fn a_tab_names_the_panel_it_controls_and_radios_sit_in_their_group() {
+    let tab = Semantics {
+        controls: Some(4),
+        ..Semantics::of(Role::Tab).in_state(false, Some(Toggle::On), false)
+    };
+    let mut panel = Semantics::of(Role::TabPanel);
+    panel.label = Some("Pricing".into());
+    let frame = describe_frame(
+        &[
+            open(1, Semantics::of(Role::TabList)),
+            open(2, tab),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            open(4, panel),
+            open(5, Semantics::of(Role::RadioGroup)),
+            open(
+                6,
+                Semantics::of(Role::Radio).in_state(false, Some(Toggle::On), false),
+            ),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let roots = roots(&frame);
+    let tab = children(roots[0])[0];
+    let panel = roots[1];
+    assert_eq!(
+        attribute(tab, "aria-controls").as_deref(),
+        Some("telar-box-4")
+    );
+    assert_eq!(attribute(panel, "id").as_deref(), Some("telar-box-4"));
+    assert_eq!(attribute(panel, "role").as_deref(), Some("tabpanel"));
+    assert_eq!(attribute(panel, "aria-label").as_deref(), Some("Pricing"));
+    let group = children(panel)[0];
+    assert_eq!(attribute(group, "role").as_deref(), Some("radiogroup"));
+    assert_eq!(
+        attribute(children(group)[0], "role").as_deref(),
+        Some("radio")
+    );
+}
+
 /// An open combobox keeps focus on itself and names the list it opened, which is laid over the page far from it: the list gets an `id` to be named by, wherever it is in the frame, and the combobox's cursor is looked for inside that list.
 #[test]
 fn a_combobox_names_the_list_it_controls_and_points_into_it() {

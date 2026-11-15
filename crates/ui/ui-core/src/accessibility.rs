@@ -354,9 +354,9 @@ fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
     }
 }
 
-/// Whether a control holds the text it draws as content read inside it, rather than being named by it: a scroll area that is a stop and was given a name, which says what it scrolls without saying it all.
+/// Whether a control holds the text it draws as content read inside it, rather than being named by it: a scroll area that is a stop and was given a name, which says what it scrolls without saying it all, and a tab panel, which its tab names.
 fn holds_what_it_draws(role: Role, named: bool) -> bool {
-    named && role == Role::ScrollArea
+    role == Role::TabPanel || (named && role == Role::ScrollArea)
 }
 
 /// Whether a node read for a box holds the nodes read inside that box. Text, and a picture, are read as what they say; a box named as a group reads as its name, a caption beside what it groups.
@@ -370,6 +370,7 @@ fn holds_structure(role: Role) -> bool {
         role,
         Role::TabList
             | Role::TabPanel
+            | Role::RadioGroup
             | Role::Menu
             | Role::ListBox
             | Role::Tree

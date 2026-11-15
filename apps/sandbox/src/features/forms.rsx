@@ -10,7 +10,7 @@ let choice = signal(Some(0usize));
 
 [view]
 col gap:20
-    doc_header kicker:"INTERACTION" title:"Form controls" desc:"checkbox, toggle, and radio are components (from the components feature, not base tags). Each binds a signal two-way: the widget renders from it and a tap writes it back. A radio group is several radios sharing one signal, each with its own value."
+    doc_header kicker:"INTERACTION" title:"Form controls" desc:"checkbox, toggle, and radio_group are components (from the components feature, not base tags). Each binds a signal two-way: the widget renders from it and a tap or a key writes it back. A radio group is one Tab stop; the arrows move between its options and choose them."
     example title:"checkbox — a bound bool; tap the box or its label to toggle"
         card gap:10
             checkbox checked:$agree label:"I agree to the terms"
@@ -21,10 +21,8 @@ col gap:20
             toggle checked:$notify label:"Email notifications"
             text "notify · {$notify}" font_size:14 color:$theme.muted
         code_line code:"toggle checked:$notify label:'Email notifications'"
-    example title:"radio — several buttons share one signal; each carries a distinct value"
+    example title:"radio_group — one signal holding the chosen index, or none"
         card gap:10
-            radio selected:$choice value:0 label:"Small"
-            radio selected:$choice value:1 label:"Medium"
-            radio selected:$choice value:2 label:"Large"
+            radio_group selected:$choice items:vec!["Small","Medium","Large"] label:"Size"
             text "choice · {$choice.map_or(String::new(), |i| i.to_string())}" font_size:14 color:$theme.muted
-        code_line code:"radio selected:$choice value:0 label:'Small'      (a group shares one signal)"
+        code_line code:"radio_group selected:$choice items:vec!['Small','Medium','Large'] label:'Size'"

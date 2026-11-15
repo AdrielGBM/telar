@@ -384,7 +384,7 @@ pub(crate) fn labelled_control(
     role: Role,
     toggled: impl Fn() -> bool + 'static,
     on_press: impl Fn() + 'static,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+) -> Result<StyledContainer, LayoutError> {
     let mut children: Vec<Box<dyn LayoutItem>> = children![control];
     if !label.get().is_empty() {
         let text = Text::declaring(
@@ -403,7 +403,7 @@ pub(crate) fn labelled_control(
         .toggled(toggled)
         .hit_outset(Reactive::of(move || target_reach(laid.peek())))
         .on_press(on_press);
-    Ok(box_item(row))
+    Ok(row)
 }
 
 /// Makes `backdrop` close what it holds when it is pressed, around it rather than on it. That press is the pointer's way out, as Escape is the keyboard's, so the backdrop stays a box: a box that answers a press is otherwise a button, and a button wrapped around the dialog or the menu it holds is one a reader is offered and cannot make sense of.

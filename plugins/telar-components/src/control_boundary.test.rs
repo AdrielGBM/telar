@@ -30,11 +30,10 @@ fn probes() -> Vec<Probe> {
         Probe {
             name: "unselected radio",
             build: || {
-                crate::radio(
-                    crate::RadioProps::props()
-                        .label("Large")
+                crate::radio_group(
+                    crate::RadioGroupProps::props()
+                        .items(vec!["Large"])
                         .selected(signal(None))
-                        .value(1)
                         .build(),
                 )
             },

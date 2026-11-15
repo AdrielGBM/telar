@@ -114,7 +114,7 @@ fn every_control_but_a_link_keeps_something() {
     }
 }
 
-const ALL_ROLES: [Role; 44] = [
+const ALL_ROLES: [Role; 45] = [
     Role::Group,
     Role::Banner,
     Role::Navigation,
@@ -134,6 +134,7 @@ const ALL_ROLES: [Role; 44] = [
     Role::Button,
     Role::Link,
     Role::CheckBox,
+    Role::RadioGroup,
     Role::Radio,
     Role::Switch,
     Role::TabList,

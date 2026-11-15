@@ -22,18 +22,18 @@ fn link_round_trip(link: Option<Destination>) -> Option<Destination> {
 #[test]
 fn every_role_tag_reads_back_as_a_role_of_its_own() {
     let mut roles = HashSet::new();
-    for tag in 0..=49u8 {
+    for tag in 0..=50u8 {
         let bytes = if tag == 10 { vec![tag, 2] } else { vec![tag] };
         let role = decode::<Role>(&bytes).unwrap();
         round_trip(role);
         roles.insert(role);
     }
-    assert_eq!(roles.len(), 50);
+    assert_eq!(roles.len(), 51);
     assert_eq!(
-        decode::<Role>(&[50]),
+        decode::<Role>(&[51]),
         Err(WireError::Tag {
             of: "Role",
-            tag: 50
+            tag: 51
         })
     );
 }
@@ -262,6 +262,7 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
         Role::Label,
         Role::KeyboardInput,
         Role::Alert,
+        Role::RadioGroup,
     ];
     let mut bytes: Vec<u8> = roles.iter().flat_map(encode).collect();
     bytes.extend(encode(&Role::Heading(6)));

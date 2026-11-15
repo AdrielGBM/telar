@@ -167,6 +167,7 @@ struct Focusable {
     consumes: Option<Box<dyn Fn() -> ConsumedKeys>>,
     // Set by `presented`: something else holds the keyboard for this box, so a tap leaves focus where it is.
     presented: bool,
+    roving: Option<(crate::RovingGroup, usize)>,
 }
 
 /// The painted box every interactive widget is built on: state styles, gestures, focus and transforms.
@@ -302,10 +303,7 @@ impl StyledContainer {
         semantics.click_through = !self.occludes();
         // Read inside `view()`, so what a reader is told and what is drawn are the same frame.
         match self.focusable.id {
-            Some(id) => {
-                let declared = self.focusable.consumes.as_ref().map(|keys| keys());
-                focus::describe(id, &mut semantics, declared);
-            }
+            Some(id) => focus::describe(id, &mut semantics, self.declared_keys()),
             None => semantics.disabled = focus::disabled_at(self.node),
         }
         semantics.position = semantics
@@ -710,6 +708,17 @@ impl StyledContainer {
         focus::register_presented(id, self.node, role, reach);
         focus::set_activation(id, self.press.activation());
         self.focusable.presented = true;
+        self
+    }
+
+    /// Makes this control the item at `index` of `group`: a Tab stop only while it is the group's, and walked to and from with the arrows of the group's axis, Home and End, which it keeps on top of the keys it declares. The keys reach its own [`on_key`](Self::on_key) first.
+    ///
+    /// Only meaningful after [`control`](Self::control). A box built again for the same place, as a tooltip may build what it wraps, takes that place over.
+    pub fn roving(mut self, group: &crate::RovingGroup, index: usize) -> Self {
+        if let Some(id) = self.focusable.id {
+            group.join(index, id);
+            self.focusable.roving = Some((group.clone(), index));
+        }
         self
     }
 
@@ -1353,12 +1362,21 @@ impl StyledContainer {
 
     /// The keys the box keeps while it holds focus, as it declared them or as its role keeps them.
     fn kept_keys(&self) -> ConsumedKeys {
-        match &self.focusable.consumes {
-            Some(keys) => keys(),
-            None => self
-                .role
-                .map_or(ConsumedKeys::EMPTY, |role| role.consumed_keys()),
+        self.declared_keys().unwrap_or_else(|| self.role_keys())
+    }
+
+    /// The keys the box says it keeps in place of its role's: those it declared, and those of the roving group it is an item of on top of them. `None` where it said nothing.
+    fn declared_keys(&self) -> Option<ConsumedKeys> {
+        let declared = self.focusable.consumes.as_ref().map(|keys| keys());
+        match &self.focusable.roving {
+            Some((group, _)) => Some(declared.unwrap_or_else(|| self.role_keys()) | group.keys()),
+            None => declared,
         }
+    }
+
+    fn role_keys(&self) -> ConsumedKeys {
+        self.role
+            .map_or(ConsumedKeys::EMPTY, |role| role.consumed_keys())
     }
 
     fn route(&mut self, event: &Event) -> EventResult {
@@ -1507,6 +1525,13 @@ impl StyledContainer {
                 {
                     return EventResult::Handled;
                 }
+                if let Some((group, index)) = &self.focusable.roving
+                    && self.focusable.id.is_some_and(focus::is_key_target)
+                    && input_region::receives_input(self.node)
+                    && group.key(*index, key)
+                {
+                    return EventResult::Handled;
+                }
                 // Consumed only when there was something to fire, so Space on a box with no press handler still reaches whatever else wanted it.
                 if self.focusable.activates
                     && let Some(id) = self.focusable.id
@@ -1530,6 +1555,9 @@ impl Drop for StyledContainer {
         }
         self.home.with_entered(|| {
             if let Some(id) = self.focusable.id {
+                if let Some((group, index)) = &self.focusable.roving {
+                    group.leave(*index, id);
+                }
                 focus::unregister(id);
             }
             if let Some(scope) = self.focusable.scope {

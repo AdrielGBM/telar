@@ -28,6 +28,7 @@ pub(crate) fn view_switch(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
             .collect(),
         None,
         Some(strings::reactive(VIEW)),
+        None,
         ControlSize::Regular,
     )
 }

@@ -64,6 +64,7 @@ wire_enum!(Role {
     Label = 47,
     KeyboardInput = 48,
     Alert = 49,
+    RadioGroup = 50,
 });
 wire_enum!(Toggle {
     Off = 0,

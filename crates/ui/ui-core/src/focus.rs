@@ -93,8 +93,7 @@ struct Entry {
     /// The widget's layout node, which is what makes reachability answerable. `None` for a focus id that belongs to no widget (the dismiss stack takes one as a token).
     node: Option<NodeId>,
     role: Role,
-    /// Whether Tab stops here. `false` for a control that is driven some other way and still has to be announced: the rows of a menu answer to arrow keys, and putting each one in the tab order would make Tab walk a list the user opened precisely so as not to.
-    tabbable: bool,
+    stop: Stop,
     /// For a control [presented](register_presented) by another, how its owner moves its cursor onto it: what asking to focus it does, since it never holds focus itself.
     reach: Option<Rc<dyn Fn()>>,
     /// What the control does when it is asked to act rather than pressed or keyed. See [`perform`].
@@ -114,6 +113,30 @@ struct Entry {
     text_input: Option<TextInputSource>,
     /// Where the caret and the selection of a field are, in the characters it shows. See [`set_text_selection`].
     text_selection: Option<Rc<dyn Fn() -> TextSelection>>,
+}
+
+/// Whether Tab stops at an entry, and whether the entry may hold focus at all.
+#[derive(Clone)]
+enum Stop {
+    Always,
+    /// A control driven some other way that still has to be announced: the rows of a menu answer to arrow keys, and putting each one in the tab order would make Tab walk a list the user opened precisely so as not to. It never holds focus.
+    Never,
+    /// An item of a [`RovingGroup`](crate::RovingGroup): it holds focus whenever it is given it, and is a stop only while `is_stop` reads true, so the group is one stop however many items it has.
+    Roving(Rc<dyn Fn() -> bool>),
+}
+
+impl Stop {
+    fn holds_focus(&self) -> bool {
+        !matches!(self, Self::Never)
+    }
+
+    fn is_stop(&self) -> bool {
+        match self {
+            Self::Always => true,
+            Self::Never => false,
+            Self::Roving(is_stop) => is_stop(),
+        }
+    }
 }
 
 pub(crate) type TextInputSource = Rc<dyn Fn() -> Option<platform_core::TextInput>>;
@@ -350,7 +373,7 @@ fn refuses(id: FocusId) -> bool {
 
 /// Whether `id` may hold focus: anything but a control another one drives, which Tab does not stop at either.
 fn holds_focus(id: FocusId) -> bool {
-    with_focus_ref(|s| s.entry(id).is_none_or(|e| e.tabbable))
+    with_focus_ref(|s| s.entry(id).is_none_or(|e| e.stop.holds_focus()))
 }
 
 fn give(id: FocusId, from_pointer: bool) {
@@ -448,11 +471,12 @@ pub fn blur_from_pointer(x: f32, y: f32) {
     if current().is_none() {
         return;
     }
-    // Collected before the rects are asked for: reading layout under the focus borrow would hold one runtime across a call into another. A scroll area is left out: one that is a stop takes focus from the press itself, as it reaches it.
+    // Collected before the rects are asked for: reading layout under the focus borrow would hold one runtime across a call into another. A scroll area is left out: one that is a stop takes focus from the press itself, as it reaches it. So is a region announced around content, such as a tab panel, which nobody presses.
     let nodes: Vec<NodeId> = with_focus_ref(|s| {
         s.order
             .iter()
             .filter(|entry| entry.scrolls.is_none())
+            .filter(|entry| entry.stop.holds_focus() || entry.role.is_control())
             .filter_map(|entry| entry.node)
             .collect()
     });
@@ -475,17 +499,17 @@ pub fn clear() {
 
 /// Adds `id` to the tab order (at the end), if not already present, as a widget that says what it does with the keyboard — a text field registers as [`FocusKind::TextEntry`], which is what makes [`text_entry_focused`] answerable. A focusable widget calls this on creation; registration order is the traversal order.
 pub fn register_as(id: FocusId, kind: FocusKind) {
-    register_node(id, kind, None, default_role(kind), true);
+    register_node(id, kind, None, default_role(kind), Stop::Always);
 }
 
 /// [`register_as`] for a widget that can say which layout node it is, which is what lets Tab skip it while it is not on screen. Every focusable widget should use this; the node-less forms remain for a focus id that stands for something other than a widget.
 pub fn register_at(id: FocusId, kind: FocusKind, node: NodeId) {
-    register_node(id, kind, Some(node), default_role(kind), true);
+    register_node(id, kind, Some(node), default_role(kind), Stop::Always);
 }
 
 /// [`register_at`] for a widget that is not simply "a thing you activate" — a checkbox, a tab, a slider. The role is what a screen reader says this is; see [`Role`].
 pub fn register_with_role(id: FocusId, kind: FocusKind, node: NodeId, role: Role) {
-    register_node(id, kind, Some(node), role, true);
+    register_node(id, kind, Some(node), role, Stop::Always);
 }
 
 /// Registers a control that is announced but is not a Tab stop, because something else drives it.
@@ -494,13 +518,26 @@ pub fn register_with_role(id: FocusId, kind: FocusKind, node: NodeId, role: Role
 ///
 /// It never holds focus. `reach` is the owner's: it moves the owner's cursor onto this control, which is what a [`request`] for it does, so a reader moving to a row leaves the keyboard with the list and the arrows carry on from that row.
 pub fn register_presented(id: FocusId, node: NodeId, role: Role, reach: impl Fn() + 'static) {
-    register_node(id, FocusKind::Widget, Some(node), role, false);
+    register_node(id, FocusKind::Widget, Some(node), role, Stop::Never);
     let reach: Rc<dyn Fn()> = Rc::new(reach);
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.reach = Some(reach);
         }
     });
+}
+
+/// Makes the control `id` an item of a roving group, a Tab stop only while `is_stop` reads true. It still takes focus whenever focus is given it, as a press or a reader moving to it does, and `is_stop` must then read true for it, so Tab leaves the group from the item that holds focus.
+pub(crate) fn rove(id: FocusId, is_stop: impl Fn() -> bool + 'static) {
+    let is_stop: Rc<dyn Fn() -> bool> = Rc::new(is_stop);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id)
+            && entry.stop.holds_focus()
+        {
+            entry.stop = Stop::Roving(is_stop);
+        }
+    });
+    roster_changed();
 }
 
 /// Declares what `id` does when it is [activated](AccessAction::Activate) without a pointer: the same code a tap on it runs, reporting whether there was anything to run.
@@ -576,7 +613,13 @@ fn scroll_into_view(node: NodeId) -> bool {
 ///
 /// A region that holds controls is scrolled by moving through them, and a stop of its own there would be one more Tab between the field above it and the first control in it. One that holds only text has nothing else the keyboard could reach it by. Holding focus keeps it a stop, so content that grows a control or shrinks to fit never takes focus from under the keyboard.
 pub(crate) fn register_scroller(id: FocusId, node: NodeId, scrolls: impl Fn() -> bool + 'static) {
-    register_node(id, FocusKind::Widget, Some(node), Role::ScrollArea, true);
+    register_node(
+        id,
+        FocusKind::Widget,
+        Some(node),
+        Role::ScrollArea,
+        Stop::Always,
+    );
     let scrolls: Rc<dyn Fn() -> bool> = Rc::new(scrolls);
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
@@ -601,7 +644,7 @@ pub(crate) fn present_scroller(id: FocusId, role: Role) {
     host_scroller(id, role);
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
-            entry.tabbable = false;
+            entry.stop = Stop::Never;
         }
     });
 }
@@ -614,7 +657,7 @@ fn default_role(kind: FocusKind) -> Role {
     }
 }
 
-fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role, tabbable: bool) {
+fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role, stop: Stop) {
     let joined = with_focus(|s| {
         let joined = match s.entry_mut(id) {
             // Re-registering only adds knowledge: a widget that learns its node later keeps its place.
@@ -624,7 +667,9 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                 if role != default_role(kind) {
                     existing.role = role;
                 }
-                existing.tabbable &= tabbable;
+                if !stop.holds_focus() {
+                    existing.stop = Stop::Never;
+                }
                 false
             }
             None => {
@@ -632,7 +677,7 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                     id,
                     node,
                     role,
-                    tabbable,
+                    stop,
                     reach: None,
                     actions: Actions::default(),
                     scrolls: None,
@@ -918,14 +963,17 @@ pub struct TabStop {
 /// The document's order, not the order the frame draws in: a layer fixed over the page or an overlay is drawn after everything under it and read where it was declared. Only what Tab can reach is in it — nothing inside a closed region or a disabled one, and only the open modal's own stops while one holds focus.
 pub fn tab_order() -> Vec<TabStop> {
     let (order, scopes) = with_focus_ref(|s| {
-        let order: Vec<TabStop> = s
+        let order: Vec<(TabStop, Stop)> = s
             .order
             .iter()
-            .filter(|e| e.tabbable)
-            .map(|e| TabStop {
-                id: e.id,
-                node: e.node,
-                role: e.role,
+            .filter(|e| e.stop.holds_focus())
+            .map(|e| {
+                let stop = TabStop {
+                    id: e.id,
+                    node: e.node,
+                    role: e.role,
+                };
+                (stop, e.stop.clone())
             })
             .collect();
         let scopes: Vec<ScopeView> = s
@@ -935,11 +983,12 @@ pub fn tab_order() -> Vec<TabStop> {
             .collect();
         (order, scopes)
     });
-    // Filtered once the borrow drops: `showing` is the author's closure, and the reachability queries borrow the layout runtime.
+    // Filtered once the borrow drops: `showing` and a roving group's choice are the author's closures, and the reachability queries borrow the layout runtime.
     let idle = idle_scrollers(&scopes);
     let order = order
         .into_iter()
-        .filter(|stop| !idle.contains(&stop.id))
+        .filter(|(stop, kind)| !idle.contains(&stop.id) && kind.is_stop())
+        .map(|(stop, _)| stop)
         .collect();
     in_document_order(order)
         .into_iter()
@@ -984,7 +1033,7 @@ fn scrollers_and_holders(pick: impl Fn(FocusId) -> bool) -> (Vec<Scroller>, Vec<
         let holders: Vec<NodeId> = s
             .order
             .iter()
-            .filter(|e| e.scrolls.is_none() && e.tabbable)
+            .filter(|e| e.scrolls.is_none() && e.stop.holds_focus())
             .filter_map(|e| e.node)
             .collect();
         (scrollers, holders)
@@ -1426,9 +1475,9 @@ pub(crate) fn describe(
 pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> Focusable {
     let entry = with_focus_ref(|s| {
         s.entry(id)
-            .map(|e| (e.node, e.tabbable, e.scrolls.is_some()))
+            .map(|e| (e.node, e.stop.clone(), e.scrolls.is_some()))
     });
-    let Some((node, tabbable, scroller)) = entry else {
+    let Some((node, stop, scroller)) = entry else {
         return Focusable::default();
     };
     let scopes = scope_views();
@@ -1438,7 +1487,7 @@ pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> 
     let consumes = declared.unwrap_or_else(|| role.consumed_keys());
     let trapped = scopes.iter().any(|(_, showing, traps)| *traps && showing());
     Focusable {
-        tab_stop: tabbable && (!scroller || tracks_scroll_stop(id)),
+        tab_stop: stop.is_stop() && (!scroller || tracks_scroll_stop(id)),
         consumes: if trapped {
             consumes | ConsumedKeys::TAB
         } else {
@@ -1455,7 +1504,7 @@ pub fn follow_box(box_id: u64) -> bool {
     let found = with_focus_ref(|s| {
         s.order
             .iter()
-            .find(|e| e.tabbable && e.node.is_some_and(|node| u64::from(node) == box_id))
+            .find(|e| e.stop.holds_focus() && e.node.is_some_and(|node| u64::from(node) == box_id))
             .map(|e| e.id)
     });
     let Some(id) = found else {

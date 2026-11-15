@@ -4,10 +4,13 @@ use std::rc::Rc;
 
 use telar::{
     Accessible, AlignItems, Border, Children, Container, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item, children,
+    Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item,
 };
 use telar::{ControlSize, Variant};
-use telar_components::{ButtonProps, PaneLimit, SplitPaneProps, Tab, button, split_pane, tab_list};
+use telar_components::{
+    ButtonProps, PaneLimit, SplitPaneProps, Tab, TabPanelLink, TabPanelProps, button, split_pane,
+    tab_list, tab_panel,
+};
 
 use super::{DrawerTab, Model, banner, mounted_while, stats};
 use crate::panels::{accessibility_panel, inspection_toggles, inspector_panel};
@@ -52,6 +55,7 @@ fn uncovered(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 fn pane(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let link = TabPanelLink::new();
     let pane = StyledContainer::new(
         workbench_fill(),
         |_| {
@@ -60,7 +64,11 @@ fn pane(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .with_fill(tokens.panel_background)
                 .with_border(Border::uniform(tokens.border_subtle, 1.0))
         },
-        vec![header(model)?, strip(model)?, body(model)?],
+        vec![
+            header(model)?,
+            strip(model, link.clone())?,
+            body(model, link)?,
+        ],
     )?
     .input_opaque()
     .role(Role::Complementary)
@@ -99,7 +107,7 @@ fn header(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(header))
 }
 
-fn strip(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn strip(model: Model, link: TabPanelLink) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let tabs = tab_list(
         model.drawer_tab,
         vec![
@@ -114,6 +122,7 @@ fn strip(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         ],
         None,
         Some(Reactive::of(|| strings::text(INSPECTOR))),
+        Some(link),
         ControlSize::Regular,
     )?;
     Ok(box_item(Container::new(
@@ -124,7 +133,16 @@ fn strip(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?))
 }
 
-fn body(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn body(model: Model, link: TabPanelLink) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    tab_panel(
+        TabPanelProps::props()
+            .link(link)
+            .children(Children::one(move || shown_tab(model)))
+            .build(),
+    )
+}
+
+fn shown_tab(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let shown = model.drawer_tab;
     let inspection = model.inspection;
     let panel = ReactiveList::with_style(
@@ -148,15 +166,7 @@ fn body(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             DrawerTab::Accessibility => accessibility_panel(inspection),
         },
     )?;
-    let body = Container::new(workbench_fill(), children![panel])?
-        .role(Role::TabPanel)
-        .a11y_label(move || {
-            strings::text(match shown.get() {
-                DrawerTab::Components => COMPONENTS,
-                DrawerTab::Accessibility => ACCESSIBILITY,
-            })
-        });
-    Ok(box_item(body))
+    Ok(box_item(panel))
 }
 
 fn spacer() -> Result<Box<dyn LayoutItem>, LayoutError> {

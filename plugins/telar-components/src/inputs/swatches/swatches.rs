@@ -3,17 +3,13 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, Color, ConsumedKeys, Container, Cursor, JustifyContent, Key,
-    LayoutError, LayoutItem, LayoutStyle, NamedKey, Props, RectStyle, RwSignal, ShapeStyle,
+    Accessible, AlignItems, Border, Color, Container, Cursor, JustifyContent, LayoutError,
+    LayoutItem, LayoutStyle, Props, RectStyle, RovingAxis, RovingGroup, RwSignal, ShapeStyle,
     StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
 use telar::ControlSize;
-
-const SWATCH_KEYS: ConsumedKeys = ConsumedKeys::ARROWS
-    .with(ConsumedKeys::EDGES)
-    .with(ConsumedKeys::ACTIVATION);
 
 /// A swatch row's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -69,6 +65,8 @@ fn cell(diameter: f32) -> LayoutStyle {
 }
 
 /// A row of colour swatches selecting one of them, or none: the picker for a value drawn from a fixed palette (a theme's accents, a set of tokens).
+///
+/// The row is a radio group, one stop in the tab order landing on the chosen swatch or the first while none is; the arrows move focus from swatch to swatch and choose the one they reach, wrapping at either end, with Left and Right following the writing direction, and Home and End go to the first and the last.
 #[derive(Props)]
 pub struct SwatchesProps {
     /// The colours offered, in order.
@@ -109,7 +107,14 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
         diameter.unwrap_or_else(|| SwatchesTokens::current().size(size))
     };
     let selected = selected.unwrap_or_else(|| signal(None::<u32>));
-    let count = colors.len() as u32;
+    let group = {
+        let on_select = on_select.clone();
+        RovingGroup::new(
+            RovingAxis::Both,
+            move || selected.get().map(|at| at as usize),
+            move |at| choose(selected, at as u32, on_select.as_deref()),
+        )
+    };
     let mut names = names.into_iter();
     let mut cells: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(colors.len());
 
@@ -119,9 +124,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
         let paint_selected = selected;
         let announced = selected;
         let press_selected = selected;
-        let key_selected = selected;
         let press_cb = on_select.clone();
-        let key_cb = on_select.clone();
         let style = style.clone();
 
         let face = StyledContainer::new(
@@ -139,30 +142,17 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
                 .styled_by(move || cell(diameter()))
                 .a11y_label(move || name.clone())
                 .control(Role::Radio)
-                .consumes_keys(|| SWATCH_KEYS)
+                .roving(&group, i)
                 .toggled(move || announced.get() == Some(idx))
                 .cursor(Cursor::Pointer)
-                .on_press(move || choose(press_selected, idx, press_cb.as_deref()))
-                .on_focused_key(move |key: &Key| -> bool {
-                    let Key::Named(named) = key else {
-                        return false;
-                    };
-                    let current = key_selected.peek().unwrap_or(idx);
-                    let target = match named {
-                        NamedKey::ArrowRight | NamedKey::ArrowDown => (current + 1).min(count - 1),
-                        NamedKey::ArrowLeft | NamedKey::ArrowUp => current.saturating_sub(1),
-                        NamedKey::Home => 0,
-                        NamedKey::End => count - 1,
-                        _ => return false,
-                    };
-                    choose(key_selected, target, key_cb.as_deref());
-                    true
-                });
+                .on_press(move || choose(press_selected, idx, press_cb.as_deref()));
         cells.push(box_item(swatch));
     }
 
     Ok(box_item(
-        Container::new(row(size, diameter()), cells)?.styled_by(move || row(size, diameter())),
+        Container::new(row(size, diameter()), cells)?
+            .styled_by(move || row(size, diameter()))
+            .role(Role::RadioGroup),
     ))
 }
 

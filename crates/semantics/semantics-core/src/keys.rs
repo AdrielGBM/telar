@@ -173,6 +173,7 @@ impl Role {
             | Self::ListItem
             | Self::Drawing
             | Self::Dialog
+            | Self::RadioGroup
             | Self::TabList
             | Self::TabPanel
             | Self::ProgressBar

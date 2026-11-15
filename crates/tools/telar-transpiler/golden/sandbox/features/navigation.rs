@@ -57,6 +57,7 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let tab = signal(0usize);
+    let pages = TabPanelLink::new();
     let open = signal(true);
 
     // Following the address makes this stack the app's history: the browser's back and forward, a `--location` argument and an Android link all land on a pane.
@@ -65,12 +66,13 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
     let depth = memo(move || panes.depth());
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Tabs, accordion & address").desc("tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Tabs, accordion & address").desc("tabs is a bound selected-index bar, one Tab stop walked with the arrows; a TabPanelLink joins it to the tab_panel whose content reactive ifs swap. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components.").build())?;
         let __node_1 = {
             let __recipe_children = Children::new(
                 {
                     let tab = tab.clone();
                     let theme = theme.clone();
+                    let pages = pages.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
@@ -78,79 +80,94 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             {
                                 let tab = tab.clone();
                                 let theme = theme.clone();
+                                let pages = pages.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).build())?;
+                                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).panel(pages.clone()).build())?;
                                 __children.push(box_item(__node_3));
-                                let __node_4 = ReactiveList::new(
-                                    { let tab = tab.clone(); move || vec![tab.get() == 0] },
-                                    |__cond: &bool| *__cond,
-                                    {
-                                        let theme = theme.clone();
-                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                        if __cond {
-                                            let __text_0 = {
-                                                Text::declaring(
-                                                    || "Overview — what the product does.".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            Ok(box_item(__text_0))
-                                        } else {
-                                            Ok(box_item(Container::column(children![])?))
+                                let __node_4 = {
+                                    let __recipe_children = Children::new(
+                                        {
+                                            let tab = tab.clone();
+                                            let theme = theme.clone();
+                                        move || {
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __node_5 = ReactiveList::new(
+                                                { let tab = tab.clone(); move || vec![tab.get() == 0] },
+                                                |__cond: &bool| *__cond,
+                                                {
+                                                    let theme = theme.clone();
+                                                move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                                    if __cond {
+                                                        let __text_0 = {
+                                                            Text::declaring(
+                                                                || "Overview — what the product does.".to_string(),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                            )?
+                                                        };
+                                                        Ok(box_item(__text_0))
+                                                    } else {
+                                                        Ok(box_item(Container::column(children![])?))
+                                                    }
+                                                }
+                                                },
+                                                0.0,
+                                            )?;
+                                            __children.push(box_item(__node_5));
+                                            let __node_6 = ReactiveList::new(
+                                                { let tab = tab.clone(); move || vec![tab.get() == 1] },
+                                                |__cond: &bool| *__cond,
+                                                {
+                                                    let theme = theme.clone();
+                                                move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                                    if __cond {
+                                                        let __text_1 = {
+                                                            Text::declaring(
+                                                                || "Pricing — plans and limits.".to_string(),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                            )?
+                                                        };
+                                                        Ok(box_item(__text_1))
+                                                    } else {
+                                                        Ok(box_item(Container::column(children![])?))
+                                                    }
+                                                }
+                                                },
+                                                0.0,
+                                            )?;
+                                            __children.push(box_item(__node_6));
+                                            let __node_7 = ReactiveList::new(
+                                                { let tab = tab.clone(); move || vec![tab.get() == 2] },
+                                                |__cond: &bool| *__cond,
+                                                {
+                                                    let theme = theme.clone();
+                                                move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                                    if __cond {
+                                                        let __text_2 = {
+                                                            Text::declaring(
+                                                                || "Team — who is behind it.".to_string(),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                            )?
+                                                        };
+                                                        Ok(box_item(__text_2))
+                                                    } else {
+                                                        Ok(box_item(Container::column(children![])?))
+                                                    }
+                                                }
+                                                },
+                                                0.0,
+                                            )?;
+                                            __children.push(box_item(__node_7));
+                                            Ok(__children)
                                         }
-                                    }
-                                    },
-                                    0.0,
-                                )?;
+                                        }
+                                    );
+                                    tab_panel(TabPanelProps::props().link(pages.clone()).children(__recipe_children).build())?
+                                };
                                 __children.push(box_item(__node_4));
-                                let __node_5 = ReactiveList::new(
-                                    { let tab = tab.clone(); move || vec![tab.get() == 1] },
-                                    |__cond: &bool| *__cond,
-                                    {
-                                        let theme = theme.clone();
-                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                        if __cond {
-                                            let __text_1 = {
-                                                Text::declaring(
-                                                    || "Pricing — plans and limits.".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            Ok(box_item(__text_1))
-                                        } else {
-                                            Ok(box_item(Container::column(children![])?))
-                                        }
-                                    }
-                                    },
-                                    0.0,
-                                )?;
-                                __children.push(box_item(__node_5));
-                                let __node_6 = ReactiveList::new(
-                                    { let tab = tab.clone(); move || vec![tab.get() == 2] },
-                                    |__cond: &bool| *__cond,
-                                    {
-                                        let theme = theme.clone();
-                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                        if __cond {
-                                            let __text_2 = {
-                                                Text::declaring(
-                                                    || "Team — who is behind it.".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            Ok(box_item(__text_2))
-                                        } else {
-                                            Ok(box_item(Container::column(children![])?))
-                                        }
-                                    }
-                                    },
-                                    0.0,
-                                )?;
-                                __children.push(box_item(__node_6));
                                 Ok(__children)
                             }
                             }
@@ -158,29 +175,29 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_7 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team']").build())?;
-                    __children.push(box_item(__node_7));
+                    let __node_8 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team'] panel:(pages.clone())   >   tab_panel link:(pages.clone())").build())?;
+                    __children.push(box_item(__node_8));
                     Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("tabs — a bound index; swap panels with reactive ifs").children(__recipe_children).build())?
+            example(ExampleProps::props().title("tabs — a bound index, and the panel it shows").children(__recipe_children).build())?
         };
-        let __node_8 = {
+        let __node_9 = {
             let __recipe_children = Children::new(
                 {
                     let open = open.clone();
                     let theme = theme.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_9 = {
+                    let __node_10 = {
                         let __recipe_children = Children::new(
                             {
                                 let open = open.clone();
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_10 = {
+                                let __node_11 = {
                                     let __recipe_children = Children::new(
                                         {
                                             let theme = theme.clone();
@@ -200,7 +217,7 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     );
                                     accordion(AccordionProps::props().title("Shipping details").open(open.clone()).children(__recipe_children).build())?
                                 };
-                                __children.push(box_item(__node_10));
+                                __children.push(box_item(__node_11));
                                 let __text_4 = {
                                     let open = open.clone();
                                     Text::declaring(
@@ -216,16 +233,16 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         );
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_9));
-                    let __node_11 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build())?;
-                    __children.push(box_item(__node_11));
+                    __children.push(box_item(__node_10));
+                    let __node_12 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build())?;
+                    __children.push(box_item(__node_12));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("accordion — a collapsible section, open bound to a signal").children(__recipe_children).build())?
         };
-        let __node_12 = {
+        let __node_13 = {
             let __recipe_children = Children::new(
                 {
                     let address = address.clone();
@@ -234,7 +251,7 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                     let panes = panes.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_13 = {
+                    let __node_14 = {
                         let __recipe_children = Children::new(
                             {
                                 let address = address.clone();
@@ -244,11 +261,11 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_14 = button(ButtonProps::props().label("Overview").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Overview) } })).build())?;
-                                    let __node_15 = button(ButtonProps::props().label("Pricing").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Pricing) } })).build())?;
-                                    let __node_16 = button(ButtonProps::props().label("Team").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Team) } })).build())?;
-                                    let __node_17 = button(ButtonProps::props().label("Back").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || { navigate_back(); })).build())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_14, __node_15, __node_16, __node_17])?
+                                    let __node_15 = button(ButtonProps::props().label("Overview").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Overview) } })).build())?;
+                                    let __node_16 = button(ButtonProps::props().label("Pricing").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Pricing) } })).build())?;
+                                    let __node_17 = button(ButtonProps::props().label("Team").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Team) } })).build())?;
+                                    let __node_18 = button(ButtonProps::props().label("Back").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || { navigate_back(); })).build())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_15, __node_16, __node_17, __node_18])?
                                 };
                                 __children.push(box_item(__row_0));
                                 let __text_5 = {
@@ -276,16 +293,16 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         );
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_13));
-                    let __node_18 = code_line(CodeLineProps::props().code("let panes = Navigator::new(Pane::Overview).follow_location();").build())?;
-                    __children.push(box_item(__node_18));
+                    __children.push(box_item(__node_14));
+                    let __node_19 = code_line(CodeLineProps::props().code("let panes = Navigator::new(Pane::Overview).follow_location();").build())?;
+                    __children.push(box_item(__node_19));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("follow_location — a page stack that is the app's address").children(__recipe_children).build())?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_12])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_9, __node_13])?
     };
     Ok(Box::new(__col_0))
 }

@@ -156,6 +156,7 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
             }
         },
     )
+    .map(box_item)
 }
 
 #[cfg(test)]

@@ -1009,6 +1009,7 @@ pub const ROLE_VALUES: &[(&str, &str)] = &[
     ("button", "Button"),
     ("link", "Link"),
     ("checkbox", "CheckBox"),
+    ("radiogroup", "RadioGroup"),
     ("radio", "Radio"),
     ("switch", "Switch"),
     ("toggle", "Switch"),

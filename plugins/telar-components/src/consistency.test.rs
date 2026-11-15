@@ -272,7 +272,12 @@ fn selections() -> Vec<Selection> {
         Selection {
             name: "radio",
             build: |size| {
-                crate::radio(crate::RadioProps::props().label("Small").size(size).build())
+                crate::radio_group(
+                    crate::RadioGroupProps::props()
+                        .items(vec!["Small"])
+                        .size(size)
+                        .build(),
+                )
             },
             role: Role::Radio,
             drawn: |size| (metrics::icon_size(size), metrics::icon_size(size)),
@@ -819,7 +824,14 @@ fn pointed() -> Vec<Pointed> {
         },
         Pointed {
             name: "radio with no label",
-            build: |size| crate::radio(crate::RadioProps::props().size(size).build()),
+            build: |size| {
+                crate::radio_group(
+                    crate::RadioGroupProps::props()
+                        .items(vec![""])
+                        .size(size)
+                        .build(),
+                )
+            },
             open: nothing_to_open,
         },
         Pointed {
