@@ -3,9 +3,9 @@
 use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Direction,
-    JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive,
-    RectStyle, RwSignal, ShapeStyle, Side, StyledContainer, SurfaceAmendment, amend_surface, box_item,
-    children, current_direction, focus::Role,
+    JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, OverlayControl, Props,
+    Reactive, RectStyle, ShapeStyle, Side, StyledContainer, SurfaceAmendment, amend_surface,
+    box_item, children, current_direction, focus::Role,
 };
 
 use crate::shared::scrim;
@@ -48,17 +48,14 @@ impl DrawerTokens {
     }
 }
 
-/// A panel that covers the page from one of its edges over a dimming scrim. When `open` is true it portals an `Overlay` with a translucent scrim and an opaque panel pinned to `side` and spanning that edge, holding its `children`; when false it collapses to a 0-size node. Tapping the scrim dismisses; tapping the panel does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
+/// A panel that covers the page from one of its edges over a dimming scrim. While its `control` is open it portals an `Overlay` with a translucent scrim and an opaque panel pinned to `side` and spanning that edge, holding its `children`; when false it collapses to a 0-size node. Tapping the scrim dismisses; tapping the panel does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
 ///
 /// The panel snaps in (no slide animation): the overlay is built only while open, so there is no off-screen frame to animate from. A slide-in (a `telar::motion::Animated<f32>` x-offset kept mounted across the close transition) is a follow-up.
 #[derive(Props)]
 pub struct DrawerProps {
-    /// Bound open/close state. `None` (the default) never opens; `Some` drives the drawer.
-    #[props(some, into, default)]
-    pub open: Option<RwSignal<bool>>,
-    /// Names this drawer, so anything on the same surface can open it with `open_overlay(id)` without holding its signal; another surface has its own `id`. `""` (the default) leaves it unnamed. Ignored when `open` is bound.
-    #[props(default = "")]
-    pub id: &'static str,
+    /// What opens and closes the drawer: an [`OverlayName`](telar::OverlayName) anything on the same surface opens with [`open_overlay`](telar::open_overlay), each surface keeping its own, or a signal the caller holds.
+    #[props(into)]
+    pub control: OverlayControl,
     /// Which edge the panel is pinned to, [`Side::Start`] by default: the start and the end of a line follow the way the surface reads, so a drawer at the end opens on the right of a left-to-right surface and on the left of a right-to-left one.
     #[props(default = Side::Start)]
     pub side: Side,
@@ -88,8 +85,7 @@ pub struct DrawerProps {
 /// A panel that slides in from an edge over a dismissing scrim.
 pub fn drawer(props: DrawerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let DrawerProps {
-        open,
-        id,
+        control,
         side,
         extent,
         size,
@@ -99,7 +95,7 @@ pub fn drawer(props: DrawerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         style,
         children,
     } = props;
-    let open = shared::resolve_open(open, id);
+    let open = control.state();
     let paint = Rc::new(move || amend_surface(panel_paint(&color, side), &style));
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {

@@ -22,7 +22,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let panel = drawer(
                 DrawerProps::props()
                     .on_close(Rc::new(|| {}))
-                    .open(open)
+                    .control(open)
                     .side(p.arg("side", Side::Start))
                     .given(p.arg("extent", None::<f32>), |props, extent| props.extent(extent))
                     .size(p.arg("size", ControlSize::Regular))

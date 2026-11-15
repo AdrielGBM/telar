@@ -14,6 +14,12 @@
 #[derive(::telar::Props)]
 pub struct DialogsProps {}
 
+#[allow(dead_code)]
+const CONFIRM: OverlayName = OverlayName::new("confirm");
+
+#[allow(dead_code)]
+const NAV: OverlayName = OverlayName::new("nav");
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -42,7 +48,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
-                                let __node_3 = button(ButtonProps::props().label("Open modal").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("confirm"))).build())?;
+                                let __node_3 = button(ButtonProps::props().label("Open modal").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay(CONFIRM))).build())?;
                                 __children.push(box_item(__node_3));
                                 let __node_4 = {
                                     let __recipe_children = Children::new(
@@ -62,7 +68,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                         }
                                         }
                                     );
-                                    modal(ModalProps::props().id("confirm").title("Confirm").children(__recipe_children).build())?
+                                    modal(ModalProps::props().control(CONFIRM).title("Confirm").children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_4));
                                 Ok(__children)
@@ -72,7 +78,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_5 = code_line(CodeLineProps::props().code("modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere on this surface").build())?;
+                    let __node_5 = code_line(CodeLineProps::props().code("modal control:CONFIRM  >  …      open_overlay(CONFIRM)  from anywhere on this surface").build())?;
                     __children.push(box_item(__node_5));
                     Ok(__children)
                 }
@@ -92,7 +98,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_8 = button(ButtonProps::props().label("Open drawer").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("nav"))).build())?;
+                                let __node_8 = button(ButtonProps::props().label("Open drawer").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay(NAV))).build())?;
                                 __children.push(box_item(__node_8));
                                 let __node_9 = {
                                     let __recipe_children = Children::new(
@@ -112,7 +118,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                         }
                                         }
                                     );
-                                    drawer(DrawerProps::props().id("nav").side(::telar::kw::end).children(__recipe_children).build())?
+                                    drawer(DrawerProps::props().control(NAV).side(::telar::kw::end).children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_9));
                                 Ok(__children)
@@ -122,7 +128,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_7));
-                    let __node_10 = code_line(CodeLineProps::props().code("drawer id:\"nav\" side:end  >  text \"Drawer content\"").build())?;
+                    let __node_10 = code_line(CodeLineProps::props().code("drawer control:NAV side:end  >  text \"Drawer content\"").build())?;
                     __children.push(box_item(__node_10));
                     Ok(__children)
                 }

@@ -692,7 +692,7 @@ fn panel_probes() -> Vec<Panel> {
                 shown(|| {
                     crate::modal(
                         crate::ModalProps::props()
-                            .open(telar::signal(true))
+                            .control(telar::signal(true))
                             .title("Confirm")
                             .build(),
                     )
@@ -706,7 +706,7 @@ fn panel_probes() -> Vec<Panel> {
                 shown(|| {
                     crate::drawer(
                         crate::DrawerProps::props()
-                            .open(telar::signal(true))
+                            .control(telar::signal(true))
                             .build(),
                     )
                 })
@@ -719,7 +719,7 @@ fn panel_probes() -> Vec<Panel> {
                 shown(|| {
                     crate::command_palette(
                         crate::CommandPaletteProps::props()
-                            .open(telar::signal(true))
+                            .control(telar::signal(true))
                             .commands(vec![crate::Command::new("save", "Save")])
                             .build(),
                     )
@@ -894,7 +894,7 @@ fn pointed() -> Vec<Pointed> {
         build: |size| {
             crate::modal(
                 crate::ModalProps::props()
-                    .open(telar::signal(true))
+                    .control(telar::signal(true))
                     .title("Confirm")
                     .size(size)
                     .build(),

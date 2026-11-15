@@ -7,9 +7,9 @@ use std::sync::Arc;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Clip, ClippedItem, Color, Container, Declared,
     JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
-    ModifiersState, NamedKey, Props, Reactive, ReactiveList, RectStyle, RwSignal, ShapeStyle, Span,
-    StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap, amend_surface, box_item,
-    children, effect,
+    ModifiersState, NamedKey, OverlayControl, Props, Reactive, ReactiveList, RectStyle, RwSignal,
+    ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap,
+    amend_surface, box_item, children, effect,
     focus::{FocusId, Role},
     memo, signal,
 };
@@ -134,12 +134,9 @@ pub type RunHandler = Rc<dyn Fn(&Command)>;
 /// The keyboard stays in the field: the arrows walk the list, Enter runs the command the cursor is on, Escape closes. A reader hears the row the cursor is on as it moves, because the field points at it.
 #[derive(Props)]
 pub struct CommandPaletteProps {
-    /// Bound open state. `None` (the default) leaves it to [`id`](Self::id), and with neither it never opens.
-    #[props(some, into, default)]
-    pub open: Option<RwSignal<bool>>,
-    /// Names the palette, so anything on the same surface can open it with `open_overlay(id)` without holding its signal; another surface has its own `id`. Ignored when `open` is bound.
-    #[props(default = "")]
-    pub id: &'static str,
+    /// What opens and closes the palette: an [`OverlayName`](telar::OverlayName) anything on the same surface opens with [`open_overlay`](telar::open_overlay), each surface keeping its own, or a signal the caller holds.
+    #[props(into)]
+    pub control: OverlayControl,
     #[props(into, default)]
     pub commands: Reactive<Vec<Command>>,
     /// Bound search text. `None` (the default) is uncontrolled. It is cleared each time the palette closes, so it opens on the whole list unless something sets it first.
@@ -177,8 +174,7 @@ pub struct CommandPaletteProps {
 /// A dialog that finds a command by typing part of its name, and runs it.
 pub fn command_palette(props: CommandPaletteProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let CommandPaletteProps {
-        open,
-        id,
+        control,
         commands,
         query,
         placeholder,
@@ -191,7 +187,7 @@ pub fn command_palette(props: CommandPaletteProps) -> Result<Box<dyn LayoutItem>
         color,
         style,
     } = props;
-    let open = shared::resolve_open(open, id);
+    let open = control.state();
     let query = query.unwrap_or_else(|| signal(String::new()));
     let parts = Parts {
         commands,
@@ -443,7 +439,7 @@ impl Palette {
 
 fn build_open_palette(
     parts: Parts,
-    open: Option<RwSignal<bool>>,
+    open: RwSignal<bool>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Parts {
@@ -537,13 +533,11 @@ fn build_open_palette(
             viewport.scroll_to(x, 0.0);
         });
     }
-    if let Some(open) = open {
-        effect(move || {
-            if !open.get() {
-                query.set(String::new());
-            }
-        });
-    }
+    effect(move || {
+        if !open.get() {
+            query.set(String::new());
+        }
+    });
 
     let field_width = width - card_pad(size) * 2.0;
     let keys = {

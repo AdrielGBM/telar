@@ -27,7 +27,7 @@ mod modal {
 
     fn props() -> ModalProps {
         ModalProps::props()
-            .open(signal(true))
+            .control(signal(true))
             .title("Confirm")
             .build()
     }
@@ -50,7 +50,7 @@ mod modal {
     fn the_close_label_prop_wins() {
         set_locale("es");
         let props = ModalProps::props()
-            .open(signal(true))
+            .control(signal(true))
             .title("Confirm")
             .close_label("Done")
             .build();

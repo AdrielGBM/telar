@@ -49,13 +49,13 @@ mod modal {
         set_catalog(&APP);
         set_locale("en");
         let props = ModalProps::props()
-            .open(signal(true))
+            .control(signal(true))
             .title("Confirm")
             .build();
         assert!(open_modal(props).contains(&"Dismiss".to_string()));
         set_locale("es");
         let props = ModalProps::props()
-            .open(signal(true))
+            .control(signal(true))
             .title("Confirm")
             .build();
         assert!(open_modal(props).contains(&"Descartar".to_string()));
@@ -66,7 +66,7 @@ mod modal {
         set_catalog(&APP);
         set_locale("en");
         let props = ModalProps::props()
-            .open(signal(true))
+            .control(signal(true))
             .title("Confirm")
             .close_label("Done")
             .build();

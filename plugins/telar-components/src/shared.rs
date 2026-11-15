@@ -321,16 +321,6 @@ pub(crate) fn resolve(color: &Option<Reactive<Color>>, fallback: impl FnOnce() -
     color.as_ref().map_or_else(fallback, Reactive::get)
 }
 
-/// The open/close state a scrim overlay is driven by: an explicitly bound `open` signal, else the shared state of the `id` it is named by, else `None` (unbound — it can never open).
-///
-/// An explicit signal wins on purpose. Given both, the two would be independent states racing each other, and the one written next to the widget is the one the author most likely meant.
-pub(crate) fn resolve_open(
-    open: Option<telar::RwSignal<bool>>,
-    id: &'static str,
-) -> Option<telar::RwSignal<bool>> {
-    open.or_else(|| (!id.is_empty()).then(|| telar::overlay_state(id)))
-}
-
 fn caption_box(text_size: f32) -> LayoutStyle {
     LayoutStyle::new().height(telar::single_line_box(text_size))
 }

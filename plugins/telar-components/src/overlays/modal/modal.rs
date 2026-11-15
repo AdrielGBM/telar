@@ -3,9 +3,9 @@
 use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent,
-    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, RectStyle, RwSignal,
-    ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface, box_item, children,
-    focus::Role,
+    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, OverlayControl, Props, Reactive,
+    RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface, box_item,
+    children, focus::Role,
 };
 
 use crate::layout::heading::heading::{HeadingProps, heading};
@@ -91,15 +91,12 @@ fn backdrop(size: ControlSize) -> LayoutStyle {
         .padding_all(ModalTokens::current().pad(size))
 }
 
-/// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque surface card holding the `title`, its `children` (the dialog body) and a Close affordance; when false it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
+/// A centred dialog over a dimming scrim. While its `control` is open it portals an `Overlay` (a top-layer layer that escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque surface card holding the `title`, its `children` (the dialog body) and a Close affordance; when false it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
 #[derive(Props)]
 pub struct ModalProps {
-    /// Bound open/close state. `None` (the default) never opens (no signal to read); `Some` drives the modal.
-    #[props(some, into, default)]
-    pub open: Option<RwSignal<bool>>,
-    /// Names this dialog, so anything on the same surface can open it with `open_overlay(id)` without holding its signal; another surface has its own `id`. `""` (the default) leaves it unnamed. Ignored when `open` is bound — an explicit signal wins, so the two forms never disagree about which state is authoritative.
-    #[props(default = "")]
-    pub id: &'static str,
+    /// What opens and closes the dialog: an [`OverlayName`](telar::OverlayName) anything on the same surface opens with [`open_overlay`](telar::open_overlay), each surface keeping its own, or a signal the caller holds.
+    #[props(into)]
+    pub control: OverlayControl,
     /// The dialog's heading, shown beside its Close affordance.
     #[props(into, default)]
     pub title: Reactive<String>,
@@ -126,8 +123,7 @@ pub struct ModalProps {
 /// A dialog portaled over the page, dismissed by its scrim, its Close or Escape.
 pub fn modal(props: ModalProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ModalProps {
-        open,
-        id,
+        control,
         title,
         size,
         on_close,
@@ -136,7 +132,7 @@ pub fn modal(props: ModalProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         style,
         children,
     } = props;
-    let open = shared::resolve_open(open, id);
+    let open = control.state();
     let paint: Rc<dyn Fn() -> RectStyle> =
         Rc::new(move || amend_surface(card_paint(&color), &style));
 

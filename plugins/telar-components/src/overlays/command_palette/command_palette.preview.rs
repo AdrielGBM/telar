@@ -51,7 +51,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let palette = command_palette(
                 CommandPaletteProps::props()
                     .on_run(Rc::new(|_| {}))
-                    .open(open)
+                    .control(open)
                     .commands(commands())
                     .given(p.arg("width", None::<f32>), |props, value| props.width(value))
                     .size(p.arg("size", ControlSize::Regular))

@@ -4,22 +4,25 @@ use crate::shared::components::code_line::{CodeLineProps, code_line};
 use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
 use crate::shared::components::example::{ExampleProps, example};
 
+const CONFIRM: OverlayName = OverlayName::new("confirm");
+const NAV: OverlayName = OverlayName::new("nav");
+
 [view]
 col gap:20
     doc_header kicker:"OVERLAYS" title:"Dialogs" desc:"Modal, drawer and tooltip — high-level widgets built on the overlay primitive (a top-layer portal that escapes clipping and blocks the page). Each renders its content only while open, so a closed overlay costs nothing and never eats a background click."
     example title:"Modal — an opaque dialog centred over a dimming scrim; the scrim or Close dismisses"
         card gap:10
             text "Naming the dialog is what removes the signal(bool) per overlay: anything can open it by name — a menu item, a shortcut, a deep link — without the state being threaded down to it." font_size:13 color:$theme.muted
-            button label:"Open modal" color:$theme.primary on_press:(|| open_overlay("confirm"))
-            modal id:"confirm" title:"Confirm"
+            button label:"Open modal" color:$theme.primary on_press:(|| open_overlay(CONFIRM))
+            modal control:CONFIRM title:"Confirm"
                 text "Body content here" font_size:14 color:$theme.ink
-        code_line code:"modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere on this surface"
+        code_line code:"modal control:CONFIRM  >  …      open_overlay(CONFIRM)  from anywhere on this surface"
     example title:"Drawer — a full-height side panel pinned to an edge, over the same scrim"
         card gap:10
-            button label:"Open drawer" color:$theme.primary on_press:(|| open_overlay("nav"))
-            drawer id:"nav" side:end
+            button label:"Open drawer" color:$theme.primary on_press:(|| open_overlay(NAV))
+            drawer control:NAV side:end
                 text "Drawer content" color:$theme.ink
-        code_line code:"drawer id:\"nav\" side:end  >  text \"Drawer content\""
+        code_line code:"drawer control:NAV side:end  >  text \"Drawer content\""
     example title:"Tooltip — a hover popup anchored just below its trigger"
         card gap:10
             tooltip text:"Helpful hint"

@@ -124,7 +124,7 @@ impl Mounted {
         let sink = ran.clone();
         let palette = command_palette(
             CommandPaletteProps::props()
-                .open(open)
+                .control(open)
                 .query(query)
                 .commands(commands)
                 .on_run(Rc::new(move |command: &Command| {
@@ -553,7 +553,7 @@ fn dialog(style: Option<telar::SurfaceAmendment>) -> (telar::Rect, RectStyle) {
     crate::test_support::fresh_layout_runtime();
     let open = signal(false);
     let props = CommandPaletteProps::props()
-        .open(open)
+        .control(open)
         .commands(catalogue());
     let props = match style {
         Some(style) => props.style(style),

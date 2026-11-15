@@ -79,7 +79,7 @@ fn track_focus_handover(open: RwSignal<bool>, content: telar::NodeId) {
     });
 }
 
-/// A 0-size collapsed node: the unbound/never-opened placeholder that registers no overlay and blocks nothing.
+/// A 0-size collapsed node: the never-opened placeholder that registers no overlay and blocks nothing.
 fn collapsed() -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(Container::new(
         LayoutStyle::new().width(0.0).height(0.0),
@@ -87,18 +87,14 @@ fn collapsed() -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?))
 }
 
-/// The portal-once toggleable-scrim scaffold shared by `modal`, `drawer` and `command_palette`. Owns the unbound guard, the build latch and the toggleable `Overlay`; `build_inner` gets the shared dismiss handler and returns its own scrim container (with the card/panel inside), which is kept mounted and shown/hidden via `open`.
+/// The portal-once toggleable-scrim scaffold shared by `modal`, `drawer` and `command_palette`. Owns the build latch and the toggleable `Overlay`; `build_inner` gets the shared dismiss handler and returns its own scrim container (with the card/panel inside), which is kept mounted and shown/hidden via `open`.
 ///
-/// `open` `None` (unbound) can never open, so it renders nothing and drops the captured body. Otherwise the scrim is built ONCE — lazily on the first open, so the layout host exists and the portal attaches to the viewport — then kept mounted and shown/hidden via `open` (see `Overlay::toggleable`), preserving the body across close/reopen. The `ReactiveList` is keyed on a latch that flips true on the first open and stays true, so the built scrim is never disposed.
+/// The scrim is built ONCE — lazily on the first open, so the layout host exists and the portal attaches to the viewport — then kept mounted and shown/hidden via `open` (see `Overlay::toggleable`), preserving the body across close/reopen. The `ReactiveList` is keyed on a latch that flips true on the first open and stays true, so the built scrim is never disposed.
 pub(crate) fn scrim_overlay(
-    open: Option<RwSignal<bool>>,
+    open: RwSignal<bool>,
     on_close: Option<Rc<dyn Fn()>>,
     build_inner: impl Fn(DismissFn) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let Some(open) = open else {
-        return collapsed();
-    };
-
     let dismiss: DismissFn = Rc::new(move || {
         open.set(false);
         if let Some(cb) = &on_close {

@@ -30,7 +30,7 @@ fn sections() -> Vec<(&'static str, Vec<Action>)> {
 }
 
 [view]
-modal open:props.open title:(strings::reactive(KEYBOARD_SHORTCUTS))
+modal control:props.open title:(strings::reactive(KEYBOARD_SHORTCUTS))
     scroll axis:col max_height:MAX_HEIGHT a11y_label:(strings::text(KEYBOARD_SHORTCUTS))
         col width:WIDTH gap:(WORKBENCH_GRID / 2.0)
             for (group, actions) in sections()

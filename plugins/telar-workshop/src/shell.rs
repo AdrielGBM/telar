@@ -155,7 +155,7 @@ fn under_drawer(
     let sidebar = regions.sidebar.clone();
     let drawer = drawer(
         DrawerProps::props()
-            .open(state.sidebar_drawer())
+            .control(state.sidebar_drawer())
             .extent(width)
             .label(Reactive::of(|| strings::text(PREVIEWS)))
             .color(Reactive::of(|| -> Color {

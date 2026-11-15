@@ -51,7 +51,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let dialog = modal(
                 ModalProps::props()
                     .on_close(Rc::new(|| {}))
-                    .open(open)
+                    .control(open)
                     .title(p.arg("title", "Confirm"))
                     .size(p.arg("size", ControlSize::Regular))
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))
@@ -80,7 +80,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(modal: ModalProps, "Long body", |p| {
             modal(
                 ModalProps::props()
-                    .open(p.signal("open", true))
+                    .control(p.signal("open", true))
                     .title("Terms")
                     .children(long_body())
                     .build(),
@@ -96,7 +96,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(modal: ModalProps, "Narrow window", |p| {
             modal(
                 ModalProps::props()
-                    .open(p.signal("open", true))
+                    .control(p.signal("open", true))
                     .title("Confirm")
                     .children(body_in(None))
                     .build(),

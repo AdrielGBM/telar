@@ -15,7 +15,7 @@ pub(super) fn palette(keymap: &Keymap) -> Result<Box<dyn LayoutItem>, LayoutErro
     let running = keymap.clone();
     command_palette(
         CommandPaletteProps::props()
-            .open(keymap.palette)
+            .control(keymap.palette)
             .commands(Reactive::of(move || commands(&listing)))
             .placeholder(Reactive::of(|| strings::text(FIND)))
             .on_run(Rc::new(move |command: &Command| {

@@ -11,7 +11,7 @@ fn open_shows_dialog_and_close_hides_it() {
     let open = signal(false);
     let modal = modal(
         ModalProps::props()
-            .open(open)
+            .control(open)
             .title("Confirm")
             .children(text_body("Body"))
             .build(),
@@ -76,7 +76,7 @@ fn open_registers_on_the_dismiss_stack_and_dismissing_closes_it() {
     let open = signal(false);
     let modal = modal(
         ModalProps::props()
-            .open(open)
+            .control(open)
             .title("Confirm")
             .children(text_body("Body"))
             .build(),
@@ -128,16 +128,18 @@ fn open_registers_on_the_dismiss_stack_and_dismissing_closes_it() {
     );
 }
 
+const CONFIRM: telar::OverlayName = telar::OverlayName::new("confirm-test");
+
 // A named modal has nothing holding its state, so opening it before it is built must still bring it up: the name resolves to one shared signal either way.
 #[test]
 fn a_named_modal_opens_from_anywhere_even_before_it_is_built() {
     crate::test_support::fresh_layout_runtime();
-    telar::close_overlay("confirm-test");
-    telar::open_overlay("confirm-test");
+    telar::close_overlay(CONFIRM);
+    telar::open_overlay(CONFIRM);
 
     let modal = modal(
         ModalProps::props()
-            .id("confirm-test")
+            .control(CONFIRM)
             .title("Confirm")
             .children(text_body("Body"))
             .build(),
@@ -167,52 +169,12 @@ fn a_named_modal_opens_from_anywhere_even_before_it_is_built() {
     );
     relayout_if_dirty();
     assert!(
-        !telar::overlay_state("confirm-test").peek(),
+        !telar::overlay_state(CONFIRM).peek(),
         "dismissing clears its open state"
     );
     assert!(
         !find_text(&tree.commands(), "Confirm"),
         "so it draws nothing"
-    );
-}
-
-// Given both, the explicitly bound signal is authoritative — otherwise the two states would race.
-#[test]
-fn an_explicit_open_signal_wins_over_a_name() {
-    crate::test_support::fresh_layout_runtime();
-    telar::open_overlay("ignored-name");
-    let open = signal(false);
-    let modal = modal(
-        ModalProps::props()
-            .open(open)
-            .id("ignored-name")
-            .title("Confirm")
-            .children(text_body("Body"))
-            .build(),
-    )
-    .unwrap();
-    let tree = ComponentList::new(modal);
-    assert!(
-        !find_text(&tree.commands(), "Confirm"),
-        "the bound signal says closed, so the open name is ignored"
-    );
-    telar::close_overlay("ignored-name");
-}
-
-#[test]
-fn unbound_modal_renders_nothing() {
-    crate::test_support::fresh_layout_runtime();
-    let modal = modal(
-        ModalProps::props()
-            .title("Confirm")
-            .children(text_body("Body"))
-            .build(),
-    )
-    .unwrap();
-    let tree = ComponentList::new(modal);
-    assert!(
-        !find_text(&tree.commands(), "Confirm"),
-        "a modal bound to nothing draws nothing"
     );
 }
 
@@ -222,7 +184,7 @@ fn a_reader_meets_the_dialog_under_its_title() {
     let open = signal(true);
     let modal = modal(
         ModalProps::props()
-            .open(open)
+            .control(open)
             .title("Confirm")
             .children(text_body("Body"))
             .build(),
@@ -266,7 +228,7 @@ fn opener_and_dialog(open: telar::RwSignal<bool>) -> (ComponentList, telar::focu
     let opener_id = opener.focus_id().expect("a control");
     let dialog = modal(
         ModalProps::props()
-            .open(open)
+            .control(open)
             .title("Confirm")
             .children(text_body("Body"))
             .build(),
@@ -365,7 +327,7 @@ fn the_card_is_rounded_by_the_dialog_role_until_the_tokens_name_a_radius() {
         || {
             open_modal(
                 ModalProps::props()
-                    .open(signal(true))
+                    .control(signal(true))
                     .title("Confirm")
                     .build(),
             )
@@ -442,7 +404,7 @@ fn a_style_amendment_restyles_the_card_over_its_own_paint() {
     let ink = Color::rgb(0.9, 0.1, 0.4);
     let tree = open_modal(
         ModalProps::props()
-            .open(signal(true))
+            .control(signal(true))
             .title("Confirm")
             .style(Rc::new(move |paint: RectStyle| {
                 paint.with_fill(ink).with_radius(BorderRadius::all(0.0))
@@ -480,7 +442,7 @@ fn the_scrim_is_the_theme_overlay_and_follows_a_switch() {
     telar::set_theme(Dimmed(first));
     let tree = open_modal(
         ModalProps::props()
-            .open(signal(true))
+            .control(signal(true))
             .title("Confirm")
             .build(),
     );
@@ -510,7 +472,7 @@ fn open_modal_sized(
     let tree = telar::testing::scoped(|| {
         let modal = modal(
             ModalProps::props()
-                .open(signal(true))
+                .control(signal(true))
                 .title("Confirm")
                 .size(size)
                 .children(body)

@@ -746,7 +746,7 @@ fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
         .collect();
     let palette = command_palette(
         CommandPaletteProps::props()
-            .id(PALETTE)
+            .control(PALETTE)
             .commands(commands)
             .build(),
     )?;
@@ -764,7 +764,7 @@ fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     });
     let notice = modal(
         ModalProps::props()
-            .id(NOTICE)
+            .control(NOTICE)
             .title("Terms")
             .children(terms)
             .build(),
@@ -810,7 +810,7 @@ fn view_rows() -> Children {
     })
 }
 
-const PALETTE: &str = "commands";
+const PALETTE: telar::OverlayName = telar::OverlayName::new("commands");
 
 /// A list that scrolls is one control that takes focus, drawn where it opened; focused, it points a reader at the row its cursor is on, a `menuitem` of a menu or an `option` of a list box.
 async fn assert_list_points_at_its_cursor(list: Role, row_role: &str, what: &str) {
@@ -1155,7 +1155,7 @@ fn controlled(control: &web_sys::Element) -> (web_sys::Element, Option<web_sys::
     (list, row)
 }
 
-const NOTICE: &str = "notice";
+const NOTICE: telar::OverlayName = telar::OverlayName::new("notice");
 
 /// A dialog whose body holds more than it shows makes the body a Tab stop the keyboard scrolls, named after the dialog, and adds no violations.
 #[wasm_bindgen_test]

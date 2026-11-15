@@ -147,7 +147,7 @@ fn a_modal_preview_stays_inside_its_canvas() {
         PreviewEntry::new("fake--modal--open", "modal", "Open", |_| {
             modal(
                 ModalProps::props()
-                    .open(signal(true))
+                    .control(signal(true))
                     .title("Confirm")
                     .build(),
             )

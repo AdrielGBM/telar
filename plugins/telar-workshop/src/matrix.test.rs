@@ -69,15 +69,17 @@ fn lit(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?))
 }
 
+const CONFIRM: telar::OverlayName = telar::OverlayName::new("confirm");
+
 /// A button that opens the dialog named `confirm`, and the dialog.
 fn confirming(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let opener = button(
         ButtonProps::props()
             .label("Ask")
-            .on_press(Rc::new(|| telar::open_overlay("confirm")))
+            .on_press(Rc::new(|| telar::open_overlay(CONFIRM)))
             .build(),
     )?;
-    let dialog = modal(ModalProps::props().id("confirm").title("Sure?").build())?;
+    let dialog = modal(ModalProps::props().control(CONFIRM).title("Sure?").build())?;
     Ok(box_item(telar::Container::new(
         LayoutStyle::new().flex_column(),
         vec![opener, dialog],
