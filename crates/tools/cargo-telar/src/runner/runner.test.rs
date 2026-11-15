@@ -4,11 +4,11 @@ use super::*;
 #[test]
 fn a_package_that_declares_no_frontend_reaches_one_through_telar() {
     assert_eq!(
-        frontend_args(Target::Tui, None, &[]),
+        frontend_args(Target::Tui, WebRenderer::Dom, &[]),
         vec!["--features", "telar/tui"]
     );
     assert_eq!(
-        frontend_args(Target::Desktop, None, &[]),
+        frontend_args(Target::Desktop, WebRenderer::Dom, &[]),
         vec!["--features", "telar/desktop"]
     );
 }
@@ -71,4 +71,33 @@ fn an_export_is_neither_a_listing_a_render_nor_a_workshop_opened_somewhere() {
         argv.extend_from_slice(other);
         assert!(preview_args(&argv).is_err(), "{argv:?}");
     }
+}
+
+fn build_renderer(argv: &[&str]) -> Result<WebRenderer, clap::Error> {
+    let cli = Cli::try_parse_from(
+        ["cargo-telar", "build", "--target", "web"]
+            .iter()
+            .chain(argv)
+            .map(|arg| arg.to_string()),
+    )?;
+    match cli.command {
+        Some(TelarCommand::Build(args)) => Ok(args.common.renderer),
+        _ => panic!("not a build command"),
+    }
+}
+
+#[test]
+fn a_web_build_draws_as_a_document_unless_the_canvas_is_asked_for() {
+    assert_eq!(build_renderer(&[]).unwrap(), WebRenderer::Dom);
+    assert_eq!(
+        build_renderer(&["--renderer", "canvas"]).unwrap(),
+        WebRenderer::Canvas
+    );
+    assert!(build_renderer(&["--renderer", "auto"]).is_err());
+}
+
+#[test]
+fn the_renderer_names_the_browser_feature_it_needs() {
+    assert_eq!(Target::Web.feature(WebRenderer::Dom), "web-dom");
+    assert_eq!(Target::Web.feature(WebRenderer::Canvas), "web");
 }

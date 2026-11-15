@@ -49,7 +49,7 @@ pub(crate) fn build_web(
     cargo_args: Vec<String>,
     config: TelarSection,
     release: bool,
-    renderer: Option<WebRenderer>,
+    renderer: WebRenderer,
     prerender: bool,
 ) -> ! {
     let out = match build_web_bundle(cargo_args, config, release, renderer, prerender) {
@@ -68,7 +68,7 @@ pub(crate) fn build_web_bundle(
     cargo_args: Vec<String>,
     config: TelarSection,
     release: bool,
-    renderer: Option<WebRenderer>,
+    renderer: WebRenderer,
     prerender: bool,
 ) -> Result<PathBuf, String> {
     let pages = match prerender {
@@ -89,7 +89,7 @@ pub(crate) fn build_web_bundle(
 
 pub(crate) struct WebBuild<'a> {
     pub(crate) release: bool,
-    pub(crate) renderer: Option<WebRenderer>,
+    pub(crate) renderer: WebRenderer,
     pub(crate) pages: SitePlan,
     /// Where the site is written; the workspace's `telar-dist/web` when `None`.
     pub(crate) out: Option<&'a Path>,
@@ -277,7 +277,7 @@ fn page_locale(default_locale: Option<String>) -> String {
 /// What the page around the app is built from, beyond the project's own files.
 struct Shell<'a> {
     app_name: &'a str,
-    renderer: Option<WebRenderer>,
+    renderer: WebRenderer,
     /// The locale the plain page is written in.
     locale: &'a str,
     site: &'a Site,

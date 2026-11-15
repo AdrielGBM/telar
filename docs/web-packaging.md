@@ -66,7 +66,7 @@ starting point to copy into `web/index.html`.
 | `%telar.lang%` | value | the document language, escaped | `[telar.i18n] default`, or `en` |
 | `%telar.dir%` | value | `ltr` or `rtl`, derived from `%telar.lang%` the same way [`Direction::for_locale`](https://docs.rs/telar-i18n-core) resolves it at runtime | derived from the default above |
 | `%telar.title%` | value | the page title, escaped | the package name |
-| `%telar.renderer%` | value | the `--renderer` choice, for `data-telar-renderer` | `auto` |
+| `%telar.renderer%` | value | the `--renderer` choice, for `data-telar-renderer` | `dom` |
 | `%telar.host%` | attributes | the attributes of a prerendered page's host element, inside its start tag | nothing |
 | `%telar.meta%` | block | the `<base>`, `<meta>` and `<link>` tags that describe the page ([Describing the site](#describing-the-site)) | a `description` and the preview tags |
 | `%telar.fonts%` | block | a preload and an `@font-face` rule per declared face ([fonts](fonts.md)) | nothing |

@@ -52,7 +52,7 @@ Already have a directory — a fresh `git init`, a Nix flake, a README you wrote
 ```sh
 cargo telar init            # scaffolds the current directory
 cargo telar init my-app     # or a path, same as `new`
-cargo telar init --target web --renderer dom   # dom | canvas | auto, browser only
+cargo telar init --target web --renderer dom   # dom (the default) | canvas, browser only
 ```
 
 <details>

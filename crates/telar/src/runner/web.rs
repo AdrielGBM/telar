@@ -18,57 +18,12 @@ pub struct WebOptions {
     pub host: Option<String>,
     /// Whether the app takes the keyboard once mounted, and whether it claims touch gestures inside its host. Both on by default; an app embedded in a scrolling page turns the second off.
     pub focus_and_gestures: Option<(bool, bool)>,
-    /// Which renderer to use, when the page wants to decide rather than let the browser decide for it.
-    pub renderer: WebRenderer,
     /// Whether a right-click opens the application's own menu instead of the browser's.
     ///
     /// `None`, the default, lets the way the app draws decide. Pixels on a canvas give the browser's menu nothing to act on — no text to copy, no link to open, no image to save — so there the app takes it. A document has all three, and an app that swallowed the menu there would be a page missing the one thing every other page has. An application that draws its own menus over a document says so here.
     pub owns_context_menu: Option<bool>,
     /// How the app's locations are written as this page's addresses — the base path the site is served under, and whether a location ends in `/`. `None` takes the base from the page's `<base href>`, and `/` where it has none.
     pub location: Option<platform_core::LocationFormat>,
-}
-
-/// How a browser app draws.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum WebRenderer {
-    /// Pixels on a canvas where the browser offers a GPU adapter, and a document where it does not.
-    ///
-    /// The default, and not a convenience: on Linux, Chrome draws WebGPU through Vulkan, and Vulkan is off in many driver and distribution combinations. A page that could only draw pixels would be blank for those people, through nothing the application did.
-    #[default]
-    Auto,
-    /// Pixels, or nothing. For an app whose frame is a picture rather than an interface.
-    Canvas,
-    /// Real elements, laid out by CSS. Text that can be selected and found, a tree a screen reader can walk, native focus and a working input method — and no GPU at all.
-    Document,
-}
-
-impl WebRenderer {
-    /// The choice, once the page has had its say.
-    ///
-    /// A document is not a fallback for a canvas; it is the other way of drawing an interface, and which one a build uses is a decision the page can make and a link can override — `?telar-renderer=dom` — without rebuilding anything. An application that named one keeps it: `Auto` is what "let somebody else decide" is spelled as, so only it asks.
-    fn resolved(self, host: &web_sys::HtmlElement) -> Self {
-        if self != Self::Auto {
-            return self;
-        }
-        let Some(setting) = platform_web::page_setting(host, RENDERER_SETTING) else {
-            return Self::Auto;
-        };
-        let setting = setting.trim();
-        if setting.is_empty() {
-            return Self::Auto;
-        }
-        match PageRenderer::parse(setting) {
-            Ok(PageRenderer::Auto) => Self::Auto,
-            Ok(PageRenderer::Canvas) => Self::Canvas,
-            Ok(PageRenderer::Dom) => Self::Document,
-            Err(error) => {
-                tracing::warn!(
-                    "the page's {RENDERER_SETTING} setting is not one this build reads: {error}"
-                );
-                Self::Auto
-            }
-        }
-    }
 }
 
 /// The names the page `cargo telar` packages gives what the app looks up in it.
@@ -89,9 +44,6 @@ pub fn run_web_app_with_name<A: App>(
     app_name: &str,
 ) {
     platform_web::install_console_logging();
-    // Owned, because the choice below is made after a promise settles and this call has long returned.
-    let app_name = app_name.to_string();
-
     let host = match platform_web::host_element(options.host.as_deref(), page_names().host_id) {
         Ok(host) => host,
         Err(e) => {
@@ -103,35 +55,29 @@ pub fn run_web_app_with_name<A: App>(
     services_core::set_clipboard(Arc::new(WebClipboard::new()));
     services_core::set_uri_opener(Arc::new(platform_web::WebUriOpener));
 
-    // The choice has to be made before the app is built: it decides what measures text, and text is measured while the tree is being built. Asking the browser costs one promise, and answering wrong costs a page that never draws.
-    let wanted = options.renderer.resolved(&host);
-    let host_for_start = host.clone();
-    wasm_bindgen_futures::spawn_local(async move {
-        let document = draws_as_document(wanted).await;
-        start(config, options, host_for_start, document, app, &app_name);
-    });
+    let document = draws_as_document(page_renderer(&host));
+    start(config, options, host, document, app, app_name);
 }
 
-/// Whether this app draws as a document, once the build and then the browser have each had their say.
+/// How the page asks the app to draw: a document unless its renderer setting names the canvas, which a link can set with `?telar-renderer=canvas` as the page can with an attribute.
+fn page_renderer(host: &web_sys::HtmlElement) -> PageRenderer {
+    let setting = platform_web::page_setting(host, RENDERER_SETTING);
+    PageRenderer::from_setting(setting.as_deref()).unwrap_or_else(|error| {
+        tracing::warn!(
+            "the page's {RENDERER_SETTING} setting is not one this build reads: {error}"
+        );
+        PageRenderer::default()
+    })
+}
+
 #[cfg(feature = "web")]
-async fn draws_as_document(wanted: WebRenderer) -> bool {
-    match wanted {
-        WebRenderer::Document => true,
-        WebRenderer::Canvas => false,
-        WebRenderer::Auto => match renderer_web::webgpu_available().await {
-            Ok(()) => false,
-            Err(reason) => {
-                tracing::info!("drawing as a document: {}", reason.message());
-                true
-            }
-        },
-    }
+fn draws_as_document(wanted: PageRenderer) -> bool {
+    wanted == PageRenderer::Dom
 }
 
-/// The same question in a build that compiled no canvas renderer, which has one answer and does not ask the browser for an adapter it could not draw through anyway.
 #[cfg(not(feature = "web"))]
-async fn draws_as_document(wanted: WebRenderer) -> bool {
-    if wanted == WebRenderer::Canvas {
+fn draws_as_document(wanted: PageRenderer) -> bool {
+    if wanted == PageRenderer::Canvas {
         tracing::warn!(
             "this build draws as a document; `canvas` needs the `web` feature, where `web-dom` is the document alone"
         );

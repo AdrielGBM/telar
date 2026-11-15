@@ -86,13 +86,13 @@ pub(crate) fn run_init_cmd(args: InitArgs) {
 enum Kind {
     App {
         target: Target,
-        renderer: Option<WebRenderer>,
+        renderer: WebRenderer,
     },
     Library,
 }
 
 impl Kind {
-    fn new(lib: bool, target: Target, renderer: Option<WebRenderer>) -> Self {
+    fn new(lib: bool, target: Target, renderer: WebRenderer) -> Self {
         match lib {
             true => Self::Library,
             false => Self::App { target, renderer },
@@ -119,7 +119,7 @@ impl Kind {
 fn scaffold_files(
     crate_name: &str,
     target: Target,
-    renderer: Option<WebRenderer>,
+    renderer: WebRenderer,
 ) -> Vec<(&'static str, String)> {
     let module = crate_name.replace('-', "_");
     vec![
@@ -163,14 +163,14 @@ fn write_all(root: &Path, files: &[(&str, String)]) {
 
 /// Transpiles the freshly written project and prints the closing instructions. Shared by `new` and `init`
 /// since both leave a project in the same state once their files are on disk.
-fn finish(path: &Path, crate_name: &str, target: Target, renderer: Option<WebRenderer>) {
+fn finish(path: &Path, crate_name: &str, target: Target, renderer: WebRenderer) {
     // Left transpiled so the project checks out of the box: opened in an editor before its first `cargo telar` command it would otherwise greet its author with the error naming one. No `cargo metadata` to resolve a version against — nothing is fetched yet, and the manifest just written pins this binary's own.
     let producer = format!("cargo-telar {TELAR_VERSION}");
     super::transpile::transpile_member(path, &producer, TELAR_VERSION);
 
     let dev = match (target, renderer) {
         (Target::Desktop, _) => "cargo telar dev".to_string(),
-        (Target::Web, Some(renderer)) => {
+        (Target::Web, renderer) => {
             let renderer = renderer
                 .to_possible_value()
                 .expect("every renderer is a value of the flag");
@@ -280,7 +280,7 @@ fn target_name(target: Target) -> &'static str {
     }
 }
 
-fn manifest(name: &str, target: Target, renderer: Option<WebRenderer>) -> String {
+fn manifest(name: &str, target: Target, renderer: WebRenderer) -> String {
     // `Target::feature` is what tells `web-dom` and `web` apart; every other target names the same word either way.
     let default_feature = target.feature(renderer);
     let tooling = super::config::tooling_feature_entry();

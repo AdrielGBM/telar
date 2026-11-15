@@ -88,15 +88,15 @@ snapped to whole cells (see [docs/surface-size.md](surface-size.md)).
 
 ```toml
 [features]
-default = ["web"]
+default = ["web-dom"]
 web = ["telar/web"]
 web-dom = ["telar/web-dom"]
 ```
 
 ```sh
-cargo telar new my-app --target web --renderer dom   # or `init`, into an existing directory
+cargo telar new my-app --target web   # or `init`, into an existing directory
 cargo telar dev --target web              # serves on :8080
-cargo telar build --target web --renderer dom
+cargo telar build --target web
 ```
 
 Two ways to draw, and they are genuinely different rather than a fallback order:
@@ -105,7 +105,9 @@ Two ways to draw, and they are genuinely different rather than a fallback order:
   canvas. No GPU, no shaper, no font bytes in the module — text is the browser's own, selectable and
   searchable, and screen readers see a document.
 - **`web`** adds pixels on a canvas through WebGPU, which draws exactly what the desktop build draws. It
-  carries a glyph shaper and needs a face, because a canvas has no fonts of its own.
+  carries a glyph shaper and needs a face, because a canvas has no fonts of its own. It is chosen only
+  explicitly, with `--renderer canvas`, and the canvas exposes no accessibility tree to assistive
+  technology yet: a screen reader finds nothing on it, while the document renderer is read as a document.
 
 The two also share the keyboard differently. A document keeps the browser's own Tab walk and keyboard
 scrolling, and prevents only the keys the focused control declares. A canvas keeps Tab, Space, the arrows and
@@ -120,16 +122,18 @@ Both read the OS theme, reduced motion, high contrast and `navigator.languages` 
 element's own box for surface size rather than the browser viewport (see
 [docs/surface-size.md](surface-size.md)).
 
-With `web`, `WebRenderer::Auto` picks pixels where the browser offers a GPU adapter and a document where it
-does not; the page can override at load time with `?telar-renderer=dom`. Build with `--profile web`, which
+The document is the default: `--renderer` on `build` and `dev` is `dom` unless it says `canvas`, which also
+writes `data-telar-renderer="canvas"` into the page. A page whose renderer setting names the canvas draws one
+when the build carries it, and a link can set it with `?telar-renderer=canvas`; nothing probes the browser
+for a GPU first. Build with `--profile web`, which
 optimises for size rather than cycles — a module crosses a network before it runs an instruction.
 `--profile web` needs a `[profile.web]` entry in the manifest, which `new` and `init` write for a web
 target; `doctor` and `build --target web` name the fix when it is missing (see
 [docs/build-tuning.md](build-tuning.md)).
 
-`--renderer` on `new`/`init` picks which one the project's `default` names: `dom` writes
-`default = ["web-dom"]` instead of `["web"]`, so the scaffolded project never links wgpu or a glyph shaper
-until you ask for `web` again.
+`--renderer` on `new`/`init` picks which one the project's `default` names: the default, `dom`, writes
+`default = ["web-dom"]`, so the scaffolded project never links wgpu or a glyph shaper until you ask for
+`--renderer canvas`, which writes `["web"]`.
 
 The build writes a static site to `target/telar-dist/web/`: a page expanded from a template (`web/index.html`
 or the built-in one), content-hashed module and glue listed in `asset-manifest.json`, and `web/public/`

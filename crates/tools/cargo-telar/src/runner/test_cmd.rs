@@ -57,7 +57,7 @@ pub(super) fn run_test_cmd(args: TestArgs) -> ! {
     cargo_args.extend(extra);
     // The frontend the target named, so a terminal project's tests are not a desktop build — and so `--target tui` reaches this command too, rather than every command but this one.
     if let Some(target) = target {
-        let selected = frontend_args(target, None, &cargo_args);
+        let selected = frontend_args(target, renderer, &cargo_args);
         cargo_args.extend(selected);
     }
     let resolved = resolve_package(&cargo_args);

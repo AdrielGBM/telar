@@ -120,7 +120,7 @@ fn default_dev_command() -> TelarCommand {
                 features: None,
                 target: None,
                 backend: None,
-                renderer: None,
+                renderer: WebRenderer::Dom,
                 cargo_args: vec![],
             },
             release: false,
@@ -138,7 +138,7 @@ struct BuildPlan {
     cargo_args: Vec<String>,
     config: TelarSection,
     target: Target,
-    renderer: Option<WebRenderer>,
+    renderer: WebRenderer,
     /// Whether the application will run in the terminal this command was launched from, which only `--target tui` makes true.
     terminal: bool,
 }
@@ -516,11 +516,7 @@ fn build_cargo_args(
 /// A package that declares a feature for the target gets it named on its own, with `--no-default-features` and the rest of its defaults re-named alongside: `default` is where a project says which frontend it builds, so asking for another one has to turn that one off. Adding it on top instead is what made `--target tui` compile a desktop stack beside the terminal one — build time nobody asked for on a desktop, and the whole of the failure under Termux, where `platform-desktop` is `cfg`'d out of the graph and the window it pays for cannot exist.
 ///
 /// A package that declares no such feature reaches the frontend through `telar/` and keeps its defaults, so any project builds for a target without first declaring one.
-fn frontend_args(
-    target: Target,
-    renderer: Option<WebRenderer>,
-    cargo_args: &[String],
-) -> Vec<String> {
+fn frontend_args(target: Target, renderer: WebRenderer, cargo_args: &[String]) -> Vec<String> {
     let mut args = Vec::new();
     resolve_package(cargo_args)
         .frontend_feature(target.feature(renderer))
@@ -535,7 +531,7 @@ fn frontend_args(
 /// The hot loop hands a terminal run `TELAR_TARGET` in its launch environment, which picks between the frontends a build ends up with. That is only still a question in the case where the package declared no feature for the target: there it kept a windowed default and the terminal rides along beside it.
 fn select_frontend(
     target: Option<Target>,
-    renderer: Option<WebRenderer>,
+    renderer: WebRenderer,
     cargo_args: &mut Vec<String>,
 ) -> bool {
     // A browser build names its own frontend in `build_web_bundle`, which is also where the wasm target and the profile that go with it are decided.

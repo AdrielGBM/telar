@@ -76,8 +76,8 @@ android = ["android-bare", "hardware", "software"]
 ## by an app that keys one).
 web-dom = ["runtime", "dep:platform-web", "dep:renderer-dom", "dep:serde_json"]
 
-## Both browser frontends: the document above, and pixels on a canvas through WebGPU — what
-## `WebRenderer::Auto` needs to have a choice to make. The canvas draws its own glyphs, hence the shaper.
+## Both browser frontends: the document above, and pixels on a canvas through WebGPU, which a page asks for
+## with `--renderer canvas` or its renderer setting. The canvas draws its own glyphs, hence the shaper.
 web = ["web-dom", "shaper", "dep:renderer-web"]
 
 ## No surface at all: exposes `rasterize`, draw commands in and pixels out, with no window and no GPU.

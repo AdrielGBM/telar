@@ -46,7 +46,7 @@ pub(crate) fn run_web_dev(
     cargo_args: Vec<String>,
     config: TelarSection,
     requested: Option<u16>,
-    renderer: Option<WebRenderer>,
+    renderer: WebRenderer,
     opening: Option<&str>,
     claim: Option<ServerClaim>,
 ) -> ! {
@@ -104,7 +104,7 @@ fn watch_and_rebuild(
     cargo_args: Vec<String>,
     config: TelarSection,
     dist: &Path,
-    renderer: Option<WebRenderer>,
+    renderer: WebRenderer,
 ) -> ! {
     let watched = match PageWatch::collect(&cargo_args, &config) {
         Ok(watched) => watched,

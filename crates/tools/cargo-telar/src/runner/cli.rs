@@ -60,8 +60,8 @@ pub(crate) struct NewArgs {
     #[arg(long, value_enum, default_value = "desktop")]
     pub(crate) target: Target,
     /// Which renderer a `--target web` project starts on (`dom` writes `default = ["web-dom"]`)
-    #[arg(long, value_enum)]
-    pub(crate) renderer: Option<WebRenderer>,
+    #[arg(long, value_enum, default_value_t)]
+    pub(crate) renderer: WebRenderer,
     /// A `[telar] library` other crates depend on, instead of an application
     #[arg(long, conflicts_with_all = ["target", "renderer"])]
     pub(crate) lib: bool,
@@ -80,8 +80,8 @@ pub(crate) struct InitArgs {
     #[arg(long, value_enum, default_value = "desktop")]
     pub(crate) target: Target,
     /// Which renderer a `--target web` project starts on (`dom` writes `default = ["web-dom"]`)
-    #[arg(long, value_enum)]
-    pub(crate) renderer: Option<WebRenderer>,
+    #[arg(long, value_enum, default_value_t)]
+    pub(crate) renderer: WebRenderer,
     /// A `[telar] library` other crates depend on, instead of an application
     #[arg(long, conflicts_with_all = ["target", "renderer"])]
     pub(crate) lib: bool,
@@ -160,8 +160,8 @@ pub(crate) struct CommonArgs {
     #[arg(long, value_enum)]
     pub(crate) backend: Option<BackendArg>,
     /// Which renderer a browser build draws with (`--target web`)
-    #[arg(long, value_enum)]
-    pub(crate) renderer: Option<WebRenderer>,
+    #[arg(long, value_enum, default_value_t)]
+    pub(crate) renderer: WebRenderer,
     /// Extra args passed directly to cargo (after --)
     #[arg(last = true)]
     pub(crate) cargo_args: Vec<String>,
@@ -294,35 +294,33 @@ pub(crate) enum Target {
 impl Target {
     /// The feature name that stands for this target, in both spellings a project can reach it by: its own `[features]` entry and `telar`'s.
     ///
-    /// A browser has two of them, told apart by `--renderer`: `--renderer dom` is a build saying it will never draw pixels, and that is worth saying — the canvas renderer brings wgpu and a glyph shaper with it, and neither is reachable from a frame that becomes elements. Anything else keeps both, because `auto` has to be able to choose between them at load time.
-    pub(crate) fn feature(self, renderer: Option<WebRenderer>) -> &'static str {
+    /// A browser has two of them, told apart by `--renderer`: `--renderer dom` is a build saying it will never draw pixels, and that is worth saying — the canvas renderer brings wgpu and a glyph shaper with it, and neither is reachable from a frame that becomes elements. `--renderer canvas` is the build that carries both, so a page can ask for the canvas.
+    pub(crate) fn feature(self, renderer: WebRenderer) -> &'static str {
         match self {
             Self::Desktop => "desktop",
             Self::Android => "android",
             Self::Tui => "tui",
             Self::Web => match renderer {
-                Some(WebRenderer::Dom) => "web-dom",
-                _ => "web",
+                WebRenderer::Dom => "web-dom",
+                WebRenderer::Canvas => "web",
             },
         }
     }
 }
 
 /// How a browser build draws. Not a fallback order: a document is the other way of drawing an interface, and this is the build saying which one it wants. The page can still say otherwise at load time with `?telar-renderer=`.
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
 pub(crate) enum WebRenderer {
-    /// Pixels where the browser offers a GPU adapter, a document where it does not.
-    Auto,
     /// Pixels on a canvas, through WebGPU.
     Canvas,
     /// Real elements, laid out by CSS.
+    #[default]
     Dom,
 }
 
 impl From<WebRenderer> for PageRenderer {
     fn from(renderer: WebRenderer) -> Self {
         match renderer {
-            WebRenderer::Auto => Self::Auto,
             WebRenderer::Canvas => Self::Canvas,
             WebRenderer::Dom => Self::Dom,
         }

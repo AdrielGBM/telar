@@ -44,7 +44,7 @@ fn the_built_in_page_expands_with_nothing_fed_but_the_bootstrap() {
     ));
     assert!(html.contains(r#"import init from "/app-0123456789ab.js";"#));
     assert!(html.contains("wasm.telar_start();"));
-    assert!(html.contains(r#"<div id="telar-root" data-telar-renderer="auto"></div>"#));
+    assert!(html.contains(r#"<div id="telar-root" data-telar-renderer="dom"></div>"#));
     assert!(!html.contains("telar-state"), "no state, no script");
 }
 
@@ -93,7 +93,7 @@ fn every_fed_marker_lands_where_the_template_puts_it() {
     page.lang = "es".to_string();
     page.dir = Direction::Rtl;
     page.title = "Portafolio".to_string();
-    page.renderer = Some(WebRenderer::Dom);
+    page.renderer = WebRenderer::Dom;
     page.meta.push(HeadTag::meta("description", "Hola"));
     page.meta
         .push(HeadTag::link("canonical", "https://example.com/es/"));
@@ -123,7 +123,7 @@ fn every_fed_marker_lands_where_the_template_puts_it() {
 #[test]
 fn the_built_in_page_names_everything_the_app_looks_up_as_the_app_spells_it() {
     let mut page = page();
-    page.renderer = Some(WebRenderer::Dom);
+    page.renderer = WebRenderer::Dom;
     page.fonts.push(face("fonts/a-0123.woff2", true));
     page.state = Some(serde_json::json!({ "locale": "es" }));
 
@@ -257,7 +257,7 @@ fn a_prerendered_page_marks_its_host_and_styles_its_content() {
     page.prerendered = "<main data-telar-id=\"1\"></main>".to_string();
     let html = page.render(DEFAULT_TEMPLATE).unwrap();
     assert!(html.contains(
-        r#"<div id="telar-root" data-telar-renderer="auto" data-telar="" style="position:relative;"><main data-telar-id="1"></main></div>"#
+        r#"<div id="telar-root" data-telar-renderer="dom" data-telar="" style="position:relative;"><main data-telar-id="1"></main></div>"#
     ), "{html}");
     assert!(
         html.contains("    <style id=\"telar-reset\">[data-telar]{}</style>\n"),
@@ -283,7 +283,7 @@ fn the_host_attributes_a_prerender_writes_reach_the_page_escaped() {
     let html = page.render(DEFAULT_TEMPLATE).unwrap();
     assert!(
         html.contains(
-            "<div id=\"telar-root\" data-telar-renderer=\"auto\" data-telar=\"\" aria-label=\"Tom &amp; &quot;Jerry&quot; &lt;3\nagain\"></div>"
+            "<div id=\"telar-root\" data-telar-renderer=\"dom\" data-telar=\"\" aria-label=\"Tom &amp; &quot;Jerry&quot; &lt;3\nagain\"></div>"
         ),
         "{html}"
     );
@@ -302,4 +302,12 @@ fn a_template_with_no_host_marker_cannot_carry_a_prerendered_host() {
         page.render(&twice),
         Err(TemplateError::Repeated(Marker::Host))
     );
+}
+
+#[test]
+fn a_page_asks_for_the_canvas_only_when_the_build_does() {
+    let mut canvas = page();
+    canvas.renderer = WebRenderer::Canvas;
+    let html = canvas.render(DEFAULT_TEMPLATE).unwrap();
+    assert!(html.contains(r#"data-telar-renderer="canvas""#));
 }

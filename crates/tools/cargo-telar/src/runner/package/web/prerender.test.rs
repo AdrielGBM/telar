@@ -89,7 +89,7 @@ fn a_page_takes_its_language_title_markup_and_state_from_what_the_app_wrote() {
         "{html}"
     );
     assert!(
-        html.contains(r#"data-telar-renderer="auto" data-telar="" style="position:relative;"><main data-telar-id="4">Hola</main></div>"#),
+        html.contains(r#"data-telar-renderer="dom" data-telar="" style="position:relative;"><main data-telar-id="4">Hola</main></div>"#),
         "{html}"
     );
     assert!(

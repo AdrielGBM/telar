@@ -223,8 +223,8 @@ pub(crate) struct Page {
     pub(crate) host: String,
     /// `%telar.bootstrap%`.
     pub(crate) bootstrap: Bootstrap,
-    /// `%telar.renderer%`, what the host element's renderer setting says; `None` writes [`PageRenderer::Auto`].
-    pub(crate) renderer: Option<WebRenderer>,
+    /// `%telar.renderer%`, what the host element's renderer setting says.
+    pub(crate) renderer: WebRenderer,
     /// `%telar.prerendered%`, inserted verbatim inside the host element.
     pub(crate) prerendered: String,
     /// `%telar.state%`, the [`STATE_ELEMENT_ID`] script when there is state to carry.
@@ -244,7 +244,7 @@ impl Page {
             fonts: Vec::new(),
             host: String::new(),
             bootstrap,
-            renderer: None,
+            renderer: WebRenderer::Dom,
             prerendered: String::new(),
             state: None,
             base: "/".to_string(),
@@ -324,12 +324,7 @@ impl Page {
             Marker::Lang => escape_html(&self.lang).into_owned(),
             Marker::Dir => direction_str(self.dir).to_string(),
             Marker::Title => escape_html(&self.title).into_owned(),
-            Marker::Renderer => self
-                .renderer
-                .map(PageRenderer::from)
-                .unwrap_or_default()
-                .as_str()
-                .to_string(),
+            Marker::Renderer => PageRenderer::from(self.renderer).as_str().to_string(),
             Marker::Host => self.host.clone(),
             Marker::Meta => {
                 let mut parts = vec![lines(&self.meta)];

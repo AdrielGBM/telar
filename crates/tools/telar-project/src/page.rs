@@ -17,21 +17,18 @@ pub const RENDERER_SETTING: &str = "renderer";
 /// How the page asks the app to draw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PageRenderer {
-    /// Pixels where the browser offers a GPU adapter, a document where it does not.
-    #[default]
-    Auto,
     /// Pixels on a canvas, through WebGPU.
     Canvas,
     /// Real elements, laid out by CSS.
+    #[default]
     Dom,
 }
 
 impl PageRenderer {
-    pub const ALL: [Self; 3] = [Self::Auto, Self::Canvas, Self::Dom];
+    pub const ALL: [Self; 2] = [Self::Canvas, Self::Dom];
 
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Auto => "auto",
             Self::Canvas => "canvas",
             Self::Dom => "dom",
         }
@@ -39,6 +36,13 @@ impl PageRenderer {
 
     pub fn parse(word: &str) -> Result<Self, UnknownValue> {
         parse_word(&Self::ALL, Self::as_str, word)
+    }
+
+    pub fn from_setting(setting: Option<&str>) -> Result<Self, UnknownValue> {
+        match setting.map(str::trim) {
+            None | Some("") => Ok(Self::default()),
+            Some(word) => Self::parse(word),
+        }
     }
 }
 

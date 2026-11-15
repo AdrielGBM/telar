@@ -9,12 +9,13 @@ fn temp_dir(name: &str) -> PathBuf {
 }
 
 fn generated_manifest(target: Target) -> toml::Table {
-    toml::from_str(&manifest("my-app", target, None)).expect("generated manifest is not valid TOML")
+    toml::from_str(&manifest("my-app", target, WebRenderer::default()))
+        .expect("generated manifest is not valid TOML")
 }
 
 #[test]
 fn the_gitignore_covers_the_generated_telar_directory_at_any_depth() {
-    let files = scaffold_files("my-app", Target::Web, None);
+    let files = scaffold_files("my-app", Target::Web, WebRenderer::default());
     let (_, gitignore) = files
         .iter()
         .find(|(path, _)| *path == ".gitignore")
@@ -33,7 +34,7 @@ fn every_target_writes_itself_as_the_default_feature() {
         let default = features["default"].as_array().expect("default array");
         assert_eq!(
             default[0].as_str(),
-            Some(target_name(target)),
+            Some(target.feature(WebRenderer::default())),
             "default does not name the chosen target"
         );
         // Every target stays one word away, whichever one the project started on.
@@ -87,7 +88,11 @@ fn the_catalogue_is_its_own_dependency_with_no_group_named() {
 fn the_devtools_are_an_optional_dependency_dev_sessions_turn_on() {
     for target in [Target::Desktop, Target::Tui, Target::Web, Target::Android] {
         let dir = temp_dir(&format!("devtools_{}", target_name(target)));
-        std::fs::write(dir.join("Cargo.toml"), manifest("my-app", target, None)).unwrap();
+        std::fs::write(
+            dir.join("Cargo.toml"),
+            manifest("my-app", target, WebRenderer::default()),
+        )
+        .unwrap();
         let declared =
             telar_project::declares_optional_dependency(&dir, telar_project::DEVTOOLS_PACKAGE);
         let _ = std::fs::remove_dir_all(&dir);
@@ -106,7 +111,11 @@ fn the_devtools_are_an_optional_dependency_dev_sessions_turn_on() {
 fn the_workshop_is_an_optional_dependency_previews_turn_on() {
     for target in [Target::Desktop, Target::Tui, Target::Web, Target::Android] {
         let dir = temp_dir(&format!("workshop_{}", target_name(target)));
-        std::fs::write(dir.join("Cargo.toml"), manifest("my-app", target, None)).unwrap();
+        std::fs::write(
+            dir.join("Cargo.toml"),
+            manifest("my-app", target, WebRenderer::default()),
+        )
+        .unwrap();
         let declared =
             telar_project::declares_optional_dependency(&dir, telar_project::WORKSHOP_PACKAGE);
         let _ = std::fs::remove_dir_all(&dir);
@@ -185,9 +194,9 @@ fn every_tooling_feature_is_named_where_the_lockfile_sees_it() {
 }
 
 #[test]
-fn the_dom_renderer_writes_web_dom_as_the_default() {
+fn a_web_project_starts_on_the_document_renderer() {
     let manifest =
-        toml::from_str::<toml::Table>(&manifest("my-app", Target::Web, Some(WebRenderer::Dom)))
+        toml::from_str::<toml::Table>(&manifest("my-app", Target::Web, WebRenderer::Dom))
             .expect("generated manifest is not valid TOML");
     let features = manifest["features"].as_table().expect("features table");
     let default = features["default"].as_array().expect("default array");
@@ -199,8 +208,10 @@ fn the_dom_renderer_writes_web_dom_as_the_default() {
 }
 
 #[test]
-fn a_web_target_without_a_renderer_still_defaults_to_web() {
-    let manifest = generated_manifest(Target::Web);
+fn the_canvas_renderer_writes_web_as_the_default() {
+    let manifest =
+        toml::from_str::<toml::Table>(&manifest("my-app", Target::Web, WebRenderer::Canvas))
+            .expect("generated manifest is not valid TOML");
     let features = manifest["features"].as_table().expect("features table");
     let default = features["default"].as_array().expect("default array");
     assert_eq!(default[0].as_str(), Some("web"));
@@ -239,7 +250,7 @@ fn init_scaffolds_into_a_directory_that_already_has_unrelated_files() {
     std::fs::write(dir.join("README.md"), "hello\n").unwrap();
     std::fs::create_dir_all(dir.join(".git")).unwrap();
 
-    let files = scaffold_files("my-app", Target::Desktop, None);
+    let files = scaffold_files("my-app", Target::Desktop, WebRenderer::default());
     assert!(
         conflicts_in(&dir, &files).is_empty(),
         "an unrelated README and .git should never conflict with the scaffold"
@@ -256,7 +267,7 @@ fn init_refuses_to_overwrite_a_file_it_would_itself_write() {
     std::fs::create_dir_all(dir.join("src")).unwrap();
     std::fs::write(dir.join("src/lib.rs"), "// mine\n").unwrap();
 
-    let files = scaffold_files("my-app", Target::Desktop, None);
+    let files = scaffold_files("my-app", Target::Desktop, WebRenderer::default());
     let conflicts = conflicts_in(&dir, &files);
     assert!(conflicts.contains(&"Cargo.toml"));
     assert!(conflicts.contains(&"src/lib.rs"));
@@ -351,7 +362,7 @@ fn a_library_takes_no_target() {
 }
 
 fn scaffold_theme() -> String {
-    scaffold_files("my-app", Target::Web, None)
+    scaffold_files("my-app", Target::Web, WebRenderer::default())
         .into_iter()
         .find(|(path, _)| *path == "src/theme.rs")
         .map(|(_, source)| source)

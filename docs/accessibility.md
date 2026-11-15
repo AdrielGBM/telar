@@ -148,7 +148,7 @@ the catalogue's accordion uses the same flag for expanded.
 | Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus` and `Click` actions. | AccessKit `toggled` for checked and pressed (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
 | Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`, `pressed`/`not pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
 | Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
-| Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to. | — |
+| Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to: the canvas, which is only built when `--renderer canvas` asks for it, carries no accessibility tree yet, so the document renderer (`web-dom`, the default) is the browser build assistive technology can read. | — |
 
 A link has one state of its own: `current:` marks it as the current one of its set, the page being shown or
 the place on the page the reader is at. It is `aria-current` in a document, AccessKit's `aria_current` on the
