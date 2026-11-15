@@ -256,7 +256,7 @@ pub(crate) struct BuildArgs {
     #[command(flatten)]
     pub(crate) common: CommonArgs,
     /// Output package format
-    #[arg(long, value_name = "FORMAT")]
+    #[arg(long, value_enum)]
     pub(crate) format: Option<BuildFormat>,
     /// Write every page of a web build ahead of time, readable before the app has loaded (`--target web`)
     #[arg(long)]
@@ -326,3 +326,7 @@ pub(crate) enum BuildFormat {
     Apk,
     Dir,
 }
+
+#[cfg(test)]
+#[path = "cli.test.rs"]
+mod tests;

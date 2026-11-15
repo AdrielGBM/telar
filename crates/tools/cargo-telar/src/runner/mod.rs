@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use telar_project::protocol::{
     PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, PREVIEW_LIST_VAR, PREVIEW_PNG_VAR,
     workshop_channel_file, workshop_server_file,
@@ -420,17 +420,6 @@ fn preview_once_command(common: &CommonArgs, release: bool, feature: &str) -> Co
     command
 }
 
-fn build_format_name(format: &BuildFormat) -> &'static str {
-    match format {
-        BuildFormat::Appimage => "appimage",
-        BuildFormat::Deb => "deb",
-        BuildFormat::Dmg => "dmg",
-        BuildFormat::Nsis => "nsis",
-        BuildFormat::Apk => "apk",
-        BuildFormat::Dir => "dir",
-    }
-}
-
 fn run_build_cmd(args: BuildArgs) -> ! {
     let BuildArgs {
         mut common,
@@ -445,7 +434,9 @@ fn run_build_cmd(args: BuildArgs) -> ! {
         ) if common.target == Some(Target::Android) => {
             eprintln!(
                 "[cargo-telar] `--format {}` is desktop-only; drop `--target android` (use `--format apk` for Android).",
-                build_format_name(fmt)
+                fmt.to_possible_value()
+                    .expect("no format is hidden")
+                    .get_name()
             );
             std::process::exit(2);
         }
