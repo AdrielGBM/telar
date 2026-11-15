@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use geometry_core::{Rect, Size};
+use geometry_core::{Rect, Size, Transform};
 use i18n_core::Direction;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
@@ -526,7 +526,7 @@ impl Component for Overlay {
                 );
                 // The content is laid out at the origin and drawn at the trigger.
                 RenderNode::overlay([RenderNode::transform_with(
-                    [1.0, 0.0, 0.0, 1.0, dx, dy],
+                    Transform::translate(dx, dy),
                     boundaries,
                 )])
             }

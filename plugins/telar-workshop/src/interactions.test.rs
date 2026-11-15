@@ -4,7 +4,8 @@ use telar::preview::{ArgValue, Frame, PreviewCtx, PreviewEntry, by_role};
 use telar::testing::{Scoped, centre, key_with, mount, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Children, ComponentList, DrawCommand, Event, Key, LayoutError,
-    LayoutItem, LocalApp, ModifiersState, NamedKey, Reactive, Rect, RenderNode, Role, Size, signal,
+    LayoutItem, LocalApp, ModifiersState, NamedKey, Reactive, Rect, RenderNode, Role, Size,
+    Transform, signal,
 };
 use telar_components::{ButtonProps, TooltipProps, button, tooltip};
 
@@ -358,7 +359,10 @@ fn a_frame_is_drawn_whole_and_centred_in_the_box_it_is_given() {
     let [RenderNode::Transform { matrix, children }] = &children[..] else {
         panic!("a frame is placed by one transform");
     };
-    assert_eq!(*matrix, [2.0, 0.0, 0.0, 2.0, 0.0, 50.0]);
+    assert_eq!(
+        *matrix,
+        Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 50.0])
+    );
     assert!(children.is_empty(), "markers are left out");
     assert!(matches!(
         drawn(

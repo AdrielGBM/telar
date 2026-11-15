@@ -5,7 +5,7 @@ use telar::{
     Accessible, AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event,
     EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
     NodeVec, Reactive, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, SizeDimension,
-    StyledContainer, Text, TextStyle, compute_layout, hot_signal, mark_dirty, new_container,
+    StyledContainer, Text, TextStyle, Transform, compute_layout, hot_signal, mark_dirty, new_container,
     new_leaf, reset_layout_runtime, set_display, set_overlay_host, signal, transform_pointer,
     use_direction, use_dismiss_depth,
 };
@@ -925,7 +925,7 @@ impl Component for ShellPage {
                 ));
             }
             let rail = RenderNode::transform_with(
-                [1.0, 0.0, 0.0, 1.0, self.rail_x(), 0.0],
+                Transform::translate(self.rail_x(), 0.0),
                 [
                     RenderNode::rect(
                         Rect {

@@ -183,7 +183,7 @@ fn draw_paths(rect: Rect) -> RenderNode {
     ));
 
     let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
-    RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
+    RenderNode::transform_with(Transform::scale_around(scale, scale, 0.0, 0.0), kids)
 }
 
 const DASH_CELL: f32 = 24.0;
@@ -254,7 +254,7 @@ fn draw_dashes(rect: Rect) -> RenderNode {
     }
     let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
     kids.push(RenderNode::transform_with(
-        [scale, 0.0, 0.0, scale, 0.0, 0.0],
+        Transform::scale_around(scale, scale, 0.0, 0.0),
         waves,
     ));
 

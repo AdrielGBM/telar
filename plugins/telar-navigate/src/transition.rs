@@ -53,7 +53,7 @@ impl NavTransition {
             NavTransition::SlideHorizontal => {
                 let dir = if forward { 1.0 } else { -1.0 };
                 let dx = dir * width * (1.0 - p);
-                RenderNode::transform_with([1.0, 0.0, 0.0, 1.0, dx, 0.0], [child])
+                RenderNode::translate(dx, 0.0, [child])
             }
         }
     }

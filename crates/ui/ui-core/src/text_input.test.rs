@@ -37,7 +37,7 @@ fn line_top() -> f32 {
                 Some(rect.y)
             }
             ui_tree::RenderNode::Transform { matrix, children } => {
-                children.iter().find_map(top_of).map(|y| y + matrix[5])
+                children.iter().find_map(top_of).map(|y| y + matrix.f)
             }
             ui_tree::RenderNode::Group { children }
             | ui_tree::RenderNode::Element { children, .. }

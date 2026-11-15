@@ -206,7 +206,7 @@ pub(super) fn rulers(
                     // Read bottom to top, as a vertical ruler is: turned a quarter anticlockwise about where it starts.
                     let turned = Transform::rotate_around(-90.0, 0.0, y - LABEL_INSET);
                     nodes.push(RenderNode::transform_with(
-                        turned.to_array(),
+                        turned,
                         [RenderNode::text(
                             value.to_string(),
                             Rect::new(0.0, y - LABEL_INSET, LABEL_GAP, band),

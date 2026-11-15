@@ -90,7 +90,7 @@ pub(crate) fn apply_enter(node: RenderNode, matrix: [f32; 6], opacity: f32) -> R
     if matrix == IDENTITY {
         faded
     } else {
-        RenderNode::transform_with(matrix, [faded])
+        RenderNode::transform_with(Transform::from_array(matrix), [faded])
     }
 }
 

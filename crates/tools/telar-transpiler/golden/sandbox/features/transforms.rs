@@ -58,7 +58,7 @@ fn draw_transforms(rect: Rect) -> RenderNode {
     for (i, (&s, &color)) in scales.iter().zip(palette.iter()).enumerate() {
         let cx = i as f32 * 130.0 + 40.0;
         let cy = 70.0f32;
-        let m = Transform::scale_around(s, s, cx, cy).to_array();
+        let m = Transform::scale_around(s, s, cx, cy);
         kids.push(RenderNode::transform_with(
             m,
             [RenderNode::rect(
@@ -88,7 +88,7 @@ fn draw_transforms(rect: Rect) -> RenderNode {
     for (i, (&a, &color)) in angles.iter().zip(palette.iter()).enumerate() {
         let cx = i as f32 * 130.0 + 45.0;
         let cy = 200.0f32;
-        let m = Transform::rotate_around(a, cx, cy).to_array();
+        let m = Transform::rotate_around(a, cx, cy);
         kids.push(RenderNode::transform_with(
             m,
             [RenderNode::path(
@@ -115,8 +115,7 @@ fn draw_transforms(rect: Rect) -> RenderNode {
         let cy = 325.0f32;
         let s = 1.0 - i as f32 * 0.16;
         let m = Transform::rotate_around(a, cx, cy)
-            .then(Transform::scale_around(s, s, cx, cy))
-            .to_array();
+            .then(Transform::scale_around(s, s, cx, cy));
         kids.push(RenderNode::transform_with(
             m,
             [RenderNode::rect(
@@ -132,7 +131,7 @@ fn draw_transforms(rect: Rect) -> RenderNode {
     }
 
     let scale = (rect.width / TRANSFORMS_DESIGN_W).min(1.0);
-    RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
+    RenderNode::transform_with(Transform::scale_around(scale, scale, 0.0, 0.0), kids)
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]

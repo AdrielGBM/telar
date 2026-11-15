@@ -37,7 +37,7 @@ fn card(row: usize, t: f32) -> RenderNode {
         rect: Rect::new(0.0, y, 640.0, 56.0),
         radius: BorderRadius::zero(),
         children: NodeVec::collect([RenderNode::Transform {
-            matrix: [1.0, 0.0, 0.0, 1.0, 0.0, y],
+            matrix: Transform::translate(0.0, y),
             children: NodeVec::collect(cells),
         }]),
     }
@@ -157,7 +157,7 @@ impl Component for ScrollContent {
             rect: Rect::new(0.0, 0.0, 320.0, 600.0),
             radius: BorderRadius::zero(),
             children: NodeVec::collect([RenderNode::Transform {
-                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -off],
+                matrix: Transform::translate(0.0, -off),
                 children: NodeVec::collect(cells),
             }]),
         }

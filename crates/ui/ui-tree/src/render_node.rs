@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use renderer_core::{
     BlendMode, BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, Span, TextStyle,
 };
@@ -63,7 +63,7 @@ pub enum RenderNode {
         children: NodeVec,
     },
     Transform {
-        matrix: [f32; 6],
+        matrix: Transform,
         children: NodeVec,
     },
     Clip {
@@ -145,7 +145,7 @@ impl RenderNode {
     }
 
     pub fn transform_with(
-        matrix: [f32; 6],
+        matrix: Transform,
         children: impl IntoIterator<Item = RenderNode>,
     ) -> Self {
         Self::Transform {
@@ -157,7 +157,7 @@ impl RenderNode {
     /// A pure translation, which is what almost every `Transform` in a widget is: a leaf drawing its content in local coordinates and moving it to wherever the layout put it. Spelling it out as a matrix is six numbers where two are meant, and four of them have to be read to see it is not a scale or a rotation.
     pub fn translate(dx: f32, dy: f32, children: impl IntoIterator<Item = RenderNode>) -> Self {
         Self::Transform {
-            matrix: [1.0, 0.0, 0.0, 1.0, dx, dy],
+            matrix: Transform::translate(dx, dy),
             children: NodeVec::collect(children),
         }
     }

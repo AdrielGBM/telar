@@ -2,7 +2,7 @@
 
 use crate::point::Point;
 
-/// A 2D affine transform stored as a 2×3 matrix `[a, b, c, d, e, f]`, mapping a point `(x, y)` to `(a*x + c*y + e, b*x + d*y + f)`. This is the same `[f32; 6]` layout consumed by `RenderNode::transform_with`, so `to_array()` plugs in directly. Compose with [`Transform::then`] instead of multiplying matrices by hand.
+/// A 2D affine transform stored as a 2×3 matrix `[a, b, c, d, e, f]`, mapping a point `(x, y)` to `(a*x + c*y + e, b*x + d*y + f)`. `to_array()` and `from_array()` convert to and from that `[f32; 6]` layout. Compose with [`Transform::then`] instead of multiplying matrices by hand.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transform {
     pub a: f32,

@@ -545,7 +545,7 @@ pub fn composite_surface(
     RenderNode::clip(
         placed_bounds(placement, size),
         BorderRadius::zero(),
-        [RenderNode::transform_with(placement.to_array(), content)],
+        [RenderNode::transform_with(placement, content)],
     )
 }
 

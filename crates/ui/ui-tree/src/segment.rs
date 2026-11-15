@@ -369,9 +369,7 @@ fn flatten_segment(
                 for child in children.into_iter().rev() {
                     stack.push(Step::Node(child));
                 }
-                emit_command!(DrawCommand::PushMatrix {
-                    transform: Transform::from_array(matrix)
-                });
+                emit_command!(DrawCommand::PushMatrix { transform: matrix });
             }
             RenderNode::Clip {
                 rect,

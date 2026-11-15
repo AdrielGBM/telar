@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use crate::transform_origin::{TransformOrigin, box_transform_about};
-use geometry_core::{Insets, Rect};
+use geometry_core::{Insets, Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
     ConsumedKeys, Cursor, Destination, DragOutcome, DroppedData, Event, IntoDestination, Key,
@@ -1341,7 +1341,7 @@ impl Component for StyledContainer {
             content
         };
         let placed = match self.transform.as_ref().and_then(|t| t(r)) {
-            Some(matrix) => RenderNode::transform_with(matrix, [composed]),
+            Some(matrix) => RenderNode::transform_with(Transform::from_array(matrix), [composed]),
             None => composed,
         };
         // The element wraps everything, so a document backend folds the transform and the layer into the box's own style rather than inventing a wrapper for each.
