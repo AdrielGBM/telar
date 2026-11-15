@@ -404,7 +404,33 @@ wire_enum!(ImageFill {
     Slice(slice) = 2,
 });
 
-wire_struct!(Linked { url, variants });
+type LinkedVariants = std::sync::Arc<[(u32, std::sync::Arc<str>)]>;
+
+impl Shaped for Linked {
+    const SHAPE: u64 = {
+        let hash = fold_shape(
+            fold(shape_named("Linked"), b"url"),
+            <std::sync::Arc<str>>::SHAPE,
+        );
+        fold_shape(fold(hash, b"variants"), LinkedVariants::SHAPE)
+    };
+}
+
+impl Wire for Linked {
+    fn put(&self, w: &mut Writer) {
+        self.url().put(w);
+        w.len(self.variants().len());
+        for variant in self.variants() {
+            variant.put(w);
+        }
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        let url = Wire::take(r)?;
+        let variants = LinkedVariants::take(r)?;
+        Linked::ordered(url, variants).ok_or(WireError::Invalid("picture copies out of order"))
+    }
+}
+
 wire_struct!(Element {
     id,
     semantics,

@@ -654,11 +654,10 @@ fn the_workbench_roles_are_the_aria_roles_of_the_same_name() {
 #[test]
 fn a_splitter_writes_its_value_and_its_orientation() {
     let semantics = Semantics {
-        value: Some(Value::from(platform_core::NumericValue {
-            now: 240.0,
-            min: 180.0,
-            max: 400.0,
-        })),
+        value: Some(Value::from(
+            platform_core::NumericValue::new(180.0..=400.0, 240.0)
+                .expect("a reading within its range"),
+        )),
         orientation: Some(platform_core::Orientation::Vertical),
         ..Semantics::of(Role::Splitter)
     };
@@ -1044,11 +1043,10 @@ fn a_named_box_with_a_role_or_content_of_its_own_names_itself() {
 #[test]
 fn an_unbounded_value_writes_no_bounds() {
     let semantics = Semantics {
-        value: Some(Value::from(platform_core::NumericValue {
-            now: 3.0,
-            min: f64::NEG_INFINITY,
-            max: f64::INFINITY,
-        })),
+        value: Some(Value::from(
+            platform_core::NumericValue::new(f64::NEG_INFINITY..=f64::INFINITY, 3.0)
+                .expect("a reading within its range"),
+        )),
         ..Semantics::of(Role::SpinButton)
     };
     let frame = describe_frame(
@@ -1101,11 +1099,8 @@ fn a_mixed_state_is_written_as_mixed_where_its_role_can_say_it() {
 fn a_value_writes_its_words_only_on_a_range() {
     let slider = described_alone(Semantics {
         value: Some(Value::Number {
-            reading: platform_core::NumericValue {
-                now: 2.0,
-                min: 1.0,
-                max: 3.0,
-            },
+            reading: platform_core::NumericValue::new(1.0..=3.0, 2.0)
+                .expect("a reading within its range"),
             text: Some(Arc::from("Medium")),
         }),
         ..Semantics::of(Role::Slider)

@@ -14,7 +14,7 @@ pub fn make_gradient(width: u32, height: u32) -> ImageData {
             pixels.extend_from_slice(&[r, g, b, 255]);
         }
     }
-    ImageData::new(pixels, width, height)
+    ImageData::new(pixels, width, height).expect("the pixels fill the image")
 }
 
 /// A checkerboard of `cell`-sized squares.
@@ -30,7 +30,7 @@ pub fn make_checker(width: u32, height: u32, cell: u32) -> ImageData {
             }
         }
     }
-    ImageData::new(pixels, width, height)
+    ImageData::new(pixels, width, height).expect("the pixels fill the image")
 }
 
 /// A radial fade from opaque centre to transparent edge.
@@ -48,5 +48,5 @@ pub fn make_radial_alpha(width: u32, height: u32) -> ImageData {
             pixels.extend_from_slice(&[240, 140, 30, alpha]);
         }
     }
-    ImageData::new(pixels, width, height)
+    ImageData::new(pixels, width, height).expect("the pixels fill the image")
 }

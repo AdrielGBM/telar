@@ -70,11 +70,10 @@ fn pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
 }
 
 fn picture(pixels: &[[u8; 4]], width: u32, height: u32) -> Arc<crate::ImageData> {
-    Arc::new(crate::ImageData::from_premultiplied(
-        pixels.concat(),
-        width,
-        height,
-    ))
+    Arc::new(
+        crate::ImageData::from_premultiplied(pixels.concat(), width, height)
+            .expect("the pixels fill the picture"),
+    )
 }
 
 fn image(data: Arc<crate::ImageData>, rect: Rect, fill: crate::ImageFill) -> DrawCommand {

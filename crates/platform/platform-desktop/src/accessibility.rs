@@ -310,9 +310,9 @@ fn label_id(index: usize) -> NodeId {
 /// The value as numbers where it is one, and as the words a reader says for it where it has any: a field's text, a select's choice, a slider's "Medium".
 fn set_value(ak: &mut Node, value: &Value) {
     if let Some(reading) = value.reading() {
-        ak.set_numeric_value(reading.now);
-        ak.set_min_numeric_value(reading.min);
-        ak.set_max_numeric_value(reading.max);
+        ak.set_numeric_value(reading.now());
+        ak.set_min_numeric_value(reading.min());
+        ak.set_max_numeric_value(reading.max());
     }
     if let Some(text) = value.text() {
         ak.set_value(text);
@@ -512,12 +512,14 @@ pub(crate) fn requested_action(
             AccessAction::SetValue(Value::Text(text.as_ref().into()))
         }
         (Action::SetValue, Some(ActionData::NumericValue(now))) => {
-            let bounds = nodes[target].value.as_ref().and_then(Value::reading);
-            AccessAction::SetValue(Value::from(NumericValue {
-                now: *now,
-                min: bounds.map_or(*now, |bounds| bounds.min),
-                max: bounds.map_or(*now, |bounds| bounds.max),
-            }))
+            let reading = match nodes[target].value.as_ref().and_then(Value::reading) {
+                Some(bounds) => NumericValue::new(
+                    bounds.min()..=bounds.max(),
+                    now.clamp(bounds.min(), bounds.max()),
+                ),
+                None => NumericValue::new(*now..=*now, *now),
+            };
+            AccessAction::SetValue(Value::from(reading.ok()?))
         }
         (Action::SetTextSelection, Some(ActionData::SetTextSelection(selection))) => {
             let runs = text_runs(nodes);

@@ -25,7 +25,10 @@ fn bakes_the_png_into_its_decoded_straight_rgba_for_every_target_but_a_browser()
         .and_then(|(_, rest)| rest.split_once("; image }"))
         .expect("the pixels are the branch for every target but a browser")
         .0;
-    assert!(expression.ends_with(".to_vec(), 40, 40)"), "{expression}");
+    assert!(
+        expression.ends_with(".to_vec(), 40, 40).expect(\"a baked picture fills its size\")"),
+        "{expression}"
+    );
 
     let rgba = rgba_of(expression);
     assert_eq!(rgba.len(), 40 * 40 * 4);

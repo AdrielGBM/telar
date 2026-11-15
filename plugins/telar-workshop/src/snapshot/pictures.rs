@@ -53,11 +53,9 @@ fn decode(path: &Path) -> Option<Arc<ImageData>> {
     let bytes = std::fs::read(path).ok()?;
     let pixmap = Pixmap::decode_png(&bytes).ok()?;
     let (width, height) = (pixmap.width(), pixmap.height());
-    Some(Arc::new(ImageData::from_premultiplied(
-        pixmap.take(),
-        width,
-        height,
-    )))
+    ImageData::from_premultiplied(pixmap.take(), width, height)
+        .ok()
+        .map(Arc::new)
 }
 
 /// The pictures as `mode` sets them; side by side whatever `mode` says when there is no pair to set against each other.
@@ -121,7 +119,7 @@ fn swiped(
     position: RwSignal<f32>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let size = signal(Rect::default());
-    let intrinsic = (current.width as f32, current.height as f32);
+    let intrinsic = (current.width() as f32, current.height() as f32);
     let line = move || {
         let shown = contained(intrinsic, size.get());
         shown.x + shown.width * position.get().clamp(0.0, 1.0)

@@ -406,11 +406,8 @@ fn a_fields_description_validity_and_value_words_reach_the_document() {
             2,
             Semantics {
                 value: Some(Value::Number {
-                    reading: platform_core::NumericValue {
-                        now: 2.0,
-                        min: 1.0,
-                        max: 3.0,
-                    },
+                    reading: platform_core::NumericValue::new(1.0..=3.0, 2.0)
+                        .expect("a reading within its range"),
                     text: Some(Arc::from("Medium")),
                 }),
                 ..Semantics::of(Role::Slider).with_label("Quality")

@@ -31,7 +31,7 @@ pub use keys::ConsumedKeys;
 pub use location::Location;
 pub use modal::Modal;
 pub use outline::{Positioning, SetPosition};
-pub use reading::{NumericValue, Orientation, SortDirection, Value};
+pub use reading::{NumericValue, NumericValueError, Orientation, SortDirection, Value};
 pub use uri::{
     DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, RouteAddress, Uri, UriError, allow_uri_scheme,
     is_uri_scheme_allowed,

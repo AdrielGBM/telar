@@ -102,7 +102,7 @@ struct Entry {
     scrolls: Option<Rc<dyn Fn() -> bool>>,
     /// A checked state, for the controls that have one. A closure and not a flag, for the same reason "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to get the answer that is true then.
     toggled: Option<Rc<dyn Fn() -> Toggle>>,
-    value: Option<Rc<dyn Fn() -> Value>>,
+    value: Option<Rc<dyn Fn() -> Option<Value>>>,
     help: Help,
     orientation: Option<Orientation>,
     outline: Outline,
@@ -1122,9 +1122,9 @@ pub fn set_toggled<S: Into<Toggle>>(id: FocusId, state: impl Fn() -> S + 'static
     });
 }
 
-/// Declares that `id` carries a value, and how to read it now: a number, or the text a field holds. The counterpart of [`set_toggled`] for the roles whose state is a value rather than a flag.
-pub fn set_value<V: Into<Value>>(id: FocusId, read: impl Fn() -> V + 'static) {
-    let read: Rc<dyn Fn() -> Value> = Rc::new(move || read().into());
+/// Declares that `id` carries a value, and how to read it now: a number, or the text a field holds; `None` while it holds none a reader could say, such as a reading that is no number. The counterpart of [`set_toggled`] for the roles whose state is a value rather than a flag.
+pub fn set_value<V: Into<Value>>(id: FocusId, read: impl Fn() -> Option<V> + 'static) {
+    let read: Rc<dyn Fn() -> Option<Value>> = Rc::new(move || read().map(Into::into));
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.value = Some(read);
@@ -1384,7 +1384,7 @@ pub fn exposed() -> Vec<Exposed> {
             Option<NodeId>,
             Role,
             Option<Rc<dyn Fn() -> Toggle>>,
-            Option<Rc<dyn Fn() -> Value>>,
+            Option<Rc<dyn Fn() -> Option<Value>>>,
             Help,
             Option<Orientation>,
             Outline,
@@ -1442,7 +1442,7 @@ pub fn exposed() -> Vec<Exposed> {
                     role,
                     enabled: !disabled_at(node),
                     toggled: toggled.as_ref().map(|read| read()),
-                    value: value.as_ref().map(|read| read()),
+                    value: value.as_ref().and_then(|read| read()),
                     description: help.description,
                     invalid: help.invalid,
                     required: help.required,
@@ -1791,7 +1791,7 @@ pub fn toggled_state(id: FocusId) -> Option<Toggle> {
 /// The value `id` declared, read now. Read inside `view()` for the same reason as [`toggled_state`].
 pub fn value_state(id: FocusId) -> Option<Value> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.value.clone()))?;
-    Some(read())
+    read()
 }
 
 /// The help `id` declared, read now; nothing said for a control that declared none. Read inside `view()` for the same reason as [`toggled_state`].

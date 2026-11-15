@@ -101,7 +101,7 @@ fn quadrants() -> Arc<ImageData> {
         [40, 60, 220, 255],
         [230, 200, 40, 255],
     ];
-    Arc::new(ImageData::new(pixels.concat(), 2, 2))
+    Arc::new(ImageData::new(pixels.concat(), 2, 2).expect("the pixels fill the image"))
 }
 
 fn picture(rect: Rect, fill: ImageFill) -> Vec<DrawCommand> {

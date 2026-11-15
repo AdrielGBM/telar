@@ -962,11 +962,10 @@ fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
 #[test]
 fn a_splitter_publishes_its_value_and_its_orientation() {
     let splitter = AccessNode {
-        value: Some(Value::from(platform_core::NumericValue {
-            now: 240.0,
-            min: 180.0,
-            max: 400.0,
-        })),
+        value: Some(Value::from(
+            platform_core::NumericValue::new(180.0..=400.0, 240.0)
+                .expect("a reading within its range"),
+        )),
         orientation: Some(Orientation::Vertical),
         ..node(Some(1), Role::Splitter, "Sidebar")
     };
@@ -1030,11 +1029,8 @@ fn a_value_is_published_as_its_text_and_its_number() {
 
     let slider = published_alone(AccessNode {
         value: Some(Value::Number {
-            reading: platform_core::NumericValue {
-                now: 2.0,
-                min: 1.0,
-                max: 3.0,
-            },
+            reading: platform_core::NumericValue::new(1.0..=3.0, 2.0)
+                .expect("a reading within its range"),
             text: Some("Medium".into()),
         }),
         ..node(Some(2), Role::Slider, "Quality")
@@ -1385,11 +1381,9 @@ fn request(target: NodeId, action: Action, data: Option<ActionData>) -> ActionRe
 #[test]
 fn a_slider_that_steps_claims_and_receives_its_steps() {
     let slider = AccessNode {
-        value: Some(Value::from(NumericValue {
-            now: 0.5,
-            min: 0.0,
-            max: 1.0,
-        })),
+        value: Some(Value::from(
+            NumericValue::new(0.0..=1.0, 0.5).expect("a reading within its range"),
+        )),
         supports: ActionSupport {
             step: true,
             set_value: true,
@@ -1427,11 +1421,9 @@ fn a_slider_that_steps_claims_and_receives_its_steps() {
         ),
         Some((
             9,
-            AccessAction::SetValue(Value::from(NumericValue {
-                now: 0.75,
-                min: 0.0,
-                max: 1.0,
-            }))
+            AccessAction::SetValue(Value::from(
+                NumericValue::new(0.0..=1.0, 0.75).expect("a reading within its range")
+            ))
         ))
     );
     assert_eq!(

@@ -46,7 +46,7 @@ impl Pictures {
                 resolved.push(command.clone());
                 continue;
             };
-            if let Some(pixels) = self.pixels_for(source, data.width, rect.width) {
+            if let Some(pixels) = self.pixels_for(source, data.width(), rect.width) {
                 resolved.push(DrawCommand::Image {
                     data: pixels,
                     rect: *rect,
@@ -61,10 +61,10 @@ impl Pictures {
     /// The copy that covers `drawn_width` device pixels, asked for if it has not been; while it is on its way, any copy of the same picture that has arrived.
     fn pixels_for(&self, source: &Linked, width: u32, drawn_width: f32) -> Option<Arc<ImageData>> {
         let wanted = source
-            .variants
+            .variants()
             .iter()
             .find(|(copy_width, _)| *copy_width as f32 >= drawn_width)
-            .map_or(&source.url, |(_, url)| url);
+            .map_or(source.url(), |(_, url)| url);
         let ready = |url: &Arc<str>| match self.arrivals.borrow().get(url) {
             Some(Arrival::Ready(pixels)) => Some(Arc::clone(pixels)),
             _ => None,
@@ -75,8 +75,8 @@ impl Pictures {
         if !self.arrivals.borrow().contains_key(wanted) {
             self.fetch(Arc::clone(wanted));
         }
-        std::iter::once((width, &source.url))
-            .chain(source.variants.iter().rev().map(|(w, url)| (*w, url)))
+        std::iter::once((width, source.url()))
+            .chain(source.variants().iter().rev().map(|(w, url)| (*w, url)))
             .find_map(|(_, url)| ready(url))
     }
 
@@ -120,7 +120,7 @@ async fn decode(address: &str) -> Result<ImageData, JsValue> {
         .dyn_into()?;
     context.draw_image_with_html_image_element(&image, 0.0, 0.0)?;
     let pixels = context.get_image_data(0.0, 0.0, width as f64, height as f64)?;
-    Ok(ImageData::new(pixels.data().0, width, height))
+    ImageData::new(pixels.data().0, width, height).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[cfg(test)]

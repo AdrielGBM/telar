@@ -38,7 +38,9 @@ impl AssetDecoder for ImageDecoder {
         reader.limits(limits);
         let rgba = reader.decode().map_err(|e| fail(&e))?.into_rgba8();
         let (width, height) = rgba.dimensions();
-        Ok(Arc::new(ImageData::new(rgba.into_raw(), width, height)))
+        ImageData::new(rgba.into_raw(), width, height)
+            .map(Arc::new)
+            .map_err(|e| fail(&e))
     }
 }
 

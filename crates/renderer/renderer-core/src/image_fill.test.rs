@@ -102,7 +102,7 @@ fn zero_insets_is_one_stretched_piece() {
 
 #[test]
 fn a_tile_repeats_at_the_scaled_size_and_refuses_a_useless_scale() {
-    let image = ImageData::new(vec![0; 4 * 6 * 4], 6, 4);
+    let image = ImageData::new(vec![0; 4 * 6 * 4], 6, 4).expect("the pixels fill the image");
     assert_eq!(ImageFill::tile_size(1.5, &image), Some((9.0, 6.0)));
     assert_eq!(ImageFill::tile_size(0.0, &image), None);
     assert_eq!(ImageFill::tile_size(f32::NAN, &image), None);

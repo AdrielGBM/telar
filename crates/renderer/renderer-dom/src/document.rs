@@ -331,18 +331,18 @@ impl Described {
             ("aria-multiselectable", flag(self.multiselectable)),
             ("aria-controls", self.controls.clone()),
             ("aria-activedescendant", self.active_descendant.clone()),
-            ("aria-valuenow", self.value.map(|v| v.now.to_string())),
+            ("aria-valuenow", self.value.map(|v| v.now().to_string())),
             (
                 "aria-valuemin",
                 self.value
-                    .filter(|v| v.min.is_finite())
-                    .map(|v| v.min.to_string()),
+                    .filter(|v| v.min().is_finite())
+                    .map(|v| v.min().to_string()),
             ),
             (
                 "aria-valuemax",
                 self.value
-                    .filter(|v| v.max.is_finite())
-                    .map(|v| v.max.to_string()),
+                    .filter(|v| v.max().is_finite())
+                    .map(|v| v.max().to_string()),
             ),
             ("aria-valuetext", self.value_text.clone()),
             (
@@ -414,7 +414,7 @@ pub(crate) fn picture_attributes(
     width: f32,
 ) -> Vec<(&'static str, Option<String>)> {
     let source = &picture.source;
-    let (srcset, sizes) = match source.variants.is_empty() {
+    let (srcset, sizes) = match source.variants().is_empty() {
         true => (None, None),
         false => (
             Some(srcset(picture)),
@@ -432,7 +432,7 @@ pub(crate) fn picture_attributes(
             "fetchpriority",
             picture.priority.then(|| "high".to_string()),
         ),
-        ("src", Some(platform_core::asset_url(&source.url))),
+        ("src", Some(platform_core::asset_url(source.url()))),
     ]
 }
 
@@ -445,12 +445,12 @@ pub(crate) fn picture_slot(width: f32) -> u32 {
 pub(crate) fn srcset(picture: &Picture) -> String {
     picture
         .source
-        .variants
+        .variants()
         .iter()
         .map(|(width, url)| (*width, url.as_ref()))
         .chain(std::iter::once((
             picture.width,
-            picture.source.url.as_ref(),
+            picture.source.url().as_ref(),
         )))
         .map(|(width, url)| format!("{} {width}w", platform_core::asset_url(url)))
         .collect::<Vec<_>>()
@@ -1894,7 +1894,7 @@ fn draw(
             let href = surface.image_href(data);
             drawing.image(
                 href.as_deref(),
-                (data.width, data.height),
+                (data.width(), data.height()),
                 *rect,
                 *raster,
                 *fill,

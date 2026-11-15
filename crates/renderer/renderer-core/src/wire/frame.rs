@@ -327,13 +327,13 @@ fn put_image(w: &mut Writer, lent: &mut FxHashMap<u64, Arc<ImageData>>, image: &
     } else if image.external_texture().is_some() {
         EXTERNAL
     } else {
-        lent.entry(image.id).or_insert_with(|| Arc::clone(image));
+        lent.entry(image.id()).or_insert_with(|| Arc::clone(image));
         PIXELS
     };
     w.u8(kind);
-    image.id.put(w);
-    image.width.put(w);
-    image.height.put(w);
+    image.id().put(w);
+    image.width().put(w);
+    image.height().put(w);
     if let Some(linked) = image.linked_source() {
         linked.put(w);
     }
@@ -445,18 +445,11 @@ impl Images<'_> {
             return Ok(Arc::clone(image));
         }
         let image = match (kind, linked) {
-            (LINKED, Some(linked)) => {
-                let variants: Vec<(u32, &str)> = linked
-                    .variants
-                    .iter()
-                    .map(|(width, url)| (*width, &**url))
-                    .collect();
-                ImageData::linked(&linked.url, width, height, &variants)
-            }
+            (LINKED, Some(linked)) => ImageData::from_linked(linked, width, height),
             (EXTERNAL, _) => ImageData::without_pixels(id, width, height),
             _ => self.image_with_pixels(id, width, height)?,
         };
-        if image.id != id {
+        if image.id() != id {
             return Err(FrameError::ImageMismatch(id));
         }
         let image = Arc::new(image);
@@ -471,11 +464,8 @@ impl Images<'_> {
         height: u32,
     ) -> Result<ImageData, FrameError> {
         let pixels = (self.copy_pixels)(id).ok_or(FrameError::MissingImage(id))?;
-        let expected = u64::from(width) * u64::from(height) * 4;
-        if expected > u64::from(u32::MAX) || pixels.len() as u64 != expected {
-            return Err(WireError::Invalid("lent pixels do not fill the image").into());
-        }
-        Ok(ImageData::from_premultiplied(pixels, width, height))
+        ImageData::from_premultiplied(pixels, width, height)
+            .map_err(|_| WireError::Invalid("lent pixels do not fill the image").into())
     }
 }
 

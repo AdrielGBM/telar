@@ -32,7 +32,7 @@ impl Image {
         // A side left at `auto` falls back to the intrinsic size, a single px side derives the other from the intrinsic aspect ratio, and a percent side is left untouched.
         let layout_style = crate::layout_leaf::resolve_intrinsic_size(layout_style, || {
             let d = data_fn();
-            (d.width as f32, d.height as f32)
+            (d.width() as f32, d.height() as f32)
         });
 
         let leaf = LayoutLeaf::register(layout_style)?;
@@ -101,8 +101,8 @@ impl Component for Image {
             };
             Some(Picture {
                 source,
-                width: data.width,
-                height: data.height,
+                width: data.width(),
+                height: data.height(),
                 fit,
                 priority: self.priority,
             })
@@ -110,7 +110,7 @@ impl Component for Image {
         let ((content, clip), fill) = match (&self.slice, fit) {
             (Some(slice), _) => ((r_local, false), ImageFill::Slice(slice())),
             (None, fit) => (
-                geometry_core::fit_rect((data.width as f32, data.height as f32), r_local, fit),
+                geometry_core::fit_rect((data.width() as f32, data.height() as f32), r_local, fit),
                 match fit {
                     ObjectFit::Tile { scale } => ImageFill::Tile { scale },
                     _ => ImageFill::Stretch,

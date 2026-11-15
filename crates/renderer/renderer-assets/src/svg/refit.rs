@@ -114,11 +114,10 @@ pub(super) fn refit_raster(
         Some(tint) => {
             let mut pixels = image.pixels().to_vec();
             apply_tint_premultiplied(&mut pixels, tint);
-            Arc::new(ImageData::from_premultiplied(
-                pixels,
-                image.width,
-                image.height,
-            ))
+            Arc::new(
+                ImageData::from_premultiplied(pixels, image.width(), image.height())
+                    .expect("a baked raster holds its pixels"),
+            )
         }
     };
     vec![DrawCommand::Image {

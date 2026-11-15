@@ -253,11 +253,8 @@ fn a_tree_row_carries_its_openness_and_its_place_beside_its_selection() {
 
 #[test]
 fn a_reading_is_compared_by_its_numbers() {
-    let reading = |now: f64| NumericValue {
-        now,
-        min: 0.0,
-        max: 10.0,
-    };
+    let reading =
+        |now: f64| NumericValue::new(0.0..=10.0, now).expect("a reading within its range");
     let with = |now: f64| Semantics {
         value: Some(Value::from(reading(now))),
         orientation: Some(Orientation::Vertical),
@@ -523,11 +520,7 @@ fn a_flag_is_an_on_or_off_toggle_and_mixed_is_a_state_of_its_own() {
 
 #[test]
 fn a_value_is_a_number_with_or_without_words_or_text() {
-    let reading = NumericValue {
-        now: 2.0,
-        min: 1.0,
-        max: 3.0,
-    };
+    let reading = NumericValue::new(1.0..=3.0, 2.0).expect("a reading within its range");
     let bare = Value::from(reading);
     assert_eq!(bare.reading(), Some(reading));
     assert_eq!(bare.text(), None);

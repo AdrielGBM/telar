@@ -112,11 +112,7 @@ fn a_valued_control_reports_where_it_stands() {
     )
     .unwrap()
     .control(Role::Slider)
-    .valued(|| platform_core::NumericValue {
-        now: 0.25,
-        min: 0.0,
-        max: 1.0,
-    });
+    .valued(|| platform_core::NumericValue::new(0.0..=1.0, 0.25).ok());
     let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(track)]).unwrap();
     compute_layout(
         root.layout_node(),
@@ -132,8 +128,8 @@ fn a_valued_control_reports_where_it_stands() {
         .as_ref()
         .and_then(Value::reading)
         .expect("a slider carries a number");
-    assert_eq!(value.now, 0.25);
-    assert_eq!((value.min, value.max), (0.0, 1.0));
+    assert_eq!(value.now(), 0.25);
+    assert_eq!((value.min(), value.max()), (0.0, 1.0));
 }
 
 /// `toggled` was populated only through `labelled_control`, so a tab never said it was the selected one.
@@ -358,7 +354,9 @@ fn a_named_picture_is_read_as_an_image() {
     )
     .unwrap();
     let picture = DrawCommand::Image {
-        data: Arc::new(renderer_core::ImageData::new(vec![0; 4], 1, 1)),
+        data: Arc::new(
+            renderer_core::ImageData::new(vec![0; 4], 1, 1).expect("the pixels fill the image"),
+        ),
         rect: rect(0.0, 0.0, 10.0, 16.0),
         raster: renderer_core::Raster::Smooth,
         fill: renderer_core::ImageFill::Stretch,
@@ -782,7 +780,9 @@ fn a_control_inside_a_named_box_keeps_its_own_name() {
 
 fn image_at(rect: Rect) -> DrawCommand {
     DrawCommand::Image {
-        data: Arc::new(renderer_core::ImageData::new(vec![0; 4], 1, 1)),
+        data: Arc::new(
+            renderer_core::ImageData::new(vec![0; 4], 1, 1).expect("the pixels fill the image"),
+        ),
         rect,
         raster: renderer_core::Raster::Smooth,
         fill: renderer_core::ImageFill::Stretch,

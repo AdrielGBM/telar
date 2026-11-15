@@ -295,11 +295,7 @@ fn a_value_is_read_after_the_role() {
         node.value = Some(value);
         node
     };
-    let reading = NumericValue {
-        now: 2.0,
-        min: 1.0,
-        max: 3.0,
-    };
+    let reading = NumericValue::new(1.0..=3.0, 2.0).expect("a reading within its range");
     assert_eq!(
         transcript(&[
             valued(Role::Slider, "Volume", Value::from(reading)),

@@ -216,7 +216,7 @@ pub struct StyledContainer {
     // Where a box that is no control sits; a control keeps it in the focus order with the rest of its state.
     position: Option<Rc<dyn Fn() -> focus::SetPosition>>,
     // What a box that is no control shows, such as how far a bar has filled; a control keeps it in the focus order.
-    value: Option<Rc<dyn Fn() -> Value>>,
+    value: Option<Rc<dyn Fn() -> Option<Value>>>,
 }
 
 impl StyledContainer {
@@ -311,7 +311,7 @@ impl StyledContainer {
             .or_else(|| self.position.as_ref().map(|read| read()));
         semantics.value = semantics
             .value
-            .or_else(|| self.value.as_ref().map(|read| read()));
+            .or_else(|| self.value.as_ref().and_then(|read| read()));
         if let Some(link) = &self.link {
             semantics = match link() {
                 Some(destination) => semantics.linking_to(destination),
@@ -739,11 +739,11 @@ impl StyledContainer {
 
     /// Declares the value this box carries, so a reader says where a slider stands, what a field holds or how far a bar has filled, and not only that it is one: a [`NumericValue`](platform_core::NumericValue) or a [`Value`]. The counterpart of [`toggled`](Self::toggled) for a box whose state is a value.
     ///
-    /// Any box may carry one, not only a control: a progress bar the keyboard never stops at still says how far along it is.
-    pub fn valued<V: Into<Value>>(mut self, read: impl Fn() -> V + 'static) -> Self {
+    /// Any box may carry one, not only a control: a progress bar the keyboard never stops at still says how far along it is. `read` answers `None` while there is nothing a reader could say, such as a reading [`NumericValue::new`](platform_core::NumericValue::new) refused.
+    pub fn valued<V: Into<Value>>(mut self, read: impl Fn() -> Option<V> + 'static) -> Self {
         match self.focusable.id {
             Some(id) => focus::set_value(id, read),
-            None => self.value = Some(Rc::new(move || read().into())),
+            None => self.value = Some(Rc::new(move || read().map(Into::into))),
         }
         self
     }
@@ -1373,7 +1373,7 @@ impl StyledContainer {
                 crate::element::role_of(self.role, self.press.activates()),
                 |semantics| renderer_core::Semantics {
                     position: self.position.as_ref().map(|read| read()),
-                    value: self.value.as_ref().map(|read| read()),
+                    value: self.value.as_ref().and_then(|read| read()),
                     ..semantics
                 },
                 || self.element(),

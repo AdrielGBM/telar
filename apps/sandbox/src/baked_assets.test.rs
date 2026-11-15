@@ -51,5 +51,5 @@ fn the_baked_image_carries_the_files_dimensions() {
     let height = u32::from_be_bytes(png[20..24].try_into().unwrap());
 
     let baked = DOT_PNG.get();
-    assert_eq!((baked.width, baked.height), (width, height));
+    assert_eq!((baked.width(), baked.height()), (width, height));
 }

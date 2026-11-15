@@ -983,7 +983,11 @@ fn answer_readers(
     };
     focus::set_value(id, {
         let mask = mask.clone();
-        move || Value::Text(value.with(|text| shown_text(text, mask())).into())
+        move || {
+            Some(Value::Text(
+                value.with(|text| shown_text(text, mask())).into(),
+            ))
+        }
     });
     focus::set_text_selection(id, {
         let mask = mask.clone();

@@ -1,12 +1,16 @@
+use crate::grid::{InvalidStep, checked_step};
+
 /// How many logical pixels one terminal cell stands for.
 ///
 /// The terminal has no pixels, but every layout value in a Telar app is written in them — `pad:24`, `width:300`, a theme's `gutter`. Rather than teach the layout engine a second unit, the terminal declares an exchange rate and reports its own size in the same currency: an 80×24 terminal at the default rate is a 640×384 "window". Everything above stays exactly as it is on the desktop, and the rounding to whole cells happens once, in the painter, on absolute edges.
 ///
 /// The default is the proportion of a typical monospace face — twice as tall as it is wide — which is what makes a layout authored for the desktop come out with recognisable proportions here.
+///
+/// Positive and finite on both axes, since every column and row is a division by it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CellSize {
-    pub width: f32,
-    pub height: f32,
+    width: f32,
+    height: f32,
 }
 
 impl Default for CellSize {
@@ -19,6 +23,22 @@ impl Default for CellSize {
 }
 
 impl CellSize {
+    /// A cell of `width` by `height` logical pixels, refusing a length that is not positive and finite.
+    pub const fn new(width: f32, height: f32) -> Result<Self, InvalidStep> {
+        match checked_step(width, height) {
+            Ok((width, height)) => Ok(Self { width, height }),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn width(self) -> f32 {
+        self.width
+    }
+
+    pub fn height(self) -> f32 {
+        self.height
+    }
+
     /// The column a logical x falls in. Rounds, and callers round *both* edges of a box rather than its width, so two boxes that touch in logical space still touch in cells.
     ///
     /// Half **up** rather than half away from zero, so that adding a whole number of cells to a coordinate adds the same whole number of columns to the answer. `f32::round` changes direction at the origin and breaks that for anything scrolled past it — see [`LayoutGrid`](crate::LayoutGrid).

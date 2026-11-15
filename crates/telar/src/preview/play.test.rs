@@ -277,11 +277,7 @@ fn volume(_: &PreviewCtx) -> Built {
         vec![label(|| String::from("Volume"))],
     )?
     .control(Role::Slider)
-    .valued(move || crate::NumericValue {
-        now: level.get(),
-        min: 0.0,
-        max: 1.0,
-    })
+    .valued(move || crate::NumericValue::new(0.0..=1.0, level.get()).ok())
     .on_press(move || level.set(0.75));
     let more = StyledContainer::new(
         LayoutStyle::new().padding_all(8.0),

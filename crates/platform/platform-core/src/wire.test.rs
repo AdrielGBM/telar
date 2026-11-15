@@ -374,11 +374,7 @@ fn node() -> AccessNode {
         enabled: false,
         toggled: Some(Toggle::Mixed),
         value: Some(Value::Number {
-            reading: NumericValue {
-                now: 5.0,
-                min: 0.0,
-                max: 10.0,
-            },
+            reading: NumericValue::new(0.0..=10.0, 5.0).expect("a reading within its range"),
             text: Some("cinco".into()),
         }),
         description: Some("Abre la sección".into()),

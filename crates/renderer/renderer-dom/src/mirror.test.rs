@@ -99,11 +99,7 @@ fn settings() -> Vec<AccessNode> {
         },
         AccessNode {
             value: Some(Value::Number {
-                reading: NumericValue {
-                    now: 30.0,
-                    min: 0.0,
-                    max: 100.0,
-                },
+                reading: NumericValue::new(0.0..=100.0, 30.0).expect("a reading within its range"),
                 text: Some("30 percent".into()),
             }),
             ..control(2, Role::Slider, "Volume", Some(0))

@@ -163,7 +163,7 @@ fn the_horizontal_bar_drags_the_same_way() {
 /// On a surface drawn in whole cells a thumb is whole cells long and starts on one, wherever the scroll has taken it: a fractional thumb is drawn one cell longer at some offsets than at others.
 #[test]
 fn on_a_cell_grid_the_thumb_is_whole_cells_wherever_it_is() {
-    let grid = geometry_core::LayoutGrid::new(8.0, 16.0);
+    let grid = geometry_core::LayoutGrid::new(8.0, 16.0).expect("a positive, finite step");
     for scroll in [0.0, 5.0, 8.0, 13.0, 16.0] {
         let thumb = Thumb::of(Axis::Vertical, grid, 0.0, 896.0, 912.0, scroll).unwrap();
         assert_eq!(thumb.length % 16.0, 0.0, "{} long", thumb.length);
@@ -173,7 +173,7 @@ fn on_a_cell_grid_the_thumb_is_whole_cells_wherever_it_is() {
     assert_eq!(thumb.length % 8.0, 0.0, "{} wide", thumb.length);
     let unit = Thumb::of(
         Axis::Vertical,
-        geometry_core::LayoutGrid::new(1.0, 1.0),
+        geometry_core::LayoutGrid::UNIT,
         0.0,
         300.0,
         1000.0,

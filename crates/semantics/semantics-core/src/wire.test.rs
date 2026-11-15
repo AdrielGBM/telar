@@ -10,6 +10,18 @@ fn round_trip<T: Wire + PartialEq + Debug>(value: T) {
     assert_eq!(decode::<T>(&encode(&value)), Ok(value));
 }
 
+#[test]
+fn a_reading_whose_range_runs_backwards_does_not_decode() {
+    let (now, min, max) = (3.0f64, 5.0f64, 1.0f64);
+    let mut bytes = encode(&now);
+    bytes.extend(encode(&min));
+    bytes.extend(encode(&max));
+    assert_eq!(
+        decode::<NumericValue>(&bytes),
+        Err(WireError::Invalid("numeric reading"))
+    );
+}
+
 fn link_round_trip(link: Option<Destination>) -> Option<Destination> {
     let mut w = Writer::new();
     put_link(&mut w, link.as_ref());
@@ -54,18 +66,10 @@ fn every_reading_value_round_trips() {
     round_trip(Toggle::Mixed);
     round_trip(Value::Text(Arc::from("ada@example.com")));
     round_trip(Value::Number {
-        reading: NumericValue {
-            now: 2.0,
-            min: 1.0,
-            max: 3.0,
-        },
+        reading: NumericValue::new(1.0..=3.0, 2.0).expect("a reading within its range"),
         text: Some(Arc::from("Medium")),
     });
-    round_trip(NumericValue {
-        now: 0.25,
-        min: -1.0,
-        max: 1.0,
-    });
+    round_trip(NumericValue::new(-1.0..=1.0, 0.25).expect("a reading within its range"));
     round_trip(SetPosition {
         level: 2,
         position: 3,
@@ -155,11 +159,7 @@ fn every_field_set() -> Semantics {
         anchor: Some(Arc::from("here")),
         current: true,
         value: Some(Value::Number {
-            reading: NumericValue {
-                now: 1.0,
-                min: 0.0,
-                max: 2.0,
-            },
+            reading: NumericValue::new(0.0..=2.0, 1.0).expect("a reading within its range"),
             text: Some(Arc::from("Half")),
         }),
         orientation: Some(Orientation::Vertical),
@@ -282,11 +282,9 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
         bytes.extend(encode(&value));
     }
     bytes.extend(encode(&Value::Text(Arc::from("ada@example.com"))));
-    bytes.extend(encode(&NumericValue {
-        now: 0.25,
-        min: -1.0,
-        max: 1.0,
-    }));
+    bytes.extend(encode(
+        &NumericValue::new(-1.0..=1.0, 0.25).expect("a reading within its range"),
+    ));
     bytes.extend(encode(&SetPosition {
         level: 2,
         position: 3,

@@ -106,7 +106,7 @@ impl Surface for PageAtRest {
 
     fn image_href(&mut self, data: &ImageData) -> Option<Rc<str>> {
         data.linked_source()
-            .map(|linked| platform_core::asset_url(&linked.url).into())
+            .map(|linked| platform_core::asset_url(linked.url()).into())
     }
 
     /// Half the leading the line box adds, then an ascent of four fifths of the size, which is what most faces come to.

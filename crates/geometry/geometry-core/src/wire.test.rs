@@ -1,11 +1,40 @@
 use std::fmt::Debug;
 
-use wire_core::{Wire, decode, encode};
+use wire_core::{Shaped, Wire, WireError, decode, encode};
 
-use crate::{BorderRadius, Color, Insets, Point, Rect, Size, Transform};
+use crate::{BorderRadius, Color, Insets, LayoutGrid, Point, Rect, Size, Transform};
 
 fn round_trip<T: Wire + PartialEq + Debug>(value: T) {
     assert_eq!(decode::<T>(&encode(&value)), Ok(value));
+}
+
+#[test]
+fn a_layout_grid_round_trips() {
+    round_trip(LayoutGrid::new(8.0, 16.0).expect("a positive, finite step"));
+    round_trip(LayoutGrid::UNIT);
+}
+
+#[test]
+fn decoding_a_zero_grid_fails() {
+    let bytes = encode(&Point::new(0.0, 16.0));
+    assert_eq!(
+        decode::<LayoutGrid>(&bytes),
+        Err(WireError::Invalid("layout grid"))
+    );
+}
+
+#[test]
+fn a_layout_grid_is_spelled_as_its_two_steps() {
+    struct LayoutGrid {
+        x: f32,
+        y: f32,
+    }
+    wire_core::wire_struct!(LayoutGrid { x, y });
+    assert_eq!(<crate::LayoutGrid as Shaped>::SHAPE, LayoutGrid::SHAPE);
+    assert_eq!(
+        encode(&crate::LayoutGrid::new(8.0, 16.0).expect("a positive, finite step")),
+        encode(&LayoutGrid { x: 8.0, y: 16.0 })
+    );
 }
 
 #[test]

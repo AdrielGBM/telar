@@ -26,7 +26,7 @@ fn lines(tree: &ComponentList) -> Vec<Rect> {
 
 fn on_cells() {
     set_text_metrics(CellMetrics::new(CellSize::default()));
-    set_layout_grid(LayoutGrid::new(8.0, ROW));
+    set_layout_grid(LayoutGrid::new(8.0, ROW).expect("a positive, finite step"));
 }
 
 fn label(content: &'static str, layout: LayoutStyle) -> Text {

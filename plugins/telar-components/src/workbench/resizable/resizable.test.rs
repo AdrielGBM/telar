@@ -93,10 +93,24 @@ fn the_content_takes_the_bound_size_and_each_edge_reports_its_side() {
             .max(Size::new(500.0, 400.0))
             .build(),
     );
-    let width = splitter(Orientation::Vertical).value.as_ref().and_then(telar::Value::reading).unwrap();
-    let height = splitter(Orientation::Horizontal).value.as_ref().and_then(telar::Value::reading).unwrap();
-    assert_eq!((width.now, width.min, width.max), (300.0, 100.0, 500.0));
-    assert_eq!((height.now, height.min, height.max), (200.0, 50.0, 400.0));
+    let width = splitter(Orientation::Vertical)
+        .value
+        .as_ref()
+        .and_then(telar::Value::reading)
+        .unwrap();
+    let height = splitter(Orientation::Horizontal)
+        .value
+        .as_ref()
+        .and_then(telar::Value::reading)
+        .unwrap();
+    assert_eq!(
+        (width.now(), width.min(), width.max()),
+        (300.0, 100.0, 500.0)
+    );
+    assert_eq!(
+        (height.now(), height.min(), height.max()),
+        (200.0, 50.0, 400.0)
+    );
     assert_eq!(width_handle().x, 300.0);
     assert_eq!(height_handle().y, 200.0);
 }
@@ -104,8 +118,24 @@ fn the_content_takes_the_bound_size_and_each_edge_reports_its_side() {
 #[test]
 fn an_unbound_resizable_starts_at_its_default_size() {
     let _tree = mount(ResizableProps::props().build());
-    assert_eq!(splitter(Orientation::Vertical).value.as_ref().and_then(telar::Value::reading).unwrap().now, 240.0);
-    assert_eq!(splitter(Orientation::Horizontal).value.as_ref().and_then(telar::Value::reading).unwrap().now, 160.0);
+    assert_eq!(
+        splitter(Orientation::Vertical)
+            .value
+            .as_ref()
+            .and_then(telar::Value::reading)
+            .unwrap()
+            .now(),
+        240.0
+    );
+    assert_eq!(
+        splitter(Orientation::Horizontal)
+            .value
+            .as_ref()
+            .and_then(telar::Value::reading)
+            .unwrap()
+            .now(),
+        160.0
+    );
 }
 
 #[test]
@@ -288,7 +318,15 @@ fn one_edge_draws_one_splitter_and_no_corner() {
             .edges(ResizeEdges::End)
             .build(),
     );
-    assert_eq!(splitter(Orientation::Vertical).value.as_ref().and_then(telar::Value::reading).unwrap().now, 300.0);
+    assert_eq!(
+        splitter(Orientation::Vertical)
+            .value
+            .as_ref()
+            .and_then(telar::Value::reading)
+            .unwrap()
+            .now(),
+        300.0
+    );
     assert_eq!(width_handle().height, 200.0);
 }
 

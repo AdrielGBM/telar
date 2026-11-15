@@ -386,11 +386,13 @@ pub fn split_pane(props: SplitPaneProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     })
     .valued(move || {
         let (lo, hi) = limits.range(total(), bar_thickness());
-        NumericValue {
-            now: applied() as f64,
-            min: lo as f64,
-            max: hi as f64,
-        }
+        let now = applied();
+        // A collapsed pane, or a window shrunk past the limits before the next layout, puts the bar outside the range a drag keeps to, and the reading still has to say where it stands.
+        NumericValue::new(
+            f64::from(lo.min(now))..=f64::from(hi.max(now)),
+            f64::from(now),
+        )
+        .ok()
     })
     .cursor(match direction {
         SplitDirection::Row => Cursor::ColResize,

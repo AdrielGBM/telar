@@ -7,19 +7,20 @@ use crate::buffer::CellBuffer;
 use crate::color::Rgb;
 use geometry_core::CellSize;
 
-const CELL: CellSize = CellSize {
-    width: 8.0,
-    height: 16.0,
-};
+fn cell() -> CellSize {
+    CellSize::new(8.0, 16.0).expect("a positive, finite cell")
+}
 
 /// Built as already premultiplied, which for the opaque fixtures below they are: `ImageData::new` would premultiply them through its `>>8` approximation and turn every 255 into a 254 that says nothing about what this module did with it.
 fn image(pixels: &[[u8; 4]], width: u32, height: u32) -> Arc<ImageData> {
     let bytes: Vec<u8> = pixels.iter().flatten().copied().collect();
-    Arc::new(ImageData::from_premultiplied(bytes, width, height))
+    Arc::new(
+        ImageData::from_premultiplied(bytes, width, height).expect("the pixels fill the image"),
+    )
 }
 
 fn draw(buf: &mut CellBuffer, commands: &[DrawCommand]) {
-    Painter::new(buf, CELL, crate::ColorDepth::TrueColor).paint(commands);
+    Painter::new(buf, cell(), crate::ColorDepth::TrueColor).paint(commands);
 }
 
 fn picture(data: Arc<ImageData>, rect: Rect, raster: Raster) -> DrawCommand {

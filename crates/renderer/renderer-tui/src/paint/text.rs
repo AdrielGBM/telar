@@ -29,7 +29,7 @@ impl Painter<'_> {
         // The painter re-wraps rather than trusting what layout measured, at the cell width of the box it actually got. The two can differ by a column when a box was sized in pixels, and a paragraph laid out one column wider than it is drawn loses its last word.
         let mut lines = std::mem::take(&mut self.lines);
         self.metrics
-            .lines(text, cols as f32 * self.cell.width, style, &mut lines);
+            .lines(text, cols as f32 * self.cell.width(), style, &mut lines);
 
         let mut resolved = SpanCursor::new(spans, style);
         for (i, line) in lines.iter().enumerate() {

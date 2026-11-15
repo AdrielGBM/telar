@@ -1226,7 +1226,7 @@ fn swatch_picture() -> std::sync::Arc<telar::ImageData> {
     let pixels = (0..16 * 8)
         .flat_map(|i: u32| [(i * 2) as u8, 90, 160, 255])
         .collect();
-    std::sync::Arc::new(telar::ImageData::new(pixels, 16, 8))
+    std::sync::Arc::new(telar::ImageData::new(pixels, 16, 8).expect("the pixels fill the image"))
 }
 
 /// A link inside the application and one out of it, a picture and one that only decorates, a text area with its count, and a search field holding a query.

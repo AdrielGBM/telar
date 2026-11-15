@@ -55,8 +55,8 @@ impl TuiRenderer {
 
     /// The grid a surface of `width`×`height` logical pixels is worth.
     fn grid(&self, width: u32, height: u32) -> (u16, u16) {
-        let cols = (width as f32 / self.config.cell.width).round().max(1.0);
-        let rows = (height as f32 / self.config.cell.height).round().max(1.0);
+        let cols = (width as f32 / self.config.cell.width()).round().max(1.0);
+        let rows = (height as f32 / self.config.cell.height()).round().max(1.0);
         (
             cols.min(u16::MAX as f32) as u16,
             rows.min(u16::MAX as f32) as u16,

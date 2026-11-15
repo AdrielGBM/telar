@@ -38,8 +38,8 @@ mod wire;
 pub use access_audit::{AccessAudit, AccessRule, AccessSeverity, AccessViolation};
 pub use accessibility::{
     AccessAction, AccessNode, ActionSupport, CurrentKind, HasPopup, Live, Modal, NumericValue,
-    Orientation, Positioning, Role, SetPosition, SortDirection, TextSelection, Toggle, ToggleKind,
-    Value,
+    NumericValueError, Orientation, Positioning, Role, SetPosition, SortDirection, TextSelection,
+    Toggle, ToggleKind, Value,
 };
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_base, asset_url, set_asset_base};

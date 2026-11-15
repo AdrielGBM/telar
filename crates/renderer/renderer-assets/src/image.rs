@@ -34,7 +34,7 @@ pub fn bake_image_to_source(bytes: &[u8]) -> Result<String, ImageError> {
     let (rgba, w, h) = decode_rgba8(bytes)?;
     // Bare `ImageData` (not `::renderer_core::ImageData`): the transpiler drops this into code that does `use telar::*`, whose facade re-exports the type unqualified.
     Ok(format!(
-        "ImageData::new({}.to_vec(), {}, {})",
+        "ImageData::new({}.to_vec(), {}, {}).expect(\"a baked picture fills its size\")",
         byte_string_literal(&rgba),
         w,
         h

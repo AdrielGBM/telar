@@ -21,7 +21,7 @@ pub(crate) fn draw_image(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
 ) {
-    let Some(source) = tiny_skia::PixmapRef::from_bytes(data.pixels(), data.width, data.height)
+    let Some(source) = tiny_skia::PixmapRef::from_bytes(data.pixels(), data.width(), data.height())
     else {
         return;
     };
@@ -36,7 +36,7 @@ pub(crate) fn draw_image(
         transform,
         clip,
     };
-    let whole = Rect::new(0.0, 0.0, data.width as f32, data.height as f32);
+    let whole = Rect::new(0.0, 0.0, data.width() as f32, data.height() as f32);
     match fill {
         ImageFill::Stretch => painter.piece(whole, rect),
         ImageFill::Tile { scale } => {
@@ -45,7 +45,7 @@ pub(crate) fn draw_image(
             }
         }
         ImageFill::Slice(slice) => {
-            for piece in slice.pieces((data.width, data.height), rect) {
+            for piece in slice.pieces((data.width(), data.height()), rect) {
                 painter.piece(piece.source, piece.dest);
             }
         }

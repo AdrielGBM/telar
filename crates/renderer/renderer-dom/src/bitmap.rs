@@ -18,9 +18,9 @@ reactive_local::dropless_thread_local! {
 /// The `href` this picture is drawn from, a linked one's address, or `None` for one this backend cannot read — a texture the application owns and fills on the GPU has no pixels on this side to encode.
 pub fn href(data: &ImageData) -> Option<Rc<str>> {
     if let Some(linked) = data.linked_source() {
-        return Some(platform_core::asset_url(&linked.url).into());
+        return Some(platform_core::asset_url(linked.url()).into());
     }
-    if let Some(cached) = CACHE.with(|cache| cache.borrow().get(&data.id).cloned()) {
+    if let Some(cached) = CACHE.with(|cache| cache.borrow().get(&data.id()).cloned()) {
         return Some(cached);
     }
     let url = encode(data)?;
@@ -29,13 +29,13 @@ pub fn href(data: &ImageData) -> Option<Rc<str>> {
         if cache.len() >= LIMIT {
             cache.clear();
         }
-        cache.insert(data.id, url.clone());
+        cache.insert(data.id(), url.clone());
     });
     Some(url)
 }
 
 fn encode(data: &ImageData) -> Option<Rc<str>> {
-    let (width, height) = (data.width, data.height);
+    let (width, height) = (data.width(), data.height());
     let pixels = data.pixels();
     if width == 0 || height == 0 || pixels.len() < width as usize * height as usize * 4 {
         return None;

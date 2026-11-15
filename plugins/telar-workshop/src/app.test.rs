@@ -160,7 +160,7 @@ fn each_splitter_is_named_and_reports_the_room_its_pane_has() {
         .and_then(telar::Value::reading)
         .expect("the sidebar's splitter carries its width");
     assert_eq!(
-        (sidebar.now, sidebar.min, sidebar.max),
+        (sidebar.now(), sidebar.min(), sidebar.max()),
         (
             f64::from(SIDEBAR_DEFAULT_WIDTH),
             f64::from(SIDEBAR_MIN_WIDTH),
@@ -172,13 +172,13 @@ fn each_splitter_is_named_and_reports_the_room_its_pane_has() {
         .as_ref()
         .and_then(telar::Value::reading)
         .expect("the panels' splitter carries their size");
-    assert_eq!(panels.now, f64::from(PANEL_DEFAULT_SIZE));
-    assert_eq!(panels.min, f64::from(PANEL_MIN_SIZE));
+    assert_eq!(panels.now(), f64::from(PANEL_DEFAULT_SIZE));
+    assert_eq!(panels.min(), f64::from(PANEL_MIN_SIZE));
     let shared = splitter(&runtime, &tree, "Resize the sidebar").rect.height;
     assert!(
-        (panels.max - f64::from(shared * PANEL_MAX_FRACTION)).abs() < 0.5,
+        (panels.max() - f64::from(shared * PANEL_MAX_FRACTION)).abs() < 0.5,
         "{} is not {PANEL_MAX_FRACTION} of {shared}",
-        panels.max
+        panels.max()
     );
 }
 
@@ -200,7 +200,7 @@ fn collapsed_panes_keep_their_sizes_for_when_they_open() {
         .as_ref()
         .and_then(telar::Value::reading)
         .unwrap()
-        .now;
+        .now();
     assert!(
         folded > 0.0 && folded < f64::from(crate::panels::HEADER_HEIGHT) + 4.0,
         "folded down to the strip of tabs: {folded}"

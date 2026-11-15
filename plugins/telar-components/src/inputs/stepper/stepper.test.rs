@@ -209,8 +209,7 @@ fn a_range_whose_start_lies_past_its_end_or_a_step_that_moves_nothing_is_refused
 
 #[test]
 fn the_buttons_take_the_colour_given_even_a_transparent_one_and_the_accent_when_none_is() {
-    let fill =
-        |tree: &telar::ComponentList| buttons(tree)[0].fill.map(|paint| paint.solid_color());
+    let fill = |tree: &telar::ComponentList| buttons(tree)[0].fill.map(|paint| paint.solid_color());
     let tree = mounted(StepperProps::props().color(Color::TRANSPARENT).build());
     assert_eq!(fill(&tree), Some(Color::TRANSPARENT));
     drop(tree);
@@ -272,11 +271,10 @@ fn a_reader_sets_the_stepper_to_the_nearest_step() {
             .build(),
     );
     let to = |now: f64| {
-        AccessAction::SetValue(telar::Value::from(telar::NumericValue {
-            now,
-            min: 1.0,
-            max: 9.0,
-        }))
+        AccessAction::SetValue(telar::Value::from(
+            telar::NumericValue::new(f64::NEG_INFINITY..=f64::INFINITY, now)
+                .expect("a finite reading"),
+        ))
     };
     assert!(telar::focus::perform(id, to(5.8)));
     assert_eq!(value.peek(), 5.0, "rounded to the steps counted from 1");
@@ -304,7 +302,9 @@ fn the_arrow_keys_step_the_focused_stepper_and_a_reader_hears_its_value() {
         .find(|node| node.role == Role::SpinButton)
         .expect("the stepper is a spin button");
     assert_eq!(
-        spin.value.and_then(|value| value.reading()).map(|r| r.now),
+        spin.value
+            .and_then(|value| value.reading())
+            .map(|r| r.now()),
         Some(3.0)
     );
 }

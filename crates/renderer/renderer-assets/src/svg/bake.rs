@@ -65,7 +65,8 @@ fn rasterize(
     let render_ts = resvg::tiny_skia::Transform::from_scale(pw as f32 / vb_w, ph as f32 / vb_h);
     resvg::render(tree, render_ts, &mut pixmap.as_mut());
     let pixels = pixmap.take();
-    let image = ImageData::from_premultiplied(pixels, pw, ph);
+    let image =
+        ImageData::from_premultiplied(pixels, pw, ph).map_err(|e| SvgError(e.to_string()))?;
     Ok((image, (pw as f32, ph as f32)))
 }
 
@@ -92,11 +93,11 @@ fn serialize(size: (f32, f32), baked: &BakedSvg) -> String {
             s
         }
         BakedSvg::Raster { image, raster_size } => format!(
-            "SvgData::from_baked_raster({}, ImageData::from_premultiplied({}.to_vec(), {}, {}), {})",
+            "SvgData::from_baked_raster({}, ImageData::from_premultiplied({}.to_vec(), {}, {}).expect(\"a baked raster fills its size\"), {})",
             ser_size(size),
             byte_string_literal(image.pixels()),
-            image.width,
-            image.height,
+            image.width(),
+            image.height(),
             ser_size(*raster_size),
         ),
     }

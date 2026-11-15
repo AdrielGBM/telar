@@ -53,7 +53,7 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 fill,
             } => {
                 2u8.hash(h);
-                data.id.hash(h);
+                data.id().hash(h);
                 rect.x.to_bits().hash(h);
                 rect.y.to_bits().hash(h);
                 rect.width.to_bits().hash(h);

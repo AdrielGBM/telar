@@ -165,7 +165,7 @@ impl Painter<'_> {
         }
         // The pill test, as every rasteriser asks it: a radius of half the shorter side is a circle. Asking it of the cell instead made a checkbox's small corner rounding read as round, so a checkbox and a radio drew the same glyph.
         let shorter =
-            (cells.cols() as f32 * self.cell.width).min(cells.rows() as f32 * self.cell.height);
+            (cells.cols() as f32 * self.cell.width()).min(cells.rows() as f32 * self.cell.height());
         let round = style.radius.top_left * self.scale() * 2.0 >= shorter;
         let glyph = if round { '\u{25cb}' } else { '\u{25a1}' };
         // Always the outline, never a filled variant: the fill was already laid into this cell's background by `rect`, so "on" reads the way it does on every other backend — by the colour behind the mark — and a fill that merely gives the control a surface is not mistaken for one that means checked.
@@ -190,7 +190,7 @@ impl Painter<'_> {
     ) {
         // A border's weight is categorical here: a hairline and a two-pixel rule are both one cell of line, so the only distinction a terminal can carry is light versus heavy.
         let thickest = widths.iter().copied().fold(0.0f32, f32::max) * self.scale();
-        let chars = if thickest >= self.cell.width * 0.5 {
+        let chars = if thickest >= self.cell.width() * 0.5 {
             &HEAVY
         } else if radius.is_zero() {
             &LIGHT

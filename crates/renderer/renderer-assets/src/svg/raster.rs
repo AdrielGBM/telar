@@ -47,7 +47,8 @@ pub(super) fn raster_fallback(
         apply_tint_premultiplied(&mut pixels, tint);
     }
     // resvg's Pixmap is already premultiplied RGBA8; use the constructor that skips premultiplication.
-    let data = ImageData::from_premultiplied(pixels, pw, ph);
+    let data =
+        ImageData::from_premultiplied(pixels, pw, ph).expect("a pixmap holds its own pixels");
     vec![DrawCommand::Image {
         data: Arc::new(data),
         rect: Rect::new(offset_x, offset_y, fitted_w, fitted_h),

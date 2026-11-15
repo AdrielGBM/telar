@@ -74,6 +74,13 @@ impl ResizeEdge {
         self != Self::End
     }
 
+    fn along(self, size: Size) -> f32 {
+        match self {
+            Self::Bottom => size.height,
+            _ => size.width,
+        }
+    }
+
     fn orientation(self) -> Option<Orientation> {
         match self {
             Self::End => Some(Orientation::Vertical),
@@ -267,17 +274,15 @@ impl Target {
         ));
     }
 
-    fn value(&self, edge: ResizeEdge) -> NumericValue {
-        let (now, bound) = (self.size.get(), self.bound());
-        let (now, min, max) = match edge {
-            ResizeEdge::Bottom => (now.height, self.min.height, bound.height),
-            _ => (now.width, self.min.width, bound.width),
-        };
-        NumericValue {
-            now: now as f64,
-            min: min as f64,
-            max: max as f64,
-        }
+    fn value(&self, edge: ResizeEdge) -> Option<NumericValue> {
+        let now = edge.along(self.size.get());
+        let (min, max) = (edge.along(self.min), edge.along(self.bound()));
+        // A size set from outside, or a bound that shrank before the next request, leaves the box outside the range a drag keeps to, and the reading still has to say how big it is.
+        NumericValue::new(
+            f64::from(min.min(now))..=f64::from(max.max(now)),
+            f64::from(now),
+        )
+        .ok()
     }
 
     fn dragged(&self, edge: ResizeEdge, from: Size, (dx, dy): (f32, f32)) -> Size {
@@ -313,7 +318,7 @@ impl Target {
             (ResizeEdge::Bottom, NamedKey::ArrowUp) => Some(along(now.height - step)),
             (_, NamedKey::Home) => Some(along(f32::NEG_INFINITY)),
             (_, NamedKey::End) => {
-                let bound = self.value(edge).max as f32;
+                let bound = edge.along(self.bound());
                 bound.is_finite().then(|| along(bound))
             }
             _ => None,
@@ -567,13 +572,13 @@ fn build_handle(
         })
         .valued(move || valued.value(edge))
         .stepped(move |direction| {
-            let before = stepping.value(edge).now;
+            let before = edge.along(stepping.size.get());
             let steps = match direction {
                 telar::focus::Step::Increment => 1.0,
                 telar::focus::Step::Decrement => -1.0,
             };
             stepping.request(stepping.stepped(edge, steps));
-            stepping.value(edge).now != before
+            edge.along(stepping.size.get()) != before
         })
         .on_focused_key(move |key: &Key| -> bool {
             let Key::Named(named) = key else {

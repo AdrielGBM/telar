@@ -54,7 +54,7 @@ impl Split {
             .iter()
             .find(|e| e.role == Role::Splitter)
             .and_then(|e| e.value.as_ref().and_then(telar::Value::reading))
-            .map_or(f32::NAN, |value| value.now as f32)
+            .map_or(f32::NAN, |value| value.now() as f32)
     }
 
     fn bar_centre(&self) -> (f64, f64) {
@@ -343,8 +343,15 @@ fn the_splitter_reports_its_value_and_orientation() {
         .iter()
         .find(|e| e.role == Role::Splitter)
         .expect("the splitter is exposed");
-    let value = splitter.value.as_ref().and_then(telar::Value::reading).expect("it carries a value");
-    assert_eq!((value.now, value.min, value.max), (200.0, 100.0, 400.0));
+    let value = splitter
+        .value
+        .as_ref()
+        .and_then(telar::Value::reading)
+        .expect("it carries a value");
+    assert_eq!(
+        (value.now(), value.min(), value.max()),
+        (200.0, 100.0, 400.0)
+    );
     assert_eq!(splitter.orientation, Some(Orientation::Vertical));
     drop(split);
 }
@@ -562,7 +569,7 @@ fn divided_by_the_thin_bar_alone(direction: SplitDirection) {
         .iter()
         .find(|e| e.role == Role::Splitter)
         .and_then(|e| e.value.as_ref().and_then(telar::Value::reading))
-        .map(|value| value.max as f32);
+        .map(|value| value.max() as f32);
     assert_eq!(
         range,
         Some(direction.main(split.root.get()) - bar_thickness()),

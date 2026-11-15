@@ -478,13 +478,13 @@ impl Play {
     pub fn expect_value(&mut self, query: Query, value: f64) -> PlayResult {
         let outcome = self.find(&query).and_then(|node| match &node.value {
             Some(Value::Number { reading, .. })
-                if (reading.now - value).abs() <= VALUE_TOLERANCE =>
+                if (reading.now() - value).abs() <= VALUE_TOLERANCE =>
             {
                 Ok(())
             }
             Some(Value::Number { reading, .. }) => Err(PlayError::new(format!(
                 "expected {query} to read {value}, but it reads {}",
-                reading.now
+                reading.now()
             ))),
             Some(Value::Text(text)) => Err(PlayError::new(format!(
                 "expected {query} to read {value}, but it reads the text {text:?}"

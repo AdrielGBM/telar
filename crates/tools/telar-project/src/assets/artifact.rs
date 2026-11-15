@@ -23,12 +23,11 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever `.telar/assets.rs`'s generated source changes shape in a way older `telar`/`telar-macros`
-/// can't read (e.g. the `static`'s wrapper type, or how an entry's initializer is called), as (at 6) every
-/// `static` becoming a `released_static!` read with `get`, so a host that unloads a hot-reloaded guest frees
-/// what it baked. This is mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal
+/// can't read (e.g. the `static`'s wrapper type, or how an entry's initializer is called), as (at 7) a baked
+/// picture's initializer unwrapping the constructor that checks its pixels fill it. This is mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal
 /// on its own, without even looking at `telar_version`, because a shape it can't parse makes that second
 /// comparison moot. Compared against an index's own [`AssetIndex::format`] by [`check_artifact`].
-pub const ASSET_ARTIFACT_FORMAT: u32 = 6;
+pub const ASSET_ARTIFACT_FORMAT: u32 = 7;
 
 /// The module every baked `static` is wired under once a macro declares `#[path = "…/assets.rs"] pub mod
 /// __rsx_assets;`, mirroring [`crate::I18N_MODULE`]. Unused by this module itself — the generated source

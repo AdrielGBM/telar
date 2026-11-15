@@ -71,7 +71,7 @@ impl ImageSource {
     fn key(&self) -> (u8, u64) {
         match self {
             Self::Loading => (0, 0),
-            Self::Ready(data) => (1, data.id),
+            Self::Ready(data) => (1, data.id()),
             Self::Failed => (2, 0),
         }
     }

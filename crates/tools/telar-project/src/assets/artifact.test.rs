@@ -15,7 +15,8 @@ fn image_asset(path: &str, content: &[u8]) -> BakedAsset {
         kind: "image".to_string(),
         path: path.to_string(),
         content: content.to_vec(),
-        init_expr: "ImageData::new(vec![0; 4], 1, 1)".to_string(),
+        init_expr: "ImageData::new(vec![0; 4], 1, 1).expect(\"a baked picture fills its size\")"
+            .to_string(),
         monochrome: false,
     }
 }

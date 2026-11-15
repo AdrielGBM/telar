@@ -13,23 +13,25 @@ fn border_on(style: LayoutStyle, surface: Size) -> (f32, f32) {
     )
 }
 
-const CELL: LayoutGrid = LayoutGrid { x: 8.0, y: 16.0 };
+fn cell() -> LayoutGrid {
+    LayoutGrid::new(8.0, 16.0).expect("a positive, finite step")
+}
 
 /// The whole of the rule: a stroke needs one cell per side, and padding already supplies cells. Only the shortfall is reserved, so a roomy box does not pay twice for its own frame.
 #[test]
 fn a_border_reserves_only_what_the_padding_does_not_give() {
     assert_eq!(
-        border_of(LayoutStyle::new().bordered_on(CELL)),
+        border_of(LayoutStyle::new().bordered_on(cell())),
         (8.0, 16.0),
         "an unpadded box needs the whole cell"
     );
     assert_eq!(
-        border_of(LayoutStyle::new().padding_all(16.0).bordered_on(CELL)),
+        border_of(LayoutStyle::new().padding_all(16.0).bordered_on(cell())),
         (0.0, 0.0),
         "a box padded a cell already has room for its frame"
     );
     assert_eq!(
-        border_of(LayoutStyle::new().padding_all(32.0).bordered_on(CELL)),
+        border_of(LayoutStyle::new().padding_all(32.0).bordered_on(cell())),
         (0.0, 0.0),
         "and so does a roomier one"
     );
@@ -46,7 +48,7 @@ fn a_unit_grid_reserves_nothing() {
 fn a_surface_fraction_of_padding_counts_once_it_has_resolved() {
     let style = LayoutStyle::new()
         .padding_all(SizeDimension::SurfaceWidth(0.02))
-        .bordered_on(CELL);
+        .bordered_on(cell());
     assert_eq!(
         border_on(style.clone(), Size::new(800.0, 400.0)),
         (0.0, 0.0),
@@ -63,7 +65,7 @@ fn a_surface_fraction_of_padding_counts_once_it_has_resolved() {
 #[test]
 fn logical_padding_counts_whichever_side_it_lands_on() {
     let style = LayoutStyle::new()
-        .bordered_on(CELL)
+        .bordered_on(cell())
         .padding_start(8.0)
         .padding_vertical(16.0);
     let rtl = style.resolve(Direction::Rtl, Size::ZERO);

@@ -192,9 +192,9 @@ pub use platform_core::{
     Chord, ChordError, ConsumedKeys, Cursor, DragActions, DragData, DragIcon, DragOffer,
     DragOutcome, DropAction, DropAnswer, DroppedData, Event, FocusBoundary, FullscreenMode,
     HasPopup, Key, KeyboardConvention, MimeType, MimeTypeError, NamedKey, NumericValue,
-    Orientation, OutgoingDrag, Representation, ResizeEdge, ScrollDelta, SortDirection, TAP_SLOP,
-    Toggle, Value, WindowCommand, WindowConfig, WindowPosition, keyboard_convention,
-    push_window_command, set_keyboard_convention, take_window_commands,
+    NumericValueError, Orientation, OutgoingDrag, Representation, ResizeEdge, ScrollDelta,
+    SortDirection, TAP_SLOP, Toggle, Value, WindowCommand, WindowConfig, WindowPosition,
+    keyboard_convention, push_window_command, set_keyboard_convention, take_window_commands,
 };
 // The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]
@@ -231,16 +231,16 @@ pub use renderer_core::{
     BlendMode, Border, BorderKind, BorderRadius, Clamp, Color, Dash, Declared, DecorationLength,
     DecorationLine, DecorationMetric, DrawCommand, DrawState, FillRule, FitWidth, FontFamily,
     FontFeatures, FontFit, FontStyle, FontTag, FontVariations, ForcedColors, Gradient,
-    GradientKind, GradientStop, GradientStops, ImageData, ImageFill, ImageSlice, LayerMask,
-    LineCap, LineHeight, LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle,
-    RendererError, Role, Scale, Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextCase,
-    TextDecoration, TextLength, TextShadow, TextStyle, TextWrap, fitted_font_size,
+    GradientKind, GradientStop, GradientStops, ImageData, ImageDataError, ImageFill, ImageSlice,
+    LayerMask, LineCap, LineHeight, LineJoin, Paint, PathData, PathStyle, PathVerb, Raster,
+    RectStyle, RendererError, Role, Scale, Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign,
+    TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap, fitted_font_size,
     for_each_with_matrix, hash_draw_commands, measure_ink_bounds, measure_text,
     text_metrics_generation, transform_clip_rect,
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]
-pub use geometry_core::{LayoutGrid, layout_grid, set_layout_grid};
+pub use geometry_core::{InvalidStep, LayoutGrid, layout_grid, set_layout_grid};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     DebugSettings, FontAsset, FontAxis, FontConfig, FontSource, FontWeight, RenderBackend,

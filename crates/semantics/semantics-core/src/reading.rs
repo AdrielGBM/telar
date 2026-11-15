@@ -1,17 +1,75 @@
+use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 /// A numeric control's reading: where it is now, and the range that makes that number mean something.
 ///
+/// The range runs forwards and `now` lies inside it, none of the three a NaN; a bound may be infinite, for a control with no end on that side.
+///
 /// Compared and hashed by the bits of its numbers, so a box carrying one can still be part of a [`Semantics`](crate::Semantics) that is compared and hashed as a whole.
 #[derive(Debug, Clone, Copy)]
 pub struct NumericValue {
-    pub now: f64,
-    pub min: f64,
-    pub max: f64,
+    now: f64,
+    min: f64,
+    max: f64,
 }
 
+/// Why three numbers are not a [`NumericValue`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NumericValueError {
+    /// The range ends before it starts, or a bound is NaN.
+    Range { min: f64, max: f64 },
+    /// `now` lies outside the range, or is NaN.
+    Outside { now: f64, min: f64, max: f64 },
+}
+
+impl fmt::Display for NumericValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Range { min, max } => {
+                write!(
+                    f,
+                    "a reading's range starts at {min}, past its end at {max}"
+                )
+            }
+            Self::Outside { now, min, max } => {
+                write!(
+                    f,
+                    "a reading of {now} lies outside its range {min} to {max}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for NumericValueError {}
+
 impl NumericValue {
+    /// The reading `now` within `range`, refusing a range that runs backwards and a `now` outside it.
+    pub fn new(range: RangeInclusive<f64>, now: f64) -> Result<Self, NumericValueError> {
+        let (min, max) = range.into_inner();
+        if min.is_nan() || max.is_nan() || min > max {
+            return Err(NumericValueError::Range { min, max });
+        }
+        if !(min..=max).contains(&now) {
+            return Err(NumericValueError::Outside { now, min, max });
+        }
+        Ok(Self { now, min, max })
+    }
+
+    pub fn now(self) -> f64 {
+        self.now
+    }
+
+    pub fn min(self) -> f64 {
+        self.min
+    }
+
+    pub fn max(self) -> f64 {
+        self.max
+    }
+
     fn bits(&self) -> [u64; 3] {
         [self.now.to_bits(), self.min.to_bits(), self.max.to_bits()]
     }
@@ -111,3 +169,7 @@ impl SortDirection {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "reading.test.rs"]
+mod tests;

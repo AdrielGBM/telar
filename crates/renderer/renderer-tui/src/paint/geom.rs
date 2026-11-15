@@ -120,8 +120,8 @@ pub fn mapped(paint: &Paint, matrix: [f32; 6]) -> Paint {
 /// The centre of a cell, in logical units — where a paint is sampled for it.
 pub fn cell_center(col: i32, row: i32, cell: CellSize) -> Point {
     Point::new(
-        (col as f32 + 0.5) * cell.width,
-        (row as f32 + 0.5) * cell.height,
+        (col as f32 + 0.5) * cell.width(),
+        (row as f32 + 0.5) * cell.height(),
     )
 }
 

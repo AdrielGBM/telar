@@ -24,46 +24,77 @@ enum ImageSource {
 /// The page fetches it and a canvas loads it; only the intrinsic size travels with the app, which is what layout needs before a byte has arrived.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Linked {
-    /// The address of the picture at its full size, relative to the page.
-    pub url: std::sync::Arc<str>,
-    /// Smaller copies of the same picture, as `(width in pixels, address)`, narrowest first: what a document offers as `srcset` so a small box does not download a large picture.
-    pub variants: std::sync::Arc<[(u32, std::sync::Arc<str>)]>,
+    url: std::sync::Arc<str>,
+    variants: std::sync::Arc<[(u32, std::sync::Arc<str>)]>,
 }
+
+impl Linked {
+    /// `url` with its `variants`, refused unless the variants run narrowest first.
+    pub(crate) fn ordered(
+        url: std::sync::Arc<str>,
+        variants: std::sync::Arc<[(u32, std::sync::Arc<str>)]>,
+    ) -> Option<Self> {
+        variants
+            .is_sorted_by_key(|(width, _)| *width)
+            .then_some(Self { url, variants })
+    }
+
+    /// The address of the picture at its full size, relative to the page.
+    pub fn url(&self) -> &std::sync::Arc<str> {
+        &self.url
+    }
+
+    /// Smaller copies of the same picture, as `(width in pixels, address)`, narrowest first: what a document offers as `srcset` so a small box does not download a large picture.
+    pub fn variants(&self) -> &[(u32, std::sync::Arc<str>)] {
+        &self.variants
+    }
+}
+
+/// Bytes that are not the RGBA8 pixels of the image they were handed in for: `width * height * 4` of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImageDataError {
+    pub width: u32,
+    pub height: u32,
+    pub bytes: usize,
+}
+
+impl std::fmt::Display for ImageDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} bytes are not the RGBA8 pixels of a {}x{} image",
+            self.bytes, self.width, self.height
+        )
+    }
+}
+
+impl std::error::Error for ImageDataError {}
 
 #[derive(Debug, Clone)]
 /// A bitmap in premultiplied RGBA, addressed by the content hash of its pixels and dimensions.
 pub struct ImageData {
-    /// Content address: equal pixels at equal dimensions give equal ids, whoever built them and whenever.
-    ///
-    /// The renderers key their texture caches on this and nothing else, so the id has to identify the *image*. A per-construction counter identified the allocation instead: a caller that rebuilt the same image each frame — which is what building an `ImageData` inside a widget body does — minted a fresh key every time, and every entry behind it became unreachable weight the cache could only shed by hitting its byte budget.
-    ///
-    /// An external texture cannot be hashed, so its owner supplies the id and carries the same duty: keep it stable while the texture is, and change it when the texture object is replaced.
-    pub id: u64,
+    id: u64,
     source: ImageSource,
-    pub width: u32,
-    pub height: u32,
+    width: u32,
+    height: u32,
 }
 
 impl ImageData {
-    pub fn new(pixels: Vec<u8>, width: u32, height: u32) -> Self {
-        assert_eq!(
-            pixels.len(),
-            (width * height * 4) as usize,
-            "pixels must be RGBA8: width * height * 4 bytes"
-        );
-        let mut pixels = pixels;
+    /// Builds from straight-alpha RGBA8 `pixels`, refusing a buffer that is not `width * height * 4` bytes.
+    pub fn new(mut pixels: Vec<u8>, width: u32, height: u32) -> Result<Self, ImageDataError> {
+        check_fills(&pixels, width, height)?;
         premultiply_rgba(&mut pixels);
-        Self::addressed(pixels, width, height)
+        Ok(Self::addressed(pixels, width, height))
     }
 
     /// Builds from bytes that are ALREADY premultiplied (e.g. a resvg `Pixmap`), skipping the premultiply step `new()` performs.
-    pub fn from_premultiplied(pixels: Vec<u8>, width: u32, height: u32) -> Self {
-        assert_eq!(
-            pixels.len(),
-            (width * height * 4) as usize,
-            "pixels must be RGBA8: width * height * 4 bytes"
-        );
-        Self::addressed(pixels, width, height)
+    pub fn from_premultiplied(
+        pixels: Vec<u8>,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, ImageDataError> {
+        check_fills(&pixels, width, height)?;
+        Ok(Self::addressed(pixels, width, height))
     }
 
     /// Refers to a texture the application owns and keeps filling, rather than pixels Telar uploads.
@@ -83,21 +114,48 @@ impl ImageData {
         }
     }
 
-    /// A picture at `url`, `width`×`height` pixels, with `variants` smaller copies of it: see [`Linked`]. Addressed by its URL, which names the content: the build names each file by its hash.
+    /// A picture at `url`, `width`×`height` pixels, with `variants` smaller copies of it in any order: see [`Linked`]. Addressed by its URL, which names the content: the build names each file by its hash.
     pub fn linked(url: &str, width: u32, height: u32, variants: &[(u32, &str)]) -> Self {
+        let mut variants: Vec<(u32, std::sync::Arc<str>)> = variants
+            .iter()
+            .map(|(width, url)| (*width, std::sync::Arc::from(*url)))
+            .collect();
+        variants.sort_by_key(|(width, _)| *width);
+        Self::from_linked(
+            Linked {
+                url: url.into(),
+                variants: variants.into(),
+            },
+            width,
+            height,
+        )
+    }
+
+    pub(crate) fn from_linked(linked: Linked, width: u32, height: u32) -> Self {
         let seed = ((width as u64) << 32) | height as u64;
         Self {
-            id: xxh3_64_with_seed(url.as_bytes(), seed),
-            source: ImageSource::Linked(std::sync::Arc::new(Linked {
-                url: url.into(),
-                variants: variants
-                    .iter()
-                    .map(|(width, url)| (*width, std::sync::Arc::from(*url)))
-                    .collect(),
-            })),
+            id: xxh3_64_with_seed(linked.url.as_bytes(), seed),
+            source: ImageSource::Linked(std::sync::Arc::new(linked)),
             width,
             height,
         }
+    }
+
+    /// Content address: equal pixels at equal dimensions give equal ids, whoever built them and whenever.
+    ///
+    /// The renderers key their texture caches on this and nothing else, so the id has to identify the *image*. A per-construction counter identified the allocation instead: a caller that rebuilt the same image each frame — which is what building an `ImageData` inside a widget body does — minted a fresh key every time, and every entry behind it became unreachable weight the cache could only shed by hitting its byte budget.
+    ///
+    /// An external texture cannot be hashed, so its owner supplies the id and carries the same duty: keep it stable while the texture is, and change it when the texture object is replaced.
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
     }
 
     pub(crate) fn without_pixels(id: u64, width: u32, height: u32) -> Self {
@@ -143,6 +201,20 @@ impl ImageData {
             width,
             height,
         }
+    }
+}
+
+fn check_fills(pixels: &[u8], width: u32, height: u32) -> Result<(), ImageDataError> {
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|area| area.checked_mul(4));
+    match expected == Some(pixels.len()) {
+        true => Ok(()),
+        false => Err(ImageDataError {
+            width,
+            height,
+            bytes: pixels.len(),
+        }),
     }
 }
 

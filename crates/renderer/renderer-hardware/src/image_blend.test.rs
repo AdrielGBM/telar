@@ -84,11 +84,10 @@ fn cpu(width: u32, height: u32, commands: &[DrawCommand]) -> Frame {
 }
 
 fn picture(pixels: &[[u8; 4]], width: u32, height: u32) -> Arc<ImageData> {
-    Arc::new(ImageData::from_premultiplied(
-        pixels.concat(),
-        width,
-        height,
-    ))
+    Arc::new(
+        ImageData::from_premultiplied(pixels.concat(), width, height)
+            .expect("the pixels fill the picture"),
+    )
 }
 
 fn image(data: Arc<ImageData>, rect: Rect, fill: ImageFill) -> DrawCommand {

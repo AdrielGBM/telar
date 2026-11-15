@@ -32,7 +32,7 @@ impl CapBandCache {
             0.0
         };
         // Snapped vertically only, to the rows of the layout grid (pixels, or a terminal's cells), since a glyph drawn half a row down is resampled across two rows and goes soft while horizontal subpixel placement keeps letter spacing even; clamped so the nudge never moves the line box, descenders included, out of the box.
-        let row = geometry_core::layout_grid().y;
+        let row = geometry_core::layout_grid().y();
         let slack = (height - block).max(0.0);
         let centred = (slack / 2.0 + nudge).clamp(0.0, slack) / row;
         // A half, give or take the noise of the sums before it, snaps toward the top, so an odd spare row goes below the band where descenders hang rather than above the capitals.

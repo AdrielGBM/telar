@@ -1254,7 +1254,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         ImageFill::Tile { .. } => Wrap::Repeat,
                         ImageFill::Stretch | ImageFill::Slice(_) => Wrap::Clamp,
                     };
-                    let key = (data.id, *raster, wrap);
+                    let key = (data.id(), *raster, wrap);
                     if self.batch_image_start.is_none() || self.batch_image_key != Some(key) {
                         self.flush_image();
                         self.batch_image_key = Some(key);
@@ -1277,8 +1277,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             }
                         }
                         ImageFill::Slice(slice) => {
-                            let (w, h) = (data.width as f32, data.height as f32);
-                            for piece in slice.pieces((data.width, data.height), *rect) {
+                            let (w, h) = (data.width() as f32, data.height() as f32);
+                            for piece in slice.pieces((data.width(), data.height()), *rect) {
                                 let s = piece.source;
                                 let uv = Rect::new(s.x / w, s.y / h, s.width / w, s.height / h);
                                 self.push_image_piece(piece.dest, uv);

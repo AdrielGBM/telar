@@ -138,11 +138,7 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
     )?
     .styled_by(track_box)
     .role(Role::ProgressBar)
-    .valued(move || NumericValue {
-        now: f64::from(filled()) * 100.0,
-        min: 0.0,
-        max: 100.0,
-    });
+    .valued(move || NumericValue::new(0.0..=100.0, f64::from(filled()) * 100.0).ok());
     Ok(box_item(track))
 }
 

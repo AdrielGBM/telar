@@ -190,7 +190,9 @@ fn a_slice_insets_change_dirties_only_the_picture() {
 #[test]
 fn an_unchanged_fill_and_blend_dirty_nothing() {
     let tiled = DrawCommand::Image {
-        data: Arc::new(ImageData::new(vec![0u8; 4 * 4 * 4], 4, 4)),
+        data: Arc::new(
+            ImageData::new(vec![0u8; 4 * 4 * 4], 4, 4).expect("the pixels fill the image"),
+        ),
         rect: Rect::new(10.0, 10.0, 40.0, 40.0),
         raster: Raster::Pixel,
         fill: ImageFill::Tile { scale: 2.0 },
@@ -1139,7 +1141,9 @@ fn a_background_whose_pixels_depend_on_where_they_land_repaints_the_clip_whole()
         ),
         (
             DrawCommand::Image {
-                data: Arc::new(ImageData::new(vec![0u8; 4 * 4 * 4], 4, 4)),
+                data: Arc::new(
+                    ImageData::new(vec![0u8; 4 * 4 * 4], 4, 4).expect("the pixels fill the image"),
+                ),
                 rect: Rect::new(50.0, 50.0, 300.0, 300.0),
                 raster: Raster::Smooth,
                 fill: ImageFill::Stretch,

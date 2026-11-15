@@ -37,7 +37,8 @@ async fn arrived(pictures: &Pictures, url: &str) {
 
 #[wasm_bindgen_test]
 fn a_frame_without_linked_pictures_is_passed_through() {
-    let commands = frame(ImageData::new(vec![0, 0, 0, 255], 1, 1));
+    let commands =
+        frame(ImageData::new(vec![0, 0, 0, 255], 1, 1).expect("the pixels fill the image"));
     assert!(matches!(
         Pictures::default().resolve(&commands),
         Cow::Borrowed(_)
@@ -58,7 +59,7 @@ async fn a_linked_picture_is_left_out_until_it_arrives_then_drawn_from_its_pixel
     let [DrawCommand::Image { data, .. }] = &resolved[..] else {
         panic!("the picture is drawn once it arrives: {resolved:?}");
     };
-    assert_eq!((data.width, data.height), (1, 1));
+    assert_eq!((data.width(), data.height()), (1, 1));
     let [red, green, blue, alpha] = data.pixels() else {
         panic!("one pixel: {:?}", data.pixels());
     };

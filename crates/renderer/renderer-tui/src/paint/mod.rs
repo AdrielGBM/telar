@@ -131,7 +131,7 @@ impl<'a> Painter<'a> {
     ///
     /// The translation only. Scale and rotation change what a cell *means* rather than where it is, and a terminal has no answer for either that rounding could improve.
     fn grid_matrix(&self) -> [f32; 6] {
-        let grid = geometry_core::LayoutGrid::new(self.cell.width, self.cell.height);
+        let grid = geometry_core::LayoutGrid::from(self.cell);
         let m = self.state.cumulative_matrix;
         [
             m[0],

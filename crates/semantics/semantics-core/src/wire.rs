@@ -93,7 +93,25 @@ wire_enum!(CurrentKind {
     Item = 2
 });
 
-wire_struct!(NumericValue { now, min, max });
+impl Shaped for NumericValue {
+    const SHAPE: u64 = {
+        let hash = fold_shape(fold(shape_named("NumericValue"), b"now"), f64::SHAPE);
+        let hash = fold_shape(fold(hash, b"min"), f64::SHAPE);
+        fold_shape(fold(hash, b"max"), f64::SHAPE)
+    };
+}
+
+impl Wire for NumericValue {
+    fn put(&self, w: &mut Writer) {
+        self.now().put(w);
+        self.min().put(w);
+        self.max().put(w);
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        let (now, min, max) = (f64::take(r)?, f64::take(r)?, f64::take(r)?);
+        NumericValue::new(min..=max, now).map_err(|_| WireError::Invalid("numeric reading"))
+    }
+}
 wire_enum!(Value {
     Number { reading, text } = 0,
     Text(text) = 1,

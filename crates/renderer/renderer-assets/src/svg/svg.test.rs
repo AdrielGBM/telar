@@ -145,8 +145,8 @@ fn filter_falls_back_to_raster_image() {
     );
     match &cmds[0] {
         DrawCommand::Image { data, .. } => {
-            assert_eq!(data.width, 20);
-            assert_eq!(data.height, 20);
+            assert_eq!(data.width(), 20);
+            assert_eq!(data.height(), 20);
         }
         other => panic!("expected Image fallback, got {other:?}"),
     }
@@ -469,7 +469,7 @@ mod equivalence {
             panic!("expected an Image fallback, got {command:?}");
         };
         let pixels = data.pixels();
-        let centre = (data.height / 2 * data.width + data.width / 2) as usize;
+        let centre = (data.height() / 2 * data.width() + data.width() / 2) as usize;
         let px: [u8; 4] = pixels[centre * 4..centre * 4 + 4].try_into().unwrap();
         let near = |a: u8, b: f32| (a as f32 - b).abs() <= 1.0;
         match tint {

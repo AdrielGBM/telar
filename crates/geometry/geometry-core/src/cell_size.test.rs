@@ -11,5 +11,5 @@ fn edges_round_so_neighbours_touch() {
 #[test]
 fn the_default_cell_is_twice_as_tall_as_wide() {
     let cell = CellSize::default();
-    assert_eq!(cell.height, 2.0 * cell.width);
+    assert_eq!(cell.height(), 2.0 * cell.width());
 }

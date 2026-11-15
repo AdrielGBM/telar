@@ -25,7 +25,7 @@ impl Painter<'_> {
             return;
         }
         let cells = self.cells_of(rect);
-        let (cw, ch) = (self.cell.width, self.cell.height);
+        let (cw, ch) = (self.cell.width(), self.cell.height());
         for row in cells.row0..cells.row1 {
             for col in cells.col0..cells.col1 {
                 let x = (col as f32 * cw, (col + 1) as f32 * cw);
@@ -75,14 +75,14 @@ struct Source<'a> {
 impl<'a> Source<'a> {
     /// `None` for a picture this backend cannot read: a texture the application owns and keeps on a GPU, or a buffer too short for the dimensions it claims.
     fn of(data: &'a ImageData) -> Option<Self> {
-        let needed = (data.width as usize)
-            .checked_mul(data.height as usize)?
+        let needed = (data.width() as usize)
+            .checked_mul(data.height() as usize)?
             .checked_mul(4)?;
         let pixels = data.pixels();
         (needed > 0 && pixels.len() >= needed).then_some(Self {
             pixels,
-            width: data.width,
-            height: data.height,
+            width: data.width(),
+            height: data.height(),
         })
     }
 

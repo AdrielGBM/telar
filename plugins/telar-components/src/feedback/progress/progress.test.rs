@@ -180,8 +180,8 @@ fn a_reader_hears_the_bar_its_name_and_how_far_it_has_filled() {
         .as_ref()
         .and_then(telar::Value::reading)
         .expect("the bar carries a number");
-    assert!((reading.now - 40.0).abs() < 1e-3, "{reading:?}");
-    assert_eq!((reading.min, reading.max), (0.0, 100.0));
+    assert!((reading.now() - 40.0).abs() < 1e-3, "{reading:?}");
+    assert_eq!((reading.min(), reading.max()), (0.0, 100.0));
     assert_eq!(node.id, None, "no keyboard stop");
 }
 

@@ -208,10 +208,12 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     })
     .control(Role::Slider)
     .a11y_label(move || label.get())
-    .valued(move || telar::NumericValue {
-        now: value.get() as f64,
-        min: min as f64,
-        max: max as f64,
+    .valued(move || {
+        telar::NumericValue::new(
+            f64::from(min)..=f64::from(max),
+            f64::from(value.get().clamp(min, max)),
+        )
+        .ok()
     })
     .on_focus({
         let release = release.clone();

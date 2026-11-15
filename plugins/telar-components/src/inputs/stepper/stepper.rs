@@ -135,15 +135,11 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     )?
     .styled_by(move || row_box(size))
     .control(Role::SpinButton)
-    .valued(move || NumericValue {
-        now: value.get() as f64,
-        min: min as f64,
-        max: max as f64,
-    })
+    .valued(move || NumericValue::new(min as f64..=max as f64, value.get() as f64).ok())
     .stepped(step_by.clone())
     .assigned(move |assigned| {
         assigned.reading().is_some_and(|reading| {
-            let steps = ((reading.now as f32 - origin) / step).round();
+            let steps = ((reading.now() as f32 - origin) / step).round();
             commit(origin + steps * step);
             true
         })

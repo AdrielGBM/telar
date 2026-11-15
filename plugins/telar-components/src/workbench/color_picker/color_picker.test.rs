@@ -229,7 +229,7 @@ fn each_axis_of_the_area_steps_on_its_own() {
             .node(Role::Slider, name)
             .and_then(|node| node.value)
             .and_then(|value| value.reading())
-            .map(|reading| reading.now)
+            .map(|reading| reading.now())
             .unwrap_or_else(|| panic!("a slider named `{name}` with a value"))
     };
     let id = |mounted: &Mounted, name: &str| {

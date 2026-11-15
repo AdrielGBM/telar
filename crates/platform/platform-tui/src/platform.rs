@@ -97,10 +97,15 @@ impl Platform for TuiPlatform {
             ))
         })?;
         let (cols, rows) = term::size();
-        let window = TuiWindow::new(cols, rows, self.config.cell.width, self.config.cell.height);
+        let window = TuiWindow::new(
+            cols,
+            rows,
+            self.config.cell.width(),
+            self.config.cell.height(),
+        );
         let mut mapper = Mapper::new(
-            self.config.cell.width,
-            self.config.cell.height,
+            self.config.cell.width(),
+            self.config.cell.height(),
             mode.reports_key_releases(),
         );
 
@@ -181,11 +186,11 @@ impl TuiPlatform {
     }
 
     fn cell_width(&self) -> f32 {
-        self.config.cell.width
+        self.config.cell.width()
     }
 
     fn cell_height(&self) -> f32 {
-        self.config.cell.height
+        self.config.cell.height()
     }
 }
 

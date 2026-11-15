@@ -174,11 +174,9 @@ fn a_reader_steps_the_slider_and_sets_it_to_a_step() {
     assert!((value.peek() - 0.5).abs() < 1e-4, "{}", value.peek());
 
     let to = |now: f64| {
-        AccessAction::SetValue(telar::Value::from(telar::NumericValue {
-            now,
-            min: 0.0,
-            max: 1.0,
-        }))
+        AccessAction::SetValue(telar::Value::from(
+            telar::NumericValue::new(0.0..=1.0, now).expect("a reading within its range"),
+        ))
     };
     assert!(telar::focus::perform(id, to(0.83)));
     assert!((value.peek() - 0.8).abs() < 1e-4, "{}", value.peek());

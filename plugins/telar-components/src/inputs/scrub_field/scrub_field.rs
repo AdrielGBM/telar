@@ -214,10 +214,12 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
     )?
     .styled_by(move || handle_box(size))
     .control(Role::SpinButton)
-    .valued(move || telar::NumericValue {
-        now: value.get() as f64,
-        min: min as f64,
-        max: max as f64,
+    .valued(move || {
+        telar::NumericValue::new(
+            f64::from(min)..=f64::from(max),
+            f64::from(value.get().clamp(min, max)),
+        )
+        .ok()
     })
     .cursor(Cursor::EwResize)
     .drag_threshold(SCRUB_THRESHOLD)

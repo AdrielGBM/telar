@@ -124,7 +124,7 @@ impl PartialEq for DrawCommand {
                     raster: raster2,
                     fill: fill2,
                 },
-            ) => d1.id == d2.id && rect1 == rect2 && raster1 == raster2 && fill1 == fill2,
+            ) => d1.id() == d2.id() && rect1 == rect2 && raster1 == raster2 && fill1 == fill2,
             (
                 DrawCommand::Line {
                     p1: p1a,

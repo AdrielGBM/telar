@@ -237,10 +237,12 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     })
     .valued({
         let value = announced_value;
-        move || telar::NumericValue {
-            now: value.get() as f64,
-            min: min as f64,
-            max: max as f64,
+        move || {
+            telar::NumericValue::new(
+                f64::from(min)..=f64::from(max),
+                f64::from(value.get().clamp(min, max)),
+            )
+            .ok()
         }
     })
     .stepped({
@@ -255,7 +257,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move |assigned| {
             assigned
                 .reading()
-                .is_some_and(|reading| commit(snap(reading.now as f32)))
+                .is_some_and(|reading| commit(snap(reading.now() as f32)))
         }
     })
     .on_focused_key({

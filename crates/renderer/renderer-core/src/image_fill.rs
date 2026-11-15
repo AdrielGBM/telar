@@ -86,8 +86,8 @@ pub struct SlicePiece {
 impl ImageFill {
     /// The size one copy of `image` covers under [`ImageFill::Tile`], or `None` when there is nothing to repeat.
     pub fn tile_size(scale: f32, image: &ImageData) -> Option<(f32, f32)> {
-        (scale.is_finite() && scale > 0.0 && image.width > 0 && image.height > 0)
-            .then_some((image.width as f32 * scale, image.height as f32 * scale))
+        (scale.is_finite() && scale > 0.0 && image.width() > 0 && image.height() > 0)
+            .then_some((image.width() as f32 * scale, image.height() as f32 * scale))
     }
 
     /// The same fill with every length it carries in destination units multiplied by `factor`.

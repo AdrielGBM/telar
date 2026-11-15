@@ -12,13 +12,43 @@
 //!
 //! So the grid is declared once by the frontend and honoured where sizes are *authored*, not patched up where they are drawn. A surface that can put an edge anywhere leaves it at [`LayoutGrid::UNIT`], where every operation here is the identity and nothing downstream changes.
 
+use std::fmt;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-/// The smallest step a surface can resolve on each axis, in logical pixels.
+use crate::CellSize;
+
+/// The smallest step a surface can resolve on each axis, in logical pixels: positive and finite on both, since every snap divides by it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LayoutGrid {
+    x: f32,
+    y: f32,
+}
+
+/// A step that is not a positive, finite length on each axis, which a [`LayoutGrid`] and a [`CellSize`] both need.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InvalidStep {
     pub x: f32,
     pub y: f32,
+}
+
+impl fmt::Display for InvalidStep {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "a step needs a positive, finite length on each axis, not {} by {}",
+            self.x, self.y
+        )
+    }
+}
+
+impl std::error::Error for InvalidStep {}
+
+pub(crate) const fn checked_step(x: f32, y: f32) -> Result<(f32, f32), InvalidStep> {
+    if x.is_finite() && x > 0.0 && y.is_finite() && y > 0.0 {
+        Ok((x, y))
+    } else {
+        Err(InvalidStep { x, y })
+    }
 }
 
 impl Default for LayoutGrid {
@@ -27,15 +57,33 @@ impl Default for LayoutGrid {
     }
 }
 
+impl From<CellSize> for LayoutGrid {
+    fn from(cell: CellSize) -> Self {
+        Self {
+            x: cell.width(),
+            y: cell.height(),
+        }
+    }
+}
+
 impl LayoutGrid {
     /// A surface that can put an edge anywhere. Every snap is the identity.
     pub const UNIT: Self = Self { x: 1.0, y: 1.0 };
 
-    pub fn new(x: f32, y: f32) -> Self {
-        Self {
-            x: if x.is_finite() && x > 0.0 { x } else { 1.0 },
-            y: if y.is_finite() && y > 0.0 { y } else { 1.0 },
+    /// A grid of `x` by `y` logical pixels, refusing a step that is not positive and finite.
+    pub const fn new(x: f32, y: f32) -> Result<Self, InvalidStep> {
+        match checked_step(x, y) {
+            Ok((x, y)) => Ok(Self { x, y }),
+            Err(error) => Err(error),
         }
+    }
+
+    pub fn x(self) -> f32 {
+        self.x
+    }
+
+    pub fn y(self) -> f32 {
+        self.y
     }
 
     /// Whether snapping can be skipped entirely.

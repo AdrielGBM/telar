@@ -6,8 +6,8 @@ use geometry_core::Rect;
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
 pub use semantics_core::{
-    CurrentKind, HasPopup, Live, Modal, NumericValue, Orientation, Positioning, Role, SetPosition,
-    SortDirection, Toggle, ToggleKind, Value,
+    CurrentKind, HasPopup, Live, Modal, NumericValue, NumericValueError, Orientation, Positioning,
+    Role, SetPosition, SortDirection, Toggle, ToggleKind, Value,
 };
 
 /// One thing a screen reader can land on.
@@ -259,7 +259,7 @@ fn value_words(value: &Value) -> String {
         Value::Number {
             reading,
             text: None,
-        } => reading.now.to_string(),
+        } => reading.now().to_string(),
         Value::Number {
             text: Some(text), ..
         }

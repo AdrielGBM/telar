@@ -29,7 +29,7 @@ fn boxes_of(tree: &telar::ComponentList) -> Vec<(f32, f32)> {
 fn every_box_keeps_its_height_at_every_scroll_offset() {
     let cell = CellSize::default();
     renderer_core::set_text_metrics(CellMetrics::new(cell));
-    telar::set_layout_grid(telar::LayoutGrid::new(cell.width, cell.height));
+    telar::set_layout_grid(telar::LayoutGrid::from(cell));
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
 
     let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());
@@ -61,7 +61,7 @@ fn every_box_keeps_its_height_at_every_scroll_offset() {
 fn layout_is_told_only_whole_cells() {
     let cell = CellSize::default();
     renderer_core::set_text_metrics(CellMetrics::new(cell));
-    telar::set_layout_grid(telar::LayoutGrid::new(cell.width, cell.height));
+    telar::set_layout_grid(telar::LayoutGrid::from(cell));
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
 
     let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());
@@ -71,9 +71,13 @@ fn layout_is_told_only_whole_cells() {
     });
 
     for (y, h) in boxes_of(&tree) {
-        assert_eq!(h % cell.height, 0.0, "a box {h}px tall is not whole cells");
         assert_eq!(
-            y % cell.height,
+            h % cell.height(),
+            0.0,
+            "a box {h}px tall is not whole cells"
+        );
+        assert_eq!(
+            y % cell.height(),
             0.0,
             "a box at y={y} does not start on a cell"
         );

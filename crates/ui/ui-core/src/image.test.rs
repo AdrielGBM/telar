@@ -8,7 +8,9 @@ use crate::layout_item::LayoutItem;
 #[test]
 fn image_without_size_uses_intrinsic_size() {
     reset_layout_runtime();
-    let data = Arc::new(ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20));
+    let data = Arc::new(
+        ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20).expect("the pixels fill the image"),
+    );
     let image = Image::new(
         LayoutStyle::new(),
         move || Arc::clone(&data),
@@ -37,7 +39,9 @@ fn image_without_size_uses_intrinsic_size() {
 #[test]
 fn a_radius_clips_the_picture_whatever_the_fit() {
     reset_layout_runtime();
-    let data = Arc::new(ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20));
+    let data = Arc::new(
+        ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20).expect("the pixels fill the image"),
+    );
     let image = Image::new(
         LayoutStyle::new().width(40.0).height(20.0),
         move || Arc::clone(&data),
@@ -77,7 +81,9 @@ fn a_radius_clips_the_picture_whatever_the_fit() {
 #[test]
 fn image_single_side_derives_aspect() {
     reset_layout_runtime();
-    let data = Arc::new(ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20));
+    let data = Arc::new(
+        ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20).expect("the pixels fill the image"),
+    );
     let image = Image::new(
         LayoutStyle::new().width(100.0),
         move || Arc::clone(&data),
@@ -116,7 +122,8 @@ fn drawn_fill(node: &RenderNode) -> Option<ImageFill> {
 
 fn picture_with(fit: ObjectFit) -> Image {
     reset_layout_runtime();
-    let data = Arc::new(ImageData::new(vec![0u8; 8 * 8 * 4], 8, 8));
+    let data =
+        Arc::new(ImageData::new(vec![0u8; 8 * 8 * 4], 8, 8).expect("the pixels fill the image"));
     Image::new(
         LayoutStyle::new().width(90.0).height(60.0),
         move || Arc::clone(&data),
@@ -179,7 +186,7 @@ fn hero() -> ImageData {
 #[test]
 fn a_linked_picture_is_shown_by_its_address_in_a_document() {
     let picture = picture_of(ObjectFit::Cover, hero(), true).expect("a picture");
-    assert_eq!(picture.source.url.as_ref(), "images/a.png");
+    assert_eq!(picture.source.url().as_ref(), "images/a.png");
     assert_eq!((picture.width, picture.height), (1200, 600));
     assert_eq!(picture.fit, "cover");
     assert!(picture.priority);
@@ -198,6 +205,6 @@ fn a_fill_css_cannot_name_stays_a_drawing() {
 
 #[test]
 fn baked_pixels_stay_a_drawing() {
-    let pixels = ImageData::new(vec![0; 4], 1, 1);
+    let pixels = ImageData::new(vec![0; 4], 1, 1).expect("the pixels fill the image");
     assert!(picture_of(ObjectFit::Cover, pixels, false).is_none());
 }

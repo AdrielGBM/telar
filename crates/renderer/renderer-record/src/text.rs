@@ -106,8 +106,8 @@ fn write_command(out: &mut String, command: &DrawCommand) {
                 out,
                 "image {} source={}x{}",
                 rect(*r),
-                data.width,
-                data.height
+                data.width(),
+                data.height()
             );
             match fill {
                 ImageFill::Stretch => {}

@@ -243,11 +243,7 @@ fn increment_on_a_slider_raises_its_value_by_one_step() {
     .unwrap()
     .control(Role::Slider)
     .a11y_label(|| "Volume")
-    .valued(move || NumericValue {
-        now: level.get(),
-        min: 0.0,
-        max: 1.0,
-    })
+    .valued(move || NumericValue::new(0.0..=1.0, level.get()).ok())
     .stepped({
         let stepped = stepped.clone();
         move |step| {
@@ -268,7 +264,7 @@ fn increment_on_a_slider_raises_its_value_by_one_step() {
             .as_ref()
             .and_then(Value::reading)
             .expect("a slider carries a number")
-            .now
+            .now()
     };
     assert!(the(&read(&tree), Role::Slider).supports.step);
 
@@ -297,11 +293,7 @@ fn bar(filled: RwSignal<f64>) -> StyledContainer {
     )
     .unwrap()
     .role(Role::ProgressBar)
-    .valued(move || NumericValue {
-        now: filled.get(),
-        min: 0.0,
-        max: 100.0,
-    })
+    .valued(move || NumericValue::new(0.0..=100.0, filled.get()).ok())
 }
 
 /// A box the keyboard never stops at still says what it shows, named or not, on a target that builds a document and on one that does not: how far a bar has filled, re-read as it fills.
@@ -321,7 +313,11 @@ fn a_box_that_is_no_control_carries_its_value() {
                 .into_iter()
                 .filter(|node| node.role == Role::ProgressBar)
                 .map(|node| {
-                    let now = node.value.as_ref().and_then(Value::reading).map(|r| r.now);
+                    let now = node
+                        .value
+                        .as_ref()
+                        .and_then(Value::reading)
+                        .map(|r| r.now());
                     (node.name, now, node.id.is_some())
                 })
                 .collect()

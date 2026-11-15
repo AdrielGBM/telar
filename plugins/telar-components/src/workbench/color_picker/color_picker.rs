@@ -352,10 +352,12 @@ fn axis_control(
         .roving(group, axis.index())
         .a11y_label(move || strings::text(axis.name()))
         .oriented(axis.orientation())
-        .valued(move || NumericValue {
-            now: (f64::from(axis.of(announced.hsv.get())) * 100.0).round(),
-            min: 0.0,
-            max: 100.0,
+        .valued(move || {
+            NumericValue::new(
+                0.0..=100.0,
+                (f64::from(axis.of(announced.hsv.get())) * 100.0).round(),
+            )
+            .ok()
         })
         .stepped(move |direction| {
             let hsv = stepped.hsv.peek();
@@ -655,11 +657,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
     )?
     .control(Role::Slider)
     .a11y_label(move || strings::text(name))
-    .valued(move || NumericValue {
-        now: (f64::from(announced()) * range).round(),
-        min: 0.0,
-        max: range,
-    })
+    .valued(move || NumericValue::new(0.0..=range, (f64::from(announced()) * range).round()).ok())
     .stepped(move |direction| {
         let before = stepped();
         let next = match direction {

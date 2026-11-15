@@ -259,7 +259,7 @@ impl SharedImages {
         filter: renderer_core::Raster,
         wrap: Wrap,
     ) -> Option<wgpu::BindGroup> {
-        let key = (image.id, filter);
+        let key = (image.id(), filter);
         if let Some(handle) = image.external_texture() {
             if let Some(cached) = self.external.get(&key) {
                 return cached.as_ref().map(|groups| groups.get(wrap).clone());
@@ -269,7 +269,7 @@ impl SharedImages {
                 // Built elsewhere and handed to a backend that cannot read it. Drawing nothing is the honest outcome, but doing it quietly is not: the command is well-formed and the region simply stays empty.
                 None => {
                     tracing::warn!(
-                        image_id = image.id,
+                        image_id = image.id(),
                         "external texture handle did not come from `telar::gpu::image`; nothing will be drawn for it"
                     );
                     None
@@ -337,8 +337,8 @@ impl SharedImages {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("telar-image-texture"),
             size: wgpu::Extent3d {
-                width: image.width,
-                height: image.height,
+                width: image.width(),
+                height: image.height(),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -359,12 +359,12 @@ impl SharedImages {
             image.pixels(),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * image.width),
-                rows_per_image: Some(image.height),
+                bytes_per_row: Some(4 * image.width()),
+                rows_per_image: Some(image.height()),
             },
             wgpu::Extent3d {
-                width: image.width,
-                height: image.height,
+                width: image.width(),
+                height: image.height(),
                 depth_or_array_layers: 1,
             },
         );

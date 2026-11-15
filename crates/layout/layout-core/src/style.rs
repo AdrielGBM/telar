@@ -929,10 +929,10 @@ impl LayoutStyle {
                 LengthPercentage::length((step - length_of(padding)).max(0.0))
             };
             style.border = taffy::geometry::Rect {
-                left: short(style.padding.left, grid.x),
-                right: short(style.padding.right, grid.x),
-                top: short(style.padding.top, grid.y),
-                bottom: short(style.padding.bottom, grid.y),
+                left: short(style.padding.left, grid.x()),
+                right: short(style.padding.right, grid.x()),
+                top: short(style.padding.top, grid.y()),
+                bottom: short(style.padding.bottom, grid.y()),
             };
         }
         style

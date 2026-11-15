@@ -29,11 +29,11 @@ fn a_terminal_reserves_one_cell_whatever_the_font_size() {
     let _globals = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
     let cell = CellSize::default();
     renderer_core::set_text_metrics(CellMetrics::new(cell));
-    telar::set_layout_grid(telar::LayoutGrid::new(cell.width, cell.height));
+    telar::set_layout_grid(telar::LayoutGrid::from(cell));
     for size in [11.0f32, 14.0, 32.0] {
         assert_eq!(
             ui_core::single_line_box(size),
-            cell.height,
+            cell.height(),
             "a {size}px line took more than its row"
         );
     }

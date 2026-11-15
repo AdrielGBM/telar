@@ -3,7 +3,7 @@ use super::*;
 /// The property the whole module exists for: on a grid, a snapped height covers the same number of steps wherever it is put.
 #[test]
 fn a_snapped_size_covers_the_same_steps_at_every_position() {
-    let g = LayoutGrid::new(8.0, 16.0);
+    let g = LayoutGrid::new(8.0, 16.0).expect("a positive, finite step");
     let h = g.snap_size_y(37.0);
     let rows = |y: f32| ((y + h) / 16.0).round() - (y / 16.0).round();
     let at_zero = rows(0.0);
@@ -38,7 +38,7 @@ fn a_unit_grid_changes_nothing() {
 /// A box the author asked for may not be quantised out of existence, but air may.
 #[test]
 fn a_size_keeps_a_step_where_space_rounds_away() {
-    let g = LayoutGrid::new(8.0, 16.0);
+    let g = LayoutGrid::new(8.0, 16.0).expect("a positive, finite step");
     assert_eq!(g.snap_size_y(2.0), 16.0);
     assert_eq!(g.snap_space_y(2.0), 0.0);
     // And a size stays at the nearest step rather than following the space bias.
@@ -50,7 +50,7 @@ fn a_size_keeps_a_step_where_space_rounds_away() {
 /// The threshold, at the two values that define it.
 #[test]
 fn space_is_kept_only_when_it_nearly_fills_a_step() {
-    let g = LayoutGrid::new(8.0, 16.0);
+    let g = LayoutGrid::new(8.0, 16.0).expect("a positive, finite step");
     assert_eq!(g.snap_space_y(11.0), 0.0, "11 of 16 is not worth a row");
     assert_eq!(g.snap_space_y(12.0), 16.0, "12 of 16 is");
     // A button's padding under the sandbox's own theme: half a row of air, which the terminal spends nothing on.
@@ -64,7 +64,7 @@ fn space_is_kept_only_when_it_nearly_fills_a_step() {
 /// The property the rounding mode exists for: a whole number of steps stays a whole number of steps, including across the origin — which is where a box scrolled above the viewport sits.
 #[test]
 fn a_whole_size_survives_being_translated_past_zero() {
-    let g = LayoutGrid::new(8.0, 16.0);
+    let g = LayoutGrid::new(8.0, 16.0).expect("a positive, finite step");
     let h = 896.0;
     let rows = |y: f32| ((g.snap_pos_y(y + h) - g.snap_pos_y(y)) / 16.0) as i32;
     for step in -40..40 {
@@ -81,7 +81,34 @@ fn a_whole_size_survives_being_translated_past_zero() {
 /// A negative coordinate is what a scrolled-away origin looks like.
 #[test]
 fn a_position_snaps_in_both_directions() {
-    let g = LayoutGrid::new(8.0, 16.0);
+    let g = LayoutGrid::new(8.0, 16.0).expect("a positive, finite step");
     assert_eq!(g.snap_pos_y(-20.0), -16.0);
     assert_eq!(g.snap_pos_y(20.0), 16.0);
+}
+
+#[test]
+fn a_step_that_is_not_positive_and_finite_is_refused() {
+    for (x, y) in [
+        (0.0, 16.0),
+        (8.0, -1.0),
+        (f32::NAN, 16.0),
+        (8.0, f32::INFINITY),
+    ] {
+        assert!(
+            LayoutGrid::new(x, y).is_err(),
+            "a {x} by {y} grid was accepted"
+        );
+        assert!(
+            CellSize::new(x, y).is_err(),
+            "a {x} by {y} cell was accepted"
+        );
+    }
+}
+
+#[test]
+fn a_grid_built_from_a_cell_steps_by_that_cell() {
+    let cell = CellSize::new(6.0, 12.0).expect("a positive, finite cell");
+    let grid = LayoutGrid::from(cell);
+    assert_eq!((grid.x(), grid.y()), (6.0, 12.0));
+    assert_eq!(grid.snap_size_y(20.0), 24.0);
 }

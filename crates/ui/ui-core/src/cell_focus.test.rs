@@ -19,7 +19,7 @@ fn fills(tree: &ComponentList) -> Vec<Option<Paint>> {
 /// A link whose words fill its box has no cell left for a frame, since the words are drawn over it. The ring's tint under those words is what shows the keyboard is there.
 #[test]
 fn a_box_with_no_room_for_a_frame_is_tinted_while_it_has_focus() {
-    set_layout_grid(LayoutGrid::new(8.0, 16.0));
+    set_layout_grid(LayoutGrid::new(8.0, 16.0).expect("a positive, finite step"));
     telar_ui_core::set_surface_size(Size::new(160.0, 48.0));
     let link = StyledContainer::new(
         LayoutStyle::new().width(48.0).height(16.0),
@@ -55,7 +55,7 @@ fn borders(tree: &ComponentList) -> Vec<Paint> {
 /// A cell is one colour behind one glyph, so a terminal cannot set a hairline beside the band: it draws one frame, in whichever of the two stands out from the fill the frame's glyphs sit on.
 #[test]
 fn a_control_filled_with_the_accent_is_framed_in_the_ring_s_inner_colour() {
-    set_layout_grid(LayoutGrid::new(8.0, 16.0));
+    set_layout_grid(LayoutGrid::new(8.0, 16.0).expect("a positive, finite step"));
     telar_ui_core::set_surface_size(Size::new(160.0, 48.0));
     let ring = telar_ui_core::focus_ring();
     let accent = ring.band;

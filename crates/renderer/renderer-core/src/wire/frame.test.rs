@@ -140,11 +140,7 @@ fn semantics() -> Semantics {
         anchor: Some("top".into()),
         current: true,
         value: Some(Value::Number {
-            reading: NumericValue {
-                now: 0.3,
-                min: -1.0,
-                max: 2.5,
-            },
+            reading: NumericValue::new(-1.0..=2.5, 0.3).expect("a reading within its range"),
             text: Some("a third".into()),
         }),
         orientation: Some(Orientation::Vertical),
@@ -175,10 +171,11 @@ fn element() -> Element {
         Rect::new(1.0, 2.0, 300.0, 40.0),
     )
     .showing(Picture {
-        source: Linked {
-            url: "/hero.avif".into(),
-            variants: vec![(320, Arc::from("/hero-320.avif"))].into(),
-        },
+        source: Linked::ordered(
+            "/hero.avif".into(),
+            vec![(320, Arc::from("/hero-320.avif"))].into(),
+        )
+        .expect("one copy is in order"),
         width: 1280,
         height: 720,
         fit: "cover",
@@ -199,11 +196,14 @@ fn element() -> Element {
 }
 
 fn pixels() -> Arc<ImageData> {
-    Arc::new(ImageData::new(
-        (0..4 * 3 * 4u8).map(|byte| byte.wrapping_mul(7)).collect(),
-        4,
-        3,
-    ))
+    Arc::new(
+        ImageData::new(
+            (0..4 * 3 * 4u8).map(|byte| byte.wrapping_mul(7)).collect(),
+            4,
+            3,
+        )
+        .expect("the pixels fill the image"),
+    )
 }
 
 fn every_command() -> Vec<DrawCommand> {
@@ -376,16 +376,39 @@ fn images_keep_their_id_size_and_pixels() {
     };
     assert_eq!(bitmap.pixels(), pixels().pixels());
     assert_eq!(
-        (bitmap.id, bitmap.width, bitmap.height),
-        (pixels().id, 4, 3)
+        (bitmap.id(), bitmap.width(), bitmap.height()),
+        (pixels().id(), 4, 3)
     );
-    assert_eq!(linked.linked_source().unwrap().url.as_ref(), "/a.png");
-    assert_eq!(linked.linked_source().unwrap().variants.len(), 2);
+    assert_eq!(linked.linked_source().unwrap().url().as_ref(), "/a.png");
+    assert_eq!(linked.linked_source().unwrap().variants().len(), 2);
     assert_eq!(
-        (external.id, external.width, external.height),
+        (external.id(), external.width(), external.height()),
         (0xfeed, 16, 9)
     );
     assert!(external.pixels().is_empty());
+}
+
+#[test]
+fn a_linked_picture_lists_its_copies_narrowest_first_whatever_order_it_was_given() {
+    let image = ImageData::linked("/a.png", 64, 32, &[(32, "/a-32.png"), (16, "/a-16.png")]);
+    let widths: Vec<u32> = image
+        .linked_source()
+        .expect("a linked picture")
+        .variants()
+        .iter()
+        .map(|(width, _)| *width)
+        .collect();
+    assert_eq!(widths, [16, 32]);
+}
+
+#[test]
+fn copies_of_a_picture_out_of_order_do_not_decode() {
+    let copies: Vec<(u32, Arc<str>)> = vec![(32, "/a-32.png".into()), (16, "/a-16.png".into())];
+    let bytes = wire_core::encode(&(Arc::<str>::from("/a.png"), copies));
+    assert_eq!(
+        wire_core::decode::<Linked>(&bytes),
+        Err(WireError::Invalid("picture copies out of order"))
+    );
 }
 
 #[test]
@@ -516,7 +539,7 @@ fn pixels_the_guest_does_not_lend_are_an_error() {
     let bytes = FrameEncoder::new().encode(&commands).to_vec();
     assert_eq!(
         FrameDecoder::new().decode(&bytes, &mut Vec::new(), |_| None),
-        Err(FrameError::MissingImage(pixels().id))
+        Err(FrameError::MissingImage(pixels().id()))
     );
 }
 

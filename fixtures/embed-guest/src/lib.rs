@@ -76,7 +76,9 @@ impl Fixture {
             title: args.join(" "),
             moves: signal(0),
             content: None,
-            picture: Arc::new(ImageData::new(vec![0x80; 4 * 4 * 4], 4, 4)),
+            picture: Arc::new(
+                ImageData::new(vec![0x80; 4 * 4 * 4], 4, 4).expect("the pixels fill the image"),
+            ),
             _timer: None,
         }
     }

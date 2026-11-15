@@ -30,7 +30,7 @@ fn a_format_behind_a_feature_decodes_once_that_feature_is_on() {
     let decoded = ImageDecoder
         .decode(&bytes)
         .expect("gif decodes with `image-gif` on");
-    assert_eq!((decoded.width, decoded.height), (2, 3));
+    assert_eq!((decoded.width(), decoded.height()), (2, 3));
 }
 
 fn png(width: u32, height: u32) -> Vec<u8> {
@@ -53,5 +53,5 @@ fn a_bitmap_wider_than_the_limit_is_rejected_before_it_is_allocated() {
 #[test]
 fn a_bitmap_at_the_limit_still_decodes() {
     let decoded = ImageDecoder.decode(&png(MAX_DIMENSION, 1)).unwrap();
-    assert_eq!((decoded.width, decoded.height), (MAX_DIMENSION, 1));
+    assert_eq!((decoded.width(), decoded.height()), (MAX_DIMENSION, 1));
 }

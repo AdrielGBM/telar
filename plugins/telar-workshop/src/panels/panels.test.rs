@@ -379,7 +379,7 @@ fn a_ranged_number_is_a_slider() {
             .value
             .as_ref()
             .and_then(telar::Value::reading)
-            .map(|value| (value.min, value.max)),
+            .map(|value| (value.min(), value.max())),
         Some((0.0, 10.0))
     );
     workshop.click(Role::Slider, "count");

@@ -182,8 +182,8 @@ fn bench_paint_native(c: &mut Criterion) {
     use_cell_metrics(cell);
     for (cols, rows) in [(80u32, 24u32), (120, 40)] {
         let (w, h) = (
-            (cols as f32 * cell.width) as u32,
-            (rows as f32 * cell.height) as u32,
+            (cols as f32 * cell.width()) as u32,
+            (rows as f32 * cell.height()) as u32,
         );
         let cmds = commands_at(w, h);
         let sink = CountingSink::default();
@@ -257,8 +257,8 @@ fn report(cmds: &[DrawCommand]) {
 
     let cell = CellSize::default();
     let (cols, rows) = (
-        (WINDOW_W as f32 / cell.width) as usize,
-        (WINDOW_H as f32 / cell.height) as usize,
+        (WINDOW_W as f32 / cell.width()) as usize,
+        (WINDOW_H as f32 / cell.height()) as usize,
     );
     eprintln!("\n--- one sandbox frame at {WINDOW_W}x{WINDOW_H} logical ---");
     eprintln!("  draw commands:       {}", cmds.len());

@@ -38,7 +38,7 @@ impl Default for TuiOptions {
 pub(super) fn install_cell_measure(cell: CellSize) {
     renderer_core::set_text_metrics(CellMetrics::new(cell));
     // Declared before the tree exists, because it is honoured where sizes are authored: a `LayoutStyle` built under the default unit grid would keep the fractional padding this is here to remove. See `geometry_core::grid`.
-    geometry_core::set_layout_grid(geometry_core::LayoutGrid::new(cell.width, cell.height));
+    geometry_core::set_layout_grid(geometry_core::LayoutGrid::from(cell));
 }
 
 /// Runs an app in the terminal it was launched from.

@@ -23,7 +23,7 @@ fn sunset() -> Arc<ImageData> {
             pixels.extend([r as u8, g as u8, b as u8, 255]);
         }
     }
-    Arc::new(ImageData::new(pixels, width, height))
+    Arc::new(ImageData::new(pixels, width, height).expect("the loop writes every pixel"))
 }
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {

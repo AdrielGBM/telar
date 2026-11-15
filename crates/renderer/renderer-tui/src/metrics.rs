@@ -50,8 +50,8 @@ impl CellMetrics {
         self.lines(text, max_width, style, &mut lines);
         let cols = lines.iter().map(|l| l.cols).max().unwrap_or(0);
         (
-            cols as f32 * self.cell.width,
-            lines.len() as f32 * self.cell.height,
+            cols as f32 * self.cell.width(),
+            lines.len() as f32 * self.cell.height(),
         )
     }
 
@@ -61,7 +61,7 @@ impl CellMetrics {
         if lines.iter().all(|line| line.cols == 0) {
             return (0.0, 0.0);
         }
-        (0.0, lines.len() as f32 * self.cell.height)
+        (0.0, lines.len() as f32 * self.cell.height())
     }
 }
 
@@ -81,7 +81,7 @@ impl TextMetrics for CellMetrics {
         let cased = case_text(text, spans, style);
         let text = cased.text.as_ref();
         let widest = text.split_whitespace().map(line_cols).max().unwrap_or(0);
-        self.extent(text, f32::from(widest) * self.cell.width, style)
+        self.extent(text, f32::from(widest) * self.cell.width(), style)
     }
 
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
@@ -89,7 +89,7 @@ impl TextMetrics for CellMetrics {
     }
 
     fn line_height(&self, _font_size: f32) -> f32 {
-        self.cell.height
+        self.cell.height()
     }
 
     /// The painter's own wrap and alignment, without the clamp: a terminal draws the cells in the order they are written, each grapheme cluster as many columns wide as it takes.
@@ -116,7 +116,7 @@ impl TextMetrics for CellMetrics {
             });
         }
         let cols = self.cell.cols_in(max_width);
-        let cell = self.cell.width;
+        let cell = self.cell.width();
         lines
             .into_iter()
             .map(|line| {
@@ -144,9 +144,9 @@ impl TextMetrics for CellMetrics {
         let text = cased.text.as_ref();
         let mut lines = Vec::new();
         self.lines(text, max_width, style, &mut lines);
-        let line = lines.get((y / self.cell.height) as usize)?;
+        let line = lines.get((y / self.cell.height()) as usize)?;
         let start = align_cols(style.text_align, self.cell.cols_in(max_width), line.cols);
-        let target = (x / self.cell.width) as u16;
+        let target = (x / self.cell.width()) as u16;
         let mut col = start;
         for (offset, grapheme) in text[line.range.clone()].grapheme_indices(true) {
             let width = grapheme_cols(grapheme);

@@ -4,11 +4,10 @@ use telar::{AccessNode, ComponentList, DrawCommand, Role, relayout_if_dirty, sig
 use super::*;
 
 fn pixels(width: u32, height: u32) -> Arc<ImageData> {
-    Arc::new(ImageData::new(
-        vec![200; (width * height * 4) as usize],
-        width,
-        height,
-    ))
+    Arc::new(
+        ImageData::new(vec![200; (width * height * 4) as usize], width, height)
+            .expect("the pixels fill the image"),
+    )
 }
 
 fn mounted(props: ImageProps) -> ComponentList {
