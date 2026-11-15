@@ -12,6 +12,7 @@ element group
           end
           element slider
             rect 288,308 224x8 fill=#616680ff border=2 border-color=#4261edff radius=4
+            rect 290,310 220x4 border=1 border-color=#ffffffff radius=2
             element group
               matrix 0.45,0,0,1,158.4,0
                 rect 288,308 224x8 fill=#4261edff radius=4

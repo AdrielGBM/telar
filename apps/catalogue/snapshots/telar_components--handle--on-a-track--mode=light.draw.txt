@@ -9,6 +9,7 @@ element group
           element slider
             matrix 1,0,0,1,87.6,6
               rect 280,288 12x12 fill=#4261edff border=2 border-color=#4261edff radius=6
+              rect 282,290 8x8 border=1 border-color=#ffffffff radius=4
             end
           end
         end

@@ -501,6 +501,7 @@ element group
                           element group
                             element separator
                               rect 128,0 8x36 border=2 border-color=#4261edff
+                              rect 130,2 4x32 border=1 border-color=#ffffffff
                             end
                           end
                         end

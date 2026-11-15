@@ -18,13 +18,13 @@ use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::track_layout;
 use crate::focus::{self, FocusId};
+use crate::focus_ring::focus_ring;
 use crate::impl_leaf_widget;
 use crate::input_region::{InputHandle, Placement};
 use crate::kept::kept;
 use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, occlude, offset_pointer, pointer_coords};
-use crate::styled_container::default_focus_ring;
 use crate::surface_context::HomeSurface;
 
 /// How a scroll area's bars are painted, and how wide they are. The default reads the theme's `scrollbar`, `scrollbar_width`, `scrollbar_inset` and `scrollbar_radius` each time the bars are drawn or grabbed; a style given to the area replaces it.
@@ -1376,13 +1376,18 @@ impl Component for LayoutScrollArea {
         let ring = self
             .focus
             .filter(|id| focus::is_focus_visible(*id))
-            .map(|_| {
-                let style = match self.host.as_ref().and_then(|host| host.ring.as_ref()) {
-                    Some(ring) => ring(rect),
-                    None => default_focus_ring(),
-                };
-                RenderNode::rect(rect, style)
-            });
+            .map(
+                |_| match self.host.as_ref().and_then(|host| host.ring.as_ref()) {
+                    Some(ring) => vec![RenderNode::rect(rect, ring(rect))],
+                    None => focus_ring().nodes(
+                        rect,
+                        BorderRadius::zero(),
+                        use_theme_tokens().focus_ring_offset(),
+                    ),
+                },
+            )
+            .into_iter()
+            .flatten();
         RenderNode::element(element, std::iter::once(content).chain(ring))
     }
 

@@ -7,6 +7,7 @@ element group
         element group
           element spinbutton
             rect 359,284 82x32 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+            rect 361,286 78x28 border=1 border-color=#ffffffff radius=8
             element group
               matrix 1,0,0,1,371,284
                 text 0,8 39x16.8 "Width" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en

@@ -25,7 +25,7 @@ pub const REQUIRED: &[&str] = &[
     "highlight_high",
 ];
 
-/// Tokens whose built-in follows from the required ones or is a convention every palette shares, so silence is the right answer rather than a contradiction: the radius and spacing steps and roles move with their base, the focus ring is the primary, a hairline is one pixel and a scrim is half black.
+/// Tokens whose built-in follows from the required ones or is a convention every palette shares, so silence is the right answer rather than a contradiction: the radius and spacing steps and roles move with their base, the focus ring is the primary over a hairline of the surface, a hairline is one pixel and a scrim is half black.
 pub const DERIVED: &[&str] = &[
     "radius_sm",
     "radius_md",
@@ -37,6 +37,7 @@ pub const DERIVED: &[&str] = &[
     "border_width",
     "border_width_strong",
     "focus_ring",
+    "focus_ring_inner",
     "focus_ring_width",
     "focus_ring_offset",
     "scrollbar_width",

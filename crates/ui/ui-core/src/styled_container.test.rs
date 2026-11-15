@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use layout_core::AvailableSpace;
 use platform_core::{PointerButton, PointerSource, WindowCommand};
-use renderer_core::{Color, ShapeStyle};
+use renderer_core::{Border, Color, ShapeStyle};
 use theme_core::{ThemeTokens, set_theme, use_theme};
 
 use super::*;
@@ -2606,10 +2606,14 @@ struct Ring {
 }
 
 const RING: Color = Color::rgba(0.1, 0.8, 0.2, 1.0);
+const RING_INNER: Color = Color::rgba(0.95, 0.9, 0.1, 1.0);
 
 impl ThemeTokens for Ring {
     fn focus_ring(&self) -> Color {
         RING
+    }
+    fn focus_ring_inner(&self) -> Color {
+        RING_INNER
     }
     fn focus_ring_width(&self) -> f32 {
         self.width
@@ -2622,10 +2626,10 @@ impl ThemeTokens for Ring {
     }
 }
 
-fn focused_control() -> (StyledContainer, FocusId) {
+fn framed_box() -> StyledContainer {
     reset_layout_runtime();
     let frame = Border::uniform(Color::BLACK, 1.0);
-    let control = StyledContainer::new(
+    StyledContainer::new(
         LayoutStyle::new().width(100.0).height(40.0),
         move |_r| {
             RectStyle::default()
@@ -2635,28 +2639,72 @@ fn focused_control() -> (StyledContainer, FocusId) {
         vec![],
     )
     .unwrap()
-    .control(focus::Role::Button);
+}
+
+fn laid_out(control: StyledContainer) -> StyledContainer {
     compute_layout(
         control.layout_node(),
         AvailableSpace::Definite(100.0),
         AvailableSpace::Definite(40.0),
     )
     .unwrap();
+    control
+}
+
+fn focused_control() -> (StyledContainer, FocusId) {
+    let control = laid_out(framed_box().control(focus::Role::Button));
     let id = control.focus_id().expect("a control is focusable");
     focus::request(id);
     (control, id)
 }
 
+/// Every rect the box draws behind its content, its own first.
+fn drawn_rects(view: &RenderNode) -> Vec<(Rect, RectStyle)> {
+    let RenderNode::Element { children, .. } = view else {
+        panic!("a box is an element");
+    };
+    let RenderNode::Group { children, .. } = &children[0] else {
+        panic!("its content is a group");
+    };
+    children
+        .iter()
+        .filter_map(|child| match child {
+            RenderNode::Primitive(renderer_core::DrawCommand::Rect { rect, style }) => {
+                Some((*rect, **style))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn strictly_inside(inner: Rect, outer: Rect) -> bool {
+    inner.x > outer.x
+        && inner.y > outer.y
+        && inner.x + inner.width < outer.x + outer.width
+        && inner.y + inner.height < outer.y + outer.height
+}
+
+/// The band alone vanishes on a control filled with the ring's colour, so a hairline in a second colour stands between the band and the fill.
 #[test]
-fn the_default_ring_is_the_theme_s_colour_and_width_on_the_box_s_edge() {
+fn the_default_ring_is_the_theme_s_band_on_the_box_s_edge_over_a_hairline_inside_it() {
     set_theme(Ring {
         width: 3.0,
         offset: 0.0,
     });
     let (control, id) = focused_control();
-    let painted = rect_style(&control.view()).expect("the box paints a rect");
-    assert_eq!(painted.border, Some(Border::uniform(RING, 3.0)));
-    assert_eq!(focus_ring_border(), Border::uniform(RING, 3.0));
+    let rects = drawn_rects(&control.view());
+    assert_eq!(rects[0].1.border, Some(Border::uniform(RING, 3.0)));
+    assert_eq!(rects.len(), 2, "the box and the hairline inside its band");
+    assert!(strictly_inside(rects[1].0, rects[0].0));
+    assert_eq!(rects[1].1.border, Some(Border::uniform(RING_INNER, 1.5)));
+    assert_eq!(
+        focus_ring(),
+        FocusRing {
+            band: RING,
+            hairline: RING_INNER,
+            width: 3.0,
+        }
+    );
     focus::release(id);
 }
 
@@ -2667,27 +2715,47 @@ fn an_offset_ring_keeps_the_box_s_border_and_stands_inside_it() {
         offset: 4.0,
     });
     let (control, id) = focused_control();
-    let view = control.view();
-    let painted = rect_style(&view).expect("the box paints a rect");
-    assert_eq!(painted.border, Some(Border::uniform(Color::BLACK, 1.0)));
-    let RenderNode::Element { children, .. } = &view else {
-        panic!("a box is an element");
+    let rects = drawn_rects(&control.view());
+    assert_eq!(rects[0].1.border, Some(Border::uniform(Color::BLACK, 1.0)));
+    let [(box_rect, _), (band_rect, band), (hairline_rect, hairline)] = rects[..] else {
+        panic!("the box, then the ring's band and hairline as rects of their own: {rects:?}");
     };
-    let RenderNode::Group { children, .. } = &children[0] else {
-        panic!("its content is a group");
-    };
-    let Some(RenderNode::Primitive(renderer_core::DrawCommand::Rect { rect, style, .. })) =
-        children.get(1)
-    else {
-        panic!("the ring is a rect of its own");
-    };
-    assert_eq!(
-        (rect.x, rect.y, rect.width, rect.height),
-        (4.0, 4.0, 92.0, 32.0)
-    );
-    assert_eq!(style.border, Some(Border::uniform(RING, 2.0)));
-    assert_eq!(style.radius, renderer_core::BorderRadius::all(6.0));
+    assert_eq!(band.border, Some(Border::uniform(RING, 2.0)));
+    assert_eq!(hairline.border, Some(Border::uniform(RING_INNER, 1.0)));
+    assert!(strictly_inside(band_rect, box_rect));
+    assert!(strictly_inside(hairline_rect, band_rect));
     focus::release(id);
+}
+
+/// A list's cursor rests on a row that does not hold focus, and is the same ring a focused control wears.
+#[test]
+fn a_keyboard_cursor_draws_the_focus_ring_while_it_answers_one() {
+    set_theme(Ring {
+        width: 2.0,
+        offset: 0.0,
+    });
+    focus::clear();
+    let at_cursor = signal(false);
+    let row = laid_out(framed_box().keyboard_cursor(move || at_cursor.get().then(focus_ring)));
+    assert_eq!(row.focus_id(), None, "the row takes no focus itself");
+    let rects = drawn_rects(&row.view());
+    assert_eq!(rects.len(), 1);
+    assert_eq!(rects[0].1.border, Some(Border::uniform(Color::BLACK, 1.0)));
+
+    at_cursor.set(true);
+    let rects = drawn_rects(&row.view());
+    assert_eq!(rects[0].1.border, Some(Border::uniform(RING, 2.0)));
+    assert_eq!(rects[1].1.border, Some(Border::uniform(RING_INNER, 1.0)));
+
+    let tone = Color::rgba(0.8, 0.1, 0.5, 1.0);
+    let tinted = laid_out(framed_box().keyboard_cursor(move || Some(focus_ring().with_band(tone))));
+    let rects = drawn_rects(&tinted.view());
+    assert_eq!(rects[0].1.border, Some(Border::uniform(tone, 2.0)));
+    assert_eq!(
+        rects[1].1.border,
+        Some(Border::uniform(RING_INNER, 1.0)),
+        "a cursor in a colour of its own keeps the theme's hairline"
+    );
 }
 
 /// A control that runs the same command as a key says so in the form a reader takes, under the keyboard convention in force and re-read as what it reads changes; text that names no chord says nothing.

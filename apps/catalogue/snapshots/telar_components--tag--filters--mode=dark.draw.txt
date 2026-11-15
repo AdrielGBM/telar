@@ -9,6 +9,7 @@ element group
             rect 324,288 71x24 fill=#7394ffff border=1 border-color=#00000000 radius=6
             element button
               rect 324,288 71x24 fill=#00000000 border=2 border-color=#7394ffff radius=6
+              rect 326,290 67x20 border=1 border-color=#1c1f29ff radius=4
               element group
                 element group
                   matrix 1,0,0,1,332,295

@@ -3,7 +3,7 @@
 use geometry_core::{LayoutGrid, Size, set_layout_grid};
 use layout_core::LayoutStyle;
 use platform_core::{Event, Location};
-use renderer_core::{DrawCommand, Paint, RectStyle};
+use renderer_core::{DrawCommand, Paint, RectStyle, ShapeStyle};
 use telar_ui_core::{ComponentList, StyledContainer, WindowRoot, box_item, focus};
 
 fn fills(tree: &ComponentList) -> Vec<Option<Paint>> {
@@ -40,4 +40,38 @@ fn a_box_with_no_room_for_a_frame_is_tinted_while_it_has_focus() {
         fills(&tree).iter().any(Option::is_some),
         "the focused link is tinted"
     );
+}
+
+fn borders(tree: &ComponentList) -> Vec<Paint> {
+    tree.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DrawCommand::Rect { style, .. } => style.border.map(|border| border.paint),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A cell is one colour behind one glyph, so a terminal cannot set a hairline beside the band: it draws one frame, in whichever of the two stands out from the fill the frame's glyphs sit on.
+#[test]
+fn a_control_filled_with_the_accent_is_framed_in_the_ring_s_inner_colour() {
+    set_layout_grid(LayoutGrid::new(8.0, 16.0));
+    telar_ui_core::set_surface_size(Size::new(160.0, 48.0));
+    let ring = telar_ui_core::focus_ring();
+    let accent = ring.band;
+    let filled = StyledContainer::new(
+        LayoutStyle::new().width(64.0).height(48.0),
+        move |_| RectStyle::default().with_fill(accent),
+        vec![],
+    )
+    .unwrap()
+    .control(focus::Role::Button);
+    let mut tree = ComponentList::new(WindowRoot::new(box_item(filled)));
+    tree.on_event(&Event::WindowResized {
+        width: 160,
+        height: 48,
+    });
+
+    focus::focus_next();
+    assert_eq!(borders(&tree), [Paint::Solid(ring.hairline)]);
 }

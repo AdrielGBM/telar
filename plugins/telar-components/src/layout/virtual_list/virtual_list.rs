@@ -14,7 +14,9 @@ use telar::{
 };
 
 use crate::layout::list::list::ListTokens;
-use crate::shared::rows::{BuiltRows, RowPlaces, RowState, counted, cursor_row_paint, with_empty_state};
+use crate::shared::rows::{
+    BuiltRows, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
+};
 use crate::shared::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
 use crate::shared;
 use crate::shared::type_ahead::TypeAhead;
@@ -446,13 +448,12 @@ fn build_row(
     let paint = |hovered: bool| {
         let (list, id, color) = (list.clone(), id.clone(), color.clone());
         move |_r| {
-            cursor_row_paint(
+            row_wash(
                 ListTokens::current().radius(),
                 &color,
                 RowState {
                     selected: list.selection.is_selected(&id),
                     hovered: hovered && !disabled,
-                    cursor: list.shows_cursor(&id),
                 },
             )
         }
@@ -469,6 +470,11 @@ fn build_row(
         let (list, id) = (list.clone(), id.clone());
         move || list.reach(&id)
     };
+    let cursor = {
+        let (list, id, color) = (list.clone(), id.clone(), color.clone());
+        move || list.shows_cursor(&id).then(|| cursor_ring(&color))
+
+    };
     let places = list.places.clone();
     let row_box = move || {
         let size = places.size();
@@ -483,6 +489,7 @@ fn build_row(
     let built = StyledContainer::new(row_box(), paint(false), content)?
         .styled_by(row_box)
         .hover_style(paint(true))
+        .keyboard_cursor(cursor)
         .disabled(move || disabled)
         .presented(Role::Option, reach)
         .positioned(place)

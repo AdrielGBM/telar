@@ -31,6 +31,7 @@ element group
               rect 367,284 32x32
               element button
                 rect 367,284 32x32 fill=#ffffff0d border=2 border-color=#7394ffff radius=10
+                rect 369,286 28x28 border=1 border-color=#1c1f29ff radius=8
                 element group
                   rect 375,292 16x16
                   element group

@@ -12,6 +12,7 @@ element group
           end
           element group
             rect 250,279 300x65 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+            rect 252,281 296x61 border=1 border-color=#ffffffff radius=8
             element scrollarea
               clip 262,287 276x51
                 matrix 1,0,0,1,262,287

@@ -26,6 +26,7 @@ element group
     rect 120,96 560x172 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
     element group
       rect 128,104 544x32 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+      rect 130,106 540x28 border=1 border-color=#ffffffff radius=8
       element group
         matrix 1,0,0,1,140,104
           clip 0,0 520x32

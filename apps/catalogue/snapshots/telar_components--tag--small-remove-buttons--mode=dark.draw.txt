@@ -20,6 +20,7 @@ element group
                   rect 379,288 24x24
                   element button
                     rect 379,288 24x24 border=2 border-color=#7394ffff radius=10
+                    rect 381,290 20x20 border=1 border-color=#1c1f29ff radius=8
                     element group
                       rect 385,294 12x12
                       element group

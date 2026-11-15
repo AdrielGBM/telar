@@ -8,7 +8,7 @@ use telar::testing::{CanvasTextMetrics, DomRenderer};
 use telar::{
     Accessible, Children, Color, ComponentList, Container, Event, LayoutError, LayoutItem,
     LayoutStyle, Location, Reactive, RectStyle, RenderBackend, Role, Size, StyledContainer, Text,
-    TextRun, TextStyle, WindowRoot, box_item, external, focus,
+    TextRun, TextStyle, Variant, WindowRoot, box_item, external, focus,
 };
 use telar_components::{
     ButtonProps, CheckboxProps, ImageProps, ImageSource, ItemProps, LinkProps, ScrubFieldProps,
@@ -130,6 +130,13 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
             .on_press(std::rc::Rc::new(|| {}))
             .build(),
     )?;
+    let cancel = button(
+        ButtonProps::props()
+            .label("Cancel")
+            .variant(Variant::Outline)
+            .on_press(std::rc::Rc::new(|| {}))
+            .build(),
+    )?;
     let source = link("Source code", || external("https://example.com/telar"))?;
     let about = link("About", || Location::root().segment("about"))?;
     let name = text_field(
@@ -177,6 +184,7 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut controls = vec![
         box_item(heading),
         save,
+        cancel,
         source,
         about,
         name,
@@ -386,16 +394,6 @@ async fn assert_clean(host: &web_sys::HtmlElement, what: &str) {
     assert!(found.is_empty(), "axe found violations {what}:\n\n{found}");
 }
 
-fn box_shadow_of(element: &web_sys::Element) -> String {
-    web_sys::window()
-        .expect("a window")
-        .get_computed_style(element)
-        .expect("a computed style")
-        .expect("styles for an element in the document")
-        .get_property_value("box-shadow")
-        .expect("a box shadow")
-}
-
 fn element_of(node: telar::NodeId) -> web_sys::Element {
     let id = u64::from(node);
     document()
@@ -422,21 +420,120 @@ async fn focus_on_a_field_or_a_button_adds_no_violations() {
     focus::clear();
 }
 
-/// The ring a keyboard user follows is Telar's own, painted as the box's shadow, and the frame around a field wears it for the line inside it.
-#[wasm_bindgen_test]
-fn the_keyboard_s_box_wears_telar_s_ring() {
-    let button = focusable(Role::Button);
-    focus::request(button.id);
-    render();
-    assert_ne!(box_shadow_of(&element_of(button.node)), "none");
+fn computed(element: &web_sys::Element, property: &str) -> String {
+    web_sys::window()
+        .expect("a window")
+        .get_computed_style(element)
+        .expect("a computed style")
+        .expect("styles for an element in the document")
+        .get_property_value(property)
+        .expect("a computed property")
+}
 
+/// Every `rgb(…)`/`rgba(…)` colour a computed value names, in order.
+fn colours_in(css: &str) -> Vec<Color> {
+    css.match_indices("rgb")
+        .filter_map(|(at, _)| {
+            let open = at + css[at..].find('(')?;
+            let close = open + css[open..].find(')')?;
+            let channels: Vec<f32> = css[open + 1..close]
+                .split([',', ' ', '/'])
+                .filter(|part| !part.is_empty())
+                .map(|part| part.parse().ok())
+                .collect::<Option<_>>()?;
+            match channels[..] {
+                [r, g, b] => Some(Color::rgba(r / 255.0, g / 255.0, b / 255.0, 1.0)),
+                [r, g, b, a] => Some(Color::rgba(r / 255.0, g / 255.0, b / 255.0, a)),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+fn in_scheme(scheme: telar::ColorScheme) {
+    let id = format!("{scheme:?}");
+    telar::register_mode(id.clone(), || {});
+    telar::set_mode_scheme(id.clone(), scheme);
+    telar::set_mode(id);
+}
+
+/// The control's fill as it shows on `surface`, and the colours of every band of the ring the document paints on it and inside it.
+fn ring_as_painted(element: &web_sys::Element, surface: Color) -> (Color, Vec<Color>) {
+    let fill = colours_in(&computed(element, "background-color"))
+        .first()
+        .map_or(surface, |fill| surface.mix(fill.with_alpha(1.0), fill.a));
+    let inside = element.query_selector_all("*").expect("a valid selector");
+    let bands = std::iter::once(element.clone())
+        .chain((0..inside.length()).filter_map(|i| inside.item(i)?.dyn_into().ok()))
+        .flat_map(|painted| colours_in(&computed(&painted, "box-shadow")))
+        .collect();
+    (fill, bands)
+}
+
+/// The ring a keyboard user follows is Telar's own, its two bands painted as inset shadows, and one of them stands out from whatever the ring lands on: the accent filling a button and the selected tab, and the surface around an outline button, in either scheme.
+#[wasm_bindgen_test]
+fn the_keyboard_s_ring_stands_out_from_the_control_and_the_surface() {
+    let named = |role: Role, text: &str| {
+        render();
+        focus::exposed()
+            .into_iter()
+            .find(|exposed| {
+                exposed.role == role
+                    && document()
+                        .query_selector(&format!(
+                            "[data-telar-focus=\"{}\"]",
+                            u64::from(exposed.node)
+                        ))
+                        .ok()
+                        .flatten()
+                        .and_then(|element| element.text_content())
+                        .as_deref()
+                        == Some(text)
+            })
+            .unwrap_or_else(|| panic!("a {role:?} named {text} is on the page"))
+    };
+    for scheme in [telar::ColorScheme::Light, telar::ColorScheme::Dark] {
+        in_scheme(scheme);
+        let surface = telar::use_theme_tokens().surface();
+        for (what, control) in [
+            ("solid button", named(Role::Button, "Save")),
+            ("outline button", named(Role::Button, "Cancel")),
+            ("selected tab", named(Role::Tab, "General")),
+        ] {
+            focus::request(control.id);
+            render();
+            let (fill, bands) = ring_as_painted(&element_of(control.node), surface);
+            assert!(
+                bands.len() >= 2,
+                "{scheme:?} {what}: both bands reach the document, got {bands:?}"
+            );
+            for (against, colour) in [("its fill", fill), ("the surface", surface)] {
+                let best = bands
+                    .iter()
+                    .map(|band| band.contrast_ratio(colour))
+                    .fold(0.0f32, f32::max);
+                assert!(
+                    best >= telar::NON_TEXT_CONTRAST,
+                    "{scheme:?} {what}: the ring's better band reaches {best:.2}:1 against {against}"
+                );
+            }
+        }
+    }
+    in_scheme(telar::ColorScheme::Light);
+    focus::clear();
+    render();
+}
+
+/// The frame around a field wears the ring for the line inside it.
+#[wasm_bindgen_test]
+fn a_field_s_frame_wears_the_ring_of_the_line_inside_it() {
     let field = focusable(Role::TextInput);
     focus::request_from_pointer(field.id);
     render();
     let line = element_of(field.node);
     let framed = std::iter::successors(line.parent_element(), |node| node.parent_element())
         .take(3)
-        .any(|frame| box_shadow_of(&frame).contains("2px"));
+        .any(|frame| computed(&frame, "box-shadow").contains("2px"));
     assert!(
         framed,
         "a field tapped into shows it is the one being typed into"

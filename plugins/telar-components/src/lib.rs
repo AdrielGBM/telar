@@ -27,6 +27,9 @@ telar::library_previews!();
 #[path = "consistency.test.rs"]
 mod consistency_test;
 #[cfg(test)]
+#[path = "focus_ring.test.rs"]
+mod focus_ring_test;
+#[cfg(test)]
 #[path = "layout/heading/heading.test.rs"]
 mod heading_test;
 #[cfg(test)]

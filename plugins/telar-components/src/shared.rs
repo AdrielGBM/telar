@@ -12,10 +12,9 @@ pub(crate) mod selection;
 pub(crate) mod type_ahead;
 
 use telar::{
-    Accessible, AlignItems, BODY_TEXT_CONTRAST, Border, BorderRadius, Chord, Color, Container,
-    LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect, RectStyle,
-    StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
-    use_theme_tokens,
+    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Chord, Color, Container, LayoutError,
+    LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect, RectStyle, StyledContainer, Text,
+    TextStyle, box_item, children, focus::Role, style_follows, use_theme_tokens,
 };
 
 pub use telar::DOUBLE_CLICK;
@@ -135,9 +134,9 @@ pub fn border_width() -> f32 {
 pub fn border_width_strong() -> f32 {
     use_theme_tokens().border_width_strong()
 }
-/// The theme's focus ring as a frame, for the cursor a list, a tree or a toolbar draws on the item the arrows reached. A focusable box gets the same ring by itself.
-pub fn focus_ring() -> Border {
-    telar::focus_ring_border()
+/// The theme's focus ring, for the cursor a list, a tree or a toolbar draws with [`StyledContainer::keyboard_cursor`] on the item the arrows reached. A focusable box wears the same ring by itself.
+pub fn focus_ring() -> telar::FocusRing {
+    telar::focus_ring()
 }
 /// The focus ring's thickness, for a cursor drawn as a line rather than a frame: where a dragged item will land.
 pub(crate) fn focus_ring_width() -> f32 {

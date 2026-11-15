@@ -12,7 +12,7 @@ use crate::shared;
 use telar::ControlSize;
 
 pub(crate) use empty::with_empty_state;
-pub(crate) use paint::{RowState, cursor_row_paint};
+pub(crate) use paint::{RowState, cursor_ring, row_wash};
 
 /// How far past the view's edge a row may end and still count as shown whole when paging: rows are drawn snapped to whole pixels, and the offsets a page is worked out from are sums of fractional heights, so a run of rows that exactly fills the view would otherwise fit or not by rounding noise.
 const WHOLE_SLACK: f32 = 0.5;
@@ -254,45 +254,34 @@ impl RowPlaces {
 }
 
 mod paint {
-    use telar::{Border, BorderRadius, Color, Reactive, RectStyle, ShapeStyle};
+    use telar::{BorderRadius, Color, FocusRing, Reactive, RectStyle, ShapeStyle};
 
     use crate::layout::list::list::tinted;
     use crate::shared;
 
-    /// What a row of a list walked by a cursor is showing: chosen, under the pointer, and where the keyboard's cursor rests while the list shows focus.
+    /// What a row of a list walked by a cursor is showing: chosen, and under the pointer.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub(crate) struct RowState {
         pub(crate) selected: bool,
         pub(crate) hovered: bool,
-        pub(crate) cursor: bool,
     }
 
-    /// A row's paint, in a corner of `radius`: the selection's wash, else the pointer's, at the theme's strengths and in the list's `color` when it was given one; and the focus ring round the cursor's row, so the cursor and the selection read apart when they are on different rows.
-    pub(crate) fn cursor_row_paint(
-        radius: f32,
-        color: &Reactive<Color>,
-        state: RowState,
-    ) -> RectStyle {
+    /// A row's paint, in a corner of `radius`: the selection's wash, else the pointer's, at the theme's strengths and in the list's `color` when it was given one.
+    pub(crate) fn row_wash(radius: f32, color: &Reactive<Color>, state: RowState) -> RectStyle {
         let style = RectStyle::default().with_radius(BorderRadius::all(radius));
-        let style = if state.selected {
+        if state.selected {
             style.with_fill(tinted(color, shared::held_wash()))
         } else if state.hovered {
             style.with_fill(tinted(color, shared::hover_wash()))
         } else {
             style
-        };
-        if !state.cursor {
-            return style;
         }
+    }
+
+    /// The ring round the row the keyboard's cursor rests on, its band in the list's `color` when it was given one, so the cursor and the selection read apart when they are on different rows.
+    pub(crate) fn cursor_ring(color: &Reactive<Color>) -> FocusRing {
         let ring = shared::focus_ring();
-        let ring = match color.get() {
-            tone if tone == Color::TRANSPARENT => ring,
-            tone => Border {
-                paint: tone.into(),
-                ..ring
-            },
-        };
-        style.with_border(ring)
+        ring.with_band(shared::resolve(color, || ring.band))
     }
 }
 

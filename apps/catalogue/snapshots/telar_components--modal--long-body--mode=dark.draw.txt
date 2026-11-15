@@ -22,6 +22,7 @@ element group
       end
       element button
         rect 365,37 35x15 border=2 border-color=#7394ffff
+        rect 367,39 31x11 border=1 border-color=#1c1f29ff
         element group
           matrix 1,0,0,1,365,37
             text 0,0 35x15.62 "Close" size=13.02 family=sans-serif weight=400 color=#ebedf5ff lang=en

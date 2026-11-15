@@ -6,6 +6,7 @@ element group
       element group
         element group
           rect 260,284 280x32 fill=#12141cff border=2 border-color=#7394ffff radius=10
+          rect 262,286 276x28 border=1 border-color=#1c1f29ff radius=8
           element group
             rect 268,292 16x16
             element group

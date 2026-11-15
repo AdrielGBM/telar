@@ -987,11 +987,11 @@ impl Walk<'_> {
         }
         match command {
             DrawCommand::Rect { rect, style } => {
-                if open.painted {
-                    return;
-                }
                 // The box's own background is the one that is the box. Anything else is paint the widget put inside it, and folding that into the background would spread one small mark over the whole element.
                 if is_own_box(*rect, open.box_rect) {
+                    if open.painted {
+                        return;
+                    }
                     open.painted = true;
                     // A matrix this box's own paint sits inside is the box's own transform, and now it is known to be: the boxes it also wraps are moved by moving the box. It is written in the same coordinates as the frame, the surface's or the box's own.
                     if let Some(matrix) = open.moved.take() {

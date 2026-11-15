@@ -10,7 +10,7 @@ use platform_core::{
     NamedKey, Orientation, OutgoingDrag, PointerButton, PointerSource, Toggle, Value,
 };
 use reactive_core::{Reactive, RwSignal, effect, signal};
-use renderer_core::{BlendMode, Border, Declared, RectStyle};
+use renderer_core::{BlendMode, Declared, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -19,6 +19,7 @@ use crate::context::{new_container, track_layout};
 use crate::cursor::{self, CursorClaim};
 use crate::drag::DragGesture;
 use crate::focus::{self, FocusId};
+use crate::focus_ring::{FocusRing, band_inside, focus_ring};
 use crate::input_region::{self, InputHandle, InputMode, Placement};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::{dispatch_container_event, transform_pointer};
@@ -100,9 +101,14 @@ struct StateStyle {
     // Ahead of every other state: a control that cannot be used must not also look pressable.
     disabled: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     // Laid *over* whichever state won, not instead of it.
-    focus: Option<Box<dyn Fn(Rect) -> RectStyle>>,
-    // Whether `focus` is the theme's ring rather than one the caller drew.
-    default_ring: bool,
+    focus: Option<FocusPaint>,
+    keyboard_cursor: Option<Box<dyn Fn() -> Option<FocusRing>>>,
+}
+
+/// What a box draws while it shows focus.
+enum FocusPaint {
+    Theme,
+    Drawn(Box<dyn Fn(Rect) -> RectStyle>),
 }
 
 impl Default for StateStyle {
@@ -114,7 +120,7 @@ impl Default for StateStyle {
             is_active: signal(false),
             disabled: None,
             focus: None,
-            default_ring: false,
+            keyboard_cursor: None,
         }
     }
 }
@@ -807,11 +813,18 @@ impl StyledContainer {
         self
     }
 
+    /// Draws `ring` round this box while it answers one, for the cursor a list, a tree or a toolbar moves over items that do not hold focus themselves: the row the arrows reached.
+    ///
+    /// Drawn exactly as a focused control's ring is, so the keyboard's place never looks like two different things. While the box itself shows focus, its focus ring is drawn instead.
+    pub fn keyboard_cursor(mut self, ring: impl Fn() -> Option<FocusRing> + 'static) -> Self {
+        self.state.keyboard_cursor = Some(Box::new(ring));
+        self
+    }
+
     /// Supplies the theme's ring, unless the caller already named one.
     fn ring_by_default(&mut self) {
         if self.state.focus.is_none() {
-            self.state.focus = Some(Box::new(|_r| default_focus_ring()));
-            self.state.default_ring = true;
+            self.state.focus = Some(FocusPaint::Theme);
         }
     }
 
@@ -819,8 +832,7 @@ impl StyledContainer {
         // Declaring a ring declares the box focusable, or it would join no tab order and nothing could satisfy the style.
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_at(id, focus::FocusKind::Widget, self.node);
-        self.state.focus = Some(Box::new(f));
-        self.state.default_ring = false;
+        self.state.focus = Some(FocusPaint::Drawn(Box::new(f)));
         self.mark_interactive();
         self
     }
@@ -1226,31 +1238,16 @@ impl Component for StyledContainer {
             .into_iter()
             .flatten()
             .any(focus::is_focus_visible);
-        let (painted, inset_ring) = match &self.state.focus {
-            Some(ring) if shows_focus => {
-                let base = style(r);
-                let ring = ring(r);
-                let band = self.state.default_ring.then(cell_focus_band).flatten();
-                let offset = use_theme_tokens().focus_ring_offset();
-                let inset_ring = ring
-                    .border
-                    .filter(|_| offset > 0.0)
-                    .and_then(|border| inset_focus_ring(r, base.radius, border, offset));
-                let painted = RectStyle {
-                    fill: ring.fill.or(base.fill).or(band),
-                    border: match inset_ring {
-                        Some(_) => base.border,
-                        None => ring.border.or(base.border),
-                    },
-                    shadow: ring.shadow.or(base.shadow),
-                    // The ring sits on the box's shape rather than choosing one of its own.
-                    radius: base.radius,
-                };
-                (painted, inset_ring)
-            }
-            _ => (style(r), None),
+        let base = style(r);
+        let (painted, inside) = match &self.state.focus {
+            Some(FocusPaint::Theme) if shows_focus => wear_ring(r, base, focus_ring()),
+            Some(FocusPaint::Drawn(ring)) if shows_focus => wear_drawn_ring(r, base, ring(r)),
+            _ => match self.state.keyboard_cursor.as_ref().and_then(|ring| ring()) {
+                Some(ring) => wear_ring(r, base, ring),
+                None => (base, Vec::new()),
+            },
         };
-        let background = std::iter::once(RenderNode::rect(r, painted)).chain(inset_ring);
+        let background = std::iter::once(RenderNode::rect(r, painted)).chain(inside);
         let content = match &self.dyn_host {
             Some(host) => RenderNode::group(background.chain(host.child_boundaries())),
             None => RenderNode::group(
@@ -1508,41 +1505,38 @@ impl Drop for StyledContainer {
     }
 }
 
-/// The ring a control wears when the keyboard is what reached it, unless it asked for one of its own.
-///
-/// A ring and not a fill, because it answers a different question from hover or pressed — *where the keys are going*, not what the box is doing — and has to survive being layered over whichever of those won. Its radius is deliberately absent: the compositing path takes that from the box, since a ring sits on a shape it does not get to reshape.
-pub(crate) fn default_focus_ring() -> RectStyle {
-    RectStyle::default().with_border(focus_ring_border())
+/// The box's paint with `ring` worn over it, and the bands of the ring that stand inside the box's edge.
+fn wear_ring(rect: Rect, base: RectStyle, ring: FocusRing) -> (RectStyle, Vec<RenderNode>) {
+    let offset = use_theme_tokens().focus_ring_offset();
+    let (edge, inside) = ring.place(rect, base.radius, offset, base.fill.as_ref());
+    let painted = RectStyle {
+        fill: base.fill.or_else(|| ring.cell_tint()),
+        border: edge.or(base.border),
+        ..base
+    };
+    (painted, inside)
 }
 
-/// The theme's ring as a frame, for a component that draws a keyboard cursor on a box that is not itself focused: the row of a list, the item of a toolbar.
-pub fn focus_ring_border() -> Border {
-    let tokens = use_theme_tokens();
-    Border::uniform(tokens.focus_ring(), tokens.focus_ring_width())
-}
-
-/// The ring drawn `offset` inside the box, on a shape of its own that follows the box's corners. `None` where the box is too small to hold it.
-fn inset_focus_ring(
-    rect: Rect,
-    radius: renderer_core::BorderRadius,
-    border: Border,
-    offset: f32,
-) -> Option<RenderNode> {
-    let (inner, radius) = renderer_core::border_inner_shape(rect, radius, [offset; 4])?;
-    Some(RenderNode::rect(
-        inner,
-        RectStyle::default().with_border(border).with_radius(radius),
-    ))
-}
-
-/// What the theme's ring adds on a surface drawn in whole cells, under a box that has no fill of its own.
-///
-/// A terminal draws the ring as box-drawing characters in the cells around the content, and a box its content fills, such as a link with no padding, has no such cells: the text is drawn over its own frame. A cell keeps its background under a glyph, so a tint is what still shows there.
-fn cell_focus_band() -> Option<renderer_core::Paint> {
-    if geometry_core::layout_grid().is_unit() {
-        return None;
-    }
-    Some(use_theme_tokens().primary().with_alpha(0.35).into())
+/// The box's paint with a ring the caller drew composed over it: only what the ring names is applied, and its frame stands inside the box's edge when the theme's offset says so.
+fn wear_drawn_ring(rect: Rect, base: RectStyle, ring: RectStyle) -> (RectStyle, Vec<RenderNode>) {
+    let offset = use_theme_tokens().focus_ring_offset();
+    let inside: Vec<RenderNode> = ring
+        .border
+        .filter(|_| offset > 0.0)
+        .and_then(|border| band_inside(rect, base.radius, border, offset))
+        .into_iter()
+        .collect();
+    let painted = RectStyle {
+        fill: ring.fill.or(base.fill),
+        border: match inside.is_empty() {
+            false => base.border,
+            true => ring.border.or(base.border),
+        },
+        shadow: ring.shadow.or(base.shadow),
+        // The ring sits on the box's shape rather than choosing one of its own.
+        radius: base.radius,
+    };
+    (painted, inside)
 }
 
 /// Builds the affine matrix for a box's declarative `rotate`/`scale`/`translate` attributes, pivoting rotation and scale on the box centre. Returns `None` when every component is identity, so an untransformed box skips the extra transform node entirely. See [`box_transform_about`] for another pivot.

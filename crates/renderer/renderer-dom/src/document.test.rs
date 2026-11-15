@@ -2098,3 +2098,34 @@ fn a_stop_inside_a_box_read_as_its_name_keeps_its_words() {
     assert_eq!(attribute(line, "aria-hidden"), None);
     assert!(matches!(&line.content, Content::Text { muted: false, .. }));
 }
+
+/// A focused control's ring is its own frame and, inside it, a hairline of a second colour: the frame is the box's own paint, and the hairline drawn after it is paint inside the box, kept as every other target keeps it.
+#[test]
+fn a_frame_drawn_inside_a_box_after_the_box_s_own_paint_is_kept_inside_it() {
+    use renderer_core::{Border, RectStyle};
+
+    let at = Rect::new(0.0, 0.0, 50.0, 20.0);
+    let framed = |colour: Color, rect: Rect| DrawCommand::Rect {
+        rect,
+        style: Arc::new(RectStyle::default().with_border(Border::uniform(colour, 1.0))),
+    };
+    let frame = describe_frame(
+        &[
+            open_at(1, Semantics::group(), at),
+            framed(Color::BLACK, at),
+            framed(Color::WHITE, Rect::new(2.0, 2.0, 46.0, 16.0)),
+            framed(Color::BLACK, at),
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let node = only_box(&frame);
+    assert!(node.style.contains("#000000"), "{}", node.style);
+    let Content::Children { pieces, .. } = &node.content else {
+        panic!("the box holds pieces");
+    };
+    assert_eq!(pieces.len(), 1, "a box painted twice keeps the first");
+    assert!(pieces[0].style.contains("#ffffff"), "{}", pieces[0].style);
+}

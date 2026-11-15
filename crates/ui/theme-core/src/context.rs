@@ -77,10 +77,17 @@ pub trait ThemeTokens: 'static {
     fn border_width_strong(&self) -> f32 {
         1.5
     }
-    /// Colour of the ring a control wears while the keyboard is on it, and of the cursor a list or a toolbar draws on the item the arrows reached.
+    /// Colour of the outer band of the ring a control wears while the keyboard is on it, and of the cursor a list or a toolbar draws on the item the arrows reached.
     fn focus_ring(&self) -> Color {
         self.primary()
     }
+    /// Colour of the hairline the ring draws just inside its outer band, between the band and the box's fill.
+    ///
+    /// Two bands because no one colour stands out from every accent fill and every surface: a band in [`primary`](Self::primary) vanishes on a solid button, a hairline in [`surface`](Self::surface) does not, and on the surface around the control the band is what shows. A theme that moves either colour keeps the pair apart.
+    fn focus_ring_inner(&self) -> Color {
+        self.surface()
+    }
+    /// Width of the ring's outer band. The hairline inside it is half as wide, so the two grow together.
     fn focus_ring_width(&self) -> f32 {
         2.0
     }

@@ -76,8 +76,8 @@ enum State {
     Pressed,
 }
 
-/// The square's paint before the caller's amendment: the theme's washes for a pointer resting on it, for a toggle held on and for a press, and the theme's focus ring where a toolbar's cursor stands.
-fn paint(state: State, toggled: bool, cursor: bool) -> RectStyle {
+/// The square's paint before the caller's amendment: the theme's washes for a pointer resting on it, for a toggle held on and for a press.
+fn paint(state: State, toggled: bool) -> RectStyle {
     let rect =
         RectStyle::default().with_radius(BorderRadius::all(IconButtonTokens::current().radius()));
     let wash = match (state, toggled) {
@@ -86,14 +86,9 @@ fn paint(state: State, toggled: bool, cursor: bool) -> RectStyle {
         (State::Rest, true) => Some(shared::held_wash()),
         (State::Hovered, true) | (State::Pressed, _) => Some(shared::pressed_wash()),
     };
-    let rect = match wash {
+    match wash {
         Some(wash) => rect.with_fill(wash),
         None => rect,
-    };
-    if cursor {
-        rect.with_border(shared::focus_ring())
-    } else {
-        rect
     }
 }
 
@@ -172,23 +167,23 @@ impl Square {
             move || disabled.get()
         };
         let cursor = {
-            let toolbar = toolbar.clone();
-            move || match (&toolbar, index) {
-                (Some(toolbar), Some(index)) => toolbar.shows_cursor_at(index),
-                _ => false,
+            let (toolbar, disabled) = (toolbar.clone(), disabled.clone());
+            move || {
+                let at_cursor = match (&toolbar, index) {
+                    (Some(toolbar), Some(index)) => toolbar.shows_cursor_at(index),
+                    _ => false,
+                };
+                (at_cursor && !disabled.get()).then(shared::focus_ring)
             }
         };
 
         let picture = picture(icon, size, ink(disabled))?;
         let surface = {
             let is_pressed = is_pressed.clone();
-            Rc::new(move |state: State, at_cursor: bool| {
-                amend_surface(paint(state, is_pressed(), at_cursor), &style)
-            })
+            Rc::new(move |state: State| amend_surface(paint(state, is_pressed()), &style))
         };
         let (rest, hover, pressing, idle) =
             (surface.clone(), surface.clone(), surface.clone(), surface);
-        let (rest_cursor, hover_cursor, press_cursor) = (cursor.clone(), cursor.clone(), cursor);
         let press = {
             let toolbar = toolbar.clone();
             move || {
@@ -200,14 +195,15 @@ impl Square {
         };
         let button = StyledContainer::new(
             shell(size),
-            move |_| rest(State::Rest, rest_cursor()),
+            move |_| rest(State::Rest),
             vec![picture],
         )?
         .styled_by(move || shell(size))
-        .hover_style(move |_| hover(State::Hovered, hover_cursor()))
-        .active_style(move |_| pressing(State::Pressed, press_cursor()))
+        .hover_style(move |_| hover(State::Hovered))
+        .active_style(move |_| pressing(State::Pressed))
+        .keyboard_cursor(cursor)
         .disabled(is_disabled)
-        .disabled_style(move |_| idle(State::Rest, false))
+        .disabled_style(move |_| idle(State::Rest))
         .on_press(press)
         .a11y_label(move || label.get());
 

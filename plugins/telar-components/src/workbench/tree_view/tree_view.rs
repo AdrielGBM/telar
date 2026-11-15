@@ -15,7 +15,7 @@ use telar::{
 };
 
 use crate::overlays::menu::menu::{MenuPlace, focused_rect, is_context_menu_key};
-use crate::shared::rows::{BuiltRows, RowPlaces, RowState, cursor_row_paint};
+use crate::shared::rows::{BuiltRows, RowPlaces, RowState, cursor_ring, row_wash};
 use crate::shared;
 use crate::shared::type_ahead::TypeAhead;
 use telar::ControlSize;
@@ -618,6 +618,10 @@ fn build_row(
         let (tree, id, color) = (tree.clone(), id.clone(), color.clone());
         move |_r| row_paint(&tree, &id, &color, hovered)
     };
+    let cursor = {
+        let (tree, id, color) = (tree.clone(), id.clone(), color.clone());
+        move || tree.shows_cursor(&id).then(|| cursor_ring(&color))
+    };
     let selected = {
         let (tree, id) = (tree.clone(), id.clone());
         move || tree.is_selected(&id)
@@ -635,6 +639,7 @@ fn build_row(
     };
     let built = StyledContainer::new(row_box(level, &tree.places), paint(false), content)?
         .hover_style(paint(true))
+        .keyboard_cursor(cursor)
         .presented(Role::TreeItem, reach)
         .toggled(selected)
         .positioned(row.position)
@@ -726,15 +731,14 @@ fn row_box(level: u32, places: &RowPlaces) -> LayoutStyle {
     )
 }
 
-/// The selection and the pointer wash the row, at the theme's strengths and in the tree's colour when it was given one; the keyboard cursor rings it while the tree shows focus, so the two read apart when they are on different rows.
+/// The selection and the pointer wash the row, at the theme's strengths and in the tree's colour when it was given one.
 fn row_paint(tree: &Tree, id: &str, color: &Reactive<Color>, hovered: bool) -> RectStyle {
-    cursor_row_paint(
+    row_wash(
         TreeViewTokens::current().radius(),
         color,
         RowState {
             selected: tree.is_selected(id),
             hovered,
-            cursor: tree.shows_cursor(id),
         },
     )
 }

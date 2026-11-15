@@ -12,6 +12,7 @@ element group
           end
           element group
             rect 250,296 301x32 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+            rect 252,298 297x28 border=1 border-color=#ffffffff radius=8
             element group
               matrix 1,0,0,1,262,296
                 clip 0,0 277x32

@@ -17,7 +17,9 @@ use telar::{
 };
 
 use crate::workbench::resizable::resizable::{ResizeEdge, ResizeHandleProps, resize_handle};
-use crate::shared::rows::{BuiltRows, RowPlaces, RowState, counted, cursor_row_paint, with_empty_state};
+use crate::shared::rows::{
+    BuiltRows, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
+};
 use crate::shared::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
 use crate::{shared, strings};
 use telar::ControlSize;
@@ -949,17 +951,18 @@ fn presented_cell(
         move || cell_box(&table, index, header)
     };
     let paint = {
-        let (table, at) = (table.clone(), at.clone());
+        let table = table.clone();
         move |_r| {
-            cursor_row_paint(
+            row_wash(
                 DataTableTokens::current().radius(),
                 &table.color,
-                RowState {
-                    cursor: table.shows_cursor(&at),
-                    ..RowState::default()
-                },
+                RowState::default(),
             )
         }
+    };
+    let cursor = {
+        let (table, at) = (table.clone(), at.clone());
+        move || table.shows_cursor(&at).then(|| cursor_ring(&table.color))
     };
     let press = {
         let (table, at) = (table.clone(), at.clone());
@@ -971,6 +974,7 @@ fn presented_cell(
     };
     let cell = StyledContainer::new(shape(), paint, content)?
         .styled_by(shape)
+        .keyboard_cursor(cursor)
         .presented(role, reach)
         .on_press(press);
     if let Some(focus_id) = cell.focus_id() {
@@ -1007,13 +1011,12 @@ fn body_row(
     let paint = |hovered: bool| {
         let (table, id) = (table.clone(), id.clone());
         move |_r| {
-            cursor_row_paint(
+            row_wash(
                 DataTableTokens::current().radius(),
                 &table.color,
                 RowState {
                     selected: table.selection.is_selected(&id),
                     hovered,
-                    cursor: false,
                 },
             )
         }

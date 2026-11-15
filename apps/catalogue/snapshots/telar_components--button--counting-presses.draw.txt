@@ -6,6 +6,7 @@ element group
       element group
         element button
           rect 335,284 130x32 fill=#3852caff border=2 border-color=#4261edff radius=10
+          rect 337,286 126x28 border=1 border-color=#ffffffff radius=8
           element group
             matrix 1,0,0,1,347,284
               text 0,8 106x16.8 "Pressed 2 times" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en

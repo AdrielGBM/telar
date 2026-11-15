@@ -78,7 +78,7 @@ defaults to a primitive or a convention, so a theme that names none of them stil
 | `radius_dialog` | modals, the command palette, drawers | `radius × 3` |
 | `radius_item` | rows, options and items inside a surface; key caps and tags | `radius_sm` |
 | `border_width`, `border_width_strong` | a hairline; a frame that is the control's shape | `1`, `1.5` |
-| `focus_ring`, `focus_ring_width`, `focus_ring_offset` | the keyboard's ring, and a list's cursor | `primary`, `2`, `0` |
+| `focus_ring`, `focus_ring_inner`, `focus_ring_width`, `focus_ring_offset` | the keyboard's ring and a list's cursor: its outer band, the hairline inside it, the band's width (the hairline is half), how far inside the edge it stands | `primary`, `surface`, `2`, `0` |
 | `scrollbar_width`, `scrollbar_inset`, `scrollbar_radius` | the lane a scroll area's bar runs in; how much narrower the thumb is than its lane; the corner of its thumb | `8`, `2`, fully rounded (`(width - inset) / 2`) |
 | `highlight_low/med/high` | the wash of hover, of selected or held open, of pressed | neutral washes |
 | `inverse_surface`, `inverse_ink` | a tooltip's bubble and its text | `ink`, `surface` |
@@ -89,7 +89,10 @@ defaults to a primitive or a convention, so a theme that names none of them stil
 A pill (a radio, a toggle's track, a progress bar) is fully rounded at whatever size it is laid out, which no
 number can say, so it is not a role: a component rounds it with `metrics::pill(rect)`. The focus ring's offset
 is measured inward: `0` draws the ring on the box's edge in place of its border, more keeps the border and leaves
-a gap. A `[telar] library`'s `$theme` reads every role like any other token.
+a gap. The ring is two bands because no one colour stands out from every fill and every surface: the band in
+`focus_ring` vanishes on a control filled with the accent, where the `focus_ring_inner` hairline between it and the
+fill shows, and on the surface around a control the band shows. A theme that moves either colour keeps the two
+apart. A `[telar] library`'s `$theme` reads every role like any other token.
 
 ## A component's size
 
@@ -114,7 +117,9 @@ text's.
 `control_height`, `control_pad_x`, `row_height`, `panel_pad`, `popup_offset`, `gap_xs/sm/md/lg/xl`, `spacing`, `icon_size`,
 `icon_pad`, `measure`, the radius roles and `pill`, `border_width(_strong)`, `focus_ring`, `hover_wash`/`held_wash`/
 `pressed_wash`, `hovered_fill`/`pressed_fill`, `thumb_on`, `strong_weight`, `control_text`, `ink_on` and
-`mark`. Each length takes the `ControlSize` it is for, and the heights and `measure` are in whole pixels. Every single-line control is
+`mark`. Each length takes the `ControlSize` it is for, and the heights and `measure` are in whole pixels. `focus_ring` is the
+theme's `FocusRing`, which a control of an application's own draws on the item its keyboard cursor rests on with
+`StyledContainer::keyboard_cursor`, the way a list, a tree and a toolbar do. Every single-line control is
 `control_height` tall and centres its line in it, so a button, a field, a select, a tab and a stepper stand level
 in one row; every row of a list, a menu, a select, a tree or a context menu is `row_height` tall; and a panel that drops
 from a control — a menu's, a select's — stands `popup_offset` away from it, on whichever side it opens.
