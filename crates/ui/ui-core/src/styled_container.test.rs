@@ -97,6 +97,129 @@ fn a_control_joins_the_tab_order_answers_enter_and_says_what_it_is() {
     assert!(exposed[0].enabled, "a control joins the tab order enabled");
 }
 
+fn key_event(named: NamedKey) -> Event {
+    Event::KeyPressed {
+        key: Key::Named(named),
+        modifiers: platform_core::ModifiersState::default(),
+        unmodified: None,
+    }
+}
+
+/// A focused control whose press counts into the returned cell, built by `build` from a bare box.
+fn pressable_control(
+    build: impl FnOnce(StyledContainer) -> StyledContainer,
+) -> (StyledContainer, Rc<Cell<u32>>) {
+    reset_layout_runtime();
+    focus::clear();
+    let fired: Rc<Cell<u32>> = Rc::new(Cell::new(0));
+    let sink = fired.clone();
+    let card = build(
+        StyledContainer::new(
+            LayoutStyle::new().width(80.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap(),
+    )
+    .on_press(move || sink.set(sink.get() + 1));
+    compute_layout(
+        card.layout_node(),
+        AvailableSpace::Definite(80.0),
+        AvailableSpace::Definite(30.0),
+    )
+    .unwrap();
+    focus::focus_next();
+    (card, fired)
+}
+
+/// A control that handles its own keys hears them first, and is still pressed by an activation key its handler leaves: a tab that walks with the arrows is chosen by Enter and Space.
+#[test]
+fn a_control_s_own_key_handler_goes_first_and_what_it_leaves_still_presses_it() {
+    let heard: Rc<std::cell::RefCell<Vec<NamedKey>>> = Rc::default();
+    let log = heard.clone();
+    let (mut card, fired) = pressable_control(|card| {
+        card.control(focus::Role::Tab)
+            .on_focused_key(move |key: &Key| {
+                let Key::Named(named) = key else {
+                    return false;
+                };
+                log.borrow_mut().push(named.clone());
+                *named == NamedKey::ArrowRight
+            })
+    });
+
+    assert_eq!(
+        card.on_event(&key_event(NamedKey::ArrowRight)),
+        EventResult::Handled
+    );
+    assert_eq!(fired.get(), 0, "a key the handler took presses nothing");
+    assert_eq!(
+        card.on_event(&key_event(NamedKey::Enter)),
+        EventResult::Handled
+    );
+    assert_eq!(
+        card.on_event(&key_event(NamedKey::Space)),
+        EventResult::Handled
+    );
+    assert_eq!(
+        fired.get(),
+        2,
+        "Enter and Space, left by the handler, press it"
+    );
+    assert_eq!(
+        *heard.borrow(),
+        [NamedKey::ArrowRight, NamedKey::Enter, NamedKey::Space],
+        "the handler heard every key first"
+    );
+}
+
+/// A handler that takes Enter keeps it: the press does not fire as well, which is how a dropdown confirms its highlighted row rather than shutting and reopening.
+#[test]
+fn an_activation_key_the_control_s_handler_takes_does_not_also_press_it() {
+    let (mut card, fired) = pressable_control(|card| {
+        card.control(focus::Role::ComboBox)
+            .on_focused_key(|key: &Key| matches!(key, Key::Named(NamedKey::Enter)))
+    });
+    assert_eq!(
+        card.on_event(&key_event(NamedKey::Enter)),
+        EventResult::Handled
+    );
+    assert_eq!(fired.get(), 0);
+}
+
+/// Only an activation key the control keeps presses it, so one it hands back to its host is never taken here too.
+#[test]
+fn a_control_is_pressed_only_by_the_activation_keys_it_keeps() {
+    let (mut slider, fired) = pressable_control(|card| card.control(focus::Role::Slider));
+    assert_eq!(
+        slider.on_event(&key_event(NamedKey::Enter)),
+        EventResult::Ignored
+    );
+    assert_eq!(
+        slider.on_event(&key_event(NamedKey::Space)),
+        EventResult::Ignored
+    );
+    assert_eq!(fired.get(), 0, "a slider keeps neither");
+
+    let (mut button, fired) = pressable_control(|card| {
+        card.control(focus::Role::Button)
+            .consumes_keys(|| ConsumedKeys::ENTER)
+    });
+    assert_eq!(
+        button.on_event(&key_event(NamedKey::Space)),
+        EventResult::Ignored
+    );
+    assert_eq!(
+        button.on_event(&key_event(NamedKey::Enter)),
+        EventResult::Handled
+    );
+    assert_eq!(
+        fired.get(),
+        1,
+        "a button declaring Enter alone is pressed by Enter alone"
+    );
+}
+
 /// And what it must *not* do. A scrim, a click-away backdrop and a drag surface all take presses, and none of them is a place the keyboard should stop — so a press on its own still buys nothing.
 #[test]
 fn a_press_handler_alone_is_not_a_control() {
@@ -2310,7 +2433,7 @@ fn a_presented_box_is_announced_but_a_tap_leaves_focus_alone() {
         size: 3,
     };
     let mut row = laid_out_box()
-        .presented(focus::Role::TreeItem)
+        .presented(focus::Role::TreeItem, || {})
         .toggled(|| true)
         .expanded(move || open.get())
         .positioned(place)
@@ -2395,7 +2518,7 @@ fn a_control_says_what_it_opens() {
 
     focus::clear();
     let mut row = laid_out_box()
-        .presented(focus::Role::MenuItem)
+        .presented(focus::Role::MenuItem, || {})
         .has_popup(focus::HasPopup::Menu);
     settle(&mut row);
     assert_eq!(semantics_of(&row).has_popup, Some(focus::HasPopup::Menu));
@@ -2426,7 +2549,7 @@ fn a_control_names_the_presented_box_its_cursor_rests_on() {
             vec![],
         )
         .unwrap()
-        .presented(focus::Role::TreeItem)
+        .presented(focus::Role::TreeItem, || {})
     };
     let (first, second) = (row(), row());
     let rows = [
@@ -2466,7 +2589,7 @@ fn a_control_names_the_presented_box_its_cursor_rests_on() {
 #[test]
 fn the_document_focusing_a_presented_box_does_not_move_focus_to_it() {
     focus::clear();
-    let row = laid_out_box().presented(focus::Role::TreeItem);
+    let row = laid_out_box().presented(focus::Role::TreeItem, || {});
     assert!(!focus::follow_box(u64::from(row.layout_node())));
     assert_eq!(focus::current(), None);
 
@@ -2625,7 +2748,7 @@ fn a_column_header_says_which_way_its_column_sorts_the_rows() {
     focus::clear();
     let sort = reactive_core::signal(None);
     let mut header = laid_out_box()
-        .presented(focus::Role::ColumnHeader)
+        .presented(focus::Role::ColumnHeader, || {})
         .sorted(move || sort.get());
     settle(&mut header);
 

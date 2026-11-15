@@ -1,5 +1,7 @@
 //! The press gesture: taps, long presses, and the non-primary buttons a box may also answer.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 use web_time::Instant;
 
@@ -13,9 +15,8 @@ const LONG_PRESS_THRESHOLD: Duration = Duration::from_millis(500);
 /// A press ("tap") gesture that any container can opt into. Mirrors `Button`'s touch/scroll disambiguation without the button's hover/label concerns: the callback fires on release, not press, and is cancelled once the pointer travels past `TAP_SLOP` — so a scroll gesture that begins on the widget never triggers it. Hit-testing is the caller's job (it owns its layout rect).
 #[derive(Default)]
 pub(crate) struct PressGesture {
-    on_press: Option<Box<dyn Fn()>>,
-    // Where a link goes on the press, after `on_press` has run: a box that is a link and also does something keeps both.
-    follow: Option<Box<dyn Fn()>>,
+    // Shared with the focus order, so a control activated without a pointer runs exactly what a tap runs.
+    primary: Rc<Primary>,
     on_long_press: Option<Box<dyn Fn()>>,
     on_alt_press: Option<Box<dyn Fn(PointerButton)>>,
     // The press point while a tap is pending; cleared once the pointer travels past `TAP_SLOP`.
@@ -26,33 +27,56 @@ pub(crate) struct PressGesture {
     armed_button: Option<PointerButton>,
 }
 
-impl PressGesture {
-    pub(crate) fn set(&mut self, f: impl Fn() + 'static) {
-        self.on_press = Some(Box::new(f));
+/// What a primary press fires: the box's own handler, then where its link goes.
+#[derive(Default)]
+struct Primary {
+    on_press: RefCell<Option<Rc<dyn Fn()>>>,
+    // Where a link goes on the press, after `on_press` has run: a box that is a link and also does something keeps both.
+    follow: RefCell<Option<Rc<dyn Fn()>>>,
+}
+
+impl Primary {
+    /// Reports whether there was anything to fire, so a key that activated nothing is left for whoever else wants it.
+    fn fire(&self) -> bool {
+        // Cloned out so no borrow is held while a handler runs and, say, gives the box a new handler.
+        let on_press = self.on_press.borrow().clone();
+        let follow = self.follow.borrow().clone();
+        if let Some(cb) = &on_press {
+            cb();
+        }
+        if let Some(follow) = &follow {
+            follow();
+        }
+        on_press.is_some() || follow.is_some()
     }
 
-    /// Fires the press without a pointer, for a control activated from the keyboard. Reports whether there was anything to fire, so a key that activated nothing is left for whoever else wants it.
-    pub(crate) fn activate(&self) -> bool {
-        self.fire_primary()
+    fn is_set(&self) -> bool {
+        self.on_press.borrow().is_some() || self.follow.borrow().is_some()
+    }
+}
+
+impl PressGesture {
+    pub(crate) fn set(&mut self, f: impl Fn() + 'static) {
+        *self.primary.on_press.borrow_mut() = Some(Rc::new(f));
     }
 
     pub(crate) fn set_follow(&mut self, f: impl Fn() + 'static) {
-        self.follow = Some(Box::new(f));
+        *self.primary.follow.borrow_mut() = Some(Rc::new(f));
+    }
+
+    /// What activating the control without a pointer fires — from the keyboard or from assistive technology — reporting whether there was anything to fire. It runs the handlers in place when it is called, so it can be taken before they are set.
+    pub(crate) fn activation(&self) -> impl Fn() -> bool + 'static {
+        let primary = Rc::clone(&self.primary);
+        move || primary.fire()
     }
 
     fn fire_primary(&self) -> bool {
-        if let Some(cb) = &self.on_press {
-            cb();
-        }
-        if let Some(follow) = &self.follow {
-            follow();
-        }
-        self.activates()
+        self.primary.fire()
     }
 
     /// Whether a primary press or the keyboard does something here: what makes a box a button, where an alt or a long press alone only adds a gesture to it.
     pub(crate) fn activates(&self) -> bool {
-        self.on_press.is_some() || self.follow.is_some()
+        self.primary.is_set()
     }
 
     pub(crate) fn set_long_press(&mut self, f: impl Fn() + 'static) {
@@ -64,10 +88,7 @@ impl PressGesture {
     }
 
     pub(crate) fn is_set(&self) -> bool {
-        self.on_press.is_some()
-            || self.follow.is_some()
-            || self.on_long_press.is_some()
-            || self.on_alt_press.is_some()
+        self.activates() || self.on_long_press.is_some() || self.on_alt_press.is_some()
     }
 
     /// Whether this gesture wants buttons beyond the primary one. A container asks before consuming a non-primary press, so one keeps falling through to the widgets behind unless something asked for it.
@@ -78,9 +99,7 @@ impl PressGesture {
     /// Whether `button` has a callback to complete. Without this a box that set only `on_alt_press` would arm on a primary press — and swallow it — having asked for nothing of the sort.
     fn accepts(&self, button: &PointerButton) -> bool {
         match button {
-            PointerButton::Primary => {
-                self.on_press.is_some() || self.follow.is_some() || self.on_long_press.is_some()
-            }
+            PointerButton::Primary => self.activates() || self.on_long_press.is_some(),
             _ => self.on_alt_press.is_some(),
         }
     }

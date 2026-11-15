@@ -95,6 +95,10 @@ struct Entry {
     role: Role,
     /// Whether Tab stops here. `false` for a control that is driven some other way and still has to be announced: the rows of a menu answer to arrow keys, and putting each one in the tab order would make Tab walk a list the user opened precisely so as not to.
     tabbable: bool,
+    /// For a control [presented](register_presented) by another, how its owner moves its cursor onto it: what asking to focus it does, since it never holds focus itself.
+    reach: Option<Rc<dyn Fn()>>,
+    /// What the control does when it is asked to act rather than pressed or keyed. See [`perform`].
+    actions: Actions,
     /// For a scroll area, whether its content can scroll now: it is a stop only then, and only while no stop inside it is reachable. See [`register_scroller`].
     scrolls: Option<Rc<dyn Fn() -> bool>>,
     /// A checked state, for the controls that have one. A closure and not a flag, for the same reason "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to get the answer that is true then.
@@ -111,6 +115,27 @@ struct Entry {
 }
 
 pub(crate) type TextInputSource = Rc<dyn Fn() -> Option<platform_core::TextInput>>;
+
+/// What a control can be asked to do through the focus order — by assistive technology, or by an activation key its own key handler left alone: one handler per action, each the same code the control's own gesture runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Action {
+    /// What a tap on the control does: press a button, choose a row, follow a link.
+    Activate,
+}
+
+/// The handlers a control registered for each [`Action`]; an action with none does nothing.
+#[derive(Default)]
+struct Actions {
+    activate: Option<Rc<dyn Fn() -> bool>>,
+}
+
+impl Actions {
+    fn handler(&self, action: Action) -> Option<Rc<dyn Fn() -> bool>> {
+        match action {
+            Action::Activate => self.activate.clone(),
+        }
+    }
+}
 
 /// Per-surface keyboard-focus state: the id allocator, the focused-widget signal, and the tab order.
 struct FocusState {
@@ -246,6 +271,8 @@ impl Drop for KeystrokeGuard {
 // The three commands below `peek` the signal they write: an effect may well issue one ("focus the selected row's field"), and a reactive read would subscribe it to the focus it sets, taking focus straight back on the next change anywhere. Same rule as `ScrollViewport::reveal`.
 
 /// Gives focus to `id`: a no-op if it already holds it, or if it sits in a subtree that takes no input, though a subtree hidden when asked is judged again once its batch settles.
+///
+/// A [presented](register_presented) control never holds focus: asking for one moves its owner's cursor onto it instead, and leaves focus with the owner.
 pub fn request(id: FocusId) {
     take(id, false);
 }
@@ -263,6 +290,15 @@ fn take(id: FocusId, from_pointer: bool) {
 
 /// Only the latest word on focus counts: a request judged after its batch settles acts only if nothing gave, released or requested focus since it was made.
 fn take_arriving(id: FocusId, from_pointer: bool, travel: Option<Travel>) {
+    if !holds_focus(id) {
+        let found = with_focus_ref(|s| s.entry(id).map(|e| (e.node, e.reach.clone())));
+        if let Some((node, Some(reach))) = found
+            && reachable(node, &scope_views())
+        {
+            reach();
+        }
+        return;
+    }
     with_focus(|s| s.arrival = travel.map(|travel| (id, travel)));
     if !refuses(id) {
         give(id, from_pointer);
@@ -297,7 +333,15 @@ fn refuses(id: FocusId) -> bool {
     node_of(id).is_some_and(|node| !crate::input_region::receives_input(node))
 }
 
+/// Whether `id` may hold focus: anything but a control another one drives, which Tab does not stop at either.
+fn holds_focus(id: FocusId) -> bool {
+    with_focus_ref(|s| s.entry(id).is_none_or(|e| e.tabbable))
+}
+
 fn give(id: FocusId, from_pointer: bool) {
+    if !holds_focus(id) {
+        return;
+    }
     supersede_deferred();
     guard_focus();
     set_pointer_focus(from_pointer);
@@ -432,8 +476,37 @@ pub fn register_with_role(id: FocusId, kind: FocusKind, node: NodeId, role: Role
 /// Registers a control that is announced but is not a Tab stop, because something else drives it.
 ///
 /// The rows of a menu are the case: they answer to arrow keys and type-ahead, and a reader that could not see them would be handed an open menu it could not describe — while a Tab order containing every row would walk the user through a list they opened in order to *avoid* walking it.
-pub fn register_presented(id: FocusId, node: NodeId, role: Role) {
+///
+/// It never holds focus. `reach` is the owner's: it moves the owner's cursor onto this control, which is what a [`request`] for it does, so a reader moving to a row leaves the keyboard with the list and the arrows carry on from that row.
+pub fn register_presented(id: FocusId, node: NodeId, role: Role, reach: impl Fn() + 'static) {
     register_node(id, FocusKind::Widget, Some(node), role, false);
+    let reach: Rc<dyn Fn()> = Rc::new(reach);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.reach = Some(reach);
+        }
+    });
+}
+
+/// Declares what `id` does when it is [activated](Action::Activate) without a pointer: the same code a tap on it runs, reporting whether there was anything to run.
+pub fn set_activation(id: FocusId, activate: impl Fn() -> bool + 'static) {
+    let activate: Rc<dyn Fn() -> bool> = Rc::new(activate);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.actions.activate = Some(activate);
+        }
+    });
+}
+
+/// Asks the control `id` to carry out `action`, reporting whether it did. The one route every such request takes: a reader's, and an activation key the focused control's own handler left alone.
+///
+/// A control out of reach — disabled, inside a closed region or behind a modal — does nothing, as it would not answer a tap; nor does one that registered no handler for `action`.
+pub fn perform(id: FocusId, action: Action) -> bool {
+    let found = with_focus_ref(|s| s.entry(id).map(|e| (e.node, e.actions.handler(action))));
+    let Some((node, Some(handler))) = found else {
+        return false;
+    };
+    reachable(node, &scope_views()) && handler()
 }
 
 /// Registers a scroll area as a stop of its own, so the keyboard can scroll it — but only while `scrolls` reads true and no stop inside `node` is reachable, or while it holds focus.
@@ -497,6 +570,8 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                     node,
                     role,
                     tabbable,
+                    reach: None,
+                    actions: Actions::default(),
                     scrolls: None,
                     toggled: None,
                     value: None,

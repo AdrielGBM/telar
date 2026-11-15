@@ -72,13 +72,23 @@ impl ToolbarContext {
             && self.0.focus_id.get().is_some_and(focus::is_focus_visible)
     }
 
+    /// Puts the cursor on item `index` for a press on it, bringing the keyboard to the toolbar without a ring.
     pub(crate) fn select(&self, index: usize) {
+        self.move_cursor(index, focus::request_from_pointer);
+    }
+
+    /// Puts the cursor on item `index` and the keyboard on the toolbar, as a reader moving to that item asks.
+    pub(crate) fn reach(&self, index: usize) {
+        self.move_cursor(index, focus::request);
+    }
+
+    fn move_cursor(&self, index: usize, request: fn(FocusId)) {
         self.0.cursor.set(index);
         if self.0.focused.peek() {
             return;
         }
         match self.0.focus_id.get() {
-            Some(id) => focus::request_from_pointer(id),
+            Some(id) => request(id),
             None => {
                 if let Some(node) = self.0.node.get() {
                     focus::focus_first_in(node);

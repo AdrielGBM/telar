@@ -179,6 +179,44 @@ fn the_arrows_walk_a_cursor_past_disabled_rows_and_enter_chooses() {
     assert_eq!(mounted.selected().as_deref(), Some("apple"));
 }
 
+/// The option a reader finds at `position` (counted from one) among the rows.
+fn option_at(position: u32) -> telar::focus::FocusId {
+    telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| {
+            exposed.role == Role::Option && exposed.position.map(|p| p.position) == Some(position)
+        })
+        .unwrap_or_else(|| panic!("an option at {position}"))
+        .id
+}
+
+/// A reader moving to a row puts the list's cursor on it and the keyboard on the list, and activating it chooses it as a press does; the arrows carry on from there.
+#[test]
+fn a_reader_reaches_a_row_through_the_list_and_activating_it_chooses_it() {
+    let mut mounted = Mounted::new(fruit(), 300.0);
+    let list = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::ListBox)
+        .expect("a list box")
+        .id;
+
+    telar::focus::request(option_at(3));
+    mounted.settle();
+    assert_eq!(telar::focus::current(), Some(list));
+    assert_eq!(mounted.pointed().as_deref(), Some("Blueberry"));
+
+    assert!(telar::focus::perform(
+        option_at(4),
+        telar::focus::Action::Activate
+    ));
+    mounted.settle();
+    assert_eq!(mounted.selected().as_deref(), Some("cherry"));
+    assert_eq!(telar::focus::current(), Some(list), "the list keeps focus");
+
+    mounted.key(NamedKey::ArrowUp);
+    assert_eq!(mounted.pointed().as_deref(), Some("Blueberry"));
+}
+
 #[test]
 fn typing_jumps_to_the_row_a_label_starts_with() {
     let mut mounted = Mounted::focused(fruit(), 300.0);

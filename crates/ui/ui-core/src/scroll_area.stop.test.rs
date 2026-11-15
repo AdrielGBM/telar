@@ -188,7 +188,7 @@ fn rows_that_are_only_presented_leave_the_area_a_stop() {
         vec![],
     )
     .unwrap()
-    .presented(Role::Option);
+    .presented(Role::Option, || {});
     let (area, _) = area(column(vec![box_item(row)]));
     let _tree = mounted(area);
 

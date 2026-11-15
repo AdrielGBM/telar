@@ -10,9 +10,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use layout_core::NodeId;
-use platform_core::{
-    AccessNode, CurrentKind, Event, Key, ModifiersState, NamedKey, Role, SetPosition,
-};
+use platform_core::{AccessNode, CurrentKind, Event, Role, SetPosition};
 use renderer_core::DrawCommand;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -1209,17 +1207,13 @@ impl AccessTarget {
 
 /// Carries out a screen reader's request to move to the control `id` names in [`snapshot`] of the surface entered now, or to activate it.
 ///
-/// A control of its own takes focus, and activation goes out as the Enter it already answers, so a reader pressing a button travels the route a keyboard does. One of a nested surface is reached the way a box event for it is, as an [`Event::AccessAction`] inside [`Event::InSurface`], which the frames along the way pass on to the surface that drew it; one of a [foreign](crate::ForeignSurface) surface, which no frame here can enter, is handed to that surface directly, and its focus stop takes focus once focus is inside. What has to travel through the surface's tree is handed to `dispatch`.
+/// A control of its own takes focus — a [presented](crate::StyledContainer::presented) one moves its owner's cursor onto itself instead — and is activated through [`focus::perform`], which runs what a tap on it runs. One of a nested surface is reached the way a box event for it is, as an [`Event::AccessAction`] inside [`Event::InSurface`], which the frames along the way pass on to the surface that drew it; one of a [foreign](crate::ForeignSurface) surface, which no frame here can enter, is handed to that surface directly, and its focus stop takes focus once focus is inside. What has to travel through the surface's tree is handed to `dispatch`.
 pub fn perform_action(id: u64, activate: bool, dispatch: impl FnOnce(&Event)) {
     match AccessTarget::of(id) {
         AccessTarget::Own(id) => {
             focus::request(id);
             if activate {
-                dispatch(&Event::KeyPressed {
-                    key: Key::Named(NamedKey::Enter),
-                    modifiers: ModifiersState::default(),
-                    unmodified: None,
-                });
+                focus::perform(id, focus::Action::Activate);
             }
         }
         AccessTarget::Nested { surface, id } => match crate::foreign_surface::target(surface, id) {
@@ -1272,3 +1266,7 @@ pub fn nested_surfaces(commands: &[DrawCommand]) -> Vec<NestedSurface> {
 #[cfg(test)]
 #[path = "accessibility.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "accessibility.action.test.rs"]
+mod action_tests;

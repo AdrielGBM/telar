@@ -457,7 +457,7 @@ fn a_focused_tree_names_the_row_its_cursor_rests_on() {
             vec![],
         )
         .unwrap()
-        .presented(Role::TreeItem)
+        .presented(Role::TreeItem, || {})
     };
     let (first, second) = (row(), row());
     let rows = [first.focus_id().unwrap(), second.focus_id().unwrap()];
@@ -515,7 +515,7 @@ fn a_combobox_names_the_list_it_controls() {
         vec![],
     )
     .unwrap()
-    .presented(Role::ListBox);
+    .presented(Role::ListBox, || {});
     let list_id = list.focus_id().unwrap();
     let gone = focus::next_id();
     let target = reactive_core::signal(list_id);
@@ -1374,7 +1374,7 @@ fn presented(role: Role, children: Vec<Box<dyn LayoutItem>>) -> StyledContainer 
         children,
     )
     .unwrap()
-    .presented(role)
+    .presented(role, || {})
 }
 
 /// Every node comes after the one it sits in, and the window's own come in reading order: what lets a flat reader walk the list and a tree reader walk the parents, and see the same thing.
@@ -1521,7 +1521,7 @@ fn a_tree_row_holds_the_rows_nested_under_it() {
             content,
         )
         .unwrap()
-        .presented(Role::TreeItem)
+        .presented(Role::TreeItem, || {})
     };
     let primary = row("Primary", vec![]);
     let button = row("Button", vec![box_item(primary)]);

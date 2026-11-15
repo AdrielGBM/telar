@@ -285,7 +285,13 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 Key::Named(NamedKey::End) if is_open && row_count > 0 => {
                     highlighted.set(list.edge(-1))
                 }
-                Key::Named(NamedKey::Enter) if is_open => {
+                // A space is a character only inside a query already under way, and confirms the row like Enter every other time.
+                Key::Named(NamedKey::Space) if is_open && list.is_searching() => {
+                    if let Some(idx) = list.type_ahead(' ', highlighted.peek()) {
+                        highlighted.set(Some(idx));
+                    }
+                }
+                Key::Named(NamedKey::Enter | NamedKey::Space) if is_open => {
                     if let Some(idx) = highlighted.peek() {
                         list.commit(idx);
                     }
@@ -296,17 +302,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                         highlighted.set(Some(idx));
                     }
                 }
-                // A space is a character only inside a query already under way, and the opener every other time.
-                Key::Named(NamedKey::Space) if is_open && list.is_searching() => {
-                    if let Some(idx) = list.type_ahead(' ', highlighted.peek()) {
-                        highlighted.set(Some(idx));
-                    }
-                }
-                Key::Named(NamedKey::ArrowDown | NamedKey::Enter | NamedKey::Space)
-                    if !is_open && trigger_focused.peek() =>
-                {
-                    toggle()
-                }
+                Key::Named(NamedKey::ArrowDown) if !is_open && trigger_focused.peek() => toggle(),
                 _ => return false,
             }
             // Taken, so the list the panel scrolls does not also answer an arrow by scrolling when it holds focus.
@@ -316,7 +312,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     let trigger = {
         let list = list.clone();
         trigger(face, open, toggle)?
-            // A control, which is what makes every key above addressable. It answers its own keys, so the default Enter-activates-the-press is stood down.
+            // A control, which is what makes every key above addressable; Enter and Space on a shut list fall through to the press, which opens it.
             .control(Role::ComboBox)
             .has_popup(HasPopup::ListBox)
             .expanded(move || open.get())

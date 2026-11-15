@@ -543,6 +543,17 @@ impl Table {
         self.reveal(line, &at);
     }
 
+    /// Puts the cursor on the cell `at` and the keyboard on the table, as a reader moving to that cell asks.
+    fn reach(&self, at: &At) {
+        let rows = self.rows();
+        if let Some((line, column)) = self.line_of(&rows, at) {
+            self.move_to(&rows, line, column);
+        }
+        if let Some(table) = self.focus.get() {
+            focus::request(table);
+        }
+    }
+
     /// Moves the cursor from the row on line `from` to `line`, choosing every row between the anchor and it when `ranging`, and making its row the anchor otherwise.
     fn walk_to(
         &self,
@@ -954,9 +965,13 @@ fn presented_cell(
         let (table, at) = (table.clone(), at.clone());
         move || table.press(&at)
     };
+    let reach = {
+        let (table, at) = (table.clone(), at.clone());
+        move || table.reach(&at)
+    };
     let cell = StyledContainer::new(shape(), paint, content)?
         .styled_by(shape)
-        .presented(role)
+        .presented(role, reach)
         .on_press(press);
     if let Some(focus_id) = cell.focus_id() {
         table.built.track(at, focus_id);
@@ -1007,12 +1022,21 @@ fn body_row(
         let (table, id) = (table.clone(), id.clone());
         move || table.selection.is_selected(&id)
     };
+    let reach = {
+        let (table, id) = (table.clone(), id.clone());
+        move || {
+            table.reach(&At {
+                row: Some(id.clone()),
+                column: 0,
+            })
+        }
+    };
     let height = (!table.places.is_measured()).then_some(table.row_height);
     let row_box = move || line_box(height);
     let built = StyledContainer::new(row_box(), paint(false), cells)?
         .styled_by(row_box)
         .hover_style(paint(true))
-        .presented(Role::Row)
+        .presented(Role::Row, reach)
         .positioned(place)
         .toggled(selected);
     Ok(box_item(built))

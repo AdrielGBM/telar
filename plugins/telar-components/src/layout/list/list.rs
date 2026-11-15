@@ -790,15 +790,22 @@ fn row_layout(size: ControlSize, look: RowLook) -> LayoutStyle {
 
 impl ListContext {
     pub(crate) fn present(&self, row: StyledContainer, index: u32, mark: Mark) -> StyledContainer {
+        let highlighted = self.0.highlighted;
+        let reach = move || {
+            highlighted.set_if_changed(Some(index));
+        };
         match self.0.selected {
             Some(selected) => row
-                .presented(Role::Option)
+                .presented(Role::Option, reach)
                 .toggled(move || selected.get() == index),
-            None => row.presented(match mark {
-                Mark::None => Role::MenuItem,
-                Mark::Tick => Role::MenuItemCheckBox,
-                Mark::Choice => Role::MenuItemRadio,
-            }),
+            None => row.presented(
+                match mark {
+                    Mark::None => Role::MenuItem,
+                    Mark::Tick => Role::MenuItemCheckBox,
+                    Mark::Choice => Role::MenuItemRadio,
+                },
+                reach,
+            ),
         }
     }
 

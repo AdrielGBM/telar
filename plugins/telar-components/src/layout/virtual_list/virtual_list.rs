@@ -261,6 +261,17 @@ impl List {
         self.places.reveal(index);
     }
 
+    /// Puts the cursor on the row `id` and the keyboard on the list, as a reader moving to that row asks.
+    fn reach(&self, id: &str) {
+        let rows = self.rows();
+        if let Some(index) = rows.iter().position(|row| &*row.id == id) {
+            self.walk_to(&rows, index, None, false);
+        }
+        if let Some(list) = self.focus.get() {
+            focus::request(list);
+        }
+    }
+
     /// Moves the cursor from `from` to `index`, choosing every row between the anchor and it when `ranging`, and making it the anchor otherwise.
     fn walk_to(&self, rows: &[ListRow], index: usize, from: Option<usize>, ranging: bool) {
         self.move_to(rows, index);
@@ -454,6 +465,10 @@ fn build_row(
         let (list, id) = (list.clone(), id.clone());
         move || list.press(&id)
     };
+    let reach = {
+        let (list, id) = (list.clone(), id.clone());
+        move || list.reach(&id)
+    };
     let places = list.places.clone();
     let row_box = move || {
         let size = places.size();
@@ -469,7 +484,7 @@ fn build_row(
         .styled_by(row_box)
         .hover_style(paint(true))
         .disabled(move || disabled)
-        .presented(Role::Option)
+        .presented(Role::Option, reach)
         .positioned(place)
         .toggled(selected)
         .on_press(press);

@@ -113,8 +113,8 @@ owns is left out, and a paragraph holding a link is kept to be read around the l
 `role:h2`) only describes it. A role a person operates — `button`, `switch` (or `toggle`), `checkbox`,
 `radio`, `tab`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `option`, `slider`, `spinbutton`, `link` —
 also makes the box a control, as `StyledContainer::control` does from Rust: a Tab stop that wears the
-theme's focus ring when the keyboard reaches it, pressed by Enter and Space the way a tap presses it (Enter
-only for a link), and announced with that role. A plain `col` or `row` with such a role becomes a styled box,
+theme's focus ring when the keyboard reaches it, pressed by the Enter and Space its role keeps the way a tap
+presses it (Enter only for a link, neither for a slider), and announced with that role. A plain `col` or `row` with such a role becomes a styled box,
 since only a styled box can be one.
 
 `toggled:` gives the control an on/off state, re-read whenever what it reads changes. One flag, and the role
@@ -141,8 +141,9 @@ box role:button toggled:$bold a11y_label:"Bold" on_press:(|| $bold.set(!$bold.ge
 
 Two combinations are build errors: `toggled:` on a box whose role carries no on/off state (no role, a region,
 a slider), and an operated role other than `link` together with `to:`, since a box with a destination is a
-link whatever else it said. A box that also has `on_key:` answers its own keys, so Enter and Space go to that
-handler rather than pressing it.
+link whatever else it said. A box that also has `on_key:` hears its keys first: an Enter or Space the handler
+takes is the handler's, and one it leaves presses the box. A box with `consumes_keys:` is pressed only by the
+Enter or Space it declares.
 
 From Rust, the same box is `StyledContainer::control(role)` followed by `.toggled(|| …)`; the disclosure in
 the catalogue's accordion uses the same flag for expanded.
@@ -154,6 +155,14 @@ the catalogue's accordion uses the same flag for expanded.
 | Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`/`partially checked`, `pressed`/`not pressed`/`partially pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
 | Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
 | Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to: the canvas, which is only built when `--renderer canvas` asks for it, carries no accessibility tree yet, so the document renderer (`web-dom`, the default) is the browser build assistive technology can read. | — |
+
+A reader's `Focus` and `Click` reach a control through the focus order, not through the keyboard. `Focus` moves
+the keyboard to it. `Click` runs the control's activation, the code a tap on it runs, which the control
+registered as it was built (`focus::perform` with `Action::Activate`), so a control whose key handler answers
+Enter its own way is still pressed, and one that is disabled or out of reach is not. A row that a list, tree,
+table, menu, toolbar or palette walks with a cursor while it keeps the keyboard (`StyledContainer::presented`)
+never takes focus: `Focus` on it moves its owner's cursor onto it and the owner keeps the keyboard, and
+`Click` runs the row's press, so the next arrow key carries on from that row.
 
 A link has one state of its own: `current:` marks it as the current one of its set, the page being shown or
 the place on the page the reader is at. It is `aria-current` in a document, AccessKit's `aria_current` on the

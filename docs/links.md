@@ -169,7 +169,8 @@ rather than inheriting one) when the spans are found by scanning the text and th
 | Headless | `push_location` | Revealed | Whatever opener a test installed with `set_uri_opener`; none by default | Followed in place |
 
 Assistive technology activates a link the way it activates any control: on the desktop, AccessKit's `Click`
-focuses it and sends Enter, and the node carries `Role::Link` and its URL. On a document the `<a>` is what a
+focuses it and runs its activation, which follows it as a tap does, and the node carries `Role::Link` and its
+URL. On a document the `<a>` is what a
 reader activates, and the browser reports it like a click.
 
 ### The document target

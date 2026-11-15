@@ -184,6 +184,18 @@ fn focus_follows_the_selection_so_the_next_key_continues_from_there() {
 }
 
 #[test]
+fn enter_and_space_select_the_focused_tab() {
+    let selected = signal(Page::First);
+    let mut tree = focused_row(selected);
+    telar::focus::focus_next();
+    route(&mut tree, &named(NamedKey::Enter));
+    assert_eq!(selected.get(), Page::Second);
+    telar::focus::focus_next();
+    route(&mut tree, &named(NamedKey::Space));
+    assert_eq!(selected.get(), Page::Third);
+}
+
+#[test]
 fn the_left_arrow_moves_forward_when_the_surface_reads_right_to_left() {
     let selected = signal(Page::First);
     let mut tree = focused_row(selected);

@@ -393,7 +393,7 @@ fn a_control_driven_by_another_keeps_its_keys_without_being_a_stop() {
     crate::context::reset_layout_runtime();
     let node = laid_out_box().layout_node();
     let id = next_id();
-    register_presented(id, node, Role::MenuItem);
+    register_presented(id, node, Role::MenuItem, || {});
 
     let focusable = focusable_of(id, Role::MenuItem, None);
     assert!(!focusable.tab_stop);

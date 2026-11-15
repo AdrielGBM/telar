@@ -211,9 +211,12 @@ impl Square {
         .on_press(press)
         .a11y_label(move || label.get());
 
-        let button = match index {
-            Some(_) => button.presented(Role::Button),
-            None => button.control(Role::Button),
+        let button = match (&toolbar, index) {
+            (Some(toolbar), Some(index)) => {
+                let toolbar = toolbar.clone();
+                button.presented(Role::Button, move || toolbar.reach(index))
+            }
+            _ => button.control(Role::Button),
         };
         let button = button.keyboard_shortcut(move || shortcut.get());
         let button = if pressed.is_some() {

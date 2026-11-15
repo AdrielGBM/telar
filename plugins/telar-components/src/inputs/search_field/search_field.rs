@@ -185,7 +185,14 @@ fn clear_button(
     let button = StyledContainer::new(side(), paint(false), children![cross])?
         .styled_by(side)
         .hover_style(paint(true))
-        .presented(Role::Button)
+        .presented(Role::Button, {
+            let line = line.clone();
+            move || {
+                if let Some(id) = line.get() {
+                    focus::request(id);
+                }
+            }
+        })
         .a11y_label(|| strings::text(strings::CLEAR_SEARCH))
         .hit_outset(Reactive::of(move || {
             telar::Insets::all(shared::target_outset(shared::icon_size(size)))

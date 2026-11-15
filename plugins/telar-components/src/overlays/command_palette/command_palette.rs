@@ -404,6 +404,18 @@ impl Palette {
         }
     }
 
+    /// Puts the cursor on the command `id` and scrolls it into view, as a reader moving to its row asks; the keyboard stays in the field.
+    fn reach(&self, id: &Arc<str>) {
+        let entries = self.entries();
+        if let Some(i) = entries
+            .iter()
+            .position(|entry| entry.reachable_id() == Some(id))
+        {
+            self.cursor.set(Some(id.clone()));
+            self.places.reveal(i);
+        }
+    }
+
     fn run_cursor(&self) {
         let entries = self.entries();
         if let Some(i) = self.cursor_index(&entries)
@@ -733,6 +745,10 @@ fn build_row(
         let (palette, command) = (palette.clone(), command.clone());
         move || (palette.run)(&command)
     };
+    let reach = {
+        let (palette, id) = (palette.clone(), id.clone());
+        move || palette.reach(&id)
+    };
     let hover = {
         let (palette, id) = (palette.clone(), id.clone());
         move |inside: bool| {
@@ -761,7 +777,7 @@ fn build_row(
         .styled_by(row_box)
         .hover_style(paint(true))
         .disabled(move || disabled)
-        .presented(Role::Option)
+        .presented(Role::Option, reach)
         .toggled(selected)
         .a11y_label(move || name.clone())
         .keyboard_shortcut(move || chord.as_deref().unwrap_or_default().to_string())

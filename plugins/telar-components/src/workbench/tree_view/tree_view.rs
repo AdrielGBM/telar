@@ -398,6 +398,17 @@ impl Tree {
         self.reveal(index);
     }
 
+    /// Puts the cursor on the row `id` and the keyboard on the tree, as a reader moving to that row asks.
+    fn reach(&self, id: &str) {
+        let rows = self.rows();
+        if let Some(index) = rows.iter().position(|row| &*row.node.id == id) {
+            self.move_to(&rows, index);
+        }
+        if let Some(tree) = self.focus.get() {
+            focus::request(tree);
+        }
+    }
+
     fn reveal(&self, index: usize) {
         self.places.reveal(index);
     }
@@ -618,9 +629,13 @@ fn build_row(
             tree.take_focus();
         }
     };
+    let reach = {
+        let (tree, id) = (tree.clone(), id.clone());
+        move || tree.reach(&id)
+    };
     let built = StyledContainer::new(row_box(level, &tree.places), paint(false), content)?
         .hover_style(paint(true))
-        .presented(Role::TreeItem)
+        .presented(Role::TreeItem, reach)
         .toggled(selected)
         .positioned(row.position)
         .on_press(press)

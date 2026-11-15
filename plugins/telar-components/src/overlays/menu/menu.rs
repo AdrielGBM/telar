@@ -251,10 +251,8 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 return keys.is_some_and(|keys| keys(key));
             }
             match key {
-                Key::Named(NamedKey::ArrowDown | NamedKey::Enter | NamedKey::Space)
-                    if trigger_focused.peek() =>
-                {
-                    seed.set(matches!(key, Key::Named(NamedKey::ArrowDown)));
+                Key::Named(NamedKey::ArrowDown) if trigger_focused.peek() => {
+                    seed.set(true);
                     toggle();
                     true
                 }
@@ -263,7 +261,7 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         }
     };
     let trigger = dropdown::trigger(face, open, toggle)?
-        // A control, which is what makes every key above addressable. It answers its own keys, so the default Enter-activates-the-press is stood down.
+        // A control, which is what makes every key above addressable; Enter and Space on a shut menu fall through to the press, which opens it with nothing highlighted.
         .control(Role::Button)
         .has_popup(HasPopup::Menu)
         .expanded(move || open.get())

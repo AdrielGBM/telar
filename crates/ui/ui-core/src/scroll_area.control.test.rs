@@ -33,7 +33,7 @@ fn row(height: f32) -> StyledContainer {
         vec![],
     )
     .unwrap()
-    .presented(Role::TreeItem)
+    .presented(Role::TreeItem, || {})
 }
 
 fn scroll(content_height: f32) -> LayoutScrollArea {

@@ -241,6 +241,29 @@ fn every_way_of_closing_a_select_leaves_the_keyboard_on_it() {
     );
 }
 
+/// Enter and Space on an open select confirm the row the cursor is on and shut the list, rather than pressing the trigger that would shut it with nothing chosen; on a shut one they open it again.
+#[test]
+fn enter_and_space_on_an_open_select_confirm_the_highlighted_row() {
+    let (mut tree, picked) = opened(3, 0.0);
+    let trigger = exposed(Role::ComboBox).id;
+    let is_open = || telar::focus::controls_state(trigger).is_some();
+
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Enter));
+    settle(&tree);
+    assert_eq!(picked.get(), 1);
+    assert!(!is_open(), "the pick shut the list");
+
+    route(&mut tree, &named(NamedKey::Space));
+    settle(&tree);
+    assert!(is_open(), "Space opens a shut select");
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Space));
+    settle(&tree);
+    assert_eq!(picked.get(), 2);
+    assert!(!is_open());
+}
+
 /// A select's list is a list box of options, each saying whether it is the bound choice: the one picked, not the one the cursor is on.
 #[test]
 fn a_select_s_rows_are_options_that_say_which_one_is_chosen() {

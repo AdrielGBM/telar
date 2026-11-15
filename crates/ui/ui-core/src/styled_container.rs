@@ -627,11 +627,14 @@ impl StyledContainer {
     ///
     /// It joins the tab order at this node, answers Enter and Space the way it answers a tap, draws the theme's focus ring while the keyboard is what reached it (see [`focus::is_focus_visible`](crate::focus::is_focus_visible)), and reports `role` outwards. A caller that wants a ring of its own still says so with [`focus_style`](Self::focus_style); this only supplies one when nothing else has.
     ///
+    /// The keys are offered to the box's own [`on_key`](Self::on_key) first, and press it only when that leaves them: a dropdown trigger takes Enter to confirm its highlighted row, and is pressed by it while its list is shut. Only the ones it keeps press it — those of its role, or of [`consumes_keys`](Self::consumes_keys) — so a slider is not pressed by Space, and a link only by Enter. Assistive technology activating it runs the same press, through [`focus::perform`].
+    ///
     /// Deliberately not implied by [`on_press`](Self::on_press): a scrim, a click-away backdrop and a drag surface all take presses and none of them is a place the keyboard should stop.
     pub fn control(mut self, role: focus::Role) -> Self {
         self.role = Some(role);
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_with_role(id, focus::FocusKind::Widget, self.node, role);
+        focus::set_activation(id, self.press.activation());
         self.focusable.activates = true;
         self.ring_by_default();
         self.mark_interactive();
@@ -682,10 +685,13 @@ impl StyledContainer {
     }
 
     /// Announces the box as a control of `role` that something else drives: the rows of a tree, walked with the arrows while the tree holds focus. It is no Tab stop, and a tap on it leaves focus where it is, but it carries [`toggled`](Self::toggled), [`expanded`](Self::expanded) and [`positioned`](Self::positioned) like any control.
-    pub fn presented(mut self, role: focus::Role) -> Self {
+    ///
+    /// `reach` is the owner's way to it: it moves the owner's cursor onto this box, and is what a reader moving to the box runs (see [`focus::register_presented`]). A reader activating the box runs its press, and focus stays with the owner.
+    pub fn presented(mut self, role: focus::Role, reach: impl Fn() + 'static) -> Self {
         self.role = Some(role);
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
-        focus::register_presented(id, self.node, role);
+        focus::register_presented(id, self.node, role, reach);
+        focus::set_activation(id, self.press.activation());
         self.focusable.presented = true;
         self
     }
@@ -1303,12 +1309,24 @@ impl StyledContainer {
         }
     }
 
-    /// Whether `key` fires the press of a focused control. Space scrolls the page a link sits on, so a link answers Enter alone.
+    /// Whether `key` fires the press of a focused control: an activation key it keeps, so a key it hands back to its host is never also taken here. A link keeps neither, since a document follows it by itself, and is followed on Enter alone everywhere else: Space scrolls the page it sits on.
     fn activated_by(&self, key: &Key) -> bool {
         match key {
-            Key::Named(NamedKey::Enter) => true,
-            Key::Named(NamedKey::Space) => self.link.is_none(),
+            Key::Named(NamedKey::Enter) => {
+                self.link.is_some() || self.kept_keys().contains(ConsumedKeys::ENTER)
+            }
+            Key::Named(NamedKey::Space) => self.kept_keys().contains(ConsumedKeys::SPACE),
             _ => false,
+        }
+    }
+
+    /// The keys the box keeps while it holds focus, as it declared them or as its role keeps them.
+    fn kept_keys(&self) -> ConsumedKeys {
+        match &self.focusable.consumes {
+            Some(keys) => keys(),
+            None => self
+                .role
+                .map_or(ConsumedKeys::EMPTY, |role| role.consumed_keys()),
         }
     }
 
@@ -1448,16 +1466,6 @@ impl StyledContainer {
                     }
                     return EventResult::Handled;
                 }
-                // Consumed only when there was something to fire, so Space on a box with no press handler still reaches whatever else wanted it. Skipped for a box that handles its own keys: a dropdown trigger answers Enter by confirming a highlighted row, not by re-opening itself.
-                if self.focusable.activates
-                    && self.on_key.is_none()
-                    && let Some(id) = self.focusable.id
-                    && focus::is_key_target(id)
-                    && self.activated_by(key)
-                    && self.press.activate()
-                {
-                    return EventResult::Handled;
-                }
                 // Not while a field has the caret: this is the app's shortcut table, which would otherwise fire on every letter typed. Nor from a subtree that is out of the layout flow: a key carries no position to miss the box with, so the chain is the only thing that can keep the shortcuts of a table nobody can see from firing.
                 if let Some(cb) = &self.on_key
                     && (!self.focusable.keys_need_focus
@@ -1465,6 +1473,15 @@ impl StyledContainer {
                     && !focus::text_entry_takes_key(key, *modifiers)
                     && input_region::receives_input(self.node)
                     && cb(key)
+                {
+                    return EventResult::Handled;
+                }
+                // Consumed only when there was something to fire, so Space on a box with no press handler still reaches whatever else wanted it.
+                if self.focusable.activates
+                    && let Some(id) = self.focusable.id
+                    && focus::is_key_target(id)
+                    && self.activated_by(key)
+                    && focus::perform(id, focus::Action::Activate)
                 {
                     return EventResult::Handled;
                 }

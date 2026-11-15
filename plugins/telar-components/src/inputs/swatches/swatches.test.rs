@@ -258,6 +258,20 @@ fn a_style_amendment_reshapes_every_swatch() {
 }
 
 #[test]
+fn enter_and_space_pick_the_focused_swatch() {
+    let selected = signal(None::<u32>);
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let (mut item, _) = build(selected, &seen);
+    focus_swatch(2);
+    key(&mut item, NamedKey::Enter);
+    assert_eq!(selected.get(), Some(2));
+    telar::focus::focus_next();
+    key(&mut item, NamedKey::Space);
+    assert_eq!(selected.get(), Some(3));
+    assert_eq!(*seen.borrow(), vec![2, 3]);
+}
+
+#[test]
 fn every_swatch_keeps_the_arrows_the_edges_and_its_activation_keys() {
     let keys = crate::test_support::declared_keys(Role::Radio, || {
         let (item, _) = build(signal(None::<u32>), &Rc::new(RefCell::new(Vec::new())));

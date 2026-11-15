@@ -16,7 +16,8 @@ Each role has a default, `Role::consumed_keys()`:
 
 | Role | Keeps |
 | --- | --- |
-| button, link, checkbox, radio, switch, tab, disclosure | Space, Enter |
+| button, checkbox, radio, switch, tab, disclosure | Space, Enter |
+| link | nothing: a document follows it on Enter by itself and scrolls on Space |
 | menu item, combobox | Space, Enter, Up/Down, Home/End |
 | slider, splitter, toolbar | the arrows |
 | tree, tree item | the arrows (Up/Down walk the rows, Right/Left expand, collapse or step between parent and child), Home/End, Space, Enter. Typeahead is characters, which are never in the set |
@@ -36,11 +37,19 @@ State adjusts it (`ui_core::focus::focusable_of`):
   Up/Down, Home and End while open.
 
 A control that answers a key it did not declare fights the host for that key on web-dom. That is the rule to
-remember when writing a custom control with `on_focused_key`.
+remember when writing a custom control with `on_focused_key`. Telar keeps to it for the press: a control is
+pressed only by the Space or Enter it keeps, so a `role:slider` with `on_press` leaves both to the host, and a
+button declaring `consumes_keys:enter` is pressed by Enter alone. A link keeps neither and is still followed
+on Enter where no document does it.
+
+A control's own `on_key` hears its keys first, and the press answers only what the handler leaves. Tabs and
+swatches walk with the arrows and are chosen by Enter and Space; a dropdown trigger takes Enter and Space to
+confirm its highlighted row while its list is open, and leaves them to the press, which opens it, while it is
+shut.
 
 In `.rsx`, a box becomes a control by its role: `role:button`, `role:switch`, `role:checkbox`, `role:tab`,
 `role:slider` and the other roles a person operates make it a Tab stop that keeps that role's keys, wears the
-theme's ring, and is pressed by Enter and Space as by a tap (see
+theme's ring, and is pressed by the Space and Enter it keeps as by a tap (see
 [accessibility.md](accessibility.md#controls-and-their-state)). A region (`role:navigation`) stays out of the
 Tab order. A box with `on_press` and no role still answers only the pointer: a scrim or a drag surface takes
 presses without being a place the keyboard should stop.
