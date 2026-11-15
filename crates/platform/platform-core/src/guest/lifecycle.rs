@@ -86,7 +86,7 @@ impl<Upper: UpperServices> super::contract::ArgShape for Lifecycle<Upper> {
     const ARG_SHAPE: u64 = Self::LAYOUT.shape;
 }
 
-/// A boundary's table of entries, which starts with its [`Lifecycle`] and carries the [`SurfaceReport`] of the instances it builds, as [`entry_table!`](crate::entry_table) declares one: what [`open_guest`](super::open_guest) copies out of a library, and what a host drives any guest through.
+/// A boundary's table of entries, which starts with its [`Lifecycle`] and carries the [`SurfaceReport`] of the instances it builds, as [`entry_table!`](crate::entry_table) declares one: what `open_guest` copies out of a library, and what a host drives any guest through.
 ///
 /// # Safety
 ///

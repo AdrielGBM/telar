@@ -152,7 +152,7 @@ impl Drop for Timer {
     }
 }
 
-/// Runs `callback` on this thread once `delay` has passed, during a later turn of the loop; see the [module docs](self).
+/// Runs `callback` on this thread once `delay` has passed, during a later turn of the loop; see the module docs.
 ///
 /// The callback runs inside a batch and re-enters the surface that was active when it was scheduled, as a [`spawn_task`](crate::spawn_task) completion does. Keep the returned [`Timer`] for as long as the callback should still run: dropping it cancels the callback, and [`Timer::pause`] holds the wait, as a notice does while the pointer rests on it.
 ///

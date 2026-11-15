@@ -22,7 +22,7 @@ use crate::{DrawList, EmbedEntries, GuestPanic, GuestStop, WindowCommands};
 
 /// A loaded guest the host drives: one instance its library built, and the library itself, which outlives the instance. `!Send`/`!Sync`: the instance is a foreign reactive runtime, driven only on the UI thread.
 ///
-/// Every call goes through its [`GuestLibrary`], so once the guest has panicked none reaches it again: [`panic`](Self::panic) says what happened and where, and every method answers as an empty guest would — nothing painted, no event taken, no timer waiting, nothing read. The host shows the report in the guest's place.
+/// Every call goes through its [`GuestLibrary`], so once the guest has panicked none reaches it again: [`stopped`](Self::stopped) says what happened and where, and every method answers as an empty guest would — nothing painted, no event taken, no timer waiting, nothing read. The host shows the report in the guest's place.
 ///
 /// The guest's surface is a [`ForeignSurface`] of the host's: its frame is marked with its [`boundary`](Self::boundary), so a screen reader reads what the guest reports of it where the host shows it, and acts on it, and its keyboard sits behind the one [focus stop](Self::focus_stop) the host keeps for it, the only way keys reach it.
 ///

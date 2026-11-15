@@ -2,7 +2,7 @@
 //!
 //! Everything an application's widgets touch — signals, layout nodes, overlays, the motion registry, the task queue — lives in a thread-local. In an ordinary build there is one copy of each and the runner can reach them directly. Under `cargo telar dev` the application is a dylib with its **own** copies, and every one of those has to be driven across the boundary instead: the host's `motion::tick` advances an empty registry, the host's `drain_tasks` runs callbacks nobody queued, the host's overlay dispatch consults a registry no widget ever registered in.
 //!
-//! So there are two runtimes, and the runner drives whichever it was handed: [`LocalApp`] for a tree in this process, [`crate::hot::HotApp`] for one behind a dylib. This trait is the difference between them.
+//! So there are two runtimes, and the runner drives whichever it was handed: [`LocalApp`] for a tree in this process, `crate::hot::HotApp` for one behind a dylib. This trait is the difference between them.
 //!
 //! **It is not part of [`App`]**, so the trait an application implements carries only the methods an author writes; nothing here is reachable from application code.
 
@@ -27,8 +27,10 @@ pub trait AppRuntime: 'static {
     /// Mounting belongs here rather than to the runner because a tree's segment effects must be created in the same reactive runtime as the signals its `view()` reads. Mount on the wrong side and no subscription is ever established: the tree renders once and then never again on its own.
     fn mount(&mut self) -> Box<dyn UiTree>;
 
+    /// The colour the surface is cleared to before each frame, or `None` to keep the backend's own.
     fn clear_color(&self) -> Option<Color>;
 
+    /// The window configuration this application asks for, or `None` to keep the runner's own.
     fn window_config(&self) -> Option<WindowConfig>;
 
     /// Called once per frame before rendering.

@@ -10,7 +10,7 @@ use super::test_run::{TestOptions, run_previews};
 
 /// The `cargo telar` dev-loop entry, for an app that wires its own runner instead of expanding [`crate::app!`] — a multi-surface host, or one on an out-of-tree backend, which reaches [`crate::run_with_platform`] or [`crate::run_multi_with_platform`] directly. `app!` generates a call to this; anything using `rsx_modules!` has to make it by hand, and until it does, `cargo telar preview`/`test` silently start the real application.
 ///
-/// It answers the requests a build with previews takes without a window: listing them, testing them, and drawing them to PNGs. A build with the preview host goes on to [`show_previews`](super::host::show_previews) when this declines, so an app built with both can still ask for pictures rather than a window.
+/// It answers the requests a build with previews takes without a window: listing them, testing them, and drawing them to PNGs. A build with the preview host goes on to `show_previews` when this declines, so an app built with both can still ask for pictures rather than a window.
 ///
 /// Returns `true` when it handled the invocation and the caller must return without starting its app.
 ///

@@ -22,11 +22,11 @@ rustdoc-args = ["--cfg", "docsrs"]
 #! crate. The guest half is the default because it is what the guest — the thing being written — needs.
 default = ["guest"]
 
-## The guest's own side: [`EmbeddedApp`](crate::EmbeddedApp), the driver that runs its tree in a surface of
+## The guest's own side: `EmbeddedApp`, the driver that runs its tree in a surface of
 ## its own, and the [`embed!`](crate::embed) macro that exports the entries a host calls.
 guest = []
 
-## The host's side: [`load_embedded`](crate::load_embedded) and the handle it returns. Brings a dynamic loader,
+## The host's side: `load_embedded` and the handle it returns. Brings a dynamic loader,
 ## which is why it is not in `default` — an application that only *is* a guest never loads one.
 host = ["guest", "platform-core/dylib", "dep:libloading", "dep:tracing"]
 

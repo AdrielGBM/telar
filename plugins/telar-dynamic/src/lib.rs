@@ -6,7 +6,7 @@
 //!
 //! **Keep this crate on the same version as `telar`.** It reaches every kernel type through `telar`, as every plugin does, so a mismatch resolves two copies of the kernel and the `Arc<SvgData>` a decoder here produces stops being the type the widget over there accepts — a type error naming one struct twice. It is the same lockstep `telar` and `telar-macros` already have, and for the same reason.
 //!
-//! Every type a decoder here hands back is re-exported from this crate too — [`SvgData`], [`ImageData`], [`Catalog`] — so two dependencies, `telar` and this one, are all an application needs to write down what it holds.
+//! Every type a decoder here hands back is re-exported from this crate too — `SvgData`, `ImageData`, `Catalog` — so two dependencies, `telar` and this one, are all an application needs to write down what it holds.
 //!
 //! Be clear about what the split does and does not buy. It costs the same to compile: `telar-dynamic/svg-text` turns on `telar/dynamic-svg-text` and links nothing beyond it. What it buys is that `telar` carries no decoder, no client and none of the per-format knobs most applications never touch, and that a third-party decoder arrives through the same door as ours.
 //!

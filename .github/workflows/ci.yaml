@@ -38,6 +38,20 @@ jobs:
       - run: .github/scripts/check-layering.sh
       - run: cargo clippy --workspace --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics -- -D warnings
 
+  # A link to a private or feature-gated item, or a public item left undocumented, only shows when rustdoc runs; both builds because a feature changes which items and links exist.
+  docs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
+      - run: cargo doc --workspace --no-deps --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
+      - run: cargo doc --workspace --all-features --no-deps --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
+
   # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off in `test`, which would leave `apps/sandbox/src/hot_tree.test.rs`, the only guard for the split-runtime regression, never type-checked.
   check-desktop:
     runs-on: ubuntu-24.04
@@ -423,6 +437,7 @@ jobs:
     if: ${{ !cancelled() }}
     needs:
       - lint
+      - docs
       - check-desktop
       - msrv
       - analyzer

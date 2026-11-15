@@ -79,7 +79,7 @@ pub fn external(uri: &str) -> Result<Destination, UriError> {
     Destination::external(uri)
 }
 
-/// `destination` as the text a target writes where an address goes — an `href`, an accessibility URL: a route in the app's [`location_format`] and in the locale its address carries, an anchor as the current location with that fragment, a locale as the current location in it, an external URI as itself.
+/// `destination` as the text a target writes where an address goes — an `href`, an accessibility URL: a route in the app's [`location_format()`] and in the locale its address carries, an anchor as the current location with that fragment, a locale as the current location in it, an external URI as itself.
 pub fn address_of(destination: &Destination) -> String {
     match destination {
         Destination::Route(location) => {

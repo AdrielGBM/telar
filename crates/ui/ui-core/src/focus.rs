@@ -1349,7 +1349,7 @@ pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> 
     }
 }
 
-/// Follows a focus move the surface made on its own to the box `box_id` names (see [`Event::BoxFocused`](platform_core::Event::BoxFocused)), reporting whether Telar's focus changed.
+/// Follows a focus move the surface made on its own to the box `box_id` names (see [`Event::BoxFocused`]), reporting whether Telar's focus changed.
 ///
 /// Taken as keyboard focus, so the ring shows. A box already focused is left alone: the move that reports it may be the echo of a tap that focused it first, and re-taking it would turn that tap's ring on.
 pub fn follow_box(box_id: u64) -> bool {
@@ -1386,7 +1386,7 @@ pub fn is_registered(id: FocusId) -> bool {
     with_focus_ref(|s| s.order.iter().any(|e| e.id == id))
 }
 
-/// Wraps at either end, except in a [hosted](host) surface with no modal up, where stepping past an end clears focus and leaves the way it went for the frame to carry on outside.
+/// Wraps at either end, except in a hosted surface with no modal up, where stepping past an end clears focus and leaves the way it went for the frame to carry on outside.
 fn step(dir: isize) {
     let order: Vec<FocusId> = tab_order().into_iter().map(|stop| stop.id).collect();
     let travel = if dir > 0 {
@@ -1427,7 +1427,7 @@ pub(crate) fn host() {
     with_focus(|s| s.hosted = true);
 }
 
-/// Which way the keyboard last stepped out of the active [hosted](host) surface, forgetting it.
+/// Which way the keyboard last stepped out of the active hosted surface, forgetting it.
 pub(crate) fn take_departure() -> Option<Travel> {
     with_focus(|s| s.departed.take())
 }
@@ -1441,7 +1441,7 @@ pub fn arrive(backwards: bool) -> bool {
     current().is_some()
 }
 
-/// Tab, or Shift+Tab, `key`, pressed while the active surface holds the keyboard of the tree around it: offered through `dispatch` first, then moving focus unless something took it. Answers whether focus stepped past the last focusable, or the first, which in a [hosted](host) surface leaves nothing focused for the tree around to carry on from.
+/// Tab, or Shift+Tab, `key`, pressed while the active surface holds the keyboard of the tree around it: offered through `dispatch` first, then moving focus unless something took it. Answers whether focus stepped past the last focusable, or the first, which in a hosted surface leaves nothing focused for the tree around to carry on from.
 pub fn tab(key: &Event, dispatch: impl FnOnce(&Event) -> EventResult) -> bool {
     // A step off the end that something other than this Tab made is no reason for this one to leave.
     take_departure();

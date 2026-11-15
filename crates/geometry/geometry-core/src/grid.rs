@@ -52,7 +52,7 @@ impl LayoutGrid {
         snap_size(v, self.y)
     }
 
-    /// A length that is *air* around elements — padding, a gap. Kept only if it nearly fills a step; otherwise it goes to zero. See [`SPACE_KEPT_ABOVE`].
+    /// A length that is *air* around elements — padding, a gap. Kept only if it nearly fills a step; otherwise it goes to zero. See `SPACE_KEPT_ABOVE`.
     pub fn snap_space_x(self, v: f32) -> f32 {
         snap_space(v, self.x)
     }

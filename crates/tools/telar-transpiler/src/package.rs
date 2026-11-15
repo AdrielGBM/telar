@@ -208,7 +208,7 @@ fn generate(
 #[cfg(feature = "transpile")]
 /// Writes each file's Rust and its `.rs.map` sidecar under `generated_dir`, returning every `.rs` path written.
 ///
-/// The returned set is what tells live output from an orphan: anything else under the directory belongs to a `.rsx` that was renamed or deleted, which is [`crate::prune_stale_generated`]'s input.
+/// The returned set is what tells live output from an orphan: anything else under the directory belongs to a `.rsx` that was renamed or deleted, which is [`telar_project::prune_stale_generated`]'s input.
 pub fn write_package(
     files: &[GeneratedFile],
     generated_dir: &Path,

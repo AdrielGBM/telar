@@ -2,11 +2,11 @@
 //!
 //! Unlike hot-reload (dev-only, one dylib that *replaces* the whole window), an embedded app is a production capability: the host stays a full rsx app and embeds one or more guests, each a cdylib with its **own** reactive/layout/overlay/motion runtime (separate thread-locals, because each dylib statically links its own copy of the runtime crates). The host cannot reach into that runtime, so — exactly as hot-reload does for its single dylib — it *drives* the guest through the entries the guest exports.
 //!
-//! The novel part hot-reload never needed is **compositing two runtimes into one window**: the guest flattens its own view tree to a self-contained draw list and lends it as bytes, which the host decodes into a [`DrawList`] of its own ([`LoadedEmbed::paint`]), translates and clips into the guest's sub-rect, marks as the guest's ([`composite`]) and splices into its own frame. What a screen reader and the input method need of the guest, it reports itself through the same contract, and its keyboard sits behind one focus stop of the host's ([`LoadedEmbed::focus_stop`]). No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
+//! The novel part hot-reload never needed is **compositing two runtimes into one window**: the guest flattens its own view tree to a self-contained draw list and lends it as bytes, which the host decodes into a [`DrawList`] of its own (`LoadedEmbed::paint`), translates and clips into the guest's sub-rect, marks as the guest's ([`composite`]) and splices into its own frame. What a screen reader and the input method need of the guest, it reports itself through the same contract, and its keyboard sits behind one focus stop of the host's (`LoadedEmbed::focus_stop`). No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
 //!
 //! Host and guest meet on the guest contract both boundaries share ([`platform_core::guest`]): one `repr(C)` table of `extern "C"` entries ([`EmbedEntries`]), stamped with [`EMBED_CONTRACT`], through which nothing owned crosses. Each side frees only what it allocated, so a `#[global_allocator]` on either side does not matter, and a guest built against another contract or as a hot-reload library is refused before any of its code runs but its initializers.
 //!
-//! Layering: this crate is app-agnostic. A guest author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`embed!`](crate::embed) macro to export the entries. The host enables `host`, calls [`load_embedded`] and drives the returned [`LoadedEmbed`]. Nothing here knows about any particular app.
+//! Layering: this crate is app-agnostic. A guest author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`embed!`](crate::embed) macro to export the entries. The host enables `host`, calls `load_embedded` and drives the returned `LoadedEmbed`. Nothing here knows about any particular app.
 //!
 //! **A second dependency, like `telar-dynamic`.** It knows nothing of `telar` — a guest builds a `ui-core` tree and hands back draw commands, which is a layer below the facade — so it is the application that names both, and keeping them on one version is the same lockstep `telar` and `telar-macros` already have.
 //!
@@ -51,7 +51,7 @@ pub type DrawList = Vec<DrawCommand>;
 /// The window-management commands drained from a guest's own queue (a title bar's drag, close and so on), decoded into the host's own.
 pub type WindowCommands = Vec<WindowCommand>;
 
-/// Wrap a guest's painted [`DrawList`] into a [`RenderNode`] the host splices into its own frame: translated to `rect`'s origin (the guest paints in its own `(0,0)` space), clipped to `rect` (so it can't draw over the host chrome) and marked as the guest's by its `boundary` ([`LoadedEmbed::boundary`]), so whoever reads the host's frame — a screen reader, the inspector — reads what the guest reports of it, where the host shows it.
+/// Wrap a guest's painted [`DrawList`] into a [`RenderNode`] the host splices into its own frame: translated to `rect`'s origin (the guest paints in its own `(0,0)` space), clipped to `rect` (so it can't draw over the host chrome) and marked as the guest's by its `boundary` (`LoadedEmbed::boundary`), so whoever reads the host's frame — a screen reader, the inspector — reads what the guest reports of it, where the host shows it.
 pub fn composite(rect: Rect, boundary: &ForeignBoundary, commands: DrawList) -> RenderNode {
     composite_surface(
         Transform::translate(rect.x, rect.y),

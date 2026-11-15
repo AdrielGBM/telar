@@ -31,7 +31,7 @@ struct Loaded {
 impl<E: Entries<Upper = UpperTable>> GuestLibrary<E> {
     /// Starts the guest `entries` were copied from, handing it the host's epoch and services before anything else of it runs. A panic in any of them is recorded in its [`Guest`] rather than returned.
     ///
-    /// `library` is what unmaps the guest when dropped, as [`open_guest`](platform_core::guest::open_guest) hands it back: the guest is told it will be unloaded, adopts an epoch read now and is served this side's stores, with `fonts` the database its shaper defers to, as [`ServedServices::installed`] takes it. `None` for entries this process serves itself, which share its epoch and its stores already: they count from [`host_epoch`], are served nothing and are never unloaded.
+    /// `library` is what unmaps the guest when dropped, as `open_guest` hands it back: the guest is told it will be unloaded, adopts an epoch read now and is served this side's stores, with `fonts` the database its shaper defers to, as [`ServedServices::installed`] takes it. `None` for entries this process serves itself, which share its epoch and its stores already: they count from [`host_epoch`], are served nothing and are never unloaded.
     pub fn start(
         entries: E,
         library: Option<Box<dyn Any>>,

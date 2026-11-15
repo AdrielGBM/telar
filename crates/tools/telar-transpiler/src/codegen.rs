@@ -291,7 +291,7 @@ pub struct TranspiledSource {
     pub source_map: Vec<Option<u32>>,
     /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the generated Rust. The half of the map that makes a *column* mean something; persisted into the `.rs.map` beside [`Self::source_map`]. See [`ExprSpan`].
     pub expr_spans: Vec<ExprSpan>,
-    /// The bindings the clone pass introduced that stand for source ones. See [`ShadowBinding`].
+    /// The bindings the clone pass introduced that stand for source ones. See `ShadowBinding`.
     pub shadows: Vec<ShadowBinding>,
 }
 
