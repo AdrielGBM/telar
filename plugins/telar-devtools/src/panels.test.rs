@@ -86,6 +86,8 @@ fn access_node(name: &str, role: Role, rect: Rect) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: Default::default(),
     }
 }
 

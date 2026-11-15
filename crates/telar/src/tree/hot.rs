@@ -1,5 +1,5 @@
 use platform_core::guest::{LentBytes, ReportsSurface};
-use platform_core::{AccessNode, ConsumedKeys, Event, TextInput};
+use platform_core::{AccessAction, AccessNode, ConsumedKeys, Event, TextInput};
 use renderer_core::wire::{DrawList, Pixels};
 use services_core::guest::LentFrames;
 use ui_core::EventResult;
@@ -99,8 +99,8 @@ impl ReportsSurface for HotTree {
         ui_core::accessibility::snapshot(&self.tree.list.commands())
     }
 
-    fn perform_access_action(&mut self, id: u64, activate: bool) {
-        self.on_event(&Event::AccessAction { id, activate });
+    fn perform_access_action(&mut self, id: u64, action: AccessAction) {
+        self.on_event(&Event::AccessAction { id, action });
     }
 
     fn text_input(&self) -> Option<TextInput> {

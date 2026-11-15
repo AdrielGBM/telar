@@ -66,6 +66,49 @@ pub struct AccessNode {
     pub multiselectable: bool,
     /// Whether a dialog is inside a modal layer that is up, so a reader keeps to it as the keyboard does.
     pub modal: bool,
+    /// Where the caret is, and what is selected, in the text a field holds as its [`value`](Self::value): what a reader follows as a person types and moves through it. `None` for every node but the field that holds the keyboard.
+    pub selection: Option<TextSelection>,
+    /// The actions with a value or a selection in them that the control answers, so a platform offers a reader those and no others.
+    pub supports: ActionSupport,
+}
+
+/// Which [`AccessAction`]s a control answers beyond the ones every control does — [`Focus`](AccessAction::Focus), [`Activate`](AccessAction::Activate) and [`ScrollIntoView`](AccessAction::ScrollIntoView).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ActionSupport {
+    /// [`Increment`](AccessAction::Increment) and [`Decrement`](AccessAction::Decrement).
+    pub step: bool,
+    /// [`SetValue`](AccessAction::SetValue).
+    pub set_value: bool,
+    /// [`SetSelection`](AccessAction::SetSelection).
+    pub set_selection: bool,
+}
+
+/// What a screen reader asks the control a node's [`id`](AccessNode::id) names to do. A control with no way to do it does nothing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccessAction {
+    /// Take the keyboard, as Tab arriving on it would.
+    Focus,
+    /// Do what a tap on it does: press a button, choose a row, follow a link.
+    Activate,
+    /// Move a value control one step up: a slider's step, a spin button's.
+    Increment,
+    /// Move a value control one step down.
+    Decrement,
+    /// Replace what the control holds with this: the text of a field, the reading of a slider.
+    SetValue(Value),
+    /// Scroll every view the control sits in until it shows.
+    ScrollIntoView,
+    /// Put a field's caret, or its selection, here.
+    SetSelection(TextSelection),
+}
+
+/// A selection in the text a field shows, each end counted in characters — Unicode scalar values — from the start of that text: a unit every platform's text interface translates into without knowing how the field stores it. Both ends at one place is a caret.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextSelection {
+    /// The end that stays put while the selection is extended.
+    pub anchor: usize,
+    /// The end the caret is at.
+    pub focus: usize,
 }
 
 /// The nodes `parent` holds directly, by their places in `nodes`, in reading order: the window's own for `None`.
@@ -119,9 +162,14 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         if let Role::Heading(level) = node.role {
             out.push_str(&format!(", level {level}"));
         }
-        if let Some(value) = &node.value {
+        if let Some(words) = node
+            .value
+            .as_ref()
+            .map(value_words)
+            .filter(|words| !words.is_empty())
+        {
             out.push_str(", ");
-            out.push_str(&value_words(value));
+            out.push_str(&words);
         }
         if let Some(place) = node
             .position

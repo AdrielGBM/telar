@@ -118,6 +118,10 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
     let format = format.unwrap_or_else(|| Rc::new(plain));
     let parse = parse.unwrap_or_else(|| Rc::new(decimal));
 
+    let step_by = move |factor: f32| {
+        let next = snap(value.peek() + factor * step, step * factor.abs().min(1.0), min, max);
+        write_through(transaction, next);
+    };
     let draft = signal(String::new());
     let scrub: Rc<Cell<Option<Scrub>>> = Rc::new(Cell::new(None));
 
@@ -256,6 +260,14 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
             }
         }
     })
+    .stepped(move |direction| {
+        let before = value.peek();
+        step_by(match direction {
+            telar::focus::Step::Increment => 1.0,
+            telar::focus::Step::Decrement => -1.0,
+        });
+        value.peek() != before
+    })
     .on_focused_key(move |key: &Key| -> bool {
         if editing.peek() {
             return false;
@@ -269,14 +281,7 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
             }
             _ => return false,
         };
-        let factor = step_factor(telar::modifiers());
-        let next = snap(
-            value.peek() + direction * step * factor,
-            step * factor.min(1.0),
-            min,
-            max,
-        );
-        write_through(transaction, next);
+        step_by(direction * step_factor(telar::modifiers()));
         true
     });
 

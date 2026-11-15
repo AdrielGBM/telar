@@ -413,6 +413,22 @@ pub fn split_pane(props: SplitPaneProps) -> Result<Box<dyn LayoutItem>, LayoutEr
             }
         }
     })
+    .stepped(move |direction| match (direction, collapsed.peek()) {
+        (telar::focus::Step::Increment, true) => {
+            collapsed.set(false);
+            true
+        }
+        (telar::focus::Step::Decrement, true) => false,
+        (direction, false) => {
+            let before = size.peek();
+            let grows = match direction {
+                telar::focus::Step::Increment => step,
+                telar::focus::Step::Decrement => -step,
+            };
+            move_to(before + grows);
+            size.peek() != before
+        }
+    })
     .on_focused_key(move |key: &Key| -> bool {
         let Key::Named(named) = key else {
             return false;

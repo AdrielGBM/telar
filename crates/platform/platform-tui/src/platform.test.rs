@@ -46,6 +46,8 @@ fn label(name: &str) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: Default::default(),
     }
 }
 

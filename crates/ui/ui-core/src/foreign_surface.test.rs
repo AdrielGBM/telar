@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 
 use geometry_core::{Rect, Size};
 use layout_core::{AvailableSpace, LayoutStyle};
-use platform_core::{ConsumedKeys, Event, Role};
+use platform_core::{AccessAction, ConsumedKeys, Event, Role};
 use ui_tree::{Component, ComponentList, EventResult};
 
 use super::*;
@@ -18,7 +18,7 @@ const AT: (f32, f32) = (30.0, 50.0);
 #[derive(Default)]
 struct Fake {
     nodes: Vec<AccessNode>,
-    actions: RefCell<Vec<(u64, bool)>>,
+    actions: RefCell<Vec<(u64, AccessAction)>>,
     input: Cell<Option<TextInput>>,
     focused: Cell<Option<u32>>,
 }
@@ -30,8 +30,8 @@ impl ForeignSurface for Fake {
         self.nodes.clone()
     }
 
-    fn perform_access_action(&self, id: u64, activate: bool) {
-        self.actions.borrow_mut().push((id, activate));
+    fn perform_access_action(&self, id: u64, action: AccessAction) {
+        self.actions.borrow_mut().push((id, action));
         self.focused.set(Some(0));
     }
 
@@ -100,6 +100,8 @@ fn button(id: u64, name: &str) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: Default::default(),
     }
 }
 
@@ -167,10 +169,10 @@ fn a_readers_action_on_a_foreign_control_reaches_the_foreign_surface() {
     let frame = host_frame(&boundary, Vec::new());
     let id = read(&frame, "Inside").and_then(|node| node.id).unwrap();
 
-    perform_action(id, true, |event| {
+    perform_action(id, platform_core::AccessAction::Activate, |event| {
         panic!("nothing travels through the host's tree: {event:?}")
     });
-    assert_eq!(*fake.actions.borrow(), [(3, true)]);
+    assert_eq!(*fake.actions.borrow(), [(3, AccessAction::Activate)]);
 }
 
 #[test]
@@ -208,7 +210,9 @@ fn a_dropped_boundary_reports_nothing_and_takes_no_action() {
         "a frame still marked with its key reads nothing of it"
     );
     let mut dispatched = Vec::new();
-    perform_action(id, true, |event| dispatched.push(event.clone()));
+    perform_action(id, platform_core::AccessAction::Activate, |event| {
+        dispatched.push(event.clone())
+    });
     assert!(fake.actions.borrow().is_empty());
     assert!(matches!(
         dispatched.as_slice(),
@@ -252,10 +256,10 @@ fn a_surface_nested_in_a_foreign_one_is_marked_and_addressed_under_a_key_of_its_
             id: 4
         }
     );
-    perform_action(id, false, |event| {
+    perform_action(id, platform_core::AccessAction::Focus, |event| {
         panic!("handed to the foreign surface: {event:?}")
     });
-    assert_eq!(*fake.actions.borrow(), [(nested_id, false)]);
+    assert_eq!(*fake.actions.borrow(), [(nested_id, AccessAction::Focus)]);
 
     let frame = host_frame(&boundary, Vec::new());
     assert_eq!(
@@ -477,7 +481,7 @@ fn a_readers_move_into_the_foreign_surface_brings_its_stop_the_keys() {
     let frame = host_frame(&boundary, Vec::new());
     let id = read(&frame, "Inside").and_then(|node| node.id).unwrap();
 
-    perform_action(id, false, |event| {
+    perform_action(id, platform_core::AccessAction::Focus, |event| {
         panic!("handed to the foreign surface: {event:?}")
     });
     assert!(fake.holds_focus());
@@ -581,7 +585,7 @@ fn a_readers_move_after_the_stop_is_dropped_requests_no_ghost_stop() {
     drop(stop);
     focus::request(before);
 
-    perform_action(id, false, |event| {
+    perform_action(id, platform_core::AccessAction::Focus, |event| {
         panic!("handed to the foreign surface: {event:?}")
     });
     assert!(fake.holds_focus());

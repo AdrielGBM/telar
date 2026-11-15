@@ -150,6 +150,47 @@ fn only_the_focused_slider_answers_the_arrows() {
     assert_eq!(brightness.peek(), 0.5, "the unfocused slider stayed put");
 }
 
+/// A reader steps a slider as its arrow keys do and writes a number into it as a drag would land it, each reported to the caller.
+#[test]
+fn a_reader_steps_the_slider_and_sets_it_to_a_step() {
+    use telar::focus::AccessAction;
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let value = signal(0.5f32);
+    let seen: Rc<Cell<f32>> = Rc::new(Cell::new(-1.0));
+    let sink = seen.clone();
+    let _widget = slider(
+        SliderProps::props()
+            .value(value)
+            .step(0.1)
+            .max(1.0)
+            .on_change(Rc::new(move |v| sink.set(v)))
+            .build(),
+    )
+    .unwrap();
+    let id = telar::focus::tab_order()[0].id;
+
+    assert!(telar::focus::perform(id, AccessAction::Increment));
+    assert!((value.peek() - 0.6).abs() < 1e-4, "{}", value.peek());
+    assert!((seen.get() - 0.6).abs() < 1e-4);
+    assert!(telar::focus::perform(id, AccessAction::Decrement));
+    assert!((value.peek() - 0.5).abs() < 1e-4, "{}", value.peek());
+
+    let to = |now: f64| {
+        AccessAction::SetValue(telar::Value::from(telar::NumericValue {
+            now,
+            min: 0.0,
+            max: 1.0,
+        }))
+    };
+    assert!(telar::focus::perform(id, to(0.83)));
+    assert!((value.peek() - 0.8).abs() < 1e-4, "{}", value.peek());
+    assert!(
+        !telar::focus::perform(id, AccessAction::SetValue(telar::Value::Text("loud".into()))),
+        "a slider holds no text"
+    );
+}
+
 #[derive(Clone, Default)]
 struct Plain {
     sliders: Option<SliderTokens>,

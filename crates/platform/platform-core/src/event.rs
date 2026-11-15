@@ -129,6 +129,10 @@ pub enum Event {
     },
     /// An input method composing into the field that holds the keyboard. Only a window told about a field through [`Window::set_text_input`](crate::Window::set_text_input) reports these.
     Ime(crate::Ime),
+    /// The platform moved the caret or the selection of the field that holds the keyboard by itself: a screen reader, or a selection handle, moved it in the element a document types into. The field takes it as it takes a reader's [`AccessAction::SetSelection`](crate::AccessAction::SetSelection).
+    SelectionMoved {
+        selection: crate::TextSelection,
+    },
     /// The held modifier keys changed, and this is the authoritative reading.
     ///
     /// It has to be its own event because the key events cannot carry the news: a bare `Shift` press maps to no [`Key`] at all, so a chord that never types a character would be invisible. The platform also re-sends this when the window regains focus, which is what makes it safe to trust — a state reconstructed from presses and releases goes wrong exactly when the user alt-tabs mid-chord.
@@ -210,12 +214,12 @@ pub enum Event {
         surface: u64,
         event: Box<Event>,
     },
-    /// A screen reader asked to move to a control, or to activate it, as [`EventHandler::on_accessibility_action`](crate::EventHandler::on_accessibility_action) does: `id` is the control's id in the surface the event reaches.
+    /// A screen reader asked a control to do something, as [`EventHandler::on_accessibility_action`](crate::EventHandler::on_accessibility_action) does: `id` is the control's id in the surface the event reaches.
     ///
     /// A reader names a control of a nested surface by the id the window's snapshot gave it, which says which surface it is in; the request travels there inside [`InSurface`](Self::InSurface), as this, with the id that surface knows it by.
     AccessAction {
         id: u64,
-        activate: bool,
+        action: crate::AccessAction,
     },
     /// The part of the surface the system keeps for itself changed: status and navigation bars, a notch, rounded corners, a browser's own chrome over a page drawn to its edges. Logical units, measured in from each edge. Sent before the first frame where the platform knows, and again whenever it moves.
     SafeAreaChanged {

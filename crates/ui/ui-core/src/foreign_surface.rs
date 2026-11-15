@@ -6,7 +6,7 @@ use std::rc::{Rc, Weak};
 
 use geometry_core::Transform;
 use layout_core::NodeId;
-use platform_core::{AccessAudit, AccessNode, ConsumedKeys, Event, TextInput};
+use platform_core::{AccessAction, AccessAudit, AccessNode, ConsumedKeys, Event, TextInput};
 use renderer_core::{Color, DrawCommand};
 use rustc_hash::{FxHashMap, FxHashSet};
 use ui_tree::RenderNode;
@@ -20,8 +20,8 @@ pub trait ForeignSurface {
     /// What a screen reader is told about the surface, as [`accessibility::snapshot`](crate::accessibility::snapshot) reads one surface: a control's id is its own focus id below `1 << 32`, or one a surface nested in it qualified with its handle, in its own numbering.
     fn access_snapshot(&self) -> Vec<AccessNode>;
 
-    /// Carries out a screen reader's request to move to the control `id` names in its [`access_snapshot`](Self::access_snapshot), or to activate it, as [`accessibility::perform_action`](crate::accessibility::perform_action) does for the surface entered.
-    fn perform_access_action(&self, id: u64, activate: bool);
+    /// Carries out a screen reader's `action` on the control `id` names in its [`access_snapshot`](Self::access_snapshot), as [`accessibility::perform_action`](crate::accessibility::perform_action) does for the surface entered.
+    fn perform_access_action(&self, id: u64, action: AccessAction);
 
     /// Where the field that holds its keyboard has its caret, or `None` while no field does, as [`text_input`](crate::text_input) reports it for the surface entered.
     fn text_input(&self) -> Option<TextInput>;

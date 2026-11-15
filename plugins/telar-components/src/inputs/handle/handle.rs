@@ -169,6 +169,11 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         clamped.set_if_changed(cut);
         write_through(transaction, bounded);
     };
+    let step_by = move |steps: f32| {
+        let before = value.peek();
+        request(before + steps * step);
+        value.peek() != before
+    };
     let release = {
         let grab = grab.clone();
         move || {
@@ -256,13 +261,19 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         release();
         stroke.end(false);
     })
+    .stepped(move |direction| {
+        step_by(match direction {
+            telar::focus::Step::Increment => 1.0,
+            telar::focus::Step::Decrement => -1.0,
+        })
+    })
     .on_focused_key(move |key: &Key| -> bool {
         let direction = match key {
             Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => 1.0,
             Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => -1.0,
             _ => return false,
         };
-        request(value.peek() + direction * step * step_factor(telar::modifiers()));
+        step_by(direction * step_factor(telar::modifiers()));
         true
     });
     Ok(box_item(dot))

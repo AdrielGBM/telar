@@ -137,9 +137,33 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     } else {
         SliderTokens::current().width(size)
     };
-    let key_on_change = on_change.clone();
     let announced_value = value;
-    let commit_value = value;
+    let snap = move |v: f32| {
+        if step > 0.0 {
+            // Rounding can walk a boundary value just past min or max.
+            let steps = ((v - min) / step).round();
+            (min + steps * step).clamp(min, max)
+        } else {
+            v.clamp(min, max)
+        }
+    };
+    let commit: Rc<dyn Fn(f32) -> bool> = {
+        let on_change = on_change.clone();
+        Rc::new(move |next: f32| {
+            let moved = next != value.peek();
+            value.set(next);
+            if let Some(cb) = &on_change {
+                cb(next);
+            }
+            moved
+        })
+    };
+    // One step per press, or a twentieth of the range when the caller named none — the granularity a continuous value has to invent for a keyboard.
+    let stride = if step > 0.0 { step } else { (max - min) / 20.0 };
+    let step_by = {
+        let commit = Rc::clone(&commit);
+        move |steps: f32| commit((value.peek() + steps * stride).clamp(min, max))
+    };
 
     // An `absolute_fill` child, so it exactly overlays the track, scaled horizontally from the left edge — cheaper than relaying out a narrower box on every drag move.
     let fill_value = value;
@@ -198,7 +222,6 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?
     .styled_by(move || track_box(size, width))
     .hit_outset(Reactive::of(move || grab_outset(size)))
-    // A slider you can reach but not move is not operable. One step per press, or a twentieth of the range when the caller named none — the granularity a continuous value has to invent for a keyboard.
     .control(Role::Slider)
     .a11y_label({
         let label = label.clone();
@@ -212,38 +235,34 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             max: max as f64,
         }
     })
-    .on_focused_key({
-        let value = commit_value;
-        let on_change = key_on_change.clone();
-        move |key: &telar::Key| {
-            let delta = match key {
-                telar::Key::Named(telar::NamedKey::ArrowRight)
-                | telar::Key::Named(telar::NamedKey::ArrowUp) => 1.0,
-                telar::Key::Named(telar::NamedKey::ArrowLeft)
-                | telar::Key::Named(telar::NamedKey::ArrowDown) => -1.0,
-                _ => return,
-            };
-            let stride = if step > 0.0 { step } else { (max - min) / 20.0 }
-                * telar::step_factor(telar::modifiers());
-            let next = (value.peek() + delta * stride).clamp(min, max);
-            value.set(next);
-            if let Some(cb) = &on_change {
-                cb(next);
-            }
+    .stepped({
+        let step_by = step_by.clone();
+        move |step| match step {
+            telar::focus::Step::Increment => step_by(1.0),
+            telar::focus::Step::Decrement => step_by(-1.0),
         }
+    })
+    .assigned({
+        let commit = Rc::clone(&commit);
+        move |assigned| {
+            assigned
+                .reading()
+                .is_some_and(|reading| commit(snap(reading.now as f32)))
+        }
+    })
+    .on_focused_key(move |key: &telar::Key| {
+        let delta = match key {
+            telar::Key::Named(telar::NamedKey::ArrowRight)
+            | telar::Key::Named(telar::NamedKey::ArrowUp) => 1.0,
+            telar::Key::Named(telar::NamedKey::ArrowLeft)
+            | telar::Key::Named(telar::NamedKey::ArrowDown) => -1.0,
+            _ => return,
+        };
+        step_by(delta * telar::step_factor(telar::modifiers()));
     })
     .on_drag(move |px, _py| {
         let t = (px / width).clamp(0.0, 1.0);
-        let mut v = min + t * (max - min);
-        if step > 0.0 {
-            // Rounding can walk a boundary value just past min or max.
-            let steps = ((v - min) / step).round();
-            v = (min + steps * step).clamp(min, max);
-        }
-        value.set(v);
-        if let Some(cb) = &on_change {
-            cb(v);
-        }
+        commit(snap(min + t * (max - min)));
     });
 
     shared::captioned(size, box_item(track), label, width)

@@ -207,7 +207,7 @@ fn a_reader_reaches_a_row_through_the_list_and_activating_it_chooses_it() {
 
     assert!(telar::focus::perform(
         option_at(4),
-        telar::focus::Action::Activate
+        telar::focus::AccessAction::Activate
     ));
     mounted.settle();
     assert_eq!(mounted.selected().as_deref(), Some("cherry"));

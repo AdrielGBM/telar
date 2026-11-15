@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use layout_core::NodeId;
 use platform_core::{
-    Chord, ConsumedKeys, Event, FocusBoundary, Key, ModifiersState, NamedKey, Orientation,
-    TabLeaves, Toggle, Value, keyboard_convention,
+    ActionSupport, Chord, ConsumedKeys, Event, FocusBoundary, Key, ModifiersState, NamedKey,
+    Orientation, TabLeaves, Toggle, Value, keyboard_convention,
 };
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::Focusable;
@@ -112,27 +112,39 @@ struct Entry {
     keyboard: Option<Rc<dyn Keyboard>>,
     /// Where a widget that takes text has its caret, for the input method composing into it. See [`crate::text_input`].
     text_input: Option<TextInputSource>,
+    /// Where the caret and the selection of a field are, in the characters it shows. See [`set_text_selection`].
+    text_selection: Option<Rc<dyn Fn() -> TextSelection>>,
 }
 
 pub(crate) type TextInputSource = Rc<dyn Fn() -> Option<platform_core::TextInput>>;
 
-/// What a control can be asked to do through the focus order — by assistive technology, or by an activation key its own key handler left alone: one handler per action, each the same code the control's own gesture runs.
+/// What a reader's [`AccessAction`] asks of a control, and an activation key its own key handler left alone asks too. See [`perform`].
+pub use platform_core::{AccessAction, TextSelection};
+
+/// Which way an [`AccessAction::Increment`] or [`AccessAction::Decrement`] moves a value control. See [`set_stepping`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action {
-    /// What a tap on the control does: press a button, choose a row, follow a link.
-    Activate,
+pub enum Step {
+    Increment,
+    Decrement,
 }
 
-/// The handlers a control registered for each [`Action`]; an action with none does nothing.
-#[derive(Default)]
+type Assign = Rc<dyn Fn(&Value) -> bool>;
+
+/// The handlers a control registered for the actions it answers; an action with none does nothing.
+#[derive(Clone, Default)]
 struct Actions {
     activate: Option<Rc<dyn Fn() -> bool>>,
+    step: Option<Rc<dyn Fn(Step) -> bool>>,
+    assign: Option<Assign>,
+    select: Option<Rc<dyn Fn(TextSelection) -> bool>>,
 }
 
 impl Actions {
-    fn handler(&self, action: Action) -> Option<Rc<dyn Fn() -> bool>> {
-        match action {
-            Action::Activate => self.activate.clone(),
+    fn support(&self) -> ActionSupport {
+        ActionSupport {
+            step: self.step.is_some(),
+            set_value: self.assign.is_some(),
+            set_selection: self.select.is_some(),
         }
     }
 }
@@ -488,25 +500,73 @@ pub fn register_presented(id: FocusId, node: NodeId, role: Role, reach: impl Fn(
     });
 }
 
-/// Declares what `id` does when it is [activated](Action::Activate) without a pointer: the same code a tap on it runs, reporting whether there was anything to run.
+/// Declares what `id` does when it is [activated](AccessAction::Activate) without a pointer: the same code a tap on it runs, reporting whether there was anything to run.
 pub fn set_activation(id: FocusId, activate: impl Fn() -> bool + 'static) {
     let activate: Rc<dyn Fn() -> bool> = Rc::new(activate);
+    with_actions(id, |actions| actions.activate = Some(activate));
+}
+
+/// Declares how the value control `id` moves one [`Step`] up or down: the same code its arrow keys run, reporting whether the value could move.
+pub fn set_stepping(id: FocusId, step: impl Fn(Step) -> bool + 'static) {
+    let step: Rc<dyn Fn(Step) -> bool> = Rc::new(step);
+    with_actions(id, |actions| actions.step = Some(step));
+}
+
+/// Declares how `id` takes a value it is [handed](AccessAction::SetValue) whole — the text a field is to hold, the reading a slider is to stand at — reporting whether it took it. A value of a kind the control does not hold is refused.
+pub fn set_assignment(id: FocusId, assign: impl Fn(&Value) -> bool + 'static) {
+    let assign: Assign = Rc::new(assign);
+    with_actions(id, |actions| actions.assign = Some(assign));
+}
+
+/// Declares how the field `id` puts its caret or its selection where it is [asked to](AccessAction::SetSelection), reporting whether it moved them.
+pub fn set_selecting(id: FocusId, select: impl Fn(TextSelection) -> bool + 'static) {
+    let select: Rc<dyn Fn(TextSelection) -> bool> = Rc::new(select);
+    with_actions(id, |actions| actions.select = Some(select));
+}
+
+fn with_actions(id: FocusId, change: impl FnOnce(&mut Actions)) {
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
-            entry.actions.activate = Some(activate);
+            change(&mut entry.actions);
         }
     });
 }
 
-/// Asks the control `id` to carry out `action`, reporting whether it did. The one route every such request takes: a reader's, and an activation key the focused control's own handler left alone.
+/// Asks the control `id` to carry out `action`, reporting whether it did. The one route every such request takes: a reader's, a selection the platform moved by itself, and an activation key the focused control's own handler left alone.
 ///
-/// A control out of reach — disabled, inside a closed region or behind a modal — does nothing, as it would not answer a tap; nor does one that registered no handler for `action`.
-pub fn perform(id: FocusId, action: Action) -> bool {
-    let found = with_focus_ref(|s| s.entry(id).map(|e| (e.node, e.actions.handler(action))));
-    let Some((node, Some(handler))) = found else {
+/// A control out of reach — disabled, inside a closed region or behind a modal — does nothing, as it would not answer a tap; nor does one that registered no handler for `action`. [`Focus`](AccessAction::Focus) and [`ScrollIntoView`](AccessAction::ScrollIntoView) need none: every control takes focus as [`request`] gives it, and is brought into view in every scroll it sits in.
+pub fn perform(id: FocusId, action: AccessAction) -> bool {
+    let found = with_focus_ref(|s| s.entry(id).map(|e| (e.node, e.actions.clone())));
+    let Some((node, actions)) = found else {
         return false;
     };
-    reachable(node, &scope_views()) && handler()
+    if !reachable(node, &scope_views()) {
+        return false;
+    }
+    match action {
+        AccessAction::Focus => {
+            request(id);
+            true
+        }
+        AccessAction::Activate => actions.activate.is_some_and(|activate| activate()),
+        AccessAction::Increment => actions.step.is_some_and(|step| step(Step::Increment)),
+        AccessAction::Decrement => actions.step.is_some_and(|step| step(Step::Decrement)),
+        AccessAction::SetValue(value) => actions.assign.is_some_and(|assign| assign(&value)),
+        AccessAction::SetSelection(selection) => {
+            actions.select.is_some_and(|select| select(selection))
+        }
+        AccessAction::ScrollIntoView => node.is_some_and(scroll_into_view),
+    }
+}
+
+/// Brings `node` into view in the innermost scroll it sits in, then that scroll into view in the next one out, each moving no further than it has to.
+fn scroll_into_view(node: NodeId) -> bool {
+    let mut item = node;
+    for viewport in crate::scroll_viewports_of(node) {
+        viewport.reveal(item, 0.0);
+        item = viewport.area();
+    }
+    true
 }
 
 /// Registers a scroll area as a stop of its own, so the keyboard can scroll it — but only while `scrolls` reads true and no stop inside `node` is reachable, or while it holds focus.
@@ -581,6 +641,7 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                     controls: None,
                     keyboard: None,
                     text_input: None,
+                    text_selection: None,
                 });
                 true
             }
@@ -1001,6 +1062,16 @@ pub fn set_value<V: Into<Value>>(id: FocusId, read: impl Fn() -> V + 'static) {
     });
 }
 
+/// Declares that the field `id` has a caret, and how to read where it and the selection are now, in the characters of what the field shows: what a reader follows while the field holds the keyboard.
+pub fn set_text_selection(id: FocusId, read: impl Fn() -> TextSelection + 'static) {
+    let read: Rc<dyn Fn() -> TextSelection> = Rc::new(read);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.text_selection = Some(read);
+        }
+    });
+}
+
 /// Declares the axis `id` runs along: the bar of a splitter, the track of a slider.
 pub fn set_orientation(id: FocusId, orientation: Orientation) {
     with_focus(|s| {
@@ -1125,6 +1196,8 @@ pub struct Exposed {
     pub sort: Option<SortDirection>,
     /// Whether a list box, a grid or a tree lets more than one of its items be chosen at once.
     pub multiselectable: bool,
+    /// The actions with a value or a selection in them it answers.
+    pub supports: ActionSupport,
 }
 
 /// The focusables a screen reader should be told about, in the order they registered; a scroll area only while it is a stop of its own.
@@ -1141,6 +1214,7 @@ pub fn exposed() -> Vec<Exposed> {
             Option<Rc<dyn Fn() -> Value>>,
             Option<Orientation>,
             Outline,
+            ActionSupport,
         );
         let order: Vec<Row> = s
             .order
@@ -1154,6 +1228,7 @@ pub fn exposed() -> Vec<Exposed> {
                     e.value.clone(),
                     e.orientation,
                     e.outline.clone(),
+                    e.actions.support(),
                 )
             })
             .collect();
@@ -1181,41 +1256,44 @@ pub fn exposed() -> Vec<Exposed> {
     order
         .into_iter()
         .filter(|(id, ..)| !idle.contains(id))
-        .filter_map(|(id, node, role, toggled, value, orientation, outline)| {
-            let node = node?;
-            let seen: Vec<ScopeView> = hiding
-                .iter()
-                .zip(&owners)
-                .map(|((scope, showing, traps), owner)| {
-                    let owned =
-                        owner.is_some_and(|owner| crate::input_region::is_inside(node, owner));
-                    (*scope, showing.clone(), *traps && !owned)
+        .filter_map(
+            |(id, node, role, toggled, value, orientation, outline, supports)| {
+                let node = node?;
+                let seen: Vec<ScopeView> = hiding
+                    .iter()
+                    .zip(&owners)
+                    .map(|((scope, showing, traps), owner)| {
+                        let owned =
+                            owner.is_some_and(|owner| crate::input_region::is_inside(node, owner));
+                        (*scope, showing.clone(), *traps && !owned)
+                    })
+                    .collect();
+                reachable(Some(node), &seen).then(|| Exposed {
+                    id,
+                    node,
+                    role,
+                    enabled: !scopes.iter().any(|(scope, showing, _, reason, _)| {
+                        *reason == ScopeReason::Disabled
+                            && !showing()
+                            && crate::input_region::is_inside(node, *scope)
+                    }),
+                    toggled: toggled.as_ref().map(|read| read()),
+                    value: value.as_ref().map(|read| read()),
+                    orientation,
+                    expanded: outline.expanded.as_ref().map(|read| read()),
+                    has_popup: outline.has_popup,
+                    keyboard_shortcut: outline
+                        .shortcut
+                        .as_ref()
+                        .and_then(|read| aria_shortcut(&read()))
+                        .map(Into::into),
+                    position: outline.position,
+                    sort: outline.sort.as_ref().and_then(|read| read()),
+                    multiselectable: outline.multiselectable,
+                    supports,
                 })
-                .collect();
-            reachable(Some(node), &seen).then(|| Exposed {
-                id,
-                node,
-                role,
-                enabled: !scopes.iter().any(|(scope, showing, _, reason, _)| {
-                    *reason == ScopeReason::Disabled
-                        && !showing()
-                        && crate::input_region::is_inside(node, *scope)
-                }),
-                toggled: toggled.as_ref().map(|read| read()),
-                value: value.as_ref().map(|read| read()),
-                orientation,
-                expanded: outline.expanded.as_ref().map(|read| read()),
-                has_popup: outline.has_popup,
-                keyboard_shortcut: outline
-                    .shortcut
-                    .as_ref()
-                    .and_then(|read| aria_shortcut(&read()))
-                    .map(Into::into),
-                position: outline.position,
-                sort: outline.sort.as_ref().and_then(|read| read()),
-                multiselectable: outline.multiselectable,
-            })
-        })
+            },
+        )
         .collect()
 }
 
@@ -1517,6 +1595,12 @@ pub fn toggled_state(id: FocusId) -> Option<Toggle> {
 /// The value `id` declared, read now. Read inside `view()` for the same reason as [`toggled_state`].
 pub fn value_state(id: FocusId) -> Option<Value> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.value.clone()))?;
+    Some(read())
+}
+
+/// Where the caret and the selection of the field `id` are, read now; `None` for a control that declared no caret.
+pub fn text_selection_state(id: FocusId) -> Option<TextSelection> {
+    let read = with_focus(|s| s.entry(id).and_then(|e| e.text_selection.clone()))?;
     Some(read())
 }
 

@@ -9,12 +9,13 @@ use std::rc::Rc;
 use geometry_core::{BorderRadius, Rect};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
 use platform_core::{
-    ConsumedKeys, Event, Ime, Key, KeyboardConvention, ModifiersState, NamedKey, PointerButton,
-    PointerSource, TextInput, keyboard_convention,
+    AccessAction, ConsumedKeys, Event, Ime, Key, KeyboardConvention, ModifiersState, NamedKey,
+    PointerButton, PointerSource, TextInput, TextSelection, Value, keyboard_convention,
 };
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{Color, LineHeight, RectStyle, Semantics, ShapeStyle, TextStyle, TextWrap};
 use ui_tree::{EventResult, RenderNode};
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::cap_band::CapBandCache;
 use crate::caret::Blink;
@@ -255,6 +256,15 @@ impl Editor {
         };
         // As the kind that takes keys as text, so an app-level shortcut table stands aside while the caret is here.
         focus::register_with_role(id, focus::FocusKind::TextEntry, node, role);
+        let anchor = signal(None);
+        answer_readers(
+            id,
+            lines,
+            &shape,
+            value,
+            Caret { at: caret, anchor },
+            affinity,
+        );
         if lines == Lines::Multi {
             remeasure(&shape, &style, node, rect, value, caret, composition);
         }
@@ -297,7 +307,7 @@ impl Editor {
             home: HomeSurface::here(),
             caret,
             affinity,
-            anchor: signal(None),
+            anchor,
             goal_x: None,
             style,
             shape,
@@ -352,10 +362,7 @@ impl Editor {
 
     /// What is drawn for `text`: the text itself, or one mask character per grapheme cluster of it.
     pub(crate) fn shown(&self, text: &str) -> String {
-        match self.mask() {
-            Some(bullet) => masked(text, bullet),
-            None => text.to_string(),
-        }
+        shown_text(text, self.mask())
     }
 
     /// What the editor shows of `text` while it holds the keyboard, selected up to `caret`: the text, or its mask with the selection counted in mask characters, so a secret never leaves the editor.
@@ -422,23 +429,8 @@ impl Editor {
         self.affinity.set(affinity);
     }
 
-    /// What of `inserted` this editor keeps: the first line of it in one of a single line, every line in one of several, with the line breaks a platform writes made `\n` and no other control character.
     fn admitted(&self, inserted: &str) -> String {
-        match self.shape.lines {
-            Lines::Single => inserted
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .chars()
-                .filter(|c| !c.is_control())
-                .collect(),
-            Lines::Multi => inserted
-                .replace("\r\n", "\n")
-                .chars()
-                .map(|c| if c == '\r' { '\n' } else { c })
-                .filter(|c| matches!(c, '\n' | '\t') || !c.is_control())
-                .collect(),
-        }
+        admitted(self.shape.lines, inserted)
     }
 
     /// Whether Tab pressed with `mods` types the indent rather than moving focus.
@@ -799,6 +791,12 @@ impl Editor {
                 self.scroll_by(delta)
             }
             Event::Ime(ime) if focus::is_key_target(self.id) => self.compose(ime),
+            Event::SelectionMoved { selection } if focus::is_key_target(self.id) => {
+                match focus::perform(self.id, AccessAction::SetSelection(*selection)) {
+                    true => EventResult::Handled,
+                    false => EventResult::Ignored,
+                }
+            }
             // The input method owns the keys while it composes, whichever reach the editor anyway.
             Event::KeyPressed { .. }
                 if focus::is_key_target(self.id) && self.composition.is_active() =>
@@ -944,6 +942,105 @@ impl Drop for Editor {
             focus::unregister(self.id);
         });
     }
+}
+
+/// Tells a reader what the editor `id` shows, as its value, and takes from one a whole text to hold and a place to put the caret or the selection, each counted in what it shows: a secret field is read, and selected in, as its mask.
+fn answer_readers(
+    id: FocusId,
+    lines: Lines,
+    shape: &Rc<Shape>,
+    value: RwSignal<String>,
+    caret: Caret,
+    affinity: RwSignal<Affinity>,
+) {
+    let mask = {
+        let shape = Rc::clone(shape);
+        move || shape.mask.get()
+    };
+    focus::set_value(id, {
+        let mask = mask.clone();
+        move || Value::Text(value.with(|text| shown_text(text, mask())).into())
+    });
+    focus::set_text_selection(id, {
+        let mask = mask.clone();
+        move || {
+            value.with(|text| {
+                let at = floor_boundary(text, caret.at.get());
+                let anchor = caret
+                    .anchor
+                    .get()
+                    .map_or(at, |anchor| floor_boundary(text, anchor));
+                let shown = |at: usize| shown_characters(&text[..at], mask());
+                TextSelection {
+                    anchor: shown(anchor),
+                    focus: shown(at),
+                }
+            })
+        }
+    });
+    focus::set_assignment(id, move |assigned| {
+        let Value::Text(text) = assigned else {
+            return false;
+        };
+        let text = admitted(lines, text);
+        caret.set(text.len());
+        value.set(text);
+        true
+    });
+    focus::set_selecting(id, move |selection| {
+        let (anchor, at) = value.with(|text| {
+            let byte = |at: usize| byte_of_shown(text, mask(), at);
+            (byte(selection.anchor), byte(selection.focus))
+        });
+        caret.anchor.set((anchor != at).then_some(anchor));
+        caret.at.set(at);
+        affinity.set(Affinity::Downstream);
+        true
+    });
+}
+
+/// What of `inserted` an editor of `lines` keeps: the first line of it in one of a single line, every line in one of several, with the line breaks a platform writes made `\n` and no other control character.
+fn admitted(lines: Lines, inserted: &str) -> String {
+    match lines {
+        Lines::Single => inserted
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .chars()
+            .filter(|c| !c.is_control())
+            .collect(),
+        Lines::Multi => inserted
+            .replace("\r\n", "\n")
+            .chars()
+            .map(|c| if c == '\r' { '\n' } else { c })
+            .filter(|c| matches!(c, '\n' | '\t') || !c.is_control())
+            .collect(),
+    }
+}
+
+/// What an editor shows of `text`: the text itself, or one `mask` character per grapheme cluster of it.
+fn shown_text(text: &str, mask: Option<char>) -> String {
+    match mask {
+        Some(bullet) => masked(text, bullet),
+        None => text.to_string(),
+    }
+}
+
+/// How many characters an editor shows for `text`: one per grapheme cluster of a masked text.
+fn shown_characters(text: &str, mask: Option<char>) -> usize {
+    match mask {
+        Some(_) => text.graphemes(true).count(),
+        None => text.chars().count(),
+    }
+}
+
+/// The byte of `text` at which the character `at` of what an editor shows of it begins: one shown character is one grapheme cluster of a masked text. The end of the text for a place past it.
+fn byte_of_shown(text: &str, mask: Option<char>, at: usize) -> usize {
+    let start = match mask {
+        Some(_) => text.grapheme_indices(true).nth(at).map(|(byte, _)| byte),
+        None => text.char_indices().nth(at).map(|(byte, _)| byte),
+    };
+    floor_boundary(text, start.unwrap_or(text.len()))
 }
 
 /// `layers` cut to the box: a line longer than it scrolls under its edge rather than drawing past it.

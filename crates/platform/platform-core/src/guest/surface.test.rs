@@ -31,6 +31,8 @@ fn field_node(focused: bool) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: Default::default(),
     }
 }
 
@@ -39,7 +41,7 @@ fn field_node(focused: bool) -> AccessNode {
 struct Field {
     focused: bool,
     tabs: u32,
-    actions: Vec<(u64, bool)>,
+    actions: Vec<(u64, AccessAction)>,
 }
 
 impl ReportsSurface for Field {
@@ -47,8 +49,8 @@ impl ReportsSurface for Field {
         vec![field_node(self.focused)]
     }
 
-    fn perform_access_action(&mut self, id: u64, activate: bool) {
-        self.actions.push((id, activate));
+    fn perform_access_action(&mut self, id: u64, action: AccessAction) {
+        self.actions.push((id, action));
     }
 
     fn text_input(&self) -> Option<TextInput> {
@@ -154,9 +156,10 @@ fn every_answer_crosses_as_what_the_surface_said() {
         )));
         assert!(!asks(|holds| (SERVED.holds_focus)(surface, holds)));
 
-        (SERVED.access_action)(surface, 7, true);
+        let action = AccessAction::SetValue(crate::Value::Text("42".into()));
+        (SERVED.access_action)(surface, 7, LentBytes::lend(&wire_core::encode(&action)));
         (SERVED.blur)(surface);
-        assert_eq!(surface.get().actions, [(7, true)]);
+        assert_eq!(surface.get().actions, [(7, action)]);
         surface.release();
     }
 }

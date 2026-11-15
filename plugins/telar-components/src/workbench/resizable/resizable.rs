@@ -289,6 +289,15 @@ impl Target {
         )
     }
 
+    /// The size `steps` of a step along `edge` reach from where it stands, larger for a positive count whichever way the edge faces: what a reader's increment and decrement ask for.
+    fn stepped(&self, edge: ResizeEdge, steps: f32) -> Size {
+        let now = self.size.get();
+        match edge {
+            ResizeEdge::Bottom => Size::new(now.width, now.height + steps * self.step),
+            _ => Size::new(now.width + steps * self.step, now.height),
+        }
+    }
+
     fn keyed(&self, edge: ResizeEdge, named: &NamedKey) -> Option<Size> {
         let now = self.size.get();
         let step = self.step * step_factor(telar::modifiers());
@@ -554,7 +563,7 @@ fn build_handle(
     let Some(orientation) = edge.orientation() else {
         return Ok(box_item(handle));
     };
-    let valued = target.clone();
+    let (valued, stepping) = (target.clone(), target.clone());
     let handle = handle
         .control(Role::Splitter)
         .oriented(orientation)
@@ -563,6 +572,15 @@ fn build_handle(
             None => strings::text(edge.default_label()),
         })
         .valued(move || valued.value(edge))
+        .stepped(move |direction| {
+            let before = stepping.value(edge).now;
+            let steps = match direction {
+                telar::focus::Step::Increment => 1.0,
+                telar::focus::Step::Decrement => -1.0,
+            };
+            stepping.request(stepping.stepped(edge, steps));
+            stepping.value(edge).now != before
+        })
         .on_focused_key(move |key: &Key| -> bool {
             let Key::Named(named) = key else {
                 return false;

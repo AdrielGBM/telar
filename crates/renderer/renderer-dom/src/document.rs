@@ -1402,7 +1402,7 @@ fn name_by_drawn_text(nodes: &mut [Node]) {
         if node.described.control
             && node.described.label.is_none()
             && !named_by_its_content(node.role)
-            && !draws_what_was_typed(node.role)
+            && !node.role.draws_what_was_typed()
             && !is_out_of_sight(node)
         {
             let mut name = String::new();
@@ -1541,11 +1541,6 @@ fn named_by_its_content(role: Role) -> bool {
             | Role::ComboBox
             | Role::Splitter
     )
-}
-
-/// Whether what a box of this role draws is the text typed into it, which is its value and never its name.
-fn draws_what_was_typed(role: Role) -> bool {
-    matches!(role, Role::TextInput | Role::MultilineTextInput)
 }
 
 /// The text drawn in `node` and the boxes inside it, in the order it was drawn, each piece trimmed and joined by a space as a reader's name is.

@@ -2,7 +2,7 @@
 //!
 //! Telar owns the text: the field is its widget, the caret is its own, and the value lives in a signal. What it does not own is *how characters are produced*. A browser gives that job to an editable element, and only to an editable element — a soft keyboard rises for one, an input method composes into one, a password manager fills one, dictation writes into one. A page that draws its fields itself gets none of that, and there is no key event to substitute for it: an IME reports `keydown` with a key that means "ask the input method", and the text arrives later, as a composition, addressed to a field.
 //!
-//! So there is one, parked at the caret of whichever field holds the keyboard and invisible on top of it, which is where an input method opens its candidates. It is the element a screen reader reads, since it is the one that is focused, so it mirrors the field: an `<input>` for a field of one line and a `<textarea>` for one of several, holding what the field shows with the field's selection, written again after every change to the field. It never changes on its own account. Every edit the browser reports is prevented before it lands and goes back through the platform's own event queue as the keys the field would have received anyway, which is what lets the whole editing path — selection, undo, the caret — stay exactly where it was; the field's next frame writes the result back.
+//! So there is one, parked at the caret of whichever field holds the keyboard and invisible on top of it, which is where an input method opens its candidates. It is the element a screen reader reads, since it is the one that is focused, so it mirrors the field: an `<input>` for a field of one line and a `<textarea>` for one of several, holding what the field shows with the field's selection, written again after every change to the field. It never changes on its own account. Every edit the browser reports is prevented before it lands and goes back through the platform's own event queue as the keys the field would have received anyway, which is what lets the whole editing path — selection, undo, the caret — stay exactly where it was; the field's next frame writes the result back. A caret or a selection moved in it by a reader or a selection handle goes back the same way, as [`Event::SelectionMoved`].
 //!
 //! A composition is the one thing it holds for a while: the browser composes into the element, over the field's selection, and the entry reports each step of it to the field as [`Ime::Preedit`] and its end as one [`Ime::Commit`], swallowing whatever a browser goes on to report as an edit of its own, so a composed word is typed once.
 
@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use geometry_core::Rect;
 use platform_core::consumed_keys::CONSUMED_KEYS_ATTRIBUTE;
-use platform_core::{ConsumedKeys, Event, Ime, Key, ModifiersState, NamedKey};
+use platform_core::{ConsumedKeys, Event, Ime, Key, ModifiersState, NamedKey, TextSelection};
 use renderer_core::Editing;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -72,6 +72,28 @@ impl Shown {
 
     fn range(&self) -> (u32, u32) {
         (self.anchor.min(self.focus), self.anchor.max(self.focus))
+    }
+
+    /// How many characters of the text lie before code unit `at`, which is how a field counts a place in what it shows.
+    fn characters_before(&self, at: u32) -> usize {
+        let units: Vec<u16> = self.text.encode_utf16().take(at as usize).collect();
+        String::from_utf16_lossy(&units).chars().count()
+    }
+
+    /// The selection the element holds when it differs from this one: one a reader or a selection handle moved, counted in characters.
+    fn moved_to(&self, (start, end, direction): (u32, u32, String)) -> Option<TextSelection> {
+        let (anchor, focus) = match direction.as_str() {
+            "backward" => (end, start),
+            _ => (start, end),
+        };
+        let same = match start == end {
+            true => self.range() == (start, end),
+            false => (anchor, focus) == (self.anchor, self.focus),
+        };
+        (!same).then(|| TextSelection {
+            anchor: self.characters_before(anchor),
+            focus: self.characters_before(focus),
+        })
     }
 
     /// How many code units the selection leaves before it and after it: what a composition over it keeps on either side.
@@ -265,6 +287,10 @@ impl TextEntry {
             listen(target, "input", false, {
                 let (field, shown, composing) = (field.clone(), shown.clone(), composing.clone());
                 move |event| on_input(event, &field, &shown, &composing)
+            }),
+            listen(target, "selectionchange", false, {
+                let (field, shown, composing) = (field.clone(), shown.clone(), composing.clone());
+                move |event| on_selection_change(event, &field, &shown, &composing)
             }),
             listen(target, "compositionstart", false, {
                 let (field, shown, composing) = (field.clone(), shown.clone(), composing.clone());
@@ -630,6 +656,28 @@ fn on_input(
         None => {}
     }
     target.show(&shown);
+}
+
+/// A caret or a selection something other than the field moved in the element — a screen reader, a selection handle — which the field moves to, and its next frame shows back. The element showing what the field does not, mid-edit or mid-composition, has no selection of the field's to move.
+fn on_selection_change(
+    event: &web_sys::Event,
+    field: &Standing,
+    shown: &RefCell<Shown>,
+    composing: &RefCell<Composing>,
+) {
+    if field.borrow().is_none() || composing.borrow().active {
+        return;
+    }
+    let Some(target) = event.target().as_ref().and_then(Editable::of) else {
+        return;
+    };
+    let shown = shown.borrow();
+    if target.value() != shown.text {
+        return;
+    }
+    if let Some(selection) = target.selection().and_then(|held| shown.moved_to(held)) {
+        platform_core::post_event(Event::SelectionMoved { selection });
+    }
 }
 
 /// The composition as the element holds it: what lies between the text it kept on either side, with the browser's selection inside it as the input method's cursor.

@@ -30,6 +30,8 @@ fn node(role: Role, name: &str) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: Default::default(),
     }
 }
 
@@ -316,6 +318,14 @@ fn a_value_is_read_after_the_role() {
         ]),
         "Volume, slider, 2\nQuality, slider, Medium\nEmail, textbox, ada@example.com"
     );
+}
+
+/// An empty field says nothing after its role rather than an empty word.
+#[test]
+fn an_empty_field_reads_no_value() {
+    let mut empty = node(Role::TextInput, "Search");
+    empty.value = Some(Value::Text("".into()));
+    assert_eq!(transcript(&[empty]), "Search, textbox");
 }
 
 /// A field says it must be filled in, that what it holds is wrong, or that it cannot be changed, and then what it describes itself as.

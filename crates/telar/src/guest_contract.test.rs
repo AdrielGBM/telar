@@ -78,7 +78,7 @@ fn a_hot_guest_with_an_allocator_of_its_own_runs_reloads_and_unloads() {
         let field = control(&window, focus::Role::TextInput)
             .id
             .expect("a control");
-        perform_action(field, false, |event| {
+        perform_action(field, platform_core::AccessAction::Focus, |event| {
             panic!("the reader's action reaches the guest itself: {event:?}")
         });
         assert!(
@@ -243,9 +243,11 @@ fn an_embedded_guests_surface_is_read_acted_on_and_typed_into_where_the_host_dra
         AccessTarget::of(button.id.expect("a control")),
         AccessTarget::Nested { surface, .. } if surface == embed.boundary().key()
     ));
-    perform_action(button.id.expect("a control"), true, |event| {
-        panic!("the reader's action reaches the guest itself: {event:?}")
-    });
+    perform_action(
+        button.id.expect("a control"),
+        platform_core::AccessAction::Activate,
+        |event| panic!("the reader's action reaches the guest itself: {event:?}"),
+    );
     assert_eq!(
         embed.drain_window_commands(),
         [WindowCommand::SetTitle("pressed 1".to_owned())],

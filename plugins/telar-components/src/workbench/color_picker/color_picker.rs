@@ -543,8 +543,8 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
         .a11y_hidden(),
     ));
 
-    let (announced, keyed) = (read.clone(), read);
-    let drag = write.clone();
+    let (announced, stepped, keyed) = (read.clone(), read.clone(), read);
+    let (drag, set) = (write.clone(), write.clone());
     let track = Container::new(LayoutStyle::new().width(width).height(track_height), layers)?;
     let track = StyledContainer::new(
         LayoutStyle::column()
@@ -560,6 +560,16 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
         now: (f64::from(announced()) * range).round(),
         min: 0.0,
         max: range,
+    })
+    .stepped(move |direction| {
+        let before = stepped();
+        let next = match direction {
+            telar::focus::Step::Increment => before + KEY_STEP,
+            telar::focus::Step::Decrement => before - KEY_STEP,
+        }
+        .clamp(0.0, 1.0);
+        set(next);
+        next != before
     })
     .on_focused_key(move |key: &Key| {
         let step = KEY_STEP * step_factor(telar::modifiers());

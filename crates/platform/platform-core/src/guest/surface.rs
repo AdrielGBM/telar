@@ -3,14 +3,14 @@
 use super::contract::TypeLayout;
 use super::lent::{Handle, LentBytes};
 use super::outcome::{CallOutcome, guest_entry};
-use crate::{AccessNode, ConsumedKeys, Event, TextInput};
+use crate::{AccessAction, AccessNode, ConsumedKeys, Event, TextInput};
 
 /// The guest's side of a surface its host draws as a foreign one, each answer in the surface's own coordinates and ids. The host keeps one focus stop for the surface, so exactly one side has a focus owner: focus arrives from the host, moves inside on Tab, leaves on Tab past either end, and is cleared when the stop loses it.
 pub trait ReportsSurface: 'static {
     /// A control's id is its own focus id below `1 << 32`, or one a surface nested in it qualified with its handle.
     fn access_snapshot(&self) -> Vec<AccessNode>;
 
-    fn perform_access_action(&mut self, id: u64, activate: bool);
+    fn perform_access_action(&mut self, id: u64, action: AccessAction);
 
     fn text_input(&self) -> Option<TextInput>;
 
@@ -69,7 +69,7 @@ macro_rules! surface_report {
 
 surface_report! {
     access_snapshot: fn(*mut LentBytes<Vec<AccessNode>>);
-    access_action: fn(u64, bool);
+    access_action: fn(u64, LentBytes<AccessAction>);
     text_input: fn(*mut LentBytes<Option<TextInput>>);
     arrive: fn(bool, *mut bool);
     tab: fn(LentBytes<Event>, *mut bool);
@@ -100,9 +100,12 @@ unsafe extern "C" fn access_snapshot<T: ReportsSurface>(
 unsafe extern "C" fn access_action<T: ReportsSurface>(
     surface: Handle<T>,
     id: u64,
-    activate: bool,
+    action: LentBytes<AccessAction>,
 ) -> CallOutcome {
-    guest_entry(|| unsafe { surface.get() }.perform_access_action(id, activate))
+    guest_entry(|| {
+        let action: AccessAction = unsafe { action.read() };
+        unsafe { surface.get() }.perform_access_action(id, action);
+    })
 }
 
 unsafe extern "C" fn text_input<T: ReportsSurface>(

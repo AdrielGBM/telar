@@ -151,18 +151,24 @@ the catalogue's accordion uses the same flag for expanded.
 | Target | Role | State |
 | --- | --- | --- |
 | Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button (either one `mixed` when partly on), `aria-selected` on a tab or an option, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
-| Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus` and `Click` actions. | AccessKit `toggled` for checked and pressed, `Mixed` included (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
+| Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus`, `Click` and `ScrollIntoView` actions, and `Increment` and `Decrement`, `SetValue` and `SetTextSelection` on a control that answers them. | AccessKit `toggled` for checked and pressed, `Mixed` included (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
 | Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`/`partially checked`, `pressed`/`not pressed`/`partially pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
 | Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
 | Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to: the canvas, which is only built when `--renderer canvas` asks for it, carries no accessibility tree yet, so the document renderer (`web-dom`, the default) is the browser build assistive technology can read. | — |
 
-A reader's `Focus` and `Click` reach a control through the focus order, not through the keyboard. `Focus` moves
-the keyboard to it. `Click` runs the control's activation, the code a tap on it runs, which the control
-registered as it was built (`focus::perform` with `Action::Activate`), so a control whose key handler answers
-Enter its own way is still pressed, and one that is disabled or out of reach is not. A row that a list, tree,
-table, menu, toolbar or palette walks with a cursor while it keeps the keyboard (`StyledContainer::presented`)
-never takes focus: `Focus` on it moves its owner's cursor onto it and the owner keeps the keyboard, and
-`Click` runs the row's press, so the next arrow key carries on from that row.
+A reader's request reaches a control through the focus order, not through the keyboard, as one of a closed set
+of `AccessAction`s carried out by `focus::perform`: `Focus` moves the keyboard to it; `Activate` (a desktop
+reader's `Click`) runs the control's activation, the code a tap on it runs, which the control registered as it
+was built (`focus::set_activation`), so a control whose key handler answers Enter its own way is still
+pressed, and one that is disabled or out of reach is not; `ScrollIntoView` brings it into view in every scroll
+it sits in. A value control steps by `Increment` and `Decrement` through the same code as its arrow keys
+(`focus::set_stepping`, `StyledContainer::stepped`), as the catalogue's `slider`, `handle` and `scrub_field` do,
+and one that takes a value whole registers `SetValue` (`focus::set_assignment`, `StyledContainer::assigned`),
+as the `slider` does for a number. A field takes `SetValue` for its text and `SetSelection` for its caret or
+selection, counted in the characters it shows. A row that a list, tree, table, menu, toolbar or palette walks
+with a cursor while it keeps the keyboard (`StyledContainer::presented`) never takes focus: `Focus` on it moves
+its owner's cursor onto it and the owner keeps the keyboard, and `Activate` runs the row's press, so the next
+arrow key carries on from that row.
 
 A link has one state of its own: `current:` marks it as the current one of its set, the page being shown or
 the place on the page the reader is at. It is `aria-current` in a document, AccessKit's `aria_current` on the
@@ -178,7 +184,7 @@ and that it can be read but not changed.
 | Target | Value | Description and validity |
 | --- | --- | --- |
 | Browser, document (`web-dom`) | `aria-valuenow`, `aria-valuemin`, `aria-valuemax`, and `aria-valuetext` for its words on a slider, spin button, progress bar or splitter. A text value writes no attribute: the text the element holds is its value. | `aria-description`, `aria-invalid`, `aria-required`, `aria-readonly`. |
-| Desktop | AccessKit's numeric value and bounds, and its `value` for the words or the text. | AccessKit's `description`, `invalid`, `required` and `read_only`. |
+| Desktop | AccessKit's numeric value and bounds, and its `value` for the words or the text; a field's text is also a text run a line under it, and the caret and the selection of the field holding the keyboard are its text selection in those runs. | AccessKit's `description`, `invalid`, `required` and `read_only`. |
 | Terminal | After the role: the words where it has them, the number otherwise (`Volume, slider, 40`). | `, required`, `, invalid`, `, read only`, then the description. |
 
 ## Lists that open from a control
@@ -387,14 +393,15 @@ and a node with no name reads as its role alone (`row, 1 of 501`).
 ## Names the catalogue gives
 
 A `text_field` is named by its `label`, or by its `placeholder` when it has no label: the caption drawn above
-the box is not inside the line a reader lands on, so without the name the document's entry was announced as
-an edit box with no name and the desktop read out whatever had been typed. `a11y_label:` with an empty string
-is no name at all: the box goes by what it draws, as if nothing had been said.
+the box is not inside the line a reader lands on, so without the name a field is announced as an edit box
+with no name. `a11y_label:` with an empty string is no name at all: the box goes by what it draws, as if
+nothing had been said.
 
 In the document, a combobox, a slider, a spin button or a splitter that nothing named is named by the text
 drawn inside it, the name every other target gives it. A browser takes that text as the value of those roles
-and their name only from a label, so a `select` showing "Small" was nameless there. A field is not: what it
-draws is what was typed into it, which is its value, so a field nothing named stays unnamed.
+and their name only from a label, so a `select` showing "Small" was nameless there; every target reads the
+choice a select shows as its value too. A field is not named by what it draws on any target: what it draws is
+what was typed into it, which is its value, so a field nothing named stays unnamed.
 
 ## The document's text entry
 
@@ -405,7 +412,9 @@ field shows (the mask, for a secret field, never the value) and its selection is
 written again after every change to the field. It goes by the field's own name, and by none when the app gave
 the field none. Every edit the browser reports on it is prevented and handed to the field as the keys that
 make it, so the field's next frame is what changes the element; a composition is the one thing the browser
-writes into it, over the field's selection, and it reaches the field as `Ime` steps and one commit.
+writes into it, over the field's selection, and it reaches the field as `Ime` steps and one commit. A caret or
+a selection a screen reader or a selection handle moves in it reaches the field as `Event::SelectionMoved`,
+which the field takes as it takes a reader's `SetSelection`.
 
 ## Contrast of the defaults
 

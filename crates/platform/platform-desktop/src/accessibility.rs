@@ -5,13 +5,14 @@
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
 use accesskit::{
-    Action, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Invalid, Live as AkLive, Node,
-    NodeId, Orientation as AkOrientation, Rect as AkRect, Role as AkRole,
-    SortDirection as AkSortDirection, Toggled, TreeId, TreeInfo, TreeUpdate,
+    Action, ActionData, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Invalid,
+    Live as AkLive, Node, NodeId, Orientation as AkOrientation, Rect as AkRect, Role as AkRole,
+    SortDirection as AkSortDirection, TextPosition, TextSelection as AkTextSelection, Toggled,
+    TreeId, TreeInfo, TreeUpdate,
 };
 use platform_core::{
-    AccessNode, CurrentKind, HasPopup, Live, Orientation, Positioning, Role, SortDirection, Toggle,
-    ToggleKind, Value,
+    AccessAction, AccessNode, ActionSupport, CurrentKind, HasPopup, Live, NumericValue,
+    Orientation, Positioning, Role, SortDirection, TextSelection, Toggle, ToggleKind, Value,
 };
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
@@ -55,7 +56,8 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         }
     }
 
-    let mut updates: Vec<(NodeId, Node)> = Vec::with_capacity(nodes.len() + 1);
+    let runs = text_runs(nodes);
+    let mut updates: Vec<(NodeId, Node)> = Vec::with_capacity(nodes.len() + runs.len() + 1);
     let mut focus = ROOT;
 
     for (index, node) in nodes.iter().enumerate() {
@@ -69,9 +71,7 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
             y1: (node.rect.y + node.rect.height) as f64,
         });
         if controls[index].is_some() {
-            // Focus and activation are the two things a reader drives, and both come back as an `ActionRequest` this node has to have claimed.
-            ak.add_action(Action::Focus);
-            ak.add_action(Action::Click);
+            claim_actions(&mut ak, node.supports);
         }
         if !node.enabled {
             ak.set_disabled();
@@ -172,10 +172,28 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         }
         let held = &children[index];
         say_what_it_holds(&mut ak, nodes, &children, index);
-        if !held.is_empty() {
-            ak.set_children(held.iter().map(|&child| ids[child]).collect::<Vec<_>>());
+        let lines: Vec<NodeId> = runs
+            .iter()
+            .filter(|run| run.field == index)
+            .map(|run| run.id)
+            .collect();
+        if let Some((anchor, focus)) = node.selection.and_then(|selection| {
+            Some((
+                position_in(&runs, index, selection.anchor)?,
+                position_in(&runs, index, selection.focus)?,
+            ))
+        }) {
+            ak.set_text_selection(AkTextSelection { anchor, focus });
+        }
+        if !held.is_empty() || !lines.is_empty() {
+            let mut kids: Vec<NodeId> = held.iter().map(|&child| ids[child]).collect();
+            kids.extend(lines);
+            ak.set_children(kids);
         }
         updates.push((id, ak));
+    }
+    for run in &runs {
+        updates.push((run.id, run_node(run, nodes[run.field].rect)));
     }
 
     root.set_children(top.iter().map(|&index| ids[index]).collect::<Vec<_>>());
@@ -383,18 +401,137 @@ fn role_of(role: Role) -> AkRole {
     }
 }
 
-/// What a reader asked for, translated back into the focus id it names. `None` for a request naming the window, a label, or a node that has since gone.
-pub(crate) fn requested_focus_id(
+/// Claims on a control's node every action a reader can ask of it and have answered: the ones every control answers, and those of `supports`.
+fn claim_actions(ak: &mut Node, supports: ActionSupport) {
+    ak.add_action(Action::Focus);
+    ak.add_action(Action::Click);
+    ak.add_action(Action::ScrollIntoView);
+    if supports.step {
+        ak.add_action(Action::Increment);
+        ak.add_action(Action::Decrement);
+    }
+    if supports.set_value {
+        ak.add_action(Action::SetValue);
+    }
+    if supports.set_selection {
+        ak.add_action(Action::SetTextSelection);
+    }
+}
+
+/// One line of the text a field holds, as the run a reader moves its caret through.
+struct TextRun {
+    /// The field, by its place in the snapshot.
+    field: usize,
+    id: NodeId,
+    /// Where the line begins in the field's text, in characters.
+    start: usize,
+    /// The line, with the line break that ends it.
+    text: String,
+}
+
+/// The runs of every field holding text, a line each, numbered after the labels: a reader reads a field's text, and places its caret in it, only through runs.
+fn text_runs(nodes: &[AccessNode]) -> Vec<TextRun> {
+    let mut runs = Vec::new();
+    for (field, node) in nodes.iter().enumerate() {
+        if !matches!(node.role, Role::TextInput | Role::MultilineTextInput) {
+            continue;
+        }
+        let Some(Value::Text(text)) = &node.value else {
+            continue;
+        };
+        let mut start = 0;
+        let last = if text.is_empty() || text.ends_with('\n') {
+            Some("")
+        } else {
+            None
+        };
+        for line in text.split_inclusive('\n').chain(last) {
+            runs.push(TextRun {
+                field,
+                id: label_id(nodes.len() + runs.len()),
+                start,
+                text: line.to_string(),
+            });
+            start += line.chars().count();
+        }
+    }
+    runs
+}
+
+fn run_node(run: &TextRun, rect: geometry_core::Rect) -> Node {
+    let mut ak = Node::new(AkRole::TextRun);
+    ak.set_value(run.text.as_str());
+    ak.set_character_lengths(
+        run.text
+            .chars()
+            .map(|character| character.len_utf8() as u8)
+            .collect::<Vec<u8>>(),
+    );
+    ak.set_bounds(AkRect {
+        x0: rect.x as f64,
+        y0: rect.y as f64,
+        x1: (rect.x + rect.width) as f64,
+        y1: (rect.y + rect.height) as f64,
+    });
+    ak
+}
+
+/// Where the character `at` of the text of the field at `field` falls among its runs: on the line break at the end of a line rather than after it, as a caret at the end of that line stands.
+fn position_in(runs: &[TextRun], field: usize, at: usize) -> Option<TextPosition> {
+    let run = runs
+        .iter()
+        .rfind(|run| run.field == field && run.start <= at)?;
+    Some(TextPosition {
+        node: run.id,
+        character_index: (at - run.start).min(run.text.chars().count()),
+    })
+}
+
+/// The field, by its place in the snapshot, and the character of its text a position in one of its runs names.
+fn character_at(runs: &[TextRun], position: TextPosition) -> Option<(usize, usize)> {
+    let run = runs.iter().find(|run| run.id == position.node)?;
+    Some((run.field, run.start + position.character_index))
+}
+
+/// What a reader asked for, as the focus id of the control it names and the action it asked of it. `None` for a request naming the window or a label, one for a node that has since gone, and one for an action no control answers.
+pub(crate) fn requested_action(
     request: &ActionRequest,
     nodes: &[AccessNode],
-) -> Option<(u64, bool)> {
+) -> Option<(u64, AccessAction)> {
     let id = request.target_node.0;
     if !is_control_id(id) {
         return None;
     }
-    nodes.iter().find(|n| n.id == Some(id))?;
-    let activate = matches!(request.action, Action::Click);
-    Some((id, activate))
+    let target = nodes.iter().position(|n| n.id == Some(id))?;
+    let action = match (request.action, &request.data) {
+        (Action::Focus, _) => AccessAction::Focus,
+        (Action::Click, _) => AccessAction::Activate,
+        (Action::Increment, _) => AccessAction::Increment,
+        (Action::Decrement, _) => AccessAction::Decrement,
+        (Action::ScrollIntoView, _) => AccessAction::ScrollIntoView,
+        (Action::SetValue, Some(ActionData::Value(text))) => {
+            AccessAction::SetValue(Value::Text(text.as_ref().into()))
+        }
+        (Action::SetValue, Some(ActionData::NumericValue(now))) => {
+            let bounds = nodes[target].value.as_ref().and_then(Value::reading);
+            AccessAction::SetValue(Value::from(NumericValue {
+                now: *now,
+                min: bounds.map_or(*now, |bounds| bounds.min),
+                max: bounds.map_or(*now, |bounds| bounds.max),
+            }))
+        }
+        (Action::SetTextSelection, Some(ActionData::SetTextSelection(selection))) => {
+            let runs = text_runs(nodes);
+            let (field, anchor) = character_at(&runs, selection.anchor)?;
+            let (other, focus) = character_at(&runs, selection.focus)?;
+            if field != target || other != target {
+                return None;
+            }
+            AccessAction::SetSelection(TextSelection { anchor, focus })
+        }
+        _ => return None,
+    };
+    Some((id, action))
 }
 
 #[cfg(test)]

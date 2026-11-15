@@ -225,10 +225,10 @@ pub trait EventHandler<W: Window> {
         None
     }
 
-    /// A screen reader asked to move to a control, or to activate it — `id` being the one the handler put in [`AccessNode::id`](crate::AccessNode::id).
+    /// A screen reader asked a control to do something — `id` being the one the handler put in [`AccessNode::id`](crate::AccessNode::id).
     ///
     /// Routed to the same focus and press the keyboard reaches, deliberately: a second activation path is a second thing to keep correct, and it is always the one nobody is testing that rots.
-    fn on_accessibility_action(&mut self, _id: u64, _activate: bool) {}
+    fn on_accessibility_action(&mut self, _id: u64, _action: crate::AccessAction) {}
     /// The user asked to go back — Android's back button or gesture, a mouse's back button — and whether anything went back.
     ///
     /// `false` hands the gesture back to the platform, to do what back means there for an app with nowhere left to go: Android sends the task to the background. Defaults to `false`.
@@ -285,8 +285,8 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
     fn root_language(&self) -> Option<String> {
         (**self).root_language()
     }
-    fn on_accessibility_action(&mut self, id: u64, activate: bool) {
-        (**self).on_accessibility_action(id, activate)
+    fn on_accessibility_action(&mut self, id: u64, action: crate::AccessAction) {
+        (**self).on_accessibility_action(id, action)
     }
     fn on_back(&mut self, window: &W) -> bool {
         (**self).on_back(window)

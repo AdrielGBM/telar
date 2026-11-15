@@ -397,10 +397,10 @@ impl SurfaceCanvas {
         self.with_entered(|| crate::accessibility::snapshot(&commands))
     }
 
-    /// Carries out a screen reader's request to move to the control `id` names in [`access_snapshot`](Self::access_snapshot), or to activate it. See [`accessibility::perform_action`](crate::accessibility::perform_action).
-    pub fn perform_access_action(&self, id: u64, activate: bool) {
+    /// Carries out a screen reader's `action` on the control `id` names in [`access_snapshot`](Self::access_snapshot). See [`accessibility::perform_action`](crate::accessibility::perform_action).
+    pub fn perform_access_action(&self, id: u64, action: platform_core::AccessAction) {
         self.with_entered(|| {
-            crate::accessibility::perform_action(id, activate, |event| {
+            crate::accessibility::perform_action(id, action, |event| {
                 self.dispatch_own(event);
             })
         })
@@ -529,8 +529,8 @@ pub fn follow_box_event(event: &Event, dispatch: impl FnOnce(&Event)) -> Option<
             crate::focus::clear();
             held
         }
-        Event::AccessAction { id, activate } => {
-            crate::accessibility::perform_action(*id, *activate, dispatch);
+        Event::AccessAction { id, action } => {
+            crate::accessibility::perform_action(*id, action.clone(), dispatch);
             true
         }
         _ => return None,

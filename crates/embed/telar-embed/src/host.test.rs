@@ -243,7 +243,7 @@ fn a_readers_action_presses_the_guests_button_and_its_stop_takes_the_keys() {
         .id
         .expect("a control");
 
-    perform_action(button, true, |event| {
+    perform_action(button, platform_core::AccessAction::Activate, |event| {
         panic!("no tree of the host's carries it: {event:?}")
     });
     assert_eq!(host.embed.title(), "ab pressed 1");

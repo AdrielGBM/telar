@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use platform_core::{Event, EventHandler, Ime, Key, Platform, WindowConfig};
+use platform_core::{Event, EventHandler, Ime, Key, Platform, TextSelection, WindowConfig};
 use platform_web::{PageNames, WebPlatform, WebPlatformConfig, WebWindow};
 use renderer_core::{
     DrawCommand, Editing, Element, ElementId, Focusable, RenderBackend, Role, Semantics,
@@ -397,5 +397,47 @@ async fn a_key_the_input_method_is_handling_never_reaches_the_app() {
             .iter()
             .any(|event| matches!(event, Event::KeyPressed { .. })),
         "{events:?}"
+    );
+}
+
+fn selection_moved(start: u32, end: u32, direction: &str) {
+    line()
+        .set_selection_range_with_direction(start, end, direction)
+        .expect("the entry takes a selection");
+    let event = web_sys::Event::new("selectionchange").expect("an event");
+    entry().dispatch_event(&event).expect("dispatched");
+}
+
+fn selections(events: &[Event]) -> Vec<TextSelection> {
+    events
+        .iter()
+        .filter_map(|event| match event {
+            Event::SelectionMoved { selection } => Some(*selection),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A selection a screen reader or a selection handle moves in the entry reaches the field, with the end the caret is at kept; the field's own selection, written into the entry, reaches it as nothing.
+#[wasm_bindgen_test]
+async fn a_selection_moved_in_the_entry_reaches_the_field() {
+    render(FIELD);
+    next_frames().await;
+    recorded();
+    selection_moved(1, 1, "none");
+    next_frames().await;
+    assert_eq!(selections(&recorded()), [], "the field's own caret");
+
+    selection_moved(0, 2, "backward");
+    next_frames().await;
+    let moved = selections(&recorded());
+    assert!(!moved.is_empty());
+    assert!(
+        moved.iter().all(|selection| *selection
+            == TextSelection {
+                anchor: 2,
+                focus: 0
+            }),
+        "{moved:?}"
     );
 }

@@ -1419,7 +1419,9 @@ fn a_readers_action_on_a_control_in_a_frame_reaches_it_in_the_frames_world() {
         .expect("the frame's button is announced");
     let inner_focus = || canvas.with_entered(focus::current);
 
-    crate::accessibility::perform_action(button, false, |event| window.send(event.clone()));
+    crate::accessibility::perform_action(button, platform_core::AccessAction::Focus, |event| {
+        window.send(event.clone())
+    });
     window.frame();
     assert!(
         inner_focus().is_some(),
@@ -1431,7 +1433,9 @@ fn a_readers_action_on_a_control_in_a_frame_reaches_it_in_the_frames_world() {
     );
     assert_eq!(presses.get(), 0, "moving to a control does not press it");
 
-    crate::accessibility::perform_action(button, true, |event| window.send(event.clone()));
+    crate::accessibility::perform_action(button, platform_core::AccessAction::Activate, |event| {
+        window.send(event.clone())
+    });
     window.frame();
     assert_eq!(presses.get(), 1, "activating it presses it once");
 }

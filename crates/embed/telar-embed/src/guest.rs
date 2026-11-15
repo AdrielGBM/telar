@@ -6,7 +6,7 @@ use platform_core::guest::{
     CWaker, CallOutcome, FrameCtx, Handle, HostServices, LentBytes, ReportsSurface, Timestamp,
     guest_entry, host_epoch,
 };
-use platform_core::{AccessNode, ConsumedKeys, Event, SystemPreferences, TextInput};
+use platform_core::{AccessAction, AccessNode, ConsumedKeys, Event, SystemPreferences, TextInput};
 use renderer_core::Color;
 use renderer_core::wire::{DrawList, Pixels};
 use services_core::guest::{LentFrames, UpperTable};
@@ -290,8 +290,8 @@ impl ReportsSurface for GuestInstance {
         self.instance.canvas.access_snapshot()
     }
 
-    fn perform_access_action(&mut self, id: u64, activate: bool) {
-        self.instance.canvas.perform_access_action(id, activate);
+    fn perform_access_action(&mut self, id: u64, action: AccessAction) {
+        self.instance.canvas.perform_access_action(id, action);
     }
 
     fn text_input(&self) -> Option<TextInput> {

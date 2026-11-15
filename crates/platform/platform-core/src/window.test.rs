@@ -48,6 +48,8 @@ impl EventHandler<TestWindow> for TestHandler {
             sort: None,
             multiselectable: false,
             modal: false,
+            selection: None,
+            supports: Default::default(),
         }]
     }
 }

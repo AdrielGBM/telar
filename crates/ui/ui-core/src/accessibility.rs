@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use layout_core::NodeId;
-use platform_core::{AccessNode, CurrentKind, Event, Role, SetPosition};
+use platform_core::{
+    AccessAction, AccessNode, ActionSupport, CurrentKind, Event, Role, SetPosition, Value,
+};
 use renderer_core::DrawCommand;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -120,6 +122,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 keyboard_shortcut: e.keyboard_shortcut.as_deref().map(str::to_string),
                 sort: e.sort,
                 multiselectable: e.multiselectable,
+                supports: e.supports,
                 position: e.position,
                 lang: reading.scope(e.node).lang.as_deref().map(str::to_string),
                 url: link.map(|(destination, _)| platform_core::address_of(destination)),
@@ -129,6 +132,9 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 controls: focus::controls_state(e.id)
                     .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
                 modal: modal(e.role, e.node),
+                selection: (focused == Some(e.id))
+                    .then(|| focus::text_selection_state(e.id))
+                    .flatten(),
             };
             Found::holding(node, e.node, &reading)
         })
@@ -187,6 +193,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         .chain(reading.text.iter().cloned())
         .filter(|piece| !piece.drawn_in.is_some_and(|node| layers.behind(node)));
 
+    let mut drawn_values = vec![String::new(); controls.len()];
     for piece in pieces {
         let owner = match &piece.named_box {
             Some(NamedBox { wraps: Some(i), .. }) => Some(*i),
@@ -211,7 +218,15 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                     .map(|(i, _)| i),
             },
         };
+        let drawn = piece.named_box.is_none() && piece.url.is_none();
         match owner {
+            // What a field or a select shows is its value; a select nobody named is also called by its choice, as a document calls it, and a field never by what was typed into it.
+            Some(i) if drawn && controls[i].0.role.draws_its_value() => {
+                append(&mut drawn_values[i], &piece.text);
+                if !named_controls[i] && !controls[i].0.role.draws_what_was_typed() {
+                    append(&mut found[i].node.name, &piece.text);
+                }
+            }
             // A control the application named is called that, whatever it draws.
             Some(i) if named_controls[i] && piece.url.is_none() => {}
             Some(i) if piece.url.is_none() => append(&mut found[i].node.name, &piece.text),
@@ -231,6 +246,11 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                     _ => Found::inside(node, piece.drawn_in, &reading),
                 });
             }
+        }
+    }
+    for (control, drawn) in found.iter_mut().zip(drawn_values) {
+        if control.node.value.is_none() && !drawn.is_empty() {
+            control.node.value = Some(Value::Text(drawn.into()));
         }
     }
 
@@ -322,6 +342,8 @@ fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: ActionSupport::default(),
     }
 }
 
@@ -1205,25 +1227,25 @@ impl AccessTarget {
     }
 }
 
-/// Carries out a screen reader's request to move to the control `id` names in [`snapshot`] of the surface entered now, or to activate it.
+/// Carries out a screen reader's `action` on the control `id` names in [`snapshot`] of the surface entered now.
 ///
-/// A control of its own takes focus — a [presented](crate::StyledContainer::presented) one moves its owner's cursor onto itself instead — and is activated through [`focus::perform`], which runs what a tap on it runs. One of a nested surface is reached the way a box event for it is, as an [`Event::AccessAction`] inside [`Event::InSurface`], which the frames along the way pass on to the surface that drew it; one of a [foreign](crate::ForeignSurface) surface, which no frame here can enter, is handed to that surface directly, and its focus stop takes focus once focus is inside. What has to travel through the surface's tree is handed to `dispatch`.
-pub fn perform_action(id: u64, activate: bool, dispatch: impl FnOnce(&Event)) {
+/// A control of its own carries it out through [`focus::perform`]; one activated takes focus first, as one tapped does — a [presented](crate::StyledContainer::presented) one moves its owner's cursor onto itself instead. One of a nested surface is reached the way a box event for it is, as an [`Event::AccessAction`] inside [`Event::InSurface`], which the frames along the way pass on to the surface that drew it; one of a [foreign](crate::ForeignSurface) surface, which no frame here can enter, is handed to that surface directly, and its focus stop takes focus once focus is inside. What has to travel through the surface's tree is handed to `dispatch`.
+pub fn perform_action(id: u64, action: AccessAction, dispatch: impl FnOnce(&Event)) {
     match AccessTarget::of(id) {
         AccessTarget::Own(id) => {
-            focus::request(id);
-            if activate {
-                focus::perform(id, focus::Action::Activate);
+            if action == AccessAction::Activate {
+                focus::perform(id, AccessAction::Focus);
             }
+            focus::perform(id, action);
         }
         AccessTarget::Nested { surface, id } => match crate::foreign_surface::target(surface, id) {
             Some((foreign, own)) => {
-                foreign.perform_access_action(own, activate);
+                foreign.perform_access_action(own, action);
                 crate::foreign_surface::follow_focus_inside(surface);
             }
             None => dispatch(&Event::InSurface {
                 surface,
-                event: Box::new(Event::AccessAction { id, activate }),
+                event: Box::new(Event::AccessAction { id, action }),
             }),
         },
     }
@@ -1270,3 +1292,7 @@ mod tests;
 #[cfg(test)]
 #[path = "accessibility.action.test.rs"]
 mod action_tests;
+
+#[cfg(test)]
+#[path = "accessibility.value.test.rs"]
+mod value_tests;

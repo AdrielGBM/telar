@@ -16,12 +16,12 @@ use wire_core::{
 
 use crate::guest::RawHandles;
 use crate::{
-    AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation, ColorScheme, Cursor,
-    DragActions, DragData, DragIcon, DragOffer, DragOutcome, DropAction, DropAnswer, DroppedData,
-    Event, FullscreenMode, HistoryStep, HistoryUpdate, Ime, Key, KeyboardConvention,
-    LocationFormat, MimeType, ModifiersState, NamedKey, OutgoingDrag, PointerButton, PointerSource,
-    Representation, ResizeEdge, ScrollDelta, SystemPreferences, TextInput, WindowCommand,
-    WindowConfig, WindowPosition,
+    AccessAction, AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation,
+    ActionSupport, ColorScheme, Cursor, DragActions, DragData, DragIcon, DragOffer, DragOutcome,
+    DropAction, DropAnswer, DroppedData, Event, FullscreenMode, HistoryStep, HistoryUpdate, Ime,
+    Key, KeyboardConvention, LocationFormat, MimeType, ModifiersState, NamedKey, OutgoingDrag,
+    PointerButton, PointerSource, Representation, ResizeEdge, ScrollDelta, SystemPreferences,
+    TextInput, TextSelection, WindowCommand, WindowConfig, WindowPosition,
 };
 
 wire_enum!(NamedKey {
@@ -158,7 +158,7 @@ wire_enum!(Event {
     BoxActivated { box_id } = 18,
     RunActivated { box_id, run } = 19,
     InSurface { surface, event: Self } = 20,
-    AccessAction { id, activate } = 21,
+    AccessAction { id, action } = 21,
     SafeAreaChanged { insets } = 22,
     SystemPreferencesChanged { preferences } = 23,
     LocationChanged { history } = 24,
@@ -166,6 +166,7 @@ wire_enum!(Event {
     DragLeft = 26,
     Dropped { x, y, data } = 27,
     DragEnded { outcome } = 28,
+    SelectionMoved { selection } = 29,
 });
 
 impl Shaped for MimeType {
@@ -347,6 +348,23 @@ wire_struct!(AccessNode {
     sort,
     multiselectable,
     modal,
+    selection,
+    supports,
+});
+wire_struct!(TextSelection { anchor, focus });
+wire_struct!(ActionSupport {
+    step,
+    set_value,
+    set_selection
+});
+wire_enum!(AccessAction {
+    Focus = 0,
+    Activate = 1,
+    Increment = 2,
+    Decrement = 3,
+    SetValue(value) = 4,
+    ScrollIntoView = 5,
+    SetSelection(selection) = 6,
 });
 wire_struct!(AccessAudit { nodes, violations });
 

@@ -30,6 +30,8 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: Default::default(),
     }
 }
 
@@ -98,7 +100,10 @@ fn a_request_maps_back_to_the_control_that_claimed_it() {
         target_node: target,
         data: None,
     };
-    assert_eq!(requested_focus_id(&request, &nodes), Some((7, true)));
+    assert_eq!(
+        requested_action(&request, &nodes),
+        Some((7, AccessAction::Activate))
+    );
 
     let stale = ActionRequest {
         action: Action::Focus,
@@ -106,9 +111,9 @@ fn a_request_maps_back_to_the_control_that_claimed_it() {
         target_node: NodeId(target.0 + 1),
         data: None,
     };
-    assert_eq!(requested_focus_id(&stale, &nodes), None);
+    assert_eq!(requested_action(&stale, &nodes), None);
     assert_eq!(
-        requested_focus_id(
+        requested_action(
             &ActionRequest {
                 action: Action::Focus,
                 target_tree: TreeId::ROOT,
@@ -149,7 +154,10 @@ fn a_nested_surfaces_control_and_the_windows_own_never_share_a_node() {
             target_node: update.nodes[index].0,
             data: None,
         };
-        assert_eq!(requested_focus_id(&request, &nodes), Some((id, false)));
+        assert_eq!(
+            requested_action(&request, &nodes),
+            Some((id, AccessAction::Focus))
+        );
     }
     let label = ActionRequest {
         action: Action::Focus,
@@ -158,7 +166,7 @@ fn a_nested_surfaces_control_and_the_windows_own_never_share_a_node() {
         data: None,
     };
     assert_eq!(
-        requested_focus_id(&label, &nodes),
+        requested_action(&label, &nodes),
         None,
         "a label is no control"
     );
@@ -1332,4 +1340,183 @@ fn every_role_said_from_outside_is_published_as_the_role_a_reader_knows() {
         };
         assert_eq!(published.live(), live, "{role:?}");
     }
+}
+
+fn request(target: NodeId, action: Action, data: Option<ActionData>) -> ActionRequest {
+    ActionRequest {
+        action,
+        target_tree: TreeId::ROOT,
+        target_node: target,
+        data,
+    }
+}
+
+/// A slider claims the steps it answers, and a reader's step, or a number it writes, comes back as that action on the slider, within the bounds the slider reads between.
+#[test]
+fn a_slider_that_steps_claims_and_receives_its_steps() {
+    let slider = AccessNode {
+        value: Some(Value::from(NumericValue {
+            now: 0.5,
+            min: 0.0,
+            max: 1.0,
+        })),
+        supports: ActionSupport {
+            step: true,
+            set_value: true,
+            set_selection: false,
+        },
+        ..node(Some(9), Role::Slider, "Volume")
+    };
+    let still = node(Some(10), Role::Slider, "Balance");
+    let nodes = [slider, still];
+    let update = tree_update(&nodes, "Mixer", None);
+    let (stepping, fixed) = (&update.nodes[0], &update.nodes[1]);
+    assert!(stepping.1.supports_action(Action::Increment));
+    assert!(stepping.1.supports_action(Action::Decrement));
+    assert!(stepping.1.supports_action(Action::SetValue));
+    assert!(!stepping.1.supports_action(Action::SetTextSelection));
+    assert!(!fixed.1.supports_action(Action::Increment));
+    assert!(fixed.1.supports_action(Action::ScrollIntoView));
+
+    assert_eq!(
+        requested_action(&request(stepping.0, Action::Increment, None), &nodes),
+        Some((9, AccessAction::Increment))
+    );
+    assert_eq!(
+        requested_action(&request(stepping.0, Action::Decrement, None), &nodes),
+        Some((9, AccessAction::Decrement))
+    );
+    assert_eq!(
+        requested_action(
+            &request(
+                stepping.0,
+                Action::SetValue,
+                Some(ActionData::NumericValue(0.75))
+            ),
+            &nodes
+        ),
+        Some((
+            9,
+            AccessAction::SetValue(Value::from(NumericValue {
+                now: 0.75,
+                min: 0.0,
+                max: 1.0,
+            }))
+        ))
+    );
+    assert_eq!(
+        requested_action(&request(stepping.0, Action::SetValue, None), &nodes),
+        None,
+        "a value to set is part of the request"
+    );
+}
+
+/// A field's text is read as a run a line, and the caret of the field holding the keyboard is placed in those runs: on the line break that ends a line, at the start of the next line once past it.
+#[test]
+fn a_field_publishes_its_text_as_runs_and_its_caret_in_them() {
+    let field = AccessNode {
+        value: Some(Value::Text("añil\nazul".into())),
+        selection: Some(TextSelection {
+            anchor: 4,
+            focus: 6,
+        }),
+        supports: ActionSupport {
+            step: false,
+            set_value: true,
+            set_selection: true,
+        },
+        ..node(Some(3), Role::MultilineTextInput, "Notes")
+    };
+    let update = tree_update(&[field], "Form", None);
+    let ak = &update.nodes[0].1;
+    assert_eq!(ak.value(), Some("añil\nazul"));
+    assert!(ak.supports_action(Action::SetValue));
+    assert!(ak.supports_action(Action::SetTextSelection));
+    let runs: Vec<&Node> = ak
+        .children()
+        .iter()
+        .map(|id| update_of(&update, *id))
+        .collect();
+    assert_eq!(
+        runs.iter().map(|run| run.value()).collect::<Vec<_>>(),
+        [Some("añil\n"), Some("azul")]
+    );
+    assert!(runs.iter().all(|run| run.role() == AkRole::TextRun));
+    assert_eq!(runs[0].character_lengths(), [1, 2, 1, 1, 1]);
+
+    let selection = ak.text_selection().expect("the caret is published");
+    assert_eq!(selection.anchor.node, ak.children()[0]);
+    assert_eq!(selection.anchor.character_index, 4);
+    assert_eq!(selection.focus.node, ak.children()[1]);
+    assert_eq!(selection.focus.character_index, 1);
+}
+
+/// A reader placing the caret names a run and a place in it; it comes back as the place in the whole text, and a reader writing the text hands it whole.
+#[test]
+fn a_reader_placing_a_fields_caret_names_a_place_in_its_text() {
+    let field = AccessNode {
+        value: Some(Value::Text("añil\nazul".into())),
+        supports: ActionSupport {
+            step: false,
+            set_value: true,
+            set_selection: true,
+        },
+        ..node(Some(3), Role::MultilineTextInput, "Notes")
+    };
+    let nodes = [field];
+    let update = tree_update(&nodes, "Form", None);
+    let (id, ak) = &update.nodes[0];
+    let at = |run: usize, character_index: usize| TextPosition {
+        node: ak.children()[run],
+        character_index,
+    };
+    let placed = request(
+        *id,
+        Action::SetTextSelection,
+        Some(ActionData::SetTextSelection(AkTextSelection {
+            anchor: at(0, 1),
+            focus: at(1, 2),
+        })),
+    );
+    assert_eq!(
+        requested_action(&placed, &nodes),
+        Some((
+            3,
+            AccessAction::SetSelection(TextSelection {
+                anchor: 1,
+                focus: 7,
+            })
+        ))
+    );
+    let written = request(
+        *id,
+        Action::SetValue,
+        Some(ActionData::Value("verde".into())),
+    );
+    assert_eq!(
+        requested_action(&written, &nodes),
+        Some((3, AccessAction::SetValue(Value::Text("verde".into()))))
+    );
+}
+
+/// An empty field is still a run a reader can put the caret in.
+#[test]
+fn an_empty_field_has_one_empty_run() {
+    let field = AccessNode {
+        value: Some(Value::Text("".into())),
+        selection: Some(TextSelection {
+            anchor: 0,
+            focus: 0,
+        }),
+        ..node(Some(3), Role::TextInput, "Search")
+    };
+    let update = tree_update(&[field], "Form", None);
+    let ak = &update.nodes[0].1;
+    assert_eq!(ak.children().len(), 1);
+    assert_eq!(update_of(&update, ak.children()[0]).value(), Some(""));
+    assert_eq!(
+        ak.text_selection()
+            .map(|selection| selection.focus.character_index),
+        Some(0)
+    );
 }

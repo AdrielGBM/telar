@@ -28,7 +28,7 @@ impl ReportsSurface for Blank {
         Vec::new()
     }
 
-    fn perform_access_action(&mut self, _id: u64, _activate: bool) {}
+    fn perform_access_action(&mut self, _id: u64, _action: platform_core::AccessAction) {}
 
     fn text_input(&self) -> Option<platform_core::TextInput> {
         None

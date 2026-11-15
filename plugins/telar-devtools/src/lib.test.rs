@@ -521,6 +521,8 @@ fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: Default::default(),
     }]);
     dev.on_violations(&[telar::AccessViolation::new(
         telar::AccessRule::UnnamedControl,

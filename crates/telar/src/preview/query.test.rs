@@ -29,6 +29,8 @@ fn node(role: Role, name: &str) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+        selection: None,
+        supports: Default::default(),
     }
 }
 

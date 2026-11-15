@@ -232,6 +232,16 @@ impl Role {
         matches!(self, Self::Group | Self::KeyboardInput)
     }
 
+    /// Whether the words drawn inside a control of this role say what it holds: a field's text, the choice a select shows. A reader is told them as the control's value, as a document reads the text inside such an element.
+    pub fn draws_its_value(&self) -> bool {
+        self.draws_what_was_typed() || *self == Self::ComboBox
+    }
+
+    /// Whether what a control of this role draws is the text typed into it, which is its value and never its name: a field nobody named stays unnamed on every target, as a document leaves an `<input>` with no label unnamed.
+    pub fn draws_what_was_typed(&self) -> bool {
+        matches!(self, Self::TextInput | Self::MultilineTextInput)
+    }
+
     /// The name this role goes by in markup and in a stylesheet — the ARIA role, which is also what an application writes in `.rsx`.
     ///
     /// One table rather than one per target: a name that parses and a name that is announced must be the same word, or an author has learned two vocabularies for one idea.

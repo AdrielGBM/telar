@@ -90,13 +90,13 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
         match event {
             AkEvent::InitialTreeRequested => self.publish_accessibility(),
             AkEvent::ActionRequested(request) => {
-                let Some((id, activate)) =
-                    crate::accessibility::requested_focus_id(&request, &self.a11y_nodes)
+                let Some((id, action)) =
+                    crate::accessibility::requested_action(&request, &self.a11y_nodes)
                 else {
                     return;
                 };
                 // Through the same door the keyboard uses: a reader activating a button takes the path a press takes, or the two grow apart and it is always the untested one that rots.
-                self.handler.on_accessibility_action(id, activate);
+                self.handler.on_accessibility_action(id, action);
                 self.publish_accessibility();
             }
             // The tree is only ever built on demand, so ceasing to be asked is the whole of stopping.
@@ -623,12 +623,12 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                 match event.window_event {
                     AkEvent::InitialTreeRequested => surface.publish_accessibility(),
                     AkEvent::ActionRequested(request) => {
-                        let Some((id, activate)) =
-                            crate::accessibility::requested_focus_id(&request, &surface.a11y_nodes)
+                        let Some((id, action)) =
+                            crate::accessibility::requested_action(&request, &surface.a11y_nodes)
                         else {
                             return;
                         };
-                        surface.handler.on_accessibility_action(id, activate);
+                        surface.handler.on_accessibility_action(id, action);
                         surface.publish_accessibility();
                     }
                     AkEvent::AccessibilityDeactivated => surface.a11y_nodes.clear(),

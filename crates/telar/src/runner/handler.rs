@@ -1289,10 +1289,10 @@ where
         self.entered_ref(|_| i18n_core::use_locale())
     }
 
-    fn on_accessibility_action(&mut self, id: u64, activate: bool) {
+    fn on_accessibility_action(&mut self, id: u64, action: platform_core::AccessAction) {
         self.entered(|this| {
             let (app, tree) = (&this.app, &mut this.tree);
-            ui_core::accessibility::perform_action(id, activate, |event| {
+            ui_core::accessibility::perform_action(id, action, |event| {
                 app.event_batch(|| {
                     if !app.dispatch_overlays(event)
                         && let Some(tree) = tree

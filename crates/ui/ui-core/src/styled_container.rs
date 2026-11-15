@@ -725,6 +725,22 @@ impl StyledContainer {
         self
     }
 
+    /// Declares how this value control moves one step up or down when a reader asks it to, reporting whether the value could move: the same code its arrow keys run, so the two cannot disagree on what a step is. See [`focus::set_stepping`].
+    pub fn stepped(self, step: impl Fn(focus::Step) -> bool + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_stepping(id, step);
+        }
+        self
+    }
+
+    /// Declares how this control takes a value a reader hands it whole, reporting whether it took it: the reading a slider is to stand at. See [`focus::set_assignment`].
+    pub fn assigned(self, assign: impl Fn(&Value) -> bool + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_assignment(id, assign);
+        }
+        self
+    }
+
     /// Declares the axis this control runs along, so a reader hears a splitter's direction. Meaningful for [`Role::Splitter`](renderer_core::Role::Splitter) and the other roles with an axis.
     pub fn oriented(self, orientation: Orientation) -> Self {
         if let Some(id) = self.focusable.id {
@@ -1478,7 +1494,7 @@ impl StyledContainer {
                     && let Some(id) = self.focusable.id
                     && focus::is_key_target(id)
                     && self.activated_by(key)
-                    && focus::perform(id, focus::Action::Activate)
+                    && focus::perform(id, focus::AccessAction::Activate)
                 {
                     return EventResult::Handled;
                 }

@@ -6,12 +6,13 @@ use geometry_core::{Insets, Rect};
 use wire_core::{Wire, WireError, decode, encode};
 
 use crate::{
-    AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation, ColorScheme, CurrentKind,
-    Cursor, DragActions, DragData, DragIcon, DragOutcome, DropAction, DropAnswer, DroppedData,
-    Event, FullscreenMode, HasPopup, HistoryStep, HistoryUpdate, Ime, Key, KeyboardConvention,
-    Location, MimeType, ModifiersState, NamedKey, NumericValue, Orientation, OutgoingDrag,
-    PointerButton, PointerSource, ResizeEdge, Role, ScrollDelta, SetPosition, SortDirection,
-    SystemPreferences, TextInput, Toggle, Value, WindowCommand, WindowConfig, WindowPosition,
+    AccessAction, AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation,
+    ActionSupport, ColorScheme, CurrentKind, Cursor, DragActions, DragData, DragIcon, DragOutcome,
+    DropAction, DropAnswer, DroppedData, Event, FullscreenMode, HasPopup, HistoryStep,
+    HistoryUpdate, Ime, Key, KeyboardConvention, Location, MimeType, ModifiersState, NamedKey,
+    NumericValue, Orientation, OutgoingDrag, PointerButton, PointerSource, ResizeEdge, Role,
+    ScrollDelta, SetPosition, SortDirection, SystemPreferences, TextInput, TextSelection, Toggle,
+    Value, WindowCommand, WindowConfig, WindowPosition,
 };
 
 fn round_trip<T: Wire + PartialEq + Debug>(value: T) {
@@ -141,13 +142,42 @@ fn every_event() -> Vec<Event> {
                 surface: 10,
                 event: Box::new(Event::AccessAction {
                     id: 11,
-                    activate: true,
+                    action: AccessAction::Activate,
                 }),
             }),
         },
         Event::AccessAction {
             id: 12,
-            activate: false,
+            action: AccessAction::Focus,
+        },
+        Event::AccessAction {
+            id: 13,
+            action: AccessAction::Increment,
+        },
+        Event::AccessAction {
+            id: 13,
+            action: AccessAction::Decrement,
+        },
+        Event::AccessAction {
+            id: 14,
+            action: AccessAction::SetValue(Value::Text("añil".into())),
+        },
+        Event::AccessAction {
+            id: 14,
+            action: AccessAction::ScrollIntoView,
+        },
+        Event::AccessAction {
+            id: 14,
+            action: AccessAction::SetSelection(TextSelection {
+                anchor: 4,
+                focus: 1,
+            }),
+        },
+        Event::SelectionMoved {
+            selection: TextSelection {
+                anchor: 2,
+                focus: 2,
+            },
         },
         Event::SafeAreaChanged {
             insets: Insets::new(44.0, 0.0, 34.0, 0.0),
@@ -209,12 +239,12 @@ fn every_event_round_trips() {
         tags.insert(encode(&event)[0]);
         round_trip(event);
     }
-    assert_eq!(tags.len(), 29);
+    assert_eq!(tags.len(), 30);
     assert_eq!(
-        decode::<Event>(&[29]),
+        decode::<Event>(&[30]),
         Err(WireError::Tag {
             of: "Event",
-            tag: 29
+            tag: 30
         })
     );
 }
@@ -371,6 +401,15 @@ fn node() -> AccessNode {
         sort: Some(SortDirection::Ascending),
         multiselectable: true,
         modal: true,
+        selection: Some(TextSelection {
+            anchor: 3,
+            focus: 0,
+        }),
+        supports: ActionSupport {
+            step: true,
+            set_value: false,
+            set_selection: true,
+        },
     }
 }
 
@@ -404,6 +443,8 @@ fn audit() -> AccessAudit {
                 sort: None,
                 multiselectable: false,
                 modal: false,
+                selection: None,
+                supports: Default::default(),
             },
             node(),
         ],
