@@ -43,7 +43,11 @@ pub fn bake_catalog(
     }
 
     let mut report = CatalogReport::default();
-    let model = match parse_sources(&sources, config.default.as_ref()) {
+    let model = match parse_sources(
+        &sources,
+        config.default.as_ref(),
+        &package_dir.join(telar_project::MANIFEST_FILENAME),
+    ) {
         Ok(model) => model,
         Err(problem) => {
             report.problems.push(problem);
@@ -209,6 +213,7 @@ pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, BakePr
     parse_sources(
         &catalog_sources(package_root, &config),
         config.default.as_ref(),
+        &package_root.join(telar_project::MANIFEST_FILENAME),
     )
 }
 
@@ -224,6 +229,7 @@ pub fn catalog_keys(package_root: &Path) -> HashSet<String> {
 fn parse_sources(
     sources: &[(String, PathBuf)],
     default: Option<&LocaleTag>,
+    manifest: &Path,
 ) -> Result<Option<CatalogModel>, BakeProblem> {
     let mut files: Vec<(&str, String, &Path)> = Vec::new();
     for (tag, path) in sources {
@@ -242,14 +248,42 @@ fn parse_sources(
         .map(|(tag, content, path)| (*tag, content.as_str(), *path))
         .collect();
 
-    CatalogModel::from_sources(&borrowed, default).map_err(|error| {
+    let model = CatalogModel::from_sources(&borrowed, default).map_err(|error| {
         BakeProblem::new(
             ProblemKind::CatalogInvalid {
                 problem: error.problem,
             },
             error.source,
         )
-    })
+    })?;
+    if let Some(model) = &model {
+        reject_unbakeable_locales(model, sources, manifest)?;
+    }
+    Ok(model)
+}
+
+fn reject_unbakeable_locales(
+    model: &CatalogModel,
+    sources: &[(String, PathBuf)],
+    manifest: &Path,
+) -> Result<(), BakeProblem> {
+    let Some(locale) = model
+        .locales
+        .iter()
+        .find(|locale| locale.variants().len() > 1)
+    else {
+        return Ok(());
+    };
+    let file = sources
+        .iter()
+        .find(|(tag, _)| LocaleTag::parse(tag).as_ref() == Ok(locale))
+        .map_or(manifest, |(_, path)| path.as_path());
+    Err(BakeProblem::new(
+        ProblemKind::LocaleNotBakeable {
+            locale: locale.clone(),
+        },
+        file,
+    ))
 }
 
 /// Serializes the catalog to a Rust source module. Types are referenced through the `telar::i18n` facade so the generated file compiles with the same `rsx` dependency every generated `.rsx` file has.

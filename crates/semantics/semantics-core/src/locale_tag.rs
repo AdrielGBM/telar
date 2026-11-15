@@ -43,13 +43,18 @@ impl LocaleTag {
         self.0.region.as_ref().map(|region| region.as_str())
     }
 
+    /// The variant subtags in canonical order, lowercase: `rozaj` and `biske` for `sl-IT-rozaj-biske`.
+    pub fn variants(&self) -> impl ExactSizeIterator<Item = &str> {
+        self.0.variants.iter().map(|variant| variant.as_str())
+    }
+
     /// The identifier the Unicode libraries that apply a language's rules take.
     pub fn identifier(&self) -> &LanguageIdentifier {
         &self.0
     }
 }
 
-/// A [`LocaleTag`] written in source: checked and put in canonical form at compile time, so it can stand in a `static`.
+/// A [`LocaleTag`] written in source: checked and put in canonical form at compile time, so it can stand in a `static`. Constant evaluation holds at most one variant, so a tag with two or more is parsed at runtime with [`LocaleTag::parse`] instead.
 ///
 /// ```
 /// use telar_semantics_core::{LocaleTag, locale_tag};

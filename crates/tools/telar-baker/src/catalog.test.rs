@@ -377,6 +377,35 @@ fn a_locale_file_named_after_no_locale_is_an_error_naming_it() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+#[test]
+fn a_locale_with_two_variants_is_an_error_naming_it() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_two_variants_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
+    std::fs::write(
+        root.join("locales/sl-IT-rozaj-biske.toml"),
+        "title = \"Nastavitve\"\n",
+    )
+    .unwrap();
+
+    let problem = parse_catalog(&root).unwrap_err();
+    assert!(
+        matches!(&problem.kind, ProblemKind::LocaleNotBakeable { locale } if *locale == tag("sl-IT-rozaj-biske")),
+        "{problem:?}"
+    );
+    assert_eq!(
+        problem.file,
+        root.join("locales").join("sl-IT-rozaj-biske.toml")
+    );
+    assert!(
+        problem.to_string().contains("sl-IT-rozaj-biske"),
+        "{problem}"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 fn tag(text: &str) -> LocaleTag {
     LocaleTag::parse(text).unwrap()
 }

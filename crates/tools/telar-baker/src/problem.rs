@@ -3,7 +3,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use i18n_core::SourceProblem;
+use i18n_core::{LocaleTag, SourceProblem};
 use icons_core::IconIdError;
 use telar_project::{AssetContext, AssetKind, ManifestError, icon_id_message};
 
@@ -120,6 +120,9 @@ pub enum ProblemKind {
     CatalogInvalid {
         problem: SourceProblem,
     },
+    LocaleNotBakeable {
+        locale: LocaleTag,
+    },
     /// The file is still baked, but a change to it will not mark the catalog stale.
     CatalogNameNotUtf8,
 }
@@ -217,7 +220,8 @@ impl BakeProblem {
             | ProblemKind::ArtifactUngenerated { .. }
             | ProblemKind::ArtifactUnwritable { .. }
             | ProblemKind::CatalogUnreadable { .. }
-            | ProblemKind::CatalogInvalid { .. } => Severity::Error,
+            | ProblemKind::CatalogInvalid { .. }
+            | ProblemKind::LocaleNotBakeable { .. } => Severity::Error,
         }
     }
 
@@ -243,6 +247,7 @@ impl BakeProblem {
             | ProblemKind::ArtifactUngenerated { .. }
             | ProblemKind::ArtifactUnwritable { .. }
             | ProblemKind::CatalogUnreadable { .. }
+            | ProblemKind::LocaleNotBakeable { .. }
             | ProblemKind::CatalogNameNotUtf8 => None,
         }
     }
@@ -342,6 +347,11 @@ impl fmt::Display for BakeProblem {
                 | SourceProblem::DuplicateKey { .. }
                 | SourceProblem::NotALocale(_) => write!(f, "catalog: {file}: {problem}"),
             },
+            ProblemKind::LocaleNotBakeable { locale } => write!(
+                f,
+                "catalog: {file} is the locale `{locale}`, which has {} variants; a baked catalog holds a locale with at most one, so name it with one variant or none",
+                locale.variants().len()
+            ),
             ProblemKind::CatalogNameNotUtf8 => write!(
                 f,
                 "catalog: {file} has a name that is not valid UTF-8, so a change to it will not mark the baked catalog stale"
