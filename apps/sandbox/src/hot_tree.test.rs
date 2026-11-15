@@ -86,6 +86,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
         std::sync::Arc::new(NoPaths) as std::sync::Arc<dyn AppPathsProvider>,
         "telar-sandbox-hot-tree-test",
         telar::AppConfig::default(),
+        telar::SurfaceConventions::default(),
     );
     handler.new_events();
     assert!(handler.on_resume(&window), "headless renderer init failed");

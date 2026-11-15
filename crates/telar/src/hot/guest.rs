@@ -299,6 +299,15 @@ pub(super) extern "C" fn set_surface_maximized(maximized: bool) -> CallOutcome {
     guest_entry(|| crate::set_surface_maximized(maximized))
 }
 
+pub(super) unsafe extern "C" fn set_surface_conventions(
+    conventions: LentBytes<crate::SurfaceConventions>,
+) -> CallOutcome {
+    guest_entry(|| {
+        let conventions: crate::SurfaceConventions = unsafe { conventions.read() };
+        crate::set_surface_conventions(conventions);
+    })
+}
+
 pub(super) unsafe extern "C" fn drain_window_commands(
     commands: *mut LentBytes<Vec<WindowCommand>>,
 ) -> CallOutcome {

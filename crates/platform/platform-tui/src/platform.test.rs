@@ -118,3 +118,17 @@ fn no_path_reads_nothing() {
 fn the_default_cell_is_the_shared_default() {
     assert_eq!(TuiPlatformConfig::default().cell, CellSize::default());
 }
+
+/// A terminal resolves nothing finer than a cell, so the tree laid out on it is told the cell it was configured with, a wheel that steps whole rows and the Ctrl a terminal hands over.
+#[test]
+fn a_terminal_lays_out_on_its_cells() {
+    let cell = CellSize::new(10.0, 20.0).expect("a positive, finite cell");
+    let platform = TuiPlatform::new(TuiPlatformConfig {
+        cell,
+        ..TuiPlatformConfig::default()
+    });
+    let conventions = platform.surface_conventions();
+    assert_eq!(conventions.grid, LayoutGrid::from(cell));
+    assert!(!conventions.smooth_wheel);
+    assert_eq!(conventions.keyboard, KeyboardConvention::Pc);
+}

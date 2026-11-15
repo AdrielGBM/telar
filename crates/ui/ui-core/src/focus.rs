@@ -1718,8 +1718,13 @@ fn trapped() -> bool {
 }
 
 /// States what Tab past the last focusable, or Shift+Tab past the first, does in the active surface. [`Release`](FocusBoundary::Release) clears focus instead of wrapping and leaves the way it went for the surrounding tree to read; a modal up inside still holds Tab within itself.
-pub fn set_boundary(boundary: FocusBoundary) {
+pub(crate) fn set_boundary(boundary: FocusBoundary) {
     with_focus(|s| s.boundary = boundary);
+}
+
+/// What Tab past an end of the focus order does in the active surface.
+pub(crate) fn boundary() -> FocusBoundary {
+    with_focus_ref(|s| s.boundary)
 }
 
 /// Which of Tab and Shift+Tab, pressed now, would leave the active surface: only under a boundary that releases, with no modal up, and while the focused control does not keep Tab for itself.
@@ -1833,7 +1838,7 @@ pub fn expanded_state(id: FocusId) -> Option<bool> {
     Some(read())
 }
 
-/// The chord `id` said runs its command, in `aria-keyshortcuts` syntax under the keyboard convention in force; `None` if it said none.
+/// The chord `id` said runs its command, in `aria-keyshortcuts` syntax under the active surface's keyboard convention; `None` if it said none.
 pub fn keyboard_shortcut_state(id: FocusId) -> Option<String> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.outline.shortcut.clone()))?;
     Some(read()?.aria(keyboard_convention()))

@@ -16,10 +16,8 @@ fn nothing_served() -> Backends {
         file_dialogs: None,
         preferences: Arc::new(MemoryStore::default()),
         app_paths: None,
-        keyboard_convention: KeyboardConvention::native(),
         location_format: None,
         asset_base: None,
-        layout_grid: LayoutGrid::default(),
         loop_waker: None,
         fonts: None,
     }
@@ -240,7 +238,6 @@ fn only_the_backends_the_host_has_are_in_its_table() {
         table.stored_preference.is_some(),
         "the host always has a store, one in memory at least"
     );
-    assert!(table.keyboard_convention.is_some() && table.layout_grid.is_some());
 }
 
 struct Paths;
@@ -391,15 +388,9 @@ unsafe extern "C" fn counting_spawn(
 #[test]
 fn installing_takes_the_host_values_wakes_the_host_loop_and_starts_threads_there() {
     static WOKEN: AtomicUsize = AtomicUsize::new(0);
-    let host_convention = match KeyboardConvention::native() {
-        KeyboardConvention::Mac => KeyboardConvention::Pc,
-        KeyboardConvention::Pc => KeyboardConvention::Mac,
-    };
     let served = served(Backends {
-        keyboard_convention: host_convention,
         location_format: Some(LocationFormat::new("/portfolio").with_trailing_slash(true)),
         asset_base: Some("https://example.com/site/".to_owned()),
-        layout_grid: LayoutGrid::default(),
         loop_waker: Some(Arc::new(|| {
             WOKEN.fetch_add(1, Ordering::Relaxed);
         })),
@@ -413,7 +404,6 @@ fn installing_takes_the_host_values_wakes_the_host_loop_and_starts_threads_there
         ..served.table()
     };
     let fonts = unsafe { install_host_services(table) };
-    assert_eq!(platform_core::keyboard_convention(), host_convention);
     assert_eq!(
         platform_core::installed_location_format(),
         Some(LocationFormat::new("/portfolio").with_trailing_slash(true))
@@ -466,11 +456,6 @@ const BRIDGED: &[(&str, &str, &[&str])] = &[
         &["app_paths"],
     ),
     (
-        "crates/platform/platform-core/src/chord.rs",
-        "CONVENTION",
-        &["keyboard_convention"],
-    ),
-    (
         "crates/platform/platform-core/src/location_format.rs",
         "CURRENT",
         &["location_format"],
@@ -484,16 +469,6 @@ const BRIDGED: &[(&str, &str, &[&str])] = &[
         "crates/platform/platform-core/src/loop_waker.rs",
         "LOOP_WAKER",
         &["wake_loop"],
-    ),
-    (
-        "crates/geometry/geometry-core/src/grid.rs",
-        "GRID_X",
-        &["layout_grid"],
-    ),
-    (
-        "crates/geometry/geometry-core/src/grid.rs",
-        "GRID_Y",
-        &["layout_grid"],
     ),
     (
         "crates/renderer/renderer-text/src/fonts.rs",
@@ -652,7 +627,7 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     (
         "crates/semantics/semantics-core/src/uri.rs",
         "APP_SCHEMES",
-        "each image registers its app's schemes from its setup, and the host parses every URI it is handed against its own",
+        "the app's own schemes, which each image registers from its setup on the thread its runtime runs on, and the host parses every URI it is handed against its own",
     ),
     (
         "crates/services/services-core/src/guest.rs",
@@ -785,9 +760,19 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "the app's own per-surface size",
     ),
     (
+        "crates/layout/layout-reactive/src/grid.rs",
+        "GRID",
+        "the app's own per-surface layout grid, which the host hands each surface it draws with that surface's conventions",
+    ),
+    (
         "crates/ui/ui-core/src/text_metrics.rs",
         "SURFACE_METRICS",
         "the per-surface measurer, which is code and cannot cross the boundary: the guest opens the one its surface is drawn with",
+    ),
+    (
+        "crates/platform/platform-core/src/chord.rs",
+        "KEYBOARD",
+        "the app's own per-surface keyboard convention, which the host hands each surface it draws with that surface's conventions",
     ),
     (
         "crates/motion/motion-core/src/ticker.rs",
@@ -1187,7 +1172,7 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
     (
         "crates/ui/ui-tree/src/wheel.rs",
         "SMOOTH",
-        "a choice of the runner of the surface: a guest runs under a windowed host, where the default holds",
+        "the app's own per-surface wheel, which the host hands each surface it draws with that surface's conventions",
     ),
     (
         "plugins/telar-components/src/overlays/toast/toast.rs",

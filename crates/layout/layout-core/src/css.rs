@@ -7,7 +7,7 @@ use taffy::{
     FlexWrap, LengthPercentage, LengthPercentageAuto, Position, Style,
 };
 
-use geometry_core::Size;
+use geometry_core::{LayoutGrid, Size};
 use i18n_core::Direction;
 
 use crate::sticky::StickyInsets;
@@ -59,13 +59,13 @@ impl std::fmt::Display for Css {
 }
 
 impl LayoutStyle {
-    /// This style as CSS declarations, resolved for `direction` on a surface of `surface` size.
+    /// This style as CSS declarations, resolved for `direction` on a surface of `surface` size that resolves to `grid`.
     ///
     /// Resolved rather than logical: the same `resolve` every layout pass runs, so what a browser is told and what Taffy computed came from one function and cannot drift apart in an RTL locale. A fraction of the surface is written as the pixels it resolved to rather than as `vw`/`vh`: the viewport those name is not always the surface (an embedded host, a scrollbar, a mobile toolbar), and pixels are the one spelling guaranteed to agree with Taffy.
-    pub fn to_css(&self, direction: Direction, surface: Size) -> Css {
+    pub fn to_css(&self, direction: Direction, surface: Size, grid: LayoutGrid) -> Css {
         css_of(
-            &self.resolve(direction, surface),
-            self.sticky_insets(direction, surface).as_ref(),
+            &self.resolve(direction, surface, grid),
+            self.sticky_insets(direction, surface, grid).as_ref(),
         )
     }
 }

@@ -3,7 +3,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use taffy::{TaffyTree, TraversePartialTree};
 
-use geometry_core::Size;
+use geometry_core::{LayoutGrid, Size};
 use i18n_core::Direction;
 
 use crate::error::LayoutError;
@@ -40,6 +40,7 @@ pub struct LayoutEngine {
     tree: TaffyTree<MeasureFn>,
     direction: Direction,
     surface: Size,
+    grid: LayoutGrid,
     /// What every node was asked for, which every path pushing a style to taffy resolves from. See [`current_style`](Self::current_style) for why it is every node and not only those needing it.
     styles: FxHashMap<NodeId, LayoutStyle>,
     /// Every node this engine currently owns. Kept because taffy has no total way to ask: `style()` indexes its slot map and panics on a freed key rather than answering, so there is nothing to guard with. See [`alive`](Self::alive) for why anything asks at all.
@@ -56,6 +57,7 @@ impl LayoutEngine {
             tree: TaffyTree::new(),
             direction: Direction::default(),
             surface: Size::ZERO,
+            grid: LayoutGrid::UNIT,
             styles: FxHashMap::default(),
             live: FxHashSet::default(),
             sticky: FxHashMap::default(),
@@ -76,6 +78,26 @@ impl LayoutEngine {
             return false;
         }
         self.direction = direction;
+        self.push_every_style();
+        true
+    }
+
+    /// The step definite lengths are put on as they resolve.
+    pub fn grid(&self) -> LayoutGrid {
+        self.grid
+    }
+
+    /// Re-resolves every node on `grid`, returning whether it changed. Like [`set_direction`](Self::set_direction) this only rewrites styles: each is put on the new grid from the lengths it was written with, never from ones an earlier grid already rounded.
+    pub fn set_grid(&mut self, grid: LayoutGrid) -> bool {
+        if self.grid == grid {
+            return false;
+        }
+        self.grid = grid;
+        self.push_every_style();
+        true
+    }
+
+    fn push_every_style(&mut self) {
         let styles = std::mem::take(&mut self.styles);
         for (&node, style) in &styles {
             self.push_style(node, style);
@@ -88,7 +110,6 @@ impl LayoutEngine {
             self.push_style(node, style);
         }
         self.styles = styles;
-        true
     }
 
     /// The size fractions of the surface currently resolve against.
@@ -135,7 +156,7 @@ impl LayoutEngine {
 
     /// Resolves `style` and pushes it to taffy, placing the leading margin — `resolve` cannot, since that needs the parent's axis to know which physical edge is "leading".
     fn push_style(&mut self, node: NodeId, style: &LayoutStyle) {
-        let mut resolved = style.resolve(self.direction, self.surface);
+        let mut resolved = style.resolve(self.direction, self.surface, self.grid);
         self.note_sticky(node, style);
         if let Some((is_row, px)) = style.logical.leading_margin {
             let leading_right = is_row && self.leads_from_right(node);
@@ -172,7 +193,7 @@ impl LayoutEngine {
     }
 
     fn note_sticky(&mut self, node: NodeId, style: &LayoutStyle) {
-        match style.sticky_insets(self.direction, self.surface) {
+        match style.sticky_insets(self.direction, self.surface, self.grid) {
             Some(insets) => self.sticky.insert(node, insets),
             None => self.sticky.remove(&node),
         };
@@ -181,7 +202,7 @@ impl LayoutEngine {
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
         let node = self
             .tree
-            .new_leaf(style.resolve(self.direction, self.surface))?;
+            .new_leaf(style.resolve(self.direction, self.surface, self.grid))?;
         self.note_sticky(node, &style);
         self.track(node, style);
         Ok(node)
@@ -192,9 +213,10 @@ impl LayoutEngine {
         style: LayoutStyle,
         measure: MeasureFn,
     ) -> Result<NodeId, LayoutError> {
-        let node = self
-            .tree
-            .new_leaf_with_context(style.resolve(self.direction, self.surface), measure)?;
+        let node = self.tree.new_leaf_with_context(
+            style.resolve(self.direction, self.surface, self.grid),
+            measure,
+        )?;
         self.note_sticky(node, &style);
         self.track(node, style);
         Ok(node)
@@ -208,9 +230,10 @@ impl LayoutEngine {
         for &child in children {
             self.leave_parent(child);
         }
-        let node = self
-            .tree
-            .new_with_children(style.resolve(self.direction, self.surface), children)?;
+        let node = self.tree.new_with_children(
+            style.resolve(self.direction, self.surface, self.grid),
+            children,
+        )?;
         self.note_sticky(node, &style);
         self.track(node, style);
         Ok(node)
@@ -873,3 +896,7 @@ mod direction_tests;
 #[cfg(test)]
 #[path = "engine.scroll.test.rs"]
 mod scroll_tests;
+
+#[cfg(test)]
+#[path = "engine.grid.test.rs"]
+mod grid_tests;

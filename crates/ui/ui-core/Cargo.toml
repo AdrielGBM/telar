@@ -44,11 +44,3 @@ web-time = { workspace = true }
 [dev-dependencies]
 renderer-text = { workspace = true }
 renderer-tui = { workspace = true }
-
-[[test]]
-name = "cell_focus"
-path = "src/cell_focus.test.rs"
-
-[[test]]
-name = "cell_text"
-path = "src/cell_text.test.rs"

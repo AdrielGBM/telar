@@ -332,7 +332,7 @@ impl Several {
         crate::test_support::fresh_layout_runtime();
         telar::testing::reset_keyboard();
         telar::focus::clear();
-        telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
+        crate::test_support::keyboard(telar::KeyboardConvention::Pc);
         let chosen = signal(BTreeSet::new());
         let heard = Rc::new(RefCell::new(Vec::new()));
         let (changes, picks) = (heard.clone(), heard.clone());

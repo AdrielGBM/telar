@@ -93,7 +93,6 @@ where
     A: App,
     D: DevOverlay,
 {
-    platform_core::set_keyboard_convention(platform.keyboard_convention());
     let (window, fonts) = split_config(config);
     let choices = match hydration {
         Some(_) => StoredChoices::AfterHydration,
@@ -113,7 +112,7 @@ where
         window.shown_title(),
         renderer,
     );
-    handler.focus_boundary = platform.focus_boundary();
+    handler.conventions = platform.surface_conventions();
     handler.location = location;
     handler.hydration = hydration;
     platform.run(window, handler)

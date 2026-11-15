@@ -677,7 +677,9 @@ impl Table {
         let multiple = self.selection.is_multiple();
         let corner = modifiers.is_ctrl || modifiers.is_meta;
         let to = match key {
-            Key::Char('a' | 'A') if multiple && modifiers.is_primary() => {
+            Key::Char('a' | 'A')
+                if multiple && modifiers.is_primary(telar::keyboard_convention()) =>
+            {
                 self.selection.all(&ids(&rows));
                 return true;
             }

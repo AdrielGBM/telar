@@ -196,8 +196,8 @@ pub use platform_core::{
     DragOutcome, DropAction, DropAnswer, DroppedData, Event, FocusBoundary, FullscreenMode,
     HasPopup, Key, KeyboardConvention, MimeType, MimeTypeError, NamedKey, NumericValue,
     NumericValueError, Orientation, OutgoingDrag, Representation, ResizeEdge, ScrollDelta,
-    SortDirection, TAP_SLOP, Toggle, Value, WindowCommand, WindowConfig, WindowPosition,
-    keyboard_convention, push_window_command, set_keyboard_convention, take_window_commands,
+    SortDirection, SurfaceConventions, TAP_SLOP, Toggle, Value, WindowCommand, WindowConfig,
+    WindowPosition, keyboard_convention, push_window_command, take_window_commands,
 };
 // The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]
@@ -242,7 +242,7 @@ pub use renderer_core::{
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory`, whose `TextMetrics` says what "how wide is this string" means on the surface it draws.
 #[cfg(feature = "runtime")]
-pub use geometry_core::{InvalidStep, LayoutGrid, layout_grid, set_layout_grid};
+pub use geometry_core::{InvalidStep, LayoutGrid};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     DebugSettings, FontAsset, FontAxis, FontConfig, FontSource, FontWeight, RenderBackend,
@@ -366,8 +366,9 @@ pub use ui_core::{
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Breakpoints, breakpoint, set_safe_area_insets, set_surface_maximized, set_surface_size,
-    surface_size, use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
+    Breakpoints, breakpoint, layout_grid, set_safe_area_insets, set_surface_conventions,
+    set_surface_maximized, set_surface_size, surface_conventions, surface_size,
+    use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{NestedCanvas, SurfaceCanvas, SurfaceEnv, SurfaceFrame, composite_surface};

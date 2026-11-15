@@ -542,3 +542,7 @@ impl_leaf_widget!(Text);
 #[cfg(test)]
 #[path = "text.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "text.cell.test.rs"]
+mod cell_tests;

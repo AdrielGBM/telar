@@ -146,20 +146,18 @@ fn a_mac_shows_symbols_in_its_own_order_and_a_pc_shows_words() {
     assert_eq!(chord("?").text(Pc), "?");
 }
 
+/// Each surface keeps the convention of the platform showing it, so a window and a terminal beside it on one thread each read their own.
 #[test]
-fn display_follows_the_convention_installed_on_this_thread() {
-    let undo = chord("Mod+Z");
-    set_keyboard_convention(Pc);
-    assert_eq!(undo.to_string(), "Ctrl+Z");
+fn each_surface_keeps_the_convention_it_was_given() {
+    let terminal = KeyboardConventionContext::new();
+    terminal.with_entered(|| set_keyboard_convention(Pc));
     set_keyboard_convention(Mac);
-    assert_eq!(undo.to_string(), "⌘Z");
-    assert!(
-        std::thread::spawn(
-            move || undo.to_string() == chord("Mod+Z").text(KeyboardConvention::native())
-        )
-        .join()
-        .unwrap(),
-        "another thread keeps the native convention"
+    assert_eq!(keyboard_convention(), Mac);
+    assert_eq!(terminal.with_entered(keyboard_convention), Pc);
+    let fresh = KeyboardConventionContext::new();
+    assert_eq!(
+        fresh.with_entered(keyboard_convention),
+        KeyboardConvention::native()
     );
 }
 
@@ -167,11 +165,11 @@ fn display_follows_the_convention_installed_on_this_thread() {
 fn mod_matches_command_on_a_mac_and_ctrl_elsewhere() {
     let undo = chord("Mod+Z");
     let z = Key::Char('z');
-    assert!(undo.matches_in(&z, held(false, false, false, true), Mac));
-    assert!(!undo.matches_in(&z, held(true, false, false, false), Mac));
-    assert!(undo.matches_in(&z, held(true, false, false, false), Pc));
-    assert!(!undo.matches_in(&z, held(false, false, false, true), Pc));
-    assert!(!undo.matches_in(&z, NONE, Pc));
+    assert!(undo.matches(&z, held(false, false, false, true), Mac));
+    assert!(!undo.matches(&z, held(true, false, false, false), Mac));
+    assert!(undo.matches(&z, held(true, false, false, false), Pc));
+    assert!(!undo.matches(&z, held(false, false, false, true), Pc));
+    assert!(!undo.matches(&z, NONE, Pc));
 }
 
 #[test]
@@ -179,39 +177,39 @@ fn a_letter_matches_in_either_case_with_shift_exactly_as_written() {
     let redo = chord("Mod+Shift+Z");
     let undo = chord("Mod+Z");
     let shifted = held(true, false, true, false);
-    assert!(redo.matches_in(&Key::Char('Z'), shifted, Pc));
-    assert!(redo.matches_in(&Key::Char('z'), shifted, Pc));
-    assert!(!undo.matches_in(&Key::Char('Z'), shifted, Pc));
+    assert!(redo.matches(&Key::Char('Z'), shifted, Pc));
+    assert!(redo.matches(&Key::Char('z'), shifted, Pc));
+    assert!(!undo.matches(&Key::Char('Z'), shifted, Pc));
     assert!(
-        undo.matches_in(&Key::Char('Z'), held(true, false, false, false), Pc),
+        undo.matches(&Key::Char('Z'), held(true, false, false, false), Pc),
         "Caps Lock"
     );
 }
 
 #[test]
 fn a_symbol_matches_whatever_shift_it_took_to_type_it() {
-    assert!(chord("?").matches_in(&Key::Char('?'), held(false, false, true, false), Pc));
-    assert!(chord("?").matches_in(&Key::Char('?'), NONE, Pc));
-    assert!(!chord("/").matches_in(&Key::Char('?'), held(false, false, true, false), Pc));
-    assert!(chord("Alt+=").matches_in(&Key::Char('='), held(false, true, true, false), Mac));
-    assert!(!chord("Alt+Shift+1").matches_in(&Key::Char('1'), held(false, true, false, false), Pc));
+    assert!(chord("?").matches(&Key::Char('?'), held(false, false, true, false), Pc));
+    assert!(chord("?").matches(&Key::Char('?'), NONE, Pc));
+    assert!(!chord("/").matches(&Key::Char('?'), held(false, false, true, false), Pc));
+    assert!(chord("Alt+=").matches(&Key::Char('='), held(false, true, true, false), Mac));
+    assert!(!chord("Alt+Shift+1").matches(&Key::Char('1'), held(false, true, false, false), Pc));
 }
 
 #[test]
 fn ctrl_alt_and_command_are_never_extra() {
     let find = chord("Mod+K");
-    assert!(!find.matches_in(&Key::Char('k'), held(true, true, false, false), Pc));
-    assert!(!chord("Alt+S").matches_in(&Key::Char('s'), held(true, true, false, false), Pc));
-    assert!(!chord("K").matches_in(&Key::Char('k'), held(false, false, false, true), Mac));
+    assert!(!find.matches(&Key::Char('k'), held(true, true, false, false), Pc));
+    assert!(!chord("Alt+S").matches(&Key::Char('s'), held(true, true, false, false), Pc));
+    assert!(!chord("K").matches(&Key::Char('k'), held(false, false, false, true), Mac));
 }
 
 #[test]
 fn a_named_key_matches_with_shift_exactly_as_written() {
     let up = chord("Alt+↑");
     let arrow = Key::Named(NamedKey::ArrowUp);
-    assert!(up.matches_in(&arrow, held(false, true, false, false), Pc));
-    assert!(!up.matches_in(&arrow, held(false, true, true, false), Pc));
-    assert!(!up.matches_in(
+    assert!(up.matches(&arrow, held(false, true, false, false), Pc));
+    assert!(!up.matches(&arrow, held(false, true, true, false), Pc));
+    assert!(!up.matches(
         &Key::Named(NamedKey::ArrowDown),
         held(false, true, false, false),
         Pc
@@ -220,12 +218,12 @@ fn a_named_key_matches_with_shift_exactly_as_written() {
 
 #[test]
 fn the_primary_modifier_held_is_the_conventions_own() {
-    set_keyboard_convention(Pc);
-    assert!(held(true, false, false, false).is_primary());
-    assert!(!held(false, false, false, true).is_primary());
-    set_keyboard_convention(Mac);
-    assert!(held(false, false, false, true).is_primary());
-    assert!(!held(true, false, false, false).is_primary());
+    let ctrl = held(true, false, false, false);
+    let command = held(false, false, false, true);
+    assert!(ctrl.is_primary(Pc));
+    assert!(!command.is_primary(Pc));
+    assert!(command.is_primary(Mac));
+    assert!(!ctrl.is_primary(Mac));
 }
 
 #[test]

@@ -34,7 +34,11 @@ pub(crate) enum Gesture {
 impl Gesture {
     /// What a press with `modifiers` held asks for in `mode`.
     pub(crate) fn of_press(mode: SelectionMode, modifiers: ModifiersState) -> Self {
-        match (mode, modifiers.is_shift, modifiers.is_primary()) {
+        match (
+            mode,
+            modifiers.is_shift,
+            modifiers.is_primary(telar::keyboard_convention()),
+        ) {
             (SelectionMode::Single, ..) => Self::Only,
             (SelectionMode::Multiple, true, keep) => Self::Range { keep },
             (SelectionMode::Multiple, false, true) => Self::Toggle,

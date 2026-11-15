@@ -132,14 +132,14 @@ keeps its role's keys, answers them with `on_focused_key` first, and scrolls wit
 
 ## Where Tab goes at the ends
 
-Each platform states a `FocusBoundary` (`telar::FocusBoundary`, from `Platform::focus_boundary`) for what Tab does past the last focusable and Shift+Tab past the first:
+Each platform states a `FocusBoundary` (`telar::FocusBoundary`, the `focus_boundary` of the `SurfaceConventions` from `Platform::surface_conventions`) for what Tab does past the last focusable and Shift+Tab past the first:
 
 - `Wrap` carries focus on at the other end, so the order is a loop. Desktop, Android, TUI and headless state it.
 - `Release` clears focus and lets the surroundings take the key. The web states it on both renderers, so a keyboard user is never trapped in the app (WCAG 2.1.2).
 
 A modal layer that holds focus traps Tab under either boundary: Tab wraps inside it. A control that keeps Tab, such as a text area that indents, keeps it at an end too.
 
-On web-dom the browser already walks past the last box, so `Release` only decides what the app does with a Tab it is handed. On a canvas the platform has to decide about a Tab before the app has heard it, so after each frame the runner tells the window, through `Window::set_tab_leaves`, which of Tab and Shift+Tab would run off an end. For those the platform leaves the default action alone, so the browser moves focus out of the surface, and does not deliver the key. A canvas drawn inside another tree (`NestedCanvas`) always releases, to the tree around it.
+On web-dom the browser already walks past the last box, so `Release` only decides what the app does with a Tab it is handed. On a canvas the platform has to decide about a Tab before the app has heard it, so after each frame the runner tells the window, through `Window::set_tab_leaves`, which of Tab and Shift+Tab would run off an end. For those the platform leaves the default action alone, so the browser moves focus out of the surface, and does not deliver the key. A canvas drawn inside another tree (`NestedCanvas`) always releases, to the tree around it. A hot-reloaded build's window follows the boundary of the platform that shows it, like any window.
 
 ## Focus on web-dom
 
@@ -199,19 +199,23 @@ everywhere. A Mac's own symbols read back too, so `"⇧⌘Z"` is Shift+Command+Z
 | `Ctrl+Shift+D` | ⌃⇧D | Ctrl+Shift+D |
 | `Mod+Enter` | ⌘⏎ | Ctrl+Enter |
 
-`Chord`'s `Display` writes it the platform's way: a Mac's symbols in its order (⌃⌥⇧⌘) with nothing between
-them, and elsewhere words joined with `+` in the order Ctrl, Alt, Shift, Meta. `keys(convention)` gives the
-same one key at a time, which is what `kbd` puts on its caps.
+`Chord::text(convention)` writes it the platform's way: a Mac's symbols in its order (⌃⌥⇧⌘) with nothing
+between them, and elsewhere words joined with `+` in the order Ctrl, Alt, Shift, Meta. `keys(convention)`
+gives the same one key at a time, which is what `kbd` puts on its caps. Both take the convention rather than
+reading one, so what a chord shows is always the convention its caller names: the active surface's is
+`telar::keyboard_convention()`.
 
-Matching follows the same rule. `Chord::matches(key, modifiers)` asks for exactly the chord's Ctrl, Alt and
-Command; a letter matches in either case with exactly the chord's Shift, and any other character matches
+Matching follows the same rule. `Chord::matches(key, modifiers, convention)` asks for exactly the chord's
+Ctrl, Alt and Command; a letter matches in either case with exactly the chord's Shift, and any other character matches
 whatever Shift it took to type it, so `?` needs no `Shift+`. `telar::chord_pressed(&chord, key)` matches the
 press a key handler was given against the modifiers held now, and with Alt held it reads the key with no
-modifier applied, since Option on a Mac types `†` for T. `ModifiersState::is_primary()` says whether the
-primary modifier is held, for a handler that asks without a chord.
+modifier applied, since Option on a Mac types `†` for T, under the active surface's convention.
+`ModifiersState::is_primary(convention)` says whether the primary modifier of `convention` is held, for a
+handler that asks without a chord.
 
-Which convention is in force is the platform's answer to `Platform::keyboard_convention`, installed before
-the app is built and read back with `telar::keyboard_convention()`:
+The convention is the `keyboard` of the `SurfaceConventions` the platform reports
+(`Platform::surface_conventions`), which the runner puts each surface on before the app's tree is built
+there, and is read back for the active surface with `telar::keyboard_convention()`:
 
 | Target | Convention |
 | --- | --- |
@@ -220,9 +224,10 @@ the app is built and read back with `telar::keyboard_convention()`:
 | TUI | PC: a terminal keeps Command for itself, so what reaches the app is Ctrl |
 | headless, snapshots | PC, so a frame does not depend on the machine that drew it |
 
-A hot-reloaded build and an embedded guest each carry their own copy of the convention, so the host hands
-over its own when it loads one, before the guest's app is built: a guest shows a shortcut the way its host
-matches it.
+A hot-reloaded build and an embedded guest each carry their own copy of every surface's convention, so the
+host hands over the conventions of the surface the guest draws in: a hot-reloaded build's window is put on
+them before its tree is mounted, and an embedded guest's surface is built on those of the host's surface it
+is drawn inside. A guest shows a shortcut the way its host matches it.
 
 The components that show a shortcut take it as that text and show it the platform's way: `item`'s
 `shortcut`, `kbd`'s `chord`, `tooltip`'s and `icon_button`'s `shortcut` and a tab's `.shortcut(…)`. A
@@ -237,8 +242,8 @@ menu label:"Edit"
 ```
 
 `item`'s `shortcut` only shows the keys; the application binds them itself, with `chord_pressed` in its key
-handler. A test pins what a shortcut shows with `telar::set_keyboard_convention`, which holds for the thread
-that calls it.
+handler. A test pins what a shortcut shows by putting its surface on conventions of its own with
+`telar::set_surface_conventions`, which hold for the surface active when it is called.
 
 ## Editing text
 

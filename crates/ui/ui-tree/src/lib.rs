@@ -21,4 +21,4 @@ pub use overlay_dispatch::{
 pub use render_node::{NodeVec, RenderNode};
 pub use segment::{Segment, SegmentNodeInfo, SegmentRoot};
 pub use tree::ComponentList;
-pub use wheel::{set_smooth_wheel, smooth_wheel};
+pub use wheel::{WheelContext, set_smooth_wheel, smooth_wheel};

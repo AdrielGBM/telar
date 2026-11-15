@@ -24,7 +24,7 @@ pub use color::{
     BODY_TEXT_CONTRAST, Color, ENHANCED_TEXT_CONTRAST, LARGE_TEXT_CONTRAST, NON_TEXT_CONTRAST,
     parse_hex,
 };
-pub use grid::{InvalidStep, LayoutGrid, layout_grid, set_layout_grid};
+pub use grid::{InvalidStep, LayoutGrid};
 pub use insets::Insets;
 pub use object_fit::{ObjectFit, fit_rect};
 pub use point::Point;

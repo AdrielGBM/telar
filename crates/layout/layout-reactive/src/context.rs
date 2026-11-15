@@ -227,12 +227,14 @@ pub fn compute_layout(
     width: AvailableSpace,
     height: AvailableSpace,
 ) -> Result<(), LayoutError> {
-    // Reconciled here rather than in `set_direction`, so a thread-wide flip reaches every surface without an override of its own; the size is the active surface's own, reconciled on the same pass so a resize and the layout answering it agree.
+    // Reconciled here rather than in `set_direction`, so a thread-wide flip reaches every surface without an override of its own; the size and grid are the active surface's own, reconciled on the same pass so a resize and the layout answering it agree.
     let direction = crate::direction::current_direction();
     let surface = crate::surface_size::surface_size();
+    let grid = crate::grid::layout_grid();
     with_runtime(|rt| {
         rt.engine.set_direction(direction);
         rt.engine.set_surface_size(surface);
+        rt.engine.set_grid(grid);
     });
     let updates = with_runtime(|rt| -> Result<Vec<Update>, LayoutError> {
         let updates = rt.compute_layout(root, width, height)?;
@@ -905,11 +907,15 @@ impl LayoutRuntime {
         }
     }
 
-    /// `node`'s declared CSS against the direction and surface the engine last resolved with, which reads no signal.
+    /// `node`'s declared CSS against the direction, surface and grid the engine last resolved with, which reads no signal.
     fn engine_css(&self, node: NodeId) -> Option<layout_core::Css> {
-        self.engine
-            .declared_style(node)
-            .map(|style| style.to_css(self.engine.direction(), self.engine.surface_size()))
+        self.engine.declared_style(node).map(|style| {
+            style.to_css(
+                self.engine.direction(),
+                self.engine.surface_size(),
+                self.engine.grid(),
+            )
+        })
     }
 
     pub(crate) fn new_leaf(
@@ -1231,7 +1237,7 @@ fn report_dead_child(engine: &LayoutEngine, parent: NodeId, children: &[NodeId])
 #[path = "context.test.rs"]
 mod tests;
 
-/// The CSS for what `node` was asked for, resolved against the direction in force and the active surface's size.
+/// The CSS for what `node` was asked for, resolved against the direction in force and the active surface's size and grid.
 ///
 /// For a backend whose output is a document rather than pixels: it is handed the box's intent, not the rect the intent produced, so the browser can lay the box out itself. `None` for a node this runtime does not own — a widget mid-teardown, or one built on another surface.
 ///
@@ -1239,10 +1245,11 @@ mod tests;
 pub fn declared_css(node: NodeId) -> Option<layout_core::Css> {
     let direction = crate::direction::current_direction();
     let surface = crate::surface_size::surface_size();
+    let grid = crate::grid::layout_grid();
     let (css, follows_surface, drawn, read) = with_runtime(|rt| {
         let (css, follows_surface) = rt.engine.declared_style(node).map(|style| {
             (
-                style.to_css(direction, surface),
+                style.to_css(direction, surface, grid),
                 style.is_surface_relative(),
             )
         })?;

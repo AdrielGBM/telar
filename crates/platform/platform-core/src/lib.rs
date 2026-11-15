@@ -29,6 +29,7 @@ mod logical_extent;
 pub mod loop_waker;
 pub mod primary_scroll;
 pub mod route;
+pub mod surface_conventions;
 pub mod system_preferences;
 pub mod text_input;
 pub mod window;
@@ -44,7 +45,8 @@ pub use accessibility::{
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_base, asset_url, set_asset_base};
 pub use chord::{
-    Chord, ChordError, KeyboardConvention, keyboard_convention, set_keyboard_convention,
+    Chord, ChordError, KeyboardConvention, KeyboardConventionContext, keyboard_convention,
+    set_keyboard_convention,
 };
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
 pub use destination::{
@@ -84,6 +86,7 @@ pub use primary_scroll::{
 };
 pub use route::Route;
 pub use semantics_core::{LocaleTag, LocaleTagError, Location, locale_tag};
+pub use surface_conventions::SurfaceConventions;
 pub use system_preferences::{
     ColorScheme, SystemPreferences, TextScale, UnknownColorScheme, locales_from_env,
     platform_locales, posix_locale_to_bcp47, system_locales_from_env,

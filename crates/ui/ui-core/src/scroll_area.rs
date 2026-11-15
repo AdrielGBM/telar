@@ -142,7 +142,7 @@ fn draw_scrollbars(
 
     let vbar = Thumb::of(
         Axis::Vertical,
-        geometry_core::layout_grid(),
+        crate::layout_grid(),
         viewport.y,
         viewport.height,
         content_rect.height,
@@ -163,7 +163,7 @@ fn draw_scrollbars(
 
     let hbar = Thumb::of(
         Axis::Horizontal,
-        geometry_core::layout_grid(),
+        crate::layout_grid(),
         viewport.x,
         viewport.width,
         content_rect.width,
@@ -277,7 +277,7 @@ fn glide_axis(
 
 /// A surface that quantises would otherwise draw the content at one offset and click it at another.
 fn snapped_offset(x: f32, y: f32) -> (f32, f32) {
-    let grid = geometry_core::layout_grid();
+    let grid = crate::layout_grid();
     (grid.snap_pos_x(x), grid.snap_pos_y(y))
 }
 
@@ -563,7 +563,7 @@ impl ScrollCore {
 
         let Some(thumb) = Thumb::of(
             axis,
-            geometry_core::layout_grid(),
+            crate::layout_grid(),
             origin,
             extent,
             content_extent,
@@ -623,7 +623,7 @@ impl ScrollCore {
         };
         if let Some(thumb) = Thumb::of(
             axis,
-            geometry_core::layout_grid(),
+            crate::layout_grid(),
             origin,
             extent,
             content_extent,

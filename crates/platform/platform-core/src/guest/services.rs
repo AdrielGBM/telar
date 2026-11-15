@@ -7,7 +7,6 @@
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use geometry_core::LayoutGrid;
 use semantics_core::{RouteAddress, Uri};
 use wire_core::{Wire, decode, encode};
 
@@ -15,7 +14,7 @@ use super::contract::{ArgShape, TypeLayout};
 use super::lent::LentBytes;
 use super::shield;
 use super::threads::{HostThread, ThreadStart};
-use crate::{KeyboardConvention, LocationFormat};
+use crate::LocationFormat;
 
 /// One entry of [`HostServices`]: answers a `Request` through a [`Reply`] with an `Answer`, or answers nothing when it cannot read the request or the backend panicked. `None` where the host has no such backend, which the guest takes as its own store left empty.
 pub type Service<Request, Answer> = Option<
@@ -88,12 +87,10 @@ pub struct HostServices<Upper> {
     pub open_beside: Service<RouteAddress, bool>,
     pub stored_preference: Service<String, Option<String>>,
     pub store_preference: Service<(String, Option<String>), ()>,
-    pub keyboard_convention: Service<(), KeyboardConvention>,
     /// As the host's platform installed it.
     pub location_format: Service<(), Option<LocationFormat>>,
     /// The asset base, ending in `/`.
     pub asset_base: Service<(), Option<String>>,
-    pub layout_grid: Service<(), LayoutGrid>,
     /// Wakes the host's loop.
     pub wake_loop: Service<(), ()>,
     /// Starts a thread of the host's running a guest's [`ThreadStart`], through [`HostThread::start`].
@@ -119,10 +116,8 @@ impl<Upper: UpperServices> HostServices<Upper> {
         open_beside: None,
         stored_preference: None,
         store_preference: None,
-        keyboard_convention: None,
         location_format: None,
         asset_base: None,
-        layout_grid: None,
         wake_loop: None,
         spawn_thread: None,
         join_thread: None,
@@ -139,10 +134,8 @@ impl<Upper: UpperServices> HostServices<Upper> {
         open_beside,
         stored_preference,
         store_preference,
-        keyboard_convention,
         location_format,
         asset_base,
-        layout_grid,
         wake_loop,
         spawn_thread,
         join_thread,

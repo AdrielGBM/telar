@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use platform_core::{
     Event, EventHandler, FixedLocation, HistorySink, KeyboardConvention, Location, LocationSource,
-    MultiSurfacePlatform, Platform, PlatformError, SurfaceId, SystemPreferences, Window,
-    WindowConfig,
+    MultiSurfacePlatform, Platform, PlatformError, SurfaceConventions, SurfaceId,
+    SystemPreferences, Window, WindowConfig,
 };
 
 use crate::seat::HeadlessSeat;
@@ -134,12 +134,19 @@ impl HeadlessPlatform {
     }
 }
 
+fn headless_conventions() -> SurfaceConventions {
+    SurfaceConventions {
+        keyboard: KeyboardConvention::Pc,
+        ..SurfaceConventions::default()
+    }
+}
+
 impl Platform for HeadlessPlatform {
     type Window = HeadlessWindow;
 
     /// The same on every machine, so a frame rendered headless does not depend on where it was rendered.
-    fn keyboard_convention(&self) -> KeyboardConvention {
-        KeyboardConvention::Pc
+    fn surface_conventions(&self) -> SurfaceConventions {
+        headless_conventions()
     }
 
     fn location_source(&mut self) -> Option<Box<dyn LocationSource>> {
@@ -238,8 +245,8 @@ impl Platform for HeadlessPlatform {
 impl MultiSurfacePlatform for HeadlessPlatform {
     type Window = HeadlessWindow;
 
-    fn keyboard_convention(&self) -> KeyboardConvention {
-        KeyboardConvention::Pc
+    fn surface_conventions(&self) -> SurfaceConventions {
+        headless_conventions()
     }
 
     fn run_surfaces<H, F>(

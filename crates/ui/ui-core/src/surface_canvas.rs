@@ -9,7 +9,9 @@ use std::rc::Rc;
 use geometry_core::{Insets, Rect, Size, Transform};
 use i18n_core::{Direction, LocaleTag};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId, SizeDimension};
-use platform_core::{AccessNode, ConsumedKeys, Event, FocusBoundary, TextInput, WindowCommand};
+use platform_core::{
+    AccessNode, ConsumedKeys, Event, FocusBoundary, SurfaceConventions, TextInput, WindowCommand,
+};
 use reactive_core::{RwSignal, in_surface_world, root_scope, signal};
 use renderer_core::{BorderRadius, DrawCommand};
 use ui_tree::{Component, ComponentList, EventResult, RenderNode, SegmentNodeInfo};
@@ -45,12 +47,13 @@ pub struct SurfaceEnv {
     pub high_contrast: Option<bool>,
     /// How far in from each edge the system keeps the surface for itself, as a device's notch and home indicator do. Zero keeps nothing.
     pub safe_area: Insets,
-    /// What Tab past an end of a standalone canvas's focus order does: the platform's [`FocusBoundary`], as the runner of the window it is shown in states it. A [`NestedCanvas`] always releases and ignores this.
-    pub focus_boundary: FocusBoundary,
+    /// What the platform the canvas is shown on says about its surface: the grid it lays out on, the keyboard its shortcuts are matched for, its wheel and what Tab past an end of a standalone canvas's focus order does. A [`NestedCanvas`] always releases focus past either end, whatever its conventions say.
+    pub conventions: SurfaceConventions,
 }
 
 impl SurfaceEnv {
     fn apply(&self) {
+        crate::set_surface_conventions(self.conventions);
         theme_core::set_surface_mode(self.mode.as_ref());
         i18n_core::set_surface_locale(self.locale.as_ref());
         layout_reactive::set_surface_direction(self.direction);
@@ -78,7 +81,7 @@ impl Component for SurfaceRoot {
 }
 
 impl SurfaceCanvas {
-    /// Builds `build`'s content on a new surface of `size` logical units, filling it. The canvas holds a keyboard of its own, as a window's does: Tab with nothing focused moves to the first focusable, or Shift+Tab to the last, unless the tree takes the key itself, and Tab past the last focusable follows the platform's [`FocusBoundary`](platform_core::FocusBoundary). For a canvas drawn inside another tree's focus order, build a [`NestedCanvas`] instead.
+    /// Builds `build`'s content on a new surface of `size` logical units, filling it. The canvas holds a keyboard of its own, as a window's does: Tab with nothing focused moves to the first focusable, or Shift+Tab to the last, unless the tree takes the key itself, and Tab past the last focusable follows the [`FocusBoundary`](platform_core::FocusBoundary) of its conventions. For a canvas drawn inside another tree's focus order, build a [`NestedCanvas`] instead.
     ///
     /// `build` runs with the surface entered and under a root scope of its own, so what it creates lives exactly as long as this canvas and reads no context from the scope it was called in. Nothing is laid out until [`resize`](Self::resize) or [`lay_out`](Self::lay_out).
     ///
@@ -96,13 +99,7 @@ impl SurfaceCanvas {
         env: &SurfaceEnv,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, LayoutError> {
-        Self::built(
-            size,
-            env,
-            FocusMode::Standalone,
-            env.focus_boundary,
-            filled(build),
-        )
+        Self::built(size, env, FocusMode::Standalone, filled(build))
     }
 
     /// [`new`](Self::new) for content that is a root already: `build` returns the component the tree mounts and the layout node sized to the surface.
@@ -119,14 +116,13 @@ impl SurfaceCanvas {
         env: &SurfaceEnv,
         build: impl FnOnce() -> Result<(C, NodeId), LayoutError>,
     ) -> Result<Self, LayoutError> {
-        Self::built(size, env, FocusMode::Standalone, env.focus_boundary, build)
+        Self::built(size, env, FocusMode::Standalone, build)
     }
 
     fn built<C: Component + 'static>(
         size: Size,
         env: &SurfaceEnv,
         focus: FocusMode,
-        boundary: FocusBoundary,
         build: impl FnOnce() -> Result<(C, NodeId), LayoutError>,
     ) -> Result<Self, LayoutError> {
         // Its frame is drawn by the renderer of the surface it is built in, so its text is measured the way that renderer draws it; one drawn by a renderer of its own opens that renderer's in `build`.
@@ -136,12 +132,14 @@ impl SurfaceCanvas {
             if let Some(measurer) = measurer {
                 crate::text_metrics::open_surface_text_metrics(measurer);
             }
-            crate::focus::set_boundary(boundary);
             let signals =
                 in_surface_world(|| (signal(size), signal(env.safe_area), signal(1.0f32)));
             crate::set_surface_size(size);
             crate::set_safe_area_insets(env.safe_area);
             env.apply();
+            if focus == FocusMode::Nested {
+                crate::focus::set_boundary(FocusBoundary::Release);
+            }
             let _scope = root_scope();
             let (component, root) = build()?;
             Ok::<_, LayoutError>((ComponentList::new(component), root, signals))
@@ -461,14 +459,7 @@ impl NestedCanvas {
         env: &SurfaceEnv,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, LayoutError> {
-        SurfaceCanvas::built(
-            size,
-            env,
-            FocusMode::Nested,
-            FocusBoundary::Release,
-            filled(build),
-        )
-        .map(Self)
+        SurfaceCanvas::built(size, env, FocusMode::Nested, filled(build)).map(Self)
     }
 
     /// [`SurfaceCanvas::with_root`] for a canvas drawn inside another tree's focus order.
@@ -485,7 +476,7 @@ impl NestedCanvas {
         env: &SurfaceEnv,
         build: impl FnOnce() -> Result<(C, NodeId), LayoutError>,
     ) -> Result<Self, LayoutError> {
-        SurfaceCanvas::built(size, env, FocusMode::Nested, FocusBoundary::Release, build).map(Self)
+        SurfaceCanvas::built(size, env, FocusMode::Nested, build).map(Self)
     }
 
     /// Focus arriving from the stop around, by the keyboard: to the first focusable, or the last when `backwards`, unless one holds it already. Answers whether one holds it now.

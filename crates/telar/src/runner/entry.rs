@@ -111,6 +111,24 @@ pub(crate) fn install_preview_text_metrics(config: &AppConfig) {
     super::font_config::install_shaper_fonts(config.clone());
 }
 
+/// What the surface a `cargo telar test` run stands in for says about itself: a terminal build lays previews out on the cells [`install_preview_text_metrics`] measures in, anything else on pixels, and shortcuts read the same whichever system the run is on.
+#[cfg(all(feature = "previews", not(target_os = "android")))]
+pub(crate) fn preview_conventions() -> platform_core::SurfaceConventions {
+    let conventions = platform_core::SurfaceConventions {
+        keyboard: platform_core::KeyboardConvention::Pc,
+        ..platform_core::SurfaceConventions::default()
+    };
+    if previews_measure_in_cells() {
+        platform_core::SurfaceConventions {
+            grid: geometry_core::LayoutGrid::from(geometry_core::CellSize::default()),
+            smooth_wheel: false,
+            ..conventions
+        }
+    } else {
+        conventions
+    }
+}
+
 /// Whether [`install_preview_text_metrics`] measures in terminal cells, where a picture of the preview drawn with glyphs would not be what the terminal shows.
 #[cfg(all(feature = "previews", feature = "tui", not(target_os = "android")))]
 pub(crate) fn previews_measure_in_cells() -> bool {

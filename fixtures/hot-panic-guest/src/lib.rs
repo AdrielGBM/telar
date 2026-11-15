@@ -116,7 +116,7 @@ fn stop_a_worker_that_will_not() {
     std::panic::panic_any("a worker that will not stop");
 }
 
-/// Asks for a redraw every frame, so the host can tell whether its frame reached the guest, and titles its window with a shortcut, so the host can read which keyboard the guest shows it for.
+/// Asks for a redraw every frame, so the host can tell whether its frame reached the guest, and titles its window with a shortcut as the surface it was put on shows it, so the host can read which keyboard the guest shows it for.
 struct Fixture;
 
 impl App for Fixture {
@@ -131,7 +131,7 @@ impl App for Fixture {
     fn window_config(&self) -> Option<WindowConfig> {
         let save = Chord::parse("Mod+S").expect("the shortcut parses");
         Some(WindowConfig {
-            title: Some(save.to_string()),
+            title: Some(save.text(telar::keyboard_convention())),
             ..WindowConfig::default()
         })
     }

@@ -30,9 +30,11 @@ use std::time::Duration;
 use web_time::Instant;
 
 use geometry_core::{Rect, Size, Transform};
+#[doc(hidden)]
+pub use platform_core::SurfaceConventions;
 use platform_core::{AppCtx, Event, SystemPreferences, WindowCommand};
 use renderer_core::{Color, DrawCommand};
-use ui_core::{EventResult, NestedCanvas, NodeId, composite_surface};
+use ui_core::{EventResult, NestedCanvas, NodeId, SurfaceEnv, composite_surface};
 use ui_tree::{Component, RenderNode};
 
 #[doc(hidden)]
@@ -66,7 +68,7 @@ pub fn composite(rect: Rect, boundary: &ForeignBoundary, commands: DrawList) -> 
 pub trait EmbeddedApp: 'static {
     /// Build the content's layout tree. Called once by the driver with the guest's surface active, so nodes are allocated in this surface's layout world. [`layout_root`](Self::layout_root) must be valid after it.
     ///
-    /// **Also where a guest installs what only a runner would have installed for it.** A guest is a `cdylib`: it links its own copy of every crate behind the facade, so the statics and thread-locals those keep are its own and start empty. The host's process-wide backends are installed before this runs, from the [`HostServices`](platform_core::guest::HostServices) table it serves: the clipboard, the URI opener, file dialogs, the preference store, the app's paths and name, the keyboard convention, the location format, the asset base, the layout grid, the loop wake and the font database its shaper measures in. The theme is not among them, and neither is the surface's `TextMetrics`, which is the one that bites: the guest's surface starts with none, and the first text laid out here panics without it — call `telar::open_default_text_metrics()` (or `telar::open_surface_text_metrics` with whatever suits the surface) before building the tree. The driver cannot do it: a measurer is code, not a backend the table serves, and only the guest knows whether it draws to pixels or to cells.
+    /// **Also where a guest installs what only a runner would have installed for it.** A guest is a `cdylib`: it links its own copy of every crate behind the facade, so the statics and thread-locals those keep are its own and start empty. The host's process-wide backends are installed before this runs, from the [`HostServices`](platform_core::guest::HostServices) table it serves: the clipboard, the URI opener, file dialogs, the preference store, the app's paths and name, the location format, the asset base, the loop wake and the font database its shaper measures in; its surface is built on the conventions of the host's it is drawn inside, its grid and keyboard convention among them. The theme is not among them, and neither is the surface's `TextMetrics`, which is the one that bites: the guest's surface starts with none, and the first text laid out here panics without it — call `telar::open_default_text_metrics()` (or `telar::open_surface_text_metrics` with whatever suits the surface) before building the tree. The driver cannot do it: a measurer is code, not a backend the table serves, and only the guest knows whether it draws to pixels or to cells.
     fn build(&mut self);
 
     /// The content's top layout node — the one the driver `compute_layout`s to the host-assigned rect size.
@@ -128,10 +130,14 @@ pub struct EmbedInstance {
 }
 
 impl EmbedInstance {
-    /// Build the guest: allocate its surface, build the content tree inside it, and mount the segment tree.
-    pub fn new(embedded: Box<dyn EmbeddedApp>) -> Self {
+    /// Build the guest: allocate its surface on the `conventions` of the host's it is drawn inside, build the content tree inside it, and mount the segment tree.
+    pub fn new(embedded: Box<dyn EmbeddedApp>, conventions: SurfaceConventions) -> Self {
         let embedded = Rc::new(RefCell::new(embedded));
-        let canvas = NestedCanvas::with_root(Size::new(0.0, 0.0), || {
+        let env = SurfaceEnv {
+            conventions,
+            ..SurfaceEnv::default()
+        };
+        let canvas = NestedCanvas::with_root_in(Size::new(0.0, 0.0), &env, || {
             embedded.borrow_mut().build();
             let root = embedded.borrow().layout_root();
             Ok((EmbeddedComponent(Rc::clone(&embedded)), root))

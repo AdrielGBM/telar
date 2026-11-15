@@ -147,7 +147,7 @@ pub fn fitted_font_size(
 ///
 /// So the grid decides which question is being asked, and a surface that can put an edge anywhere keeps the design's leading.
 pub fn single_line_box(font_size: f32) -> f32 {
-    if geometry_core::layout_grid().is_unit() {
+    if crate::layout_grid().is_unit() {
         font_size * SINGLE_LINE_LEADING
     } else {
         line_height(font_size)

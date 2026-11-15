@@ -226,12 +226,12 @@ impl Default for WebPlatform {
 impl Platform for WebPlatform {
     type Window = WebWindow;
 
-    fn keyboard_convention(&self) -> platform_core::KeyboardConvention {
-        crate::keyboard::keyboard_convention()
-    }
-
-    fn focus_boundary(&self) -> platform_core::FocusBoundary {
-        platform_core::FocusBoundary::Release
+    fn surface_conventions(&self) -> platform_core::SurfaceConventions {
+        platform_core::SurfaceConventions {
+            keyboard: crate::keyboard::keyboard_convention(),
+            focus_boundary: platform_core::FocusBoundary::Release,
+            ..platform_core::SurfaceConventions::default()
+        }
     }
 
     fn location_source(&mut self) -> Option<Box<dyn platform_core::LocationSource>> {

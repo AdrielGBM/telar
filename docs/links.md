@@ -25,8 +25,10 @@ an accessibility URL are written from `Destination::External`), so none of them 
 policy did not see.
 
 - **Allowed by default:** `http`, `https`, `mailto`, `tel`, `sms` (`DEFAULT_URI_SCHEMES`).
-- **Allowed by the app:** `allow_uri_scheme("myapp")` lets every `Uri` built afterwards use `myapp:`. Call it
-  once, in the setup block of `telar::app!`, which runs on every target and on both sides of a hot reload.
+- **Allowed by the app:** `allow_uri_scheme("myapp")` lets every `Uri` the app builds afterwards use `myapp:`.
+  The registration is the app's, kept with the thread its runtime runs on, so two apps in one process each
+  open only their own and a `Uri` built on another thread sees the defaults alone. Call it once, in the setup
+  block of `telar::app!`, which runs on every target and on both sides of a hot reload.
   A plugin that owns a scheme registers it itself, where it is built: `WorkshopApp::new` allows `vscode:` for
   its "open in editor" links, so an app that uses the workshop needs no call of its own. Schemes compare
   ignoring case; registering one twice is harmless.

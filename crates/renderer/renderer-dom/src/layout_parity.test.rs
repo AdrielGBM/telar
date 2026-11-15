@@ -202,7 +202,7 @@ fn frame(engine: &LayoutEngine, built: &Built, origin: (f32, f32), out: &mut Vec
     let css = engine
         .declared_style(built.node)
         .expect("the node kept its style")
-        .to_css(engine.direction(), engine.surface_size());
+        .to_css(engine.direction(), engine.surface_size(), engine.grid());
     out.push(DrawCommand::PushElement {
         element: Arc::new(Element::new(
             ElementId(built.node.into()),
@@ -766,7 +766,7 @@ fn content_frame(
     let css = engine
         .declared_style(built.node)
         .expect("the node kept its style")
-        .to_css(engine.direction(), engine.surface_size());
+        .to_css(engine.direction(), engine.surface_size(), engine.grid());
     out.push(DrawCommand::PushElement {
         element: Arc::new(Element::new(
             ElementId(built.node.into()),

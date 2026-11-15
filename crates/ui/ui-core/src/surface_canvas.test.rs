@@ -397,7 +397,10 @@ fn a_standalone_canvas_takes_the_boundary_its_environment_states_and_a_nested_on
     };
     let [first, second] = [signal(false), signal(false)];
     let release = SurfaceEnv {
-        focus_boundary: FocusBoundary::Release,
+        conventions: platform_core::SurfaceConventions {
+            focus_boundary: FocusBoundary::Release,
+            ..platform_core::SurfaceConventions::default()
+        },
         ..SurfaceEnv::default()
     };
     let releasing =

@@ -50,7 +50,10 @@ impl Workshop {
         reset_layout_runtime();
         focus::clear();
         telar::testing::install_test_face();
-        telar::set_keyboard_convention(KeyboardConvention::Pc);
+        telar::set_surface_conventions(telar::SurfaceConventions {
+            keyboard: KeyboardConvention::Pc,
+            ..telar::SurfaceConventions::default()
+        });
         let state = WorkshopState::new(entries.into(), &Default::default());
         let runtime = LocalApp(Shell { state });
         let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
@@ -356,7 +359,10 @@ fn slash_and_mod_k_open_the_palette_without_typing_into_it() {
         (KeyboardConvention::Pc, ctrl, command),
         (KeyboardConvention::Mac, command, ctrl),
     ] {
-        telar::set_keyboard_convention(convention);
+        telar::set_surface_conventions(telar::SurfaceConventions {
+            keyboard: convention,
+            ..telar::SurfaceConventions::default()
+        });
         workshop.press(Key::Char('k'), other);
         assert!(
             workshop.dialogs().is_empty(),
@@ -543,7 +549,10 @@ fn a_chord_names_one_action_whatever_the_case_of_its_letter() {
 
 #[test]
 fn every_action_has_a_distinct_id_and_a_chord_that_runs_it() {
-    telar::set_keyboard_convention(KeyboardConvention::Pc);
+    telar::set_surface_conventions(telar::SurfaceConventions {
+        keyboard: KeyboardConvention::Pc,
+        ..telar::SurfaceConventions::default()
+    });
     let mut ids: Vec<_> = ACTIONS.iter().map(|action| action.id()).collect();
     ids.sort_unstable();
     ids.dedup();

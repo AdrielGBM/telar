@@ -72,8 +72,7 @@ where
     pub(super) text_input: Option<platform_core::TextInput>,
     // What the window was last told about Tab leaving the app, so it hears only a change.
     pub(super) tab_leaves: platform_core::TabLeaves,
-    // What Tab past an end of the focus order does in this surface, as its platform states it.
-    pub(super) focus_boundary: platform_core::FocusBoundary,
+    pub(super) conventions: platform_core::SurfaceConventions,
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
@@ -166,7 +165,7 @@ where
         hydration: None,
         text_input: None,
         tab_leaves: platform_core::TabLeaves::default(),
-        focus_boundary: platform_core::FocusBoundary::default(),
+        conventions: platform_core::SurfaceConventions::default(),
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -423,7 +422,7 @@ where
             ui_core::open_surface_text_metrics(metrics);
         }
         self.app.open_font_family(self.fonts.family.as_ref());
-        self.app.set_focus_boundary(self.focus_boundary);
+        self.app.set_surface_conventions(self.conventions);
         self.tree = Some(self.app.mount());
         self.fit_tree_to(window);
         if let Some(hydration) = hydration {

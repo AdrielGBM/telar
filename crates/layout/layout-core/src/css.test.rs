@@ -2,7 +2,9 @@ use super::*;
 use crate::style::{AlignItems, JustifyContent, SizeDimension};
 
 pub(crate) fn css(style: LayoutStyle) -> String {
-    style.to_css(Direction::Ltr, Size::ZERO).into_string()
+    style
+        .to_css(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
+        .into_string()
 }
 
 /// Every property CSS already starts where taffy does is left unsaid, so what reaches the browser is what the app actually asked for.
@@ -28,7 +30,9 @@ fn a_row_becomes_a_flex_row() {
 #[test]
 fn a_row_under_rtl_is_a_row_told_the_direction() {
     let style = LayoutStyle::new().flex_row();
-    let written = style.to_css(Direction::Rtl, Size::ZERO).into_string();
+    let written = style
+        .to_css(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT)
+        .into_string();
     assert!(
         written.contains("direction:rtl;flex-direction:row;"),
         "got {written}"
@@ -41,7 +45,7 @@ fn rtl_is_written_on_every_box_and_ltr_is_left_to_the_default() {
     let column = LayoutStyle::new().flex_column();
     assert!(
         column
-            .to_css(Direction::Rtl, Size::ZERO)
+            .to_css(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT)
             .as_str()
             .contains(";direction:rtl;")
     );
@@ -245,19 +249,19 @@ fn a_logical_edge_follows_the_direction() {
     let style = LayoutStyle::new().padding_start(SizeDimension::Px(20.0));
     assert!(
         style
-            .to_css(Direction::Ltr, Size::ZERO)
+            .to_css(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
             .as_str()
             .contains("padding:0 0 0 20px;"),
         "ltr: {}",
-        style.to_css(Direction::Ltr, Size::ZERO)
+        style.to_css(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
     );
     assert!(
         style
-            .to_css(Direction::Rtl, Size::ZERO)
+            .to_css(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT)
             .as_str()
             .contains("padding:0 20px 0 0;"),
         "rtl: {}",
-        style.to_css(Direction::Rtl, Size::ZERO)
+        style.to_css(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT)
     );
 }
 
@@ -288,7 +292,7 @@ fn a_sticky_start_inset_follows_the_writing_direction() {
     assert!(css(style.clone()).contains("left:8px;"));
     assert!(
         style
-            .to_css(Direction::Rtl, Size::ZERO)
+            .to_css(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT)
             .as_str()
             .contains("right:8px;")
     );

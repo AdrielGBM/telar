@@ -356,6 +356,13 @@ impl crate::app_runtime::AppRuntime for HotApp {
             .call(|entries| unsafe { (entries.set_surface_maximized)(maximized) });
     }
 
+    fn set_surface_conventions(&self, conventions: platform_core::SurfaceConventions) {
+        self.library()
+            .send(&conventions, |entries, conventions| unsafe {
+                (entries.set_surface_conventions)(conventions)
+            });
+    }
+
     fn set_location_history(&self, history: &[platform_core::Location]) {
         self.library()
             .send(&history.to_vec(), |entries, history| unsafe {

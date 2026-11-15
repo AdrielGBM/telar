@@ -43,7 +43,7 @@ impl FocusRing {
     ///
     /// A surface drawn in whole cells has one colour per cell behind one glyph, so it cannot put a hairline beside a band: it draws one band, in whichever colour stands out more from the fill under it.
     fn bands(self, fill: Option<&Paint>) -> Vec<(Border, f32)> {
-        if geometry_core::layout_grid().is_unit() {
+        if crate::layout_grid().is_unit() {
             return vec![
                 (Border::uniform(self.band, self.width).as_focus_ring(), 0.0),
                 (
@@ -69,7 +69,7 @@ impl FocusRing {
     ///
     /// A terminal draws the ring as box-drawing characters in the cells around the content, and a box its content fills, such as a link with no padding, has no such cells: the text is drawn over its own frame. A cell keeps its background under a glyph, so a tint is what still shows there.
     pub(crate) fn cell_tint(self) -> Option<Paint> {
-        if geometry_core::layout_grid().is_unit() {
+        if crate::layout_grid().is_unit() {
             return None;
         }
         Some(self.band.with_alpha(0.35).into())
@@ -128,3 +128,7 @@ pub(crate) fn band_inside(
 #[cfg(test)]
 #[path = "focus_ring.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "focus_ring.cell.test.rs"]
+mod cell_tests;

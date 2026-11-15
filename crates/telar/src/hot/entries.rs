@@ -6,7 +6,10 @@ use platform_core::guest::{
 
 use std::time::Duration;
 
-use platform_core::{AccessAudit, Event, Location, SystemPreferences, WindowCommand, WindowConfig};
+use platform_core::{
+    AccessAudit, Event, Location, SurfaceConventions, SystemPreferences, WindowCommand,
+    WindowConfig,
+};
 use renderer_core::wire::{DrawList, Pixels};
 use renderer_core::{Color, FontFamily};
 use ui_tree::SegmentNodeInfo;
@@ -53,6 +56,7 @@ platform_core::entry_table! {
         set_surface_size: fn(f32, f32);
         set_safe_area_insets: fn(f32, f32, f32, f32);
         set_surface_maximized: fn(bool);
+        set_surface_conventions: fn(LentBytes<SurfaceConventions>);
         drain_window_commands: fn(*mut LentBytes<Vec<WindowCommand>>);
         set_location_history: fn(LentBytes<Vec<Location>>);
         open_title: fn(LentBytes<(String, String)>);

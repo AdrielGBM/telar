@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use telar::{KeyboardConvention, set_keyboard_convention};
+use telar::KeyboardConvention;
 
 use super::*;
 
@@ -30,7 +30,7 @@ fn held(shift: bool, ctrl: bool, meta: bool) -> ModifiersState {
 
 #[test]
 fn a_press_asks_for_what_its_modifiers_say_and_one_row_only_in_single_mode() {
-    set_keyboard_convention(KeyboardConvention::Pc);
+    crate::test_support::keyboard(KeyboardConvention::Pc);
     let multiple = |modifiers| Gesture::of_press(SelectionMode::Multiple, modifiers);
     assert_eq!(multiple(held(false, false, false)), Gesture::Only);
     assert_eq!(multiple(held(false, true, false)), Gesture::Toggle);
@@ -47,9 +47,9 @@ fn a_press_asks_for_what_its_modifiers_say_and_one_row_only_in_single_mode() {
         Gesture::Only,
         "Command is not the primary modifier on a PC"
     );
-    set_keyboard_convention(KeyboardConvention::Mac);
+    crate::test_support::keyboard(KeyboardConvention::Mac);
     assert_eq!(multiple(held(false, false, true)), Gesture::Toggle);
-    set_keyboard_convention(KeyboardConvention::Pc);
+    crate::test_support::keyboard(KeyboardConvention::Pc);
     assert_eq!(
         Gesture::of_press(SelectionMode::Single, held(true, true, false)),
         Gesture::Only

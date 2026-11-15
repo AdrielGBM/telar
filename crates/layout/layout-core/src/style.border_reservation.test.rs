@@ -6,7 +6,7 @@ fn border_of(style: LayoutStyle) -> (f32, f32) {
 }
 
 fn border_on(style: LayoutStyle, surface: Size) -> (f32, f32) {
-    let resolved = style.resolve(Direction::Ltr, surface);
+    let resolved = style.resolve(Direction::Ltr, surface, cell());
     (
         length_of(resolved.border.left),
         length_of(resolved.border.top),
@@ -21,26 +21,31 @@ fn cell() -> LayoutGrid {
 #[test]
 fn a_border_reserves_only_what_the_padding_does_not_give() {
     assert_eq!(
-        border_of(LayoutStyle::new().bordered_on(cell())),
+        border_of(LayoutStyle::new().bordered()),
         (8.0, 16.0),
         "an unpadded box needs the whole cell"
     );
     assert_eq!(
-        border_of(LayoutStyle::new().padding_all(16.0).bordered_on(cell())),
+        border_of(LayoutStyle::new().padding_all(16.0).bordered()),
         (0.0, 0.0),
         "a box padded a cell already has room for its frame"
     );
     assert_eq!(
-        border_of(LayoutStyle::new().padding_all(32.0).bordered_on(cell())),
+        border_of(LayoutStyle::new().padding_all(32.0).bordered()),
         (0.0, 0.0),
         "and so does a roomier one"
     );
 }
 
-/// A surface that can put an edge anywhere draws a stroke inside the box for free, exactly as it did before any of this existed. Goes through `bordered`, since the unit grid is the default and the short-circuit is the part worth covering.
+/// A surface that can put an edge anywhere draws a stroke inside the box, where it costs no layout.
 #[test]
 fn a_unit_grid_reserves_nothing() {
-    assert_eq!(border_of(LayoutStyle::new().bordered()), (0.0, 0.0));
+    let resolved =
+        LayoutStyle::new()
+            .bordered()
+            .resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT);
+    assert_eq!(length_of(resolved.border.left), 0.0);
+    assert_eq!(length_of(resolved.border.top), 0.0);
 }
 
 /// Padding written as a fraction of the surface has no value until the surface is known, so the frame has to be reserved from the padding it resolved to — read at the builder, it was zero and every such box paid a cell it already had.
@@ -48,16 +53,16 @@ fn a_unit_grid_reserves_nothing() {
 fn a_surface_fraction_of_padding_counts_once_it_has_resolved() {
     let style = LayoutStyle::new()
         .padding_all(SizeDimension::SurfaceWidth(0.02))
-        .bordered_on(cell());
+        .bordered();
     assert_eq!(
         border_on(style.clone(), Size::new(800.0, 400.0)),
         (0.0, 0.0),
         "16px of padding is a cell on both axes"
     );
     assert_eq!(
-        border_on(style, Size::new(200.0, 400.0)),
-        (4.0, 12.0),
-        "4px of padding leaves the rest of each cell to reserve"
+        border_on(style, Size::new(400.0, 400.0)),
+        (0.0, 16.0),
+        "8px of padding is a cell across and no row down"
     );
 }
 
@@ -65,10 +70,10 @@ fn a_surface_fraction_of_padding_counts_once_it_has_resolved() {
 #[test]
 fn logical_padding_counts_whichever_side_it_lands_on() {
     let style = LayoutStyle::new()
-        .bordered_on(cell())
+        .bordered()
         .padding_start(8.0)
         .padding_vertical(16.0);
-    let rtl = style.resolve(Direction::Rtl, Size::ZERO);
+    let rtl = style.resolve(Direction::Rtl, Size::ZERO, cell());
     assert_eq!(length_of(rtl.border.right), 0.0);
     assert_eq!(length_of(rtl.border.left), 8.0);
     assert_eq!(length_of(rtl.border.top), 0.0);

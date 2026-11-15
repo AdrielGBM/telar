@@ -10,10 +10,9 @@
 //!
 //! which is a function of `y` as well as `h`. Only when `h` is a whole number of steps does it reduce to `h / step` for every `y` — so a box that is 2.3 cells tall is drawn 2 cells tall at one scroll offset and 3 at the next, and two identical boxes at different heights on the page disagree while nothing is moving at all.
 //!
-//! So the grid is declared once by the frontend and honoured where sizes are *authored*, not patched up where they are drawn. A surface that can put an edge anywhere leaves it at [`LayoutGrid::UNIT`], where every operation here is the identity and nothing downstream changes.
+//! So each surface declares its grid and the layout pass honours it where sizes are *resolved*, not patched up where they are drawn. A surface that can put an edge anywhere leaves it at [`LayoutGrid::UNIT`], where every operation here is the identity and nothing downstream changes.
 
 use std::fmt;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::CellSize;
 
@@ -155,23 +154,6 @@ fn snap_space(v: f32, step: f32) -> f32 {
         (whole + 1.0) * step
     } else {
         whole * step
-    }
-}
-
-// Two f32 bit patterns rather than a lock: this is read on every layout value a tree builds, and a frontend writes it once before the first component exists.
-static GRID_X: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
-static GRID_Y: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
-
-/// Declares the step this surface resolves to. A frontend calls this once, before the tree is built, alongside whatever text measurer it installs.
-pub fn set_layout_grid(grid: LayoutGrid) {
-    GRID_X.store(grid.x.to_bits(), Ordering::Relaxed);
-    GRID_Y.store(grid.y.to_bits(), Ordering::Relaxed);
-}
-
-pub fn layout_grid() -> LayoutGrid {
-    LayoutGrid {
-        x: f32::from_bits(GRID_X.load(Ordering::Relaxed)),
-        y: f32::from_bits(GRID_Y.load(Ordering::Relaxed)),
     }
 }
 

@@ -3,10 +3,10 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use geometry_core::CellSize;
+use geometry_core::{CellSize, LayoutGrid};
 use platform_core::{
     Event, EventHandler, Key, KeyboardConvention, ModifiersState, Platform, PlatformError,
-    WindowConfig,
+    SurfaceConventions, WindowConfig,
 };
 
 use crate::map::Mapper;
@@ -81,9 +81,14 @@ fn is_ctrl_c(event: &Event) -> bool {
 impl Platform for TuiPlatform {
     type Window = TuiWindow;
 
-    /// A terminal keeps Command for itself on a Mac, so what reaches the app is Ctrl wherever it runs.
-    fn keyboard_convention(&self) -> KeyboardConvention {
-        KeyboardConvention::Pc
+    /// Cells, of the size the terminal was configured with, and no wheel easing, since a cell is the smallest step it can show. A terminal keeps Command for itself on a Mac, so what reaches the app is Ctrl wherever it runs.
+    fn surface_conventions(&self) -> SurfaceConventions {
+        SurfaceConventions {
+            grid: LayoutGrid::from(self.config.cell),
+            keyboard: KeyboardConvention::Pc,
+            smooth_wheel: false,
+            ..SurfaceConventions::default()
+        }
     }
 
     fn run<H: EventHandler<TuiWindow>>(

@@ -45,7 +45,6 @@ impl Snapshots {
                 .collect(),
         )
         .map_err(SnapshotError::Fonts)?;
-        platform_core::set_keyboard_convention(platform_core::KeyboardConvention::Pc);
         Ok(Self {
             paths,
             mode,

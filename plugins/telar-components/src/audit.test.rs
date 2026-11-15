@@ -938,7 +938,10 @@ async fn an_open_menu_with_a_switch_row_adds_no_violations() {
 /// A command that has keys says them as `aria-keyshortcuts` on the control that runs it, in the form UI Events names the keys, and keeps them in the row's name: the row of an open menu and an icon button.
 #[wasm_bindgen_test]
 async fn a_shortcut_is_written_on_the_control_it_runs() {
-    telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
+    telar::set_surface_conventions(telar::SurfaceConventions {
+        keyboard: telar::KeyboardConvention::Pc,
+        ..telar::SurfaceConventions::default()
+    });
     let host = render();
     let find = host
         .query_selector(r#"[role="toolbar"] [aria-label="Find"]"#)

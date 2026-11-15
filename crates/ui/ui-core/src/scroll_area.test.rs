@@ -689,11 +689,13 @@ fn wheel_inside_viewport_scrolls_without_a_prior_move() {
 /// What a terminal does: its smallest visible step is a whole cell, so the notch is applied at once.
 #[test]
 fn a_surface_that_cannot_show_the_gap_takes_the_notch_whole() {
-    let was = ui_tree::set_smooth_wheel(false);
+    crate::set_surface_conventions(platform_core::SurfaceConventions {
+        smooth_wheel: false,
+        ..platform_core::SurfaceConventions::default()
+    });
     let mut sa = make_scroll_area();
     sa.on_event(&wheel_over(ScrollDelta::Lines { x: 0.0, y: -3.0 }));
     assert_eq!(sa.core.scroll_y.get(), 60.0, "no frame clock involved");
-    ui_tree::set_smooth_wheel(was);
 }
 
 /// A finger landing on a laptop that has both a wheel and a touch screen takes the offset over.

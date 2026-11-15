@@ -43,8 +43,7 @@ where
     }
     let app_name = app_name.to_owned();
     let debug = super::debug_settings::process_debug_settings();
-    platform_core::set_keyboard_convention(platform.keyboard_convention());
-    let focus_boundary = platform.focus_boundary();
+    let conventions = platform.surface_conventions();
 
     platform.run_surfaces(window_configs, move |id| {
         let (fonts, title) = opened
@@ -64,7 +63,7 @@ where
             super::host::SurfaceRenderer::builtin(),
         );
         // Every surface shares this UI thread and the one reactive runtime, so each needs its own `Surface` world. Built here, on the thread that drives the handler.
-        handler.focus_boundary = focus_boundary;
+        handler.conventions = conventions;
         handler.surface = Some(ui_core::Surface::new());
         handler
     })
@@ -72,7 +71,7 @@ where
 
 /// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`AppRuntime`](crate::AppRuntime), boxed so a multi-surface backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s factory produces — a handler carrying its own `ui_core::Surface` world, booted the same way — but for surfaces opened at runtime (as `open_window` opens one), so the backend can enqueue the handler into its single UI-thread loop instead of spawning a thread. Builds no renderer; call it on the thread that drives the handler, whose reactive runtime it brings the app's stored choices back into.
 ///
-/// `config` is the surface's own: its window's title, falling back to `app_name`, and the faces and family it sets text in. The rest of its window is the backend's to apply.
+/// `config` is the surface's own: its window's title, falling back to `app_name`, and the faces and family it sets text in. The rest of its window is the backend's to apply. `conventions` are what the backend says about the surface, as [`Platform::surface_conventions`](platform_core::Platform::surface_conventions) reports them.
 ///
 /// Takes a runtime rather than an [`App`] because a secondary surface is not always a tree in this process: the dev host opens one for a dylib-backed application, whose runtime is the far side of an FFI boundary. Wrap a plain application in [`LocalApp`](crate::LocalApp).
 pub fn build_surface_handler<W, A>(
@@ -80,6 +79,7 @@ pub fn build_surface_handler<W, A>(
     paths: Arc<dyn AppPathsProvider>,
     app_name: &str,
     config: AppConfig,
+    conventions: platform_core::SurfaceConventions,
 ) -> Box<dyn EventHandler<W>>
 where
     W: super::host::SurfaceWindow,
@@ -98,6 +98,7 @@ where
         window.titled_or(app_name).shown_title(),
         super::host::SurfaceRenderer::builtin(),
     );
+    handler.conventions = conventions;
     handler.surface = Some(ui_core::Surface::new());
     Box::new(handler)
 }

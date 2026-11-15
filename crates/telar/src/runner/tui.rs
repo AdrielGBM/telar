@@ -34,11 +34,9 @@ impl Default for TuiOptions {
     }
 }
 
-/// Makes the active surface measure its text in terminal cells, and the process snap sizes to them, as everything built after it expects to.
+/// Makes the active surface measure its text in terminal cells, as everything built after it expects to.
 pub(super) fn install_cell_measure(cell: CellSize) {
     ui_core::open_surface_text_metrics(Arc::new(CellMetrics::new(cell)));
-    // Declared before the tree exists, because it is honoured where sizes are authored: a `LayoutStyle` built under the default unit grid would keep the fractional padding this is here to remove. See `geometry_core::grid`.
-    geometry_core::set_layout_grid(geometry_core::LayoutGrid::from(cell));
 }
 
 /// Runs an app in the terminal it was launched from.
@@ -52,8 +50,6 @@ pub fn run_tui_app_with_name<A: App>(
 ) {
     super::logging::install_file(&SystemPaths, app_name);
     install_cell_measure(options.cell);
-    // A cell is the smallest step this surface can show, so easing across a wheel notch would repaint the screen several times to draw the same rows.
-    ui_tree::set_smooth_wheel(false);
     services_core::set_clipboard(Arc::new(OscClipboard::new(std::io::stdout())));
     services_core::set_uri_opener(Arc::new(services_core::SystemOpener));
 

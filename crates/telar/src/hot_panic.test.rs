@@ -11,7 +11,7 @@ use std::sync::{Mutex, PoisonError};
 use telar::hot::{HotApp, load_hot_app};
 use telar::{
     AppCtx, AppRuntime, Chord, Color, Event, EventResult, FontFamily, KeyboardConvention,
-    PointerButton, PointerSource, Size, TextStyle, set_keyboard_convention,
+    PointerButton, PointerSource, Size, SurfaceConventions, TextStyle,
 };
 
 /// One at a time: both count what the process has mapped and what sits in the build directory.
@@ -212,15 +212,18 @@ fn a_face_a_hot_guest_adds_while_it_runs_reaches_the_host() {
     );
 }
 
-/// The guest's copy of the convention answers for the system it was compiled on until the host hands over its own, which is what a terminal host on a Mac needs: it matches Ctrl, and a guest left alone would show ⌘.
+/// The guest's copy of the convention answers for the system it was compiled on until the host puts the window's surface on its platform's conventions, which is what a terminal host on a Mac needs: it matches Ctrl, and a guest left alone would show ⌘.
 #[test]
 #[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
 fn a_hot_guest_shows_shortcuts_for_the_keyboard_its_host_matches() {
     let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     let library = build_fixture();
     for convention in [KeyboardConvention::Mac, KeyboardConvention::Pc] {
-        set_keyboard_convention(convention);
         let app = load(&library).expect("the guest loads");
+        app.set_surface_conventions(SurfaceConventions {
+            keyboard: convention,
+            ..SurfaceConventions::default()
+        });
         let title = app
             .window_config()
             .expect("the guest titles its window with a shortcut")

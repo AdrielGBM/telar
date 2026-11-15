@@ -4,12 +4,14 @@
 
 mod context;
 mod direction;
+mod grid;
 mod surface_size;
 
 pub use direction::{
     DirectionContext, current_direction, set_direction, set_surface_direction, use_direction,
     use_surface_direction,
 };
+pub use grid::{LayoutGridContext, layout_grid, set_layout_grid};
 pub use surface_size::{
     SurfaceSizeContext, set_safe_area_insets, set_surface_maximized, set_surface_size,
     surface_size, use_safe_area_insets, use_surface_height, use_surface_maximized,

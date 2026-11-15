@@ -1,6 +1,6 @@
 //! What a host and the guests it loads share beyond the contract `platform_core::guest` declares, since it reaches into stores and a draw list that crate does not link: [`GuestLibrary`], which drives any guest a host loaded and keeps what it was served; [`ServedServices`], the backends a host serves through the contract's [`HostServices`] table, and [`install_host_services`], which fills a guest's own stores with backends that ask the host through it; and [`LentFrames`], the frames a guest's instance lends.
 //!
-//! A guest links its own copy of every store here, of `platform-core`'s and of the shaper's font database, and each starts empty: without the table a guest copies to no clipboard, opens no link, keeps no preference past its unload, has no directories of its own, shows its shortcuts for the system it was compiled on, sets its text in faces the host does not draw it in, and starts its threads with its own std, which keeps its library mapped for as long as the host thread that started one lives. Nothing owned crosses: each request and answer is spelled into bytes the spelling side lends, and the host's backends stay behind `data`, which the guest never reads.
+//! A guest links its own copy of every store here, of `platform-core`'s and of the shaper's font database, and each starts empty: without the table a guest copies to no clipboard, opens no link, keeps no preference past its unload, has no directories of its own, sets its text in faces the host does not draw it in, and starts its threads with its own std, which keeps its library mapped for as long as the host thread that started one lives. Nothing owned crosses: each request and answer is spelled into bytes the spelling side lends, and the host's backends stay behind `data`, which the guest never reads.
 
 mod frames;
 mod library;
@@ -13,11 +13,10 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
-use geometry_core::LayoutGrid;
+use platform_core::LocationFormat;
 use platform_core::guest::{
     ArgShape, HostServices, HostThread, LentBytes, Reply, Service, TypeLayout, UpperServices, serve,
 };
-use platform_core::{KeyboardConvention, LocationFormat};
 use reactive_local::threads::{Joinable, Spawner};
 use renderer_core::{ExclusiveFontsError, FontAsset, FontConfig, FontHost, FontSources};
 use semantics_core::{RouteAddress, Uri};
@@ -43,10 +42,8 @@ struct Backends {
     file_dialogs: Option<Arc<dyn FileDialogs>>,
     preferences: Arc<dyn PreferenceStore>,
     app_paths: Option<Installed>,
-    keyboard_convention: KeyboardConvention,
     location_format: Option<LocationFormat>,
     asset_base: Option<String>,
-    layout_grid: LayoutGrid,
     loop_waker: Option<LoopWaker>,
     fonts: Option<Arc<dyn FontHost>>,
 }
@@ -61,10 +58,8 @@ impl ServedServices {
                 file_dialogs: crate::file_dialogs(),
                 preferences: crate::preference_store(),
                 app_paths: app_paths::installed(),
-                keyboard_convention: platform_core::keyboard_convention(),
                 location_format: platform_core::installed_location_format(),
                 asset_base: platform_core::asset_base(),
-                layout_grid: geometry_core::layout_grid(),
                 loop_waker: platform_core::loop_waker(),
                 fonts,
             }),
@@ -82,10 +77,8 @@ impl ServedServices {
             open_beside: some(backends.uri_opener.is_some(), open_beside),
             stored_preference: Some(stored_preference),
             store_preference: Some(store_preference),
-            keyboard_convention: Some(keyboard_convention),
             location_format: Some(location_format),
             asset_base: Some(asset_base),
-            layout_grid: Some(layout_grid),
             wake_loop: some(backends.loop_waker.is_some(), wake_loop),
             spawn_thread: Some(platform_core::guest::spawn_thread),
             join_thread: Some(platform_core::guest::join_thread),
@@ -326,18 +319,6 @@ unsafe extern "C" fn app_dirs(
     }
 }
 
-unsafe extern "C" fn keyboard_convention(
-    data: *const c_void,
-    request: LentBytes<()>,
-    reply: Reply<KeyboardConvention>,
-) {
-    unsafe {
-        serve(data, request, reply, |host: &Backends, ()| {
-            host.keyboard_convention
-        })
-    }
-}
-
 unsafe extern "C" fn location_format(
     data: *const c_void,
     request: LentBytes<()>,
@@ -360,14 +341,6 @@ unsafe extern "C" fn asset_base(
             host.asset_base.clone()
         })
     }
-}
-
-unsafe extern "C" fn layout_grid(
-    data: *const c_void,
-    request: LentBytes<()>,
-    reply: Reply<LayoutGrid>,
-) {
-    unsafe { serve(data, request, reply, |host: &Backends, ()| host.layout_grid) }
 }
 
 unsafe extern "C" fn wake_loop(data: *const c_void, request: LentBytes<()>, reply: Reply<()>) {
@@ -660,7 +633,7 @@ impl FontHost for HostFonts {
     }
 }
 
-/// Installs, in this copy's own stores, a backend per entry `table` has, each asking the host through it, and the values the host serves: its app name and directories, keyboard convention, location format, asset base and layout grid. A store whose entry is missing keeps what this copy had. Every thread this copy's runtime starts from then on (`reactive_local::threads`) is started by the host, with its own std.
+/// Installs, in this copy's own stores, a backend per entry `table` has, each asking the host through it, and the values the host serves: its app name and directories, location format and asset base. A store whose entry is missing keeps what this copy had. Every thread this copy's runtime starts from then on (`reactive_local::threads`) is started by the host, with its own std.
 ///
 /// Answers with the host's font database, as a [`FontHost`] this copy's shaper is to defer to (`renderer_text::fonts::defer_to`), or `None` where the host serves none: the shaper is the one store this crate cannot reach.
 ///
@@ -686,17 +659,11 @@ pub unsafe fn install_host_services(table: HostServices<UpperTable>) -> Option<A
     if let Some(dirs) = host.ask(|table| table.upper.app_paths, &()).flatten() {
         app_paths::install(dirs.name.clone(), Arc::new(dirs));
     }
-    if let Some(convention) = host.ask(|table| table.keyboard_convention, &()) {
-        platform_core::set_keyboard_convention(convention);
-    }
     if let Some(format) = host.ask(|table| table.location_format, &()).flatten() {
         platform_core::set_location_format(format);
     }
     if let Some(base) = host.ask(|table| table.asset_base, &()).flatten() {
         platform_core::set_asset_base(&base);
-    }
-    if let Some(grid) = host.ask(|table| table.layout_grid, &()) {
-        geometry_core::set_layout_grid(grid);
     }
     if table.spawn_thread.is_some() && table.join_thread.is_some() && table.detach_thread.is_some()
     {

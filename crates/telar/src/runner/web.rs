@@ -204,12 +204,8 @@ mod described {
             self.platform.location_source()
         }
 
-        fn keyboard_convention(&self) -> platform_core::KeyboardConvention {
-            self.platform.keyboard_convention()
-        }
-
-        fn focus_boundary(&self) -> platform_core::FocusBoundary {
-            self.platform.focus_boundary()
+        fn surface_conventions(&self) -> platform_core::SurfaceConventions {
+            self.platform.surface_conventions()
         }
 
         fn run<H: EventHandler<WebWindow> + 'static>(

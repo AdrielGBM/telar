@@ -80,7 +80,7 @@ impl From<SizeDimension> for LengthPercentage {
     }
 }
 
-/// Every definite length a style is given, put on the surface's grid before taffy ever sees it.
+/// Every definite length a style is given, put on the surface's grid when the style is resolved, before taffy ever sees it.
 ///
 /// Here rather than in the painter because a box has to *be* a whole number of steps, not merely be drawn as one. A backend that quantises rounds each edge of a box independently — the only way two boxes sharing an edge share a cell rather than leaving a seam — which makes the steps a box covers `round((y + h) / step) - round(y / step)`: a function of where it is as well as how big it is. Snap `h` and that collapses to `h / step` for every `y`, so a box keeps its size while it scrolls and two identical boxes agree wherever they landed.
 ///
@@ -97,37 +97,30 @@ fn length_of(v: LengthPercentage) -> f32 {
     }
 }
 
-fn snapped(d: SizeDimension, f: impl Fn(LayoutGrid, f32) -> f32) -> SizeDimension {
+fn snapped(d: SizeDimension, grid: LayoutGrid, f: fn(LayoutGrid, f32) -> f32) -> SizeDimension {
     match d {
-        SizeDimension::Px(v) => {
-            let grid = geometry_core::layout_grid();
-            if grid.is_unit() {
-                d
-            } else {
-                SizeDimension::Px(f(grid, v))
-            }
-        }
+        SizeDimension::Px(v) if !grid.is_unit() => SizeDimension::Px(f(grid, v)),
         other => other,
     }
 }
 
-fn size_x(d: impl Into<SizeDimension>) -> SizeDimension {
-    snapped(d.into(), |g, v| g.snap_size_x(v))
+fn size_x(d: SizeDimension, grid: LayoutGrid) -> SizeDimension {
+    snapped(d, grid, LayoutGrid::snap_size_x)
 }
-fn size_y(d: impl Into<SizeDimension>) -> SizeDimension {
-    snapped(d.into(), |g, v| g.snap_size_y(v))
+fn size_y(d: SizeDimension, grid: LayoutGrid) -> SizeDimension {
+    snapped(d, grid, LayoutGrid::snap_size_y)
 }
-fn space_x(d: impl Into<SizeDimension>) -> SizeDimension {
-    snapped(d.into(), |g, v| g.snap_space_x(v))
+fn space_x(d: SizeDimension, grid: LayoutGrid) -> SizeDimension {
+    snapped(d, grid, LayoutGrid::snap_space_x)
 }
-fn space_y(d: impl Into<SizeDimension>) -> SizeDimension {
-    snapped(d.into(), |g, v| g.snap_space_y(v))
+fn space_y(d: SizeDimension, grid: LayoutGrid) -> SizeDimension {
+    snapped(d, grid, LayoutGrid::snap_space_y)
 }
-fn pos_x(d: impl Into<SizeDimension>) -> SizeDimension {
-    snapped(d.into(), |g, v| g.snap_pos_x(v))
+fn pos_x(d: SizeDimension, grid: LayoutGrid) -> SizeDimension {
+    snapped(d, grid, LayoutGrid::snap_pos_x)
 }
-fn pos_y(d: impl Into<SizeDimension>) -> SizeDimension {
-    snapped(d.into(), |g, v| g.snap_pos_y(v))
+fn pos_y(d: SizeDimension, grid: LayoutGrid) -> SizeDimension {
+    snapped(d, grid, LayoutGrid::snap_pos_y)
 }
 
 /// For margin and inset, where `auto` is a real answer: it is what centres a block and what leaves an edge unpinned.
@@ -141,7 +134,7 @@ impl From<SizeDimension> for LengthPercentageAuto {
     }
 }
 
-/// A physical property a surface-relative length can be written into. The logical edges need none: [`LogicalStyle`] already keeps them as [`SizeDimension`]s until resolution.
+/// A physical length property, kept as written until resolution puts it against the surface and on its grid. The logical edges need none: [`LogicalStyle`] already keeps them as [`SizeDimension`]s until resolution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Slot {
     Width,
@@ -157,6 +150,8 @@ enum Slot {
     PaddingRight,
     MarginTop,
     MarginBottom,
+    /// Written only by [`LayoutStyle::margin_from_left`]: a position in the viewport rather than air around the box.
+    MarginLeft,
     InsetTop,
     InsetBottom,
     GapX,
@@ -164,19 +159,20 @@ enum Slot {
 }
 
 impl Slot {
-    /// Puts `d` on the grid the way the builder for this property would have, had it been pixels all along.
-    fn snap(self, d: SizeDimension) -> SizeDimension {
+    /// Puts `d` on `grid` as a length of this property: a size, air around a box, or a position.
+    fn snap(self, d: SizeDimension, grid: LayoutGrid) -> SizeDimension {
         match self {
-            Slot::Width | Slot::MinWidth | Slot::MaxWidth => size_x(d),
-            Slot::Height | Slot::MinHeight | Slot::MaxHeight => size_y(d),
+            Slot::Width | Slot::MinWidth | Slot::MaxWidth => size_x(d, grid),
+            Slot::Height | Slot::MinHeight | Slot::MaxHeight => size_y(d, grid),
             Slot::FlexBasis => d,
-            Slot::PaddingLeft | Slot::PaddingRight | Slot::GapX => space_x(d),
+            Slot::PaddingLeft | Slot::PaddingRight | Slot::GapX => space_x(d, grid),
             Slot::PaddingTop
             | Slot::PaddingBottom
             | Slot::MarginTop
             | Slot::MarginBottom
-            | Slot::GapY => space_y(d),
-            Slot::InsetTop | Slot::InsetBottom => pos_y(d),
+            | Slot::GapY => space_y(d, grid),
+            Slot::MarginLeft => pos_x(d, grid),
+            Slot::InsetTop | Slot::InsetBottom => pos_y(d, grid),
         }
     }
 
@@ -195,6 +191,7 @@ impl Slot {
             Slot::PaddingRight => style.padding.right = d.into(),
             Slot::MarginTop => style.margin.top = d.into(),
             Slot::MarginBottom => style.margin.bottom = d.into(),
+            Slot::MarginLeft => style.margin.left = d.into(),
             Slot::InsetTop => style.inset.top = d.into(),
             Slot::InsetBottom => style.inset.bottom = d.into(),
             Slot::GapX => style.gap.width = d.into(),
@@ -239,19 +236,6 @@ impl TrackSlot {
     }
 }
 
-/// A logical edge's length in pixels against `surface`, snapped as its builder snaps pixels. A length that was never surface-relative was snapped when it was written and is returned untouched.
-fn settle(
-    d: SizeDimension,
-    surface: Size,
-    snap: fn(SizeDimension) -> SizeDimension,
-) -> SizeDimension {
-    if d.is_surface_relative() {
-        snap(d.against(surface))
-    } else {
-        d
-    }
-}
-
 /// The parts of a style that cannot be turned into physical edges until a [`Direction`] is known. Kept alongside the resolved `taffy::Style` rather than folded into it, so a direction flip can re-resolve the original intent instead of trying to un-swap edges it can no longer tell apart from physical ones.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct LogicalStyle {
@@ -277,8 +261,8 @@ pub(crate) struct LogicalStyle {
     pub(crate) min_height_override: Option<f32>,
     /// Set by `LayoutEngine::set_leading_margin`; `(is_row, px)`, placed by the engine since which physical edge is "leading" depends on the parent's axis.
     pub(crate) leading_margin: Option<(bool, f32)>,
-    /// Set by [`LayoutStyle::bordered`] on a surface that draws strokes in whole cells: the cell its frame needs, reserved at resolution from the padding the box actually resolved to.
-    pub(crate) stroke_cell: Option<LayoutGrid>,
+    /// Set by [`LayoutStyle::bordered`]: on a surface that draws strokes in whole cells, the cell its frame needs is reserved at resolution from the padding the box actually resolved to.
+    pub(crate) bordered: bool,
     /// Set by [`LayoutStyle::sticky`] and [`LayoutStyle::sticky_when`]. Taffy has no sticky position and would read the insets as a relative offset, so they are taken out of what it is handed whether the node sticks right now or not.
     pub(crate) sticky: Sticky,
 }
@@ -337,8 +321,8 @@ impl Margin {
 pub struct LayoutStyle {
     pub(crate) inner: Style,
     pub(crate) logical: LogicalStyle,
-    /// The physical properties written as a fraction of the surface, each still holding that fraction; [`inner`](Self::inner) holds a placeholder for them until [`resolve`](Self::resolve) knows the surface.
-    surface: Vec<(Slot, SizeDimension)>,
+    /// Every physical length as written, which [`resolve`](Self::resolve) puts against the surface and on its grid; [`inner`](Self::inner) holds them unsnapped, and a placeholder for a fraction of the surface.
+    lengths: Vec<(Slot, SizeDimension)>,
     /// The grid track lists naming a fraction of the surface, kept as written for the same reason as [`surface`](Self::surface).
     tracks: Vec<(TrackSlot, Vec<TemplateTrack>)>,
 }
@@ -354,7 +338,7 @@ impl LayoutStyle {
                 ..Style::default()
             },
             logical: LogicalStyle::default(),
-            surface: Vec::new(),
+            lengths: Vec::new(),
             tracks: Vec::new(),
         }
     }
@@ -370,23 +354,20 @@ impl LayoutStyle {
     }
 
     fn put(&mut self, slot: Slot, d: SizeDimension) {
-        let d = slot.snap(d);
-        self.surface.retain(|(held, _)| *held != slot);
-        if d.is_surface_relative() {
-            self.surface.push((slot, d));
-        }
+        self.lengths.retain(|(held, _)| *held != slot);
+        self.lengths.push((slot, d));
         slot.write(&mut self.inner, d);
     }
 
     /// Sets a definite width, or `auto` when `None`, exactly as given: what the engine fills a root with is the space it was handed, already on the grid.
     pub(crate) fn set_definite_width(&mut self, width: Option<f32>) {
-        self.surface.retain(|(held, _)| *held != Slot::Width);
+        self.lengths.retain(|(held, _)| *held != Slot::Width);
         self.inner.size.width = width.map_or(Dimension::auto(), Dimension::length);
     }
 
     /// The height counterpart of [`set_definite_width`](Self::set_definite_width).
     pub(crate) fn set_definite_height(&mut self, height: Option<f32>) {
-        self.surface.retain(|(held, _)| *held != Slot::Height);
+        self.lengths.retain(|(held, _)| *held != Slot::Height);
         self.inner.size.height = height.map_or(Dimension::auto(), Dimension::length);
     }
 
@@ -402,15 +383,15 @@ impl LayoutStyle {
     }
 
     fn surface_slot(&self, slot: Slot) -> Option<SizeDimension> {
-        self.surface
+        self.lengths
             .iter()
-            .find_map(|&(held, d)| (held == slot).then_some(d))
+            .find_map(|&(held, d)| (held == slot && d.is_surface_relative()).then_some(d))
     }
 
     /// Whether anything in this style is a fraction of the surface, and so has to be resolved again when the surface changes size.
     pub fn is_surface_relative(&self) -> bool {
         let logical = &self.logical;
-        !self.surface.is_empty()
+        self.lengths.iter().any(|(_, d)| d.is_surface_relative())
             || !self.tracks.is_empty()
             || [
                 logical.padding_start,
@@ -477,7 +458,7 @@ impl LayoutStyle {
             top: zero,
             bottom: zero,
         };
-        self.surface
+        self.lengths
             .retain(|(held, _)| !matches!(held, Slot::InsetTop | Slot::InsetBottom));
         self
     }
@@ -641,13 +622,13 @@ impl LayoutStyle {
 
     /// Padding on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under [`Direction::Rtl`].
     pub fn padding_start(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.padding_start = Some(space_x(size));
+        self.logical.padding_start = Some(size.into());
         self
     }
 
     /// Padding on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under [`Direction::Rtl`].
     pub fn padding_end(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.padding_end = Some(space_x(size));
+        self.logical.padding_end = Some(size.into());
         self
     }
 
@@ -673,13 +654,13 @@ impl LayoutStyle {
 
     /// Margin on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under [`Direction::Rtl`].
     pub fn margin_inline_start(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.margin_start = Some(space_x(size));
+        self.logical.margin_start = Some(size.into());
         self
     }
 
     /// Margin on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under [`Direction::Rtl`].
     pub fn margin_inline_end(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.margin_end = Some(space_x(size));
+        self.logical.margin_end = Some(size.into());
         self
     }
 
@@ -689,21 +670,20 @@ impl LayoutStyle {
     ///
     /// The right margin goes `auto` with it, which pins the box to that x in a column under either direction: a column's cross-axis start is the inline start, the right edge under RTL, and an auto margin outranks the alignment that would otherwise carry the box there.
     pub fn margin_from_left(mut self, px: f32) -> Self {
-        self.inner.margin.left =
-            LengthPercentageAuto::length(geometry_core::layout_grid().snap_pos_x(px));
+        self.put(Slot::MarginLeft, SizeDimension::Px(px));
         self.inner.margin.right = LengthPercentageAuto::auto();
         self
     }
 
     /// Inset from the edge the text starts from, for a node taken out of flow (see [`absolute_fill`](Self::absolute_fill)) or made [`sticky`](Self::sticky).
     pub fn inset_start(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.inset_start = Some(pos_x(size));
+        self.logical.inset_start = Some(size.into());
         self
     }
 
     /// Inset from the edge the text runs towards, for a node taken out of flow or made [`sticky`](Self::sticky).
     pub fn inset_end(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.inset_end = Some(pos_x(size));
+        self.logical.inset_end = Some(size.into());
         self
     }
 
@@ -712,17 +692,8 @@ impl LayoutStyle {
     /// On a raster backend a stroke is drawn inside the box and costs no layout at all — a one-pixel rule overlaps the padding and nobody notices. A terminal has no sub-cell line: a border claims an entire cell on each side. A box laid out with no room for one therefore has its own frame and its content competing for the same row, and below three rows the text is drawn on top of the frame.
     ///
     /// Nothing on a unit grid, so a desktop window keeps exactly the geometry it had.
-    pub fn bordered(self) -> Self {
-        let grid = geometry_core::layout_grid();
-        if grid.is_unit() {
-            return self;
-        }
-        self.bordered_on(grid)
-    }
-
-    /// The rule itself, with the grid handed in rather than read. Split out so it can be tested without writing the process-wide grid: that global is documented as written once by a frontend before any component exists, and a test that re-writes it mid-run breaks the contract every other test in the binary is relying on.
-    fn bordered_on(mut self, grid: LayoutGrid) -> Self {
-        self.logical.stroke_cell = Some(grid);
+    pub fn bordered(mut self) -> Self {
+        self.logical.bordered = true;
         self
     }
 
@@ -842,13 +813,13 @@ impl LayoutStyle {
         self
     }
 
-    /// The physical `taffy::Style` this describes under `direction`, on a surface of `surface` size. Called by the engine at every point a style reaches a node, and again for each affected node when the direction flips or the surface is resized.
+    /// The physical `taffy::Style` this describes under `direction`, on a surface of `surface` size that resolves to `grid`. Called by the engine at every point a style reaches a node, and again for each affected node when the direction flips, the surface is resized or its grid changes.
     ///
     /// Does not place the leading margin ([`LogicalStyle::leading_margin`]) — the engine does that afterwards, since it needs the parent's axis to know which physical edge "leading" means.
     ///
     /// A sticky node's insets are left out, whether it sticks right now or not: taffy would read them as a relative offset. [`sticky_insets`](Self::sticky_insets) is where they go instead.
-    pub(crate) fn resolve(&self, direction: Direction, surface: Size) -> Style {
-        let mut style = self.resolve_all(direction, surface);
+    pub(crate) fn resolve(&self, direction: Direction, surface: Size, grid: LayoutGrid) -> Style {
+        let mut style = self.resolve_all(direction, surface, grid);
         if self.logical.sticky != Sticky::Never {
             style.inset = taffy::Rect {
                 left: LengthPercentageAuto::auto(),
@@ -865,15 +836,18 @@ impl LayoutStyle {
         &self,
         direction: Direction,
         surface: Size,
+        grid: LayoutGrid,
     ) -> Option<StickyInsets> {
         self.is_sticky()
-            .then(|| StickyInsets::of(self.resolve_all(direction, surface).inset))
+            .then(|| StickyInsets::of(self.resolve_all(direction, surface, grid).inset))
     }
 
-    fn resolve_all(&self, direction: Direction, surface: Size) -> Style {
+    fn resolve_all(&self, direction: Direction, surface: Size, grid: LayoutGrid) -> Style {
         let mut style = self.inner.clone();
-        for &(slot, d) in &self.surface {
-            slot.write(&mut style, slot.snap(d.against(surface)));
+        for &(slot, d) in &self.lengths {
+            if d.is_surface_relative() || !grid.is_unit() {
+                slot.write(&mut style, slot.snap(d.against(surface), grid));
+            }
         }
         let logical = &self.logical;
         // Taffy is told the direction on every node rather than only having a row's main axis reversed for it: a column's cross-axis alignment, a block's placement of a narrower child and a grid's columns all follow the inline direction too, and only taffy sees all of them.
@@ -907,23 +881,23 @@ impl LayoutStyle {
         };
         for (edge, size) in [(start, logical.padding_start), (end, logical.padding_end)] {
             if let Some(size) = size {
-                *edge.of_mut(&mut style.padding) = settle(size, surface, space_x).into();
+                *edge.of_mut(&mut style.padding) = space_x(size.against(surface), grid).into();
             }
         }
         for (edge, size) in [(start, logical.margin_start), (end, logical.margin_end)] {
             if let Some(size) = size {
-                *edge.of_mut(&mut style.margin) = settle(size, surface, space_x).into();
+                *edge.of_mut(&mut style.margin) = space_x(size.against(surface), grid).into();
             }
         }
         for (edge, size) in [(start, logical.inset_start), (end, logical.inset_end)] {
             if let Some(size) = size {
-                *edge.of_mut(&mut style.inset) = settle(size, surface, pos_x).into();
+                *edge.of_mut(&mut style.inset) = pos_x(size.against(surface), grid).into();
             }
         }
         for (slot, tracks) in &self.tracks {
             slot.write(&mut style, tracks, surface);
         }
-        if let Some(grid) = logical.stroke_cell {
+        if logical.bordered && !grid.is_unit() {
             // Only what the padding does not already give: a raster backend draws a stroke inside the box over its padding, and the cell equivalent is a frame in the outermost cell, so a box padded by a cell or more already has the room. Read from the resolved padding, logical and surface-relative edges included, so the builder order does not matter.
             let short = |padding: LengthPercentage, step: f32| {
                 LengthPercentage::length((step - length_of(padding)).max(0.0))

@@ -29,7 +29,10 @@ fn boxes_of(tree: &telar::ComponentList) -> Vec<(f32, f32)> {
 fn every_box_keeps_its_height_at_every_scroll_offset() {
     let cell = CellSize::default();
     telar::open_surface_text_metrics(std::sync::Arc::new(CellMetrics::new(cell)));
-    telar::set_layout_grid(telar::LayoutGrid::from(cell));
+    telar::set_surface_conventions(telar::SurfaceConventions {
+        grid: telar::LayoutGrid::from(cell),
+        ..telar::SurfaceConventions::default()
+    });
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
 
     let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());
@@ -61,7 +64,10 @@ fn every_box_keeps_its_height_at_every_scroll_offset() {
 fn layout_is_told_only_whole_cells() {
     let cell = CellSize::default();
     telar::open_surface_text_metrics(std::sync::Arc::new(CellMetrics::new(cell)));
-    telar::set_layout_grid(telar::LayoutGrid::from(cell));
+    telar::set_surface_conventions(telar::SurfaceConventions {
+        grid: telar::LayoutGrid::from(cell),
+        ..telar::SurfaceConventions::default()
+    });
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
 
     let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());

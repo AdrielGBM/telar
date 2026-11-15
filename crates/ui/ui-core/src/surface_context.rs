@@ -1,6 +1,6 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, text measurer, window-command queue, and the writing direction, locale, theme mode and high contrast it overrides the thread's with. Several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::with_entered`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size and layout grid, its keyboard convention and wheel, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, text measurer, window-command queue, and the writing direction, locale, theme mode and high contrast it overrides the thread's with. Several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::with_entered`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
 //! Single-window apps never build a `Surface`: the reactive current-surface stays `None`, every effect captures no surface, and entering none is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
@@ -11,16 +11,17 @@ use std::rc::{Rc, Weak};
 
 use i18n_core::LocaleContext;
 use layout_reactive::{
-    DirectionContext, LayoutContext, ParentsContext, ScrollHostsContext, SurfaceSizeContext,
+    DirectionContext, LayoutContext, LayoutGridContext, ParentsContext, ScrollHostsContext,
+    SurfaceSizeContext,
 };
-use platform_core::WindowCommandContext;
+use platform_core::{KeyboardConventionContext, WindowCommandContext};
 use preferences_core::HighContrastContext;
 use reactive_core::{
     SurfaceHandle, cancel_tasks_for, cancel_timers_for, current_surface, dispose_surface,
     enter_surface_if_alive, in_surface_world, set_surface_enter_hook, with_current_surface,
 };
 use theme_core::ModeContext;
-use ui_tree::OverlayContext;
+use ui_tree::{OverlayContext, WheelContext};
 
 use crate::anchor_line::PlacesContext;
 use crate::annotation::AnnotationsContext;
@@ -72,6 +73,9 @@ surface_worlds! {
     parents: ParentsContext,
     scroll_hosts: ScrollHostsContext,
     size: SurfaceSizeContext,
+    grid: LayoutGridContext,
+    keyboard: KeyboardConventionContext,
+    wheel: WheelContext,
     overlay: OverlayContext,
     dismiss: DismissContext,
     named_overlays: NamedOverlaysContext,

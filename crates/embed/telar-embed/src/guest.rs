@@ -6,7 +6,9 @@ use platform_core::guest::{
     CWaker, CallOutcome, FrameCtx, Handle, HostServices, LentBytes, ReportsSurface, Timestamp,
     guest_entry, host_epoch,
 };
-use platform_core::{AccessAction, AccessNode, ConsumedKeys, Event, SystemPreferences, TextInput};
+use platform_core::{
+    AccessAction, AccessNode, ConsumedKeys, Event, SurfaceConventions, SystemPreferences, TextInput,
+};
 use renderer_core::Color;
 use renderer_core::wire::{DrawList, Pixels};
 use services_core::guest::{LentFrames, UpperTable};
@@ -26,10 +28,11 @@ macro_rules! embed {
         #[doc(hidden)]
         unsafe extern "C" fn __telar_embed_create(
             args: $crate::LentBytes<::std::vec::Vec<::std::string::String>>,
+            conventions: $crate::LentBytes<$crate::SurfaceConventions>,
             instance: *mut $crate::Handle<$crate::guest::GuestInstance>,
         ) -> $crate::CallOutcome {
             let make = $factory;
-            unsafe { $crate::guest::create(args, instance, make) }
+            unsafe { $crate::guest::create(args, conventions, instance, make) }
         }
 
         #[doc(hidden)]
@@ -47,20 +50,22 @@ pub struct GuestInstance {
     frames: LentFrames,
 }
 
-/// Builds one instance of the app `make` returns for the launch arguments the host lent, and hands the host a handle on it.
+/// Builds one instance of the app `make` returns for the launch arguments the host lent, on a surface put on the conventions of the host's it is drawn inside, and hands the host a handle on it.
 ///
 /// # Safety
 ///
-/// `args` must be lent for the call, `instance` writable, and the handle written there released only through this library's `release`.
+/// `args` and `conventions` must be lent for the call, `instance` writable, and the handle written there released only through this library's `release`.
 pub unsafe fn create(
     args: LentBytes<Vec<String>>,
+    conventions: LentBytes<SurfaceConventions>,
     instance: *mut Handle<GuestInstance>,
     make: impl FnOnce(&[String]) -> Box<dyn EmbeddedApp>,
 ) -> CallOutcome {
     guest_entry(|| {
         let args: Vec<String> = unsafe { args.read() };
+        let conventions: SurfaceConventions = unsafe { conventions.read() };
         let built = GuestInstance {
-            instance: EmbedInstance::new(make(&args)),
+            instance: EmbedInstance::new(make(&args), conventions),
             frames: LentFrames::new(),
         };
         unsafe { instance.write(Handle::new(built)) };

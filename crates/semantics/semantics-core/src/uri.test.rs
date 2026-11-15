@@ -83,6 +83,24 @@ fn an_app_scheme_opens_only_once_the_app_allows_it() {
     );
 }
 
+/// Two apps in one process each open only what they allowed: a scheme one registers is no scheme of the other's.
+#[test]
+fn a_scheme_one_app_allows_is_not_allowed_for_another() {
+    allow_uri_scheme("telar-first-app").unwrap();
+    let other_app = std::thread::spawn(|| {
+        (
+            Uri::parse("telar-first-app://x").is_ok(),
+            allow_uri_scheme("telar-second-app").is_ok()
+                && is_uri_scheme_allowed("telar-second-app"),
+        )
+    })
+    .join()
+    .unwrap();
+    assert_eq!(other_app, (false, true));
+    assert!(Uri::parse("telar-first-app://x").is_ok());
+    assert!(!is_uri_scheme_allowed("telar-second-app"));
+}
+
 #[test]
 fn schemes_match_ignoring_case() {
     allow_uri_scheme("Telar-Case-Test").unwrap();

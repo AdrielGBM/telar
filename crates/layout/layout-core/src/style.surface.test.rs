@@ -9,7 +9,7 @@ fn each_unit_is_a_fraction_of_its_own_side() {
         .height(SizeDimension::SurfaceHeight(0.25))
         .min_width(SizeDimension::SurfaceMin(0.1))
         .max_width(SizeDimension::SurfaceMax(0.1));
-    let resolved = style.resolve(Direction::Ltr, PHONE);
+    let resolved = style.resolve(Direction::Ltr, PHONE, LayoutGrid::UNIT);
     assert_eq!(resolved.size.width, Dimension::length(200.0));
     assert_eq!(resolved.size.height, Dimension::length(200.0));
     assert_eq!(resolved.min_size.width, LengthPercentageAuto::length(40.0));
@@ -19,8 +19,8 @@ fn each_unit_is_a_fraction_of_its_own_side() {
 #[test]
 fn resolving_again_on_another_surface_does_not_remember_the_first() {
     let style = LayoutStyle::new().padding_all(SizeDimension::SurfaceWidth(0.05));
-    let _ = style.resolve(Direction::Ltr, PHONE);
-    let wide = style.resolve(Direction::Ltr, Size::new(1000.0, 800.0));
+    let _ = style.resolve(Direction::Ltr, PHONE, LayoutGrid::UNIT);
+    let wide = style.resolve(Direction::Ltr, Size::new(1000.0, 800.0), LayoutGrid::UNIT);
     assert_eq!(wide.padding.left, LengthPercentage::length(50.0));
     assert_eq!(wide.padding.top, LengthPercentage::length(50.0));
 }
@@ -31,7 +31,7 @@ fn logical_edges_resolve_against_the_surface_and_the_direction_together() {
         .padding_start(SizeDimension::SurfaceWidth(0.1))
         .margin_inline_end(SizeDimension::SurfaceWidth(0.05))
         .inset_start(SizeDimension::SurfaceHeight(0.01));
-    let rtl = style.resolve(Direction::Rtl, PHONE);
+    let rtl = style.resolve(Direction::Rtl, PHONE, LayoutGrid::UNIT);
     assert_eq!(rtl.padding.right, LengthPercentage::length(40.0));
     assert_eq!(rtl.margin.left, LengthPercentageAuto::length(20.0));
     assert_eq!(rtl.inset.right, LengthPercentageAuto::length(8.0));
@@ -45,7 +45,7 @@ fn a_later_pixel_value_replaces_an_earlier_fraction() {
         .padding_all(SizeDimension::SurfaceWidth(0.1))
         .padding_left(3.0);
     assert!(style.is_surface_relative(), "three padding edges still are");
-    let resolved = style.resolve(Direction::Ltr, PHONE);
+    let resolved = style.resolve(Direction::Ltr, PHONE, LayoutGrid::UNIT);
     assert_eq!(resolved.size.width, Dimension::length(120.0));
     assert_eq!(resolved.padding.left, LengthPercentage::length(3.0));
     assert_eq!(resolved.padding.right, LengthPercentage::length(40.0));
@@ -78,7 +78,7 @@ fn a_grid_track_is_a_fraction_of_the_surface_until_resolved_against_one() {
             ),
         ]);
     assert!(style.is_surface_relative());
-    let resolved = style.resolve(Direction::Ltr, PHONE);
+    let resolved = style.resolve(Direction::Ltr, PHONE, LayoutGrid::UNIT);
     let expected: Vec<taffy::GridTemplateComponent<String>> = vec![
         taffy::GridTemplateComponent::Single(taffy::style_helpers::length(100.0)),
         taffy::GridTemplateComponent::Single(taffy::style_helpers::minmax(

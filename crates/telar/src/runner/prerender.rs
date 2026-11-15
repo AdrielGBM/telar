@@ -93,7 +93,10 @@ pub fn prerender_page<A: App>(
     platform_core::set_location_format(platform_core::LocationFormat::new(&request.base));
     platform_core::set_asset_base(&request.base);
     // The page is served to every browser, and the one that takes it over shows its own convention from then on.
-    platform_core::set_keyboard_convention(platform_core::KeyboardConvention::Pc);
+    app.set_surface_conventions(platform_core::SurfaceConventions {
+        keyboard: platform_core::KeyboardConvention::Pc,
+        ..platform_core::SurfaceConventions::default()
+    });
     app.set_system_preferences(&system_preferences(&request.preferences));
     let size = geometry_core::Size::new(surface.width as f32, surface.height as f32);
     app.set_surface_size(size);

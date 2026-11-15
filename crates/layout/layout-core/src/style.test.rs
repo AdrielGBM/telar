@@ -3,10 +3,10 @@ use super::*;
 #[test]
 fn logical_padding_resolves_to_the_edge_the_direction_starts_from() {
     let style = LayoutStyle::new().padding_start(8.0).padding_end(2.0);
-    let ltr = style.resolve(Direction::Ltr, Size::ZERO);
+    let ltr = style.resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT);
     assert_eq!(ltr.padding.left, LengthPercentage::length(8.0));
     assert_eq!(ltr.padding.right, LengthPercentage::length(2.0));
-    let rtl = style.resolve(Direction::Rtl, Size::ZERO);
+    let rtl = style.resolve(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT);
     assert_eq!(rtl.padding.right, LengthPercentage::length(8.0));
     assert_eq!(rtl.padding.left, LengthPercentage::length(2.0));
 }
@@ -15,7 +15,7 @@ fn logical_padding_resolves_to_the_edge_the_direction_starts_from() {
 fn a_physical_edge_is_left_alone_by_the_direction() {
     let style = LayoutStyle::new().padding_left(12.0);
     for direction in [Direction::Ltr, Direction::Rtl] {
-        let resolved = style.resolve(direction, Size::ZERO);
+        let resolved = style.resolve(direction, Size::ZERO, LayoutGrid::UNIT);
         assert_eq!(resolved.padding.left, LengthPercentage::length(12.0));
         assert_eq!(resolved.padding.right, LengthPercentage::length(0.0));
     }
@@ -25,8 +25,8 @@ fn a_physical_edge_is_left_alone_by_the_direction() {
 fn resolving_twice_does_not_accumulate() {
     // The engine re-resolves from the same LayoutStyle on every flip, so resolution must be a pure function of the intent.
     let style = LayoutStyle::new().padding_start(8.0);
-    let _ = style.resolve(Direction::Rtl, Size::ZERO);
-    let back = style.resolve(Direction::Ltr, Size::ZERO);
+    let _ = style.resolve(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT);
+    let back = style.resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT);
     assert_eq!(back.padding.left, LengthPercentage::length(8.0));
     assert_eq!(back.padding.right, LengthPercentage::length(0.0));
 }
@@ -38,17 +38,21 @@ fn a_row_follows_the_direction_taffy_is_told_but_an_explicit_reverse_stays_right
         (Direction::Ltr, taffy::Direction::Ltr),
         (Direction::Rtl, taffy::Direction::Rtl),
     ] {
-        let resolved = row.resolve(direction, Size::ZERO);
+        let resolved = row.resolve(direction, Size::ZERO, LayoutGrid::UNIT);
         assert_eq!(resolved.flex_direction, FlexDirection::Row);
         assert_eq!(resolved.direction, told);
     }
     let reversed = LayoutStyle::new().flex_row_reverse();
     assert_eq!(
-        reversed.resolve(Direction::Ltr, Size::ZERO).flex_direction,
+        reversed
+            .resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
+            .flex_direction,
         FlexDirection::RowReverse
     );
     assert_eq!(
-        reversed.resolve(Direction::Rtl, Size::ZERO).flex_direction,
+        reversed
+            .resolve(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT)
+            .flex_direction,
         FlexDirection::Row,
         "an explicit reverse is physical: under RTL a plain row already runs right to left"
     );
@@ -61,7 +65,7 @@ fn a_column_keeps_its_axis_and_is_told_the_direction() {
         (Direction::Ltr, taffy::Direction::Ltr),
         (Direction::Rtl, taffy::Direction::Rtl),
     ] {
-        let resolved = col.resolve(direction, Size::ZERO);
+        let resolved = col.resolve(direction, Size::ZERO, LayoutGrid::UNIT);
         assert_eq!(resolved.flex_direction, FlexDirection::Column);
         assert_eq!(resolved.direction, told);
     }
@@ -71,11 +75,15 @@ fn a_column_keeps_its_axis_and_is_told_the_direction() {
 #[test]
 fn a_logical_edge_resolves_to_the_side_the_direction_chose() {
     let style = LayoutStyle::new().margin_inline_start(4.0);
-    let ltr = style.resolve(Direction::Ltr, Size::ZERO).margin;
+    let ltr = style
+        .resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
+        .margin;
     assert_eq!(ltr.left, LengthPercentageAuto::length(4.0));
     assert_eq!(ltr.right, LengthPercentageAuto::length(0.0));
 
-    let rtl = style.resolve(Direction::Rtl, Size::ZERO).margin;
+    let rtl = style
+        .resolve(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT)
+        .margin;
     assert_eq!(rtl.right, LengthPercentageAuto::length(4.0));
     assert_eq!(rtl.left, LengthPercentageAuto::length(0.0));
 }
@@ -214,8 +222,8 @@ fn margin_writes_the_block_pair_directly_and_defers_the_inline_pair() {
 #[test]
 fn a_margin_from_the_left_stays_left_under_rtl() {
     let style = LayoutStyle::new().margin_from_left(20.0);
-    let ltr = style.resolve(Direction::Ltr, Size::ZERO);
-    let rtl = style.resolve(Direction::Rtl, Size::ZERO);
+    let ltr = style.resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT);
+    let rtl = style.resolve(Direction::Rtl, Size::ZERO, LayoutGrid::UNIT);
     assert_eq!(ltr.margin.left, LengthPercentageAuto::length(20.0));
     assert_eq!(rtl.margin.left, LengthPercentageAuto::length(20.0));
 }
@@ -227,11 +235,11 @@ fn a_sticky_inset_never_reaches_taffy() {
         .sticky()
         .inset_top(10.0)
         .inset_start(SizeDimension::Px(4.0));
-    let resolved = style.resolve(Direction::Ltr, Size::ZERO);
+    let resolved = style.resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT);
     assert_eq!(resolved.position, taffy::Position::Relative);
     assert!(resolved.inset.top.is_auto() && resolved.inset.left.is_auto());
     let insets = style
-        .sticky_insets(Direction::Ltr, Size::ZERO)
+        .sticky_insets(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
         .expect("it sticks");
     assert_eq!(insets.top, Some(SizeDimension::Px(10.0)));
     assert_eq!(insets.left, Some(SizeDimension::Px(4.0)));
@@ -244,7 +252,7 @@ fn a_sticky_inset_can_be_a_fraction_of_the_surface() {
         .sticky()
         .inset_top(SizeDimension::SurfaceHeight(0.1));
     let insets = style
-        .sticky_insets(Direction::Ltr, Size::new(800.0, 600.0))
+        .sticky_insets(Direction::Ltr, Size::new(800.0, 600.0), LayoutGrid::UNIT)
         .expect("it sticks");
     assert_eq!(insets.top, Some(SizeDimension::Px(60.0)));
 }
@@ -259,10 +267,14 @@ fn going_absolute_stops_sticking() {
 #[test]
 fn a_sticky_box_switched_off_keeps_its_insets_from_taffy_too() {
     let style = LayoutStyle::new().sticky_when(false).inset_top(10.0);
-    let resolved = style.resolve(Direction::Ltr, Size::ZERO);
+    let resolved = style.resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT);
     assert_eq!(resolved.position, taffy::Position::Relative);
     assert!(resolved.inset.top.is_auto());
-    assert!(style.sticky_insets(Direction::Ltr, Size::ZERO).is_none());
+    assert!(
+        style
+            .sticky_insets(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
+            .is_none()
+    );
     assert!(!style.is_sticky());
 }
 
@@ -277,7 +289,7 @@ fn sticky_when_is_the_last_position_written() {
         .inset_top(4.0);
     assert!(
         !absolute
-            .resolve(Direction::Ltr, Size::ZERO)
+            .resolve(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
             .inset
             .top
             .is_auto()

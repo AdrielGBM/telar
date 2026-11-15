@@ -113,9 +113,9 @@ pub trait AppRuntime: 'static {
         ui_core::text_input()
     }
 
-    /// States what Tab past an end of the focus order does in the surface being mounted, in the focus registry this application's widgets live in. See [`ui_core::focus::set_boundary`].
-    fn set_focus_boundary(&self, boundary: platform_core::FocusBoundary) {
-        ui_core::focus::set_boundary(boundary);
+    /// Puts the surface being mounted on what its platform says about it, in the worlds this application's widgets live in. See [`ui_core::set_surface_conventions`].
+    fn set_surface_conventions(&self, conventions: platform_core::SurfaceConventions) {
+        ui_core::set_surface_conventions(conventions);
     }
 
     /// Which of Tab and Shift+Tab would leave the application now, read against the focus registry this application's widgets live in. See [`ui_core::focus::tab_leaves`].

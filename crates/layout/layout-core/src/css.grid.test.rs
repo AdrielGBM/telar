@@ -2,7 +2,9 @@ use super::*;
 use crate::track::TemplateTrack;
 
 fn css(style: LayoutStyle) -> String {
-    style.to_css(Direction::Ltr, Size::ZERO).into_string()
+    style
+        .to_css(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT)
+        .into_string()
 }
 
 #[test]

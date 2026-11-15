@@ -37,7 +37,6 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         tracing::error!("invalid {HOT_PORT_VAR} value: {hot_port}");
         std::process::exit(1);
     };
-    platform_core::set_keyboard_convention(platform.keyboard_convention());
     let paths: Arc<dyn services_core::AppPathsProvider> = Arc::new(DesktopPathsProvider);
     let (mut window, fonts) = split_config(config);
     // Installed before the library loads, because the guest is handed the fonts, paths and store installed here.
@@ -70,7 +69,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         window.shown_title(),
         super::host::SurfaceRenderer::builtin(),
     );
-    handler.focus_boundary = platform.focus_boundary();
+    handler.conventions = platform.surface_conventions();
     handler.hot = Some(hot);
     handler.location = Some(super::location::LocationBinding::for_window(Box::new(
         platform_core::ArgumentLocation::from_env(),

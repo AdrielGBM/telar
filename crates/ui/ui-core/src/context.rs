@@ -25,7 +25,7 @@ pub fn reset_layout_runtime() {
 }
 pub use layout_reactive::{
     NodeId, RelayoutHook, absolute_rect, after_layout, attach_overlay, container_is_row,
-    current_direction, layout_generation, live_node_count, mark_dirty, measure_again,
+    current_direction, layout_generation, layout_grid, live_node_count, mark_dirty, measure_again,
     new_container, new_drawn_leaf, new_leaf, new_measured_leaf, on_relayout, record_nodes,
     remove_node, set_children, set_container_row, set_direction, set_display, set_layout_style,
     set_leading_margin, set_min_height, set_overlay_host, set_safe_area_insets, set_sticky_view,

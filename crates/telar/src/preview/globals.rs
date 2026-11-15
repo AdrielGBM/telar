@@ -119,7 +119,7 @@ impl Globals {
         self.high_contrast
     }
 
-    /// The environment the globals hold now, as a canvas is built in it.
+    /// The environment the globals hold now, as a canvas is built in it, on the conventions of the active surface it is drawn inside.
     pub fn env(&self) -> SurfaceEnv {
         SurfaceEnv {
             mode: self.mode.peek(),
@@ -127,7 +127,7 @@ impl Globals {
             direction: self.direction.peek(),
             high_contrast: self.high_contrast.peek(),
             safe_area: self.safe_area.peek(),
-            ..SurfaceEnv::default()
+            conventions: ui_core::surface_conventions(),
         }
     }
 

@@ -89,12 +89,13 @@ pub fn shortcut_key(key: &Key) -> Key {
     })
 }
 
-/// Whether the press that reported `key` is `chord`, with the modifiers held now. With Alt held it is matched on [`shortcut_key`], since the layout may have composed the key into another character.
+/// Whether the press that reported `key` is `chord`, with the modifiers held now, under the active surface's keyboard convention. With Alt held it is matched on [`shortcut_key`], since the layout may have composed the key into another character.
 pub fn chord_pressed(chord: &Chord, key: &Key) -> bool {
     let modifiers = modifiers();
+    let convention = platform_core::keyboard_convention();
     match modifiers.is_alt {
-        true => chord.matches(&shortcut_key(key), modifiers),
-        false => chord.matches(key, modifiers),
+        true => chord.matches(&shortcut_key(key), modifiers, convention),
+        false => chord.matches(key, modifiers, convention),
     }
 }
 

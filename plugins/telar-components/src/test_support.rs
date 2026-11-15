@@ -6,7 +6,10 @@
 pub(crate) fn fresh_layout_runtime() {
     telar::testing::install_test_face();
     telar::reset_layout_runtime();
-    telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
+    telar::set_surface_conventions(telar::SurfaceConventions {
+        keyboard: telar::KeyboardConvention::Pc,
+        ..telar::SurfaceConventions::default()
+    });
 }
 
 /// Where each control in `role` is drawn now, in the order a reader meets them: after every transform and scroll between it and the surface.
@@ -308,4 +311,12 @@ pub(crate) fn icon_inks(cmds: &[telar::DrawCommand]) -> Vec<telar::Paint> {
             _ => None,
         })
         .collect()
+}
+
+/// Puts the active surface on a platform with `convention`'s keyboard, as a runner does for its window.
+pub(crate) fn keyboard(convention: telar::KeyboardConvention) {
+    telar::set_surface_conventions(telar::SurfaceConventions {
+        keyboard: convention,
+        ..telar::SurfaceConventions::default()
+    });
 }

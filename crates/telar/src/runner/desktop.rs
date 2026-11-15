@@ -93,7 +93,7 @@ impl SurfaceControl for WinitSurfaceControl {
 
 /// Opens a **full `App`** in its own top-level window on the already-running single-thread multi-surface runner — the app is moved in (so it may be `!Send`, e.g. hold `Rc` state), keeps the one shared reactive runtime, and gets its own `Surface` world and `on_frame` driven. It hosts a real `App`, so a caller can move a live sub-app (a detached tab, with its state and background work) into a window. Returns a token; dropping it, or the window's own close, tears the window down. Only meaningful while [`run_app_windowed`] is running.
 ///
-/// `config` is the window's, as [`run_app_windowed`] takes one: the app's own [`App::window_config`] wins over its window, whose title falls back to the running app's name, and its faces and family are what the window sets text in. The window is the running app's, so it keeps that app's directories and preferences.
+/// `config` is the window's, as [`run_app_windowed`] takes one: the app's own [`App::window_config`] wins over its window, whose title falls back to the running app's name, and its faces and family are what the window sets text in. The window is the running app's, so it keeps that app's directories and preferences, and is put on the conventions of the surface that opens it, which the same platform shows.
 ///
 /// # Panics
 ///
@@ -110,6 +110,7 @@ pub fn open_window<A: App>(config: AppConfig, app: A) -> SurfaceToken {
             window: window.clone(),
             ..config
         },
+        ui_core::surface_conventions(),
     );
     let close = request_dynamic_surface(window, handler);
     SurfaceToken::new(Box::new(WinitSurfaceControl { close }))

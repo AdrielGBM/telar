@@ -1,7 +1,7 @@
 use telar::{
     AvailableSpace, BorderRadius, ComponentList, Container, ControlSize, DrawCommand,
     KeyboardConvention, LayoutItem, LayoutStyle, RectStyle, SurfaceAmendment, box_item,
-    compute_layout, set_keyboard_convention,
+    compute_layout,
 };
 
 use crate::shared::shown_chord;
@@ -13,7 +13,7 @@ fn texts(chord: &'static str) -> Vec<String> {
 
 fn texts_in(convention: KeyboardConvention, chord: &'static str) -> Vec<String> {
     crate::test_support::fresh_layout_runtime();
-    set_keyboard_convention(convention);
+    crate::test_support::keyboard(convention);
     let tree = telar::testing::scoped(|| {
         let cap = kbd(KbdProps::props().chord(chord).build()).unwrap();
         let root = Container::new(
@@ -67,7 +67,7 @@ fn a_chord_is_spoken_as_the_platform_writes_it() {
     assert_eq!(shown_chord("Shift+Alt+P"), "Alt+Shift+P");
     assert_eq!(shown_chord(" Ctrl + K "), "Ctrl+K");
     assert_eq!(shown_chord("Mod+K"), "Ctrl+K");
-    set_keyboard_convention(KeyboardConvention::Mac);
+    crate::test_support::keyboard(KeyboardConvention::Mac);
     assert_eq!(shown_chord("Mod+K"), "⌘K");
     assert_eq!(shown_chord("Mod+Shift+P"), "⇧⌘P");
 }
@@ -220,7 +220,7 @@ fn a_cap_takes_the_ink_of_the_place_it_sits_in() {
 fn each_way_of_putting_keys_on_caps_follows_the_platform() {
     let drawn = |convention, chord: &'static str, caps: KbdCaps| {
         crate::test_support::fresh_layout_runtime();
-        set_keyboard_convention(convention);
+        crate::test_support::keyboard(convention);
         let chord = kbd(KbdProps::props().chord(chord).caps(caps).build()).unwrap();
         compute_layout(
             chord.layout_node(),

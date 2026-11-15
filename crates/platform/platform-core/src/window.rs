@@ -411,13 +411,9 @@ pub trait Platform {
     fn location_source(&mut self) -> Option<Box<dyn crate::LocationSource>> {
         None
     }
-    /// Whose keyboard the person at this platform has, which decides what `Mod` in a shortcut is and how a shortcut is shown. Asked once, before [`run`](Self::run).
-    fn keyboard_convention(&self) -> crate::KeyboardConvention {
-        crate::KeyboardConvention::native()
-    }
-    /// What happens to the keyboard when Tab runs off an end of the app's focus order. Asked once, before [`run`](Self::run).
-    fn focus_boundary(&self) -> crate::FocusBoundary {
-        crate::FocusBoundary::Wrap
+    /// What the surface this platform shows is like, which the tree on it is built against: its grid, whose keyboard the person at it has, whether its wheel glides and what Tab past an end of the app's focus order does. Asked once, before [`run`](Self::run).
+    fn surface_conventions(&self) -> crate::SurfaceConventions {
+        crate::SurfaceConventions::default()
     }
     /// Runs `handler` until the app closes.
     ///
@@ -439,13 +435,9 @@ pub struct SurfaceId(pub u64);
 pub trait MultiSurfacePlatform {
     /// The window this backend hands to each handler.
     type Window: Window;
-    /// As [`Platform::keyboard_convention`]: asked once, before [`run_surfaces`](Self::run_surfaces).
-    fn keyboard_convention(&self) -> crate::KeyboardConvention {
-        crate::KeyboardConvention::native()
-    }
-    /// As [`Platform::focus_boundary`]: asked once, before [`run_surfaces`](Self::run_surfaces).
-    fn focus_boundary(&self) -> crate::FocusBoundary {
-        crate::FocusBoundary::Wrap
+    /// As [`Platform::surface_conventions`], for every surface this platform shows: asked once, before [`run_surfaces`](Self::run_surfaces).
+    fn surface_conventions(&self) -> crate::SurfaceConventions {
+        crate::SurfaceConventions::default()
     }
     /// Runs every surface in `surfaces` (each an `(id, config)` pair), building its handler via `factory(id)`. Blocks until all surfaces have closed.
     fn run_surfaces<H, F>(

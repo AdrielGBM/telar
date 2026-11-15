@@ -18,6 +18,7 @@ mod children;
 mod composition;
 mod container;
 mod context;
+mod conventions;
 mod cursor;
 pub mod dismiss;
 mod disposal;
@@ -111,13 +112,14 @@ pub use child_host::{ChildSlot, fragment, fragment_keyed, fragment_positional};
 pub use children::{Children, use_context};
 pub use container::Container;
 pub use context::{
-    NodeId, RelayoutHook, absolute_rect, compute_layout, current_direction, live_node_count,
-    mark_dirty, new_container, new_leaf, on_relayout, overlay_viewport, relayout_if_dirty,
-    remove_node, reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
-    set_overlay_host, set_safe_area_insets, set_surface_maximized, set_surface_size, surface_size,
-    track_layout, use_direction, use_safe_area_insets, use_surface_height, use_surface_maximized,
-    use_surface_size, use_surface_width,
+    NodeId, RelayoutHook, absolute_rect, compute_layout, current_direction, layout_grid,
+    live_node_count, mark_dirty, new_container, new_leaf, on_relayout, overlay_viewport,
+    relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_direction, set_display,
+    set_min_height, set_overlay_host, set_safe_area_insets, set_surface_maximized,
+    set_surface_size, surface_size, track_layout, use_direction, use_safe_area_insets,
+    use_surface_height, use_surface_maximized, use_surface_size, use_surface_width,
 };
+pub use conventions::{set_surface_conventions, surface_conventions};
 pub use cursor::requested_cursor;
 pub use dismiss::{
     DismissRegistration, confirm_top, dismiss_depth, dismiss_top, register_transaction,

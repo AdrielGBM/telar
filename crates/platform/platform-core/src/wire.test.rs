@@ -266,6 +266,17 @@ fn every_pointer_button_and_cursor_has_a_tag_of_its_own() {
 }
 
 #[test]
+fn surface_conventions_round_trip() {
+    round_trip(crate::SurfaceConventions::default());
+    round_trip(crate::SurfaceConventions {
+        grid: geometry_core::LayoutGrid::new(8.0, 16.0).expect("a positive, finite step"),
+        keyboard: KeyboardConvention::Pc,
+        smooth_wheel: false,
+        focus_boundary: crate::FocusBoundary::Release,
+    });
+}
+
+#[test]
 fn system_preferences_round_trip_known_and_unknown() {
     round_trip(preferences());
     round_trip(SystemPreferences::default());

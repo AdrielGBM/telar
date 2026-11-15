@@ -350,7 +350,9 @@ impl List {
             nearest_reachable(&rows, to.unwrap_or(0), forward)
         };
         let target = match key {
-            Key::Char('a' | 'A') if multiple && modifiers.is_primary() => {
+            Key::Char('a' | 'A')
+                if multiple && modifiers.is_primary(telar::keyboard_convention()) =>
+            {
                 self.selection.all(&choosable(&rows));
                 return true;
             }

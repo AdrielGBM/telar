@@ -4,7 +4,7 @@ use platform_core::guest::{Lifecycle, Timestamp};
 use services_core::guest::UpperTable;
 
 thread_local! {
-    static HANDED: std::cell::Cell<Option<platform_core::KeyboardConvention>> = const { std::cell::Cell::new(None) };
+    static HANDED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static HANDED_BEFORE_BUILD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static SERVED_NOTHING: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
     static CALLS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -27,21 +27,14 @@ impl ui_tree::Component for BlankView {
 }
 
 unsafe extern "C" fn hand_over(services: HostServices<UpperTable>) -> CallOutcome {
-    HANDED.set(unsafe { services.ask(services.keyboard_convention, &()) });
+    HANDED.set(!services.data.is_null());
     SERVED_NOTHING.set(Some(services.data.is_null()));
     CallOutcome::OK
 }
 
 unsafe extern "C" fn build_blank(app: *mut Handle<GuestApp>) -> CallOutcome {
-    HANDED_BEFORE_BUILD.set(HANDED.get().is_some());
+    HANDED_BEFORE_BUILD.set(HANDED.get());
     unsafe { guest::create(app, || Box::new(Blank)) }
-}
-
-fn foreign_convention() -> platform_core::KeyboardConvention {
-    match platform_core::KeyboardConvention::native() {
-        platform_core::KeyboardConvention::Mac => platform_core::KeyboardConvention::Pc,
-        platform_core::KeyboardConvention::Pc => platform_core::KeyboardConvention::Mac,
-    }
 }
 
 fn record(call: &'static str) -> CallOutcome {
@@ -77,22 +70,20 @@ fn recorded(
     }
 }
 
-/// A build carries its own copy of the convention, which left alone answers for the system it was compiled on: a terminal host on a Mac matches Ctrl while the build would show ⌘.
+/// A build carries its own copy of every store, which left alone answers for nothing: the app's setup already reads the host's clipboard, preferences and paths.
 #[cfg(unix)]
 #[test]
 fn a_build_is_handed_the_host_services_before_it_is_made() {
-    let host = foreign_convention();
-    platform_core::set_keyboard_convention(host);
     let entries = HotEntries {
         lifecycle: recorded(hand_over),
         ..HotEntries::serving(build_blank)
     };
     let this_process = libloading::Library::from(libloading::os::unix::Library::this());
     let app = HotApp::start(entries, Some(this_process));
-    assert_eq!(HANDED.get(), Some(host));
+    assert!(HANDED.get());
     assert!(
         HANDED_BEFORE_BUILD.get(),
-        "the app's setup already shows shortcuts the host's way"
+        "the app's setup already reads the host's stores"
     );
     drop(app);
 }
@@ -338,4 +329,34 @@ fn the_app_says_it_answers_reloads_then_answers_each_one_naming_its_library() {
         .map(|line| HotReply::parse(line))
         .collect();
     assert_eq!(heard, sent.map(Some));
+}
+
+thread_local! {
+    static CONVENTIONS: std::cell::Cell<Option<platform_core::SurfaceConventions>> = const { std::cell::Cell::new(None) };
+}
+
+unsafe extern "C" fn record_conventions(
+    conventions: LentBytes<platform_core::SurfaceConventions>,
+) -> CallOutcome {
+    CONVENTIONS.set(Some(unsafe { conventions.read() }));
+    CallOutcome::OK
+}
+
+/// The library builds the tree in worlds of its own, so what the platform says about the window has to cross into them: left on this side, the tree would lay out on the defaults its copy started with.
+#[test]
+fn the_window_s_conventions_cross_into_the_library_that_builds_its_tree() {
+    let entries = HotEntries {
+        set_surface_conventions: record_conventions,
+        ..HotEntries::serving(build_blank)
+    };
+    let app = HotApp::start(entries, None);
+    let cells = platform_core::SurfaceConventions {
+        grid: geometry_core::LayoutGrid::new(8.0, 16.0).expect("a positive, finite step"),
+        keyboard: platform_core::KeyboardConvention::Mac,
+        smooth_wheel: false,
+        focus_boundary: platform_core::FocusBoundary::Release,
+    };
+    crate::app_runtime::AppRuntime::set_surface_conventions(&app, cells);
+    assert_eq!(CONVENTIONS.get(), Some(cells));
+    drop(app);
 }

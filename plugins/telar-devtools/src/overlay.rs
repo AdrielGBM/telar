@@ -11,7 +11,7 @@ use std::cell::Ref;
 use telar::{
     BuildOutcome, Container, DevAction, Direction, DrawCommand, Event, EventResult, GuestStop,
     LayoutError, LayoutItem, LayoutStyle, OverlayResponse, RwSignal, Size, SizeDimension,
-    SurfaceCanvas, box_item, focus, interactive_rects, signal,
+    SurfaceCanvas, SurfaceEnv, box_item, focus, interactive_rects, signal,
 };
 
 use crate::inspect::{InspectSource, Inspection};
@@ -70,7 +70,11 @@ pub(crate) struct Overlay {
 impl Overlay {
     pub fn new() -> Result<Self, LayoutError> {
         let mut built = None;
-        let canvas = SurfaceCanvas::new(Size::ZERO, || {
+        let env = SurfaceEnv {
+            conventions: telar::surface_conventions(),
+            ..SurfaceEnv::default()
+        };
+        let canvas = SurfaceCanvas::new_in(Size::ZERO, &env, || {
             let model = Model::new();
             built = Some(model);
             Ok(box_item(workbench_scope(move || root(model))?))

@@ -457,25 +457,26 @@ impl Editor {
                 .get()
                 .map_or(caret, |a| floor_boundary(&text, a))
         });
-        let command = keyboard_convention() == KeyboardConvention::Mac && mods.is_meta;
+        let convention = keyboard_convention();
+        let command = convention == KeyboardConvention::Mac && mods.is_meta;
         let replace = |text: &mut String, caret: usize, with: &str| {
             let at = self.take_selection(text).unwrap_or(caret);
             text.insert_str(at, with);
             at + with.len()
         };
         match key {
-            Key::Char('a') | Key::Char('A') if mods.is_primary() => {
+            Key::Char('a') | Key::Char('A') if mods.is_primary(convention) => {
                 self.select(0, text.len(), Affinity::Downstream);
                 return EventResult::Handled;
             }
-            Key::Char('c') | Key::Char('C') if mods.is_primary() => {
+            Key::Char('c') | Key::Char('C') if mods.is_primary(convention) => {
                 let Some(selected) = self.selected_text(&text) else {
                     return EventResult::Ignored;
                 };
                 services_core::set_clipboard_text(&selected);
                 return EventResult::Handled;
             }
-            Key::Char('x') | Key::Char('X') if mods.is_primary() => {
+            Key::Char('x') | Key::Char('X') if mods.is_primary(convention) => {
                 let Some(selected) = self.selected_text(&text) else {
                     return EventResult::Ignored;
                 };
@@ -483,7 +484,7 @@ impl Editor {
                 caret = replace(&mut text, caret, "");
                 edited = true;
             }
-            Key::Char('v') | Key::Char('V') if mods.is_primary() => {
+            Key::Char('v') | Key::Char('V') if mods.is_primary(convention) => {
                 let Some(pasted) = services_core::clipboard_text() else {
                     return EventResult::Ignored;
                 };
@@ -547,8 +548,8 @@ impl Editor {
                 }
                 edited = true;
             }
-            Key::Named(NamedKey::Home) if mods.is_primary() => caret = 0,
-            Key::Named(NamedKey::End) if mods.is_primary() => caret = text.len(),
+            Key::Named(NamedKey::Home) if mods.is_primary(convention) => caret = 0,
+            Key::Named(NamedKey::End) if mods.is_primary(convention) => caret = text.len(),
             Key::Named(NamedKey::ArrowUp) if command => caret = 0,
             Key::Named(NamedKey::ArrowDown) if command => caret = text.len(),
             Key::Named(NamedKey::ArrowLeft) if command => caret = self.row_start(&text, caret),

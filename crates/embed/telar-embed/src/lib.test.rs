@@ -4,7 +4,7 @@ use layout_core::LayoutStyle;
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 use platform_core::guest::Lifecycle;
 use platform_core::guest::{CWaker, HostServices};
-use platform_core::{Key, KeyboardConvention, ModifiersState};
+use platform_core::{Key, ModifiersState};
 use renderer_core::RectStyle;
 use services_core::guest::UpperTable;
 
@@ -59,8 +59,15 @@ crate::embed!(|_args: &[String]| -> Box<dyn EmbeddedApp> { Box::new(Stub::new())
 /// Builds an instance through the exported table, and hands it back with the outcome.
 fn create_through_table() -> (CallOutcome, Handle<GuestInstance>) {
     let args = wire_core::encode(&Vec::<String>::new());
+    let conventions = wire_core::encode(&SurfaceConventions::default());
     let mut instance = Handle::NULL;
-    let outcome = unsafe { (TELAR_EMBED_ENTRIES.create)(LentBytes::lend(&args), &mut instance) };
+    let outcome = unsafe {
+        (TELAR_EMBED_ENTRIES.create)(
+            LentBytes::lend(&args),
+            LentBytes::lend(&conventions),
+            &mut instance,
+        )
+    };
     (outcome, instance)
 }
 
@@ -95,7 +102,7 @@ fn the_export_macro_builds_a_table_that_answers_in_bytes() {
 // These deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `EmbedInstance::on_event`.
 #[test]
 fn a_guest_records_the_modifiers_it_is_handed() {
-    let mut inst = EmbedInstance::new(Box::new(Stub::new()));
+    let mut inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
     inst.canvas
         .with_entered(|| assert_eq!(ui_core::modifiers(), ModifiersState::default()));
 
@@ -111,7 +118,7 @@ fn a_guest_records_the_modifiers_it_is_handed() {
 
 #[test]
 fn an_overlay_event_reaches_the_registry_too() {
-    let inst = EmbedInstance::new(Box::new(Stub::new()));
+    let inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
     inst.dispatch_overlays(&Event::ModifiersChanged { modifiers: shift() });
 
     inst.canvas.with_entered(|| {
@@ -124,7 +131,7 @@ fn an_overlay_event_reaches_the_registry_too() {
 
 #[test]
 fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
-    let mut inst = EmbedInstance::new(Box::new(Stub::new()));
+    let mut inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
     inst.on_event(&Event::KeyPressed {
         key: Key::Char('c'),
         modifiers: ModifiersState::default(),
@@ -152,7 +159,7 @@ fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
 
 #[test]
 fn a_guest_paints_and_its_generation_is_stable_between_frames() {
-    let mut inst = EmbedInstance::new(Box::new(Stub::new()));
+    let mut inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
     inst.relayout(40.0, 20.0);
     assert!(
         !inst.paint().is_empty(),
@@ -163,7 +170,7 @@ fn a_guest_paints_and_its_generation_is_stable_between_frames() {
 
 #[test]
 fn the_driver_forwards_metadata_from_the_embedded_app() {
-    let inst = EmbedInstance::new(Box::new(Stub::new()));
+    let inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
     assert_eq!(inst.title(), "stub");
     assert_eq!(inst.id(), "stub");
     assert_eq!(inst.clear_color(), None);
@@ -313,7 +320,10 @@ fn waiting() -> (
 ) {
     let fired = Rc::new(std::cell::Cell::new(false));
     let moves = Rc::new(std::cell::Cell::new(0));
-    let inst = EmbedInstance::new(Box::new(Waiting::new(&fired, &moves)));
+    let inst = EmbedInstance::new(
+        Box::new(Waiting::new(&fired, &moves)),
+        SurfaceConventions::default(),
+    );
     (inst, fired, moves)
 }
 
@@ -504,8 +514,16 @@ fn create_with(
     make: impl FnOnce(&[String]) -> Box<dyn EmbeddedApp>,
 ) -> (CallOutcome, Handle<GuestInstance>) {
     let args = wire_core::encode(&Vec::<String>::new());
+    let conventions = wire_core::encode(&SurfaceConventions::default());
     let mut instance = Handle::NULL;
-    let outcome = unsafe { guest::create(LentBytes::lend(&args), &mut instance, make) };
+    let outcome = unsafe {
+        guest::create(
+            LentBytes::lend(&args),
+            LentBytes::lend(&conventions),
+            &mut instance,
+            make,
+        )
+    };
     (outcome, instance)
 }
 
@@ -536,26 +554,37 @@ fn a_guest_whose_build_panics_hands_back_no_instance() {
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_panicking(
     args: LentBytes<Vec<String>>,
+    conventions: LentBytes<SurfaceConventions>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
-    unsafe { guest::create(args, instance, |_| Box::new(BorrowsTwice::new(true))) }
+    unsafe {
+        guest::create(args, conventions, instance, |_| {
+            Box::new(BorrowsTwice::new(true))
+        })
+    }
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_fixed(
     args: LentBytes<Vec<String>>,
+    conventions: LentBytes<SurfaceConventions>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
-    unsafe { guest::create(args, instance, |_| Box::new(BorrowsTwice::new(false))) }
+    unsafe {
+        guest::create(args, conventions, instance, |_| {
+            Box::new(BorrowsTwice::new(false))
+        })
+    }
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_nothing(
     args: LentBytes<Vec<String>>,
+    conventions: LentBytes<SurfaceConventions>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe {
-        guest::create(args, instance, |_| {
+        guest::create(args, conventions, instance, |_| {
             panic!("the guest could not find its assets")
         })
     }
@@ -676,11 +705,16 @@ fn a_host_reads_what_a_guest_answers_into_its_own_values() {
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_waiting(
     args: LentBytes<Vec<String>>,
+    conventions: LentBytes<SurfaceConventions>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     let fired = Rc::new(std::cell::Cell::new(false));
     let moves = Rc::new(std::cell::Cell::new(0));
-    unsafe { guest::create(args, instance, |_| Box::new(Waiting::new(&fired, &moves))) }
+    unsafe {
+        guest::create(args, conventions, instance, |_| {
+            Box::new(Waiting::new(&fired, &moves))
+        })
+    }
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
@@ -726,9 +760,14 @@ impl EmbeddedApp for WakesTheHost {
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_waking(
     args: LentBytes<Vec<String>>,
+    conventions: LentBytes<SurfaceConventions>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
-    unsafe { guest::create(args, instance, |_| Box::new(WakesTheHost(Stub::new()))) }
+    unsafe {
+        guest::create(args, conventions, instance, |_| {
+            Box::new(WakesTheHost(Stub::new()))
+        })
+    }
 }
 
 /// The waker the guest is handed is host code; a panic in it stays on the host's side instead of unwinding through the guest, and the redraw the guest asks for reaches the host's context.
@@ -746,14 +785,14 @@ fn a_panic_in_the_host_waker_does_not_reach_the_guest() {
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 thread_local! {
-    static CONVENTION_HANDED: std::cell::Cell<Option<KeyboardConvention>> = const { std::cell::Cell::new(None) };
+    static HOST_SERVED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static HANDED_BEFORE_BUILD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static SERVED_NOTHING: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn record_services(services: HostServices<UpperTable>) -> CallOutcome {
-    CONVENTION_HANDED.set(unsafe { services.ask(services.keyboard_convention, &()) });
+    HOST_SERVED.set(!services.data.is_null());
     SERVED_NOTHING.set(Some(services.data.is_null()));
     CallOutcome::OK
 }
@@ -761,10 +800,11 @@ unsafe extern "C" fn record_services(services: HostServices<UpperTable>) -> Call
 #[cfg(all(feature = "host", unix))]
 unsafe extern "C" fn create_after_services(
     args: LentBytes<Vec<String>>,
+    conventions: LentBytes<SurfaceConventions>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
-    HANDED_BEFORE_BUILD.set(CONVENTION_HANDED.get().is_some());
-    unsafe { guest::create(args, instance, |_| Box::new(Stub::new())) }
+    HANDED_BEFORE_BUILD.set(HOST_SERVED.get());
+    unsafe { guest::create(args, conventions, instance, |_| Box::new(Stub::new())) }
 }
 
 #[cfg(all(feature = "host", unix))]
@@ -772,19 +812,10 @@ extern "C" fn does_nothing() -> CallOutcome {
     CallOutcome::OK
 }
 
-fn foreign_convention() -> KeyboardConvention {
-    match KeyboardConvention::native() {
-        KeyboardConvention::Mac => KeyboardConvention::Pc,
-        KeyboardConvention::Pc => KeyboardConvention::Mac,
-    }
-}
-
-/// A guest carries its own copy of the convention, which left alone answers for the system it was compiled on: a terminal host on a Mac matches Ctrl while the guest would show ⌘.
+/// A guest carries its own copy of every store, which left alone answers for nothing: its build already reads the host's clipboard, preferences and paths.
 #[cfg(all(feature = "host", unix))]
 #[test]
 fn a_guest_is_handed_the_host_services_before_it_is_built() {
-    let host = foreign_convention();
-    platform_core::set_keyboard_convention(host);
     let this_process = libloading::Library::from(libloading::os::unix::Library::this());
     let embed = LoadedEmbed::start(
         EmbedEntries {
@@ -802,10 +833,10 @@ fn a_guest_is_handed_the_host_services_before_it_is_built() {
         Some(this_process),
     )
     .expect("the guest loads");
-    assert_eq!(CONVENTION_HANDED.get(), Some(host));
+    assert!(HOST_SERVED.get());
     assert!(
         HANDED_BEFORE_BUILD.get(),
-        "the guest's build already shows shortcuts the host's way"
+        "the guest's build already reads the host's stores"
     );
     drop(embed);
 }
@@ -831,20 +862,22 @@ fn a_guest_of_this_process_is_served_nothing() {
 }
 
 #[test]
-fn the_exported_table_installs_the_convention_it_is_handed() {
-    let handed = foreign_convention();
-    platform_core::set_keyboard_convention(handed);
+fn the_exported_table_installs_the_values_it_is_handed() {
+    platform_core::set_asset_base("https://host.example/assets/");
     let served = services_core::guest::ServedServices::installed(None);
-    platform_core::set_keyboard_convention(KeyboardConvention::native());
+    platform_core::set_asset_base("https://guest.example/");
     let full = served.table();
-    let only_the_convention = HostServices {
+    let only_the_asset_base = HostServices {
         data: full.data,
-        keyboard_convention: full.keyboard_convention,
+        asset_base: full.asset_base,
         ..HostServices::NONE
     };
-    let outcome = unsafe { (TELAR_EMBED_ENTRIES.lifecycle.install_services)(only_the_convention) };
+    let outcome = unsafe { (TELAR_EMBED_ENTRIES.lifecycle.install_services)(only_the_asset_base) };
     assert_eq!(outcome.status(), CallOutcome::RETURNED);
-    assert_eq!(platform_core::keyboard_convention(), handed);
+    assert_eq!(
+        platform_core::asset_base().as_deref(),
+        Some("https://host.example/assets/")
+    );
 }
 
 #[cfg(all(feature = "host", unix))]
@@ -944,7 +977,7 @@ impl motion_core::Tickable for PanicsWhenTicked {
 
 #[test]
 fn an_animation_that_panics_mid_tick_leaves_later_flushes_working() {
-    let inst = EmbedInstance::new(Box::new(Stub::new()));
+    let inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
     let animation: std::rc::Rc<dyn motion_core::Tickable> = std::rc::Rc::new(PanicsWhenTicked);
     inst.canvas.with_entered(|| {
         motion_core::register(motion_core::next_id(), std::rc::Rc::downgrade(&animation))
@@ -1035,7 +1068,10 @@ fn tab() -> Event {
 
 #[test]
 fn a_press_on_nothing_in_a_guest_lets_its_keyboard_go() {
-    let mut inst = EmbedInstance::new(Box::new(TwoFocusables { content: None }));
+    let mut inst = EmbedInstance::new(
+        Box::new(TwoFocusables { content: None }),
+        SurfaceConventions::default(),
+    );
     inst.relayout(100.0, 100.0);
     let _ = inst.paint();
 
@@ -1053,7 +1089,10 @@ fn a_press_on_nothing_in_a_guest_lets_its_keyboard_go() {
 
 #[test]
 fn tab_past_a_guests_last_focusable_steps_out_to_the_host() {
-    let mut inst = EmbedInstance::new(Box::new(TwoFocusables { content: None }));
+    let mut inst = EmbedInstance::new(
+        Box::new(TwoFocusables { content: None }),
+        SurfaceConventions::default(),
+    );
     inst.relayout(100.0, 100.0);
     let _ = inst.paint();
 
@@ -1065,4 +1104,51 @@ fn tab_past_a_guests_last_focusable_steps_out_to_the_host() {
     assert!(!inst.canvas.tab(&tab()), "Tab walks the guest's focusables");
     assert!(inst.canvas.tab(&tab()), "and past the last one steps out");
     assert!(!inst.canvas.holds_focus());
+}
+
+fn on_cells() -> SurfaceConventions {
+    SurfaceConventions {
+        grid: geometry_core::LayoutGrid::new(8.0, 16.0).expect("a positive, finite step"),
+        keyboard: platform_core::KeyboardConvention::Pc,
+        smooth_wheel: false,
+        focus_boundary: platform_core::FocusBoundary::Release,
+    }
+}
+
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+thread_local! {
+    static CONVENTIONS_HANDED: std::cell::Cell<Option<SurfaceConventions>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+unsafe extern "C" fn create_recording(
+    args: LentBytes<Vec<String>>,
+    conventions: LentBytes<SurfaceConventions>,
+    instance: *mut Handle<GuestInstance>,
+) -> CallOutcome {
+    CONVENTIONS_HANDED.set(Some(unsafe { conventions.read() }));
+    unsafe { guest::create(args, conventions, instance, |_| Box::new(Stub::new())) }
+}
+
+/// A guest is drawn inside a surface of the host's, so it is built on that surface's conventions rather than on the defaults its own copy starts with.
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+#[test]
+fn a_guest_is_handed_the_conventions_of_the_surface_it_is_drawn_inside() {
+    ui_core::set_surface_conventions(on_cells());
+    let embed = embedded(create_recording).expect("the guest loads");
+    assert_eq!(CONVENTIONS_HANDED.get(), Some(on_cells()));
+    drop(embed);
+}
+
+#[test]
+fn an_instance_lays_out_on_the_conventions_it_is_given() {
+    let inst = EmbedInstance::new(Box::new(Stub::new()), on_cells());
+    assert_eq!(
+        inst.canvas.with_entered(ui_core::surface_conventions),
+        on_cells()
+    );
+    assert_eq!(
+        ui_core::surface_conventions(),
+        SurfaceConventions::default()
+    );
 }

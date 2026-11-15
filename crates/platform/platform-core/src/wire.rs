@@ -19,10 +19,11 @@ use crate::guest::RawHandles;
 use crate::{
     AccessAction, AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation,
     ActionSupport, ColorScheme, Cursor, DragActions, DragData, DragIcon, DragOffer, DragOutcome,
-    DropAction, DropAnswer, DroppedData, Event, FullscreenMode, HistoryStep, HistoryUpdate, Ime,
-    Key, KeyboardConvention, LocationFormat, MimeType, ModifiersState, NamedKey, OutgoingDrag,
-    PointerButton, PointerSource, Representation, ResizeEdge, ScrollDelta, SystemPreferences,
-    TextInput, TextScale, TextSelection, WindowCommand, WindowConfig, WindowPosition,
+    DropAction, DropAnswer, DroppedData, Event, FocusBoundary, FullscreenMode, HistoryStep,
+    HistoryUpdate, Ime, Key, KeyboardConvention, LocationFormat, MimeType, ModifiersState,
+    NamedKey, OutgoingDrag, PointerButton, PointerSource, Representation, ResizeEdge, ScrollDelta,
+    SurfaceConventions, SystemPreferences, TextInput, TextScale, TextSelection, WindowCommand,
+    WindowConfig, WindowPosition,
 };
 
 wire_enum!(NamedKey {
@@ -314,6 +315,18 @@ wire_struct!(TextInput {
 wire_enum!(KeyboardConvention {
     Mac = 0,
     Pc = 1
+});
+
+wire_enum!(FocusBoundary {
+    Wrap = 0,
+    Release = 1
+});
+
+wire_struct!(SurfaceConventions {
+    grid,
+    keyboard,
+    smooth_wheel,
+    focus_boundary
 });
 
 wire_enum!(AccessSeverity {

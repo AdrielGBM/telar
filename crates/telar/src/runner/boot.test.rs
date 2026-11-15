@@ -136,6 +136,7 @@ fn a_surface_handler_built_at_runtime_installs_the_app_under_its_name() {
                 Arc::new(Rooted(root.to_owned())),
                 APP,
                 AppConfig::default(),
+                platform_core::SurfaceConventions::default(),
             );
             assert_booted_as_the_app(root);
         },
@@ -184,6 +185,7 @@ fn runtime_surface() -> Box<dyn platform_core::EventHandler<HeadlessWindow>> {
         Arc::new(NoPaths),
         APP,
         AppConfig::default(),
+        platform_core::SurfaceConventions::default(),
     )
 }
 

@@ -120,10 +120,11 @@ fn a_document_is_told_the_scroll_container_is_a_block_whatever_it_was_declared()
         .new_leaf(LayoutStyle::new().flex_row().flex_grow(1.0))
         .unwrap();
     engine.set_scroll_content(host, content).unwrap();
-    let css = engine
-        .declared_style(host)
-        .unwrap()
-        .to_css(Direction::Ltr, Size::ZERO);
+    let css =
+        engine
+            .declared_style(host)
+            .unwrap()
+            .to_css(Direction::Ltr, Size::ZERO, LayoutGrid::UNIT);
     assert!(
         css.as_str().starts_with("display:block;"),
         "the browser lays the content out as Taffy does, as a block child: {css}"

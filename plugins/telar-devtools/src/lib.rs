@@ -88,8 +88,10 @@ impl DevTools {
     }
 
     fn shortcut(&mut self, key: &Key, modifiers: ModifiersState) -> Option<DevAction> {
-        let pressed =
-            |chord: &str| Chord::parse(chord).is_ok_and(|chord| chord.matches(key, modifiers));
+        let pressed = |chord: &str| {
+            Chord::parse(chord)
+                .is_ok_and(|chord| chord.matches(key, modifiers, telar::keyboard_convention()))
+        };
         if pressed(SWITCH_RENDERER_CHORD) {
             Some(DevAction::ToggleBackend)
         } else if pressed(SHOW_PANEL_CHORD) {

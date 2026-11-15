@@ -1041,11 +1041,11 @@ fn the_trigger_stands_at_the_menu_s_size() {
 /// A row's shortcut is written once, portably, and shown the way the platform writes it: on a PC, `Mod` is Ctrl and the keys are words joined with `+`.
 #[test]
 fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
-    use telar::{DrawCommand, KeyboardConvention, NamedKey, set_keyboard_convention};
+    use telar::{DrawCommand, KeyboardConvention, NamedKey};
 
     let open_with = |convention: KeyboardConvention| {
         crate::test_support::fresh_layout_runtime();
-        set_keyboard_convention(convention);
+        crate::test_support::keyboard(convention);
         telar::focus::clear();
         let item = menu(
             MenuProps::props()

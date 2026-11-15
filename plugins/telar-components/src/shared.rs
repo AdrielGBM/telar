@@ -639,10 +639,11 @@ pub(crate) fn hinted(
 
 /// `chord` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere, a sequence step after step (`Ctrl+K, then S`): what a hint shows and a reader hears. Text that names no [`Chord`] is shown as written.
 pub(crate) fn shown_chord(chord: &str) -> String {
+    let convention = telar::keyboard_convention();
     match chord_steps(chord) {
         Some(steps) => steps
             .iter()
-            .map(ChordStep::to_string)
+            .map(|step| step.text(convention))
             .reduce(|first, next| {
                 crate::strings::text_with(
                     crate::strings::THEN,
@@ -665,11 +666,12 @@ pub(crate) enum ChordStep {
     Written(String),
 }
 
-impl std::fmt::Display for ChordStep {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ChordStep {
+    /// The step as `convention` writes it, or as written when it names no chord.
+    pub(crate) fn text(&self, convention: telar::KeyboardConvention) -> String {
         match self {
-            ChordStep::Chord(chord) => chord.fmt(f),
-            ChordStep::Written(text) => f.write_str(text),
+            ChordStep::Chord(chord) => chord.text(convention),
+            ChordStep::Written(text) => text.clone(),
         }
     }
 }

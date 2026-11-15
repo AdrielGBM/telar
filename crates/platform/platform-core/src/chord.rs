@@ -1,6 +1,5 @@
 //! [`Chord`]: a keyboard shortcut written once, shown and matched the way the platform it runs on spells it.
 
-use std::cell::Cell;
 use std::fmt;
 use std::str::FromStr;
 
@@ -54,26 +53,27 @@ impl KeyboardConvention {
     }
 }
 
-reactive_local::dropless_thread_local! {
-    static CONVENTION: Cell<Option<KeyboardConvention>> = const { Cell::new(None) };
+reactive_local::surface_local! {
+    /// The keyboard convention of one surface.
+    slot KEYBOARD: KeyboardConvention = KeyboardConvention::native();
+    access with_keyboard, with_keyboard_ref;
+    context KeyboardConventionContext;
 }
 
-/// The convention shortcuts are shown and matched in on this thread: what the running platform installed, else [`KeyboardConvention::native`].
+/// The convention shortcuts are shown and matched in on the active surface: the one its platform reported, [`KeyboardConvention::native`] until one is set.
 pub fn keyboard_convention() -> KeyboardConvention {
-    CONVENTION
-        .with(Cell::get)
-        .unwrap_or(KeyboardConvention::native())
+    with_keyboard_ref(|convention| *convention)
 }
 
-/// Installs the convention [`keyboard_convention`] answers with. The runner installs what its platform reports before it builds the app; a test installs one to pin what a shortcut shows.
+/// Sets the convention of the active surface, as whatever hosts it puts the surface on its platform's conventions.
 pub fn set_keyboard_convention(convention: KeyboardConvention) {
-    CONVENTION.with(|current| current.set(Some(convention)));
+    with_keyboard(|current| *current = convention);
 }
 
 impl ModifiersState {
-    /// Whether the primary modifier of the convention in force is held: Command on a Mac, Ctrl elsewhere.
-    pub fn is_primary(&self) -> bool {
-        match keyboard_convention() {
+    /// Whether the primary modifier of `convention` is held: Command on a Mac, Ctrl elsewhere.
+    pub fn is_primary(&self, convention: KeyboardConvention) -> bool {
+        match convention {
             KeyboardConvention::Mac => self.is_meta,
             KeyboardConvention::Pc => self.is_ctrl,
         }
@@ -183,14 +183,10 @@ impl Chord {
         }
     }
 
-    /// Whether a press of `key` with `modifiers` held is this chord, under the convention in force.
+    /// Whether a press of `key` with `modifiers` held is this chord, under `convention`.
     ///
     /// Ctrl, Alt and Command must be exactly the chord's. A letter matches in either case and Shift must be exactly the chord's; any other character is matched as typed, so `?` matches the Shift that typed it, unless the chord names Shift itself. A press whose character Alt composed (Option+T is `†` on a Mac) is matched on the key it makes with no modifier, which is what `shortcut_key` answers.
-    pub fn matches(&self, key: &Key, modifiers: ModifiersState) -> bool {
-        self.matches_in(key, modifiers, keyboard_convention())
-    }
-
-    pub fn matches_in(
+    pub fn matches(
         &self,
         key: &Key,
         modifiers: ModifiersState,
@@ -250,12 +246,6 @@ impl Chord {
             .chain([aria_key(&self.key)])
             .collect::<Vec<_>>()
             .join("+")
-    }
-}
-
-impl fmt::Display for Chord {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.text(keyboard_convention()))
     }
 }
 

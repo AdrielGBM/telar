@@ -2,16 +2,21 @@
 
 use std::fmt;
 use std::str::FromStr;
-use std::sync::{Arc, PoisonError, RwLock};
+use std::sync::Arc;
 
 pub const DEFAULT_URI_SCHEMES: [&str; 5] = ["http", "https", "mailto", "tel", "sms"];
 
 /// The schemes no app may open, whatever it registers: each runs code or reads local files in whatever opens it. A single-letter scheme is refused too, since it is a drive path (`C:\x.exe`).
 pub const DENIED_URI_SCHEMES: [&str; 4] = ["javascript", "vbscript", "data", "file"];
 
-static APP_SCHEMES: RwLock<Vec<Box<str>>> = RwLock::new(Vec::new());
+reactive_local::dropless_thread_local! {
+    // Kept with the thread the app's runtime runs on rather than with the process, so two apps in one process each open only what they allowed.
+    static APP_SCHEMES: released Vec<Box<str>> = const { Vec::new() };
+}
 
-/// Lets every [`Uri`] built from now on use `scheme` (`"myapp"`, without the `:`), on top of [`DEFAULT_URI_SCHEMES`]. Refused for a scheme in [`DENIED_URI_SCHEMES`], a single letter, or text that is no scheme.
+/// Lets every [`Uri`] the app builds from now on use `scheme` (`"myapp"`, without the `:`), on top of [`DEFAULT_URI_SCHEMES`]. Refused for a scheme in [`DENIED_URI_SCHEMES`], a single letter, or text that is no scheme.
+///
+/// The app is the one whose runtime runs on this thread: the registration is part of its context, as its locale is, and a [`Uri`] built on another thread sees the defaults alone.
 pub fn allow_uri_scheme(scheme: &str) -> Result<(), UriError> {
     if !is_scheme(scheme) {
         return Err(UriError::InvalidScheme(scheme.into()));
@@ -20,10 +25,12 @@ pub fn allow_uri_scheme(scheme: &str) -> Result<(), UriError> {
     if is_denied(&scheme) {
         return Err(UriError::DeniedScheme(scheme.into()));
     }
-    let mut schemes = APP_SCHEMES.write().unwrap_or_else(PoisonError::into_inner);
-    if !schemes.iter().any(|allowed| **allowed == *scheme) {
-        schemes.push(scheme.into());
-    }
+    APP_SCHEMES.with(|schemes| {
+        let mut schemes = schemes.borrow_mut();
+        if !schemes.iter().any(|allowed| **allowed == *scheme) {
+            schemes.push(scheme.into());
+        }
+    });
     Ok(())
 }
 
@@ -36,11 +43,8 @@ fn allowed_lowercase(scheme: &str) -> Result<(), UriError> {
     if is_denied(scheme) {
         return Err(UriError::DeniedScheme(scheme.into()));
     }
-    let registered = APP_SCHEMES
-        .read()
-        .unwrap_or_else(PoisonError::into_inner)
-        .iter()
-        .any(|allowed| **allowed == *scheme);
+    let registered =
+        APP_SCHEMES.with(|schemes| schemes.borrow().iter().any(|allowed| **allowed == *scheme));
     if DEFAULT_URI_SCHEMES.contains(&scheme) || registered {
         Ok(())
     } else {
