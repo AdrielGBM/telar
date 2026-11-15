@@ -377,6 +377,15 @@ impl Args {
         Self::new().describing(entry)
     }
 
+    /// Args for `entry`, held in memory on signals of their own, that hold every value these were edited to: writing one leaves the other as it was.
+    pub(super) fn detached_for(&self, entry: &PreviewEntry) -> Result<Self, ArgError> {
+        let detached = Self::in_memory_for(entry);
+        for (name, value) in self.overrides() {
+            detached.set(&name, value)?;
+        }
+        Ok(detached)
+    }
+
     fn describing(self, entry: &PreviewEntry) -> Self {
         if let Some(props) = entry.props {
             self.link_props(props());

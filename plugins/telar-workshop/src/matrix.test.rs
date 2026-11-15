@@ -100,6 +100,32 @@ fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )
 }
 
+/// A control that counts the times focus arrives on it, and says how many.
+fn focus_counting(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let arrivals = telar::signal(0_u32);
+    let probe = telar::StyledContainer::new(
+        LayoutStyle::new().width(80.0).height(32.0),
+        |_| telar::RectStyle::filled(Color::BLACK, 0.0),
+        Vec::new(),
+    )?
+    .control(Role::Button)
+    .a11y_label(|| "Probe")
+    .on_focus(move |now| {
+        if now {
+            arrivals.update(|count| *count += 1);
+        }
+    });
+    let count = Text::new(
+        move || format!("Focused {}", arrivals.get()),
+        LayoutStyle::new(),
+        || TextStyle::new(13.0, Color::BLACK),
+    )?;
+    Ok(box_item(telar::Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(probe), box_item(count)],
+    )?))
+}
+
 fn toggle_control() -> ControlKind {
     ControlKind::Toggle
 }
@@ -119,6 +145,7 @@ const ASKING: &str = "kit--dialog--asking";
 const COUNTING: &str = "kit--counter--counting";
 const LONG_FAILING: &str = "kit--badge--long-failing";
 const LIT: &str = "kit--badge--lit";
+const FOCUS_COUNTING: &str = "kit--probe--focus-counting";
 
 fn entries() -> Vec<PreviewEntry> {
     vec![
@@ -135,6 +162,8 @@ fn entries() -> Vec<PreviewEntry> {
             .matrix(Matrix::Axes(&[Axis::Dir(&[Direction::Ltr])]))
             .play(|canvas| canvas.expect_text("gadget")),
         PreviewEntry::new(LIT, "badge", "Lit", lit),
+        PreviewEntry::new(FOCUS_COUNTING, "probe", "Focus counting", focus_counting)
+            .matrix(Matrix::Axes(&[Axis::Dir(&[Direction::Ltr])])),
         PreviewEntry::new(LONG_FAILING, "badge", "Long failing", widget)
             .matrix(Matrix::Axes(&[Axis::Dir(&[Direction::Ltr])]))
             .play(|canvas| {
@@ -369,6 +398,12 @@ fn each_cell_runs_its_play_and_checks_what_the_play_left() {
         "the cell says why: {:?}",
         failing.texts()
     );
+}
+
+#[test]
+fn a_cell_is_unchanged_after_its_accessibility_check() {
+    let workshop = Workshop::open(FOCUS_COUNTING);
+    assert!(workshop.draws("Focused 0"), "{:?}", workshop.texts());
 }
 
 #[test]

@@ -40,6 +40,19 @@ impl Globals {
         }
     }
 
+    /// Globals holding what these hold now, on signals of their own: writing one leaves the other as it was.
+    pub(super) fn detached(&self) -> Self {
+        Self {
+            mode: signal(self.mode.peek()),
+            locale: signal(self.locale.peek()),
+            direction: signal(self.direction.peek()),
+            viewport: signal(self.viewport.peek()),
+            safe_area: signal(self.safe_area.peek()),
+            background: signal(self.background.peek()),
+            high_contrast: signal(self.high_contrast.peek()),
+        }
+    }
+
     /// Globals holding what `env` asks for, or why they cannot: `env` names a mode the application has not registered.
     pub fn seeded(env: &PreviewEnv) -> Result<Self, UnknownMode> {
         let globals = Self::new();

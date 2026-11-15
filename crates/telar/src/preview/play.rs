@@ -266,7 +266,11 @@ impl Play {
 
     /// The [`a11y::check`] findings for the canvas now, and the [`a11y::check_focus`] findings as the keyboard reaches each of its stops, without the rules the entry ignores.
     ///
-    /// Each stop is given focus in turn and the canvas settled; focus goes back where it was, the way it was held, before this returns.
+    /// The stops are walked on a copy of the preview mounted with the same args, environment and size, and its play run again if this one has taken steps, so a handler that runs as focus arrives (a cursor seeded on focus) leaves this canvas as it was.
+    ///
+    /// # Panics
+    ///
+    /// When the copy cannot be mounted, which a preview that built once builds again.
     pub fn check_a11y(&self) -> a11y::Report {
         let frame = self.frame();
         let snapshot = frame
@@ -275,13 +279,26 @@ impl Play {
             .map(|access| access.snapshot.as_slice())
             .unwrap_or_default();
         a11y::check(&frame, snapshot)
-            .and(self.check_focus())
+            .and(self.throwaway_copy().check_focus())
             .ignoring(self.entry.a11y_ignore)
+    }
+
+    fn throwaway_copy(&self) -> Play {
+        let mut copy = Self::mount_in_owner(&self.entry, self.canvas().size(), || {
+            self.ctx
+                .detached(&self.entry)
+                .map_err(|error| PlayError::new(error.to_string()))
+        })
+        .unwrap_or_else(|error| panic!("the preview did not mount again to be checked: {error}"));
+        if !self.steps.is_empty() {
+            let _ = copy.run();
+        }
+        copy
     }
 
     fn check_focus(&self) -> a11y::Report {
         let canvas = self.canvas();
-        let (held, order) = canvas.with_entered(|| (focus::remember(), focus::tab_order()));
+        let order = canvas.with_entered(focus::tab_order);
         canvas.with_entered(focus::clear);
         self.settle_now();
         let rest = self.frame();
@@ -302,11 +319,6 @@ impl Play {
                 focused.push(a11y::FocusedStop { node, frame });
             }
         }
-        canvas.with_entered(|| match held {
-            Some(held) => held.restore(),
-            None => focus::clear(),
-        });
-        self.settle_now();
         a11y::check_focus(&rest, &focused)
     }
 

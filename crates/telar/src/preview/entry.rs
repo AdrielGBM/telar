@@ -8,6 +8,7 @@ use crate::{
 };
 
 use super::a11y::Rule;
+use super::args::ArgError;
 use super::host::Args;
 use super::snapshot::SnapshotAt;
 use super::{ActionLog, ArgSpec, Globals, Matrix, PlayFn, PreviewArg, PropsSchema};
@@ -31,6 +32,15 @@ impl PreviewCtx {
     /// The canvas `entry` mounts in with `args`: a fresh action log, and globals seeded from its [`PreviewEnv`], or why it cannot be, as [`Self::for_entry`] says.
     pub fn for_entry_with(entry: &PreviewEntry, args: Args) -> Result<Self, UnknownMode> {
         Ok(Self::from(args).with_globals(Globals::seeded(&entry.env)?))
+    }
+
+    /// What `entry` mounts in as another canvas: the values of these args and globals on signals of their own, and an action log of its own, so what runs on the one cannot be seen from the other.
+    pub(super) fn detached(&self, entry: &PreviewEntry) -> Result<Self, ArgError> {
+        Ok(Self {
+            args: self.args.detached_for(entry)?,
+            actions: ActionLog::new(),
+            globals: self.globals.detached(),
+        })
     }
 
     /// This canvas with `actions` as its action log.
