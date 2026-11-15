@@ -7,7 +7,8 @@ use std::rc::Rc;
 use telar::{
     Accessible, Border, Color, Cursor, Insets, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey,
     Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
-    Transaction, amend_surface, box_item, focus::Role, signal, step_factor, use_theme_tokens,
+    Transaction, Transform, amend_surface, box_item, focus::Role, signal, step_factor,
+    use_theme_tokens,
 };
 
 use crate::shared;
@@ -204,7 +205,7 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let placed = placed.clone();
         move |_| {
             let (x, y) = placed(value.get());
-            Some([1.0, 0.0, 0.0, 1.0, x, y])
+            Some(Transform::translate(x, y))
         }
     })
     .control(Role::Slider)

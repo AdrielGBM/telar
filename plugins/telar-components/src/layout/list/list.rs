@@ -5,9 +5,9 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Color, Container, LayoutError, LayoutItem,
-    LayoutStyle, Lazy, Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, Text, TextWrap, box_item,
+    Accessible, AlignItems, BorderRadius, Children, Color, Container, KeySequence, LayoutError,
+    LayoutItem, LayoutStyle, Lazy, Margin, NodeId, Props, Reactive, RectStyle, RwSignal,
+    ShapeStyle, StyledContainer, Text, TextWrap, box_item,
     focus::{FocusId, Role},
     signal, use_context,
 };
@@ -418,9 +418,9 @@ pub struct ItemProps {
     /// Trailing text, quiet: a count, a units suffix, the value a setting holds. `Option` for the same reason as [`checked`](Self::checked).
     #[props(some, into, default)]
     pub hint: Option<Reactive<String>>,
-    /// The keys that run the row's command without the menu, written portably as [`telar::Chord`] reads it (`"Mod+Z"`) and shown trailing, quiet, as the platform writes it: `⌘Z` on a Mac, `Ctrl+Z` elsewhere. Only shown: the application binds the keys itself.
+    /// The keys that run the row's command without the menu, written portably as [`KeySequence`] reads them (`"Mod+Z"`, `"Mod+K S"`) and shown trailing, quiet, as the platform writes it: `⌘Z` on a Mac, `Ctrl+Z` elsewhere. Only shown: the application binds the keys itself.
     #[props(some, into, default)]
-    pub shortcut: Option<Reactive<String>>,
+    pub shortcut: Option<KeySequence>,
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
     #[props(some, default)]
     pub on_press: Option<Rc<dyn Fn()>>,
@@ -513,7 +513,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         content.push(box_item(hint_text(size, hint, &list)?));
     }
     if let Some(shortcut) = shortcut.clone() {
-        let shown = Reactive::of(move || shown_chord(&shortcut.get()));
+        let shown = Reactive::of(move || shown_chord(&shortcut));
         content.push(box_item(hint_text(size, shown, &list)?));
     }
     if let Some(on) = &switch {
@@ -550,8 +550,8 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         }
         _ => row,
     };
-    let row = match shortcut {
-        Some(chord) => row.keyboard_shortcut(move || shared::declared_chord(&chord.get())),
+    let row = match shortcut.as_ref().and_then(KeySequence::chord).cloned() {
+        Some(chord) => row.keyboard_shortcut(move || Some(chord.clone())),
         None => row,
     };
     // The tick is drawn for the eye; a reader hears the state instead, and the row keeps one name whether it is ticked or not.

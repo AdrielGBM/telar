@@ -724,12 +724,7 @@ fn build_row(
     let mut content: Vec<Box<dyn LayoutItem>> =
         children![ClippedItem::new(box_item(text), Clip::both())];
     if let Some(chord) = command.shortcut.clone() {
-        content.push(kbd(KbdProps::props()
-            .chord(Reactive::of(move || {
-                chord.text(telar::keyboard_convention())
-            }))
-            .size(size)
-            .build())?);
+        content.push(kbd(KbdProps::props().chord(chord).size(size).build())?);
     }
 
     let chord = command.shortcut.clone();

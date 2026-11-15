@@ -39,4 +39,4 @@ modal control:props.open title:(strings::reactive(KEYBOARD_SHORTCUTS))
                     row align:center gap:WORKBENCH_GRID
                         text "{strings::text(action.label())}" grow:1 min_width:0
                         for chord in action.chords()
-                            kbd chord:(chord.to_string())
+                            kbd chord:chord

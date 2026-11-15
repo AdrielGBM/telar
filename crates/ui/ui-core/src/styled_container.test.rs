@@ -36,7 +36,7 @@ fn box_transform_scale_pivots_on_center() {
     // scale_around(2, 2, 50, 50) pins the centre, so e = f = 50 - 2*50 = -50.
     assert_eq!(
         box_transform(r, 0.0, 2.0, 2.0, 0.0, 0.0).unwrap(),
-        [2.0, 0.0, 0.0, 2.0, -50.0, -50.0]
+        Transform::scale_around(2.0, 2.0, 50.0, 50.0)
     );
 }
 
@@ -50,7 +50,7 @@ fn box_transform_translate_offsets_origin() {
     };
     assert_eq!(
         box_transform(r, 0.0, 1.0, 1.0, 8.0, -4.0).unwrap(),
-        [1.0, 0.0, 0.0, 1.0, 8.0, -4.0]
+        Transform::translate(8.0, -4.0)
     );
 }
 use crate::container::Container;

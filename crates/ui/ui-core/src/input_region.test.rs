@@ -906,7 +906,7 @@ fn a_transformed_box_claims_and_takes_the_pointer_where_it_is_drawn() {
     reset_layout_runtime();
     let (taps, on_tap) = counter();
     let moved_box = boxed(placed(0.0, 0.0, 100.0), vec![])
-        .with_transform(|_r| Some([1.0, 0.0, 0.0, 1.0, 200.0, 0.0]))
+        .with_transform(|_r| Some(Transform::translate(200.0, 0.0)))
         .on_press(on_tap);
     let mut root = Container::new(full(), vec![Box::new(moved_box)]).unwrap();
     lay_out(&root);
@@ -996,7 +996,7 @@ fn an_anchored_panel_opens_beside_a_trigger_where_a_transform_drew_it() {
     let trigger = boxed(placed(0.0, 0.0, 20.0), vec![]);
     let trigger_node = trigger.layout_node();
     let card = boxed(placed(10.0, 10.0, 100.0), vec![Box::new(trigger)])
-        .with_transform(|_r| Some([1.0, 0.0, 0.0, 1.0, 200.0, 50.0]));
+        .with_transform(|_r| Some(Transform::translate(200.0, 50.0)));
     let root = Container::new(full(), vec![Box::new(card)]).unwrap();
     lay_out(&root);
 
@@ -1128,7 +1128,7 @@ fn a_box_whose_transform_follows_its_own_drag_is_measured_from_its_press() {
     let reported = Rc::new(Cell::new((0.0f32, 0.0f32)));
     let sink = reported.clone();
     let carried = boxed(placed(0.0, 0.0, 100.0), vec![])
-        .with_transform(move |_r| Some([1.0, 0.0, 0.0, 1.0, offset.get(), 0.0]))
+        .with_transform(move |_r| Some(Transform::translate(offset.get(), 0.0)))
         .on_drag(move |x, y| {
             sink.set((x, y));
             offset.set(x - 50.0);

@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, AuthoredText, BorderRadius, Color, Declared, IconName, JustifyContent,
-    LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer,
-    SurfaceAmendment, amend_surface, box_item, focus::Role,
+    Accessible, AlignItems, AuthoredText, BorderRadius, Chord, Color, Declared, IconName,
+    JustifyContent, KeySequence, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle,
+    ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, focus::Role,
 };
 
 use crate::shared;
@@ -21,9 +21,9 @@ pub struct IconButtonProps {
     /// The button's name.
     #[props(into)]
     pub label: Reactive<String>,
-    /// The key binding that does the same thing, written portably (`"Mod+K"`) and shown in the tooltip as the platform writes it. `None` (the default) names none.
+    /// The key binding that does the same thing, written portably as [`KeySequence`] reads it (`"Mod+K"`) and shown in the tooltip as the platform writes it. `None` (the default) names none.
     #[props(some, into, default)]
-    pub shortcut: Option<Reactive<String>>,
+    pub shortcut: Option<KeySequence>,
     /// How large the button is drawn: its square and the icon in it, as [`ControlSize`] works them out. A small one is the smallest pointer target, so it fits a tag's `action` without making the tag taller.
     #[props(default)]
     pub size: ControlSize,
@@ -117,7 +117,7 @@ pub fn icon_button(props: IconButtonProps) -> Result<Box<dyn LayoutItem>, Layout
         icon,
         label: label.clone(),
         size,
-        shortcut: shortcut.clone(),
+        shortcut: shortcut.as_ref().and_then(KeySequence::chord).cloned(),
         pressed,
         disabled,
         activate,
@@ -135,7 +135,7 @@ struct Square {
     icon: IconName,
     label: Reactive<String>,
     size: ControlSize,
-    shortcut: Option<Reactive<String>>,
+    shortcut: Option<Chord>,
     pressed: Option<Reactive<bool>>,
     disabled: Reactive<bool>,
     activate: Rc<dyn Fn()>,
@@ -211,9 +211,7 @@ impl Square {
             _ => button.control(Role::Button),
         };
         let button = match shortcut {
-            Some(shortcut) => {
-                button.keyboard_shortcut(move || shared::declared_chord(&shortcut.get()))
-            }
+            Some(chord) => button.keyboard_shortcut(move || Some(chord.clone())),
             None => button,
         };
         let button = if pressed.is_some() {

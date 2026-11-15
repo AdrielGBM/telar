@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use telar::{
     AlignItems, BorderRadius, Children, Color, Container, DismissRegistration, JustifyContent,
-    LayoutError, LayoutItem, LayoutStyle, NodeId, Overlay, Props, Reactive, ReactiveList,
-    RectStyle, RwSignal, ShapeStyle, Side, StyledContainer, SurfaceAmendment, SurfaceStyle, Text,
-    TextStyle, TextWrap, Timer, amend_surface, box_item, children, effect, focus, on_cleanup,
-    pointer_position, run_after, signal, use_theme_tokens, visible_rect,
+    KeySequence, LayoutError, LayoutItem, LayoutStyle, NodeId, Overlay, Props, Reactive,
+    ReactiveList, RectStyle, RwSignal, ShapeStyle, Side, StyledContainer, SurfaceAmendment,
+    SurfaceStyle, Text, TextStyle, TextWrap, Timer, amend_surface, box_item, children, effect,
+    focus, on_cleanup, pointer_position, run_after, signal, use_theme_tokens, visible_rect,
 };
 
 use crate::shared::{self, shown_chord};
@@ -79,11 +79,11 @@ pub struct TooltipProps {
     /// Whether `text` is already what a reader calls the trigger, as on a control that is only a picture named by the same words, so only [`description`](Self::description) is said as the trigger's description. Off by default: the trigger is described by `text`, then by `description`.
     #[props(default = false)]
     pub names_trigger: bool,
-    /// The binding that does the same thing, written portably as [`telar::Chord`] reads it (`"Mod+S"`) and shown as the platform writes it (`⌘S` on a Mac, `Ctrl+S` elsewhere), pushed to the far side of the first line. `None` (the default) names none.
+    /// The binding that does the same thing, written portably as [`KeySequence`] reads it (`"Mod+S"`, `"Mod+K S"`) and shown as the platform writes it (`⌘S` on a Mac, `Ctrl+S` elsewhere), pushed to the far side of the first line. `None` (the default) names none.
     ///
     /// A hint that names its own shortcut is how a keyboard gets learned — the pointer finds the control, and the bubble says which key would have got there first. Separate from `text` because it is *placed*, not worded: folded into the sentence it wraps with it and stops lining up down a toolbar.
     #[props(some, into, default)]
-    pub shortcut: Option<Reactive<String>>,
+    pub shortcut: Option<KeySequence>,
     /// A sentence under the name, saying what the control does rather than what it is called. `None` (the default) is the right shape for a control whose name already says everything.
     #[props(some, into, default)]
     pub description: Option<Reactive<String>>,
@@ -128,7 +128,7 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         description.clone(),
         names_trigger,
     ));
-    let shortcut = shortcut.map(|shortcut| Reactive::of(move || shown_chord(&shortcut.get())));
+    let shortcut = shortcut.map(|shortcut| Reactive::of(move || shown_chord(&shortcut)));
     let trigger_content = children.build()?;
 
     let mut trigger_style = LayoutStyle::row();

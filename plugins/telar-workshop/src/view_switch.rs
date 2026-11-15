@@ -23,7 +23,7 @@ pub(crate) fn view_switch(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
             .map(|(view, key)| {
                 Tab::new(view, strings::reactive(key))
                     .icon(view_icon(view))
-                    .shortcut(shown_by(view).chords()[0].to_string())
+                    .shortcut(shown_by(view).chords()[0])
             })
             .collect(),
         None,

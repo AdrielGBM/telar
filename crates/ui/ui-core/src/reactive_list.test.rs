@@ -774,7 +774,7 @@ mod layout_animation {
     use crate::context::{compute_layout, live_node_count, relayout_if_dirty};
     use crate::layout_item::box_item;
     use crate::styled_container::StyledContainer;
-    use crate::surface::IDENTITY;
+    use geometry_core::Transform;
 
     const SLIDE_MS: u64 = 200;
 
@@ -810,7 +810,7 @@ mod layout_animation {
     }
 
     fn drawn_y(child: &Child) -> f32 {
-        laid_out_y(child) + child.matrix_now()[5]
+        laid_out_y(child) + child.matrix_now().f
     }
 
     /// One frame as the runner drives it: the animations advance, then whatever they dirtied is laid out.
@@ -833,7 +833,7 @@ mod layout_animation {
         lay_out(&list);
         assert_eq!(
             row(&list, 0).matrix_now(),
-            IDENTITY,
+            Transform::IDENTITY,
             "the first layout places the rows without sliding them in from nowhere"
         );
 
@@ -860,7 +860,11 @@ mod layout_animation {
         );
 
         frame(now, SLIDE_MS);
-        assert_eq!(third.matrix_now(), IDENTITY, "and it lands on its layout");
+        assert_eq!(
+            third.matrix_now(),
+            Transform::IDENTITY,
+            "and it lands on its layout"
+        );
         assert!(!motion_core::has_active());
     }
 
@@ -894,7 +898,7 @@ mod layout_animation {
         frame(next, SLIDE_MS / 2 - 16);
         assert_eq!(
             third.matrix_now(),
-            IDENTITY,
+            Transform::IDENTITY,
             "half the way back takes half the time"
         );
     }
@@ -1023,7 +1027,7 @@ mod layout_animation {
         );
         frame(now, EXIT_MS);
         assert_eq!(drawn_y(&last), 20.0);
-        assert_eq!(returning.matrix_now(), IDENTITY);
+        assert_eq!(returning.matrix_now(), Transform::IDENTITY);
     }
 
     fn button(presses: Rc<Cell<u32>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -1105,7 +1109,7 @@ mod layout_animation {
         items.set(vec![3, 1, 2]);
         relayout_if_dirty();
         let third = row(&list, 0);
-        assert_eq!(third.matrix_now(), IDENTITY);
+        assert_eq!(third.matrix_now(), Transform::IDENTITY);
         assert_eq!(drawn_y(&third), 0.0);
         assert!(!motion_core::has_active(), "nothing left to play");
         set_scale(1.0);

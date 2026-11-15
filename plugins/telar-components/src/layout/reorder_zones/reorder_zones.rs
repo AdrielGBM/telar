@@ -6,8 +6,8 @@ use std::rc::Rc;
 use telar::{
     Axis, ConsumedKeys, Container, Cursor, DragAxis, Key, LayoutError, LayoutItem, LayoutStyle,
     NamedKey, Props, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension,
-    StyledContainer, Transaction, box_item, focus::Role, insertion_index, on_cleanup, signal,
-    track_layout,
+    StyledContainer, Transaction, Transform, box_item, focus::Role, insertion_index, on_cleanup,
+    signal, track_layout,
 };
 
 use crate::shared;
@@ -381,7 +381,7 @@ impl ReorderGroup {
                         (Hand::Keys, DropPreview::Gap) => group.gap_origin(&held, held.to?)?,
                         (Hand::Keys, DropPreview::Line) => return None,
                     };
-                    Some([1.0, 0.0, 0.0, 1.0, x - laid.x, y - laid.y])
+                    Some(Transform::translate(x - laid.x, y - laid.y))
                 }
             })
             .control(Role::ListItem)
@@ -631,8 +631,8 @@ fn insertion_line(
         let along =
             line_position(held.zone(zone)?, to.index, gap) - shared::focus_ring_width() / 2.0;
         Some(match axis {
-            Axis::Horizontal => [1.0, 0.0, 0.0, 1.0, along - rect.x, 0.0],
-            Axis::Vertical => [1.0, 0.0, 0.0, 1.0, 0.0, along - rect.y],
+            Axis::Horizontal => Transform::translate(along - rect.x, 0.0),
+            Axis::Vertical => Transform::translate(0.0, along - rect.y),
         })
     });
     Ok(box_item(line))

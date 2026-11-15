@@ -29,7 +29,7 @@ use crate::surface_context::HomeSurface;
 /// The bool is [`KeyAnswer::took`], resolved at the builder so dispatch has one shape to call.
 type KeyTable = Box<dyn Fn(&Key) -> bool>;
 
-type TransformFn = dyn Fn(Rect) -> Option<[f32; 6]>;
+type TransformFn = dyn Fn(Rect) -> Option<Transform>;
 
 /// What a key handler answers, which is either nothing at all or whether it took the key.
 ///
@@ -187,7 +187,7 @@ pub struct StyledContainer {
     // Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity.
     transform: Option<Rc<TransformFn>>,
     // The transform a stroke was pressed under, so a box whose transform follows its own drag is still measured in the frame the drag started in.
-    stroke_frame: Option<Option<[f32; 6]>>,
+    stroke_frame: Option<Option<Transform>>,
     children: TrackedChildren,
     // Set when the box holds a reactive fragment: static and dynamic children route through the host so they interleave in this node. `children` is empty in that case.
     dyn_host: Option<DynHost>,
@@ -333,7 +333,7 @@ impl StyledContainer {
             || self.link.as_ref().is_some_and(|link| link().is_none())
     }
 
-    fn stroke_matrix(&mut self, event: &Event) -> Option<[f32; 6]> {
+    fn stroke_matrix(&mut self, event: &Event) -> Option<Transform> {
         let transform = self.transform.as_ref()?;
         let current = transform(self.rect.get());
         match event {
@@ -579,7 +579,7 @@ impl StyledContainer {
 
     pub fn with_transform(
         mut self,
-        transform: impl Fn(Rect) -> Option<[f32; 6]> + 'static,
+        transform: impl Fn(Rect) -> Option<Transform> + 'static,
     ) -> Self {
         let transform: Rc<TransformFn> = Rc::new(transform);
         let (rect, placed) = (self.rect, Rc::clone(&transform));
@@ -1339,7 +1339,7 @@ impl Component for StyledContainer {
             content
         };
         let placed = match self.transform.as_ref().and_then(|t| t(r)) {
-            Some(matrix) => RenderNode::transform_with(Transform::from_array(matrix), [composed]),
+            Some(matrix) => RenderNode::transform_with(matrix, [composed]),
             None => composed,
         };
         // The element wraps everything, so a document backend folds the transform and the layer into the box's own style rather than inventing a wrapper for each.
@@ -1647,7 +1647,7 @@ pub fn box_transform(
     scale_y: f32,
     translate_x: f32,
     translate_y: f32,
-) -> Option<[f32; 6]> {
+) -> Option<Transform> {
     box_transform_about(
         rect,
         TransformOrigin::CENTER,

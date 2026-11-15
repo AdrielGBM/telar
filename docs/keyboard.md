@@ -229,11 +229,18 @@ host hands over the conventions of the surface the guest draws in: a hot-reloade
 them before its tree is mounted, and an embedded guest's surface is built on those of the host's surface it
 is drawn inside. A guest shows a shortcut the way its host matches it.
 
-The components that show a shortcut take it as that text and show it the platform's way: `item`'s
+A command can also take chords pressed one after another. `KeySequence` reads them from text whose steps are
+parted by whitespace, each read as `Chord` reads it: `"Mod+K S"` is Mod+K, then S, and a `+` joins the keys
+of one step however it is spaced, so `"Ctrl + +"` is one step. A single chord is a sequence of one step, and
+`KeySequence::chord()` gives it back. `KeySequence::text(convention)` writes each step the platform's way,
+parted by a space.
+
+The components that show a shortcut take a `KeySequence` and show it the platform's way: `item`'s
 `shortcut`, `kbd`'s `chord`, `tooltip`'s and `icon_button`'s `shortcut` and a tab's `.shortcut(…)`. A
-reader hears the same text the row shows. Text that names no chord is shown as written. A command palette
-entry's `with_shortcut(…)` takes a `Chord` rather than text, so a chord that does not parse is an error
-where the entry is declared: `Chord::parse("Mod+O")?`, or `Chord::new(Key::Char('o')).with_primary()`.
+reader hears the same text the row shows, a sequence step after step (`Ctrl+K, then S`). A string literal
+converts to one where the prop is declared, and text that names no sequence panics there, naming the step
+that names no chord; text read at run time goes through `KeySequence::parse`. A command palette entry's
+`with_shortcut(…)` takes a `Chord`: `Chord::parse("Mod+O")?`, or `Chord::new(Key::Char('o')).with_primary()`.
 
 ```text
 menu label:"Edit"

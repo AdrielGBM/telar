@@ -56,7 +56,7 @@ pub fn box_transform_about(
     scale_y: f32,
     translate_x: f32,
     translate_y: f32,
-) -> Option<[f32; 6]> {
+) -> Option<Transform> {
     if rotate_deg == 0.0
         && scale_x == 1.0
         && scale_y == 1.0
@@ -69,7 +69,7 @@ pub fn box_transform_about(
     let matrix = Transform::rotate_around(rotate_deg, px, py)
         .then(Transform::scale_around(scale_x, scale_y, px, py))
         .then(Transform::translate(translate_x, translate_y));
-    Some(matrix.to_array())
+    Some(matrix)
 }
 
 #[cfg(test)]

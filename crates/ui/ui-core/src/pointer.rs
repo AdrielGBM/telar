@@ -2,7 +2,7 @@
 
 use std::cell::Cell;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use platform_core::{Event, PointerButton};
 use ui_tree::EventResult;
 
@@ -139,8 +139,8 @@ pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
 /// Applies the full affine inverse of `matrix` to all pointer-coordinate events. Returns `None` for non-pointer events or when `matrix` is degenerate (det ≈ 0), so callers fall back to the original.
 ///
 /// Public because a component that paints a subtree under a [`RenderNode::Transform`](ui_tree::RenderNode::Transform) it chose itself — a hand-placed rail or panel, rather than a laid-out one — has to put the same transform's inverse on the events it forwards there, or its hit-testing drifts from what is on screen.
-pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
-    let inv = geometry_core::Transform::from_array(matrix).invert()?;
+pub fn transform_pointer(event: &Event, matrix: Transform) -> Option<Event> {
+    let inv = matrix.invert()?;
     // In f64 so pointer coordinates keep their precision; `Transform::apply` would round-trip through f32.
     let apply = |world_x: f64, world_y: f64| -> (f64, f64) {
         let local_x = inv.a as f64 * world_x + inv.c as f64 * world_y + inv.e as f64;
@@ -221,7 +221,7 @@ pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
 }
 
 pub(crate) fn offset_pointer(event: &Event, dx: f64, dy: f64) -> Option<Event> {
-    transform_pointer(event, [1.0, 0.0, 0.0, 1.0, dx as f32, dy as f32])
+    transform_pointer(event, Transform::translate(dx as f32, dy as f32))
 }
 
 /// Returns `event` when the pointer is inside `rect`, or `None` when it is outside; non-pointer events always pass through. Callers use `None` to short-circuit to `Ignored`.

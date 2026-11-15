@@ -14,7 +14,7 @@ use crate::context::{
 };
 use crate::layout_item::box_item;
 use crate::styled_container::StyledContainer;
-use crate::surface::IDENTITY;
+use geometry_core::Transform;
 
 const SLIDE_MS: u64 = 200;
 
@@ -53,7 +53,7 @@ fn press(target: &mut dyn LayoutItem, x: f64, y: f64) -> EventResult {
 }
 
 fn drawn_y(transition: &LayoutTransition) -> f32 {
-    track_layout(transition.layout_node()).unwrap().peek().y + transition.child.matrix_now()[5]
+    track_layout(transition.layout_node()).unwrap().peek().y + transition.child.matrix_now().f
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn a_node_pushed_down_by_a_growing_sibling_slides_there_and_takes_the_pointer_on
         AvailableSpace::Definite(100.0),
     )
     .unwrap();
-    assert_eq!(moving.child.matrix_now(), IDENTITY);
+    assert_eq!(moving.child.matrix_now(), Transform::IDENTITY);
     assert_eq!(drawn_y(&moving), 10.0);
 
     set_layout_style(
@@ -142,7 +142,7 @@ fn a_node_moved_only_by_its_parent_is_left_to_the_parent() {
     assert_eq!(track_layout(inner.layout_node()).unwrap().peek().y, 30.0);
     assert_eq!(
         inner.child.matrix_now(),
-        IDENTITY,
+        Transform::IDENTITY,
         "its place inside its parent did not change"
     );
 }

@@ -4,9 +4,10 @@ use std::rc::Rc;
 
 use telar::{
     Accessible, AlignItems, BorderRadius, Children, Color, Container, IconName, JustifyContent,
-    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Props, Reactive, Rect,
-    RectStyle, RovingAxis, RovingGroup, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
-    Text, TextStyle, amend_surface, box_item, effect, focus::Role, signal, track_layout,
+    KeySequence, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Props, Reactive,
+    Rect, RectStyle, RovingAxis, RovingGroup, RwSignal, ShapeStyle, StyledContainer,
+    SurfaceAmendment, Text, TextStyle, amend_surface, box_item, effect, focus::Role, signal,
+    track_layout,
 };
 
 use crate::navigation::tabs::tab_panel::TabPanelLink;
@@ -95,7 +96,7 @@ pub struct Tab<T> {
     label: Reactive<String>,
     trailing: Children,
     icon: Option<IconName>,
-    shortcut: Option<Reactive<String>>,
+    shortcut: Option<KeySequence>,
 }
 
 impl<T> Tab<T> {
@@ -122,8 +123,8 @@ impl<T> Tab<T> {
         self
     }
 
-    /// The key binding that selects this tab from anywhere, written portably (`"Alt+1"`) and shown in a tooltip over it as the platform writes it.
-    pub fn shortcut(mut self, shortcut: impl Into<Reactive<String>>) -> Self {
+    /// The key binding that selects this tab from anywhere, written portably as [`KeySequence`] reads it (`"Alt+1"`) and shown in a tooltip over it as the platform writes it.
+    pub fn shortcut(mut self, shortcut: impl Into<KeySequence>) -> Self {
         self.shortcut = Some(shortcut.into());
         self
     }
@@ -497,8 +498,8 @@ where
         .toggled(move || selected.get() == value)
         .on_press(move || selected.set(value))
         .a11y_label(move || name.get());
-        let tab = match shortcut {
-            Some(chord) => tab.keyboard_shortcut(move || shared::declared_chord(&chord.get())),
+        let tab = match shortcut.as_ref().and_then(KeySequence::chord).cloned() {
+            Some(chord) => tab.keyboard_shortcut(move || Some(chord.clone())),
             None => tab,
         };
         let tab = match panel {

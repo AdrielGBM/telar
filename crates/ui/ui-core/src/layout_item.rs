@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
 
-use geometry_core::{BorderRadius, Rect};
+use geometry_core::{BorderRadius, Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use layout_reactive::NodeRecording;
 use motion_core::Curve;
@@ -18,7 +18,7 @@ use crate::input_region::{InputHandle, Placement, gate_admits, withhold};
 use crate::layout_leaf::LayoutLeaf;
 use crate::layout_transition::{Flip, translated};
 use crate::presence::{Mount, Transition};
-use crate::surface::{IDENTITY, apply_enter};
+use crate::surface::apply_enter;
 
 /// A container child. The boxed widget is shared (`Rc<RefCell<…>>`) between event dispatch (which borrows it mutably) and its render `segment` (which borrows it immutably to flatten its `view()`) — they never overlap because dispatch is batched. `rect` is the child's layout signal for hit-testing. `Clone` is a cheap handle copy (all fields are `Rc`/signal): a reactive list clones a `Child` to move a reused item to its new position without rebuilding it.
 #[derive(Clone)]
@@ -83,7 +83,7 @@ impl Child {
         input.place(
             self.node,
             Placement::Transform(Rc::new(move || {
-                Some(mount.frame_now().0).filter(|matrix| *matrix != IDENTITY)
+                Some(mount.frame_now().0).filter(|matrix| *matrix != Transform::IDENTITY)
             })),
         );
         self.presented = Some(Rc::new(Presented {
@@ -114,7 +114,9 @@ impl Child {
     /// The child's render boundary, drawn where its transitions have it.
     pub(crate) fn boundary(&self) -> RenderNode {
         let boundary = self.segment.boundary();
-        let (matrix, opacity) = self.mount().map_or((IDENTITY, 1.0), |mount| mount.frame());
+        let (matrix, opacity) = self
+            .mount()
+            .map_or((Transform::IDENTITY, 1.0), |mount| mount.frame());
         let matrix = match &self.flip {
             Some(flip) => translated(matrix, flip.offset()),
             None => matrix,
@@ -123,8 +125,10 @@ impl Child {
     }
 
     /// The matrix the child is drawn with right now, without subscribing to it.
-    pub(crate) fn matrix_now(&self) -> [f32; 6] {
-        let matrix = self.mount().map_or(IDENTITY, |mount| mount.frame_now().0);
+    pub(crate) fn matrix_now(&self) -> Transform {
+        let matrix = self
+            .mount()
+            .map_or(Transform::IDENTITY, |mount| mount.frame_now().0);
         match &self.flip {
             Some(flip) => translated(matrix, flip.offset_now()),
             None => matrix,
@@ -138,7 +142,7 @@ impl Child {
             return withhold(event, send);
         }
         let matrix = self.matrix_now();
-        match (matrix != IDENTITY)
+        match (matrix != Transform::IDENTITY)
             .then(|| crate::pointer::transform_pointer(event, matrix))
             .flatten()
         {

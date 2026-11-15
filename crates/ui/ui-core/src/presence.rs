@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use motion_core::{Animated, Easing, Tween, tween};
 use platform_core::Event;
@@ -15,7 +15,7 @@ use crate::context::{mark_dirty, new_container, set_children, set_display, track
 use crate::layout_item::{BuildPass, Child, LayoutItem, dispose_child};
 use crate::pointer::dispatch_container_event;
 use crate::serial::Serial;
-use crate::surface::{ENTER_MS, Edge, IDENTITY, slide_matrix};
+use crate::surface::{ENTER_MS, Edge, slide_matrix};
 
 reactive_core::surface_local! {
     /// Per surface, because what a host waits on before unmapping is its own window's exits.
@@ -64,9 +64,9 @@ impl Transition {
         self.tween.duration
     }
 
-    fn frame(&self, progress: f32) -> ([f32; 6], f32) {
+    fn frame(&self, progress: f32) -> (Transform, f32) {
         let p = progress.clamp(0.0, 1.0);
-        let matrix = self.slide.map_or(IDENTITY, |(edge, distance)| {
+        let matrix = self.slide.map_or(Transform::IDENTITY, |(edge, distance)| {
             slide_matrix(edge, distance * (1.0 - p))
         });
         (matrix, p)
@@ -161,16 +161,16 @@ impl Mount {
     }
 
     /// The transform and opacity to draw the child with, subscribing the caller to the progress.
-    pub(crate) fn frame(&self) -> ([f32; 6], f32) {
+    pub(crate) fn frame(&self) -> (Transform, f32) {
         if !self.progress.is_alive() {
-            return (IDENTITY, 1.0);
+            return (Transform::IDENTITY, 1.0);
         }
         self.transition.frame(self.progress.get())
     }
 
-    pub(crate) fn frame_now(&self) -> ([f32; 6], f32) {
+    pub(crate) fn frame_now(&self) -> (Transform, f32) {
         if !self.progress.is_alive() {
-            return (IDENTITY, 1.0);
+            return (Transform::IDENTITY, 1.0);
         }
         self.transition.frame(self.progress.read().peek())
     }

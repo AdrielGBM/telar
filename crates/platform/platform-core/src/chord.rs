@@ -1,4 +1,4 @@
-//! [`Chord`]: a keyboard shortcut written once, shown and matched the way the platform it runs on spells it.
+//! [`Chord`] and [`KeySequence`]: a keyboard shortcut written once, shown and matched the way the platform it runs on spells it.
 
 use std::fmt;
 use std::str::FromStr;
@@ -281,6 +281,106 @@ impl fmt::Display for ChordError {
 }
 
 impl std::error::Error for ChordError {}
+
+/// Chords pressed one after another to run one command: `"Mod+K S"` is Mod+K, then S. A single chord is a sequence of one step.
+///
+/// Parsed from text whose steps are parted by whitespace, each read as [`Chord`] reads it. A `+` joins the keys of one step however it is spaced, so `"Ctrl + K"` is one step and `"Ctrl + +"` is Ctrl and the plus key.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct KeySequence {
+    first: Chord,
+    then: Vec<Chord>,
+}
+
+impl KeySequence {
+    pub fn parse(text: &str) -> Result<Self, KeySequenceError> {
+        let mut steps = step_words(text).into_iter().map(|step| {
+            Chord::parse(&step).map_err(|error| KeySequenceError::Step { step, error })
+        });
+        let first = steps.next().ok_or(KeySequenceError::Empty)??;
+        let then = steps.collect::<Result<_, _>>()?;
+        Ok(Self { first, then })
+    }
+
+    /// The chords in the order they are pressed.
+    pub fn steps(&self) -> impl Iterator<Item = &Chord> {
+        std::iter::once(&self.first).chain(&self.then)
+    }
+
+    /// The chord, when the sequence is a single one: what a control can declare as its shortcut, since `aria-keyshortcuts` has no form for a sequence.
+    pub fn chord(&self) -> Option<&Chord> {
+        self.then.is_empty().then_some(&self.first)
+    }
+
+    /// The sequence as `convention` writes it, steps parted by a space: `Ctrl+K S`, or `⌘K S` on a Mac.
+    pub fn text(&self, convention: KeyboardConvention) -> String {
+        self.steps()
+            .map(|step| step.text(convention))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+impl From<Chord> for KeySequence {
+    fn from(chord: Chord) -> Self {
+        Self {
+            first: chord,
+            then: Vec::new(),
+        }
+    }
+}
+
+impl FromStr for KeySequence {
+    type Err = KeySequenceError;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::parse(text)
+    }
+}
+
+impl From<&'static str> for KeySequence {
+    /// Panics on text that names no sequence, so a shortcut written as a literal is refused where it is declared. Runtime text goes through [`KeySequence::parse`].
+    fn from(text: &'static str) -> Self {
+        Self::parse(text).unwrap_or_else(|error| panic!("`{text}` is not a key sequence: {error}"))
+    }
+}
+
+/// Why text names no [`KeySequence`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum KeySequenceError {
+    Empty,
+    /// A step, as written, that names no [`Chord`].
+    Step {
+        step: String,
+        error: ChordError,
+    },
+}
+
+impl fmt::Display for KeySequenceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => f.write_str("a key sequence names at least one chord"),
+            Self::Step { step, error } => write!(f, "step `{step}`: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for KeySequenceError {}
+
+/// The steps of a sequence's text: whitespace parts them, except beside a `+`, which joins the keys of one chord however it is spaced.
+fn step_words(text: &str) -> Vec<String> {
+    let mut steps: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match steps.last_mut() {
+            Some(step)
+                if word.starts_with('+') || (step.ends_with('+') && !step.ends_with("++")) =>
+            {
+                step.push_str(word)
+            }
+            _ => steps.push(word.to_string()),
+        }
+    }
+    steps
+}
 
 #[derive(Clone, Copy)]
 enum Modifier {

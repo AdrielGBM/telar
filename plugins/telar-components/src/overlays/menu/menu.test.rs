@@ -1038,7 +1038,7 @@ fn the_trigger_stands_at_the_menu_s_size() {
     }
 }
 
-/// A row's shortcut is written once, portably, and shown the way the platform writes it: on a PC, `Mod` is Ctrl and the keys are words joined with `+`.
+/// A row's shortcut is written once, portably, and shown the way the platform writes it: on a PC, `Mod` is Ctrl and the keys are words joined with `+`. A sequence is shown step after step, and a reader is told no keys for it, since the form a reader takes has none for a sequence.
 #[test]
 fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
     use telar::{DrawCommand, KeyboardConvention, NamedKey};
@@ -1052,7 +1052,11 @@ fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
                 .label("Edit")
                 .children(Children::new(|| {
                     let mut items = Vec::new();
-                    for (label, shortcut) in [("Undo", "Mod+Z"), ("Redo", "Mod+Shift+Z")] {
+                    for (label, shortcut) in [
+                        ("Undo", "Mod+Z"),
+                        ("Redo", "Mod+Shift+Z"),
+                        ("Format", "Mod+K F"),
+                    ] {
                         items.push(crate::layout::list::list::item(
                             crate::layout::list::list::ItemProps::props()
                                 .label(label)
@@ -1097,7 +1101,7 @@ fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
     };
 
     let (drawn, read, keys) = open_with(KeyboardConvention::Pc);
-    for shown in ["Ctrl+Z", "Ctrl+Shift+Z"] {
+    for shown in ["Ctrl+Z", "Ctrl+Shift+Z", "Ctrl+K, then F"] {
         assert!(drawn.iter().any(|text| text == shown), "{shown}: {drawn:?}");
     }
     assert!(
@@ -1108,20 +1112,33 @@ fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
         keys,
         [
             Some("Control+Z".to_string()),
-            Some("Control+Shift+Z".to_string())
+            Some("Control+Shift+Z".to_string()),
+            None
         ],
         "and is told the keys in the form a reader takes"
     );
 
     let (drawn, _, keys) = open_with(KeyboardConvention::Mac);
-    for shown in ["⌘Z", "⇧⌘Z"] {
+    for shown in ["⌘Z", "⇧⌘Z", "⌘K, then F"] {
         assert!(drawn.iter().any(|text| text == shown), "{shown}: {drawn:?}");
     }
     assert_eq!(
         keys,
-        [Some("Meta+Z".to_string()), Some("Shift+Meta+Z".to_string())],
+        [
+            Some("Meta+Z".to_string()),
+            Some("Shift+Meta+Z".to_string()),
+            None
+        ],
         "a Mac names Command, not Control"
     );
+}
+
+#[test]
+#[should_panic(
+    expected = "`Mod+Shfit+Z` is not a key sequence: step `Mod+Shfit+Z`: `Shfit` is not a modifier"
+)]
+fn a_row_s_shortcut_that_names_no_keys_is_refused_where_it_is_declared() {
+    crate::layout::list::list::ItemProps::props().shortcut("Mod+Shfit+Z");
 }
 
 /// A row can come and go while its menu is open: hidden, it takes no room and the keyboard passes over it; shown, it is there without the menu opening again.

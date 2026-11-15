@@ -45,8 +45,8 @@ pub use accessibility::{
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_base, asset_url, set_asset_base};
 pub use chord::{
-    Chord, ChordError, KeyboardConvention, KeyboardConventionContext, keyboard_convention,
-    set_keyboard_convention,
+    Chord, ChordError, KeySequence, KeySequenceError, KeyboardConvention,
+    KeyboardConventionContext, keyboard_convention, set_keyboard_convention,
 };
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
 pub use destination::{

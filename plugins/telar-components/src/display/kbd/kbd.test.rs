@@ -1,11 +1,15 @@
 use telar::{
-    AvailableSpace, BorderRadius, ComponentList, Container, ControlSize, DrawCommand,
+    AvailableSpace, BorderRadius, ComponentList, Container, ControlSize, DrawCommand, KeySequence,
     KeyboardConvention, LayoutItem, LayoutStyle, RectStyle, SurfaceAmendment, box_item,
     compute_layout,
 };
 
 use crate::shared::shown_chord;
 use crate::{KbdCaps, KbdProps, KbdTokens, kbd};
+
+fn heard(sequence: &'static str) -> String {
+    shown_chord(&KeySequence::from(sequence))
+}
 
 fn texts(chord: &'static str) -> Vec<String> {
     texts_in(KeyboardConvention::Pc, chord)
@@ -55,21 +59,14 @@ fn a_mac_draws_its_symbols_on_the_caps() {
 }
 
 #[test]
-fn text_that_names_no_chord_is_one_cap_as_written() {
-    assert_eq!(texts(" Hyper+K "), ["Hyper+K"]);
-    assert!(texts("  ").is_empty());
-    assert_eq!(shown_chord(" Hyper+K "), "Hyper+K");
-}
-
-#[test]
 fn a_chord_is_spoken_as_the_platform_writes_it() {
     crate::test_support::fresh_layout_runtime();
-    assert_eq!(shown_chord("Shift+Alt+P"), "Alt+Shift+P");
-    assert_eq!(shown_chord(" Ctrl + K "), "Ctrl+K");
-    assert_eq!(shown_chord("Mod+K"), "Ctrl+K");
+    assert_eq!(heard("Shift+Alt+P"), "Alt+Shift+P");
+    assert_eq!(heard(" Ctrl + K "), "Ctrl+K");
+    assert_eq!(heard("Mod+K"), "Ctrl+K");
     crate::test_support::keyboard(KeyboardConvention::Mac);
-    assert_eq!(shown_chord("Mod+K"), "⌘K");
-    assert_eq!(shown_chord("Mod+Shift+P"), "⇧⌘P");
+    assert_eq!(heard("Mod+K"), "⌘K");
+    assert_eq!(heard("Mod+Shift+P"), "⇧⌘P");
 }
 
 fn mounted(props: KbdProps) -> ComponentList {
@@ -262,16 +259,13 @@ fn each_way_of_putting_keys_on_caps_follows_the_platform() {
 fn a_sequence_is_drawn_step_after_step_and_heard_once() {
     assert_eq!(texts("Mod+K S"), ["Ctrl", "K", "S"]);
     assert_eq!(texts(" Ctrl + K  Ctrl + + "), ["Ctrl", "K", "Ctrl", "+"]);
-    assert_eq!(shown_chord("Mod+K S"), "Ctrl+K, then S");
+    assert_eq!(heard("Mod+K S"), "Ctrl+K, then S");
 }
 
 #[test]
-fn text_with_a_word_that_names_no_key_stays_one_cap() {
-    assert_eq!(texts("Any key"), ["Any key"]);
-}
-
-#[test]
-fn a_step_that_names_no_chord_is_kept_as_written_beside_the_others() {
-    assert_eq!(texts("Mod+Shift+P a+a"), ["Ctrl", "Shift", "P", "a+a"]);
-    assert_eq!(shown_chord("Mod+Shift+P a+a"), "Ctrl+Shift+P, then a+a");
+#[should_panic(
+    expected = "`Mod+Shift+P a+a` is not a key sequence: step `a+a`: `a` is not a modifier"
+)]
+fn a_chord_with_a_step_that_names_no_keys_is_refused_where_it_is_declared() {
+    KbdProps::props().chord("Mod+Shift+P a+a");
 }

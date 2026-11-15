@@ -299,7 +299,7 @@ impl SurfaceCanvas {
 
     /// Routes an event that arrived in the outer space: pointers are mapped back through the [`placement`](Self::placement), the surface's overlays see it first, and the tree only if none of them took it — but for a move, which reaches the tree [`covered`](crate::covered).
     pub fn dispatch(&self, event: &Event) -> EventResult {
-        let mapped = crate::transform_pointer(event, self.placement.get().to_array());
+        let mapped = crate::transform_pointer(event, self.placement.get());
         self.dispatch_own(mapped.as_ref().unwrap_or(event))
     }
 

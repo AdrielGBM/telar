@@ -861,7 +861,7 @@ impl ShellPage {
         if rail_x == 0.0 {
             return self.sidebar_scroll.on_event(event);
         }
-        match transform_pointer(event, [1.0, 0.0, 0.0, 1.0, rail_x, 0.0]) {
+        match transform_pointer(event, Transform::translate(rail_x, 0.0)) {
             Some(local) => self.sidebar_scroll.on_event(&local),
             None => self.sidebar_scroll.on_event(event),
         }

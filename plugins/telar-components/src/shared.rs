@@ -12,9 +12,10 @@ pub(crate) mod selection;
 pub(crate) mod type_ahead;
 
 use telar::{
-    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Chord, Color, Container, LayoutError,
-    LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect, RectStyle, StyledContainer, Text,
-    TextStyle, box_item, children, focus::Role, style_follows, use_theme_tokens,
+    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Color, Container, KeySequence,
+    LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect, RectStyle,
+    StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
+    use_theme_tokens,
 };
 
 pub use telar::DOUBLE_CLICK;
@@ -620,12 +621,12 @@ pub(crate) fn shown_while(
     Ok(box_item(list))
 }
 
-/// What `build` makes, under a tooltip of `size` showing `text` and `shortcut` (empty for none): a control that is only a picture, or one whose binding is worth showing, already called `text` by a reader. A recipe because the tooltip builds its trigger where it places it, and again whenever it places it again, so whatever `build` draws from has to outlive one build: a `#[derive(Clone)]` struct of the parts with a `build(&self)`, moved in as `move || parts.build()`.
+/// What `build` makes, under a tooltip of `size` showing `text` and `shortcut`, if any: a control that is only a picture, or one whose binding is worth showing, already called `text` by a reader. A recipe because the tooltip builds its trigger where it places it, and again whenever it places it again, so whatever `build` draws from has to outlive one build: a `#[derive(Clone)]` struct of the parts with a `build(&self)`, moved in as `move || parts.build()`.
 pub(crate) fn hinted(
     build: impl Fn() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     size: ControlSize,
     text: Reactive<String>,
-    shortcut: Option<Reactive<String>>,
+    shortcut: Option<KeySequence>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut props = crate::TooltipProps::props()
         .size(size)
@@ -637,72 +638,14 @@ pub(crate) fn hinted(
     crate::tooltip(props)
 }
 
-/// `chord` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere, a sequence step after step (`Ctrl+K, then S`): what a hint shows and a reader hears. Text that names no [`Chord`] is shown as written.
-pub(crate) fn shown_chord(chord: &str) -> String {
+/// `sequence` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere, step after step (`Ctrl+K, then S`): what a hint shows and a reader hears.
+pub(crate) fn shown_chord(sequence: &KeySequence) -> String {
     let convention = telar::keyboard_convention();
-    match chord_steps(chord) {
-        Some(steps) => steps
-            .iter()
-            .map(|step| step.text(convention))
-            .reduce(|first, next| {
-                crate::strings::text_with(
-                    crate::strings::THEN,
-                    &[("first", &first), ("next", &next)],
-                )
-            })
-            .unwrap_or_default(),
-        None => chord.trim().to_string(),
-    }
-}
-
-/// The single chord a shortcut's text names, for the control the keys run: `None` for a sequence or text that names no chord, which a reader is shown but cannot be told as keys, since `aria-keyshortcuts` has no form for either.
-pub(crate) fn declared_chord(text: &str) -> Option<Chord> {
-    Chord::parse(text).ok()
-}
-
-/// One step of a sequence: a chord, or a step that names none, kept as written.
-pub(crate) enum ChordStep {
-    Chord(Chord),
-    Written(String),
-}
-
-impl ChordStep {
-    /// The step as `convention` writes it, or as written when it names no chord.
-    pub(crate) fn text(&self, convention: telar::KeyboardConvention) -> String {
-        match self {
-            ChordStep::Chord(chord) => chord.text(convention),
-            ChordStep::Written(text) => text.clone(),
-        }
-    }
-}
-
-/// The steps of a sequence written as editors write one, `"Mod+K S"`: what is pressed together, step after step, each read on its own so one step that names no [`Chord`] is kept as written beside the others. `None` when no step names a chord: text, not a shortcut.
-pub(crate) fn chord_steps(text: &str) -> Option<Vec<ChordStep>> {
-    let steps: Vec<ChordStep> = step_words(text)
-        .into_iter()
-        .map(|step| match Chord::parse(&step) {
-            Ok(chord) => ChordStep::Chord(chord),
-            Err(_) => ChordStep::Written(step),
+    sequence
+        .steps()
+        .map(|step| step.text(convention))
+        .reduce(|first, next| {
+            crate::strings::text_with(crate::strings::THEN, &[("first", &first), ("next", &next)])
         })
-        .collect();
-    steps
-        .iter()
-        .any(|step| matches!(step, ChordStep::Chord(_)))
-        .then_some(steps)
-}
-
-/// Whitespace parts the steps of a sequence, except beside a `+`, which joins the keys of one chord however it is spaced: `Ctrl + K` is one step, as is `Ctrl + +`.
-fn step_words(text: &str) -> Vec<String> {
-    let mut steps: Vec<String> = Vec::new();
-    for word in text.split_whitespace() {
-        match steps.last_mut() {
-            Some(step)
-                if word.starts_with('+') || (step.ends_with('+') && !step.ends_with("++")) =>
-            {
-                step.push_str(word)
-            }
-            _ => steps.push(word.to_string()),
-        }
-    }
-    steps
+        .unwrap_or_default()
 }

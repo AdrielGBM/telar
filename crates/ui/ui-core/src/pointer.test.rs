@@ -407,7 +407,16 @@ fn a_scroll_end_is_mapped_like_the_scroll_before_it() {
     };
     let ended = Event::ScrollEnded { x: 70.0, y: 90.0 };
     assert_eq!(
-        at(transform_pointer(&ended, [2.0, 0.0, 0.0, 2.0, 30.0, 50.0])),
+        at(transform_pointer(
+            &ended,
+            Transform {
+                a: 2.0,
+                d: 2.0,
+                e: 30.0,
+                f: 50.0,
+                ..Transform::IDENTITY
+            }
+        )),
         Some((20.0, 20.0))
     );
     assert_eq!(at(offset_pointer(&ended, 10.0, 40.0)), Some((60.0, 50.0)));

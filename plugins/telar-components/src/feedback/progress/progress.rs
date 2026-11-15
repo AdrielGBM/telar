@@ -111,7 +111,12 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
                 Direction::Ltr => r.x,
                 Direction::Rtl => r.x + r.width,
             };
-            Some(Transform::scale_around(filled(), 1.0, start, r.y + r.height / 2.0).to_array())
+            Some(Transform::scale_around(
+                filled(),
+                1.0,
+                start,
+                r.y + r.height / 2.0,
+            ))
         }
     });
 

@@ -1,7 +1,7 @@
 [logic]
 use crate::shared::{self, shown_chord};
 use telar::preview::{by_role, by_text};
-use telar::{ControlSize, Role};
+use telar::{ControlSize, KeySequence, Role};
 
 [previews "Display/Kbd" layout:centered]
 
@@ -15,7 +15,7 @@ kbd chord:"Mod+D" tone:ink variant:soft
 kbd chord:"Mod+K H" caps:KbdCaps::Each
 
 [play]
-canvas.expect(by_role(Role::KeyboardInput).named(shown_chord("Mod+K H")))?;
+canvas.expect(by_role(Role::KeyboardInput).named(shown_chord(&KeySequence::from("Mod+K H"))))?;
 canvas.expect_absent(by_text("K"))?;
 canvas.expect_absent(by_text("H"))?;
 

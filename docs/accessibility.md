@@ -402,8 +402,8 @@ key spelled as UI Events names it, so `Mod+Shift+Z` is `Control+Shift+Z` on a PC
 Mac, and `Ctrl++` is `Control+Plus`. It is `aria-keyshortcuts` in a document, AccessKit `keyboard_shortcut`
 on the desktop, and `, shortcut Control+Z` in the terminal's reading; `None` says nothing.
 The catalogue sets it on a menu row with `shortcut`, on an `icon_button` and a tab with `shortcut`, and on a
-command palette row. Those props are text that may name a sequence (`"Mod+K S"`) to show; a reader is told
-only the text that names one chord.
+command palette row. Those props are a `KeySequence`, which may be a sequence (`"Mod+K S"`) to show; a reader
+is told the keys only of a sequence of one chord, since `aria-keyshortcuts` has no form for a sequence.
 
 The visible shortcut stays in the control's name (`Undo, Ctrl+Z`; a palette row is `Open file, Ctrl+O`).
 `aria-keyshortcuts` is a hint on top of the name, not a replacement for it: VoiceOver and TalkBack do not

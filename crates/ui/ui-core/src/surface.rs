@@ -51,7 +51,6 @@ pub enum Edge {
 /// Enter-animation duration and slide travel.
 pub(crate) const ENTER_MS: u64 = 200;
 const SLIDE_DISTANCE: f32 = 24.0;
-pub(crate) const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
 #[derive(Clone, Copy)]
 pub(crate) enum EnterMotion {
@@ -60,17 +59,17 @@ pub(crate) enum EnterMotion {
 }
 
 /// The transform matrix and opacity for an enter animation at `progress` (0 = just opened, 1 = settled). A slide starts `SLIDE_DISTANCE` off its edge and eases to rest; both forms fade in.
-pub(crate) fn enter_transform(motion: EnterMotion, progress: f32) -> ([f32; 6], f32) {
+pub(crate) fn enter_transform(motion: EnterMotion, progress: f32) -> (Transform, f32) {
     let p = progress.clamp(0.0, 1.0);
     let opacity = p;
     match motion {
-        EnterMotion::Fade => (IDENTITY, opacity),
+        EnterMotion::Fade => (Transform::IDENTITY, opacity),
         EnterMotion::Slide(anchor) => (slide_matrix(anchor, SLIDE_DISTANCE * (1.0 - p)), opacity),
     }
 }
 
 /// A translation `distance` px off `edge`, toward the outside of the viewport.
-pub(crate) fn slide_matrix(edge: Edge, distance: f32) -> [f32; 6] {
+pub(crate) fn slide_matrix(edge: Edge, distance: f32) -> Transform {
     let (dx, dy) = match edge {
         Edge::Top => (0.0, -distance),
         Edge::Bottom => (0.0, distance),
@@ -78,19 +77,19 @@ pub(crate) fn slide_matrix(edge: Edge, distance: f32) -> [f32; 6] {
         Edge::Right => (distance, 0.0),
         Edge::Center => (0.0, 0.0),
     };
-    Transform::translate(dx, dy).to_array()
+    Transform::translate(dx, dy)
 }
 
-pub(crate) fn apply_enter(node: RenderNode, matrix: [f32; 6], opacity: f32) -> RenderNode {
+pub(crate) fn apply_enter(node: RenderNode, matrix: Transform, opacity: f32) -> RenderNode {
     let faded = if opacity < 1.0 {
         RenderNode::layer(opacity, 0.0, [node])
     } else {
         node
     };
-    if matrix == IDENTITY {
+    if matrix == Transform::IDENTITY {
         faded
     } else {
-        RenderNode::transform_with(Transform::from_array(matrix), [faded])
+        RenderNode::transform_with(matrix, [faded])
     }
 }
 
@@ -214,17 +213,19 @@ impl SurfaceScaffold {
             self.content.layout_node(),
             Placement::Transform(Rc::new(move || {
                 Some(enter_transform(EnterMotion::Slide(edge), moving.get()).0)
-                    .filter(|matrix| *matrix != IDENTITY)
+                    .filter(|matrix| *matrix != Transform::IDENTITY)
             })),
         );
         self.transition = Some(transition);
         self
     }
 
-    fn panel_matrix(&self) -> [f32; 6] {
-        self.transition.as_ref().map_or(IDENTITY, |transition| {
-            enter_transform(EnterMotion::Slide(self.edge), transition.get()).0
-        })
+    fn panel_matrix(&self) -> Transform {
+        self.transition
+            .as_ref()
+            .map_or(Transform::IDENTITY, |transition| {
+                enter_transform(EnterMotion::Slide(self.edge), transition.get()).0
+            })
     }
 }
 
@@ -239,14 +240,14 @@ impl Component for SurfaceScaffold {
         let content = self.content.view();
         let (matrix, opacity) = match &self.transition {
             Some(transition) => enter_transform(EnterMotion::Slide(self.edge), transition.get()),
-            None => (IDENTITY, 1.0),
+            None => (Transform::IDENTITY, 1.0),
         };
         let panel = apply_enter(content, matrix, opacity);
         match (self.scrim, self.root_rect.as_ref()) {
             (Some(scrim), Some(rect)) => {
                 let scrim = apply_enter(
                     RenderNode::rect(rect.get(), RectStyle::filled(scrim.color(), 0.0)),
-                    IDENTITY,
+                    Transform::IDENTITY,
                     opacity,
                 );
                 RenderNode::group([scrim, panel])
@@ -257,7 +258,7 @@ impl Component for SurfaceScaffold {
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         let matrix = self.panel_matrix();
-        let moved = (matrix != IDENTITY)
+        let moved = (matrix != Transform::IDENTITY)
             .then(|| crate::pointer::transform_pointer(event, matrix))
             .flatten();
         let event = moved.as_ref().unwrap_or(event);

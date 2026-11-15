@@ -189,7 +189,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     .with_transform(move |r| {
         let t = ((fill_value.get() - min) / (max - min)).clamp(0.0, 1.0);
         // `box_transform` only pivots scale on the rect centre; a progress bar needs the left edge pinned, which needs the raw matrix.
-        Some(Transform::scale_around(t, 1.0, r.x, r.y + r.height / 2.0).to_array())
+        Some(Transform::scale_around(t, 1.0, r.x, r.y + r.height / 2.0))
     });
 
     // A normal in-flow child, so it lands at the track's top-left; a translate then carries it to the value's position and re-centres it against the thinner track.

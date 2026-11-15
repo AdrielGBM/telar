@@ -1,7 +1,7 @@
 [logic]
 use crate::look::Look;
-use crate::shared::{self, ChordStep, shown_chord};
-use telar::{Chord, ControlSize, Tone, Variant, keyboard_convention};
+use crate::shared::{self, shown_chord};
+use telar::{ControlSize, KeySequence, Tone, Variant, keyboard_convention};
 
 /// The key caps' own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -35,9 +35,9 @@ impl KbdTokens {
 ///
 /// A reader hears the chord once, as the platform writes it (`Ctrl+K, then S`), as keyboard input: text, never a stop, the caps silent. A document writes it as `<kbd>`. It is the hint a person sees; the control that runs the command says the shortcut to a reader itself, through `keyboard_shortcut`, where it can be used.
 pub struct Props {
-    /// The chord, written portably as [`Chord`] reads it: `"Mod+K"`, `"Alt+Shift+P"`, `"Ctrl++"`, or a sequence of them step after step, `"Mod+K S"`. Its caps are the keys the platform names, `⌘` `K` on a Mac and `Ctrl` `K` elsewhere; the steps of a sequence stand further apart than the keys of one, and it is heard as `Ctrl+K, then S`. Text that names no chord is one cap, as written.
-    #[props(into, default)]
-    pub chord: Reactive<String>,
+    /// The chord, written portably as [`KeySequence`] reads it: `"Mod+K"`, `"Alt+Shift+P"`, `"Ctrl++"`, or a sequence of them step after step, `"Mod+K S"`. Its caps are the keys the platform names, `⌘` `K` on a Mac and `Ctrl` `K` elsewhere; the steps of a sequence stand further apart than the keys of one, and it is heard as `Ctrl+K, then S`.
+    #[props(into)]
+    pub chord: KeySequence,
     /// How large the caps are drawn: their padding, the gap between them and their text, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
@@ -66,44 +66,37 @@ pub enum KbdCaps {
     Joined,
 }
 
-/// The caps of each step of `chord`, the way the platform names its keys, each with the separator standing before it, if any. Text that names no [`Chord`] is one cap, as written.
-fn shown_steps(chord: &str, caps: KbdCaps) -> Vec<Vec<(Option<&'static str>, String)>> {
+/// The caps of each step of `sequence`, the way the platform names its keys, each with the separator standing before it, if any.
+fn shown_steps(sequence: &KeySequence, caps: KbdCaps) -> Vec<Vec<(Option<&'static str>, String)>> {
     let convention = keyboard_convention();
     let separator = Some(convention.separator()).filter(|separator| !separator.is_empty());
     let spaced = separator.map_or_else(String::new, |separator| format!(" {separator} "));
-    let alone = |cap: String| vec![(None, cap)];
-    match shared::chord_steps(chord) {
-        Some(steps) => steps
-            .iter()
-            .map(|step| match (step, caps) {
-                (ChordStep::Chord(chord), KbdCaps::Joined) => {
-                    alone(chord.keys(convention).join(&spaced))
-                }
-                (ChordStep::Chord(chord), KbdCaps::Each) => {
-                    chord.keys(convention).into_iter().map(|key| (None, key)).collect()
-                }
-                (ChordStep::Chord(chord), KbdCaps::Linked) => chord
-                    .keys(convention)
-                    .into_iter()
-                    .enumerate()
-                    .map(|(at, key)| (separator.filter(|_| at > 0), key))
-                    .collect(),
-                (ChordStep::Written(text), _) => alone(text.clone()),
-            })
-            .collect(),
-        None if chord.trim().is_empty() => Vec::new(),
-        None => vec![alone(chord.trim().to_string())],
-    }
+    sequence
+        .steps()
+        .map(|chord| match caps {
+            KbdCaps::Joined => vec![(None, chord.keys(convention).join(&spaced))],
+            KbdCaps::Each => chord.keys(convention).into_iter().map(|key| (None, key)).collect(),
+            KbdCaps::Linked => chord
+                .keys(convention)
+                .into_iter()
+                .enumerate()
+                .map(|(at, key)| (separator.filter(|_| at > 0), key))
+                .collect(),
+        })
+        .collect()
 }
 
 let size = props.size;
 let chord = props.chord.clone();
 let look = Look::shown(props.tone.clone(), props.variant);
 let caps = props.caps;
-let steps = memo(move || shown_steps(&chord.get(), caps).into_iter().enumerate().collect::<Vec<_>>());
+let steps = memo({
+    let chord = chord.clone();
+    move || shown_steps(&chord, caps).into_iter().enumerate().collect::<Vec<_>>()
+});
 
 [view]
-row role:(Role::KeyboardInput) a11y_label:(shown_chord(&$props.chord))
+row role:(Role::KeyboardInput) a11y_label:(shown_chord(&chord))
     // The steps of a sequence stand as far apart as two controls do, well clear of the keys inside one.
     row align:center gap:(shared::gap_md(size))
         for (step, keys) in $steps key (*step, keys.clone())

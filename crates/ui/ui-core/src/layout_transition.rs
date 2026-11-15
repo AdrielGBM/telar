@@ -3,7 +3,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use geometry_core::Point;
+use geometry_core::{Point, Transform};
 use layout_core::NodeId;
 use motion_core::{Animated, Curve, Lerp};
 use platform_core::Event;
@@ -106,12 +106,15 @@ fn position_in_parent(node: NodeId, left: Option<NodeId>) -> Option<(Option<Node
 }
 
 /// `matrix`, then a translation by `offset`.
-pub(crate) fn translated(matrix: [f32; 6], offset: Point) -> [f32; 6] {
+pub(crate) fn translated(matrix: Transform, offset: Point) -> Transform {
     if offset.x == 0.0 && offset.y == 0.0 {
         return matrix;
     }
-    let [a, b, c, d, e, f] = matrix;
-    [a, b, c, d, e + offset.x, f + offset.y]
+    Transform {
+        e: matrix.e + offset.x,
+        f: matrix.f + offset.y,
+        ..matrix
+    }
 }
 
 /// Transform-only: laid out once at its new place and drawn gliding there under `curve`, so a size change still lands at once and a time scale of zero (reduced motion) skips the glide. Built by [`animate_layout`].

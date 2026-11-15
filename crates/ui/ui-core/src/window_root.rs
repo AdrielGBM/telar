@@ -7,7 +7,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::context::{compute_layout, mark_dirty, new_container};
 use crate::focus_mode::FocusMode;
 use crate::layout_item::LayoutItem;
-use crate::surface::{EnterMotion, IDENTITY, SurfaceTransition, apply_enter, enter_transform};
+use crate::surface::{EnterMotion, SurfaceTransition, apply_enter, enter_transform};
 
 /// Lays its content out against the window, because nothing above it will.
 ///
@@ -71,7 +71,7 @@ impl Component for WindowRoot {
         match &self.transition {
             Some(transition) => {
                 let (_, opacity) = enter_transform(EnterMotion::Fade, transition.get());
-                apply_enter(content, IDENTITY, opacity)
+                apply_enter(content, geometry_core::Transform::IDENTITY, opacity)
             }
             None => content,
         }

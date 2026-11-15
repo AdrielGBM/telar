@@ -610,7 +610,7 @@ impl Component for Guests {
             {
                 continue;
             }
-            let placed = Transform::translate(at.x, at.y).to_array();
+            let placed = Transform::translate(at.x, at.y);
             let local = telar::transform_pointer(event, placed).unwrap_or_else(|| event.clone());
             taken |= embed.dispatch_overlays(&local) || embed.on_event(&local);
             for command in embed.drain_window_commands() {

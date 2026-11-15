@@ -271,3 +271,46 @@ fn the_aria_form_names_keys_as_ui_events_does_and_resolves_mod_per_platform() {
     assert_eq!(chord("Menu").aria(Pc), "ContextMenu");
     assert_eq!(chord("Esc").aria(Pc), "Escape");
 }
+
+fn sequence(text: &str) -> KeySequence {
+    KeySequence::parse(text).unwrap_or_else(|e| panic!("{text}: {e}"))
+}
+
+#[test]
+fn a_sequence_reads_its_steps_in_the_order_they_are_pressed() {
+    let steps: Vec<Chord> = sequence("Mod+K S").steps().cloned().collect();
+    assert_eq!(steps, [chord("Mod+K"), chord("S")]);
+    let spaced: Vec<Chord> = sequence(" Ctrl + K  Ctrl + + ").steps().cloned().collect();
+    assert_eq!(spaced, [chord("Ctrl+K"), chord("Ctrl++")]);
+}
+
+#[test]
+fn only_a_sequence_of_one_step_is_a_chord() {
+    assert_eq!(sequence("Mod+Z").chord(), Some(&chord("Mod+Z")));
+    assert_eq!(sequence("Mod+K S").chord(), None);
+    assert_eq!(KeySequence::from(chord("F5")), sequence("F5"));
+}
+
+#[test]
+fn a_sequence_is_written_step_after_step_as_the_platform_writes_each() {
+    assert_eq!(sequence("Mod+K Shift+S").text(Pc), "Ctrl+K Shift+S");
+    assert_eq!(sequence("Mod+K Shift+S").text(Mac), "⌘K ⇧S");
+}
+
+#[test]
+fn text_that_names_no_sequence_says_which_step_and_why() {
+    assert_eq!(KeySequence::parse(" "), Err(KeySequenceError::Empty));
+    assert_eq!(
+        KeySequence::parse("Mod+K Kay"),
+        Err(KeySequenceError::Step {
+            step: "Kay".into(),
+            error: ChordError::UnknownKey("Kay".into()),
+        })
+    );
+}
+
+#[test]
+#[should_panic(expected = "`Mod+K Kay` is not a key sequence: step `Kay`: `Kay` is not a key")]
+fn a_literal_that_names_no_sequence_is_refused_where_it_is_written() {
+    let _ = KeySequence::from("Mod+K Kay");
+}

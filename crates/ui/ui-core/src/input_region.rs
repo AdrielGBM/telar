@@ -21,7 +21,7 @@ pub(crate) enum InputMode {
 #[derive(Clone)]
 pub(crate) enum Placement {
     Offset(Rc<dyn Fn() -> (f32, f32)>),
-    Transform(Rc<dyn Fn() -> Option<[f32; 6]>>),
+    Transform(Rc<dyn Fn() -> Option<Transform>>),
     Clip(Rc<dyn Fn() -> Option<Rect>>),
 }
 
@@ -415,11 +415,10 @@ impl Shape {
     }
 
     /// An axis-aligned matrix keeps a box a box; one that turns it hands back the corners it draws, since the bounds around those would claim four corners the box is not in.
-    fn transformed(self, matrix: [f32; 6]) -> Shape {
-        let transform = Transform::from_array(matrix);
+    fn transformed(self, transform: Transform) -> Shape {
         let apply = |corner| transform.apply(corner);
         match self {
-            Shape::Box(rect) if matrix[1] == 0.0 && matrix[2] == 0.0 => {
+            Shape::Box(rect) if transform.b == 0.0 && transform.c == 0.0 => {
                 let start = apply(Point::new(rect.x, rect.y));
                 let end = apply(Point::new(rect.x + rect.width, rect.y + rect.height));
                 Shape::Box(Rect::new(
@@ -617,7 +616,7 @@ fn unplace(node: NodeId, x: f32, y: f32) -> Option<(f32, f32)> {
             // A matrix that will not invert flattened the box onto a line, and no point is inside that.
             Placement::Transform(matrix) => match matrix() {
                 Some(matrix) => {
-                    let inverse = Transform::from_array(matrix).invert()?;
+                    let inverse = matrix.invert()?;
                     let local = inverse.apply(Point::new(point.0, point.1));
                     (local.x, local.y)
                 }

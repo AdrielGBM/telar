@@ -182,30 +182,39 @@ fn no_dismiss_when_not_configured() {
 }
 #[test]
 fn enter_transform_fade_is_opacity_only() {
-    assert_eq!(enter_transform(EnterMotion::Fade, 0.0), (IDENTITY, 0.0));
-    assert_eq!(enter_transform(EnterMotion::Fade, 0.5), (IDENTITY, 0.5));
-    assert_eq!(enter_transform(EnterMotion::Fade, 1.0), (IDENTITY, 1.0));
+    assert_eq!(
+        enter_transform(EnterMotion::Fade, 0.0),
+        (Transform::IDENTITY, 0.0)
+    );
+    assert_eq!(
+        enter_transform(EnterMotion::Fade, 0.5),
+        (Transform::IDENTITY, 0.5)
+    );
+    assert_eq!(
+        enter_transform(EnterMotion::Fade, 1.0),
+        (Transform::IDENTITY, 1.0)
+    );
 }
 
 #[test]
 fn enter_transform_slide_offsets_from_edge_then_settles() {
     let (m, o) = enter_transform(EnterMotion::Slide(Edge::Top), 0.0);
     assert_eq!(o, 0.0);
-    assert_eq!(m[5], -SLIDE_DISTANCE, "top slides down from above");
+    assert_eq!(m.f, -SLIDE_DISTANCE, "top slides down from above");
     assert_eq!(
         enter_transform(EnterMotion::Slide(Edge::Top), 1.0),
-        (IDENTITY, 1.0)
+        (Transform::IDENTITY, 1.0)
     );
     assert_eq!(
-        enter_transform(EnterMotion::Slide(Edge::Bottom), 0.0).0[5],
+        enter_transform(EnterMotion::Slide(Edge::Bottom), 0.0).0.f,
         SLIDE_DISTANCE
     );
     assert_eq!(
-        enter_transform(EnterMotion::Slide(Edge::Left), 0.0).0[4],
+        enter_transform(EnterMotion::Slide(Edge::Left), 0.0).0.e,
         -SLIDE_DISTANCE
     );
     assert_eq!(
-        enter_transform(EnterMotion::Slide(Edge::Right), 0.0).0[4],
+        enter_transform(EnterMotion::Slide(Edge::Right), 0.0).0.e,
         SLIDE_DISTANCE
     );
 }

@@ -53,9 +53,7 @@ fn scaled_from(origin: TransformOrigin) -> Rect {
         DrawCommand::PushElement {
             element: Arc::new(Element::new(ElementId(1), Semantics::group(), "", BOX)),
         },
-        DrawCommand::PushMatrix {
-            transform: Transform::from_array(matrix),
-        },
+        DrawCommand::PushMatrix { transform: matrix },
         DrawCommand::Rect {
             rect: BOX,
             style: Arc::new(RectStyle::default().with_fill(Color::WHITE)),
@@ -196,9 +194,7 @@ fn a_box_inside_a_drawing_scales_about_its_own_start() {
         DrawCommand::PushElement {
             element: Arc::new(Element::new(ElementId(2), Semantics::group(), "", BELOW)),
         },
-        DrawCommand::PushMatrix {
-            transform: Transform::from_array(matrix),
-        },
+        DrawCommand::PushMatrix { transform: matrix },
         DrawCommand::Rect {
             rect: BELOW,
             style: Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(200, 30, 40))),
