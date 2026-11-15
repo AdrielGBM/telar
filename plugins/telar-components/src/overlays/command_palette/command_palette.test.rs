@@ -115,7 +115,7 @@ impl Mounted {
 
     fn in_size(commands: Vec<Command>, width: f32, height: f32) -> Self {
         crate::test_support::fresh_layout_runtime();
-        telar::set_locale("en");
+        telar::set_locale(telar::locale_tag!("en"));
         telar::testing::reset_keyboard();
         focus::clear();
         let open = signal(false);

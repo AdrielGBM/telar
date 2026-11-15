@@ -1,6 +1,6 @@
 //! The text the catalogue draws itself, in the locales it ships, and the one way a widget asks for it.
 
-use telar::i18n::{Catalog, Entry, Message, Part, translate_with_override};
+use telar::i18n::{Catalog, Entry, Message, Part, locale_tag, translate_with_override};
 
 const NAMESPACE: &str = "telar_components";
 
@@ -46,31 +46,31 @@ pub(crate) const WARNING: &str = "warning";
 pub(crate) const WINDOW: &str = "window";
 
 static CATALOG: Catalog = Catalog {
-    locales: &["ar", "en", "es"],
-    default_locale: "en",
+    locales: &[locale_tag!("ar"), locale_tag!("en"), locale_tag!("es")],
+    default_locale: locale_tag!("en"),
     // Sorted by key: a lookup is a binary search, and an entry out of order is never found.
     entries: &[
         Entry {
             key: BRIGHTNESS,
             messages: &[
-                ("ar", Message::Plain("السطوع")),
-                ("en", Message::Plain("Brightness")),
-                ("es", Message::Plain("Brillo")),
+                (locale_tag!("ar"), Message::Plain("السطوع")),
+                (locale_tag!("en"), Message::Plain("Brightness")),
+                (locale_tag!("es"), Message::Plain("Brillo")),
             ],
         },
         Entry {
             key: CHARACTERS,
             messages: &[
                 (
-                    "ar",
+                    locale_tag!("ar"),
                     Message::Format(&[Part::Arg("count"), Part::Lit(" حرف")]),
                 ),
                 (
-                    "en",
+                    locale_tag!("en"),
                     Message::Format(&[Part::Arg("count"), Part::Lit(" characters")]),
                 ),
                 (
-                    "es",
+                    locale_tag!("es"),
                     Message::Format(&[Part::Arg("count"), Part::Lit(" caracteres")]),
                 ),
             ],
@@ -79,7 +79,7 @@ static CATALOG: Catalog = Catalog {
             key: CHARACTERS_OF,
             messages: &[
                 (
-                    "ar",
+                    locale_tag!("ar"),
                     Message::Format(&[
                         Part::Arg("count"),
                         Part::Lit(" من "),
@@ -88,7 +88,7 @@ static CATALOG: Catalog = Catalog {
                     ]),
                 ),
                 (
-                    "en",
+                    locale_tag!("en"),
                     Message::Format(&[
                         Part::Arg("count"),
                         Part::Lit(" of "),
@@ -97,7 +97,7 @@ static CATALOG: Catalog = Catalog {
                     ]),
                 ),
                 (
-                    "es",
+                    locale_tag!("es"),
                     Message::Format(&[
                         Part::Arg("count"),
                         Part::Lit(" de "),
@@ -110,96 +110,96 @@ static CATALOG: Catalog = Catalog {
         Entry {
             key: CLEAR_SEARCH,
             messages: &[
-                ("ar", Message::Plain("مسح البحث")),
-                ("en", Message::Plain("Clear search")),
-                ("es", Message::Plain("Borrar búsqueda")),
+                (locale_tag!("ar"), Message::Plain("مسح البحث")),
+                (locale_tag!("en"), Message::Plain("Clear search")),
+                (locale_tag!("es"), Message::Plain("Borrar búsqueda")),
             ],
         },
         Entry {
             key: CLOSE,
             messages: &[
-                ("ar", Message::Plain("إغلاق")),
-                ("en", Message::Plain("Close")),
-                ("es", Message::Plain("Cerrar")),
+                (locale_tag!("ar"), Message::Plain("إغلاق")),
+                (locale_tag!("en"), Message::Plain("Close")),
+                (locale_tag!("es"), Message::Plain("Cerrar")),
             ],
         },
         Entry {
             key: CODE,
             messages: &[
-                ("ar", Message::Plain("الكود")),
-                ("en", Message::Plain("Code")),
-                ("es", Message::Plain("Código")),
+                (locale_tag!("ar"), Message::Plain("الكود")),
+                (locale_tag!("en"), Message::Plain("Code")),
+                (locale_tag!("es"), Message::Plain("Código")),
             ],
         },
         Entry {
             key: COMMAND_PALETTE,
             messages: &[
-                ("ar", Message::Plain("لوحة الأوامر")),
-                ("en", Message::Plain("Command palette")),
-                ("es", Message::Plain("Paleta de comandos")),
+                (locale_tag!("ar"), Message::Plain("لوحة الأوامر")),
+                (locale_tag!("en"), Message::Plain("Command palette")),
+                (locale_tag!("es"), Message::Plain("Paleta de comandos")),
             ],
         },
         Entry {
             key: COMMANDS,
             messages: &[
-                ("ar", Message::Plain("الأوامر")),
-                ("en", Message::Plain("Commands")),
-                ("es", Message::Plain("Comandos")),
+                (locale_tag!("ar"), Message::Plain("الأوامر")),
+                (locale_tag!("en"), Message::Plain("Commands")),
+                (locale_tag!("es"), Message::Plain("Comandos")),
             ],
         },
         Entry {
             key: COPIED,
             messages: &[
-                ("ar", Message::Plain("تم النسخ")),
-                ("en", Message::Plain("Copied")),
-                ("es", Message::Plain("Copiado")),
+                (locale_tag!("ar"), Message::Plain("تم النسخ")),
+                (locale_tag!("en"), Message::Plain("Copied")),
+                (locale_tag!("es"), Message::Plain("Copiado")),
             ],
         },
         Entry {
             key: COPY,
             messages: &[
-                ("ar", Message::Plain("نسخ")),
-                ("en", Message::Plain("Copy")),
-                ("es", Message::Plain("Copiar")),
+                (locale_tag!("ar"), Message::Plain("نسخ")),
+                (locale_tag!("en"), Message::Plain("Copy")),
+                (locale_tag!("es"), Message::Plain("Copiar")),
             ],
         },
         Entry {
             key: DISMISS,
             messages: &[
-                ("ar", Message::Plain("تجاهل")),
-                ("en", Message::Plain("Dismiss")),
-                ("es", Message::Plain("Descartar")),
+                (locale_tag!("ar"), Message::Plain("تجاهل")),
+                (locale_tag!("en"), Message::Plain("Dismiss")),
+                (locale_tag!("es"), Message::Plain("Descartar")),
             ],
         },
         Entry {
             key: DRAWER,
             messages: &[
-                ("ar", Message::Plain("درج جانبي")),
-                ("en", Message::Plain("Drawer")),
-                ("es", Message::Plain("Panel lateral")),
+                (locale_tag!("ar"), Message::Plain("درج جانبي")),
+                (locale_tag!("en"), Message::Plain("Drawer")),
+                (locale_tag!("es"), Message::Plain("Panel lateral")),
             ],
         },
         Entry {
             key: ERROR,
             messages: &[
-                ("ar", Message::Plain("خطأ")),
-                ("en", Message::Plain("Error")),
-                ("es", Message::Plain("Error")),
+                (locale_tag!("ar"), Message::Plain("خطأ")),
+                (locale_tag!("en"), Message::Plain("Error")),
+                (locale_tag!("es"), Message::Plain("Error")),
             ],
         },
         Entry {
             key: EXTERNAL_LINK,
             messages: &[
                 (
-                    "ar",
+                    locale_tag!("ar"),
                     Message::Format(&[Part::Arg("label"), Part::Lit(" (رابط خارجي)")]),
                 ),
                 (
-                    "en",
+                    locale_tag!("en"),
                     Message::Format(&[Part::Arg("label"), Part::Lit(" (external link)")]),
                 ),
                 (
-                    "es",
+                    locale_tag!("es"),
                     Message::Format(&[Part::Arg("label"), Part::Lit(" (enlace externo)")]),
                 ),
             ],
@@ -207,72 +207,72 @@ static CATALOG: Catalog = Catalog {
         Entry {
             key: HEX,
             messages: &[
-                ("ar", Message::Plain("الرمز الست عشري")),
-                ("en", Message::Plain("Hex")),
-                ("es", Message::Plain("Hexadecimal")),
+                (locale_tag!("ar"), Message::Plain("الرمز الست عشري")),
+                (locale_tag!("en"), Message::Plain("Hex")),
+                (locale_tag!("es"), Message::Plain("Hexadecimal")),
             ],
         },
         Entry {
             key: HUE,
             messages: &[
-                ("ar", Message::Plain("درجة اللون")),
-                ("en", Message::Plain("Hue")),
-                ("es", Message::Plain("Tono")),
+                (locale_tag!("ar"), Message::Plain("درجة اللون")),
+                (locale_tag!("en"), Message::Plain("Hue")),
+                (locale_tag!("es"), Message::Plain("Tono")),
             ],
         },
         Entry {
             key: INFORMATION,
             messages: &[
-                ("ar", Message::Plain("معلومة")),
-                ("en", Message::Plain("Information")),
-                ("es", Message::Plain("Información")),
+                (locale_tag!("ar"), Message::Plain("معلومة")),
+                (locale_tag!("en"), Message::Plain("Information")),
+                (locale_tag!("es"), Message::Plain("Información")),
             ],
         },
         Entry {
             key: MAXIMIZE,
             messages: &[
-                ("ar", Message::Plain("تكبير")),
-                ("en", Message::Plain("Maximize")),
-                ("es", Message::Plain("Maximizar")),
+                (locale_tag!("ar"), Message::Plain("تكبير")),
+                (locale_tag!("en"), Message::Plain("Maximize")),
+                (locale_tag!("es"), Message::Plain("Maximizar")),
             ],
         },
         Entry {
             key: MINIMIZE,
             messages: &[
-                ("ar", Message::Plain("تصغير")),
-                ("en", Message::Plain("Minimize")),
-                ("es", Message::Plain("Minimizar")),
+                (locale_tag!("ar"), Message::Plain("تصغير")),
+                (locale_tag!("en"), Message::Plain("Minimize")),
+                (locale_tag!("es"), Message::Plain("Minimizar")),
             ],
         },
         Entry {
             key: NO_RESULTS,
             messages: &[
-                ("ar", Message::Plain("لا توجد نتائج")),
-                ("en", Message::Plain("No results")),
-                ("es", Message::Plain("Sin resultados")),
+                (locale_tag!("ar"), Message::Plain("لا توجد نتائج")),
+                (locale_tag!("en"), Message::Plain("No results")),
+                (locale_tag!("es"), Message::Plain("Sin resultados")),
             ],
         },
         Entry {
             key: NOTHING_TO_SHOW,
             messages: &[
-                ("ar", Message::Plain("لا يوجد شيء لعرضه")),
-                ("en", Message::Plain("Nothing to show")),
-                ("es", Message::Plain("No hay nada que mostrar")),
+                (locale_tag!("ar"), Message::Plain("لا يوجد شيء لعرضه")),
+                (locale_tag!("en"), Message::Plain("Nothing to show")),
+                (locale_tag!("es"), Message::Plain("No hay nada que mostrar")),
             ],
         },
         Entry {
             key: NOTICE,
             messages: &[
                 (
-                    "ar",
+                    locale_tag!("ar"),
                     Message::Format(&[Part::Arg("tone"), Part::Lit(": "), Part::Arg("message")]),
                 ),
                 (
-                    "en",
+                    locale_tag!("en"),
                     Message::Format(&[Part::Arg("tone"), Part::Lit(": "), Part::Arg("message")]),
                 ),
                 (
-                    "es",
+                    locale_tag!("es"),
                     Message::Format(&[Part::Arg("tone"), Part::Lit(": "), Part::Arg("message")]),
                 ),
             ],
@@ -280,36 +280,36 @@ static CATALOG: Catalog = Catalog {
         Entry {
             key: NOTIFICATIONS,
             messages: &[
-                ("ar", Message::Plain("الإشعارات")),
-                ("en", Message::Plain("Notifications")),
-                ("es", Message::Plain("Notificaciones")),
+                (locale_tag!("ar"), Message::Plain("الإشعارات")),
+                (locale_tag!("en"), Message::Plain("Notifications")),
+                (locale_tag!("es"), Message::Plain("Notificaciones")),
             ],
         },
         Entry {
             key: OPACITY,
             messages: &[
-                ("ar", Message::Plain("العتامة")),
-                ("en", Message::Plain("Opacity")),
-                ("es", Message::Plain("Opacidad")),
+                (locale_tag!("ar"), Message::Plain("العتامة")),
+                (locale_tag!("en"), Message::Plain("Opacity")),
+                (locale_tag!("es"), Message::Plain("Opacidad")),
             ],
         },
         Entry {
             key: RESIZE,
             messages: &[
-                ("ar", Message::Plain("تغيير الحجم")),
-                ("en", Message::Plain("Resize")),
-                ("es", Message::Plain("Redimensionar")),
+                (locale_tag!("ar"), Message::Plain("تغيير الحجم")),
+                (locale_tag!("en"), Message::Plain("Resize")),
+                (locale_tag!("es"), Message::Plain("Redimensionar")),
             ],
         },
         Entry {
             key: RESIZE_COLUMN,
             messages: &[
                 (
-                    "ar",
+                    locale_tag!("ar"),
                     Message::Format(&[Part::Lit("تغيير عرض العمود "), Part::Arg("label")]),
                 ),
                 (
-                    "en",
+                    locale_tag!("en"),
                     Message::Format(&[
                         Part::Lit("Resize "),
                         Part::Arg("label"),
@@ -317,7 +317,7 @@ static CATALOG: Catalog = Catalog {
                     ]),
                 ),
                 (
-                    "es",
+                    locale_tag!("es"),
                     Message::Format(&[
                         Part::Lit("Cambiar el ancho de la columna "),
                         Part::Arg("label"),
@@ -328,96 +328,105 @@ static CATALOG: Catalog = Catalog {
         Entry {
             key: RESIZE_HEIGHT,
             messages: &[
-                ("ar", Message::Plain("تغيير الارتفاع")),
-                ("en", Message::Plain("Resize height")),
-                ("es", Message::Plain("Cambiar el alto")),
+                (locale_tag!("ar"), Message::Plain("تغيير الارتفاع")),
+                (locale_tag!("en"), Message::Plain("Resize height")),
+                (locale_tag!("es"), Message::Plain("Cambiar el alto")),
             ],
         },
         Entry {
             key: RESIZE_WIDTH,
             messages: &[
-                ("ar", Message::Plain("تغيير العرض")),
-                ("en", Message::Plain("Resize width")),
-                ("es", Message::Plain("Cambiar el ancho")),
+                (locale_tag!("ar"), Message::Plain("تغيير العرض")),
+                (locale_tag!("en"), Message::Plain("Resize width")),
+                (locale_tag!("es"), Message::Plain("Cambiar el ancho")),
             ],
         },
         Entry {
             key: RESTORE,
             messages: &[
-                ("ar", Message::Plain("استعادة")),
-                ("en", Message::Plain("Restore")),
-                ("es", Message::Plain("Restaurar")),
+                (locale_tag!("ar"), Message::Plain("استعادة")),
+                (locale_tag!("en"), Message::Plain("Restore")),
+                (locale_tag!("es"), Message::Plain("Restaurar")),
             ],
         },
         Entry {
             key: SATURATION,
             messages: &[
-                ("ar", Message::Plain("التشبع")),
-                ("en", Message::Plain("Saturation")),
-                ("es", Message::Plain("Saturación")),
+                (locale_tag!("ar"), Message::Plain("التشبع")),
+                (locale_tag!("en"), Message::Plain("Saturation")),
+                (locale_tag!("es"), Message::Plain("Saturación")),
             ],
         },
         Entry {
             key: SATURATION_BRIGHTNESS,
             messages: &[
-                ("ar", Message::Plain("التشبع والسطوع")),
-                ("en", Message::Plain("Saturation and brightness")),
-                ("es", Message::Plain("Saturación y brillo")),
+                (locale_tag!("ar"), Message::Plain("التشبع والسطوع")),
+                (
+                    locale_tag!("en"),
+                    Message::Plain("Saturation and brightness"),
+                ),
+                (locale_tag!("es"), Message::Plain("Saturación y brillo")),
             ],
         },
         Entry {
             key: SEARCH,
             messages: &[
-                ("ar", Message::Plain("بحث")),
-                ("en", Message::Plain("Search")),
-                ("es", Message::Plain("Buscar")),
+                (locale_tag!("ar"), Message::Plain("بحث")),
+                (locale_tag!("en"), Message::Plain("Search")),
+                (locale_tag!("es"), Message::Plain("Buscar")),
             ],
         },
         Entry {
             key: SEARCH_COMMANDS,
             messages: &[
-                ("ar", Message::Plain("اكتب أمرًا أو ابحث…")),
-                ("en", Message::Plain("Type a command or search…")),
-                ("es", Message::Plain("Escribe un comando o busca…")),
+                (locale_tag!("ar"), Message::Plain("اكتب أمرًا أو ابحث…")),
+                (
+                    locale_tag!("en"),
+                    Message::Plain("Type a command or search…"),
+                ),
+                (
+                    locale_tag!("es"),
+                    Message::Plain("Escribe un comando o busca…"),
+                ),
             ],
         },
         Entry {
             key: SELECT,
             messages: &[
-                ("ar", Message::Plain("اختر")),
-                ("en", Message::Plain("Select")),
-                ("es", Message::Plain("Seleccionar")),
+                (locale_tag!("ar"), Message::Plain("اختر")),
+                (locale_tag!("en"), Message::Plain("Select")),
+                (locale_tag!("es"), Message::Plain("Seleccionar")),
             ],
         },
         Entry {
             key: SUCCESS,
             messages: &[
-                ("ar", Message::Plain("نجاح")),
-                ("en", Message::Plain("Success")),
-                ("es", Message::Plain("Éxito")),
+                (locale_tag!("ar"), Message::Plain("نجاح")),
+                (locale_tag!("en"), Message::Plain("Success")),
+                (locale_tag!("es"), Message::Plain("Éxito")),
             ],
         },
         Entry {
             key: SWATCHES,
             messages: &[
-                ("ar", Message::Plain("عينات الألوان")),
-                ("en", Message::Plain("Swatches")),
-                ("es", Message::Plain("Muestras")),
+                (locale_tag!("ar"), Message::Plain("عينات الألوان")),
+                (locale_tag!("en"), Message::Plain("Swatches")),
+                (locale_tag!("es"), Message::Plain("Muestras")),
             ],
         },
         Entry {
             key: THEN,
             messages: &[
                 (
-                    "ar",
+                    locale_tag!("ar"),
                     Message::Format(&[Part::Arg("first"), Part::Lit("، ثم "), Part::Arg("next")]),
                 ),
                 (
-                    "en",
+                    locale_tag!("en"),
                     Message::Format(&[Part::Arg("first"), Part::Lit(", then "), Part::Arg("next")]),
                 ),
                 (
-                    "es",
+                    locale_tag!("es"),
                     Message::Format(&[
                         Part::Arg("first"),
                         Part::Lit(", luego "),
@@ -430,7 +439,7 @@ static CATALOG: Catalog = Catalog {
             key: TITLED_NOTICE,
             messages: &[
                 (
-                    "ar",
+                    locale_tag!("ar"),
                     Message::Format(&[
                         Part::Arg("tone"),
                         Part::Lit(": "),
@@ -440,7 +449,7 @@ static CATALOG: Catalog = Catalog {
                     ]),
                 ),
                 (
-                    "en",
+                    locale_tag!("en"),
                     Message::Format(&[
                         Part::Arg("tone"),
                         Part::Lit(": "),
@@ -450,7 +459,7 @@ static CATALOG: Catalog = Catalog {
                     ]),
                 ),
                 (
-                    "es",
+                    locale_tag!("es"),
                     Message::Format(&[
                         Part::Arg("tone"),
                         Part::Lit(": "),
@@ -464,17 +473,17 @@ static CATALOG: Catalog = Catalog {
         Entry {
             key: WARNING,
             messages: &[
-                ("ar", Message::Plain("تحذير")),
-                ("en", Message::Plain("Warning")),
-                ("es", Message::Plain("Advertencia")),
+                (locale_tag!("ar"), Message::Plain("تحذير")),
+                (locale_tag!("en"), Message::Plain("Warning")),
+                (locale_tag!("es"), Message::Plain("Advertencia")),
             ],
         },
         Entry {
             key: WINDOW,
             messages: &[
-                ("ar", Message::Plain("النافذة")),
-                ("en", Message::Plain("Window")),
-                ("es", Message::Plain("Ventana")),
+                (locale_tag!("ar"), Message::Plain("النافذة")),
+                (locale_tag!("en"), Message::Plain("Window")),
+                (locale_tag!("es"), Message::Plain("Ventana")),
             ],
         },
     ],

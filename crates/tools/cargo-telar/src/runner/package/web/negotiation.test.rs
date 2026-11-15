@@ -28,20 +28,20 @@ fn site(toml: &str) -> Site {
 fn pages() -> SitePages {
     SitePages {
         pages: vec![
-            PageLocation::root().in_locale("es"),
-            PageLocation::root().in_locale("en"),
+            PageLocation::root().in_locale(&i18n_core::locale_tag!("es")),
+            PageLocation::root().in_locale(&i18n_core::locale_tag!("en")),
         ],
-        locales: vec!["es".to_string(), "en".to_string()],
-        base_locale: Some("es".to_string()),
+        locales: vec![i18n_core::locale_tag!("es"), i18n_core::locale_tag!("en")],
+        base_locale: Some(i18n_core::locale_tag!("es")),
         not_found: true,
         ..SitePages::default()
     }
 }
 
-fn titles() -> BTreeMap<String, String> {
+fn titles() -> BTreeMap<i18n_core::LocaleTag, String> {
     BTreeMap::from([
-        ("es".to_string(), "Portafolio".to_string()),
-        ("en".to_string(), "Portfolio".to_string()),
+        (i18n_core::locale_tag!("es"), "Portafolio".to_string()),
+        (i18n_core::locale_tag!("en"), "Portfolio".to_string()),
     ])
 }
 
@@ -69,10 +69,18 @@ fn the_page_and_the_app_negotiate_alike() {
         serde_json::Value::from(json)
     ));
     let chosen: Vec<String> = serde_json::from_str(printed.trim()).unwrap();
+    let tags = |texts: &[&str]| -> Vec<i18n_core::LocaleTag> {
+        texts
+            .iter()
+            .filter_map(|text| i18n_core::LocaleTag::parse(text).ok())
+            .collect()
+    };
     for ((preferred, available, fallback), chosen) in cases.iter().zip(chosen) {
+        let available = tags(available);
         assert_eq!(
             chosen,
-            i18n_core::negotiate_locale(preferred, available, fallback),
+            i18n_core::negotiate_locale(&tags(preferred), &available)
+                .map_or_else(|| fallback.to_string(), ToString::to_string),
             "{preferred:?} against {available:?}"
         );
     }
@@ -80,7 +88,12 @@ fn the_page_and_the_app_negotiate_alike() {
 
 #[test]
 fn the_root_page_sends_the_reader_to_the_root_of_their_locale() {
-    let html = root_page(&site(""), &pages(), "es", &titles());
+    let html = root_page(
+        &site(""),
+        &pages(),
+        &i18n_core::locale_tag!("es"),
+        &titles(),
+    );
     let script = html
         .split("<script>")
         .nth(1)
@@ -102,7 +115,12 @@ fn the_root_page_sends_the_reader_to_the_root_of_their_locale() {
 
 #[test]
 fn without_scripts_the_root_page_offers_every_locale_and_goes_to_the_base() {
-    let html = root_page(&site(""), &pages(), "es", &titles());
+    let html = root_page(
+        &site(""),
+        &pages(),
+        &i18n_core::locale_tag!("es"),
+        &titles(),
+    );
     for expected in [
         r#"<html lang="es" dir="ltr">"#,
         "<title>Portafolio</title>",
@@ -123,7 +141,7 @@ fn a_root_page_of_a_site_with_an_origin_points_at_the_base_locale() {
     let html = root_page(
         &site("origin = \"https://example.com\"\ntheme_color = \"#111\""),
         &pages(),
-        "es",
+        &i18n_core::locale_tag!("es"),
         &titles(),
     );
     for expected in [
@@ -138,7 +156,12 @@ fn a_root_page_of_a_site_with_an_origin_points_at_the_base_locale() {
 
 #[test]
 fn a_root_page_under_a_base_path_sends_the_reader_below_it() {
-    let html = root_page(&site("base = \"/docs/\""), &pages(), "es", &titles());
+    let html = root_page(
+        &site("base = \"/docs/\""),
+        &pages(),
+        &i18n_core::locale_tag!("es"),
+        &titles(),
+    );
     assert!(html.contains(r#"<base href="/docs/" />"#), "{html}");
     assert!(html.contains("url=/docs/es/"), "{html}");
     assert!(

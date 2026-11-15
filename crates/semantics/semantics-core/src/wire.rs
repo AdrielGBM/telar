@@ -9,8 +9,8 @@ use wire_core::{
 
 use crate::{
     ConsumedKeys, CurrentKind, Destination, Focusable, ForcedColors, HasPopup, HeadingLevel,
-    Location, Modal, NumericValue, Orientation, Role, RouteAddress, Semantics, SetPosition,
-    SortDirection, Toggle, Uri, UriError, Value,
+    LocaleTag, Location, Modal, NumericValue, Orientation, Role, RouteAddress, Semantics,
+    SetPosition, SortDirection, Toggle, Uri, UriError, Value,
 };
 
 wire_enum!(Role {
@@ -135,7 +135,10 @@ wire_struct!(Focusable { tab_stop, consumes });
 impl Shaped for Location {
     const SHAPE: u64 = fold_shape(
         fold_shape(
-            fold_shape(shape_named("Location"), <Vec<String>>::SHAPE),
+            fold_shape(
+                fold_shape(shape_named("Location"), <Vec<String>>::SHAPE),
+                <Option<LocaleTag>>::SHAPE,
+            ),
             <Option<String>>::SHAPE,
         ),
         <Vec<(String, String)>>::SHAPE,
@@ -148,7 +151,7 @@ impl Wire for Location {
         for segment in self.segments() {
             w.str(segment);
         }
-        self.locale().map(str::to_owned).put(w);
+        self.locale().cloned().put(w);
         self.fragment().map(str::to_owned).put(w);
         w.len(self.params().len());
         for (key, value) in self.params() {
@@ -160,7 +163,7 @@ impl Wire for Location {
         let len = r.len()?;
         let segments: Vec<&str> = (0..len).map(|_| r.str()).collect::<Result<_, _>>()?;
         let mut location = Location::from_segments(segments);
-        if let Some(locale) = <Option<String> as Wire>::take(r)? {
+        if let Some(locale) = <Option<LocaleTag> as Wire>::take(r)? {
             location = location.with_locale(locale);
         }
         if let Some(fragment) = <Option<String> as Wire>::take(r)? {
@@ -185,6 +188,20 @@ impl Wire for Uri {
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         Uri::parse(r.str()?).map_err(|_| WireError::Invalid("a URI this side's policy refuses"))
+    }
+}
+
+/// Parsed again on arrival, so bytes that are no language tag are refused rather than carried as one.
+impl Shaped for LocaleTag {
+    const SHAPE: u64 = fold_shape(shape_named("LocaleTag"), String::SHAPE);
+}
+
+impl Wire for LocaleTag {
+    fn put(&self, w: &mut Writer) {
+        w.str(&self.to_string());
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        LocaleTag::parse(r.str()?).map_err(|_| WireError::Invalid("a locale tag"))
     }
 }
 
@@ -226,7 +243,7 @@ pub const LINK_SHAPE: u64 = {
     let hash = fold(hash, &[ANCHOR]);
     let hash = fold_shape(hash, <std::sync::Arc<str>>::SHAPE);
     let hash = fold(hash, &[LOCALE]);
-    let hash = fold_shape(hash, <std::sync::Arc<str>>::SHAPE);
+    let hash = fold_shape(hash, LocaleTag::SHAPE);
     let hash = fold(hash, &[EXTERNAL]);
     fold_shape(hash, Uri::SHAPE)
 };

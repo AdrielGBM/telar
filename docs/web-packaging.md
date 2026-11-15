@@ -76,9 +76,9 @@ starting point to copy into `web/index.html`.
 
 `%telar.lang%` and `%telar.dir%` are a build-time default: the page a browser first sees, before the wasm
 module has run. Once it has, `<html lang>` and `<html dir>` follow the active locale instead — the app can
-call `set_locale` with anything, and both attributes move with it, mirroring the writing direction
+call `set_locale` with any locale, and both attributes move with it, mirroring the writing direction
 `follow_locale_direction` already resolves for layout. `[telar.i18n] default` only decides the default this
-page opens with.
+page opens with, and a value there that is no BCP 47 tag fails the build naming it.
 
 The rules:
 
@@ -217,8 +217,9 @@ When the app's address carries its locale (`follow_location_locale`, see [docs/l
 writes `index.html` as the page that sends a reader to theirs:
 
 - **With scripts**, it picks a locale from `navigator.languages` with the rule `negotiate_locale` uses, the
-  one the app uses when an address names no locale: for each preferred tag in order, an exact match ignoring
-  case, then the first locale with the same language; the base locale when nothing matches. It then
+  one the app uses when an address names no locale: for each preferred tag in order, an exact match (the
+  browser's tag read with its case folded and `_` as `-`, as a `LocaleTag` reads it), then the first locale
+  with the same language; the base locale when nothing matches. It then
   `location.replace`s to that locale's root, keeping the query and the fragment, so the root leaves no entry
   in the history. The script is the rule written once in JavaScript and shared with the Cloudflare Pages
   worker below; a test runs both against `negotiate_locale` itself.

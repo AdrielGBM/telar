@@ -38,7 +38,10 @@ fn a_current_link_is_the_current_one_of_what_its_destination_names() {
         Destination::anchor("contact").current_kind(),
         CurrentKind::Location
     );
-    assert_eq!(Destination::locale("en").current_kind(), CurrentKind::Item);
+    assert_eq!(
+        Destination::Locale(crate::locale_tag!("en")).current_kind(),
+        CurrentKind::Item
+    );
     assert_eq!(
         Destination::external("https://example.com")
             .unwrap()

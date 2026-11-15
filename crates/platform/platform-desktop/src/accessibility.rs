@@ -13,7 +13,7 @@ use accesskit::{
     TreeId, TreeInfo, TreeUpdate,
 };
 use platform_core::{
-    AccessAction, AccessNode, ActionSupport, CurrentKind, HasPopup, Live, NumericValue,
+    AccessAction, AccessNode, ActionSupport, CurrentKind, HasPopup, Live, LocaleTag, NumericValue,
     Orientation, Positioning, Role, SortDirection, TextSelection, Toggle, ToggleKind, Value,
 };
 
@@ -26,11 +26,15 @@ const OWN: u64 = 1 << 63;
 /// Turns Telar's description of the window into the tree AccessKit publishes.
 ///
 /// The nesting is the snapshot's own — the nesting of *meaning*, a grid around its rows and a row around its cells, a list box around its options, a dialog around what it asks — not the nesting of every box a layout happened to need, and each node's children are in the reading order the snapshot lists them in. What a reader counts off a container is said on it: a grid's rows and columns, a set's size where every item in it says the same one.
-pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>) -> TreeUpdate {
+pub(crate) fn tree_update(
+    nodes: &[AccessNode],
+    title: &str,
+    lang: Option<&LocaleTag>,
+) -> TreeUpdate {
     let mut root = Node::new(AkRole::Window);
     root.set_label(title.to_string());
     if let Some(lang) = lang {
-        root.set_language(lang);
+        root.set_language(lang.to_string());
     }
 
     // Positional ids for the labels, which nothing addresses; a control keeps its focus id, so the same button stays the same node across frames and a reader is not told it appeared anew.
@@ -79,7 +83,7 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
             ak.set_disabled();
         }
         if let Some(lang) = &node.lang {
-            ak.set_language(lang.as_str());
+            ak.set_language(lang.to_string());
         }
         if let Some(url) = &node.url {
             ak.set_url(url.as_str());

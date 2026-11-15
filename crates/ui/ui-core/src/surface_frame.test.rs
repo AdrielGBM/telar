@@ -826,21 +826,21 @@ fn a_frame_without_a_direction_of_its_own_follows_the_window() {
 }
 
 static CATALOG: Catalog = Catalog {
-    locales: &["en", "es"],
-    default_locale: "en",
+    locales: &[i18n_core::locale_tag!("en"), i18n_core::locale_tag!("es")],
+    default_locale: i18n_core::locale_tag!("en"),
     entries: &[
         Entry {
             key: "farewell",
             messages: &[
-                ("en", Message::Plain("Bye")),
-                ("es", Message::Plain("Adiós")),
+                (i18n_core::locale_tag!("en"), Message::Plain("Bye")),
+                (i18n_core::locale_tag!("es"), Message::Plain("Adiós")),
             ],
         },
         Entry {
             key: "greeting",
             messages: &[
-                ("en", Message::Plain("Hello")),
-                ("es", Message::Plain("Hola")),
+                (i18n_core::locale_tag!("en"), Message::Plain("Hello")),
+                (i18n_core::locale_tag!("es"), Message::Plain("Hola")),
             ],
         },
     ],
@@ -871,7 +871,7 @@ fn texts(commands: &[DrawCommand]) -> Vec<String> {
 #[test]
 fn a_locale_set_on_a_frame_translates_the_text_inside_it_only() {
     reset_layout_runtime();
-    i18n_core::set_locale("en");
+    i18n_core::set_locale(i18n_core::locale_tag!("en"));
     let canvas = Rc::new(
         NestedCanvas::new(Size::new(1.0, 1.0), || {
             Ok(boxed(Container::new(fill(), vec![translated("greeting")])?))
@@ -890,14 +890,17 @@ fn a_locale_set_on_a_frame_translates_the_text_inside_it_only() {
     );
     assert_eq!(texts(&window.frame()), ["Bye", "Hello"]);
 
-    canvas.set_locale(Some("es"));
-    assert_eq!(canvas.locale().as_deref(), Some("es"));
+    canvas.set_locale(Some(&i18n_core::locale_tag!("es")));
+    assert_eq!(canvas.locale(), Some(i18n_core::locale_tag!("es")));
     assert_eq!(
         texts(&window.frame()),
         ["Bye", "Hola"],
         "the frame speaks Spanish and the window around it does not"
     );
-    assert_eq!(i18n_core::current_locale().as_deref(), Some("en"));
+    assert_eq!(
+        i18n_core::current_locale(),
+        Some(i18n_core::locale_tag!("en"))
+    );
 
     canvas.set_locale(None);
     assert_eq!(
@@ -906,13 +909,13 @@ fn a_locale_set_on_a_frame_translates_the_text_inside_it_only() {
         "cleared, the frame follows the window's locale again"
     );
 
-    i18n_core::set_locale("es");
+    i18n_core::set_locale(i18n_core::locale_tag!("es"));
     assert_eq!(
         texts(&window.frame()),
         ["Adiós", "Hola"],
         "a frame with no locale of its own hears the window's change"
     );
-    i18n_core::set_locale("en");
+    i18n_core::set_locale(i18n_core::locale_tag!("en"));
 }
 
 #[test]

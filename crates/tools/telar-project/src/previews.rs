@@ -5,6 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use semantics_core::LocaleTag;
 use serde::Deserialize;
 
 use crate::declared::{DeclaredEntry, EntryProblem, PackageDependencies, declarations};
@@ -47,8 +48,7 @@ pub enum MatrixAxis {
     Mode(Vec<String>),
     /// Every mode registered when the matrix expands.
     RegisteredModes,
-    /// BCP 47 language tags.
-    Locale(Vec<String>),
+    Locale(Vec<LocaleTag>),
     /// Every locale the application's catalog has.
     CatalogLocales,
     Dir(Vec<MatrixDirection>),
@@ -320,7 +320,7 @@ fn parse_axis(
     let problems_of = &mut problems;
     let parsed = match axis {
         "mode" => MatrixAxis::Mode(read_each(at, values, problems_of, named_text)),
-        "locale" => MatrixAxis::Locale(read_each(at, values, problems_of, named_text)),
+        "locale" => MatrixAxis::Locale(read_each(at, values, problems_of, locale_tag)),
         "dir" => MatrixAxis::Dir(read_each(at, values, problems_of, |value| {
             word(value, &MatrixDirection::WORDS)
         })),
@@ -380,6 +380,10 @@ fn named_text(value: &MatrixValue) -> Result<String, String> {
         "" => Err("an empty string names nothing".to_string()),
         text => Ok(text.to_string()),
     }
+}
+
+fn locale_tag(value: &MatrixValue) -> Result<LocaleTag, String> {
+    LocaleTag::parse(text(value)?).map_err(|error| error.to_string())
 }
 
 fn viewport_text(

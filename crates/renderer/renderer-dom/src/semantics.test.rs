@@ -69,7 +69,12 @@ fn attribute(node: &web_sys::Element, name: &str) -> Option<String> {
 #[wasm_bindgen_test]
 fn split_letters_are_one_named_word_with_hidden_letters() {
     let row = rendered(&[
-        open(1, Semantics::group().with_label("Hi").with_lang("en")),
+        open(
+            1,
+            Semantics::group()
+                .with_label("Hi")
+                .with_lang(platform_core::locale_tag!("en")),
+        ),
         open(2, Semantics::group().hidden_from_readers()),
         text("H"),
         DrawCommand::PopElement,
@@ -154,7 +159,11 @@ fn an_annotation_withdrawn_is_an_attribute_removed() {
     let frame = |semantics: Semantics| [open(30, semantics), text("x"), DrawCommand::PopElement];
     renderer
         .render_frame(
-            &frame(Semantics::group().hidden_from_readers().with_lang("ja")),
+            &frame(
+                Semantics::group()
+                    .hidden_from_readers()
+                    .with_lang(platform_core::locale_tag!("ja")),
+            ),
             None,
         )
         .expect("the frame reconciled");

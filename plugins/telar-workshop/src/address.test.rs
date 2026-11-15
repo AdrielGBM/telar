@@ -72,7 +72,7 @@ fn a_link_opens_its_preview_with_its_args_and_settings_and_the_address_keeps_the
     assert_eq!(
         state.canvas_settings().peek(),
         CanvasSettings {
-            locale: Some("ar".into()),
+            locale: Some(telar::locale_tag!("ar")),
             grid: true,
             ..CanvasSettings::default()
         }

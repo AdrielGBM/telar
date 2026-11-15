@@ -3,7 +3,8 @@
 use reactive_core::RwSignal;
 
 use crate::{
-    Children, Color, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Size, UnknownMode,
+    Children, Color, Container, Direction, LayoutError, LayoutItem, LayoutStyle, LocaleTag, Size,
+    UnknownMode,
 };
 
 use super::a11y::Rule;
@@ -160,8 +161,8 @@ pub struct PreviewEnv {
     pub background: Option<Color>,
     /// The name of a mode the application registers, looked up when a canvas is seeded from the environment.
     pub mode: Option<&'static str>,
-    /// A BCP 47 language tag.
-    pub locale: Option<&'static str>,
+    /// The locale the canvas is shown in.
+    pub locale: Option<&'static LocaleTag>,
     /// The writing direction, whatever the locale's own.
     pub direction: Option<Direction>,
     /// `Some(true)` to show the preview with more contrast, `Some(false)` with the regular palette.
@@ -203,8 +204,8 @@ impl PreviewEnv {
         }
     }
 
-    /// This environment asking for the BCP 47 language tag `locale`.
-    pub const fn locale(self, locale: &'static str) -> Self {
+    /// This environment asking for `locale`.
+    pub const fn locale(self, locale: &'static LocaleTag) -> Self {
         Self {
             locale: Some(locale),
             ..self
@@ -398,8 +399,8 @@ impl PreviewEntry {
         Self { env, ..self }
     }
 
-    /// A BCP 47 language tag.
-    pub const fn locale(self, locale: &'static str) -> Self {
+    /// The locale the preview is shown in.
+    pub const fn locale(self, locale: &'static LocaleTag) -> Self {
         let env = self.env.locale(locale);
         Self { env, ..self }
     }

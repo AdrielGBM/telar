@@ -260,7 +260,10 @@ fn the_meta_section_titles_every_variant_and_sets_what_they_share() {
             .contains(".bg(Color::rgba(32.0 / 255.0, 32.0 / 255.0, 32.0 / 255.0, 255.0 / 255.0))"),
         "{second}"
     );
-    assert!(second.contains(".locale(\"ar\")"), "{second}");
+    assert!(
+        second.contains(".locale(const { &::telar::i18n::locale_tag!(\"ar\") })"),
+        "{second}"
+    );
     assert!(second.contains(".dir(::telar::Direction::Rtl)"), "{second}");
     assert!(second.contains(".decorate(frames::card)"), "{second}");
     let build = code.split_once("fn checkbox_preview_1").unwrap().1;
@@ -277,7 +280,7 @@ fn a_matrix_is_named_or_written_out() {
         "{code}"
     );
     assert!(
-        code.contains(".matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Mode(&[\"light\", \"dark\"]), ::telar::preview::Axis::Locale(&[\"en\", \"ar\"]), ::telar::preview::Axis::Dir(&[::telar::Direction::Ltr, ::telar::Direction::Rtl]), ::telar::preview::Axis::Viewport(&[\"390x844\", \"phone\"]), ::telar::preview::Axis::Arg(\"size\", &[\"12\", \"16\"]), ::telar::preview::Axis::Arg(\"label\", &[\"\\\"Save\\\"\", \"Primary\"]), ::telar::preview::Axis::Arg(\"agree\", &[\"true\", \"false\"])]))"),
+        code.contains(".matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Mode(&[\"light\", \"dark\"]), ::telar::preview::Axis::Locale(const { &[::telar::i18n::locale_tag!(\"en\"), ::telar::i18n::locale_tag!(\"ar\")] }), ::telar::preview::Axis::Dir(&[::telar::Direction::Ltr, ::telar::Direction::Rtl]), ::telar::preview::Axis::Viewport(&[\"390x844\", \"phone\"]), ::telar::preview::Axis::Arg(\"size\", &[\"12\", \"16\"]), ::telar::preview::Axis::Arg(\"label\", &[\"\\\"Save\\\"\", \"Primary\"]), ::telar::preview::Axis::Arg(\"agree\", &[\"true\", \"false\"])]))"),
         "{code}"
     );
     assert!(!code.contains("compile_error!"), "{code}");
@@ -315,6 +318,10 @@ fn a_matrix_the_transpiler_cannot_read_is_refused_on_its_header() {
             "lists `light` more than once",
         ),
         ("matrix:(size:[12 a+b])", "`a+b` is not an arg value"),
+        (
+            "matrix:(locale:[en en_US.UTF-8])",
+            "`matrix:` axis `locale`: `en_US.UTF-8` is not a BCP 47 language tag",
+        ),
         ("matrix:(mode:[a] mode:[b])", "varies `mode` twice"),
         ("matrix:()", "varies nothing"),
         ("matrix:(mode mode:[a])", "varies `mode` twice"),
@@ -376,6 +383,10 @@ fn an_option_value_the_transpiler_cannot_read_is_refused() {
         ("viewport:wide", "`viewport:wide` is not a size"),
         ("bg:surface", "`bg:surface` is not a colour"),
         ("dir:up", "`dir:up` is not a direction"),
+        (
+            "locale:english_UK",
+            "`locale:english_UK`: `english_UK` is not a BCP 47 language tag",
+        ),
         ("args:all", "`args:all` is not an option"),
         ("animate:yes", "`animate` is a flag"),
         ("animate", "`animate` plays a surface's enter transition"),

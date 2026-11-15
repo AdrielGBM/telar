@@ -192,7 +192,7 @@ fn a_cased_fitted_line_fits_the_string_it_draws() {
 fn a_fitted_line_is_cased_and_fitted_in_the_language_said_above_it() {
     std::thread::spawn(|| {
         reset_layout_runtime();
-        i18n_core::set_locale("en");
+        i18n_core::set_locale(i18n_core::locale_tag!("en"));
         let text = Text::fitting(
             || "istanbul".to_string(),
             LayoutStyle::new(),
@@ -203,15 +203,15 @@ fn a_fitted_line_is_cased_and_fitted_in_the_language_said_above_it() {
         let root = new_container(LayoutStyle::new().flex_column(), &[text.layout_node()]).unwrap();
         lay_out(root, 600.0);
         let style = drawn_style(&text.view()).unwrap();
-        assert_eq!(style.lang.as_deref(), Some("en"));
+        assert_eq!(style.lang, Some(i18n_core::locale_tag!("en")));
 
         let slot = crate::annotation::slot(root);
         let mut said = slot.peek();
-        said.lang = Some("tr".into());
+        said.lang = Some(i18n_core::locale_tag!("tr"));
         slot.set(said);
         crate::context::relayout_if_dirty();
         let style = drawn_style(&text.view()).unwrap();
-        assert_eq!(style.lang.as_deref(), Some("tr"));
+        assert_eq!(style.lang, Some(i18n_core::locale_tag!("tr")));
         let as_written = style.clone().with_text_case(TextCase::AsWritten);
         assert!(
             close(line_width("İSTANBUL", &as_written), 600.0),

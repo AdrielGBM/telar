@@ -90,7 +90,7 @@ fn a_block_marker_indents_every_line_it_writes_like_its_own() {
 #[test]
 fn every_fed_marker_lands_where_the_template_puts_it() {
     let mut page = page();
-    page.lang = "es".to_string();
+    page.lang = i18n_core::locale_tag!("es");
     page.dir = Direction::Rtl;
     page.title = "Portafolio".to_string();
     page.renderer = WebRenderer::Dom;

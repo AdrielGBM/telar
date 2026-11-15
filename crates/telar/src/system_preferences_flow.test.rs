@@ -77,7 +77,7 @@ fn the_tree_is_built_already_knowing_the_preferences() {
         color_scheme: Some(ColorScheme::Dark),
         reduced_motion: Some(true),
         high_contrast: Some(false),
-        locales: vec!["es-CL".into(), "en".into()],
+        locales: vec![telar::locale_tag!("es-CL"), telar::locale_tag!("en")],
         text_scale: telar::TextScale::new(1.25).expect("a scale above zero"),
     };
     let observed = run(declared.clone());
@@ -93,7 +93,7 @@ fn the_tree_is_built_already_knowing_the_preferences() {
 #[test]
 fn an_unknown_scheme_leaves_the_theme_on_its_default() {
     let observed = run(SystemPreferences {
-        locales: vec!["fr".into()],
+        locales: vec![telar::locale_tag!("fr")],
         ..SystemPreferences::default()
     });
     assert_eq!(observed.mode_in_frame.borrow().as_deref(), Some("day"));

@@ -104,7 +104,7 @@ fn played(build: fn(&PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError>) ->
         "behaviour",
         build,
     )
-    .locale("en");
+    .locale(const { &telar::locale_tag!("en") });
     Play::mount(&entry).unwrap_or_else(|error| panic!("the strip mounts: {error}"))
 }
 

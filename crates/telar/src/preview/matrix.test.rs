@@ -39,7 +39,7 @@ fn an_inline_matrix_is_a_constant_a_preview_writes_in_place() {
     modes(&["light", "dark"]);
     let entry = entry().matrix(Matrix::Axes(&[
         Axis::Mode(&["light", "dark"]),
-        Axis::Locale(&["en", "ar"]),
+        Axis::Locale(const { &[crate::locale_tag!("en"), crate::locale_tag!("ar")] }),
     ]));
     let cells = entry
         .matrix
@@ -60,7 +60,7 @@ fn an_inline_matrix_is_a_constant_a_preview_writes_in_place() {
         [("mode", "light".to_string()), ("locale", "ar".to_string())]
     );
     assert_eq!(cells[1].globals.mode, ModeId::registered("light").ok());
-    assert_eq!(cells[1].globals.locale.as_deref(), Some("ar"));
+    assert_eq!(cells[1].globals.locale, Some(crate::locale_tag!("ar")));
     assert_eq!(cells[1].globals.direction, None);
 }
 
@@ -220,7 +220,10 @@ fn an_axis_with_no_values_varies_nothing() {
     assert_eq!(themes.cells(&entry(), &matrices), Ok(Vec::new()));
     assert_eq!(themes.cell_count(&entry(), &matrices), Ok(0));
 
-    let mixed = Matrix::Axes(&[Axis::RegisteredModes, Axis::Locale(&["en", "ar"])]);
+    let mixed = Matrix::Axes(&[
+        Axis::RegisteredModes,
+        Axis::Locale(const { &[crate::locale_tag!("en"), crate::locale_tag!("ar")] }),
+    ]);
     let cells = mixed.cells(&entry(), &matrices).unwrap();
     assert_eq!(
         ids(&cells),
@@ -264,7 +267,8 @@ fn an_arg_axis_with_no_values_takes_every_value_its_control_picks_among() {
 
 #[test]
 fn a_catalog_locales_axis_takes_the_locales_the_catalog_has() {
-    let matrices = Matrices::default().with_locales(&["en", "es"]);
+    let matrices = Matrices::default()
+        .with_locales(const { &[crate::locale_tag!("en"), crate::locale_tag!("es")] });
     let matrix = Matrix::Axes(&[Axis::CatalogLocales]);
     assert_eq!(
         ids(&matrix.cells(&entry(), &matrices).unwrap()),
@@ -281,7 +285,15 @@ fn the_cell_count_is_known_before_expanding() {
     let matrices = Matrices::default().with_modes(modes(&["light", "dark"]));
     let matrix = Matrix::Axes(&[
         Axis::RegisteredModes,
-        Axis::Locale(&["en", "ar", "ja"]),
+        Axis::Locale(
+            const {
+                &[
+                    crate::locale_tag!("en"),
+                    crate::locale_tag!("ar"),
+                    crate::locale_tag!("ja"),
+                ]
+            },
+        ),
         Axis::Arg("ghost", &["true", "false"]),
     ]);
     assert_eq!(matrix.cell_count(&entry(), &matrices), Ok(12));
@@ -302,7 +314,9 @@ fn a_matrix_that_cannot_name_its_cells_apart_is_refused() {
             MatrixError::RepeatedAxis { axis: "mode" },
         ),
         (
-            Matrix::Axes(&[Axis::Locale(&["en", "en"])]),
+            Matrix::Axes(&[Axis::Locale(
+                const { &[crate::locale_tag!("en"), crate::locale_tag!("en")] },
+            )]),
             MatrixError::RepeatedValue {
                 axis: "locale",
                 value: "en".into(),
@@ -347,9 +361,9 @@ fn a_matrix_naming_a_mode_nobody_registered_is_refused_by_name() {
 
 #[test]
 fn a_cell_of_a_preview_asking_for_a_mode_nobody_registered_cannot_be_set_up() {
-    let entry = entry()
-        .mode("drak")
-        .matrix(Matrix::Axes(&[Axis::Locale(&["ar"])]));
+    let entry = entry().mode("drak").matrix(Matrix::Axes(&[Axis::Locale(
+        const { &[crate::locale_tag!("ar")] },
+    )]));
     let cells = entry
         .matrix
         .unwrap()
@@ -362,10 +376,13 @@ fn a_cell_of_a_preview_asking_for_a_mode_nobody_registered_cannot_be_set_up() {
 #[test]
 fn a_cell_mounts_with_the_preview_env_under_its_own() {
     let dark = crate::register_mode("dark", || {});
-    let entry = entry().mode("dark").locale("es").matrix(Matrix::Axes(&[
-        Axis::Locale(&["ar"]),
-        Axis::Arg("size", &["16"]),
-    ]));
+    let entry = entry()
+        .mode("dark")
+        .locale(const { &crate::locale_tag!("es") })
+        .matrix(Matrix::Axes(&[
+            Axis::Locale(const { &[crate::locale_tag!("ar")] }),
+            Axis::Arg("size", &["16"]),
+        ]));
     let cells = entry
         .matrix
         .unwrap()
@@ -374,7 +391,7 @@ fn a_cell_mounts_with_the_preview_env_under_its_own() {
     let ctx = cells[0].ctx(&entry).unwrap();
     let globals = ctx.globals();
     assert_eq!(globals.mode().get(), Some(dark));
-    assert_eq!(globals.locale().get().as_deref(), Some("ar"));
+    assert_eq!(globals.locale().get(), Some(crate::locale_tag!("ar")));
     assert_eq!(ctx.arg("size", 12u32), 16);
 }
 

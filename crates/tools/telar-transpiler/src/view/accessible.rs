@@ -20,7 +20,7 @@ impl ViewGen<'_> {
             calls.push_str(&format!(".{method}({})", self.annotation_text(label)));
         }
         if let Some(lang) = find(crate::registry::LANG_ATTR) {
-            calls.push_str(&format!(".lang({})", self.annotation_text(lang)));
+            calls.push_str(&format!(".lang({})", self.lang_value(lang)));
         }
         if !builtin {
             calls.push_str(
@@ -124,26 +124,53 @@ impl ViewGen<'_> {
         }
     }
 
+    /// `lang:` as the closure `Accessible::lang` takes: a quoted tag, checked here and written in canonical form, or an expression that is a `LocaleTag`.
+    fn lang_value(&self, attr: &Attr) -> String {
+        if let Value::Quoted(text) = &attr.value {
+            return match semantics_core::LocaleTag::parse(text) {
+                Ok(tag) => format!("|| ::telar::i18n::locale_tag!({:?})", tag.to_string()),
+                Err(error) => {
+                    let message = format!("`lang:\"{text}\"`: {error}");
+                    format!("|| ::core::compile_error!({message:?})")
+                }
+            };
+        }
+        let value = attr.value.text().trim();
+        self.owning(
+            &[value],
+            &format!(
+                "move || ::std::clone::Clone::clone(&({}))",
+                self.expression_read(attr, value)
+            ),
+        )
+    }
+
     /// A closure yielding the attribute's text, re-read when what it reads changes, so a name built from `t!(…)` follows the locale. A quoted one interpolates `{…}` as a `text` does.
     fn annotation_text(&self, attr: &Attr) -> String {
         let value = match &attr.value {
             Value::Quoted(text) => return self.text_closure(text, attr.value_start),
             value => value.text().trim(),
         };
-        let inner = super::redundant_parens(value).unwrap_or(value);
-        let read = if inner.contains('$') {
-            substitute_reads(inner, self.theme_access)
-        } else {
-            let lead = attr.value.text().len() - attr.value.text().trim_start().len()
-                + usize::from(inner.len() != value.len());
-            format!(
-                "{}{inner}",
-                expr_marker(attr.value_start + lead, inner.len())
-            )
-        };
         self.owning(
             &[value],
-            &format!("move || ::std::string::ToString::to_string(&({read}))"),
+            &format!(
+                "move || ::std::string::ToString::to_string(&({}))",
+                self.expression_read(attr, value)
+            ),
+        )
+    }
+
+    /// An attribute's expression `value` as the closure reads it: its `$` reads substituted, or else marked with its span in the source.
+    fn expression_read(&self, attr: &Attr, value: &str) -> String {
+        let inner = super::redundant_parens(value).unwrap_or(value);
+        if inner.contains('$') {
+            return substitute_reads(inner, self.theme_access);
+        }
+        let lead = attr.value.text().len() - attr.value.text().trim_start().len()
+            + usize::from(inner.len() != value.len());
+        format!(
+            "{}{inner}",
+            expr_marker(attr.value_start + lead, inner.len())
         )
     }
 }

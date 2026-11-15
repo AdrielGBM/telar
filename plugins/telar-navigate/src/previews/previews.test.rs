@@ -6,7 +6,7 @@ use telar::preview::{Play, PreviewEntry};
 use super::previews;
 
 fn mount(entry: &PreviewEntry) -> Play {
-    Play::mount(&entry.locale("en"))
+    Play::mount(&entry.locale(const { &telar::locale_tag!("en") }))
         .unwrap_or_else(|error| panic!("`{}` does not mount: {error}", entry.id))
 }
 

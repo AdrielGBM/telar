@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use platform_core::TextScale;
+use platform_core::{LocaleTag, TextScale};
 use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HWND, LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -71,8 +71,8 @@ pub fn text_scale() -> TextScale {
     TextScale::new(percent as f32 / 100.0).unwrap_or(TextScale::UNSCALED)
 }
 
-/// The display languages in the user's order, as BCP 47 names (`es-CL`). Empty where the call fails.
-pub fn locales() -> Vec<String> {
+/// The display languages in the user's order, which Windows names in BCP 47 (`es-CL`). Empty where the call fails.
+pub fn locales() -> Vec<LocaleTag> {
     let mut count = 0u32;
     let mut len = 0u32;
     let sized = unsafe {
@@ -93,7 +93,7 @@ pub fn locales() -> Vec<String> {
     if filled == 0 {
         return Vec::new();
     }
-    split_multi_sz(&buffer)
+    platform_core::platform_locales(split_multi_sz(&buffer))
 }
 
 static ON_CHANGE: Mutex<Option<Arc<dyn Fn() + Send + Sync>>> = Mutex::new(None);

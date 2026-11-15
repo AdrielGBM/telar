@@ -14,12 +14,15 @@ fn a_page_s_state_reads_back_as_the_inputs_it_was_written_from() {
         parse_served_state(FIXTURE),
         Some(ServedState {
             version: 1,
-            locale: Some("es".to_string()),
+            locale: Some(platform_core::locale_tag!("es")),
             preferences: SystemPreferences {
                 color_scheme: Some(ColorScheme::Dark),
                 reduced_motion: Some(true),
                 high_contrast: None,
-                locales: vec!["es-CL".to_string(), "en".to_string()],
+                locales: vec![
+                    platform_core::locale_tag!("es-CL"),
+                    platform_core::locale_tag!("en")
+                ],
                 text_scale: TextScale::UNSCALED,
             },
             surface: (1280, 800),

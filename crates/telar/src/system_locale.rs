@@ -1,8 +1,10 @@
 //! Binds the active locale to the user's preferred locales.
 //!
-//! In the facade for the same reason as `direction`: `i18n-core` stays on `reactive-core` alone, and `preferences-core` knows nothing of translations.
+//! In the facade for the same reason as `direction`: `i18n-core` stays clear of the platform, and `preferences-core` knows nothing of translations.
 
 use std::cell::Cell;
+
+use i18n_core::LocaleTag;
 
 reactive_core::dropless_thread_local! {
     // An effect stops only with its owner, so it gets a scope of its own that a re-call disposes; otherwise two followers would race to set the locale.
@@ -14,12 +16,8 @@ reactive_core::dropless_thread_local! {
 /// Call once at app start, in place of an initial [`set_locale`](crate::set_locale). An empty list is not a vote for `fallback`: it leaves an active locale alone, and selects `fallback` only when none is set yet. A manual [`set_locale`](crate::set_locale) still wins until the list changes.
 ///
 /// An application whose locale is part of where the user is (`/es/`, `/en/`) calls [`follow_location_locale`](crate::follow_location_locale) instead, which negotiates only when nothing chose a locale yet.
-pub fn follow_system_locale(
-    available: impl IntoIterator<Item = impl Into<String>>,
-    fallback: impl Into<String>,
-) {
-    let available: Vec<String> = available.into_iter().map(Into::into).collect();
-    let fallback = fallback.into();
+pub fn follow_system_locale(available: impl IntoIterator<Item = LocaleTag>, fallback: LocaleTag) {
+    let available: Vec<LocaleTag> = available.into_iter().collect();
     if let Some(previous) = FOLLOW.take() {
         reactive_core::dispose_owner(previous);
     }
@@ -29,9 +27,8 @@ pub fn follow_system_locale(
         if preferred.is_empty() && i18n_core::current_locale().is_some() {
             return;
         }
-        i18n_core::set_locale(i18n_core::negotiate_locale(
-            &preferred, &available, &fallback,
-        ));
+        let negotiated = i18n_core::negotiate_locale(&preferred, &available).unwrap_or(&fallback);
+        i18n_core::set_locale(negotiated.clone());
     });
     FOLLOW.set(Some(scope.id()));
 }

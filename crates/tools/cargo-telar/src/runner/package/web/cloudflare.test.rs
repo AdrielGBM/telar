@@ -12,7 +12,7 @@ fn site() -> Site {
 fn at(segments: &[&str], locale: Option<&str>) -> PageLocation {
     PageLocation {
         segments: segments.iter().map(|segment| segment.to_string()).collect(),
-        locale: locale.map(str::to_string),
+        locale: locale.map(|tag| i18n_core::LocaleTag::parse(tag).unwrap()),
     }
 }
 
@@ -24,8 +24,8 @@ fn localized() -> SitePages {
             at(&[], Some("en")),
             at(&["projects"], Some("en")),
         ],
-        locales: vec!["es".to_string(), "en".to_string()],
-        base_locale: Some("es".to_string()),
+        locales: vec![i18n_core::locale_tag!("es"), i18n_core::locale_tag!("en")],
+        base_locale: Some(i18n_core::locale_tag!("es")),
         not_found: true,
         ..SitePages::default()
     }
@@ -163,7 +163,11 @@ fn the_worker_redirects_the_root_by_accept_language_and_serves_everything_else()
     let dir = output("worker", &[]);
     std::fs::write(
         dir.join("worker.mjs"),
-        worker(&site(), &["es".to_string(), "en".to_string()], "es"),
+        worker(
+            &site(),
+            &[i18n_core::locale_tag!("es"), i18n_core::locale_tag!("en")],
+            &i18n_core::locale_tag!("es"),
+        ),
     )
     .unwrap();
     std::fs::write(

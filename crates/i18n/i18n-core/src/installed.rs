@@ -4,6 +4,8 @@
 
 use std::sync::RwLock;
 
+use semantics_core::{LocaleTag, locale_tag};
+
 use crate::message::Catalog;
 
 /// A `&'static Catalog` is immutable `&'static` data throughout, so sharing it across threads costs nothing beyond the lock it is replaced under.
@@ -38,12 +40,14 @@ pub fn catalog() -> Option<&'static Catalog> {
 }
 
 /// The language text is in where no locale was chosen: the installed catalog's default locale, which [`translate`](crate::translate) falls back to, or English where no catalog is installed, the language every catalog a Telar crate ships is written in.
-pub fn default_locale() -> &'static str {
+pub fn default_locale() -> &'static LocaleTag {
     default_locale_of(catalog())
 }
 
-fn default_locale_of(catalog: Option<&'static Catalog>) -> &'static str {
-    catalog.map_or("en", |catalog| catalog.default_locale)
+fn default_locale_of(catalog: Option<&'static Catalog>) -> &'static LocaleTag {
+    catalog.map_or(const { &locale_tag!("en") }, |catalog| {
+        &catalog.default_locale
+    })
 }
 
 /// Translates `key` against the installed catalog for the active locale.
@@ -53,14 +57,14 @@ fn default_locale_of(catalog: Option<&'static Catalog>) -> &'static str {
 /// It is a *function*, so it cannot check the key at build time the way `t!` does. An absent key — or no catalog installed yet — renders as the key itself, which is visible in the UI rather than silent.
 ///
 /// ```
-/// # use telar_i18n_core::{Catalog, Entry, Message, set_catalog, set_locale, t};
+/// # use telar_i18n_core::{Catalog, Entry, Message, locale_tag, set_catalog, set_locale, t};
 /// # static CATALOG: Catalog = Catalog {
-/// #     locales: &["en"],
-/// #     default_locale: "en",
-/// #     entries: &[Entry { key: "greeting", messages: &[("en", Message::Plain("Hello"))] }],
+/// #     locales: &[locale_tag!("en")],
+/// #     default_locale: locale_tag!("en"),
+/// #     entries: &[Entry { key: "greeting", messages: &[(locale_tag!("en"), Message::Plain("Hello"))] }],
 /// # };
 /// set_catalog(&CATALOG);
-/// set_locale("en");
+/// set_locale(locale_tag!("en"));
 /// assert_eq!(t("greeting", &[]), "Hello");
 /// assert_eq!(t("absent", &[]), "absent");
 /// ```

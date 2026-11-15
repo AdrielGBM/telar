@@ -52,8 +52,8 @@ format_date(Date::try_new_iso(2024, 3, 15).unwrap(), Length::Long); // "March 15
 ```
 
 Both read the active locale with `use_locale()`, so text built from them inside a widget's content closure
-re-renders on a language switch. With no locale set, they use the installed catalog's default locale, as a
-translated string does.
+re-renders on a language switch. With no locale set, they use the installed catalog's default locale, or English
+where none is installed, as a translated string does.
 
 Dates are formatted in the Gregorian calendar whatever calendar the locale prefers, which keeps every other
 calendar's names and conversion code out of the binary.

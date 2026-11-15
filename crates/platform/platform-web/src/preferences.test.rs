@@ -19,7 +19,10 @@ fn the_page_reports_its_languages_in_order() {
         .collect();
     let preferences = read_system_preferences();
     if !languages.is_empty() {
-        assert_eq!(preferences.locales, languages);
+        assert_eq!(
+            preferences.locales,
+            platform_core::platform_locales(languages)
+        );
     }
     assert!(
         !preferences.locales.is_empty(),

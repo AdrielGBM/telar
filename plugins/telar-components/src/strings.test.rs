@@ -8,15 +8,15 @@ use telar::set_locale;
 
 #[test]
 fn the_select_placeholder_is_english_by_default() {
-    set_locale("en");
+    set_locale(telar::locale_tag!("en"));
     assert!(select_placeholder().contains(&"Select".to_string()));
 }
 
 #[test]
 fn the_select_placeholder_follows_the_locale() {
-    set_locale("es");
+    set_locale(telar::locale_tag!("es"));
     assert!(select_placeholder().contains(&"Seleccionar".to_string()));
-    set_locale("ar");
+    set_locale(telar::locale_tag!("ar"));
     assert!(select_placeholder().contains(&"اختر".to_string()));
 }
 
@@ -34,21 +34,21 @@ mod modal {
 
     #[test]
     fn close_is_english_by_default() {
-        set_locale("en");
+        set_locale(telar::locale_tag!("en"));
         assert!(open_modal(props()).contains(&"Close".to_string()));
     }
 
     #[test]
     fn close_follows_the_locale() {
-        set_locale("es");
+        set_locale(telar::locale_tag!("es"));
         assert!(open_modal(props()).contains(&"Cerrar".to_string()));
-        set_locale("ar");
+        set_locale(telar::locale_tag!("ar"));
         assert!(open_modal(props()).contains(&"إغلاق".to_string()));
     }
 
     #[test]
     fn the_close_label_prop_wins() {
-        set_locale("es");
+        set_locale(telar::locale_tag!("es"));
         let props = ModalProps::props()
             .control(signal(true))
             .title("Confirm")

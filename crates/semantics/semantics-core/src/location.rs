@@ -1,5 +1,7 @@
 //! [`Location`]: a platform-neutral address for a piece of navigation state — not a URL.
 
+use crate::LocaleTag;
+
 /// Where a route points, in terms every Telar target understands: a path of segments, an optional locale naming
 /// the language the place is shown in, an optional fragment naming an in-page anchor (see `anchor:` in
 /// `ui-core`), and query-style parameters.
@@ -15,7 +17,7 @@
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Location {
     segments: Vec<String>,
-    locale: Option<String>,
+    locale: Option<LocaleTag>,
     fragment: Option<String>,
     params: Vec<(String, String)>,
 }
@@ -46,9 +48,9 @@ impl Location {
         self
     }
 
-    /// Names the locale (a BCP-47 tag such as `"es"`) the place is shown in, builder-style. Replaces any locale already set.
-    pub fn with_locale(mut self, locale: impl Into<String>) -> Self {
-        self.locale = Some(locale.into());
+    /// Names the locale the place is shown in, builder-style. Replaces any locale already set.
+    pub fn with_locale(mut self, locale: LocaleTag) -> Self {
+        self.locale = Some(locale);
         self
     }
 
@@ -83,8 +85,8 @@ impl Location {
     }
 
     /// The locale this location is shown in, if it names one.
-    pub fn locale(&self) -> Option<&str> {
-        self.locale.as_deref()
+    pub fn locale(&self) -> Option<&LocaleTag> {
+        self.locale.as_ref()
     }
 
     /// The in-page anchor this location targets, if any.

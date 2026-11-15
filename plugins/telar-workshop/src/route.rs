@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use telar::preview::host::title_path;
 use telar::preview::{ArgValue, direction_word, parse_direction, parse_size};
-use telar::{Location, Route};
+use telar::{LocaleTag, Location, Route};
 
 use crate::matrix::{CustomAxis, PickedAxis};
 use crate::settings::{Background, CanvasSettings, CanvasSize, ModeChoice, Zoom};
@@ -278,7 +278,11 @@ pub(crate) fn parse_settings(text: &str) -> CanvasSettings {
         let (key, value) = word.split_once(':').unwrap_or((word, ""));
         match (key, value) {
             ("mode", mode) => settings.mode = ModeChoice::parse(mode),
-            ("locale", locale) if !locale.is_empty() => settings.locale = Some(locale.to_string()),
+            ("locale", locale) => {
+                if let Ok(locale) = LocaleTag::parse(locale) {
+                    settings.locale = Some(locale);
+                }
+            }
             ("dir", direction) => settings.direction = parse_direction(direction),
             ("bg", background) => settings.background = parse_background(background),
             ("size", size) => settings.size = parse_canvas_size(size).unwrap_or_default(),

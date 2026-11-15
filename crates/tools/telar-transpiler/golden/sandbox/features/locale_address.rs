@@ -19,10 +19,14 @@ pub fn locale_address(props: LocaleAddressProps) -> Result<Box<dyn LayoutItem>, 
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let active = memo(|| telar::use_locale().unwrap_or_else(|| "none".to_string()));
+    let active = memo(|| {
+        telar::use_locale().map_or_else(|| "none".to_string(), |locale| locale.to_string())
+    });
     let address = memo(|| {
-        let locale = telar::use_locale().unwrap_or_default();
-        telar::address_of(&telar::in_locale(&locale))
+        telar::use_locale().map_or_else(
+            || "none".to_string(),
+            |locale| telar::address_of(&telar::in_locale(locale)),
+        )
     });
 
     let __col_0 = {
@@ -62,9 +66,9 @@ pub fn locale_address(props: LocaleAddressProps) -> Result<Box<dyn LayoutItem>, 
                                 };
                                 __children.push(box_item(__text_1));
                                 let __row_0 = {
-                                    let __node_3 = button(ButtonProps::props().label("English").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale("en"))).build())?;
-                                    let __node_4 = button(ButtonProps::props().label("Español").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale("es"))).build())?;
-                                    let __node_5 = button(ButtonProps::props().label("العربية").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale("ar"))).build())?;
+                                    let __node_3 = button(ButtonProps::props().label("English").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale(telar::locale_tag!("en")))).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("Español").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale(telar::locale_tag!("es")))).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("العربية").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale(telar::locale_tag!("ar")))).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -83,7 +87,7 @@ pub fn locale_address(props: LocaleAddressProps) -> Result<Box<dyn LayoutItem>, 
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_6 = code_line(CodeLineProps::props().code("follow_location_locale([\"en\", \"es\", \"ar\"], \"en\")   ·   set_locale(\"es\")").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("follow_location_locale([locale_tag!(\"en\"), locale_tag!(\"es\"), locale_tag!(\"ar\")], locale_tag!(\"en\"))   ·   set_locale(locale_tag!(\"es\"))").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }
@@ -113,7 +117,7 @@ pub fn locale_address(props: LocaleAddressProps) -> Result<Box<dyn LayoutItem>, 
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
                                                 )?
                                             };
-                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || in_locale("en"))
+                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || in_locale(locale_tag!("en")))
                                         };
                                         let __sbox_1 = {
                                             let __text_4 = {
@@ -123,7 +127,7 @@ pub fn locale_address(props: LocaleAddressProps) -> Result<Box<dyn LayoutItem>, 
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
                                                 )?
                                             };
-                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || in_locale("es"))
+                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || in_locale(locale_tag!("es")))
                                         };
                                         Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__sbox_0, __sbox_1])?
                                     };
@@ -146,7 +150,7 @@ pub fn locale_address(props: LocaleAddressProps) -> Result<Box<dyn LayoutItem>, 
                     };
                     let __col_1 = __col_1.page_anchor(move || ::std::string::ToString::to_string(&(t!("locale_address.anchor"))));
                     __children.push(box_item(__col_1));
-                    let __node_9 = code_line(CodeLineProps::props().code("box to:in_locale(\"es\")   ·   col anchor:t!(\"locale_address.anchor\")").build())?;
+                    let __node_9 = code_line(CodeLineProps::props().code("box to:in_locale(locale_tag!(\"es\"))   ·   col anchor:t!(\"locale_address.anchor\")").build())?;
                     __children.push(box_item(__node_9));
                     Ok(__children)
                 }

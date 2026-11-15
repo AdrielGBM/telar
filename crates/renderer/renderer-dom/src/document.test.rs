@@ -408,7 +408,10 @@ fn a_current_link_says_what_it_is_the_current_one_of() {
         Some("location")
     );
     assert_eq!(
-        current_attribute(link(Destination::locale("en")).marked_current(true)).as_deref(),
+        current_attribute(
+            link(Destination::Locale(platform_core::locale_tag!("en"))).marked_current(true)
+        )
+        .as_deref(),
         Some("true")
     );
     assert_eq!(current_attribute(link(Destination::anchor("web"))), None);

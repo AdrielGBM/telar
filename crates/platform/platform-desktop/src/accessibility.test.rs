@@ -179,7 +179,7 @@ fn a_nested_surfaces_control_and_the_windows_own_never_share_a_node() {
 #[test]
 fn a_node_in_another_language_says_which() {
     let mut quote = node(None, Role::Label, "Bonjour");
-    quote.lang = Some("fr".to_string());
+    quote.lang = Some(platform_core::locale_tag!("fr"));
     let update = tree_update(&[quote, node(None, Role::Label, "Hello")], "Editor", None);
     assert_eq!(update.nodes[0].1.language(), Some("fr"));
     assert_eq!(update.nodes[1].1.language(), None);
@@ -190,11 +190,11 @@ fn a_node_in_another_language_says_which() {
 #[test]
 fn the_root_language_is_the_surfaces_own_and_a_node_can_still_override_it() {
     let mut quote = node(None, Role::Label, "Bonjour");
-    quote.lang = Some("fr".to_string());
+    quote.lang = Some(platform_core::locale_tag!("fr"));
     let update = tree_update(
         &[quote, node(None, Role::Label, "Hello")],
         "Editor",
-        Some("es"),
+        Some(&platform_core::locale_tag!("es")),
     );
     let (root_id, root) = update.nodes.last().unwrap();
     assert_eq!(*root_id, ROOT);
@@ -563,7 +563,7 @@ mod from_a_screen {
             .map(|letter| words(letter).map(|text| box_item(text.a11y_hidden())))
             .collect::<Result<_, _>>()?;
         let word = Container::new(LayoutStyle::new().flex_row(), letters)?.a11y_label(|| "Telar");
-        let greeting = words("Bonjour tout le monde")?.lang(|| "fr");
+        let greeting = words("Bonjour tout le monde")?.lang(|| platform_core::locale_tag!("fr"));
         let hidden =
             Container::new(LayoutStyle::new(), vec![box_item(words("Decoration")?)])?.a11y_hidden();
         let column = Container::new(
@@ -609,7 +609,7 @@ mod from_a_screen {
     fn published(tree: &ComponentList) -> TreeUpdate {
         ui_core::relayout_if_dirty();
         let nodes = ui_core::accessibility::snapshot(&tree.commands());
-        tree_update(&nodes, "Settings", Some("en"))
+        tree_update(&nodes, "Settings", Some(&platform_core::locale_tag!("en")))
     }
 
     fn named<'a>(update: &'a TreeUpdate, name: &str) -> &'a Node {

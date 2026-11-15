@@ -178,7 +178,7 @@ fn the_setters_describe_the_canvas() {
         .viewport(390.0, 844.0)
         .bg(Color::WHITE)
         .mode("dark")
-        .locale("ar")
+        .locale(const { &telar::locale_tag!("ar") })
         .dir(Direction::Rtl)
         .tags(&["stateful"])
         .matrix(Matrix::Named("themes"))
@@ -188,7 +188,7 @@ fn the_setters_describe_the_canvas() {
     assert_eq!(entry.env.viewport, Some(telar::Size::new(390.0, 844.0)));
     assert_eq!(entry.env.background, Some(Color::WHITE));
     assert_eq!(entry.env.mode, Some("dark"));
-    assert_eq!(entry.env.locale, Some("ar"));
+    assert_eq!(entry.env.locale, Some(&telar::locale_tag!("ar")));
     assert_eq!(entry.env.direction, Some(Direction::Rtl));
     assert_eq!(entry.tags, ["stateful"]);
     assert_eq!(entry.matrix, Some(Matrix::Named("themes")));

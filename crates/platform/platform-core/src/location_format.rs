@@ -1,5 +1,7 @@
 //! [`LocationFormat`]: a [`Location`] written as the path, query and fragment of a URI reference.
 
+use semantics_core::LocaleTag;
+
 use crate::Location;
 
 /// How a [`Location`] is spelled as text: `/base/segment/segment?key=value#fragment`.
@@ -13,7 +15,7 @@ use crate::Location;
 pub struct LocationFormat {
     base: String,
     trailing_slash: bool,
-    locales: Vec<String>,
+    locales: Vec<LocaleTag>,
 }
 
 impl Default for LocationFormat {
@@ -62,22 +64,22 @@ impl LocationFormat {
         self.trailing_slash
     }
 
-    /// Reads a first segment that is one of `locales` as the location's locale, ignoring ASCII case and answering with the tag as `locales` spells it. Only an app whose addresses carry a locale names any.
-    pub fn with_locales(mut self, locales: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.locales = locales.into_iter().map(Into::into).collect();
+    /// Reads a first segment that is one of `locales`, in any spelling of it, as the location's locale. Only an app whose addresses carry a locale names any.
+    pub fn with_locales(mut self, locales: impl IntoIterator<Item = LocaleTag>) -> Self {
+        self.locales = locales.into_iter().collect();
         self
     }
 
     /// The locales a first segment is read as.
-    pub fn locales(&self) -> &[String] {
+    pub fn locales(&self) -> &[LocaleTag] {
         &self.locales
     }
 
     /// `location` as a path reference under the base.
     pub fn format(&self, location: &Location) -> String {
         let mut out = self.base.clone();
-        if let Some(locale) = location.locale().filter(|locale| !locale.is_empty()) {
-            out.push_str(&encode(locale, SEGMENT));
+        if let Some(locale) = location.locale() {
+            out.push_str(&encode(&locale.to_string(), SEGMENT));
             out.push('/');
         }
         let segments: Vec<String> = location
@@ -140,11 +142,9 @@ impl LocationFormat {
         Some(location)
     }
 
-    fn locale_named(&self, segment: &str) -> Option<String> {
-        self.locales
-            .iter()
-            .find(|locale| locale.eq_ignore_ascii_case(segment))
-            .cloned()
+    fn locale_named(&self, segment: &str) -> Option<LocaleTag> {
+        let tag = LocaleTag::parse(segment).ok()?;
+        self.locales.contains(&tag).then_some(tag)
     }
 
     fn below_base<'a>(&self, path: &'a str) -> Option<&'a str> {

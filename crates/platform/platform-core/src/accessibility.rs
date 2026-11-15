@@ -3,6 +3,7 @@
 //! Here rather than in the UI layer for the same reason [`Event`](crate::Event) is: it is the vocabulary the two ends share. The UI declares roles and names; the platform's accessibility API — AccessKit on the desktop — is what turns them into something a screen reader can read. Neither end owns the words.
 
 use geometry_core::Rect;
+use semantics_core::LocaleTag;
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
 pub use semantics_core::{
@@ -40,8 +41,8 @@ pub struct AccessNode {
     pub required: bool,
     /// Whether a field shows a value that can be read and copied but not changed.
     pub readonly: bool,
-    /// The language the node is in, as a BCP 47 tag, where the application said. `None` is the surface's own.
-    pub lang: Option<String>,
+    /// The language the node is in, where the application said. `None` is the surface's own.
+    pub lang: Option<LocaleTag>,
     /// Where a link goes, written as [`address_of`](crate::address_of) writes it. `None` for everything that is not a link.
     pub url: Option<String>,
     /// What a link marked current is the current one of: the page being shown, the place on it the reader is at. `None` for every box that is not a current link.

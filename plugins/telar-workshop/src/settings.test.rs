@@ -12,14 +12,14 @@ fn settings_left_at_their_defaults_take_what_the_preview_asks_for() {
     let night = telar::register_mode("night", || {});
     let env = PreviewEnv::NONE
         .mode("night")
-        .locale("fr")
+        .locale(const { &telar::locale_tag!("fr") })
         .viewport(300.0, 200.0)
         .background(RED);
     assert_eq!(
         resolve(&CanvasSettings::default(), env),
         CanvasEnv {
             mode: Some(night),
-            locale: Some("fr".into()),
+            locale: Some(telar::locale_tag!("fr")),
             direction: Some(Direction::Ltr),
             high_contrast: None,
             background: Some(RED),
@@ -48,19 +48,19 @@ fn a_setting_wins_over_what_the_preview_asks_for() {
     telar::register_mode("night", || {});
     let settings = CanvasSettings {
         mode: ModeChoice::Named("day".into()),
-        locale: Some("en".into()),
+        locale: Some(telar::locale_tag!("en")),
         background: Background::Dark,
         size: CanvasSize::Preset("tablet".into()),
         ..CanvasSettings::default()
     };
     let env = PreviewEnv::NONE
         .mode("night")
-        .locale("fr")
+        .locale(const { &telar::locale_tag!("fr") })
         .viewport(300.0, 200.0)
         .background(RED);
     let resolved = resolve(&settings, env);
     assert_eq!(resolved.mode, Some(day));
-    assert_eq!(resolved.locale.as_deref(), Some("en"));
+    assert_eq!(resolved.locale, Some(telar::locale_tag!("en")));
     assert_eq!(resolved.background, Some(DARK_BACKGROUND));
     assert_eq!(resolved.viewport, Some(Size::new(768.0, 1024.0)));
 }
@@ -68,7 +68,7 @@ fn a_setting_wins_over_what_the_preview_asks_for() {
 #[test]
 fn a_locale_turns_the_direction_unless_one_is_chosen() {
     let arabic = CanvasSettings {
-        locale: Some("ar".into()),
+        locale: Some(telar::locale_tag!("ar")),
         ..CanvasSettings::default()
     };
     assert_eq!(
@@ -89,16 +89,24 @@ fn a_locale_turns_the_direction_unless_one_is_chosen() {
         Some(Direction::Ltr)
     );
     assert_eq!(
-        resolve(&CanvasSettings::default(), PreviewEnv::NONE.locale("he")).direction,
+        resolve(
+            &CanvasSettings::default(),
+            PreviewEnv::NONE.locale(const { &telar::locale_tag!("he") })
+        )
+        .direction,
         Some(Direction::Rtl),
         "the preview's own locale turns it as well"
     );
     let english = CanvasSettings {
-        locale: Some("en".into()),
+        locale: Some(telar::locale_tag!("en")),
         ..CanvasSettings::default()
     };
     assert_eq!(
-        resolve(&english, PreviewEnv::NONE.locale("he")).direction,
+        resolve(
+            &english,
+            PreviewEnv::NONE.locale(const { &telar::locale_tag!("he") })
+        )
+        .direction,
         Some(Direction::Ltr),
         "the locale the toolbar sets wins over the preview's"
     );
@@ -166,7 +174,7 @@ fn a_device_sets_the_safe_area_and_rotating_turns_it_with_the_size() {
 fn a_fullscreen_preview_takes_no_size_and_no_safe_area() {
     let settings = CanvasSettings {
         size: CanvasSize::Device("phone".into()),
-        locale: Some("ar".into()),
+        locale: Some(telar::locale_tag!("ar")),
         ..CanvasSettings::default()
     };
     let resolved = settings.resolve(
@@ -210,7 +218,7 @@ fn fitting_never_zooms_in_and_shrinks_what_the_room_cannot_hold() {
 fn the_settings_are_kept_as_one_json_value() {
     let settings = CanvasSettings {
         mode: ModeChoice::Named("night".into()),
-        locale: Some("ar".into()),
+        locale: Some(telar::locale_tag!("ar")),
         direction: Some(Direction::Rtl),
         background: Background::Transparent,
         size: CanvasSize::Device("phone".into()),
@@ -405,7 +413,7 @@ fn settings_kept_with_a_control_size_load_without_it() {
     assert_eq!(
         kept,
         CanvasSettings {
-            locale: Some("ar".into()),
+            locale: Some(telar::locale_tag!("ar")),
             grid: true,
             ..CanvasSettings::default()
         }

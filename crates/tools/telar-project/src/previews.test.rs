@@ -321,7 +321,7 @@ everything = { size = [12, 1.5], viewport = ["phone", " 1280x800 "], dir = ["rtl
         matrices["everything"],
         [
             MatrixAxis::Mode(vec!["dark".into()]),
-            MatrixAxis::Locale(vec!["ar".into()]),
+            MatrixAxis::Locale(vec![semantics_core::locale_tag!("ar")]),
             MatrixAxis::Dir(vec![MatrixDirection::Rtl]),
             MatrixAxis::Viewport(vec!["phone".into(), "1280x800".into()]),
             MatrixAxis::Arg {

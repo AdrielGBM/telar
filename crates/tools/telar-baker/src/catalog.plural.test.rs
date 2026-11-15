@@ -1,3 +1,4 @@
+use i18n_core::LocaleTag;
 use std::collections::BTreeMap;
 
 use super::*;
@@ -24,11 +25,11 @@ fn plural_serializes_with_its_categories() {
 #[test]
 fn the_plural_category_import_is_emitted_only_when_used() {
     let plain = CatalogModel {
-        locales: vec!["en".into()],
-        default_locale: "en".into(),
+        locales: vec![tag("en")],
+        default_locale: tag("en"),
         entries: BTreeMap::from([(
             "a".to_string(),
-            BTreeMap::from([("en".to_string(), MessageModel::Plain("x".into()))]),
+            BTreeMap::from([(tag("en"), MessageModel::Plain("x".into()))]),
         )]),
     };
     assert!(
@@ -41,7 +42,7 @@ fn the_plural_category_import_is_emitted_only_when_used() {
     with_plural.entries.insert(
         "items".to_string(),
         BTreeMap::from([(
-            "en".to_string(),
+            tag("en"),
             MessageModel::Plural(BTreeMap::from([(
                 "other".to_string(),
                 MessageModel::Plain("items".into()),
@@ -53,4 +54,8 @@ fn the_plural_category_import_is_emitted_only_when_used() {
         "and one with plurals must:\n{}",
         to_source(&with_plural)
     );
+}
+
+fn tag(text: &str) -> LocaleTag {
+    LocaleTag::parse(text).unwrap()
 }

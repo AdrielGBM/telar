@@ -4,7 +4,7 @@ use android_activity::AndroidApp;
 use android_activity::ndk::configuration::{Configuration, UiModeNight};
 use jni::objects::{JObject, JString, JValue};
 use jni::{Env, JavaVM, jni_sig, jni_str};
-use platform_core::{ColorScheme, SystemPreferences, TextScale};
+use platform_core::{ColorScheme, LocaleTag, SystemPreferences, TextScale};
 
 use crate::preference_values::{
     animator_scale_reduces_motion, configuration_locale, split_language_tags,
@@ -47,7 +47,7 @@ pub fn read(app: &AndroidApp) -> SystemPreferences {
 struct FromJava {
     reduced_motion: Option<bool>,
     high_contrast: Option<bool>,
-    locales: Vec<String>,
+    locales: Vec<LocaleTag>,
     text_scale: TextScale,
 }
 
@@ -128,7 +128,7 @@ fn high_text_contrast(env: &mut Env, resolver: &JObject) -> jni::errors::Result<
 }
 
 // `Configuration.getLocales()` is API 24; below that the call fails and the caller falls back to the configuration's single locale.
-fn locale_list(env: &mut Env, activity: &JObject) -> jni::errors::Result<Vec<String>> {
+fn locale_list(env: &mut Env, activity: &JObject) -> jni::errors::Result<Vec<LocaleTag>> {
     let resources = env
         .call_method(
             activity,

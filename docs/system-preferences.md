@@ -17,7 +17,7 @@ let languages = use_preferred_locales(); // ["es-CL", "es", "en"]
 | `color_scheme` | `Option<ColorScheme>` | the platform has no preference to report, or cannot be asked |
 | `reduced_motion` | `Option<bool>` | the platform cannot say |
 | `high_contrast` | `Option<bool>` | the platform cannot say |
-| `locales` | `Vec<String>` (BCP 47, most preferred first) | empty |
+| `locales` | `Vec<LocaleTag>` (most preferred first) | empty |
 | `text_scale` | `TextScale` (a finite factor above zero) | never unknown: a platform with no such setting, or one it cannot read, says `TextScale::UNSCALED` (1.0) |
 
 Unknown is never quietly turned into a default. `None` and "the user said no" are different answers, and an
@@ -69,7 +69,7 @@ facade to do so.
 | --- | --- | --- |
 | Colour scheme | `follow_system(light, dark)` (theme) | Selects `light` or `dark` as the resolved scheme changes: the system's, or the person's choice (see [Choosing a scheme](#choosing-a-scheme)). Under `System`, an unknown scheme leaves an active mode alone and selects `light` only if no mode is active yet. A manual `set_mode` of another mode wins until the next change. |
 | Reduced motion | the motion ticker, by default | Follows `use_reduced_motion()`: the system's preference, or the app's override (see [Choosing reduced motion](#choosing-reduced-motion)). Every animation jumps to its end; scroll momentum keeps moving. `motion::follow_reduced_motion(false)` opts out. See [animations.md](animations.md#d5-one-time-scale-and-reduced-motion-zeroes-it). |
-| Locales | `follow_system_locale(available, fallback)` | Sets the active locale to `negotiate_locale(&use_preferred_locales(), available, fallback)`, again whenever the list changes. An empty list leaves an active locale alone. |
+| Locales | `follow_system_locale(available, fallback)` | Sets the active locale to what `negotiate_locale(&use_preferred_locales(), available)` picks, or `fallback` where it picks none, again whenever the list changes. An empty list leaves an active locale alone. |
 | Locales, once | `follow_location_locale(available, base)` | For an app whose address carries its locale: the system's list is negotiated only when the address the app opens at names none and the person never chose one, and is not followed after. See [docs/location.md](location.md#the-locale-in-the-location). |
 | High contrast | the theme's tokens, always | Wherever `use_high_contrast()` is `Some(true)` (the system's preference, the app's override, or the surface's own; see [Choosing high contrast](#choosing-high-contrast)), `use_theme_tokens()` answers the high-contrast set derived from the theme, so every catalogue component follows. An application that reads its own theme type's fields reads them as written; see [themes](themes.md#high-contrast). |
 | Text scale | the text cascade, always | Every size the cascade resolves is multiplied by it: the document's own, one a box declares, one a text's call authors, one a span names in pixels. A size in `em` follows the size it is of, and a fraction of the surface stays the surface's. A widget that sizes a box from the text around it (`measure`, a control's caption) grows with it. A style built whole in Rust (`TextStyle::new(13.0, …)`) is drawn at the size it names. |
@@ -150,26 +150,30 @@ do not cover, such as a palette of its own type.
 
 ### Negotiating a locale
 
-`negotiate_locale(preferred, available, fallback)` picks what to show from the locales an application ships.
+`negotiate_locale(preferred, available)` picks what to show from the locales an application ships, or `None` where nothing matches.
 It is three rules, kept that small on purpose so the same answer can be computed where Rust does not run (a
 page choosing its language before any wasm loads):
 
-1. For each preferred tag, most preferred first: an available tag equal to it, ignoring ASCII case.
+1. For each preferred tag, most preferred first: an available tag equal to it.
 2. Otherwise, the first available tag, in `available`'s order, with the same primary language subtag
    (`es-CL` picks `es`, and `es` picks `es-MX`).
-3. Otherwise the next preferred tag; when none match, `fallback`.
+3. Otherwise the next preferred tag; when none match, `None`.
 
-A match comes back spelled as `available` spells it. Order of preference beats quality of match:
+Every tag is a `LocaleTag`, read once into its canonical casing, so `en_us`, `EN-US` and `en-US` are one tag and
+equality is the whole of rule 1. Order of preference beats quality of match:
 `["en-US", "es"]` against `["es", "en-GB"]` picks `en-GB`.
 
 ```rust
-use telar::{follow_location_locale, follow_system_locale, negotiate_locale, system_preferences};
+use telar::{
+    follow_location_locale, follow_system_locale, locale_tag, negotiate_locale, system_preferences,
+};
 
-follow_system_locale(["es", "en"], "es");
+follow_system_locale([locale_tag!("es"), locale_tag!("en")], locale_tag!("es"));
 // or, where the locale is part of the address (`/es/`, `/en/`) and the system only picks the first one:
-follow_location_locale(["es", "en"], "es");
+follow_location_locale([locale_tag!("es"), locale_tag!("en")], locale_tag!("es"));
 // or, where the locale is chosen somewhere else and only needs a default:
-let locale = negotiate_locale(&system_preferences().locales, &["es", "en"], "es");
+let shipped = [locale_tag!("es"), locale_tag!("en")];
+let locale = negotiate_locale(&system_preferences().locales, &shipped).unwrap_or(&shipped[0]);
 ```
 
 ## Where each target reads them
@@ -236,6 +240,7 @@ Notes on the less obvious rows:
 
 Send `Event::SystemPreferencesChanged` before the first `on_resume` of every surface, and again with a full
 snapshot whenever something changes. `platform_core::locales_from_env` and `posix_locale_to_bcp47` turn a
-POSIX environment into ordered BCP 47 tags following gettext's precedence. A `C` locale disables
-`LANGUAGE`, as it does in gettext. A backend with no text size setting to read says `TextScale::UNSCALED` in its
+POSIX environment into ordered `LocaleTag`s following gettext's precedence. A `C` locale disables
+`LANGUAGE`, as it does in gettext. A name that is no locale is left out with a warning naming the variable, as
+`platform_locales` leaves out a tag another platform reports that does not parse. A backend with no text size setting to read says `TextScale::UNSCALED` in its
 snapshot, by name, rather than leaving it to `..SystemPreferences::default()`.

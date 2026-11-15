@@ -1,4 +1,6 @@
 use super::*;
+use semantics_core::locale_tag;
+
 use crate::{Color, Declared};
 
 fn style(case: TextCase) -> TextStyle {
@@ -26,17 +28,21 @@ fn capitalize_leaves_the_rest_of_each_word_as_written() {
 
 #[test]
 fn the_language_picks_the_rules() {
-    assert_eq!(TextCase::Upper.apply("istanbul", Some("tr")), "İSTANBUL");
-    assert_eq!(TextCase::Upper.apply("istanbul", Some("en")), "ISTANBUL");
     assert_eq!(
-        TextCase::Lower.apply("DİYARBAKIR", Some("tr")),
+        TextCase::Upper.apply("istanbul", Some(&locale_tag!("tr"))),
+        "İSTANBUL"
+    );
+    assert_eq!(
+        TextCase::Upper.apply("istanbul", Some(&locale_tag!("en"))),
+        "ISTANBUL"
+    );
+    assert_eq!(
+        TextCase::Lower.apply("DİYARBAKIR", Some(&locale_tag!("tr"))),
         "diyarbakır"
     );
-    assert_eq!(TextCase::Upper.apply("Καλημέρα", Some("el")), "ΚΑΛΗΜΕΡΑ");
     assert_eq!(
-        TextCase::Upper.apply("istanbul", Some("not a tag!")),
-        "ISTANBUL",
-        "a tag that does not parse takes the language-neutral rules"
+        TextCase::Upper.apply("Καλημέρα", Some(&locale_tag!("el"))),
+        "ΚΑΛΗΜΕΡΑ"
     );
 }
 
@@ -86,6 +92,10 @@ fn a_span_can_ask_for_a_case_of_its_own() {
 
 #[test]
 fn the_style_language_reaches_the_mapping() {
-    let cased = case_text("izmir", None, &style(TextCase::Upper).with_lang("tr"));
+    let cased = case_text(
+        "izmir",
+        None,
+        &style(TextCase::Upper).with_lang(locale_tag!("tr")),
+    );
     assert_eq!(cased.text, "İZMİR");
 }

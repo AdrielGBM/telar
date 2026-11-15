@@ -6,14 +6,14 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
-pub use platform_core::{ColorScheme, SystemPreferences, TextScale};
+pub use platform_core::{ColorScheme, LocaleTag, SystemPreferences, TextScale};
 use reactive_core::{RwSignal, detached, signal};
 
 reactive_core::dropless_thread_local! {
     static COLOR_SCHEME: RwSignal<Option<ColorScheme>> = detached(|| signal(None));
     static REDUCED_MOTION: RwSignal<Option<bool>> = detached(|| signal(None));
     static HIGH_CONTRAST: RwSignal<Option<bool>> = detached(|| signal(None));
-    static LOCALES: RwSignal<Vec<String>> = detached(|| signal(Vec::new()));
+    static LOCALES: RwSignal<Vec<LocaleTag>> = detached(|| signal(Vec::new()));
     static TEXT_SCALE: RwSignal<TextScale> = detached(|| signal(TextScale::UNSCALED));
     static REDUCED_MOTION_OVERRIDE: RwSignal<Option<bool>> = detached(|| signal(None));
 }
@@ -151,8 +151,8 @@ pub fn use_surface_high_contrast() -> Option<bool> {
     contrast().surface()
 }
 
-/// BCP 47 tags, most preferred first; empty where the platform reports none.
-pub fn use_preferred_locales() -> Vec<String> {
+/// Most preferred first; empty where the platform reports none.
+pub fn use_preferred_locales() -> Vec<LocaleTag> {
     LOCALES.with(|s| s.get())
 }
 

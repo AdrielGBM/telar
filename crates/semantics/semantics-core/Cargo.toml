@@ -10,8 +10,14 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+serde = ["dep:serde"]
+
 [dependencies]
 wire-core = { workspace = true }
+
+icu_locale_core = { workspace = true, features = ["alloc"] }
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 wire-core = { workspace = true, features = ["golden"] }

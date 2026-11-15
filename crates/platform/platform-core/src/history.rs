@@ -8,6 +8,8 @@
 
 use std::rc::Rc;
 
+use semantics_core::LocaleTag;
+
 use crate::{HistoryStep, HistoryUpdate, Location, WindowCommand, push_window_command};
 
 /// What keeps the app's pages in step with its address — in practice a route stack, and in practice `Navigator::follow_location`.
@@ -35,10 +37,10 @@ pub trait HistoryFollower {
 /// What keeps the app's language in step with the locale its address carries — in practice `telar::follow_location_locale`.
 pub trait LocaleFollower {
     /// The locale to write an address in when the one the app opened at names none. One of the locales bound with it.
-    fn choose(&self) -> String;
+    fn choose(&self) -> LocaleTag;
 
     /// The address now names `locale`: the one the app was opened or linked at, or the one a link went to. The app shows it.
-    fn adopt(&self, locale: &str);
+    fn adopt(&self, locale: &LocaleTag);
 }
 
 /// Names one [`follow_location_history`] registration, for [`unfollow_location_history`].
@@ -48,18 +50,15 @@ pub struct HistoryFollowerId(u64);
 type AnchorRevealer = Rc<dyn Fn(&str)>;
 
 struct Locales {
-    available: Vec<String>,
+    available: Vec<LocaleTag>,
     follower: Rc<dyn LocaleFollower>,
     /// `None` until the history opens, when the address or the follower names one.
-    current: Option<String>,
+    current: Option<LocaleTag>,
 }
 
 impl Locales {
-    fn spelled(&self, locale: &str) -> Option<String> {
-        self.available
-            .iter()
-            .find(|available| available.eq_ignore_ascii_case(locale))
-            .cloned()
+    fn carried(&self, locale: &LocaleTag) -> Option<LocaleTag> {
+        self.available.contains(locale).then(|| locale.clone())
     }
 }
 
@@ -80,7 +79,7 @@ struct Hub {
 
 impl Hub {
     fn in_locale(&self, location: Location) -> Location {
-        match self.locales.as_ref().and_then(|l| l.current.as_deref()) {
+        match self.locales.as_ref().and_then(|l| l.current.clone()) {
             Some(locale) => location.with_locale(locale),
             None => location,
         }
@@ -287,7 +286,7 @@ pub fn replace_location(location: Location) -> bool {
 
 /// Switches to the locale `location` names, and answers with the place it names in no locale; `None` when the switch was the whole of the move, because that place is the one shown.
 fn arrive_in_locale(location: Location) -> Option<Location> {
-    let Some(locale) = location.locale().map(str::to_owned) else {
+    let Some(locale) = location.locale().cloned() else {
         return Some(location);
     };
     let place = location.without_locale();
@@ -432,7 +431,7 @@ pub fn unfollow_location_history(id: HistoryFollowerId) {
 /// Makes the app's address carry its locale, as one of `available`, with `follower` keeping the app's language in step with it. Replaces any binding before it; an app that never binds one has addresses with no locale in them.
 ///
 /// Bound before the history opens — the usual place is the app's setup — the address the app opens at decides the locale. Bound after, the history it already has does, and is rewritten in that locale.
-pub fn bind_location_locale(available: Vec<String>, follower: Rc<dyn LocaleFollower>) {
+pub fn bind_location_locale(available: Vec<LocaleTag>, follower: Rc<dyn LocaleFollower>) {
     let opened = with_hub(|hub| {
         let kept = hub.locales.take().and_then(|locales| locales.current);
         let mut locales = Locales {
@@ -440,7 +439,7 @@ pub fn bind_location_locale(available: Vec<String>, follower: Rc<dyn LocaleFollo
             follower,
             current: None,
         };
-        locales.current = kept.and_then(|locale| locales.spelled(&locale));
+        locales.current = kept.and_then(|locale| locales.carried(&locale));
         hub.locales = Some(locales);
         hub.opened
     });
@@ -450,8 +449,8 @@ pub fn bind_location_locale(available: Vec<String>, follower: Rc<dyn LocaleFollo
     if location_locale().is_none() {
         let named = location_history()
             .last()
-            .and_then(|top| top.locale().map(str::to_owned));
-        settle_locale(named.as_deref());
+            .and_then(|top| top.locale().cloned());
+        settle_locale(named.as_ref());
     }
     if let Some(history) = with_hub(Hub::restamp) {
         replace_on_platform(history);
@@ -466,7 +465,7 @@ pub fn location_pages() -> Vec<Location> {
 }
 
 /// The locales the app's addresses carry, as [`bind_location_locale`] declared them. Empty for an app whose addresses carry none.
-pub fn location_locales() -> Vec<String> {
+pub fn location_locales() -> Vec<LocaleTag> {
     with_hub(|hub| {
         hub.locales
             .as_ref()
@@ -476,12 +475,12 @@ pub fn location_locales() -> Vec<String> {
 }
 
 /// The locale the app's address is written in, once the history it opened on settled one.
-pub fn location_locale() -> Option<String> {
+pub fn location_locale() -> Option<LocaleTag> {
     with_hub(|hub| hub.locales.as_ref().and_then(|l| l.current.clone()))
 }
 
 /// The app is now shown in `locale`: its address is rewritten in it, keeping the page and the anchor, in place of the entry shown rather than as a new one. Nothing happens for a locale the address does not carry, or before the history opens, when the address the app was opened at decides.
-pub fn set_location_locale(locale: &str) {
+pub fn set_location_locale(locale: &LocaleTag) {
     switch_locale(locale, false);
 }
 
@@ -494,12 +493,12 @@ pub(crate) fn in_location_locale(location: Location) -> Location {
 }
 
 /// Settles the locale the history opens in: `named` when it is one of the bound locales, the follower's choice otherwise. The follower is told either way.
-fn settle_locale(named: Option<&str>) {
+fn settle_locale(named: Option<&LocaleTag>) {
     let Some((follower, named)) = with_hub(|hub| {
         let locales = hub.locales.as_ref()?;
         Some((
             locales.follower.clone(),
-            named.and_then(|locale| locales.spelled(locale)),
+            named.and_then(|locale| locales.carried(locale)),
         ))
     }) else {
         return;
@@ -508,7 +507,7 @@ fn settle_locale(named: Option<&str>) {
     let settled = with_hub(|hub| {
         let locales = hub.locales.as_mut()?;
         let locale = locales
-            .spelled(&chosen)
+            .carried(&chosen)
             .or_else(|| locales.available.first().cloned())?;
         locales.current = Some(locale.clone());
         Some(locale)
@@ -519,14 +518,14 @@ fn settle_locale(named: Option<&str>) {
 }
 
 /// Writes the whole history in `locale` and tells the platform, and the follower too when `adopt`. `false` when the address does not carry `locale`: none is bound, it is not one of them, or the history has not opened.
-fn switch_locale(locale: &str, adopt: bool) -> bool {
+fn switch_locale(locale: &LocaleTag, adopt: bool) -> bool {
     let Some((switched, changed)) = with_hub(|hub| {
         if !hub.opened {
             return None;
         }
         let locales = hub.locales.as_mut()?;
-        let locale = locales.spelled(locale)?;
-        if locales.current.as_deref() == Some(locale.as_str()) {
+        let locale = locales.carried(locale)?;
+        if locales.current.as_ref() == Some(&locale) {
             return Some((None, None));
         }
         locales.current = Some(locale.clone());

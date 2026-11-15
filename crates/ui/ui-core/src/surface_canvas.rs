@@ -7,7 +7,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use geometry_core::{Insets, Rect, Size, Transform};
-use i18n_core::Direction;
+use i18n_core::{Direction, LocaleTag};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId, SizeDimension};
 use platform_core::{AccessNode, ConsumedKeys, Event, FocusBoundary, TextInput, WindowCommand};
 use reactive_core::{RwSignal, in_surface_world, root_scope, signal};
@@ -39,8 +39,7 @@ pub struct SurfaceCanvas {
 pub struct SurfaceEnv {
     /// A mode the application registered.
     pub mode: Option<theme_core::ModeId>,
-    /// A BCP 47 language tag.
-    pub locale: Option<String>,
+    pub locale: Option<LocaleTag>,
     pub direction: Option<Direction>,
     /// `Some(true)` for more contrast, `Some(false)` for the regular palette, whatever the application and the system say.
     pub high_contrast: Option<bool>,
@@ -53,7 +52,7 @@ pub struct SurfaceEnv {
 impl SurfaceEnv {
     fn apply(&self) {
         theme_core::set_surface_mode(self.mode.as_ref());
-        i18n_core::set_surface_locale(self.locale.as_deref());
+        i18n_core::set_surface_locale(self.locale.as_ref());
         layout_reactive::set_surface_direction(self.direction);
         preferences_core::set_surface_high_contrast(self.high_contrast);
     }
@@ -230,12 +229,12 @@ impl SurfaceCanvas {
     }
 
     /// The locale the surface's text is translated into, where it has one of its own; `None` where it follows [`set_locale`](i18n_core::set_locale). Reactive.
-    pub fn locale(&self) -> Option<String> {
+    pub fn locale(&self) -> Option<LocaleTag> {
         self.with_entered(i18n_core::use_surface_locale)
     }
 
     /// Translates the surface's text into `locale` whatever the thread's is, or with `None` into the thread's again. Re-renders only the text inside that reads it.
-    pub fn set_locale(&self, locale: Option<&str>) {
+    pub fn set_locale(&self, locale: Option<&LocaleTag>) {
         self.with_entered(|| {
             i18n_core::set_surface_locale(locale);
         })

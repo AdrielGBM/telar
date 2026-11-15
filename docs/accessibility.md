@@ -8,7 +8,7 @@ the application knows, and it says them with three attributes that any built-in 
 | Attribute | Value | Means |
 | --- | --- | --- |
 | `a11y_label:` | `"text"`, `t!("key")`, or an expression reading `$state` | The name assistive technology reads for the box. Re-read when what it reads changes, so a translated name follows the locale. |
-| `lang:` | a BCP 47 tag: `"ja"`, `"es-CL"` | The language of the box and everything under it. The nearest one wins. |
+| `lang:` | a BCP 47 tag, `"ja"`, `"es-CL"`, checked when the `.rsx` is transpiled; or an expression that is a `LocaleTag` | The language of the box and everything under it. The nearest one wins. |
 | `a11y:hidden` | — | Assistive technology skips the box and its whole subtree. It is still drawn and still answers the pointer. |
 
 `label` is always text that is seen, never the name a reader hears, so `label:` on a built-in tag is a build
@@ -24,7 +24,7 @@ button label:"Open" variant:ghost a11y_label:"Open {name} in the canvas"
 A quoted name or language interpolates `{…}` as text does, wherever it is written.
 
 The language decides how the text under it is shaped, broken and cased, not only what a reader is told, so it
-is `lang:` on every tag, `.lang(|| …)` from Rust, and never a component's own prop.
+is `lang:` on every tag, `.lang(|| locale_tag!("es"))` from Rust, and never a component's own prop.
 
 A call may also say what that item is with `role:`, but only in words that describe the item from outside and
 ask nothing of what it holds:

@@ -57,10 +57,10 @@ fn split_letters_reach_a_document_as_one_named_word() {
     let word = Container::new(LayoutStyle::new(), vec![box_item(h), box_item(i)])
         .unwrap()
         .a11y_label(|| "Hi")
-        .lang(|| "en");
+        .lang(|| i18n_core::locale_tag!("en"));
     let row = as_document(|| captured(&word.view()));
     assert_eq!(row[0].semantics.label.as_deref(), Some("Hi"));
-    assert_eq!(row[0].semantics.lang.as_deref(), Some("en"));
+    assert_eq!(row[0].semantics.lang, Some(i18n_core::locale_tag!("en")));
     assert!(!row[0].semantics.hidden, "the word itself is read");
     assert!(
         letters.iter().all(|letter| letter[0].semantics.hidden),

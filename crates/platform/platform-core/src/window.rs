@@ -309,8 +309,8 @@ pub trait EventHandler<W: Window> {
         Vec::new()
     }
 
-    /// The surface's own language, as a BCP 47 tag — what [`AccessNode::lang`](crate::AccessNode) means by "the surface's own" when a node carries none. `None` where nothing has said, which leaves the platform's accessibility root with no language claim at all rather than a wrong one.
-    fn root_language(&self) -> Option<String> {
+    /// The surface's own language — what [`AccessNode::lang`](crate::AccessNode) means by "the surface's own" when a node carries none. `None` where nothing has said, which leaves the platform's accessibility root with no language claim at all rather than a wrong one.
+    fn root_language(&self) -> Option<semantics_core::LocaleTag> {
         None
     }
 
@@ -371,7 +371,7 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
     fn accessibility(&self) -> Vec<crate::AccessNode> {
         (**self).accessibility()
     }
-    fn root_language(&self) -> Option<String> {
+    fn root_language(&self) -> Option<semantics_core::LocaleTag> {
         (**self).root_language()
     }
     fn on_accessibility_action(&mut self, id: u64, action: crate::AccessAction) {

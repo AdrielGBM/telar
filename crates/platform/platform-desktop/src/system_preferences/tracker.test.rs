@@ -5,7 +5,7 @@ use super::PreferencesTracker;
 fn dark() -> SystemPreferences {
     SystemPreferences {
         color_scheme: Some(ColorScheme::Dark),
-        locales: vec!["es-CL".into()],
+        locales: vec![platform_core::locale_tag!("es-CL")],
         ..SystemPreferences::default()
     }
 }
@@ -45,7 +45,7 @@ fn a_single_key_changes_only_its_field() {
         .modify(|preferences| preferences.high_contrast = Some(true))
         .expect("the key changed something");
     assert_eq!(next.color_scheme, Some(ColorScheme::Dark));
-    assert_eq!(next.locales, ["es-CL"]);
+    assert_eq!(next.locales, [platform_core::locale_tag!("es-CL")]);
     assert_eq!(next.high_contrast, Some(true));
     assert_eq!(
         tracker.modify(|preferences| preferences.high_contrast = Some(true)),

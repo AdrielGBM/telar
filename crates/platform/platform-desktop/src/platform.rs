@@ -112,9 +112,8 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
         let nodes = self.handler.accessibility();
         let title = self.config.shown_title().to_owned();
         let lang = self.handler.root_language();
-        adapter.update_if_active(|| {
-            crate::accessibility::tree_update(&nodes, &title, lang.as_deref())
-        });
+        adapter
+            .update_if_active(|| crate::accessibility::tree_update(&nodes, &title, lang.as_ref()));
         self.a11y_nodes = nodes;
     }
 }
@@ -457,9 +456,8 @@ impl SurfaceRunner {
         let nodes = self.handler.accessibility();
         let title = self.title.clone();
         let lang = self.handler.root_language();
-        adapter.update_if_active(|| {
-            crate::accessibility::tree_update(&nodes, &title, lang.as_deref())
-        });
+        adapter
+            .update_if_active(|| crate::accessibility::tree_update(&nodes, &title, lang.as_ref()));
         self.a11y_nodes = nodes;
     }
 }

@@ -6,7 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::locale_tag::canonical_tag;
+use semantics_core::{LocaleTag, LocaleTagError, locale_tag};
+
 use crate::message::{Catalog, Entry, Message, Part};
 use crate::plural::PluralCategory;
 
@@ -57,9 +58,9 @@ impl MessageModel {
 /// A whole catalog as parsed: available locales, the fallback locale, and every key's per-locale messages. `BTreeMap`s keep output deterministic so unchanged catalogs don't retrigger recompilation — and, for the runtime path, give [`leak`](Self::leak) the sorted order [`Catalog`]'s binary searches rely on.
 #[derive(Debug, Clone)]
 pub struct CatalogModel {
-    pub locales: Vec<String>,
-    pub default_locale: String,
-    pub entries: BTreeMap<String, BTreeMap<String, MessageModel>>,
+    pub locales: Vec<LocaleTag>,
+    pub default_locale: LocaleTag,
+    pub entries: BTreeMap<String, BTreeMap<LocaleTag, MessageModel>>,
 }
 
 impl CatalogModel {
@@ -80,23 +81,24 @@ impl CatalogModel {
         self.entries.keys()
     }
 
-    /// Merges every `(locale, TOML, source)` into one catalog, `None` when there is no source. `source` is how the caller names where the TOML came from, a file path for the baker or a locale tag for a string held in memory, and comes back in the error.
+    /// Merges every `(locale, TOML, source)` into one catalog, `None` when there is no source. `source` is how the caller names where the TOML came from, a file path for the baker or a locale tag for a string held in memory, and comes back in the error, as it does for a locale that is no BCP 47 tag.
     ///
     /// `default` is the fallback locale when the active one lacks a key; an unknown or absent one resolves to `en` if the catalog has it, else the first tag alphabetically. Defining one key twice for one locale is an error rather than a last-writer-wins: the two definitions came from different files, and which of them a user sees would otherwise depend on directory order.
     ///
-    /// Locale tags, `default` among them, are kept with their subtags separated by `-` whichever separator they were written with, so `pt_BR.toml` and `pt-BR/` are one locale, `pt-BR`, and every copy of [`negotiate_locale`](crate::negotiate_locale) sees the tags in the one form a browser reports.
+    /// Locales are read as [`LocaleTag`]s, so `pt_BR.toml` and `pt-br/` are one locale, `pt-BR`.
     pub fn from_sources<S: Clone>(
         sources: &[(&str, &str, S)],
-        default: Option<&str>,
+        default: Option<&LocaleTag>,
     ) -> Result<Option<Self>, CatalogError<S>> {
-        let mut entries: BTreeMap<String, BTreeMap<String, MessageModel>> = BTreeMap::new();
-        let mut locales: Vec<String> = Vec::new();
+        let mut entries: BTreeMap<String, BTreeMap<LocaleTag, MessageModel>> = BTreeMap::new();
+        let mut locales: Vec<LocaleTag> = Vec::new();
         for (tag, content, source) in sources {
             let in_source = |problem| CatalogError {
                 source: source.clone(),
                 problem,
             };
-            let tag = canonical_tag(tag);
+            let tag = LocaleTag::parse(tag)
+                .map_err(|error| in_source(SourceProblem::NotALocale(error)))?;
             if !locales.contains(&tag) {
                 locales.push(tag.clone());
             }
@@ -118,9 +120,9 @@ impl CatalogModel {
         locales.sort();
 
         let default_locale = default
-            .map(canonical_tag)
             .filter(|d| locales.contains(d))
-            .or_else(|| locales.iter().find(|l| *l == "en").cloned())
+            .or_else(|| locales.iter().find(|l| **l == locale_tag!("en")))
+            .cloned()
             .unwrap_or_else(|| locales[0].clone());
 
         Ok(Some(Self {
@@ -136,7 +138,6 @@ impl CatalogModel {
     ///
     /// The returned data is heap-allocated, so unlike a catalog baked into a hot-reload dylib it stays valid after that dylib is unloaded.
     pub fn leak(&self) -> &'static Catalog {
-        let locales: Vec<&'static str> = self.locales.iter().map(|s| leak_str(s)).collect();
         let entries: Vec<Entry> = self
             .entries
             .iter()
@@ -145,14 +146,14 @@ impl CatalogModel {
                 messages: leak_slice(
                     per_locale
                         .iter()
-                        .map(|(locale, message)| (leak_str(locale), leak_message(message)))
+                        .map(|(locale, message)| (locale.clone(), leak_message(message)))
                         .collect(),
                 ),
             })
             .collect();
         Box::leak(Box::new(Catalog {
-            locales: leak_slice(locales),
-            default_locale: leak_str(&self.default_locale),
+            locales: leak_slice(self.locales.clone()),
+            default_locale: self.default_locale.clone(),
             entries: leak_slice(entries),
         }))
     }
@@ -183,8 +184,10 @@ pub enum SourceProblem {
     /// The key is defined for this locale in another source too.
     DuplicateKey {
         key: String,
-        locale: String,
+        locale: LocaleTag,
     },
+    /// The locale the source is named after is no BCP 47 tag.
+    NotALocale(LocaleTagError),
 }
 
 impl SourceProblem {
@@ -193,7 +196,8 @@ impl SourceProblem {
             Self::Syntax { line, .. } => *line,
             Self::PluralNotString { .. }
             | Self::UnsupportedType { .. }
-            | Self::DuplicateKey { .. } => None,
+            | Self::DuplicateKey { .. }
+            | Self::NotALocale(_) => None,
         }
     }
 }
@@ -213,6 +217,7 @@ impl std::fmt::Display for SourceProblem {
                 f,
                 "duplicate key `{key}` for locale `{locale}` (already defined in another file)"
             ),
+            Self::NotALocale(error) => write!(f, "named after no locale: {error}"),
         }
     }
 }
@@ -377,8 +382,9 @@ impl Catalog {
     /// A catalog parsed from one locale's TOML, for an application whose translations are a string it already holds — an `include_str!`, a downloaded pack, a test.
     ///
     /// The format is the one the baker reads: dotted or nested keys, `{name}` placeholders, a table of CLDR categories for a plural.
-    pub fn from_toml(locale: &str, toml: &str) -> Result<&'static Catalog, String> {
-        CatalogModel::from_sources(&[(locale, toml, locale)], Some(locale))
+    pub fn from_toml(locale: &LocaleTag, toml: &str) -> Result<&'static Catalog, String> {
+        let tag = locale.to_string();
+        CatalogModel::from_sources(&[(tag.as_str(), toml, tag.as_str())], Some(locale))
             .map_err(|error| error.to_string())?
             .map(|model| model.leak())
             .ok_or_else(|| format!("no catalog for `{locale}`"))
@@ -386,10 +392,10 @@ impl Catalog {
 
     /// A catalog loaded from a directory of `<locale>.toml` files — the `locales/` layout the transpiler bakes from, read at runtime instead.
     ///
-    /// This is the answer for an application with no `.rsx` files: the baked `CATALOG` only exists where the transpiler ran, so without this there is no way to reach [`crate::translate`] at all. `default` names the fallback locale; `None` resolves to `en` when present, else the first tag alphabetically.
+    /// This is the answer for an application with no `.rsx` files: the baked `CATALOG` only exists where the transpiler ran, so without this there is no way to reach [`crate::translate`] at all. `default` names the fallback locale; `None` resolves to `en` when present, else the first tag alphabetically. A file named after no BCP 47 tag is an error naming it.
     pub fn from_dir(
         dir: impl AsRef<std::path::Path>,
-        default: Option<&str>,
+        default: Option<&LocaleTag>,
     ) -> Result<&'static Catalog, String> {
         let dir = dir.as_ref();
         let read = std::fs::read_dir(dir).map_err(|e| format!("reading {}: {e}", dir.display()))?;

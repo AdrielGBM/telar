@@ -152,7 +152,7 @@ fn page() -> Vec<DrawCommand> {
         fill(Rect::new(0.0, 0.0, 640.0, 40.0), Color::rgb(0.9, 0.9, 0.95)),
         boxed(
             1,
-            Semantics::of(Role::Main).with_lang("es"),
+            Semantics::of(Role::Main).with_lang(platform_core::locale_tag!("es")),
             "display:flex;flex-direction:column;gap:8px;",
             full,
         ),
@@ -167,7 +167,9 @@ fn page() -> Vec<DrawCommand> {
         boxed(
             3,
             Semantics::of(Role::Link).linking_to(Destination::Route(
-                Location::root().segment("proyectos").with_locale("es"),
+                Location::root()
+                    .segment("proyectos")
+                    .with_locale(platform_core::locale_tag!("es")),
             )),
             "",
             Rect::new(0.0, 48.0, 120.0, 20.0),

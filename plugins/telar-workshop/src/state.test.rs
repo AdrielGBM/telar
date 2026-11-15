@@ -215,7 +215,7 @@ fn the_canvas_settings_start_at_their_defaults_and_are_restored_whole() {
     assert_eq!(
         state.canvas_settings().peek(),
         CanvasSettings {
-            locale: Some("ar".into()),
+            locale: Some(telar::locale_tag!("ar")),
             size: CanvasSize::Custom {
                 width: 320.0,
                 height: 480.0

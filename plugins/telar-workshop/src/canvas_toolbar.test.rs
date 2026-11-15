@@ -38,7 +38,7 @@ fn environment(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
         format!(
             "env {:?} {}",
             use_direction(),
-            use_locale().unwrap_or_else(|| "none".into())
+            use_locale().map_or_else(|| "none".to_string(), |locale| locale.to_string())
         )
     })?;
     let row = Container::new(
@@ -79,7 +79,8 @@ fn entries(
 ) -> Vec<PreviewEntry> {
     vec![
         PreviewEntry::new("fake--probe--env", "probe", "Env", build),
-        PreviewEntry::new("fake--probe--arabic", "probe", "Arabic", build).locale("ar"),
+        PreviewEntry::new("fake--probe--arabic", "probe", "Arabic", build)
+            .locale(const { &telar::locale_tag!("ar") }),
     ]
 }
 
@@ -340,8 +341,10 @@ fn the_canvas_follows_the_system_scheme_as_it_changes_until_a_scheme_is_picked()
 #[test]
 fn the_preview_locale_is_the_default_and_a_chosen_direction_wins_over_the_locale() {
     let mut workshop = Workshop::open(vec![
-        PreviewEntry::new("fake--probe--arabic", "probe", "Arabic", environment).locale("ar"),
-        PreviewEntry::new("fake--probe--english", "probe", "English", environment).locale("en"),
+        PreviewEntry::new("fake--probe--arabic", "probe", "Arabic", environment)
+            .locale(const { &telar::locale_tag!("ar") }),
+        PreviewEntry::new("fake--probe--english", "probe", "English", environment)
+            .locale(const { &telar::locale_tag!("en") }),
     ]);
     assert!(workshop.draws("env Rtl ar"), "the preview's own locale");
     workshop.pick("Locale", "en");

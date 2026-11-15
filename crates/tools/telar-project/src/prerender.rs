@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 
+use semantics_core::LocaleTag;
 use serde::{Deserialize, Serialize};
 
 /// The variable the request travels in.
@@ -66,7 +67,7 @@ pub enum PageRequest {
 pub struct PageLocation {
     pub segments: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub locale: Option<String>,
+    pub locale: Option<LocaleTag>,
 }
 
 impl PageLocation {
@@ -75,17 +76,18 @@ impl PageLocation {
     }
 
     /// The same page in `locale`.
-    pub fn in_locale(&self, locale: &str) -> Self {
+    pub fn in_locale(&self, locale: &LocaleTag) -> Self {
         Self {
             segments: self.segments.clone(),
-            locale: Some(locale.to_string()),
+            locale: Some(locale.clone()),
         }
     }
 
     /// Where the page's file goes under the site's root: its locale, then its segments, then `index.html`, which every static host serves for the directory's address with or without its closing `/`. `None` for a segment no file system path can hold.
     pub fn file(&self) -> Option<PathBuf> {
         let mut path = PathBuf::new();
-        for segment in self.locale.iter().chain(&self.segments) {
+        let locale = self.locale.as_ref().map(ToString::to_string);
+        for segment in locale.iter().chain(&self.segments) {
             if !is_contained_segment(segment) {
                 return None;
             }
@@ -126,16 +128,16 @@ pub struct Preferences {
     pub reduced_motion: Option<bool>,
     #[serde(default)]
     pub high_contrast: Option<bool>,
-    /// BCP 47 tags, most preferred first.
+    /// Most preferred first.
     #[serde(default)]
-    pub locales: Vec<String>,
+    pub locales: Vec<LocaleTag>,
 }
 
 /// One page, as the app built it.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PrerenderedPage {
     /// The language the page is in, when the app set one.
-    pub lang: Option<String>,
+    pub lang: Option<LocaleTag>,
     /// The surface's title as the platform would show it: the app's, or the page's within it.
     pub title: String,
     /// The attributes the element the app fills carries, escaped and each with a leading space, as they are written inside its start tag.
@@ -149,10 +151,10 @@ pub struct PrerenderedPage {
     /// Every page the app declared while it ran at this one (see `Route::pages`), with no locale.
     pub pages: Vec<PageLocation>,
     /// The locales its address carries, as `follow_location_locale` bound them.
-    pub locales: Vec<String>,
+    pub locales: Vec<LocaleTag>,
     /// The locale an address falls back to when nothing chooses another, as `follow_location_locale` bound it.
     #[serde(default)]
-    pub base_locale: Option<String>,
+    pub base_locale: Option<LocaleTag>,
     /// Whether the last two frames were the same, which is when the page is what the app shows rather than a moment on the way there.
     pub settled: bool,
 }
@@ -165,7 +167,7 @@ pub struct PrerenderState {
     /// The address the page was built at, as the app writes it with no base path (`/es/projects`); `None` for the page an address with no page of its own is served.
     pub location: Option<String>,
     /// The locale the app was in.
-    pub locale: Option<String>,
+    pub locale: Option<LocaleTag>,
     /// What the reader was assumed to prefer.
     pub preferences: Preferences,
     /// The surface the page was laid out on.

@@ -1,4 +1,5 @@
 use super::*;
+use crate::LocaleTag;
 
 fn flat(src: &str) -> BTreeMap<String, MessageModel> {
     let mut out = BTreeMap::new();
@@ -97,21 +98,21 @@ fn a_leaked_catalog_answers_like_a_baked_one() {
     .unwrap()
     .leak();
 
-    assert_eq!(catalog.locales, ["en", "es"]);
-    assert_eq!(catalog.default_locale, "en");
+    assert_eq!(catalog.locales, [tag("en"), tag("es")]);
+    assert_eq!(catalog.default_locale, tag("en"));
     assert_eq!(
         catalog
-            .message("battery.remaining", "es")
+            .message("battery.remaining", &tag("es"))
             .unwrap()
             .render(&[("time", "5m")]),
         "quedan 5m"
     );
     assert_eq!(
-        catalog.message("title", "fr").unwrap().render(&[]),
+        catalog.message("title", &tag("fr")).unwrap().render(&[]),
         "Settings"
     );
     assert!(
-        catalog.message("absent", "en").is_none(),
+        catalog.message("absent", &tag("en")).is_none(),
         "a catalog answers nothing for a key it does not hold"
     );
 }
@@ -129,16 +130,16 @@ fn a_plural_table_survives_the_round_trip() {
     .unwrap()
     .unwrap()
     .leak();
-    let message = catalog.message("items", "en").unwrap();
+    let message = catalog.message("items", &tag("en")).unwrap();
     assert_eq!(
         message
-            .select("en", &[("count", "1")])
+            .select(&tag("en"), &[("count", "1")])
             .render(&[("count", "1")]),
         "1 item"
     );
     assert_eq!(
         message
-            .select("en", &[("count", "3")])
+            .select(&tag("en"), &[("count", "3")])
             .render(&[("count", "3")]),
         "3 items"
     );
@@ -160,7 +161,7 @@ fn one_key_defined_twice_for_one_locale_is_an_error() {
             source: "b.toml",
             problem: SourceProblem::DuplicateKey {
                 key: "title".to_string(),
-                locale: "en".to_string(),
+                locale: tag("en"),
             },
         }
     );
@@ -214,11 +215,11 @@ fn a_directory_of_locale_files_loads_as_one_catalog() {
     std::fs::write(dir.join("en.toml"), "greeting = \"Hello, {name}!\"\n").unwrap();
     std::fs::write(dir.join("es.toml"), "greeting = \"¡Hola, {name}!\"\n").unwrap();
 
-    let catalog = Catalog::from_dir(&dir, Some("es")).unwrap();
-    assert_eq!(catalog.default_locale, "es");
+    let catalog = Catalog::from_dir(&dir, Some(&tag("es"))).unwrap();
+    assert_eq!(catalog.default_locale, tag("es"));
     assert_eq!(
         catalog
-            .message("greeting", "en")
+            .message("greeting", &tag("en"))
             .unwrap()
             .render(&[("name", "Ada")]),
         "Hello, Ada!"
@@ -235,12 +236,12 @@ fn locale_tags_are_read_with_hyphens_whichever_separator_they_were_written_with(
             ("pt-BR", "save = \"Salvar\"\n", "pt-BR/editor.toml"),
             ("sr_Cyrl", "title = \"Подешавања\"\n", "sr_Cyrl.toml"),
         ],
-        Some("pt_BR"),
+        Some(&tag("pt_BR")),
     )
     .unwrap()
     .unwrap();
-    assert_eq!(catalog.locales, ["pt-BR", "sr-Cyrl"]);
-    assert_eq!(catalog.default_locale, "pt-BR");
+    assert_eq!(catalog.locales, [tag("pt-BR"), tag("sr-Cyrl")]);
+    assert_eq!(catalog.default_locale, tag("pt-BR"));
 }
 
 #[test]
@@ -254,24 +255,48 @@ fn one_key_in_both_spellings_of_a_locale_is_defined_twice() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err.problem, SourceProblem::DuplicateKey { locale, .. } if locale == "pt-BR"),
+        matches!(&err.problem, SourceProblem::DuplicateKey { locale, .. } if *locale == tag("pt-BR")),
         "{err}"
     );
 }
 
 #[test]
-fn a_locale_set_with_underscores_finds_the_catalog_written_with_them() {
+fn every_spelling_of_a_locale_finds_the_same_catalog() {
     let catalog = CatalogModel::from_sources(
         &[
-            ("en", "title = \"Settings\"\n", "en.toml"),
-            ("pt_BR", "title = \"Ajustes\"\n", "pt_BR.toml"),
+            ("es", "title = \"Ajustes\"\n", "es.toml"),
+            ("en_us", "title = \"Settings\"\n", "en_us.toml"),
         ],
-        Some("en"),
+        Some(&tag("es")),
     )
     .unwrap()
     .unwrap()
     .leak();
-    crate::set_locale("pt_BR");
-    assert_eq!(crate::translate(catalog, "title", &[]), "Ajustes");
-    crate::set_locale("en");
+    for spelling in ["en_us", "EN-US", "en-US"] {
+        crate::set_locale(tag(spelling));
+        assert_eq!(
+            crate::translate(catalog, "title", &[]),
+            "Settings",
+            "{spelling}"
+        );
+    }
+    crate::set_locale(tag("es"));
+}
+
+#[test]
+fn a_source_named_after_no_locale_is_an_error_naming_it() {
+    let err = CatalogModel::from_sources(
+        &[("en_US.UTF-8", "title = \"Settings\"\n", "en_US.UTF-8.toml")],
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(err.source, "en_US.UTF-8.toml");
+    assert!(
+        matches!(&err.problem, SourceProblem::NotALocale(error) if error.tag() == "en_US.UTF-8"),
+        "{err}"
+    );
+}
+
+fn tag(text: &str) -> LocaleTag {
+    LocaleTag::parse(text).unwrap()
 }

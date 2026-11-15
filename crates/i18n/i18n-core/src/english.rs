@@ -3,11 +3,11 @@
 /// A plain string is a [`Message::Plain`](crate::Message::Plain); literals and `{name}` placeholders in sequence are a [`Message::Format`](crate::Message::Format), filled by name at lookup.
 ///
 /// ```
-/// use telar_i18n_core::{Catalog, english, translate};
+/// use telar_i18n_core::{Catalog, english, locale_tag, translate};
 ///
 /// static CATALOG: Catalog = Catalog {
-///     locales: &["en"],
-///     default_locale: "en",
+///     locales: &[locale_tag!("en")],
+///     default_locale: locale_tag!("en"),
 ///     entries: &[
 ///         english!("close", "Close"),
 ///         english!("fps", { count }, " fps"),
@@ -30,14 +30,14 @@ macro_rules! english {
     ($key:expr, $text:literal $(,)?) => {
         $crate::Entry {
             key: $key,
-            messages: &[("en", $crate::Message::Plain($text))],
+            messages: &[($crate::locale_tag!("en"), $crate::Message::Plain($text))],
         }
     };
     ($key:expr, $($part:tt),+ $(,)?) => {
         $crate::Entry {
             key: $key,
             messages: &[(
-                "en",
+                $crate::locale_tag!("en"),
                 $crate::Message::Format(&[$($crate::english!(@part $part)),+]),
             )],
         }

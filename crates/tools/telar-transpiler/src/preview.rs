@@ -11,6 +11,7 @@
 
 use std::fmt::Write;
 
+use semantics_core::LocaleTag;
 use telar_parser::{
     ArgDecl, ArgKind, Attr, Element, Preview, PreviewsMeta, RsxDocument, StyleClass, StyleProp,
     Value, ViewNode,
@@ -660,7 +661,7 @@ struct Options {
     viewport: Option<(f32, f32)>,
     bg: Option<String>,
     mode: Option<String>,
-    locale: Option<String>,
+    locale: Option<LocaleTag>,
     dir: Option<&'static str>,
     tags: Vec<String>,
     matrix: Option<Matrix>,
@@ -840,7 +841,11 @@ impl Options {
                 self.bg = Some(hex_to_color_expr(text));
             }
             PreviewOption::Mode => self.mode = Some(text.to_string()),
-            PreviewOption::Locale => self.locale = Some(text.to_string()),
+            PreviewOption::Locale => {
+                self.locale = Some(
+                    LocaleTag::parse(text).map_err(|error| format!("`locale:{text}`: {error}"))?,
+                )
+            }
             PreviewOption::Dir => {
                 self.dir = Some(match MatrixDirection::parse(text) {
                     Some(MatrixDirection::Ltr) => "Ltr",
@@ -953,7 +958,10 @@ impl Options {
             push(format!("mode({mode:?})"));
         }
         if let Some(locale) = &self.locale {
-            push(format!("locale({locale:?})"));
+            push(format!(
+                "locale(const {{ &::telar::i18n::locale_tag!({:?}) }})",
+                locale.to_string()
+            ));
         }
         if let Some(dir) = self.dir {
             push(format!("dir(::telar::Direction::{dir})"));
@@ -1091,7 +1099,12 @@ fn axis(name: &str, written: &[&str]) -> Result<MatrixAxis, String> {
     };
     Ok(match name {
         "mode" => MatrixAxis::Mode(values),
-        "locale" => MatrixAxis::Locale(values),
+        "locale" => MatrixAxis::Locale(
+            values
+                .iter()
+                .map(|value| LocaleTag::parse(value).map_err(|error| format!("{at}: {error}")))
+                .collect::<Result<_, _>>()?,
+        ),
         "dir" => MatrixAxis::Dir(
             values
                 .iter()
@@ -1166,7 +1179,13 @@ fn axis_expr(axis: &MatrixAxis) -> String {
         MatrixAxis::CatalogLocales => format!("{path}::CatalogLocales"),
         MatrixAxis::ProjectViewports => format!("{path}::ProjectViewports"),
         MatrixAxis::ArgValues { name } => format!("{path}::ArgValues({name:?})"),
-        MatrixAxis::Locale(locales) => format!("{path}::Locale(&{locales:?})"),
+        MatrixAxis::Locale(locales) => {
+            let locales: Vec<String> = locales
+                .iter()
+                .map(|locale| format!("::telar::i18n::locale_tag!({:?})", locale.to_string()))
+                .collect();
+            format!("{path}::Locale(const {{ &[{}] }})", locales.join(", "))
+        }
         MatrixAxis::Dir(directions) => {
             let directions: Vec<&str> = directions
                 .iter()

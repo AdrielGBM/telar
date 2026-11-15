@@ -17,7 +17,7 @@ fn split_letters_are_named_by_their_parent_and_hidden_one_by_one() {
         "the row carries the word:\n{code}"
     );
     assert!(
-        code.contains(".lang(|| \"es\")"),
+        code.contains(".lang(|| ::telar::i18n::locale_tag!(\"es\"))"),
         "and its language:\n{code}"
     );
     assert_eq!(
@@ -157,7 +157,10 @@ fn a_component_call_is_annotated_as_a_built_in_tag_is() {
         call.starts_with("{ let name = name.clone(); move || format!(\"Open {} in the canvas\""),
         "a quoted name interpolates, reading its signal:\n{code}"
     );
-    assert!(code.contains(".lang(|| \"es\")"), "{code}");
+    assert!(
+        code.contains(".lang(|| ::telar::i18n::locale_tag!(\"es\"))"),
+        "{code}"
+    );
     assert!(code.contains(".a11y_hidden()"), "{code}");
 }
 
@@ -171,6 +174,23 @@ fn a_component_calls_lang_sets_its_items_language() {
         .nth(1)
         .expect("the returned item says its language");
     assert!(call.contains("name.get()"), "{code}");
+}
+
+/// A quoted language is read as a tag where the `.rsx` is transpiled: written in its canonical form, or refused naming what does not parse.
+#[test]
+fn a_quoted_language_is_checked_and_written_canonical() {
+    let code = transpile("text \"Hola\" lang:\"es_cl\"\n");
+    assert!(
+        code.contains(".lang(|| ::telar::i18n::locale_tag!(\"es-CL\"))"),
+        "{code}"
+    );
+    let code = transpile("text \"Hola\" lang:\"spanish please\"\n");
+    assert!(
+        code.contains(
+            "`lang:\\\"spanish please\\\"`: `spanish please` is not a BCP 47 language tag"
+        ),
+        "{code}"
+    );
 }
 
 /// The spelling a component call once said its language with is refused on every tag, naming the one that replaced it, and reaches no component as a prop.

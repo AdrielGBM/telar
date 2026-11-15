@@ -11,7 +11,7 @@
 //! use telar_i18n::{Date, Length, format_date, format_number};
 //!
 //! telar_i18n::install();
-//! telar::set_locale("de");
+//! telar::set_locale(telar::locale_tag!("de"));
 //! assert_eq!(format_number(1_234_567), "1.234.567");
 //! assert_eq!(format_date(Date::try_new_iso(2024, 3, 15).unwrap(), Length::Long), "15. März 2024");
 //! ```

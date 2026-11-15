@@ -1,17 +1,18 @@
 use super::*;
+use crate::{LocaleTag, locale_tag};
 
 static CATALOG: Catalog = Catalog {
-    locales: &["en", "es"],
-    default_locale: "en",
+    locales: &[locale_tag!("en"), locale_tag!("es")],
+    default_locale: locale_tag!("en"),
     entries: &[Entry {
         key: "greeting",
         messages: &[
             (
-                "en",
+                locale_tag!("en"),
                 Message::Format(&[Part::Lit("Hello, "), Part::Arg("name"), Part::Lit("!")]),
             ),
             (
-                "es",
+                locale_tag!("es"),
                 Message::Format(&[Part::Lit("Hola, "), Part::Arg("name"), Part::Lit("!")]),
             ),
         ],
@@ -20,12 +21,12 @@ static CATALOG: Catalog = Catalog {
 
 #[test]
 fn translate_follows_active_locale() {
-    set_locale("en");
+    set_locale(tag("en"));
     assert_eq!(
         translate(&CATALOG, "greeting", &[("name", "Ada")]),
         "Hello, Ada!"
     );
-    set_locale("es");
+    set_locale(tag("es"));
     assert_eq!(
         translate(&CATALOG, "greeting", &[("name", "Ada")]),
         "Hola, Ada!"
@@ -34,6 +35,10 @@ fn translate_follows_active_locale() {
 
 #[test]
 fn translate_falls_back_to_key_when_absent() {
-    set_locale("en");
+    set_locale(tag("en"));
     assert_eq!(translate(&CATALOG, "nope", &[]), "nope");
+}
+
+fn tag(text: &str) -> LocaleTag {
+    LocaleTag::parse(text).unwrap()
 }

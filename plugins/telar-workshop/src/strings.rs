@@ -1,7 +1,7 @@
 //! The text the workshop draws itself, and the one way its chrome asks for it.
 
 use telar::Reactive;
-use telar::i18n::{Catalog, english, translate_with_override};
+use telar::i18n::{Catalog, english, locale_tag, translate_with_override};
 
 const NAMESPACE: &str = "telar_workshop";
 
@@ -197,8 +197,8 @@ pub(crate) const ZOOM_PERCENT: &str = "zoom_percent";
 pub(crate) const ZOOM_RESET: &str = "zoom_reset";
 
 static CATALOG: Catalog = Catalog {
-    locales: &["en"],
-    default_locale: "en",
+    locales: &[locale_tag!("en")],
+    default_locale: locale_tag!("en"),
     // Sorted by key: a lookup binary-searches them.
     entries: &[
         english!(A11Y_ERRORS, "A11y errors: ", { arg }),

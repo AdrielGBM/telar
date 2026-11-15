@@ -1,7 +1,7 @@
 //! The inputs a prerendered page carries for the app that takes it over (`telar-state`), read with the browser's own JSON parser so a page build links no parser of its own for them.
 
 use js_sys::{Array, JSON, Object, Reflect};
-use platform_core::{ColorScheme, SystemPreferences, TextScale};
+use platform_core::{ColorScheme, LocaleTag, SystemPreferences, TextScale};
 use wasm_bindgen::{JsCast, JsValue};
 
 /// What a prerendered page says it was built from.
@@ -10,7 +10,7 @@ pub struct ServedState {
     /// The format the page was written in.
     pub version: u32,
     /// The locale the app was in.
-    pub locale: Option<String>,
+    pub locale: Option<LocaleTag>,
     /// The system preferences the page assumed.
     pub preferences: SystemPreferences,
     /// The surface size the page was laid out at, in CSS pixels.
@@ -34,19 +34,24 @@ pub fn parse_served_state(json: &str) -> Option<ServedState> {
         Some(scheme) => Some(scheme.as_string()?.parse::<ColorScheme>().ok()?),
         None => None,
     };
+    let locale = match field(&state, "locale").and_then(|locale| locale.as_string()) {
+        Some(locale) => Some(LocaleTag::parse(&locale).ok()?),
+        None => None,
+    };
     Some(ServedState {
         version: number(&field(&state, "version")?)?,
-        locale: field(&state, "locale").and_then(|locale| locale.as_string()),
+        locale,
         preferences: SystemPreferences {
             color_scheme,
             reduced_motion: preference("reduced_motion").and_then(|on| on.as_bool()),
             high_contrast: preference("high_contrast").and_then(|on| on.as_bool()),
             locales: preference("locales")
                 .map(|locales| {
-                    Array::from(&locales)
-                        .iter()
-                        .filter_map(|locale| locale.as_string())
-                        .collect()
+                    platform_core::platform_locales(
+                        Array::from(&locales)
+                            .iter()
+                            .filter_map(|locale| locale.as_string()),
+                    )
                 })
                 .unwrap_or_default(),
             text_scale: TextScale::UNSCALED,

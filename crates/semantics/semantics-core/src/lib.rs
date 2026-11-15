@@ -18,6 +18,7 @@ use std::sync::Arc;
 mod colours;
 mod destination;
 mod keys;
+mod locale_tag;
 mod location;
 mod modal;
 mod outline;
@@ -26,8 +27,12 @@ mod uri;
 pub mod wire;
 
 pub use colours::ForcedColors;
+#[doc(hidden)]
+pub use icu_locale_core as __icu;
+
 pub use destination::{CurrentKind, Destination};
 pub use keys::ConsumedKeys;
+pub use locale_tag::{LocaleTag, LocaleTagError};
 pub use location::Location;
 pub use modal::Modal;
 pub use outline::{HeadingLevel, Positioning, SetPosition};
@@ -518,8 +523,8 @@ pub struct Semantics {
     pub click_through: bool,
     /// How the keyboard reaches the box. `None` for a box that cannot hold focus.
     pub focusable: Option<Focusable>,
-    /// The language the box and everything under it is written in, as a BCP 47 tag, where it differs from the one around it. `None` inherits.
-    pub lang: Option<Arc<str>>,
+    /// The language the box and everything under it is written in, where it differs from the one around it. `None` inherits.
+    pub lang: Option<LocaleTag>,
     /// Whether assistive technology skips the box and everything under it. Still drawn and still operable by pointer: this is what a reader is told, not what is on screen.
     pub hidden: bool,
     /// The name a [`Destination::Anchor`] reaches this box by: a place on the page.
@@ -558,7 +563,7 @@ pub struct Annotation {
     pub label: Option<Arc<str>>,
     /// What the box is, laid over what the widget made it as [`Role::annotated`] allows.
     pub role: Option<Role>,
-    pub lang: Option<Arc<str>>,
+    pub lang: Option<LocaleTag>,
     pub hidden: bool,
     /// Skipped by readers while it goes by no `label`: artwork that only decorates until whoever places it says what it means.
     pub decorative: bool,
@@ -623,8 +628,8 @@ impl Semantics {
         self
     }
 
-    pub fn with_lang(mut self, lang: impl Into<Arc<str>>) -> Self {
-        self.lang = Some(lang.into());
+    pub fn with_lang(mut self, lang: LocaleTag) -> Self {
+        self.lang = Some(lang);
         self
     }
 

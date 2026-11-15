@@ -246,7 +246,7 @@ fn page(variant: &Variant) -> Vec<DrawCommand> {
         fill(Rect::new(0.0, 0.0, 640.0, 40.0), Color::rgb(0.9, 0.9, 0.95)),
         boxed(
             MAIN,
-            Semantics::of(Role::Main).with_lang("es"),
+            Semantics::of(Role::Main).with_lang(platform_core::locale_tag!("es")),
             &format!("display:flex;flex-direction:column;{}", variant.gap),
             full,
         ),

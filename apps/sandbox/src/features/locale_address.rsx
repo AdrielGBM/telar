@@ -4,10 +4,14 @@ use crate::shared::components::code_line::{CodeLineProps, code_line};
 use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
 use crate::shared::components::example::{ExampleProps, example};
 
-let active = memo(|| telar::use_locale().unwrap_or_else(|| "none".to_string()));
+let active = memo(|| {
+    telar::use_locale().map_or_else(|| "none".to_string(), |locale| locale.to_string())
+});
 let address = memo(|| {
-    let locale = telar::use_locale().unwrap_or_default();
-    telar::address_of(&telar::in_locale(&locale))
+    telar::use_locale().map_or_else(
+        || "none".to_string(),
+        |locale| telar::address_of(&telar::in_locale(locale)),
+    )
 });
 
 [view]
@@ -18,18 +22,18 @@ col gap:20
             text "{t!(\"greeting\", name = \"Ada\")}" font_size:15 color:$theme.ink
             text "locale · {$active}   ·   address · {$address}" font_size:13 color:$theme.primary
             row gap:8
-                button label:"English" variant:ghost on_press:(|| telar::set_locale("en"))
-                button label:"Español" variant:ghost on_press:(|| telar::set_locale("es"))
-                button label:"العربية" variant:ghost on_press:(|| telar::set_locale("ar"))
+                button label:"English" variant:ghost on_press:(|| telar::set_locale(telar::locale_tag!("en")))
+                button label:"Español" variant:ghost on_press:(|| telar::set_locale(telar::locale_tag!("es")))
+                button label:"العربية" variant:ghost on_press:(|| telar::set_locale(telar::locale_tag!("ar")))
             text "set_locale rewrites the entry shown in the new locale: the page and the anchor stay, and no entry is added, so back still leaves the page. The choice is kept for the next run." font_size:12 color:$theme.muted
-        code_line code:"follow_location_locale([\"en\", \"es\", \"ar\"], \"en\")   ·   set_locale(\"es\")"
+        code_line code:"follow_location_locale([locale_tag!(\"en\"), locale_tag!(\"es\"), locale_tag!(\"ar\")], locale_tag!(\"en\"))   ·   set_locale(locale_tag!(\"es\"))"
     example title:"A link to this place in another language"
         col anchor:t!("locale_address.anchor")
             card gap:10
                 row gap:10 align:center
-                    box to:in_locale("en") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
+                    box to:in_locale(locale_tag!("en")) fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
                         text "Read in English" font_size:14 color:$theme.primary
-                    box to:in_locale("es") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
+                    box to:in_locale(locale_tag!("es")) fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
                         text "Leer en español" font_size:14 color:$theme.primary
                 text "in_locale names the place being shown in another language. A document writes it as an <a href> with the locale's prefix, so it switches before any code runs; elsewhere a tap switches in place. This example is an anchor named by t!, so its name in the address follows the language too." font_size:12 color:$theme.muted
-        code_line code:"box to:in_locale(\"es\")   ·   col anchor:t!(\"locale_address.anchor\")"
+        code_line code:"box to:in_locale(locale_tag!(\"es\"))   ·   col anchor:t!(\"locale_address.anchor\")"

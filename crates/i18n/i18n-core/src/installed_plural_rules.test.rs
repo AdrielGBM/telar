@@ -1,15 +1,15 @@
 //! Plural selection through rules installed for the process. Its own binary because the installed rules are process-wide.
 
 use telar_i18n_core::{
-    BuiltinPluralRules, Catalog, Entry, Message, Part, PluralCategory, PluralOperands, PluralRules,
-    plural_category, set_locale, set_plural_rules, translate,
+    BuiltinPluralRules, Catalog, Entry, LocaleTag, Message, Part, PluralCategory, PluralOperands,
+    PluralRules, locale_tag, plural_category, set_locale, set_plural_rules, translate,
 };
 
 /// Rules no language has, so a selection they made cannot be mistaken for the built-in table's.
 struct EvenOdd;
 
 impl PluralRules for EvenOdd {
-    fn category(&self, _locale: &str, operands: PluralOperands) -> PluralCategory {
+    fn category(&self, _locale: &LocaleTag, operands: PluralOperands) -> PluralCategory {
         if !operands.is_integer() {
             PluralCategory::Many
         } else if operands.integer.is_multiple_of(2) {
@@ -21,12 +21,12 @@ impl PluralRules for EvenOdd {
 }
 
 static CATALOG: Catalog = Catalog {
-    locales: &["en"],
-    default_locale: "en",
+    locales: &[locale_tag!("en")],
+    default_locale: locale_tag!("en"),
     entries: &[Entry {
         key: "items",
         messages: &[(
-            "en",
+            locale_tag!("en"),
             Message::Plural(&[
                 (
                     PluralCategory::One,
@@ -55,12 +55,12 @@ fn items(count: &str) -> String {
 
 #[test]
 fn installed_rules_replace_the_builtin_table_until_replaced_again() {
-    set_locale("en");
+    set_locale(tag("en"));
     assert_eq!(items("1"), "1 odd");
     assert_eq!(items("2"), "2 items");
 
     set_plural_rules(&EvenOdd);
-    assert_eq!(plural_category("en", 4), PluralCategory::Two);
+    assert_eq!(plural_category(&tag("en"), 4), PluralCategory::Two);
     assert_eq!(items("1"), "1 odd");
     assert_eq!(items("2"), "2 even");
     assert_eq!(items("2.5"), "2.5 fractional");
@@ -68,4 +68,8 @@ fn installed_rules_replace_the_builtin_table_until_replaced_again() {
     set_plural_rules(&BuiltinPluralRules);
     assert_eq!(items("2"), "2 items");
     assert_eq!(items("2.5"), "2.5 items");
+}
+
+fn tag(text: &str) -> LocaleTag {
+    LocaleTag::parse(text).unwrap()
 }

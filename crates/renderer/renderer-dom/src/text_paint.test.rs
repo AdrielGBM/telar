@@ -76,7 +76,7 @@ fn a_cased_text_is_measured_as_the_page_draws_it() {
     ] {
         let style = TextStyle::new(20.0, Color::BLACK)
             .with_text_case(case)
-            .with_lang(lang);
+            .with_lang(platform_core::LocaleTag::parse(lang).unwrap());
         let (measured, _) = metrics.measure(text, None, 10_000.0, &style);
         let drawn = drawn_width(text, &format!("text-transform:{}", case.css_name()), lang);
         assert!(

@@ -89,16 +89,16 @@ a reload, a deep link or a restored session opens in that language:
 
 ```rust
 telar::app!(MyTheme, {
-    telar::follow_location_locale(["es", "en"], "es");
+    telar::follow_location_locale([locale_tag!("es"), locale_tag!("en")], locale_tag!("es"));
 }, config, Root);
 ```
 
 | | What happens |
 | --- | --- |
-| Opening | The address decides: `/en/projects` opens in English. An address that names no locale is written in the first of: the locale already set, the one the person last chose (`telar.locale`, see [docs/user-preferences.md](user-preferences.md)), and `negotiate_locale` of the system's preferred locales against `available`, falling back to `base`. The platform's entry is then rewritten to name it. |
+| Opening | The address decides: `/en/projects` opens in English, and so does `/EN/projects`, since a first segment is read as a locale tag and compared with the bound ones. A first segment that is no tag, or names a locale the app does not carry, is a page segment like any other. An address that names no locale is written in the first of: the locale already set, the one the person last chose (`telar.locale`, see [docs/user-preferences.md](user-preferences.md)), and `negotiate_locale` of the system's preferred locales against `available`, falling back to `base`. The platform's entry is then rewritten to name it. |
 | `set_locale(tag)` | The entry shown is rewritten in the new locale, keeping the page and the anchor; no entry is added. A regional tag is carried as the locale it negotiates to (`en-GB` as `en`), and one the app does not ship as `base`. The choice is kept for the next run. |
 | A link to a `Location` with a locale | Switches to it (the same rewrite), then opens the place if it is not the one shown. A link to the current place in another language is a language switch and nothing more. |
-| `to:in_locale("en")` | The language switcher: the place being shown, in that locale. Its `<a href>` is the current entry's address in it (`/en/doc#team`), and following it is the same switch as `set_locale`. |
+| `to:in_locale(locale_tag!("en"))` | The language switcher: the place being shown, in that locale. Its `<a href>` is the current entry's address in it (`/en/doc#team`), and following it is the same switch as `set_locale`. |
 | Back and forward | An entry the platform returns to from before a switch is shown, and rewritten, in the locale the app is in. |
 | Routes | Never see a locale: `Route::to_location` writes none, `from_location` is handed none, `pages_of` strips it. |
 | Links | `address_of` writes a route or an anchor in the locale the address carries, so an `<a href>` is right before any code runs. |
@@ -115,7 +115,7 @@ its locale, so a copied link, a reload and a prerendered page each open in the r
 | Web (DOM and canvas) | The first segment under the base path: `/es/`, `/portfolio/en/projects#team`. `/` is handled like any address without a locale; serving it as a negotiation page belongs to the web packaging ([docs/web-packaging.md](web-packaging.md#the-root-of-a-site-in-several-locales)). |
 | Desktop, terminal | In every entry of the history saved in the preference store, and in `--location /en/projects`. Also kept as `telar.locale`, for a launch with no saved history. |
 | Android | The `ACTION_VIEW` link (`https://example.com/en/projects`), and `telar.locale` for a launch without one. |
-| Headless | The fixed location: `HeadlessPlatform::with_location([route.to_location().with_locale("en")])` is one route in one language, which is what a prerender of each route × locale builds. |
+| Headless | The fixed location: `HeadlessPlatform::with_location([route.to_location().with_locale(locale_tag!("en"))])` is one route in one language, which is what a prerender of each route × locale builds. |
 
 An app that never calls `follow_location_locale` has addresses with no locale in them, and `/es/projects` is
 two segments there as it always was.

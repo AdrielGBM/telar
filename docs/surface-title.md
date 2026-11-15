@@ -30,7 +30,7 @@ let pages = Navigator::new(Page::Home).follow_location();
 ```
 
 With the app titled `Portfolio`, the surface is called `Portfolio` on the home page and `Credits — Portfolio`
-on the credits page; after `set_locale("es")` it is `Créditos — Portfolio`. Nothing else has to ask: the title
+on the credits page; after `set_locale(locale_tag!("es"))` it is `Créditos — Portfolio`. Nothing else has to ask: the title
 is derived in an effect, so it moves when the route, the locale or anything else the title reads moves.
 
 ## The pieces
@@ -112,7 +112,7 @@ locale reads it from there:
 ```rust
 use platform_headless::{HeadlessPlatform, TitleSink};
 
-telar::set_locale("es");
+telar::set_locale(telar::locale_tag!("es"));
 let titles = TitleSink::default();
 telar::run_with_platform::<_, _, ()>(
     HeadlessPlatform::new(1280, 800)

@@ -58,7 +58,7 @@ own line, which lists the keys it takes.
 | `viewport` | `390x844` | The canvas size, in logical px |
 | `bg` | `#202020` | The canvas background |
 | `mode` | a registered mode's name | The theme mode the preview opens in; a name no mode is registered under fails the preview, saying so |
-| `locale` | a BCP 47 tag | The language the preview opens in |
+| `locale` | a BCP 47 tag, checked when the `.rsx` is transpiled | The language the preview opens in |
 | `dir` | `ltr`, `rtl` | The writing direction, whatever the locale's own |
 | `tags` | `[stateful slow]` | Free-form labels the workshop filters by |
 | `matrix` | `themes` or `(…)` | The cells the preview is also rendered across; see [Matrices](#matrices) |

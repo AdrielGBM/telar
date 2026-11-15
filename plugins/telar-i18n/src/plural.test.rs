@@ -1,6 +1,7 @@
-use super::*;
 use telar::i18n::{Catalog, Entry, Message, plural_category, translate};
-use telar::set_locale;
+use telar::{locale_tag, set_locale};
+
+use super::*;
 
 use PluralCategory::*;
 
@@ -11,16 +12,25 @@ macro_rules! branches {
 }
 
 static CATALOG: Catalog = Catalog {
-    locales: &["ar", "en", "fr", "pl", "ru"],
-    default_locale: "en",
+    locales: &[
+        locale_tag!("ar"),
+        locale_tag!("en"),
+        locale_tag!("fr"),
+        locale_tag!("pl"),
+        locale_tag!("ru"),
+    ],
+    default_locale: locale_tag!("en"),
     entries: &[Entry {
         key: "files",
         messages: &[
-            ("ar", branches!(Zero, One, Two, Few, Many, Other)),
-            ("en", branches!(One, Other)),
-            ("fr", branches!(One, Many, Other)),
-            ("pl", branches!(One, Few, Many, Other)),
-            ("ru", branches!(One, Few, Many, Other)),
+            (
+                locale_tag!("ar"),
+                branches!(Zero, One, Two, Few, Many, Other),
+            ),
+            (locale_tag!("en"), branches!(One, Other)),
+            (locale_tag!("fr"), branches!(One, Many, Other)),
+            (locale_tag!("pl"), branches!(One, Few, Many, Other)),
+            (locale_tag!("ru"), branches!(One, Few, Many, Other)),
         ],
     }],
 };
@@ -59,7 +69,7 @@ fn installed_rules_answer_through_the_seam() {
     install();
     for &(locale, count, want) in CASES {
         assert_eq!(
-            plural_category(locale, operands(count)),
+            plural_category(&tag(locale), operands(count)),
             want,
             "{locale} {count}"
         );
@@ -70,7 +80,7 @@ fn installed_rules_answer_through_the_seam() {
 fn installed_rules_select_a_catalog_plural() {
     install();
     for &(locale, count, want) in CASES {
-        set_locale(locale);
+        set_locale(tag(locale));
         assert_eq!(
             translate(&CATALOG, "files", &[("count", count)]),
             format!("{want:?}"),
@@ -82,12 +92,19 @@ fn installed_rules_select_a_catalog_plural() {
 #[test]
 fn a_region_resolves_like_its_language_however_it_is_separated() {
     for locale in ["ru-RU", "ru_RU"] {
-        assert_eq!(CldrPluralRules.category(locale, 22.into()), Few, "{locale}");
+        assert_eq!(
+            CldrPluralRules.category(&tag(locale), 22.into()),
+            Few,
+            "{locale}"
+        );
     }
 }
 
 #[test]
-fn a_tag_icu4x_cannot_place_picks_other() {
-    assert_eq!(CldrPluralRules.category("", 1.into()), Other);
-    assert_eq!(CldrPluralRules.category("not a locale", 1.into()), Other);
+fn a_locale_icu4x_has_no_data_for_picks_other() {
+    assert_eq!(CldrPluralRules.category(&tag("zz"), 1.into()), Other);
+}
+
+fn tag(text: &str) -> LocaleTag {
+    LocaleTag::parse(text).unwrap()
 }

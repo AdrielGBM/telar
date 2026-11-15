@@ -6,7 +6,7 @@ use std::sync::Arc;
 use ui_core::accessibility::{self, FrameReading};
 use ui_core::focus::{self, TabStop};
 
-use crate::{AccessNode, Color, Direction, DrawCommand, Size, SurfaceCanvas};
+use crate::{AccessNode, Color, Direction, DrawCommand, LocaleTag, Size, SurfaceCanvas};
 
 /// What a canvas drew at one moment, in its own coordinates, with the environment it drew it in.
 ///
@@ -20,8 +20,8 @@ pub struct Frame {
     pub size: Size,
     /// The reading direction the canvas was drawn in.
     pub direction: Direction,
-    /// The language the canvas is in, as a BCP 47 tag. `None` where it has none.
-    pub lang: Option<String>,
+    /// The language the canvas is in. `None` where it has none.
+    pub lang: Option<LocaleTag>,
     /// What shows behind everything the commands draw: the window's clear colour. `None` where it is not known.
     pub background: Option<Color>,
     /// What a reader and the keyboard were told about the frame when it was drawn. `None` for a frame made from commands alone.
@@ -88,7 +88,7 @@ impl Frame {
     }
 
     /// This frame with the language the canvas is in.
-    pub fn with_lang(self, lang: Option<String>) -> Self {
+    pub fn with_lang(self, lang: Option<LocaleTag>) -> Self {
         Self { lang, ..self }
     }
 

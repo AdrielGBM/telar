@@ -618,11 +618,7 @@ fn reads_before(next: Rect, previous: Rect, direction: Direction) -> bool {
 }
 
 fn missing_lang(frame: &Frame, snapshot: &[AccessNode], out: &mut Vec<Violation>) {
-    if frame
-        .lang
-        .as_deref()
-        .is_some_and(|lang| !lang.trim().is_empty())
-    {
+    if frame.lang.is_some() {
         return;
     }
     let unlabelled = snapshot

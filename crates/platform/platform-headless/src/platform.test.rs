@@ -37,7 +37,10 @@ fn declared() -> SystemPreferences {
         color_scheme: Some(ColorScheme::Dark),
         reduced_motion: Some(true),
         high_contrast: None,
-        locales: vec!["es".into(), "en".into()],
+        locales: vec![
+            platform_core::locale_tag!("es"),
+            platform_core::locale_tag!("en"),
+        ],
         text_scale: TextScale::new(1.25).expect("a scale above zero"),
     }
 }

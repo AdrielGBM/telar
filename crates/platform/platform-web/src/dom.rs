@@ -41,11 +41,11 @@ pub(crate) fn element_text(id: &str) -> Option<String> {
 
 /// Keeps `<html lang>` and `<html dir>` matching the active locale. `is_rtl` is the caller's, since this
 /// crate knows nothing about locales — `i18n_core::Direction::for_locale` is the rule to compute it with.
-pub fn set_document_language(lang: &str, is_rtl: bool) {
+pub fn set_document_language(lang: &platform_core::LocaleTag, is_rtl: bool) {
     let Some(root) = document().document_element() else {
         return;
     };
-    let _ = root.set_attribute("lang", lang);
+    let _ = root.set_attribute("lang", &lang.to_string());
     let _ = root.set_attribute("dir", if is_rtl { "rtl" } else { "ltr" });
 }
 

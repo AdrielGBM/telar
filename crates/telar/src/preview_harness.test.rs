@@ -151,7 +151,7 @@ const DIRECTIONS: Matrix = Matrix::Axes(&[Axis::Dir(&[Direction::Ltr, Direction:
 fn run_entries(set: &str) -> Vec<PreviewEntry> {
     let badge = PreviewEntry::new("harness--badge--default", "badge", "default", badge)
         .viewport(160.0, 80.0)
-        .locale("en")
+        .locale(const { &telar::locale_tag!("en") })
         .play(finds_the_label)
         .matrix(DIRECTIONS);
     match set {
@@ -163,7 +163,8 @@ fn run_entries(set: &str) -> Vec<PreviewEntry> {
                 .play(finds_nothing),
         ],
         "faint" => vec![
-            PreviewEntry::new("harness--faint--default", "faint", "default", faint).locale("en"),
+            PreviewEntry::new("harness--faint--default", "faint", "default", faint)
+                .locale(const { &telar::locale_tag!("en") }),
         ],
         other => panic!("no preview set {other}"),
     }

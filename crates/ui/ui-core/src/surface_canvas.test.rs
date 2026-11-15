@@ -205,7 +205,7 @@ fn a_canvas_in_an_environment_is_built_in_it() {
     reset_layout_runtime();
     let env = SurfaceEnv {
         mode: Some(theme_core::register_mode("dusk", || {})),
-        locale: Some(String::from("ar")),
+        locale: Some(i18n_core::locale_tag!("ar")),
         direction: Some(Direction::Rtl),
         high_contrast: Some(true),
         safe_area: Insets::new(44.0, 0.0, 34.0, 0.0),

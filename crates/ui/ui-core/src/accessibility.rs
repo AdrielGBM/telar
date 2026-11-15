@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use geometry_core::Rect;
+use i18n_core::LocaleTag;
 use layout_core::NodeId;
 use platform_core::{
     AccessAction, AccessNode, ActionSupport, CurrentKind, Event, Role, SetPosition, Value,
@@ -126,7 +127,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 multiselectable: e.multiselectable,
                 supports: e.supports,
                 position: e.position,
-                lang: reading.scope(e.node).lang.as_deref().map(str::to_string),
+                lang: reading.scope(e.node).lang.clone(),
                 url: link.map(|(destination, _)| platform_core::address_of(destination)),
                 current: link.and_then(|(_, current)| *current),
                 active_descendant: focus::active_descendant_state(e.id)
@@ -237,7 +238,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
             // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog asks about. A link run is its own node wherever it sits.
             _ => {
                 let node = AccessNode {
-                    lang: piece.lang.as_deref().map(str::to_string),
+                    lang: piece.lang.clone(),
                     url: piece.url,
                     position: piece.position,
                     value: piece
@@ -308,7 +309,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                     append(&mut name, word);
                 }
                 let node = AccessNode {
-                    lang: titled.lang.as_deref().map(str::to_string),
+                    lang: titled.lang.clone(),
                     ..unaddressed(titled.role, name, rect)
                 };
                 Some(Found::holding(node, titled.node, &reading))
@@ -643,7 +644,7 @@ struct Piece {
     text: String,
     rect: Rect,
     role: Role,
-    lang: Option<Arc<str>>,
+    lang: Option<LocaleTag>,
     /// Where a link run of a paragraph goes, as the address a reader announces.
     url: Option<String>,
     /// Where a named box sits among the items of its set, as its role says it.
@@ -701,14 +702,14 @@ fn wrapped_control(named: &Named, controls: &[(focus::Exposed, Rect)]) -> Option
 #[derive(Clone, Default)]
 struct Scope {
     hidden: bool,
-    lang: Option<Arc<str>>,
+    lang: Option<LocaleTag>,
 }
 
 /// A box the application gave a name to, and what it drew that a reader would otherwise have found.
 struct Named {
     node: NodeId,
     label: Arc<str>,
-    lang: Option<Arc<str>>,
+    lang: Option<LocaleTag>,
     /// What the box said it is; [`Role::Group`] for a box with no role of its own.
     role: Role,
     /// Where it sits among the items of its set, as its role says it.
@@ -739,7 +740,7 @@ struct Stated {
 struct Titled {
     node: NodeId,
     role: Role,
-    lang: Option<Arc<str>>,
+    lang: Option<LocaleTag>,
     words: Vec<(usize, String)>,
 }
 
@@ -764,7 +765,7 @@ pub struct BoxReading {
     /// The name the application gave it. `None` for a box given none, and for one a reader skips, which is never announced by any name.
     pub name: Option<Arc<str>>,
     /// The language it is in: the nearest said on it or around it.
-    pub lang: Option<Arc<str>>,
+    pub lang: Option<LocaleTag>,
 }
 
 /// One bitmap or piece of vector art a frame draws, as a reader meets it.

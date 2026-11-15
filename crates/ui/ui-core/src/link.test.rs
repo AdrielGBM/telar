@@ -260,11 +260,11 @@ fn a_box_that_is_gone_has_no_link_to_activate() {
 struct Shown(Cell<usize>);
 
 impl platform_core::LocaleFollower for Shown {
-    fn choose(&self) -> String {
-        "es".into()
+    fn choose(&self) -> i18n_core::LocaleTag {
+        i18n_core::locale_tag!("es")
     }
 
-    fn adopt(&self, _locale: &str) {
+    fn adopt(&self, _locale: &i18n_core::LocaleTag) {
         self.0.set(self.0.get() + 1);
     }
 }
@@ -273,16 +273,21 @@ impl platform_core::LocaleFollower for Shown {
 fn a_locale_link_switches_the_place_shown_and_goes_nowhere_without_one() {
     receive_location_history(vec![Location::from_segments(["doc"]).with_fragment("team")]);
     assert!(
-        !follow(&platform_core::in_locale("en")),
+        !follow(&platform_core::in_locale(i18n_core::locale_tag!("en"))),
         "an address that carries no locale has nowhere to switch"
     );
     let shown = Rc::new(Shown(Cell::new(0)));
-    platform_core::bind_location_locale(vec!["es".into(), "en".into()], shown.clone());
-    assert!(follow(&platform_core::in_locale("en")));
+    platform_core::bind_location_locale(
+        vec![i18n_core::locale_tag!("es"), i18n_core::locale_tag!("en")],
+        shown.clone(),
+    );
+    assert!(follow(&platform_core::in_locale(i18n_core::locale_tag!(
+        "en"
+    ))));
     assert_eq!(
         location_history(),
         [Location::from_segments(["doc"])
-            .with_locale("en")
+            .with_locale(i18n_core::locale_tag!("en"))
             .with_fragment("team")]
     );
     assert_eq!(

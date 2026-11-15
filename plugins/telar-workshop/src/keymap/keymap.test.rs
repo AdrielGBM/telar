@@ -36,7 +36,7 @@ fn entries() -> Vec<PreviewEntry> {
         PreviewEntry::new("button--secondary", "button", "Secondary", blank).title("Inputs/Button"),
         PreviewEntry::new("checkbox--checked", "checkbox", "Checked", blank)
             .title("Inputs/Checkbox")
-            .locale("ar"),
+            .locale(const { &telar::locale_tag!("ar") }),
     ]
 }
 
@@ -251,7 +251,7 @@ fn alt_f_takes_the_canvas_fullscreen_and_puts_the_panes_back_as_they_were() {
 fn alt_t_l_and_r_cycle_the_mode_locale_and_direction_back_to_the_previews_own() {
     let mut workshop = Workshop::open(entries());
     let locales = locales(workshop.state());
-    assert!(locales.contains(&"ar".to_string()));
+    assert!(locales.contains(&telar::locale_tag!("ar")));
     for locale in &locales {
         workshop.alt('l');
         assert_eq!(workshop.settings().locale.as_ref(), Some(locale));

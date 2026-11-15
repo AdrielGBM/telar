@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use telar::preview::{PreviewEnv, ViewportPreset};
-use telar::{Color, ColorScheme, Direction, Insets, ModeId, Size, registered_modes, scheme_mode};
+use telar::{
+    Color, ColorScheme, Direction, Insets, LocaleTag, ModeId, Size, registered_modes, scheme_mode,
+};
 
 use crate::strings::{
     self, DEVICE_COMPACT_PHONE, DEVICE_PHONE, DEVICE_TABLET, MODE_DARK, MODE_LIGHT, MODE_SYSTEM,
@@ -28,8 +30,8 @@ pub(crate) const GRID_STEP: f32 = 8.0;
 #[serde(default)]
 pub(crate) struct CanvasSettings {
     pub(crate) mode: ModeChoice,
-    /// A BCP 47 language tag.
-    pub(crate) locale: Option<String>,
+    #[serde(with = "locale_text")]
+    pub(crate) locale: Option<LocaleTag>,
     /// Set only by choosing one; otherwise the canvas reads in the direction of its locale.
     #[serde(with = "direction_text")]
     pub(crate) direction: Option<Direction>,
@@ -348,15 +350,12 @@ impl CanvasSettings {
         project: &[ViewportPreset],
         scheme: ColorScheme,
     ) -> CanvasEnv {
-        let locale = self
-            .locale
-            .clone()
-            .or_else(|| env.locale.map(str::to_string));
+        let locale = self.locale.clone().or_else(|| env.locale.cloned());
         // A canvas's locale does not turn its direction the way the application's does, so the canvas follows its own here.
         let direction = self
             .direction
             .or(env.direction)
-            .or_else(|| locale.as_deref().map(Direction::for_locale));
+            .or_else(|| locale.as_ref().map(Direction::for_locale));
         let safe_area = self
             .device()
             .filter(|_| framed)
@@ -383,7 +382,7 @@ impl CanvasSettings {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CanvasEnv {
     pub(crate) mode: Option<ModeId>,
-    pub(crate) locale: Option<String>,
+    pub(crate) locale: Option<LocaleTag>,
     pub(crate) direction: Option<Direction>,
     pub(crate) high_contrast: Option<bool>,
     pub(crate) background: Option<Color>,
@@ -427,6 +426,30 @@ mod direction_text {
     ) -> Result<Option<Direction>, D::Error> {
         let word = Option::<String>::deserialize(deserializer)?;
         Ok(word.as_deref().and_then(parse_direction))
+    }
+}
+
+/// A locale kept as its tag; one kept that is no tag does not load.
+mod locale_text {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use telar::LocaleTag;
+
+    pub(super) fn serialize<S: Serializer>(
+        value: &Option<LocaleTag>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        value
+            .as_ref()
+            .map(ToString::to_string)
+            .serialize(serializer)
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<LocaleTag>, D::Error> {
+        Option::<String>::deserialize(deserializer)?
+            .map(|tag| LocaleTag::parse(&tag).map_err(serde::de::Error::custom))
+            .transpose()
     }
 }
 

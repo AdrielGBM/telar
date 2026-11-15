@@ -16,21 +16,21 @@ use telar::{
 };
 
 static CATALOG: Catalog = Catalog {
-    locales: &["en", "es"],
-    default_locale: "es",
+    locales: &[telar::locale_tag!("en"), telar::locale_tag!("es")],
+    default_locale: telar::locale_tag!("es"),
     entries: &[
         Entry {
             key: "credits.title",
             messages: &[
-                ("en", Message::Plain("Credits")),
-                ("es", Message::Plain("Créditos")),
+                (telar::locale_tag!("en"), Message::Plain("Credits")),
+                (telar::locale_tag!("es"), Message::Plain("Créditos")),
             ],
         },
         Entry {
             key: "home.title",
             messages: &[
-                ("en", Message::Plain("Home")),
-                ("es", Message::Plain("Inicio")),
+                (telar::locale_tag!("en"), Message::Plain("Home")),
+                (telar::locale_tag!("es"), Message::Plain("Inicio")),
             ],
         },
     ],
@@ -62,14 +62,14 @@ impl App for Titled {
         if let Some(locale) = self.switch_to
             && !self.switched.replace(true)
         {
-            set_locale(locale);
+            set_locale(telar::LocaleTag::parse(locale).unwrap());
         }
     }
 }
 
 fn titles_of(location: &str, locale: &str, switch_to: Option<&'static str>) -> Vec<String> {
     set_catalog(&CATALOG);
-    set_locale(locale);
+    set_locale(telar::LocaleTag::parse(locale).unwrap());
     let sink = TitleSink::default();
     let app = Titled {
         fill: FillApp {

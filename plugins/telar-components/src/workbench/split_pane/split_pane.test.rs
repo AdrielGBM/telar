@@ -382,7 +382,7 @@ fn splitter_name(props: SplitPaneProps) -> String {
 
 #[test]
 fn the_splitter_is_named_resize_unless_told_otherwise() {
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
     assert_eq!(splitter_name(SplitPaneProps::props().build()), "Resize");
     assert_eq!(
         splitter_name(SplitPaneProps::props().label("Sidebar width").build()),

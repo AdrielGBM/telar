@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use icons_core::{IconId, IconIdError};
 use platform_core::{FullscreenMode, WindowPosition};
+use semantics_core::LocaleTag;
 use serde::Deserialize;
 
 use crate::assets::{AssetKind, IdBaking};
@@ -119,8 +120,8 @@ pub struct I18nSection {
     pub root: Option<CatalogDir>,
     /// The directory name looked for recursively under `src/`, for catalogs kept beside the module that reads them. Default `"i18n"`.
     pub scan: Option<CatalogDir>,
-    /// The locale a lookup falls back to. `None` means `"en"` if present, else the first tag found.
-    pub default: Option<String>,
+    /// The locale a lookup falls back to. `None` means `en` if present, else the first tag found.
+    pub default: Option<LocaleTag>,
 }
 
 /// What only means something to a browser build: `[telar.web]`, read by `cargo telar build --target web` and `dev --target web` and by nothing else.
@@ -184,7 +185,7 @@ pub struct PrerenderSection {
     pub high_contrast: Option<bool>,
     /// The system locales assumed, most preferred first.
     #[serde(default)]
-    pub locales: Vec<String>,
+    pub locales: Vec<LocaleTag>,
 }
 
 impl PrerenderSection {
@@ -475,7 +476,7 @@ impl TelarSection {
     }
 
     /// The locale a lookup falls back to, if the project names one.
-    pub fn default_locale(&self) -> Option<String> {
+    pub fn default_locale(&self) -> Option<LocaleTag> {
         self.i18n.default.clone()
     }
 }

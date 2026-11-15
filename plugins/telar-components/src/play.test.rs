@@ -9,7 +9,7 @@ fn failures(check: impl Fn(&mut Play) -> Vec<String>) -> Vec<String> {
     telar_components::telar_all_previews()
         .into_iter()
         .filter_map(|entry| {
-            let entry = entry.locale("en");
+            let entry = entry.locale(const { &telar::locale_tag!("en") });
             let mut play = Play::mount(&entry)
                 .unwrap_or_else(|error| panic!("`{}` does not mount: {error}", entry.id));
             let found = check(&mut play);

@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, PreviewEntry, ViewportPreset};
 use telar::{
-    Accessible, Children, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    RwSignal, Size, box_item, effect, signal,
+    Accessible, Children, Container, Direction, LayoutError, LayoutItem, LayoutStyle, LocaleTag,
+    Reactive, RwSignal, Size, box_item, effect, signal,
 };
 use telar_components::{
     GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, SubmenuProps,
@@ -603,21 +603,20 @@ fn dimensions(size: Size) -> String {
 }
 
 /// The locales a canvas can be shown in: the application catalog's, then any a preview asks for.
-pub(crate) fn locales(state: &WorkshopState) -> Vec<String> {
+pub(crate) fn locales(state: &WorkshopState) -> Vec<LocaleTag> {
     let catalog = telar::i18n::catalog().map_or(&[][..], |catalog| catalog.locales);
     let asked = state.entries().iter().filter_map(|entry| entry.env.locale);
-    listed_all(catalog.iter().copied().chain(asked))
+    listed_all(catalog.iter().chain(asked).cloned())
 }
 
 /// `options`, with `current` after them when it is not among them, so a setting restored from elsewhere still shows.
-fn listed(options: Vec<String>, current: Option<String>) -> Vec<String> {
+fn listed<T: PartialEq>(options: Vec<T>, current: Option<T>) -> Vec<T> {
     listed_all(options.into_iter().chain(current))
 }
 
-fn listed_all<S: Into<String>>(options: impl IntoIterator<Item = S>) -> Vec<String> {
-    let mut listed: Vec<String> = Vec::new();
+fn listed_all<T: PartialEq>(options: impl IntoIterator<Item = T>) -> Vec<T> {
+    let mut listed: Vec<T> = Vec::new();
     for option in options {
-        let option = option.into();
         if !listed.contains(&option) {
             listed.push(option);
         }
@@ -626,13 +625,12 @@ fn listed_all<S: Into<String>>(options: impl IntoIterator<Item = S>) -> Vec<Stri
 }
 
 /// A row leaving the setting to the preview, then one per option.
-fn optional(unset: &'static str, options: Vec<String>) -> Vec<Row<Option<String>>> {
+fn optional(unset: &'static str, options: Vec<LocaleTag>) -> Vec<Row<Option<LocaleTag>>> {
     std::iter::once(Row::choice(None, Label::Key(unset)))
-        .chain(
-            options
-                .into_iter()
-                .map(|option| Row::choice(Some(option.clone()), Label::Text(option))),
-        )
+        .chain(options.into_iter().map(|option| {
+            let label = Label::Text(option.to_string());
+            Row::choice(Some(option), label)
+        }))
         .collect()
 }
 

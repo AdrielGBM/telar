@@ -99,12 +99,9 @@ fn follow_locale_language() {
     }
     let scope = reactive_core::detached(reactive_core::owner_scope);
     reactive_core::effect(|| {
-        let locale = i18n_core::use_locale();
-        let lang = locale
-            .as_deref()
-            .unwrap_or_else(|| i18n_core::default_locale());
-        let is_rtl = i18n_core::Direction::for_locale(lang).is_rtl();
-        platform_web::set_document_language(lang, is_rtl);
+        let lang = i18n_core::use_locale().unwrap_or_else(|| i18n_core::default_locale().clone());
+        let is_rtl = i18n_core::Direction::for_locale(&lang).is_rtl();
+        platform_web::set_document_language(&lang, is_rtl);
     });
     FOLLOW_LANGUAGE.set(Some(scope.id()));
 }
@@ -259,7 +256,7 @@ mod described {
             self.handler.accessibility()
         }
 
-        fn root_language(&self) -> Option<String> {
+        fn root_language(&self) -> Option<platform_core::LocaleTag> {
             self.handler.root_language()
         }
 

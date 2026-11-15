@@ -255,16 +255,19 @@ Text a plugin draws itself goes through `telar::i18n::translate_with_override`, 
 namespace. This is the whole of `telar-components`' `strings.rs`, abridged:
 
 ```rust
-use telar::i18n::{Catalog, Entry, Message, translate_with_override};
+use telar::i18n::{Catalog, Entry, Message, locale_tag, translate_with_override};
 
 const NAMESPACE: &str = "telar_components";
 
 static CATALOG: Catalog = Catalog {
-    locales: &["en", "es"],
-    default_locale: "en",
+    locales: &[locale_tag!("en"), locale_tag!("es")],
+    default_locale: locale_tag!("en"),
     entries: &[Entry {
         key: "close",
-        messages: &[("en", Message::Plain("Close")), ("es", Message::Plain("Cerrar"))],
+        messages: &[
+            (locale_tag!("en"), Message::Plain("Close")),
+            (locale_tag!("es"), Message::Plain("Cerrar")),
+        ],
     }],
 };
 

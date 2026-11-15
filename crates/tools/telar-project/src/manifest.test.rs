@@ -55,7 +55,10 @@ default = "es"
     assert_eq!(telar.dev.window.as_ref().unwrap().width, Some(1024));
     assert_eq!(telar.locales_root(&root), Some(root.join("strings")));
     assert_eq!(telar.catalog_scan_dir().as_deref(), Some("lang"));
-    assert_eq!(telar.default_locale().as_deref(), Some("es"));
+    assert_eq!(
+        telar.default_locale(),
+        Some(semantics_core::locale_tag!("es"))
+    );
 }
 
 /// The whole reason this file exists. Every reader treated an unrecognised key as absent, so a setting that was off and a setting that was misspelled looked identical — and `cargo-telar`'s own comment records the release where that shipped.
@@ -350,7 +353,7 @@ fn a_prerender_table_names_the_reader_pages_are_written_for() {
         Some(platform_core::ColorScheme::Dark)
     );
     assert_eq!(preferences.reduced_motion, None);
-    assert_eq!(preferences.locales, ["es-CL"]);
+    assert_eq!(preferences.locales, [semantics_core::locale_tag!("es-CL")]);
 }
 
 #[test]

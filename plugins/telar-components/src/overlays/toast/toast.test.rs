@@ -49,7 +49,7 @@ impl Mounted {
         around: impl FnOnce(Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Self {
         crate::test_support::fresh_layout_runtime();
-        telar::set_locale("en");
+        telar::set_locale(telar::locale_tag!("en"));
         telar::focus::clear();
         set_surface_size(SURFACE);
         let queue = Toasts::new();

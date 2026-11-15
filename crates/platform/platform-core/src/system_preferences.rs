@@ -2,6 +2,8 @@
 //!
 //! Every field but the text scale can be unknown. A platform that cannot answer says so with `None` (or an empty locale list) rather than guessing, so a consumer can tell "the user wants light" from "nobody said" and keep its own default for the second. The text scale has no such gap: an unset scale and one the platform cannot read both mean text at its designed size, so a platform says [`TextScale::UNSCALED`] for either.
 
+use semantics_core::{LocaleTag, LocaleTagError};
+
 /// The light/dark preference, written `light` or `dark` wherever it is spelled out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(into = "&'static str", try_from = "String")]
@@ -63,8 +65,8 @@ pub struct SystemPreferences {
     pub reduced_motion: Option<bool>,
     /// `Some(true)` when the user asked for more contrast; `None` when the platform cannot say.
     pub high_contrast: Option<bool>,
-    /// BCP 47 tags, most preferred first. Empty when the platform reports none.
-    pub locales: Vec<String>,
+    /// Most preferred first. Empty when the platform reports none.
+    pub locales: Vec<LocaleTag>,
     /// What the user asked every text to be multiplied by. A platform with no such setting, or one it cannot read, says [`TextScale::UNSCALED`].
     pub text_scale: TextScale,
 }
@@ -110,63 +112,75 @@ impl SystemPreferences {
     }
 }
 
-/// A POSIX locale name (`es_CL.UTF-8`, `sr_RS@latin`) as a BCP 47 tag (`es-CL`, `sr-Latn-RS`).
+/// A POSIX locale name (`es_CL.UTF-8`, `sr_RS@latin`) as a locale tag (`es-CL`, `sr-Latn-RS`).
 ///
-/// `None` for the empty name and for `C`/`POSIX`, which name no language at all.
-pub fn posix_locale_to_bcp47(raw: &str) -> Option<String> {
+/// `Ok(None)` for the empty name and for `C`/`POSIX`, which name no language at all, and an error for a name that is no locale.
+pub fn posix_locale_to_bcp47(raw: &str) -> Result<Option<LocaleTag>, LocaleTagError> {
     let (name, modifier) = match raw.split_once('@') {
         Some((name, modifier)) => (name, Some(modifier)),
         None => (raw, None),
     };
     let name = name.split('.').next().unwrap_or_default().trim();
     if name.is_empty() || name.eq_ignore_ascii_case("c") || name.eq_ignore_ascii_case("posix") {
-        return None;
+        return Ok(None);
     }
     let (language, region) = match name.split_once('_') {
         Some((language, region)) => (language, Some(region)),
         None => (name, None),
     };
-    if language.is_empty() || !language.chars().all(|c| c.is_ascii_alphabetic()) {
-        return None;
-    }
     let script = match modifier {
         Some("latin") => Some("Latn"),
         Some("cyrillic") => Some("Cyrl"),
         Some("devanagari") => Some("Deva"),
         _ => None,
     };
-    let mut tag = language.to_ascii_lowercase();
+    let mut tag = language.to_string();
     if let Some(script) = script {
         tag.push('-');
         tag.push_str(script);
     }
     if let Some(region) = region.filter(|r| !r.is_empty()) {
         tag.push('-');
-        tag.push_str(&region.to_ascii_uppercase());
+        tag.push_str(region);
     }
-    Some(tag)
+    LocaleTag::parse(&tag).map(Some)
 }
 
 /// The preferred locales a POSIX environment declares, most preferred first, following gettext's precedence.
 ///
-/// `LANGUAGE` is a colon-separated priority list and comes first, but gettext ignores it when the effective locale (`LC_ALL`, else `LC_MESSAGES`, else `LANG`) is `C`, and so does this. The effective locale follows it. Duplicates keep their first position.
-pub fn locales_from_env(var: impl Fn(&str) -> Option<String>) -> Vec<String> {
-    let effective = ["LC_ALL", "LC_MESSAGES", "LANG"]
-        .into_iter()
-        .find_map(|name| var(name).filter(|value| !value.is_empty()));
-    let Some(effective) = effective else {
+/// `LANGUAGE` is a colon-separated priority list and comes first, but gettext ignores it when the effective locale (`LC_ALL`, else `LC_MESSAGES`, else `LANG`) is `C`, and so does this. The effective locale follows it. Duplicates keep their first position. A name that is no locale is left out with a warning naming the variable and the name.
+pub fn locales_from_env(var: impl Fn(&str) -> Option<String>) -> Vec<LocaleTag> {
+    let Some((effective_var, effective)) =
+        ["LC_ALL", "LC_MESSAGES", "LANG"]
+            .into_iter()
+            .find_map(|name| {
+                var(name)
+                    .filter(|value| !value.is_empty())
+                    .map(|value| (name, value))
+            })
+    else {
         return Vec::new();
     };
-    let Some(effective_tag) = posix_locale_to_bcp47(&effective) else {
-        return Vec::new();
+    let effective_tag = match posix_locale_to_bcp47(&effective) {
+        Ok(None) => return Vec::new(),
+        Ok(Some(tag)) => Some(tag),
+        Err(error) => {
+            warn_unread(effective_var, &effective, &error);
+            None
+        }
     };
-    let mut locales: Vec<String> = Vec::new();
     let language = var("LANGUAGE").unwrap_or_default();
-    for tag in language
+    let listed = language
         .split(':')
-        .filter_map(posix_locale_to_bcp47)
-        .chain(std::iter::once(effective_tag))
-    {
+        .filter_map(|name| match posix_locale_to_bcp47(name) {
+            Ok(tag) => tag,
+            Err(error) => {
+                warn_unread("LANGUAGE", name, &error);
+                None
+            }
+        });
+    let mut locales: Vec<LocaleTag> = Vec::new();
+    for tag in listed.chain(effective_tag) {
         if !locales.contains(&tag) {
             locales.push(tag);
         }
@@ -174,8 +188,29 @@ pub fn locales_from_env(var: impl Fn(&str) -> Option<String>) -> Vec<String> {
     locales
 }
 
+fn warn_unread(var: &str, name: &str, error: &LocaleTagError) {
+    tracing::warn!(
+        "{var} names `{name}`, which is no locale, so it is not among the preferred ones: {error}"
+    );
+}
+
+/// The locales a platform reported, most preferred first, as tags. One that is no BCP 47 tag is left out with a warning naming it, since a preference the app cannot read is one it cannot honour, and duplicates keep their first position.
+pub fn platform_locales<S: AsRef<str>>(reported: impl IntoIterator<Item = S>) -> Vec<LocaleTag> {
+    let mut locales: Vec<LocaleTag> = Vec::new();
+    for reported in reported {
+        match LocaleTag::parse(reported.as_ref()) {
+            Ok(tag) if !locales.contains(&tag) => locales.push(tag),
+            Ok(_) => {}
+            Err(error) => tracing::warn!(
+                "the platform prefers a locale that is no BCP 47 tag, so it is not among the preferred ones: {error}"
+            ),
+        }
+    }
+    locales
+}
+
 /// [`locales_from_env`] over this process's environment.
-pub fn system_locales_from_env() -> Vec<String> {
+pub fn system_locales_from_env() -> Vec<LocaleTag> {
     locales_from_env(|name| std::env::var(name).ok())
 }
 

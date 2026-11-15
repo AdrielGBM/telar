@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use i18n_core::LocaleTag;
 use layout_core::NodeId;
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Annotation, Modal, Role};
@@ -54,10 +55,10 @@ pub(crate) fn peek(node: NodeId) -> Option<Annotation> {
 }
 
 /// The language `node` is written in: the nearest `lang` said on it or above it, or the surface's own, the active locale. Resolved along the layout tree, the nesting a document writes its `lang` attributes along, so the case a shaper maps text into follows the language the page declares.
-pub(crate) fn language_at(node: NodeId) -> Option<Arc<str>> {
+pub(crate) fn language_at(node: NodeId) -> Option<LocaleTag> {
     layout_reactive::ancestors(node)
         .find_map(|at| of(at).and_then(|annotation| annotation.lang))
-        .or_else(|| i18n_core::use_locale().map(Arc::from))
+        .or_else(i18n_core::use_locale)
 }
 
 /// The signal `node`'s annotation lives in, made on first use and withdrawn with the owner that made it.
@@ -167,10 +168,10 @@ pub trait Accessible: LayoutItem + Sized {
         self
     }
 
-    /// The language this box and everything under it is written in, as a BCP 47 tag. Nearer boxes win, so a quotation inside a paragraph says only its own.
-    fn lang<S: Into<Arc<str>>>(self, lang: impl Fn() -> S + 'static) -> Self {
+    /// The language this box and everything under it is written in. Nearer boxes win, so a quotation inside a paragraph says only its own.
+    fn lang(self, lang: impl Fn() -> LocaleTag + 'static) -> Self {
         follow(self.layout_node(), move |annotation| {
-            annotation.lang = Some(lang().into());
+            annotation.lang = Some(lang());
         });
         self
     }

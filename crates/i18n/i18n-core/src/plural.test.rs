@@ -1,8 +1,9 @@
 use super::PluralCategory::*;
 use super::*;
+use crate::LocaleTag;
 
 fn builtin(locale: &str, count: i64) -> PluralCategory {
-    BuiltinPluralRules.category(locale, count.into())
+    BuiltinPluralRules.category(&tag(locale), count.into())
 }
 
 fn operands(text: &str) -> PluralOperands {
@@ -122,17 +123,27 @@ fn text_that_is_not_a_decimal_has_no_operands() {
 
 #[test]
 fn the_builtin_rules_pick_other_for_a_fraction() {
-    assert_eq!(BuiltinPluralRules.category("en", operands("1.0")), Other);
-    assert_eq!(BuiltinPluralRules.category("ru", operands("1.5")), Other);
+    assert_eq!(
+        BuiltinPluralRules.category(&tag("en"), operands("1.0")),
+        Other
+    );
+    assert_eq!(
+        BuiltinPluralRules.category(&tag("ru"), operands("1.5")),
+        Other
+    );
 }
 
 #[test]
 fn with_no_rules_installed_the_builtin_rules_answer() {
     for (locale, n) in [("en", 1), ("ru", 21), ("pl", 22), ("ar", 11), ("ja", 1)] {
         assert_eq!(
-            plural_category(locale, n),
+            plural_category(&tag(locale), n),
             builtin(locale, n),
             "{locale} {n}"
         );
     }
+}
+
+fn tag(text: &str) -> LocaleTag {
+    LocaleTag::parse(text).unwrap()
 }

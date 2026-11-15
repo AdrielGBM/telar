@@ -53,7 +53,10 @@ fn axis_tokens(axis: &MatrixAxis) -> TokenStream2 {
         MatrixAxis::CatalogLocales => quote! { #axis_path::CatalogLocales },
         MatrixAxis::ProjectViewports => quote! { #axis_path::ProjectViewports },
         MatrixAxis::ArgValues { name } => quote! { #axis_path::ArgValues(#name) },
-        MatrixAxis::Locale(locales) => quote! { #axis_path::Locale(&[#(#locales),*]) },
+        MatrixAxis::Locale(locales) => {
+            let locales = locales.iter().map(ToString::to_string);
+            quote! { #axis_path::Locale(const { &[#(::telar::i18n::locale_tag!(#locales)),*] }) }
+        }
         MatrixAxis::Dir(directions) => {
             let directions = directions.iter().map(|direction| match direction {
                 MatrixDirection::Ltr => quote! { ::telar::Direction::Ltr },

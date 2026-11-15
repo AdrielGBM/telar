@@ -76,7 +76,7 @@ impl Mounted {
 
     fn in_box(props: CodeViewProps, frame: LayoutStyle) -> Self {
         crate::test_support::fresh_layout_runtime();
-        telar::set_locale("en");
+        telar::set_locale(telar::locale_tag!("en"));
         focus::clear();
         let item = code_view(props).unwrap();
         let node = item.layout_node();

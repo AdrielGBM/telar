@@ -1,8 +1,8 @@
 use fixed_decimal::Decimal;
 use icu_plurals::PluralRulesPreferences;
-use telar::i18n::{PluralCategory, PluralOperands, PluralRules, set_plural_rules};
+use telar::i18n::{LocaleTag, PluralCategory, PluralOperands, PluralRules, set_plural_rules};
 
-use crate::locale::parse_locale;
+use crate::locale::icu_locale;
 
 /// The CLDR cardinal plural rules for every locale ICU4X has data for, as a [`PluralRules`] for the catalog lookup.
 ///
@@ -10,8 +10,8 @@ use crate::locale::parse_locale;
 pub struct CldrPluralRules;
 
 impl PluralRules for CldrPluralRules {
-    fn category(&self, locale: &str, operands: PluralOperands) -> PluralCategory {
-        let prefs = PluralRulesPreferences::from(&parse_locale(locale));
+    fn category(&self, locale: &LocaleTag, operands: PluralOperands) -> PluralCategory {
+        let prefs = PluralRulesPreferences::from(&icu_locale(locale));
         let Ok(rules) = icu_plurals::PluralRules::try_new_cardinal(prefs) else {
             return PluralCategory::Other;
         };

@@ -6054,6 +6054,7 @@ name = "telar-i18n-core"
 version = "0.2.3"
 dependencies = [
  "telar-reactive-core",
+ "telar-semantics-core",
  "toml",
 ]
 
@@ -6275,6 +6276,7 @@ dependencies = [
  "telar-icons-core",
  "telar-platform-core",
  "telar-renderer-core",
+ "telar-semantics-core",
  "toml",
 ]
 
@@ -6495,6 +6497,8 @@ dependencies = [
 name = "telar-semantics-core"
 version = "0.2.3"
 dependencies = [
+ "icu_locale_core",
+ "serde",
  "telar-wire-core",
 ]
 

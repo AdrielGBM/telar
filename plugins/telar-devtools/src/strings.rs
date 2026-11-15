@@ -1,6 +1,6 @@
 //! The text the overlay draws, and the one way it asks for it.
 
-use telar::i18n::{Catalog, english, translate_with_override};
+use telar::i18n::{Catalog, english, locale_tag, translate_with_override};
 
 const NAMESPACE: &str = "telar_devtools";
 
@@ -58,8 +58,8 @@ pub(crate) const UNNAMED: &str = "unnamed";
 pub(crate) const WARNINGS: &str = "warnings";
 
 static CATALOG: Catalog = Catalog {
-    locales: &["en"],
-    default_locale: "en",
+    locales: &[locale_tag!("en")],
+    default_locale: locale_tag!("en"),
     // Sorted by key: a lookup binary-searches them.
     entries: &[
         english!(ACCESSIBILITY, "Accessibility"),

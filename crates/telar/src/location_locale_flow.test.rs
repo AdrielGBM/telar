@@ -20,7 +20,7 @@ use telar::{
 
 fn at(path: &str) -> Location {
     LocationFormat::root()
-        .with_locales(["es", "en"])
+        .with_locales([telar::locale_tag!("es"), telar::locale_tag!("en")])
         .parse(path)
         .unwrap()
 }
@@ -28,7 +28,7 @@ fn at(path: &str) -> Location {
 #[derive(Default)]
 struct Seen {
     history: Vec<Location>,
-    locale: Option<String>,
+    locale: Option<telar::LocaleTag>,
     link: String,
 }
 
@@ -53,13 +53,16 @@ impl App for Reader {
         if let Some(locale) = self.switches_to
             && !self.switched.replace(true)
         {
-            set_locale(locale);
+            set_locale(telar::LocaleTag::parse(locale).unwrap());
         }
     }
 }
 
 fn run(platform: HeadlessPlatform, switches_to: Option<&'static str>) -> Seen {
-    follow_location_locale(["es", "en"], "es");
+    follow_location_locale(
+        [telar::locale_tag!("es"), telar::locale_tag!("en")],
+        telar::locale_tag!("es"),
+    );
     let seen = Rc::new(RefCell::new(Seen::default()));
     let app = Reader {
         fill: FillApp {
@@ -82,7 +85,10 @@ fn run(platform: HeadlessPlatform, switches_to: Option<&'static str>) -> Seen {
 
 fn preferring(locales: &[&str]) -> SystemPreferences {
     SystemPreferences {
-        locales: locales.iter().map(|tag| tag.to_string()).collect(),
+        locales: locales
+            .iter()
+            .map(|tag| telar::LocaleTag::parse(tag).unwrap())
+            .collect(),
         ..SystemPreferences::default()
     }
 }
@@ -102,7 +108,11 @@ fn the_locale_rides_the_address_through_the_runner() {
                 .with_system_preferences(preferring(&["es"])),
             None,
         );
-        assert_eq!(seen.locale.as_deref(), Some("en"), "the address decides");
+        assert_eq!(
+            seen.locale,
+            Some(telar::locale_tag!("en")),
+            "the address decides"
+        );
         assert_eq!(seen.history, [at("/en/"), at("/en/projects")]);
         assert_eq!(seen.link, "/en/projects", "links are written in it");
         assert_eq!(stored_preference(LOCALE_KEY).as_deref(), Some("en"));
@@ -119,8 +129,8 @@ fn the_locale_rides_the_address_through_the_runner() {
             None,
         );
         assert_eq!(
-            seen.locale.as_deref(),
-            Some("en"),
+            seen.locale,
+            Some(telar::locale_tag!("en")),
             "an address naming none negotiates the system's preferred locales"
         );
         assert_eq!(*sink.lock().unwrap(), [at("/en/")]);
@@ -135,8 +145,8 @@ fn the_locale_rides_the_address_through_the_runner() {
             None,
         );
         assert_eq!(
-            seen.locale.as_deref(),
-            Some("es"),
+            seen.locale,
+            Some(telar::locale_tag!("es")),
             "the locale the person last chose outranks the system's"
         );
     });

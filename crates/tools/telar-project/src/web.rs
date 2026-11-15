@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use semantics_core::LocaleTag;
 use serde::Deserialize;
 
 use crate::manifest::WebSection;
@@ -22,12 +23,12 @@ pub enum WebHost {
 #[serde(untagged)]
 pub enum OgImage {
     Shared(String),
-    PerLocale(BTreeMap<String, String>),
+    PerLocale(BTreeMap<LocaleTag, String>),
 }
 
 impl OgImage {
     /// The picture for a page in `locale`; a locale the table leaves out shows `base`'s.
-    pub fn for_locale(&self, locale: &str, base: &str) -> Option<&str> {
+    pub fn for_locale(&self, locale: &LocaleTag, base: &LocaleTag) -> Option<&str> {
         match self {
             Self::Shared(image) => Some(image),
             Self::PerLocale(images) => images

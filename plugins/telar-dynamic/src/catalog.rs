@@ -1,6 +1,6 @@
 //! Parsing one locale's TOML into the catalog `telar::i18n::translate` reads.
 
-use telar::i18n::Catalog;
+use telar::i18n::{Catalog, LocaleTag};
 use telar::{AssetDecoder, AssetError};
 
 /// Decodes a locale's TOML into the `&'static Catalog` [`telar::i18n::set_catalog`] installs.
@@ -11,15 +11,13 @@ use telar::{AssetDecoder, AssetError};
 ///
 /// Every successful decode leaks its catalog, because a `&'static Catalog` is what the lookup path takes. That is once per locale in the shape this is for; decoding the same locale in a loop leaks once per pass.
 pub struct CatalogDecoder {
-    locale: String,
+    locale: LocaleTag,
 }
 
 impl CatalogDecoder {
-    /// A decoder for the locale `locale` names — the BCP 47 tag the messages are written in, and the one they will be found under.
-    pub fn new(locale: impl Into<String>) -> Self {
-        Self {
-            locale: locale.into(),
-        }
+    /// A decoder for `locale`: the one the messages are written in, and the one they will be found under.
+    pub fn new(locale: LocaleTag) -> Self {
+        Self { locale }
     }
 }
 

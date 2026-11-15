@@ -85,7 +85,7 @@ struct Mounted {
 impl Mounted {
     fn new(start: Color, alpha: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
-        telar::set_locale("en");
+        telar::set_locale(telar::locale_tag!("en"));
         telar::testing::reset_keyboard();
         focus::clear();
         let value = signal(start);
@@ -340,7 +340,7 @@ impl telar::ThemeTokens for Plain {
 /// Every box a picker showing `start` paints, in paint order: the area first.
 fn painted(start: Color, style: Option<SurfaceAmendment>) -> Vec<(Rect, RectStyle)> {
     crate::test_support::fresh_layout_runtime();
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
     telar::testing::scoped(|| {
         let mut props = ColorPickerProps::props().value(signal(start)).build();
         props.style = style;

@@ -248,7 +248,7 @@ impl Text {
                 }
                 let lang = match cell.get() {
                     Some(node) => crate::annotation::language_at(node),
-                    None => i18n_core::use_locale().map(Arc::from),
+                    None => i18n_core::use_locale(),
                 };
                 TextStyle { lang, ..style }
             })

@@ -3,28 +3,29 @@
 use telar_i18n_core::{
     Catalog, Entry, Message, catalog, set_catalog, set_catalog_if_unset, set_locale, t,
 };
+use telar_i18n_core::{LocaleTag, locale_tag};
 
 static FIRST: Catalog = Catalog {
-    locales: &["en"],
-    default_locale: "en",
+    locales: &[locale_tag!("en")],
+    default_locale: locale_tag!("en"),
     entries: &[Entry {
         key: "greeting",
-        messages: &[("en", Message::Plain("first"))],
+        messages: &[(locale_tag!("en"), Message::Plain("first"))],
     }],
 };
 
 static SECOND: Catalog = Catalog {
-    locales: &["en"],
-    default_locale: "en",
+    locales: &[locale_tag!("en")],
+    default_locale: locale_tag!("en"),
     entries: &[Entry {
         key: "greeting",
-        messages: &[("en", Message::Plain("second"))],
+        messages: &[(locale_tag!("en"), Message::Plain("second"))],
     }],
 };
 
 #[test]
 fn an_empty_slot_is_filled_and_an_occupied_one_is_kept_until_replaced() {
-    set_locale("en");
+    set_locale(tag("en"));
     assert!(catalog().is_none());
 
     assert!(set_catalog_if_unset(&FIRST));
@@ -35,4 +36,8 @@ fn an_empty_slot_is_filled_and_an_occupied_one_is_kept_until_replaced() {
 
     set_catalog(&SECOND);
     assert_eq!(t("greeting", &[]), "second");
+}
+
+fn tag(text: &str) -> LocaleTag {
+    LocaleTag::parse(text).unwrap()
 }

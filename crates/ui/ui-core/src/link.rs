@@ -37,14 +37,11 @@ pub fn follow(destination: &Destination) -> bool {
             true
         }
         Destination::Locale(locale) => {
-            let carried = platform_core::location_locales()
-                .iter()
-                .any(|carried| carried.eq_ignore_ascii_case(locale));
-            if !carried {
+            if !platform_core::location_locales().contains(locale) {
                 return false;
             }
             let shown = platform_core::location_history().pop().unwrap_or_default();
-            platform_core::push_location(shown.with_locale(locale.as_ref()))
+            platform_core::push_location(shown.with_locale(locale.clone()))
         }
         Destination::External(uri) => services_core::open_uri(uri),
     }

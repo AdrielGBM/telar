@@ -91,11 +91,11 @@ where
 /// ```ignore
 /// reactive_core::surface_scoped! {
 ///     /// The active surface's own locale, in place of the thread's while it has one.
-///     scoped locale: String as Option<String> = None;
+///     scoped locale: LocaleTag as Option<LocaleTag> = None;
 ///     context LocaleContext;
 /// }
 ///
-/// pub fn current_locale() -> Option<String> {
+/// pub fn current_locale() -> Option<LocaleTag> {
 ///     locale().peek()
 /// }
 /// ```

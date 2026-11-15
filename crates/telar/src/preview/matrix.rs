@@ -5,7 +5,7 @@
 use std::fmt;
 use std::sync::{PoisonError, RwLock};
 
-use crate::{Direction, ModeId, Size, UnknownMode};
+use crate::{Direction, LocaleTag, ModeId, Size, UnknownMode};
 
 use super::args::unbuilt_control;
 use super::host::{ArgError, Args};
@@ -36,8 +36,8 @@ pub enum Axis {
     Mode(&'static [&'static str]),
     /// Every mode registered when the matrix is expanded, as [`Matrices::installed`] reads them or [`Matrices::with_modes`] lists them.
     RegisteredModes,
-    /// BCP 47 language tags.
-    Locale(&'static [&'static str]),
+    /// Locales, written in a fn body inside `const { .. }`, since a [`LocaleTag`] is not promoted to a constant on its own: `Axis::Locale(const { &[locale_tag!("en"), locale_tag!("ar")] })`.
+    Locale(&'static [LocaleTag]),
     /// Every locale the application's catalog has, as [`Matrices::installed`] reads them or [`Matrices::with_locales`] lists them.
     CatalogLocales,
     /// Writing directions.
@@ -66,7 +66,8 @@ impl Axis {
 
     fn len(&self, entry: &PreviewEntry, matrices: &Matrices) -> usize {
         match self {
-            Self::Mode(values) | Self::Locale(values) | Self::Viewport(values) => values.len(),
+            Self::Mode(values) | Self::Viewport(values) => values.len(),
+            Self::Locale(values) => values.len(),
             Self::RegisteredModes => matrices.modes.len(),
             Self::CatalogLocales => matrices.locales.len(),
             Self::ProjectViewports => matrices.viewports.len(),
@@ -118,11 +119,8 @@ impl Axis {
     }
 }
 
-fn locale_settings(locales: &[&str]) -> Vec<Setting> {
-    locales
-        .iter()
-        .map(|locale| Setting::Locale(locale.to_string()))
-        .collect()
+fn locale_settings(locales: &[LocaleTag]) -> Vec<Setting> {
+    locales.iter().cloned().map(Setting::Locale).collect()
 }
 
 fn arg_values(entry: &PreviewEntry, name: &str) -> Option<&'static [&'static str]> {
@@ -147,7 +145,7 @@ fn arg_settings(
 #[derive(Clone, Debug)]
 enum Setting {
     Mode(ModeId),
-    Locale(String),
+    Locale(LocaleTag),
     Dir(Direction),
     Viewport(&'static str, Size),
     Arg(&'static str, ArgValue),
@@ -157,7 +155,7 @@ impl Setting {
     fn label(&self) -> String {
         match self {
             Self::Mode(mode) => mode.name().to_string(),
-            Self::Locale(text) => text.clone(),
+            Self::Locale(locale) => locale.to_string(),
             Self::Dir(direction) => direction_word(*direction).to_string(),
             Self::Viewport(text, _) => text.trim().to_string(),
             Self::Arg(_, value) => value.to_string(),
@@ -248,7 +246,7 @@ pub struct Matrices {
     named: &'static [NamedMatrix],
     viewports: &'static [ViewportPreset],
     modes: Vec<ModeId>,
-    locales: &'static [&'static str],
+    locales: &'static [LocaleTag],
 }
 
 #[derive(Clone, Copy)]
@@ -291,7 +289,7 @@ impl Matrices {
     }
 
     /// The locales [`Axis::CatalogLocales`] takes, in order.
-    pub fn with_locales(self, locales: &'static [&'static str]) -> Self {
+    pub fn with_locales(self, locales: &'static [LocaleTag]) -> Self {
         Self { locales, ..self }
     }
 
@@ -330,7 +328,7 @@ impl Matrices {
     }
 
     /// The locales `Axis::CatalogLocales` takes.
-    pub fn locales(&self) -> &'static [&'static str] {
+    pub fn locales(&self) -> &'static [LocaleTag] {
         self.locales
     }
 }
@@ -510,8 +508,8 @@ pub struct MatrixCell {
 pub struct CellGlobals {
     /// A mode the application registered.
     pub mode: Option<ModeId>,
-    /// A BCP 47 language tag.
-    pub locale: Option<String>,
+    /// The locale the cell is shown in.
+    pub locale: Option<LocaleTag>,
     /// The writing direction, whatever the locale's own.
     pub direction: Option<Direction>,
     /// The canvas size, in logical px.

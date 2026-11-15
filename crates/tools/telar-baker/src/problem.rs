@@ -339,7 +339,8 @@ impl fmt::Display for BakeProblem {
                 SourceProblem::Syntax { .. } => write!(f, "catalog: parsing {file}: {problem}"),
                 SourceProblem::PluralNotString { .. }
                 | SourceProblem::UnsupportedType { .. }
-                | SourceProblem::DuplicateKey { .. } => write!(f, "catalog: {file}: {problem}"),
+                | SourceProblem::DuplicateKey { .. }
+                | SourceProblem::NotALocale(_) => write!(f, "catalog: {file}: {problem}"),
             },
             ProblemKind::CatalogNameNotUtf8 => write!(
                 f,

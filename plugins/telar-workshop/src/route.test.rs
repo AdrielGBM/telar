@@ -60,7 +60,7 @@ fn an_address_the_workshop_has_no_page_for_is_none() {
 fn a_copied_link_carries_args_and_settings() {
     let settings = CanvasSettings {
         mode: ModeChoice::Named("dusk".into()),
-        locale: Some("ar".into()),
+        locale: Some(telar::locale_tag!("ar")),
         direction: Some(Direction::Rtl),
         background: Background::Transparent,
         size: CanvasSize::Custom {

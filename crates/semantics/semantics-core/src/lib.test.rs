@@ -143,7 +143,7 @@ fn an_annotation_names_a_box_over_what_the_widget_derived() {
     let annotation = Annotation {
         label: Some("Company logo".into()),
         role: None,
-        lang: Some("es".into()),
+        lang: Some(crate::locale_tag!("es")),
         hidden: false,
         decorative: false,
         anchor: Some("logo".into()),
@@ -153,7 +153,7 @@ fn an_annotation_names_a_box_over_what_the_widget_derived() {
     let said = derived.annotated(&annotation);
     assert_eq!(said.role, Role::Drawing, "the role is still the widget's");
     assert_eq!(said.label.as_deref(), Some("Company logo"));
-    assert_eq!(said.lang.as_deref(), Some("es"));
+    assert_eq!(said.lang, Some(crate::locale_tag!("es")));
     assert_eq!(said.anchor.as_deref(), Some("logo"));
     assert!(!said.hidden);
 }
@@ -192,12 +192,12 @@ fn decoration_is_hidden_until_it_is_named() {
 #[test]
 fn a_language_is_an_annotation_even_without_a_name() {
     let annotation = Annotation {
-        lang: Some("ja".into()),
+        lang: Some(crate::locale_tag!("ja")),
         ..Annotation::default()
     };
     assert!(!annotation.is_empty());
     let said = Semantics::group().annotated(&annotation);
-    assert_eq!(said.lang.as_deref(), Some("ja"));
+    assert_eq!(said.lang, Some(crate::locale_tag!("ja")));
     assert!(said.label.is_none());
 }
 

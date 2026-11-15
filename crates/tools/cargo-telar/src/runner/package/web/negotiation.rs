@@ -4,18 +4,19 @@
 
 use std::collections::BTreeMap;
 
+use i18n_core::LocaleTag;
 use renderer_dom::escape_html;
 use telar_project::PageLocation;
 
 use super::page::{HeadTag, script_json};
 use super::site::{PageMeta, Site, SitePages};
 
-/// `negotiate_locale(preferred, available, fallback)`, rule for rule: for each preferred tag in order, an available tag equal to it ignoring ASCII case, else the first available tag with the same primary language subtag; `fallback` when none matches. The `lower` helper folds ASCII only, as `eq_ignore_ascii_case` does.
+/// `negotiate_locale(preferred, available)`, rule for rule, with `fallback` where it finds none: for each preferred tag in order, an available tag equal to it, else the first available tag with the same primary language subtag. The available tags are canonical, and `folded` folds a preferred one as far as comparing with them needs: ASCII case, and `_` read as `-`.
 pub(crate) const NEGOTIATE_JS: &str = r#"function negotiateLocale(preferred, available, fallback) {
-  const lower = (tag) => String(tag).replace(/[A-Z]/g, (c) => c.toLowerCase());
-  const language = (tag) => lower(tag).split("-")[0];
+  const folded = (tag) => String(tag).replace(/_/g, "-").replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const language = (tag) => folded(tag).split("-")[0];
   for (const wanted of preferred) {
-    const exact = available.find((tag) => lower(tag) === lower(wanted));
+    const exact = available.find((tag) => folded(tag) === folded(wanted));
     if (exact !== undefined) return exact;
     const primary = language(wanted);
     if (primary === "") continue;
@@ -29,14 +30,15 @@ pub(crate) const NEGOTIATE_JS: &str = r#"function negotiateLocale(preferred, ava
 pub(crate) fn root_page(
     site: &Site,
     pages: &SitePages,
-    base_locale: &str,
-    titles: &BTreeMap<String, String>,
+    base_locale: &LocaleTag,
+    titles: &BTreeMap<LocaleTag, String>,
 ) -> String {
     let base_root = PageLocation::root().in_locale(base_locale);
+    let base_tag = base_locale.to_string();
     let title = titles
         .get(base_locale)
         .map(String::as_str)
-        .unwrap_or(base_locale);
+        .unwrap_or(&base_tag);
 
     let mut head = site.head_tags(&PageMeta {
         title,
@@ -58,16 +60,23 @@ pub(crate) fn root_page(
         .locales
         .iter()
         .map(|locale| {
-            let label = titles.get(locale).map(String::as_str).unwrap_or(locale);
+            let tag = locale.to_string();
+            let label = titles.get(locale).map(String::as_str).unwrap_or(&tag);
             format!(
                 "        <li><a href=\"{}\" hreflang=\"{locale}\" lang=\"{locale}\">{}</a></li>",
                 escape_html(&site.path_of(&PageLocation::root().in_locale(locale))),
                 escape_html(label),
-                locale = escape_html(locale),
+                locale = escape_html(&tag),
             )
         })
         .collect();
-    let available = serde_json::Value::from(pages.locales.clone());
+    let available = serde_json::Value::from(
+        pages
+            .locales
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+    );
     let dir = if i18n_core::Direction::for_locale(base_locale).is_rtl() {
         "rtl"
     } else {
@@ -99,13 +108,13 @@ location.replace({base} + locale + "/" + location.search + location.hash);
   </body>
 </html>
 "#,
-        lang = escape_html(base_locale),
+        lang = escape_html(&base_tag),
         title = escape_html(title),
         head = head.join("\n"),
         fallback = escape_html(&fallback),
         negotiate = NEGOTIATE_JS,
         available = script_json(&available),
-        base_locale = script_json(&serde_json::Value::from(base_locale)),
+        base_locale = script_json(&serde_json::Value::from(base_tag.as_str())),
         base = script_json(&serde_json::Value::from(site.base())),
         links = links.join("\n"),
     )

@@ -14,7 +14,7 @@ fn at(segments: &[&str]) -> PageLocation {
 
 fn written(pages: Vec<PageLocation>, locales: &[&str]) -> PrerenderedPage {
     PrerenderedPage {
-        lang: Some("es".to_string()),
+        lang: Some(i18n_core::locale_tag!("es")),
         title: "Proyectos — Portafolio".to_string(),
         host_attributes_html: " data-telar=\"\" style=\"position:relative;\"".to_string(),
         head: "<style id=\"telar-reset\"></style>".to_string(),
@@ -22,14 +22,19 @@ fn written(pages: Vec<PageLocation>, locales: &[&str]) -> PrerenderedPage {
         state: PrerenderState {
             version: STATE_VERSION,
             location: Some("/es/projects".to_string()),
-            locale: Some("es".to_string()),
+            locale: Some(i18n_core::locale_tag!("es")),
             preferences: Preferences::default(),
             surface: Surface::default(),
             signals: BTreeMap::new(),
         },
         pages,
-        locales: locales.iter().map(|locale| locale.to_string()).collect(),
-        base_locale: locales.first().map(|locale| locale.to_string()),
+        locales: locales
+            .iter()
+            .map(|locale| i18n_core::LocaleTag::parse(locale).unwrap())
+            .collect(),
+        base_locale: locales
+            .first()
+            .map(|locale| i18n_core::LocaleTag::parse(locale).unwrap()),
         settled: true,
     }
 }
@@ -42,7 +47,7 @@ fn base() -> Page {
             module: "app_bg-ba9876543210.wasm".to_string(),
         },
     );
-    page.lang = "en".to_string();
+    page.lang = i18n_core::locale_tag!("en");
     page
 }
 
@@ -58,10 +63,10 @@ fn every_page_is_written_in_every_locale_the_address_carries() {
     assert_eq!(
         pages,
         [
-            PageLocation::root().in_locale("en"),
-            at(&["projects"]).in_locale("en"),
-            PageLocation::root().in_locale("es"),
-            at(&["projects"]).in_locale("es"),
+            PageLocation::root().in_locale(&i18n_core::locale_tag!("en")),
+            at(&["projects"]).in_locale(&i18n_core::locale_tag!("en")),
+            PageLocation::root().in_locale(&i18n_core::locale_tag!("es")),
+            at(&["projects"]).in_locale(&i18n_core::locale_tag!("es")),
         ]
     );
 }
@@ -73,7 +78,7 @@ fn site(toml: &str) -> Site {
 
 #[test]
 fn a_page_takes_its_language_title_markup_and_state_from_what_the_app_wrote() {
-    let location = at(&["projects"]).in_locale("es");
+    let location = at(&["projects"]).in_locale(&i18n_core::locale_tag!("es"));
     let html = page_for(
         &base(),
         &written(Vec::new(), &[]),
@@ -107,7 +112,7 @@ fn a_page_takes_its_language_title_markup_and_state_from_what_the_app_wrote() {
 fn a_page_carries_its_description_canonical_and_alternates() {
     let site = site("origin = \"https://example.com\"");
     let pages = site_pages(&written(vec![at(&["projects"])], &["es", "en"]));
-    let location = at(&["projects"]).in_locale("en");
+    let location = at(&["projects"]).in_locale(&i18n_core::locale_tag!("en"));
     let html = page_for(
         &base(),
         &written(Vec::new(), &[]),
@@ -149,9 +154,9 @@ fn the_page_for_a_missing_address_names_no_place_of_its_own() {
 #[test]
 fn the_pages_of_a_site_whose_addresses_carry_a_locale_fall_back_to_its_base_locale() {
     let mut root = written(vec![at(&["projects"])], &["en", "es"]);
-    root.base_locale = Some("es".to_string());
+    root.base_locale = Some(i18n_core::locale_tag!("es"));
     let pages = site_pages(&root);
-    assert_eq!(pages.base_locale.as_deref(), Some("es"));
+    assert_eq!(pages.base_locale, Some(i18n_core::locale_tag!("es")));
     assert_eq!(pages.pages.len(), 4);
     assert!(!pages.pages.contains(&PageLocation::root()));
 

@@ -8,7 +8,10 @@ fn dark_spanish() -> SystemPreferences {
         color_scheme: Some(ColorScheme::Dark),
         reduced_motion: Some(false),
         high_contrast: None,
-        locales: vec!["es-CL".into(), "en".into()],
+        locales: vec![
+            platform_core::locale_tag!("es-CL"),
+            platform_core::locale_tag!("en"),
+        ],
         text_scale: TextScale::new(1.5).expect("a scale above zero"),
     }
 }
@@ -47,7 +50,7 @@ fn a_reader_of_one_field_ignores_the_others() {
 
     set_system_preferences(SystemPreferences {
         color_scheme: Some(ColorScheme::Light),
-        locales: vec!["fr".into()],
+        locales: vec![platform_core::locale_tag!("fr")],
         ..dark_spanish()
     });
     assert_eq!(runs.get(), 1, "neither changed field was read");
@@ -97,7 +100,13 @@ fn a_whole_snapshot_is_one_notification() {
     });
     set_system_preferences(dark_spanish());
     assert_eq!(runs.get(), 2);
-    assert_eq!(use_preferred_locales(), ["es-CL", "en"]);
+    assert_eq!(
+        use_preferred_locales(),
+        [
+            platform_core::locale_tag!("es-CL"),
+            platform_core::locale_tag!("en")
+        ]
+    );
     assert_eq!(use_color_scheme(), Some(ColorScheme::Dark));
     assert_eq!(use_high_contrast(), None);
 }

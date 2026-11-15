@@ -6,8 +6,8 @@ use std::rc::Rc;
 use reactive_core::{RwSignal, effect, signal};
 
 use crate::{
-    Color, Direction, Insets, LayoutError, LayoutItem, ModeId, NestedCanvas, Size, SurfaceCanvas,
-    SurfaceEnv, UnknownMode,
+    Color, Direction, Insets, LayoutError, LayoutItem, LocaleTag, ModeId, NestedCanvas, Size,
+    SurfaceCanvas, SurfaceEnv, UnknownMode,
 };
 
 use super::PreviewEnv;
@@ -18,7 +18,7 @@ use super::PreviewEnv;
 #[derive(Clone, Copy)]
 pub struct Globals {
     mode: RwSignal<Option<ModeId>>,
-    locale: RwSignal<Option<String>>,
+    locale: RwSignal<Option<LocaleTag>>,
     direction: RwSignal<Option<Direction>>,
     viewport: RwSignal<Option<Size>>,
     safe_area: RwSignal<Insets>,
@@ -54,7 +54,7 @@ impl Globals {
             self.mode.set(Some(mode));
         }
         if let Some(locale) = env.locale {
-            self.locale.set(Some(locale.to_string()));
+            self.locale.set(Some(locale.clone()));
         }
         if let Some(direction) = env.direction {
             self.direction.set(Some(direction));
@@ -76,8 +76,8 @@ impl Globals {
         self.mode
     }
 
-    /// A BCP 47 language tag.
-    pub fn locale(&self) -> RwSignal<Option<String>> {
+    /// The locale the canvas is shown in, where one was asked for.
+    pub fn locale(&self) -> RwSignal<Option<LocaleTag>> {
         self.locale
     }
 
@@ -156,7 +156,7 @@ impl Globals {
             canvas.set_direction(direction.get())
         }));
         follow(Box::new(move |canvas| {
-            canvas.set_locale(locale.get().as_deref())
+            canvas.set_locale(locale.get().as_ref())
         }));
         follow(Box::new(move |canvas| {
             canvas.set_high_contrast(high_contrast.get())

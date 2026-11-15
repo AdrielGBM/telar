@@ -1,8 +1,8 @@
-use crate::{Catalog, Message, Part, translate};
+use crate::{Catalog, Message, Part, locale_tag, translate};
 
 static CATALOG: Catalog = Catalog {
-    locales: &["en"],
-    default_locale: "en",
+    locales: &[locale_tag!("en")],
+    default_locale: locale_tag!("en"),
     entries: &[
         english!("close", "Close"),
         english!("fps", { count }, " fps"),
@@ -15,7 +15,7 @@ static CATALOG: Catalog = Catalog {
 fn a_plain_string_is_a_plain_english_message() {
     let entry = &CATALOG.entries[0];
     assert_eq!(entry.messages.len(), 1);
-    assert_eq!(entry.messages[0].0, "en");
+    assert_eq!(entry.messages[0].0, locale_tag!("en"));
     assert!(matches!(entry.messages[0].1, Message::Plain("Close")));
 }
 

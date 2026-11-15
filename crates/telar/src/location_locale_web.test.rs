@@ -80,26 +80,29 @@ async fn the_address_prefix_and_the_active_locale_follow_each_other() {
         )
         .unwrap();
 
-    follow_location_locale(["es", "en"], "es");
+    follow_location_locale(
+        [telar::locale_tag!("es"), telar::locale_tag!("en")],
+        telar::locale_tag!("es"),
+    );
     let mut source = WebLocation::new(Some(LocationFormat::new(BASE)));
     let opened = source.initial();
     assert_eq!(
         opened,
         [Location::from_segments(["doc"])
-            .with_locale("es")
+            .with_locale(telar::locale_tag!("es"))
             .with_fragment("simulacion")],
         "the first segment under the base is the locale"
     );
     receive_location_history(opened);
     carry_out(&mut source);
     assert_eq!(
-        current_locale().as_deref(),
-        Some("es"),
+        current_locale(),
+        Some(telar::locale_tag!("es")),
         "the address decides"
     );
 
     let before = entries();
-    set_locale("en");
+    set_locale(telar::locale_tag!("en"));
     carry_out(&mut source);
     assert_eq!(
         path_now(),
@@ -129,7 +132,7 @@ async fn the_address_prefix_and_the_active_locale_follow_each_other() {
     carry_out(&mut source);
     assert_eq!(path_now(), format!("{BASE}/en/projects"));
     assert_eq!(entries(), before + 1);
-    set_locale("es");
+    set_locale(telar::locale_tag!("es"));
     carry_out(&mut source);
     assert_eq!(path_now(), format!("{BASE}/es/projects"));
 
@@ -137,8 +140,8 @@ async fn the_address_prefix_and_the_active_locale_follow_each_other() {
     settle().await;
     follow_the_browser(&mut source);
     assert_eq!(
-        current_locale().as_deref(),
-        Some("es"),
+        current_locale(),
+        Some(telar::locale_tag!("es")),
         "back leaves the page, not the language"
     );
     assert_eq!(
@@ -149,11 +152,11 @@ async fn the_address_prefix_and_the_active_locale_follow_each_other() {
 
     assert!(push_location(
         Location::from_segments(["doc"])
-            .with_locale("en")
+            .with_locale(telar::locale_tag!("en"))
             .with_fragment("simulation")
     ));
     carry_out(&mut source);
-    assert_eq!(current_locale().as_deref(), Some("en"));
+    assert_eq!(current_locale(), Some(telar::locale_tag!("en")));
     assert_eq!(
         path_now(),
         format!("{BASE}/en/doc#simulation"),

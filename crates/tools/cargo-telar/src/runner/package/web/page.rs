@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use i18n_core::Direction;
+use i18n_core::{Direction, LocaleTag, locale_tag};
 use renderer_dom::escape_html;
 use telar_project::{
     ASSETS_META_NAME, FONT_FAMILY_ATTRIBUTE, FontDeclaration, PageRenderer, STATE_ELEMENT_ID,
@@ -208,7 +208,7 @@ pub(crate) struct PageFont {
 #[derive(Clone, Debug)]
 pub(crate) struct Page {
     /// `%telar.lang%`.
-    pub(crate) lang: String,
+    pub(crate) lang: LocaleTag,
     /// `%telar.dir%`.
     pub(crate) dir: Direction,
     /// `%telar.title%`, escaped.
@@ -236,7 +236,7 @@ pub(crate) struct Page {
 impl Page {
     pub(crate) fn new(title: impl Into<String>, bootstrap: Bootstrap) -> Self {
         Self {
-            lang: "en".to_string(),
+            lang: locale_tag!("en"),
             dir: Direction::default(),
             title: title.into(),
             meta: Vec::new(),
@@ -321,7 +321,7 @@ impl Page {
 
     fn expand(&self, marker: Marker) -> String {
         match marker {
-            Marker::Lang => escape_html(&self.lang).into_owned(),
+            Marker::Lang => escape_html(&self.lang.to_string()).into_owned(),
             Marker::Dir => direction_str(self.dir).to_string(),
             Marker::Title => escape_html(&self.title).into_owned(),
             Marker::Renderer => PageRenderer::from(self.renderer).as_str().to_string(),

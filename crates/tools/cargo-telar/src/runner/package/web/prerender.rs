@@ -211,7 +211,7 @@ fn describe(page: &PageRequest) -> String {
         PageRequest::At { location } => {
             let locale = location
                 .locale
-                .as_deref()
+                .as_ref()
                 .map(|locale| format!("/{locale}"))
                 .unwrap_or_default();
             format!("the page at {locale}/{}", location.segments.join("/"))

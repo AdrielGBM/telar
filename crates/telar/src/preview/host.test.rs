@@ -42,9 +42,10 @@ fn a_preview_with_no_file_is_named_instead() {
 
 #[test]
 fn a_canvas_for_an_entry_is_seeded_from_its_env() {
-    let entry = PreviewEntry::new("demo--card--a", "card", "A", empty).locale("ar");
+    let entry = PreviewEntry::new("demo--card--a", "card", "A", empty)
+        .locale(const { &crate::locale_tag!("ar") });
     let ctx = PreviewCtx::for_entry(&entry).unwrap();
-    assert_eq!(ctx.globals().locale().get().as_deref(), Some("ar"));
+    assert_eq!(ctx.globals().locale().get(), Some(crate::locale_tag!("ar")));
     assert_eq!(ctx.globals().mode().get(), None);
     assert_eq!(ctx.actions().count(), 0);
 }

@@ -83,10 +83,10 @@ pub use primary_scroll::{
     scroll_primary_to,
 };
 pub use route::Route;
-pub use semantics_core::Location;
+pub use semantics_core::{LocaleTag, LocaleTagError, Location, locale_tag};
 pub use system_preferences::{
     ColorScheme, SystemPreferences, TextScale, UnknownColorScheme, locales_from_env,
-    posix_locale_to_bcp47, system_locales_from_env,
+    platform_locales, posix_locale_to_bcp47, system_locales_from_env,
 };
 pub use text_input::{Ime, TextInput};
 pub use window::{

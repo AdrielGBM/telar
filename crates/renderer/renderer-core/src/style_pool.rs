@@ -54,7 +54,7 @@ pub fn hash_text_style(s: &TextStyle) -> u64 {
     // Folded in only when set, so a style without either hashes as it always has.
     if s.text_case != TextCase::AsWritten {
         h.write_u8(s.text_case as u8);
-        h.write(s.lang.as_deref().unwrap_or_default().as_bytes());
+        s.lang.hash(&mut h);
     }
     if s.decoration != TextDecoration::default() {
         hash_decoration(&s.decoration, &mut h);

@@ -252,7 +252,10 @@ fn back_over_an_anchor_leaves_the_page_where_it_is() {
 
 fn in_locales(path: &str) -> Location {
     LocationFormat::root()
-        .with_locales(["es", "en"])
+        .with_locales([
+            semantics_core::locale_tag!("es"),
+            semantics_core::locale_tag!("en"),
+        ])
         .parse(path)
         .unwrap()
 }
@@ -264,12 +267,12 @@ struct Language {
 }
 
 impl LocaleFollower for Language {
-    fn choose(&self) -> String {
-        self.chooses.clone()
+    fn choose(&self) -> LocaleTag {
+        LocaleTag::parse(&self.chooses).unwrap()
     }
 
-    fn adopt(&self, locale: &str) {
-        self.adopted.borrow_mut().push(locale.to_owned());
+    fn adopt(&self, locale: &LocaleTag) {
+        self.adopted.borrow_mut().push(locale.to_string());
     }
 }
 
@@ -278,16 +281,22 @@ fn bind(chooses: &str) -> Rc<Language> {
         chooses: chooses.to_owned(),
         ..Language::default()
     });
-    bind_location_locale(vec!["es".into(), "en".into()], language.clone());
+    bind_location_locale(
+        vec![
+            semantics_core::locale_tag!("es"),
+            semantics_core::locale_tag!("en"),
+        ],
+        language.clone(),
+    );
     language
 }
 
 #[test]
 fn the_address_opened_at_decides_the_locale_over_one_set_before() {
     let language = bind("es");
-    set_location_locale("es");
+    set_location_locale(&semantics_core::locale_tag!("es"));
     receive_location_history(vec![in_locales("/en/a")]);
-    assert_eq!(location_locale().as_deref(), Some("en"));
+    assert_eq!(location_locale(), Some(semantics_core::locale_tag!("en")));
     assert_eq!(*language.adopted.borrow(), ["en"]);
     assert!(navigations().is_empty());
 }
@@ -331,7 +340,7 @@ fn a_switch_rewrites_every_entry_in_place() {
     let language = bind("es");
     receive_location_history(vec![in_locales("/es/"), in_locales("/es/#contact")]);
     navigations();
-    set_location_locale("en");
+    set_location_locale(&semantics_core::locale_tag!("en"));
     assert_eq!(
         navigations(),
         [HistoryUpdate {
@@ -339,7 +348,7 @@ fn a_switch_rewrites_every_entry_in_place() {
             history: vec![in_locales("/en/"), in_locales("/en/#contact")],
         }]
     );
-    set_location_locale("fr");
+    set_location_locale(&semantics_core::locale_tag!("fr"));
     assert!(
         navigations().is_empty(),
         "a locale the address does not carry"
@@ -356,7 +365,7 @@ fn an_app_that_binds_no_locale_keeps_its_first_segments() {
     receive_location_history(vec![at("/es/a")]);
     assert_eq!(location_history(), [Location::from_segments(["es", "a"])]);
     assert_eq!(location_locale(), None);
-    set_location_locale("en");
+    set_location_locale(&semantics_core::locale_tag!("en"));
     assert!(navigations().is_empty());
 }
 

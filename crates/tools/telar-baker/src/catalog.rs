@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use i18n_core::PluralCategory;
-use i18n_core::{CatalogModel, MessageModel, PartModel};
+use i18n_core::{CatalogModel, LocaleTag, MessageModel, PartModel};
 use telar_project::{
     CATALOG_ARTIFACT_FORMAT, CATALOG_INDEX_FILENAME, CATALOG_SOURCE_FILENAME, CatalogEntry,
     CatalogIndex, CatalogSourceFile, ManifestError, TelarManifest, content_hash,
@@ -43,7 +43,7 @@ pub fn bake_catalog(
     }
 
     let mut report = CatalogReport::default();
-    let model = match parse_sources(&sources, config.default.as_deref()) {
+    let model = match parse_sources(&sources, config.default.as_ref()) {
         Ok(model) => model,
         Err(problem) => {
             report.problems.push(problem);
@@ -125,7 +125,7 @@ pub fn bake_catalog(
 struct I18nConfig {
     root: Option<PathBuf>,
     scan: Option<String>,
-    default: Option<String>,
+    default: Option<LocaleTag>,
 }
 
 impl I18nConfig {
@@ -208,7 +208,7 @@ pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, BakePr
     })?;
     parse_sources(
         &catalog_sources(package_root, &config),
-        config.default.as_deref(),
+        config.default.as_ref(),
     )
 }
 
@@ -223,7 +223,7 @@ pub fn catalog_keys(package_root: &Path) -> HashSet<String> {
 
 fn parse_sources(
     sources: &[(String, PathBuf)],
-    default: Option<&str>,
+    default: Option<&LocaleTag>,
 ) -> Result<Option<CatalogModel>, BakeProblem> {
     let mut files: Vec<(&str, String, &Path)> = Vec::new();
     for (tag, path) in sources {
@@ -256,17 +256,21 @@ fn parse_sources(
 pub fn to_source(model: &CatalogModel) -> String {
     let mut s = String::new();
     s.push_str("pub static CATALOG: Catalog = Catalog {\n");
-    let locales: Vec<String> = model.locales.iter().map(|tag| format!("{tag:?}")).collect();
+    let locales: Vec<String> = model.locales.iter().map(ser_locale).collect();
     s.push_str(&format!("    locales: &[{}],\n", locales.join(", ")));
     s.push_str(&format!(
-        "    default_locale: {:?},\n",
-        model.default_locale
+        "    default_locale: {},\n",
+        ser_locale(&model.default_locale)
     ));
     s.push_str("    entries: &[\n");
     for (key, per_locale) in &model.entries {
         s.push_str(&format!("        Entry {{ key: {key:?}, messages: &["));
         for (locale, message) in per_locale {
-            s.push_str(&format!("({locale:?}, {}), ", ser_message(message)));
+            s.push_str(&format!(
+                "({}, {}), ",
+                ser_locale(locale),
+                ser_message(message)
+            ));
         }
         s.push_str("] },\n");
     }
@@ -279,7 +283,12 @@ pub fn to_source(model: &CatalogModel) -> String {
             .into_iter()
             .filter(|name| s.contains(&format!("{name}::"))),
     );
+    names.push("locale_tag");
     format!("use telar::i18n::{{{}}};\n\n{s}", names.join(", "))
+}
+
+fn ser_locale(locale: &LocaleTag) -> String {
+    format!("locale_tag!({:?})", locale.to_string())
 }
 
 fn ser_message(message: &MessageModel) -> String {

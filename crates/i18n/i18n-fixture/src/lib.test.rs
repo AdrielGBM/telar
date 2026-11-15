@@ -1,36 +1,36 @@
 // The whole i18n pipeline end to end: the baker turned `locales/*.toml` into a catalog, `t!` validated its keys and args at compile time, and `translate` renders the active locale.
 #[test]
 fn catalog_translates_and_switches() {
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
     assert_eq!(telar::t!("greeting", name = "Ada"), "Hello, Ada!");
     assert_eq!(telar::t!("nav.overview"), "Overview");
-    telar::set_locale("es");
+    telar::set_locale(telar::locale_tag!("es"));
     assert_eq!(telar::t!("greeting", name = "Ada"), "Hola, Ada!");
     assert_eq!(telar::t!("nav.overview"), "Resumen");
-    telar::set_locale("fr");
+    telar::set_locale(telar::locale_tag!("fr"));
     assert_eq!(telar::t!("nav.overview"), "Overview");
 }
 
 // A plural table is baked as one key with per-category branches, and the active locale's rules pick one.
 #[test]
 fn plural_selects_a_branch_per_locale() {
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
     assert_eq!(telar::t!("items", count = "1"), "1 item");
     assert_eq!(telar::t!("items", count = "0"), "0 items");
     assert_eq!(telar::t!("items", count = "5"), "5 items");
 
-    telar::set_locale("es");
+    telar::set_locale(telar::locale_tag!("es"));
     assert_eq!(telar::t!("items", count = "1"), "1 elemento");
     assert_eq!(telar::t!("items", count = "5"), "5 elementos");
 
     // Arabic is the reason the category set is not just one/other: it uses all six.
-    telar::set_locale("ar");
+    telar::set_locale(telar::locale_tag!("ar"));
     assert_eq!(telar::t!("items", count = "0"), "لا عناصر");
     assert_eq!(telar::t!("items", count = "1"), "عنصر واحد");
     assert_eq!(telar::t!("items", count = "2"), "عنصران");
     assert_eq!(telar::t!("items", count = "3"), "3 عناصر");
     assert_eq!(telar::t!("items", count = "11"), "11 عنصرًا");
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
 }
 
 mod plugin_override {
@@ -40,14 +40,18 @@ mod plugin_override {
 
     // The catalog `telar-components` ships its "Close" in, which a core crate may not depend on.
     static COMPONENTS: Catalog = Catalog {
-        locales: &["ar", "en", "es"],
-        default_locale: "en",
+        locales: &[
+            telar::locale_tag!("ar"),
+            telar::locale_tag!("en"),
+            telar::locale_tag!("es"),
+        ],
+        default_locale: telar::locale_tag!("en"),
         entries: &[Entry {
             key: "close",
             messages: &[
-                ("ar", Message::Plain("إغلاق")),
-                ("en", Message::Plain("Close")),
-                ("es", Message::Plain("Cerrar")),
+                (telar::locale_tag!("ar"), Message::Plain("إغلاق")),
+                (telar::locale_tag!("en"), Message::Plain("Close")),
+                (telar::locale_tag!("es"), Message::Plain("Cerrar")),
             ],
         }],
     };
@@ -71,11 +75,11 @@ mod plugin_override {
         let installed = telar::i18n::catalog().expect("the application catalog is installed");
         assert!(std::ptr::eq(installed, &crate::__rsx_i18n::CATALOG));
 
-        telar::set_locale("en");
+        telar::set_locale(telar::locale_tag!("en"));
         assert_eq!(drawn_close_label(), ["Dismiss"]);
-        telar::set_locale("es");
+        telar::set_locale(telar::locale_tag!("es"));
         assert_eq!(drawn_close_label(), ["Descartar"]);
-        telar::set_locale("ar");
+        telar::set_locale(telar::locale_tag!("ar"));
         assert_eq!(drawn_close_label(), ["إغلاق"]);
     }
 }

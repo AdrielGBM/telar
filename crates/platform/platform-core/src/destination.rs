@@ -6,7 +6,7 @@ pub use semantics_core::{
 };
 
 use crate::history::in_location_locale;
-use crate::{Location, Route, location_format, location_history};
+use crate::{LocaleTag, Location, Route, location_format, location_history};
 
 /// A value a link can be pointed at: a [`Destination`] itself, a [`Location`], or any typed [`Route`] — or,
 /// flattened, an `Option` of one of those or the `Result` of [`external`], so `to:external(expr)` and `to:(maybe_route)` both work when the
@@ -57,18 +57,16 @@ pub fn anchor(name: &str) -> Destination {
 }
 
 /// A link to the place being shown, in `locale`: a language switch that keeps the page and the anchor. Written as that place's address in `locale`, so a page's `<a href>` opens it there before any code runs. Only an app whose address carries its locale can go there; elsewhere it is the place being shown, and following it goes nowhere.
-pub fn in_locale(locale: &str) -> Destination {
-    Destination::locale(locale)
+pub fn in_locale(locale: LocaleTag) -> Destination {
+    Destination::Locale(locale)
 }
 
-fn shown_in(locale: &str) -> Location {
+fn shown_in(locale: &LocaleTag) -> Location {
     let shown = location_history().pop().unwrap_or_default();
-    let carried = crate::location_locales()
-        .into_iter()
-        .find(|carried| carried.eq_ignore_ascii_case(locale));
-    match carried {
-        Some(locale) => shown.with_locale(locale),
-        None => shown,
+    if crate::location_locales().contains(locale) {
+        shown.with_locale(locale.clone())
+    } else {
+        shown
     }
 }
 

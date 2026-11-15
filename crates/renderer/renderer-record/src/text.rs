@@ -297,7 +297,7 @@ fn text_fields(style: &TextStyle) -> Vec<(&'static str, String)> {
         );
         add("underline-color", decoration.color.as_ref().map(paint));
     }
-    add("lang", style.lang.as_deref().map(str::to_string));
+    add("lang", style.lang.as_ref().map(ToString::to_string));
     add(
         "shadow",
         match &style.text_shadow {

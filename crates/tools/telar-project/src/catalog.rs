@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::assets::content_hash;
 
 /// Bumped when `.telar/i18n.rs`'s generated source changes shape in a way an older `telar` cannot read. Independent of the asset artifact's own format: the two are written by the same command but consumed by different code, and coupling their versions would force a re-bake of one for a change to the other.
-pub const CATALOG_ARTIFACT_FORMAT: u32 = 1;
+pub const CATALOG_ARTIFACT_FORMAT: u32 = 2;
 
 /// The crate-root module the baked catalog is wired under, and the path every `t!`/markup call site references.
 pub const I18N_MODULE: &str = "__rsx_i18n";

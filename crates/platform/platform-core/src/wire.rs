@@ -10,6 +10,7 @@ use raw_window_handle::{
     Win32WindowHandle, WinRtWindowHandle, WindowsDisplayHandle, XcbDisplayHandle, XcbWindowHandle,
     XlibDisplayHandle, XlibWindowHandle,
 };
+use semantics_core::LocaleTag;
 use wire_core::{
     Reader, Shaped, Wire, WireError, Writer, fold_shape, shape_named, wire_enum, wire_struct,
 };
@@ -392,7 +393,7 @@ impl Shaped for LocationFormat {
             fold_shape(shape_named("LocationFormat"), String::SHAPE),
             bool::SHAPE,
         ),
-        <Vec<String>>::SHAPE,
+        <Vec<LocaleTag>>::SHAPE,
     );
 }
 
@@ -402,14 +403,14 @@ impl Wire for LocationFormat {
         self.trailing_slash().put(w);
         w.len(self.locales().len());
         for locale in self.locales() {
-            w.str(locale);
+            locale.put(w);
         }
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         let base = r.str()?;
         Ok(LocationFormat::new(base)
             .with_trailing_slash(bool::take(r)?)
-            .with_locales(Vec::<String>::take(r)?))
+            .with_locales(Vec::<LocaleTag>::take(r)?))
     }
 }
 

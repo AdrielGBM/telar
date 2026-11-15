@@ -69,7 +69,7 @@ fn row(style: LayoutStyle, children: Vec<Box<dyn LayoutItem>>) -> Built {
 }
 
 fn report(build: fn(&PreviewCtx) -> Built) -> Report {
-    report_of(entry(build).locale("en"))
+    report_of(entry(build).locale(const { &crate::locale_tag!("en") }))
 }
 
 fn entry(build: fn(&PreviewCtx) -> Built) -> PreviewEntry {
@@ -283,7 +283,9 @@ fn right_to_left_reading_order_is_not_reported_as_backwards() {
             ],
         )?])
     }
-    let rtl = entry(row_of_two).locale("ar").dir(crate::Direction::Rtl);
+    let rtl = entry(row_of_two)
+        .locale(const { &crate::locale_tag!("ar") })
+        .dir(crate::Direction::Rtl);
     assert_eq!(found(&report_of(rtl), Rule::FocusOrder), 0);
 }
 
@@ -324,7 +326,7 @@ fn ignoring_a_rule_drops_its_findings_and_keeps_the_rest() {
     }
     let ignored = report_of(
         entry(both)
-            .locale("en")
+            .locale(const { &crate::locale_tag!("en") })
             .a11y_ignore(&[Rule::UnnamedControl]),
     );
     assert_eq!(found(&ignored, Rule::UnnamedControl), 0);
@@ -369,7 +371,8 @@ fn focus_order_follows_tab_and_not_the_order_the_frame_draws_in() {
     fn read_out_of_place(_: &PreviewCtx) -> Built {
         layered(300.0)
     }
-    let play = Play::mount(&entry(read_in_place).locale("en")).unwrap();
+    let play =
+        Play::mount(&entry(read_in_place).locale(const { &crate::locale_tag!("en") })).unwrap();
     let frame = play.frame();
     let access = frame
         .access
@@ -438,7 +441,7 @@ fn troubled(_: &PreviewCtx) -> Built {
 
 #[test]
 fn a_captured_frame_is_checked_the_same_once_its_canvas_is_gone() {
-    let play = Play::mount(&entry(troubled).locale("en")).unwrap();
+    let play = Play::mount(&entry(troubled).locale(const { &crate::locale_tag!("en") })).unwrap();
     let live = play.check_a11y();
     for rule in [
         Rule::UnnamedPicture,
@@ -457,7 +460,7 @@ fn a_captured_frame_is_checked_the_same_once_its_canvas_is_gone() {
 
 #[test]
 fn a_frame_made_from_commands_alone_is_read_against_the_surface_entered() {
-    let play = Play::mount(&entry(troubled).locale("en")).unwrap();
+    let play = Play::mount(&entry(troubled).locale(const { &crate::locale_tag!("en") })).unwrap();
     let captured = play.frame();
     let bare = Frame::new(Arc::clone(&captured.commands), captured.size)
         .with_lang(captured.lang.clone())
@@ -681,7 +684,7 @@ fn checking_focus_leaves_it_where_the_play_put_it() {
             button(Some("Two"), 80.0, 32.0),
         ])
     }
-    let mut play = Play::mount(&entry(pair).locale("en")).unwrap();
+    let mut play = Play::mount(&entry(pair).locale(const { &crate::locale_tag!("en") })).unwrap();
     play.tab().unwrap();
     play.tab().unwrap();
     let before = play.frame();

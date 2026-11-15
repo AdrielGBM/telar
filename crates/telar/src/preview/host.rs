@@ -112,7 +112,7 @@ pub use telar_project::protocol::{docs_key, docs_path, title_path};
 /// Gives the previews the language their text is in when the app's setup chose none: the installed catalog's default. A preview host is what every canvas without a locale of its own follows, so without one a reader is told no language for text that is in one.
 pub fn speak_the_app_language() {
     if i18n_core::current_locale().is_none() {
-        i18n_core::set_locale(i18n_core::default_locale());
+        i18n_core::set_locale(i18n_core::default_locale().clone());
     }
 }
 

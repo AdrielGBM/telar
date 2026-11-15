@@ -1,6 +1,6 @@
 //! The writing direction, and which one a locale is written in.
 
-use crate::locale_tag::LocaleTag;
+use semantics_core::LocaleTag;
 
 /// The direction text is written in, which layout resolves logical edges against.
 ///
@@ -30,16 +30,11 @@ impl Direction {
         matches!(self, Direction::Rtl)
     }
 
-    /// The direction `locale` is written in. A script subtag decides when the tag has one, so `uz-Arab` is right to left and `sr-Cyrl` left to right; otherwise the language's usual script does, so `ar-EG` and `he_IL` are right to left and `uz` is not.
-    pub fn for_locale(locale: &str) -> Self {
-        let tag = LocaleTag::parse(locale);
-        let rtl = match tag.script {
-            Some(script) => RTL_SCRIPTS
-                .iter()
-                .any(|rtl| rtl.eq_ignore_ascii_case(script)),
-            None => RTL_LANGUAGES
-                .iter()
-                .any(|rtl| rtl.eq_ignore_ascii_case(tag.language)),
+    /// The direction `locale` is written in. A script subtag decides when the tag has one, so `uz-Arab` is right to left and `sr-Cyrl` left to right; otherwise the language's usual script does, so `ar-EG` and `he-IL` are right to left and `uz` is not.
+    pub fn for_locale(locale: &LocaleTag) -> Self {
+        let rtl = match locale.script() {
+            Some(script) => RTL_SCRIPTS.contains(&script),
+            None => RTL_LANGUAGES.contains(&locale.language()),
         };
         if rtl { Direction::Rtl } else { Direction::Ltr }
     }

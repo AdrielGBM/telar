@@ -85,10 +85,25 @@ fn a_picture_per_locale_falls_back_to_the_base_locale() {
     let image = web("og_image = { es = \"og/es.png\", en = \"og/en.png\" }")
         .og_image
         .unwrap();
-    assert_eq!(image.for_locale("en", "es"), Some("og/en.png"));
-    assert_eq!(image.for_locale("fr", "es"), Some("og/es.png"));
     assert_eq!(
-        OgImage::Shared("og.png".to_string()).for_locale("fr", "es"),
+        image.for_locale(
+            &semantics_core::locale_tag!("en"),
+            &semantics_core::locale_tag!("es")
+        ),
+        Some("og/en.png")
+    );
+    assert_eq!(
+        image.for_locale(
+            &semantics_core::locale_tag!("fr"),
+            &semantics_core::locale_tag!("es")
+        ),
+        Some("og/es.png")
+    );
+    assert_eq!(
+        OgImage::Shared("og.png".to_string()).for_locale(
+            &semantics_core::locale_tag!("fr"),
+            &semantics_core::locale_tag!("es")
+        ),
         Some("og.png")
     );
 }

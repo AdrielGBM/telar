@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{Location, Uri, UriError};
+use crate::{LocaleTag, Location, Uri, UriError};
 
 /// Where a link goes, as the intent rather than as an address.
 ///
@@ -14,7 +14,7 @@ pub enum Destination {
     /// A named anchor on the page being shown, revealed where it is.
     Anchor(Arc<str>),
     /// The place being shown, in the locale this names: a language switch that keeps the page and the anchor.
-    Locale(Arc<str>),
+    Locale(LocaleTag),
     /// Something outside the app, opened with whatever the system opens it with.
     External(Uri),
 }
@@ -22,10 +22,6 @@ pub enum Destination {
 impl Destination {
     pub fn anchor(name: impl Into<Arc<str>>) -> Self {
         Self::Anchor(name.into())
-    }
-
-    pub fn locale(locale: impl Into<Arc<str>>) -> Self {
-        Self::Locale(locale.into())
     }
 
     /// An external destination at `uri`, refused unless it is a [`Uri`] the app's policy allows.

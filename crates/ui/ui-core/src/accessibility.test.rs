@@ -210,7 +210,7 @@ fn a_named_box_over_hidden_letters_reads_as_one_word() {
     )
     .unwrap()
     .a11y_label(|| "Hi")
-    .lang(|| "en");
+    .lang(|| i18n_core::locale_tag!("en"));
     compute_layout(
         word.layout_node(),
         AvailableSpace::Definite(200.0),
@@ -232,7 +232,7 @@ fn a_named_box_over_hidden_letters_reads_as_one_word() {
     assert_eq!(nodes.len(), 1, "one word, not a word and its letters");
     assert_eq!(nodes[0].name, "Hi");
     assert_eq!(nodes[0].role, Role::Label);
-    assert_eq!(nodes[0].lang.as_deref(), Some("en"));
+    assert_eq!(nodes[0].lang, Some(i18n_core::locale_tag!("en")));
     assert_eq!(platform_core::accessibility::transcript(&nodes), "Hi");
 }
 
@@ -242,11 +242,11 @@ fn a_language_reaches_the_text_beneath_it() {
     use crate::annotation::Accessible;
     reset_layout_runtime();
     focus::clear();
-    let quote = letter("Hola").lang(|| "es");
+    let quote = letter("Hola").lang(|| i18n_core::locale_tag!("es"));
     let quote_node = quote.layout_node();
     let page = Container::new(LayoutStyle::new(), vec![box_item(quote)])
         .unwrap()
-        .lang(|| "en");
+        .lang(|| i18n_core::locale_tag!("en"));
     let frame = [
         open(page.layout_node(), rect(0.0, 0.0, 100.0, 40.0)),
         text_at("Hello", rect(0.0, 0.0, 40.0, 16.0)),
@@ -262,8 +262,8 @@ fn a_language_reaches_the_text_beneath_it() {
             .find(|n| n.name == name)
             .and_then(|n| n.lang.clone())
     };
-    assert_eq!(lang_of("Hello").as_deref(), Some("en"));
-    assert_eq!(lang_of("Hola").as_deref(), Some("es"));
+    assert_eq!(lang_of("Hello"), Some(i18n_core::locale_tag!("en")));
+    assert_eq!(lang_of("Hola"), Some(i18n_core::locale_tag!("es")));
 }
 
 /// A control the application named is announced by that name, and not by the glyph it draws.
@@ -859,7 +859,7 @@ fn a_frame_reading_says_what_each_box_is_called_and_whether_it_is_skipped() {
         vec![box_item(named), box_item(hidden)],
     )
     .unwrap()
-    .lang(|| "en");
+    .lang(|| i18n_core::locale_tag!("en"));
     let page_node = page.layout_node();
 
     let reading = FrameReading::of(&[
@@ -878,7 +878,7 @@ fn a_frame_reading_says_what_each_box_is_called_and_whether_it_is_skipped() {
     let named = reading.get(named_node).expect("drawn");
     assert!(!named.skipped);
     assert_eq!(named.name.as_deref(), Some("Alpha"));
-    assert_eq!(named.lang.as_deref(), Some("en"));
+    assert_eq!(named.lang, Some(i18n_core::locale_tag!("en")));
     assert!(reading.skips(hidden_node));
     assert!(reading.skips(hidden_named_node), "hiding takes the subtree");
     assert_eq!(reading.get(hidden_named_node).unwrap().name, None);

@@ -23,11 +23,15 @@ let locales = memo(|| {
     if locales.is_empty() {
         "none reported".to_string()
     } else {
-        locales.join(", ")
+        let spelled: Vec<String> = locales.iter().map(ToString::to_string).collect();
+        spelled.join(", ")
     }
 });
 let negotiated = memo(|| {
-    telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string()
+    let shipped = [telar::locale_tag!("es"), telar::locale_tag!("en")];
+    telar::negotiate_locale(&telar::use_preferred_locales(), &shipped)
+        .unwrap_or(&shipped[0])
+        .to_string()
 });
 let chosen = memo(|| telar::use_scheme_preference().as_str().to_string());
 let safe_area = memo(|| {

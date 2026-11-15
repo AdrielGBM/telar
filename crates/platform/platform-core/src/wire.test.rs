@@ -50,7 +50,10 @@ fn preferences() -> SystemPreferences {
         color_scheme: Some(ColorScheme::Dark),
         reduced_motion: Some(true),
         high_contrast: None,
-        locales: vec!["es-CL".into(), "en".into()],
+        locales: vec![
+            semantics_core::locale_tag!("es-CL"),
+            semantics_core::locale_tag!("en"),
+        ],
         text_scale: TextScale::new(1.25).expect("a scale above zero"),
     }
 }
@@ -382,7 +385,7 @@ fn node() -> AccessNode {
         invalid: true,
         required: true,
         readonly: true,
-        lang: Some("es".into()),
+        lang: Some(semantics_core::locale_tag!("es")),
         url: Some("/docs#intro".into()),
         current: Some(CurrentKind::Location),
         orientation: Some(Orientation::Horizontal),

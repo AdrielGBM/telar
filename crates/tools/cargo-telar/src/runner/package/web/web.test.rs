@@ -32,7 +32,7 @@ fn assemble_demo(
     web: &WebSection,
     fonts: &[FontDeclaration],
     renderer: WebRenderer,
-    locale: &str,
+    locale: &i18n_core::LocaleTag,
 ) -> Result<(Page, String), String> {
     let site = Site::new(web, package, "demo")?;
     let shell = Shell {
@@ -54,7 +54,7 @@ fn a_project_with_nothing_under_web_gets_the_built_in_page_and_hashed_bootstrap(
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap();
 
@@ -90,7 +90,7 @@ fn the_page_lang_and_dir_follow_the_locale_passed_in() {
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "es",
+        &i18n_core::locale_tag!("es"),
     )
     .unwrap();
     let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
@@ -105,7 +105,7 @@ fn the_page_lang_and_dir_follow_the_locale_passed_in() {
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "ar",
+        &i18n_core::locale_tag!("ar"),
     )
     .unwrap();
     let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
@@ -123,7 +123,7 @@ fn a_new_module_gives_the_glue_a_new_name_too() {
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap();
     let first = manifest(&out);
@@ -137,7 +137,7 @@ fn a_new_module_gives_the_glue_a_new_name_too() {
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap();
     let second = manifest(&out);
@@ -165,7 +165,7 @@ fn the_project_template_and_public_directory_are_used() {
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap();
     let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
@@ -195,7 +195,15 @@ fn the_web_table_can_move_the_template_and_the_public_directory() {
         public: Some("site/static".to_string()),
         ..WebSection::default()
     };
-    assemble_demo(&out, &package, &web, &[], WebRenderer::Dom, "en").unwrap();
+    assemble_demo(
+        &out,
+        &package,
+        &web,
+        &[],
+        WebRenderer::Dom,
+        &i18n_core::locale_tag!("en"),
+    )
+    .unwrap();
     assert!(
         std::fs::read_to_string(out.join(PAGE_FILE))
             .unwrap()
@@ -213,7 +221,15 @@ fn a_named_template_or_public_directory_that_is_not_there_is_an_error() {
         public: None,
         ..WebSection::default()
     };
-    let error = assemble_demo(&out, &package, &web, &[], WebRenderer::Dom, "en").unwrap_err();
+    let error = assemble_demo(
+        &out,
+        &package,
+        &web,
+        &[],
+        WebRenderer::Dom,
+        &i18n_core::locale_tag!("en"),
+    )
+    .unwrap_err();
     assert!(error.contains("site/page.html"), "{error}");
     cleanup(&package);
 
@@ -223,7 +239,15 @@ fn a_named_template_or_public_directory_that_is_not_there_is_an_error() {
         public: Some("static".to_string()),
         ..WebSection::default()
     };
-    let error = assemble_demo(&out, &package, &web, &[], WebRenderer::Dom, "en").unwrap_err();
+    let error = assemble_demo(
+        &out,
+        &package,
+        &web,
+        &[],
+        WebRenderer::Dom,
+        &i18n_core::locale_tag!("en"),
+    )
+    .unwrap_err();
     assert!(error.contains("[telar.web] public"), "{error}");
     cleanup(&package);
 }
@@ -243,7 +267,7 @@ fn a_template_error_names_the_template() {
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap_err();
     assert!(error.contains("web/index.html"), "{error}");
@@ -261,7 +285,7 @@ fn glue_that_does_not_name_the_module_is_an_error() {
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap_err();
     assert!(error.contains("'app_bg.wasm'"), "{error}");
@@ -334,7 +358,7 @@ fn a_declared_font_ships_hashed_with_its_face_rule_and_preload() {
         &WebSection::default(),
         &fonts,
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap();
 
@@ -379,7 +403,7 @@ fn a_template_without_a_place_for_declared_fonts_is_refused() {
         &WebSection::default(),
         &fonts,
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap_err();
     assert!(error.contains("%telar.fonts%"), "{error}");
@@ -396,7 +420,7 @@ fn a_declared_font_that_is_not_there_is_an_error_naming_it() {
         &WebSection::default(),
         &fonts,
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap_err();
     assert!(
@@ -422,7 +446,7 @@ fn a_baked_picture_ships_at_the_address_the_module_was_baked_with() {
         &WebSection::default(),
         &[],
         WebRenderer::Dom,
-        "en",
+        &i18n_core::locale_tag!("en"),
     )
     .unwrap();
     images::ship_images(&out, std::slice::from_ref(&package)).unwrap();
@@ -440,10 +464,12 @@ fn a_baked_picture_ships_at_the_address_the_module_was_baked_with() {
 }
 
 #[test]
-fn the_page_lang_is_the_default_locale_in_bcp_47_form() {
-    assert_eq!(page_locale(Some("pt_BR".to_string())), "pt-BR");
-    assert_eq!(page_locale(Some("es".to_string())), "es");
-    assert_eq!(page_locale(None), "en");
+fn the_page_lang_is_the_default_locale_or_english() {
+    assert_eq!(
+        page_locale(Some(i18n_core::locale_tag!("es"))),
+        i18n_core::locale_tag!("es")
+    );
+    assert_eq!(page_locale(None), i18n_core::locale_tag!("en"));
 }
 
 fn strings(args: &[&str]) -> Vec<String> {

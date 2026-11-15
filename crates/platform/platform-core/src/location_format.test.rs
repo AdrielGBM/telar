@@ -144,37 +144,40 @@ fn a_broken_escape_is_kept_as_written() {
 fn a_locale_is_the_first_segment_and_its_root_a_directory() {
     let format = LocationFormat::new("/portfolio");
     assert_eq!(
-        format.format(&Location::root().with_locale("es")),
+        format.format(&Location::root().with_locale(semantics_core::locale_tag!("es"))),
         "/portfolio/es/"
     );
     assert_eq!(
         format.format(
             &Location::from_segments(["projects"])
-                .with_locale("en")
+                .with_locale(semantics_core::locale_tag!("en"))
                 .with_fragment("telar")
         ),
         "/portfolio/en/projects#telar"
     );
     assert_eq!(
-        format
-            .with_trailing_slash(true)
-            .format(&Location::from_segments(["projects"]).with_locale("en")),
+        format.with_trailing_slash(true).format(
+            &Location::from_segments(["projects"]).with_locale(semantics_core::locale_tag!("en"))
+        ),
         "/portfolio/en/projects/"
     );
 }
 
 #[test]
 fn a_locale_is_read_back_only_where_the_format_ships_it() {
-    let format = LocationFormat::new("/portfolio").with_locales(["es", "en"]);
+    let format = LocationFormat::new("/portfolio").with_locales([
+        semantics_core::locale_tag!("es"),
+        semantics_core::locale_tag!("en"),
+    ]);
     for written in ["/portfolio/es/", "/portfolio/es", "/portfolio/ES/"] {
         assert_eq!(
             format.parse(written),
-            Some(Location::root().with_locale("es")),
+            Some(Location::root().with_locale(semantics_core::locale_tag!("es"))),
             "{written:?}"
         );
     }
     let deep = Location::from_segments(["projects"])
-        .with_locale("en")
+        .with_locale(semantics_core::locale_tag!("en"))
         .with_param("tag", "rust")
         .with_fragment("telar");
     assert_eq!(format.parse(&format.format(&deep)), Some(deep));
@@ -190,8 +193,11 @@ fn a_locale_is_read_back_only_where_the_format_ships_it() {
     );
     assert_eq!(
         LocationFormat::root()
-            .with_locales(["es", "en"])
+            .with_locales([
+                semantics_core::locale_tag!("es"),
+                semantics_core::locale_tag!("en")
+            ])
             .parse("myapp://open/en/projects"),
-        Some(Location::from_segments(["projects"]).with_locale("en"))
+        Some(Location::from_segments(["projects"]).with_locale(semantics_core::locale_tag!("en")))
     );
 }

@@ -1,63 +1,55 @@
 use super::*;
 
+fn tags(texts: &[&str]) -> Vec<LocaleTag> {
+    texts
+        .iter()
+        .map(|text| LocaleTag::parse(text).unwrap())
+        .collect()
+}
+
+fn negotiate(preferred: &[&str], available: &[&str]) -> Option<String> {
+    negotiate_locale(&tags(preferred), &tags(available)).map(ToString::to_string)
+}
+
 const SHIPPED: [&str; 3] = ["es", "en", "pt-BR"];
 
 #[test]
-fn an_exact_tag_wins_and_comes_back_as_the_application_spells_it() {
-    assert_eq!(negotiate_locale(&["PT-br"], &SHIPPED, "es"), "pt-BR");
+fn an_exact_tag_wins_whatever_its_spelling() {
+    assert_eq!(negotiate(&["PT-br"], &SHIPPED), Some("pt-BR".into()));
+    assert_eq!(negotiate(&["pt_BR"], &SHIPPED), Some("pt-BR".into()));
 }
 
 #[test]
 fn a_regional_preference_falls_back_to_its_language() {
-    assert_eq!(negotiate_locale(&["es-CL"], &SHIPPED, "en"), "es");
-    assert_eq!(negotiate_locale(&["pt-PT"], &SHIPPED, "es"), "pt-BR");
+    assert_eq!(negotiate(&["es-CL"], &SHIPPED), Some("es".into()));
+    assert_eq!(negotiate(&["pt-PT"], &SHIPPED), Some("pt-BR".into()));
 }
 
 #[test]
 fn a_bare_language_accepts_a_regional_tag() {
-    assert_eq!(negotiate_locale(&["pt"], &SHIPPED, "es"), "pt-BR");
+    assert_eq!(negotiate(&["pt"], &SHIPPED), Some("pt-BR".into()));
 }
 
 #[test]
 fn among_several_of_one_language_the_first_available_wins() {
-    let shipped = ["es-ES", "es-MX", "es"];
-    assert_eq!(negotiate_locale(&["es-CL"], &shipped, "es"), "es-ES");
+    assert_eq!(
+        negotiate(&["es-CL"], &["es-ES", "es-MX", "es"]),
+        Some("es-ES".into())
+    );
 }
 
 #[test]
 fn the_order_of_preference_outranks_the_quality_of_the_match() {
     assert_eq!(
-        negotiate_locale(&["en-US", "es"], &["es", "en-GB"], "es"),
-        "en-GB",
+        negotiate(&["en-US", "es"], &["es", "en-GB"]),
+        Some("en-GB".into()),
         "English was asked for first, so a British catalog beats an exact Spanish one"
     );
 }
 
 #[test]
-fn nothing_in_common_or_nothing_asked_is_the_fallback() {
-    assert_eq!(negotiate_locale(&["fr", "de"], &SHIPPED, "es"), "es");
-    assert_eq!(negotiate_locale(&[] as &[&str], &SHIPPED, "es"), "es");
-    assert_eq!(negotiate_locale(&["es"], &[] as &[&str], "en"), "en");
-}
-
-#[test]
-fn an_empty_preference_matches_nothing() {
-    assert_eq!(negotiate_locale(&["", "en"], &SHIPPED, "es"), "en");
-}
-
-#[test]
-fn owned_lists_work_as_well_as_borrowed_ones() {
-    let preferred: Vec<String> = vec!["en-AU".into()];
-    let shipped: Vec<String> = vec!["es".into(), "en".into()];
-    assert_eq!(negotiate_locale(&preferred, &shipped, "es"), "en");
-}
-
-#[test]
-fn an_underscore_separates_subtags_as_a_hyphen_does() {
-    assert_eq!(negotiate_locale(&["pt_BR"], &SHIPPED, "es"), "pt-BR");
-    assert_eq!(negotiate_locale(&["es_CL"], &SHIPPED, "en"), "es");
-    assert_eq!(
-        negotiate_locale(&["pt-PT"], &["es", "pt_BR"], "es"),
-        "pt_BR"
-    );
+fn nothing_in_common_or_nothing_asked_is_no_answer() {
+    assert_eq!(negotiate(&["fr", "de"], &SHIPPED), None);
+    assert_eq!(negotiate(&[], &SHIPPED), None);
+    assert_eq!(negotiate(&["es"], &[]), None);
 }

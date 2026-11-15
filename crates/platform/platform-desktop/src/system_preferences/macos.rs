@@ -11,6 +11,7 @@ use objc2_app_kit::{NSWorkspace, NSWorkspaceAccessibilityDisplayOptionsDidChange
 use objc2_foundation::{
     NSCurrentLocaleDidChangeNotification, NSLocale, NSNotification, NSNotificationCenter,
 };
+use platform_core::LocaleTag;
 
 pub fn reduced_motion() -> Option<bool> {
     Some(NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceMotion())
@@ -20,12 +21,13 @@ pub fn high_contrast() -> Option<bool> {
     Some(NSWorkspace::sharedWorkspace().accessibilityDisplayShouldIncreaseContrast())
 }
 
-/// Already BCP 47 (`es-CL`, `es-419`), in the order System Settings lists them.
-pub fn locales() -> Vec<String> {
-    NSLocale::preferredLanguages()
-        .iter()
-        .map(|language| language.to_string())
-        .collect()
+/// In the order System Settings lists them, which the system names in BCP 47 (`es-CL`, `es-419`).
+pub fn locales() -> Vec<LocaleTag> {
+    platform_core::platform_locales(
+        NSLocale::preferredLanguages()
+            .iter()
+            .map(|language| language.to_string()),
+    )
 }
 
 type Observer = (

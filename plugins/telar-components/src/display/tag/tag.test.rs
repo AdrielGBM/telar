@@ -115,7 +115,8 @@ fn in_scheme(scheme: ColorScheme) {
 
 fn played(build: fn(&PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError>) -> Play {
     fresh_layout_runtime();
-    let entry = PreviewEntry::new("test--tag--behaviour", "tag", "behaviour", build).locale("en");
+    let entry = PreviewEntry::new("test--tag--behaviour", "tag", "behaviour", build)
+        .locale(const { &telar::locale_tag!("en") });
     Play::mount(&entry).unwrap_or_else(|error| panic!("the tag mounts: {error}"))
 }
 

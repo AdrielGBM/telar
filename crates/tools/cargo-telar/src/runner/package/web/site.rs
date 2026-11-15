@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use i18n_core::MessageModel;
+use i18n_core::{LocaleTag, MessageModel};
 use renderer_dom::escape_html;
 use telar_project::{OgImage, PageLocation, ThemeColor, WebSection, is_absolute_url};
 
@@ -20,9 +20,9 @@ pub(crate) struct SitePages {
     /// Every page with content. With locales, each locale's root (`/es/`) stands where `/` would.
     pub(crate) pages: Vec<PageLocation>,
     /// The locales the addresses carry; empty for an app whose addresses carry none.
-    pub(crate) locales: Vec<String>,
+    pub(crate) locales: Vec<LocaleTag>,
     /// The locale `/` and an address naming none fall back to; `Some` exactly when `locales` has any.
-    pub(crate) base_locale: Option<String>,
+    pub(crate) base_locale: Option<LocaleTag>,
     /// Whether a `404.html` was written.
     pub(crate) not_found: bool,
     /// The first segments under which every address is a page, which a host profile names in one rule rather than one per page: a site with an open-ended set of pages, such as a workshop's one per preview, would otherwise outgrow the host's rule limit.
@@ -42,7 +42,7 @@ impl SitePages {
 /// One page, as its tags describe it.
 pub(crate) struct PageMeta<'a> {
     pub(crate) title: &'a str,
-    pub(crate) lang: &'a str,
+    pub(crate) lang: &'a LocaleTag,
     /// Where the page is; `None` for a page served at any address.
     pub(crate) location: Option<&'a PageLocation>,
     pub(crate) pages: &'a SitePages,
@@ -62,7 +62,7 @@ pub(crate) struct Site {
 enum Description {
     Fixed(String),
     Translated {
-        messages: BTreeMap<String, String>,
+        messages: BTreeMap<LocaleTag, String>,
         fallback: String,
     },
 }
@@ -101,7 +101,8 @@ impl Site {
     /// The path a page is served at: its directory, with the closing `/` a static host redirects to.
     pub(crate) fn path_of(&self, location: &PageLocation) -> String {
         let mut path = self.base.clone();
-        for segment in location.locale.iter().chain(&location.segments) {
+        let locale = location.locale.as_ref().map(ToString::to_string);
+        for segment in locale.iter().chain(&location.segments) {
             path.push_str(&encode_segment(segment));
             path.push('/');
         }
@@ -121,13 +122,14 @@ impl Site {
     }
 
     /// The description, in `lang` or the locale it negotiates to.
-    pub(crate) fn description(&self, lang: &str) -> &str {
+    pub(crate) fn description(&self, lang: &LocaleTag) -> &str {
         match &self.description {
             Description::Fixed(text) => text,
             Description::Translated { messages, fallback } => {
-                let shipped: Vec<&str> = messages.keys().map(String::as_str).collect();
-                let locale = i18n_core::negotiate_locale(&[lang], &shipped, "");
-                messages.get(locale).unwrap_or(fallback)
+                let shipped: Vec<LocaleTag> = messages.keys().cloned().collect();
+                i18n_core::negotiate_locale(std::slice::from_ref(lang), &shipped)
+                    .and_then(|locale| messages.get(locale))
+                    .unwrap_or(fallback)
             }
         }
     }
@@ -160,21 +162,16 @@ impl Site {
         }
         tags.push(HeadTag::property("og:locale", og_locale(meta.lang)));
         if let Some(location) = localized {
-            let own = location.locale.as_deref();
-            for locale in meta
-                .pages
-                .locales
-                .iter()
-                .filter(|l| Some(l.as_str()) != own)
-            {
+            let own = location.locale.as_ref();
+            for locale in meta.pages.locales.iter().filter(|l| Some(*l) != own) {
                 tags.push(HeadTag::property("og:locale:alternate", og_locale(locale)));
             }
         }
         let locale = meta
             .location
-            .and_then(|location| location.locale.as_deref())
+            .and_then(|location| location.locale.as_ref())
             .unwrap_or(meta.lang);
-        let base_locale = meta.pages.base_locale.as_deref().unwrap_or(locale);
+        let base_locale = meta.pages.base_locale.as_ref().unwrap_or(locale);
         let image = self
             .og_image
             .as_ref()
@@ -203,7 +200,12 @@ impl Site {
         let mut hrefs: Vec<(String, String)> = pages
             .locales
             .iter()
-            .map(|locale| (locale.clone(), self.href_of(&location.in_locale(locale))))
+            .map(|locale| {
+                (
+                    locale.to_string(),
+                    self.href_of(&location.in_locale(locale)),
+                )
+            })
             .collect();
         if let Some(base) = &pages.base_locale {
             hrefs.push((
@@ -265,8 +267,8 @@ impl Site {
 }
 
 /// Open Graph spells a locale with an underscore: `es`, `en_US`.
-fn og_locale(tag: &str) -> String {
-    tag.replace('-', "_")
+fn og_locale(tag: &LocaleTag) -> String {
+    tag.to_string().replace('-', "_")
 }
 
 /// The description under `key` in every locale of the project's catalog, each a plain message: a page is described before any argument could be given.

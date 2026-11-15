@@ -3,7 +3,7 @@ use super::*;
 fn at(segments: &[&str], locale: Option<&str>) -> PageLocation {
     PageLocation {
         segments: segments.iter().map(|segment| segment.to_string()).collect(),
-        locale: locale.map(str::to_string),
+        locale: locale.map(|tag| LocaleTag::parse(tag).unwrap()),
     }
 }
 
@@ -44,7 +44,12 @@ fn a_segment_no_path_can_hold_has_no_file() {
 #[test]
 fn a_bad_segment_anywhere_in_the_address_leaves_the_page_without_a_file() {
     assert_eq!(at(&["acts", "C:"], Some("en")).file(), None);
-    assert_eq!(at(&["acts"], Some("c:foo")).file(), None);
+}
+
+#[test]
+fn an_address_whose_locale_is_no_tag_is_refused_as_it_is_read() {
+    let read = serde_json::from_str::<PageLocation>(r#"{"segments":["acts"],"locale":"c:foo"}"#);
+    assert!(read.is_err(), "{read:?}");
 }
 
 #[test]

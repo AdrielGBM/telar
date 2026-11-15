@@ -23,6 +23,18 @@ fn a_reading_whose_range_runs_backwards_does_not_decode() {
     );
 }
 
+#[test]
+fn a_locale_tag_crosses_in_canonical_form_and_text_that_is_no_tag_is_refused() {
+    assert_eq!(
+        decode::<LocaleTag>(&encode(&"pt_br".to_string())),
+        Ok(crate::locale_tag!("pt-BR"))
+    );
+    assert_eq!(
+        decode::<LocaleTag>(&encode(&"not a tag".to_string())),
+        Err(WireError::Invalid("a locale tag"))
+    );
+}
+
 fn link_round_trip(link: Option<Destination>) -> Option<Destination> {
     let mut w = Writer::new();
     put_link(&mut w, link.as_ref());
@@ -91,7 +103,7 @@ fn a_location_round_trips_with_everything_it_can_name() {
     round_trip(Location::root());
     round_trip(
         Location::from_segments(["docs", "ñandú"])
-            .with_locale("es-CL")
+            .with_locale(crate::locale_tag!("es-CL"))
             .with_fragment("intro")
             .with_param("tag", "a")
             .with_param("tag", "b"),
@@ -104,7 +116,7 @@ fn every_kind_of_link_round_trips() {
         None,
         Some(Destination::Route(Location::from_segments(["a", "b"]))),
         Some(Destination::anchor("settings")),
-        Some(Destination::locale("de")),
+        Some(Destination::Locale(crate::locale_tag!("de"))),
         Some(Destination::external("https://example.com/a?b=c").unwrap()),
     ] {
         assert_eq!(link_round_trip(link.clone()), link);
@@ -155,7 +167,7 @@ fn every_field_set() -> Semantics {
             tab_stop: false,
             consumes: ConsumedKeys::SPACE,
         }),
-        lang: Some(Arc::from("en")),
+        lang: Some(crate::locale_tag!("en")),
         hidden: true,
         anchor: Some(Arc::from("here")),
         current: true,
@@ -317,7 +329,7 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
     }));
     bytes.extend(encode(
         &Location::from_segments(["docs", "ñandú"])
-            .with_locale("es-CL")
+            .with_locale(crate::locale_tag!("es-CL"))
             .with_fragment("intro")
             .with_param("tag", "a")
             .with_param("tag", "b"),
@@ -335,7 +347,7 @@ fn the_bytes_of_every_kind_of_link_are_pinned_to_the_wire_version() {
         None,
         Some(Destination::Route(Location::from_segments(["a", "b"]))),
         Some(Destination::anchor("settings")),
-        Some(Destination::locale("de")),
+        Some(Destination::Locale(crate::locale_tag!("de"))),
         Some(Destination::external("https://example.com/a?b=c").unwrap()),
     ] {
         put_link(&mut w, link.as_ref());

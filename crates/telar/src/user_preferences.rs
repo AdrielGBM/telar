@@ -53,6 +53,16 @@ pub(crate) fn store_backend(backend: RendererBackend) {
     services_core::store_preference(BACKEND_KEY, Some(backend.as_str()));
 }
 
+/// The locale kept under [`LOCALE_KEY`], or `None` where none is kept. One the store holds that is no locale is reported and read as none.
+pub(crate) fn stored_locale() -> Option<i18n_core::LocaleTag> {
+    let stored = services_core::stored_preference(LOCALE_KEY)?;
+    i18n_core::LocaleTag::parse(&stored)
+        .inspect_err(|error| {
+            tracing::warn!("the locale kept under `{LOCALE_KEY}` is not read: {error}")
+        })
+        .ok()
+}
+
 pub(crate) fn stored_history() -> Vec<String> {
     services_core::stored_preference(HISTORY_KEY)
         .map(|text| text.lines().map(str::to_owned).collect())

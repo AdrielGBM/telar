@@ -351,7 +351,7 @@ fn render() -> Scoped<ComponentList> {
 fn the_library_component_draws_with_the_application_catalog_and_theme() {
     telar::set_theme(ConsumerTheme::new());
 
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
     let tree = render();
     let drawn = texts(&tree);
     assert!(drawn.iter().any(|text| text == "Welcome aboard, Ada!"), "the application's override is drawn: {drawn:?}");
@@ -367,7 +367,7 @@ fn the_library_component_draws_with_the_application_catalog_and_theme() {
     drop(commands);
     drop(tree);
 
-    telar::set_locale("es");
+    telar::set_locale(telar::locale_tag!("es"));
     let drawn = texts(&render());
     assert!(drawn.iter().any(|text| text == "¡Hola, Ada!"), "a locale the application does not override falls back to the library's catalog: {drawn:?}");
 }
@@ -402,7 +402,7 @@ telar::__previews! {
         }
 
         telar::set_theme(ConsumerTheme::new());
-        telar::set_locale("en");
+        telar::set_locale(telar::locale_tag!("en"));
         telar::install_default_text_metrics();
         reset_layout_runtime();
         let ada = previews.iter().find(|entry| entry.id == "telar_rsx_fixture--greeting_card--ada").unwrap();

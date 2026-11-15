@@ -332,7 +332,7 @@ fn one_edge_draws_one_splitter_and_no_corner() {
 
 #[test]
 fn the_edges_are_named_by_their_side_unless_told_otherwise() {
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
     let names = |props: ResizableProps| {
         let tree = mount(props);
         let mut names: Vec<String> = telar::inspect::snapshot(&tree.commands())

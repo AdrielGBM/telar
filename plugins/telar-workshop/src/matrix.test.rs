@@ -610,7 +610,7 @@ fn a_grid_puts_the_last_axis_across_and_the_others_down() {
     let cells = Matrix::expand(
         &[
             Axis::Mode(&["light", "dark"]),
-            Axis::Locale(&["en"]),
+            Axis::Locale(const { &[telar::locale_tag!("en")] }),
             Axis::Dir(&[Direction::Ltr, Direction::Rtl]),
         ],
         &entry,
@@ -632,7 +632,14 @@ fn a_grid_puts_the_last_axis_across_and_the_others_down() {
         ]
     );
 
-    let one = Matrix::expand(&[Axis::Locale(&["en", "ar"])], &entry, &Matrices::default()).unwrap();
+    let one = Matrix::expand(
+        &[Axis::Locale(
+            const { &[telar::locale_tag!("en"), telar::locale_tag!("ar")] },
+        )],
+        &entry,
+        &Matrices::default(),
+    )
+    .unwrap();
     let laid = grid(&one);
     assert_eq!(laid.columns, ["locale: en", "locale: ar"]);
     assert_eq!(laid.rows.len(), 1);
@@ -765,14 +772,21 @@ fn what_keeps_a_plan_from_having_cells_is_told_apart() {
 #[test]
 fn a_cell_is_set_up_in_the_toolbar_settings_under_its_own() {
     let (_, night) = register_modes();
-    let entry = PreviewEntry::new(PLAIN, "badge", "Plain", widget)
-        .env(PreviewEnv::NONE.locale("en").mode("day"));
-    let cell = Matrix::expand(&[Axis::Locale(&["ar"])], &entry, &Matrices::default())
-        .unwrap()
-        .remove(0);
+    let entry = PreviewEntry::new(PLAIN, "badge", "Plain", widget).env(
+        PreviewEnv::NONE
+            .locale(const { &telar::locale_tag!("en") })
+            .mode("day"),
+    );
+    let cell = Matrix::expand(
+        &[Axis::Locale(const { &[telar::locale_tag!("ar")] })],
+        &entry,
+        &Matrices::default(),
+    )
+    .unwrap()
+    .remove(0);
     let settings = CanvasSettings {
         mode: ModeChoice::Named("night".into()),
-        locale: Some("fr".into()),
+        locale: Some(telar::locale_tag!("fr")),
         background: Background::Dark,
         ..CanvasSettings::default()
     };
@@ -780,8 +794,8 @@ fn a_cell_is_set_up_in_the_toolbar_settings_under_its_own() {
     seed(&globals, &settings, ColorScheme::Light, &entry, &cell);
     assert_eq!(globals.mode().peek(), Some(night));
     assert_eq!(
-        globals.locale().peek().as_deref(),
-        Some("ar"),
+        globals.locale().peek(),
+        Some(telar::locale_tag!("ar")),
         "the cell wins"
     );
     assert_eq!(
@@ -813,9 +827,13 @@ fn a_snapshot_that_failed_the_run_reads_as_drifted() {
 #[test]
 fn a_cell_without_a_viewport_mounts_at_the_size_the_test_run_uses_and_is_only_shrunk_to_show() {
     let entry = PreviewEntry::new(PLAIN, "badge", "Plain", widget);
-    let cell = Matrix::expand(&[Axis::Locale(&["ar"])], &entry, &Matrices::default())
-        .unwrap()
-        .remove(0);
+    let cell = Matrix::expand(
+        &[Axis::Locale(const { &[telar::locale_tag!("ar")] })],
+        &entry,
+        &Matrices::default(),
+    )
+    .unwrap()
+    .remove(0);
 
     let (viewport, scale) = sizing(&entry, &cell);
     assert_eq!(viewport, Play::DEFAULT_VIEWPORT);

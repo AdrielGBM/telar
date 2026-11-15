@@ -21,7 +21,7 @@ pub fn follow_locale_direction() {
     let scope = reactive_core::detached(reactive_core::owner_scope);
     reactive_core::effect(|| {
         let direction = i18n_core::use_locale()
-            .as_deref()
+            .as_ref()
             .map(Direction::for_locale)
             .unwrap_or_default();
         ui_core::set_direction(direction);

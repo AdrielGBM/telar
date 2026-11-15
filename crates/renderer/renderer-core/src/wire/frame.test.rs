@@ -72,13 +72,13 @@ fn text_style() -> TextStyle {
         .with_underline_offset(2.0)
         .with_underline_thickness(1.5)
         .with_underline_color(BLUE)
-        .with_lang("fr-CA")
+        .with_lang(semantics_core::locale_tag!("fr-CA"))
         .with_text_shadow(Shadow::new(1.0, 2.0, 3.0, BLUE).with_spread(0.5))
 }
 
 fn spans() -> Arc<[Span]> {
     let route = Location::from_segments(["docs", "wire"])
-        .with_locale("fr")
+        .with_locale(semantics_core::locale_tag!("fr"))
         .with_fragment("top")
         .with_param("q", "bytes");
     vec![
@@ -105,7 +105,8 @@ fn spans() -> Arc<[Span]> {
         )
         .linking_to(Destination::Route(route)),
         Span::new(4..9, Declared::default()).linking_to(Destination::anchor("intro")),
-        Span::new(9..12, Declared::default()).linking_to(Destination::locale("de")),
+        Span::new(9..12, Declared::default())
+            .linking_to(Destination::Locale(semantics_core::locale_tag!("de"))),
         Span::new(12..14, Declared::default()).linking_to(Destination::External(
             Uri::parse("https://example.com/a?b=c").unwrap(),
         )),
@@ -136,7 +137,7 @@ fn semantics() -> Semantics {
             tab_stop: true,
             consumes: ConsumedKeys::ARROWS.with(ConsumedKeys::ENTER),
         }),
-        lang: Some("es".into()),
+        lang: Some(semantics_core::locale_tag!("es")),
         hidden: true,
         anchor: Some("top".into()),
         current: true,

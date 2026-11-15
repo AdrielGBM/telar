@@ -1,10 +1,12 @@
 //! Binds the active locale to the locale the app's address carries.
 //!
-//! In the facade for the same reason as `system_locale`: `i18n-core` stays on `reactive-core` alone, and `platform-core` knows nothing of translations.
+//! In the facade for the same reason as `system_locale`: `i18n-core` stays clear of the platform, and `platform-core` knows nothing of translations.
 
 use std::rc::Rc;
 
-use crate::user_preferences::LOCALE_KEY;
+use i18n_core::LocaleTag;
+
+use crate::user_preferences::{LOCALE_KEY, stored_locale};
 
 type Followed = Option<(reactive_core::OwnerId, Rc<Binding>)>;
 
@@ -20,13 +22,9 @@ reactive_core::dropless_thread_local! {
 /// - **Arriving.** A link to a [`Location`](crate::Location) that names a locale switches to it; back and forward return to entries in the locale the app is in.
 ///
 /// Routes never see the locale, and links and anchors are written with it, so an `<a href>` is right before any code runs. Call once at app start, in place of an initial `set_locale` and of [`follow_system_locale`](crate::follow_system_locale), whose live re-negotiation would move the address under the reader. Re-calling replaces the previous binding. An app that never calls it has addresses with no locale in them.
-pub fn follow_location_locale(
-    available: impl IntoIterator<Item = impl Into<String>>,
-    base: impl Into<String>,
-) {
-    let base = base.into();
-    let mut available: Vec<String> = available.into_iter().map(Into::into).collect();
-    if !available.iter().any(|tag| tag.eq_ignore_ascii_case(&base)) {
+pub fn follow_location_locale(available: impl IntoIterator<Item = LocaleTag>, base: LocaleTag) {
+    let mut available: Vec<LocaleTag> = available.into_iter().collect();
+    if !available.contains(&base) {
         available.push(base.clone());
     }
     let binding = Rc::new(Binding {
@@ -45,14 +43,14 @@ pub fn follow_location_locale(
         };
         let carried = followed.carried(&active);
         platform_core::set_location_locale(carried);
-        services_core::store_preference(LOCALE_KEY, Some(carried));
+        services_core::store_preference(LOCALE_KEY, Some(&carried.to_string()));
     });
     FOLLOW.with(|follow| *follow.borrow_mut() = Some((scope.id(), binding)));
 }
 
 /// The locale an address falls back to, as the last [`follow_location_locale`] named it; `None` for an app whose addresses carry none.
 #[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]
-pub(crate) fn location_base_locale() -> Option<String> {
+pub(crate) fn location_base_locale() -> Option<LocaleTag> {
     FOLLOW.with(|follow| {
         follow
             .borrow()
@@ -62,37 +60,38 @@ pub(crate) fn location_base_locale() -> Option<String> {
 }
 
 struct Binding {
-    available: Vec<String>,
-    base: String,
+    available: Vec<LocaleTag>,
+    base: LocaleTag,
 }
 
 impl Binding {
     /// The locale an address carries for `locale`: the one of `available` it negotiates to, `es` for `es-CL`, or `base` for one the app does not ship.
-    fn carried(&self, locale: &str) -> &str {
-        i18n_core::negotiate_locale(&[locale], &self.available, &self.base)
+    fn carried(&self, locale: &LocaleTag) -> &LocaleTag {
+        self.shipped(locale).unwrap_or(&self.base)
     }
 
-    fn shipped(&self, locale: &str) -> Option<String> {
-        let carried = i18n_core::negotiate_locale(&[locale], &self.available, "");
-        (!carried.is_empty()).then(|| carried.to_owned())
+    fn shipped(&self, locale: &LocaleTag) -> Option<&LocaleTag> {
+        i18n_core::negotiate_locale(std::slice::from_ref(locale), &self.available)
     }
 }
 
 impl platform_core::LocaleFollower for Binding {
-    fn choose(&self) -> String {
+    fn choose(&self) -> LocaleTag {
         let chosen = i18n_core::current_locale()
             .into_iter()
-            .chain(services_core::stored_preference(LOCALE_KEY))
-            .find_map(|locale| self.shipped(&locale));
+            .chain(stored_locale())
+            .find_map(|locale| self.shipped(&locale).cloned());
         chosen.unwrap_or_else(|| {
             let preferred = preferences_core::system_preferences().locales;
-            i18n_core::negotiate_locale(&preferred, &self.available, &self.base).to_owned()
+            i18n_core::negotiate_locale(&preferred, &self.available)
+                .unwrap_or(&self.base)
+                .clone()
         })
     }
 
-    fn adopt(&self, locale: &str) {
-        if i18n_core::current_locale().as_deref() != Some(locale) {
-            i18n_core::set_locale(locale);
+    fn adopt(&self, locale: &LocaleTag) {
+        if i18n_core::current_locale().as_ref() != Some(locale) {
+            i18n_core::set_locale(locale.clone());
         }
     }
 }

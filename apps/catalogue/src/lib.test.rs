@@ -37,7 +37,10 @@ fn no_preview_breaks_an_accessibility_rule_that_is_an_error_in_either_mode() {
     let matrices = Matrices::installed();
     let mut broken = Vec::new();
     for entry in crate::__telar_app_previews() {
-        for (id, play) in mounts(&entry.locale("en"), &matrices) {
+        for (id, play) in mounts(
+            &entry.locale(const { &telar::locale_tag!("en") }),
+            &matrices,
+        ) {
             let errors: Vec<String> = play
                 .check_a11y()
                 .at_least(Severity::Error)

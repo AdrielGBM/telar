@@ -13,7 +13,7 @@ fn site(toml: &str) -> Site {
 fn at(segments: &[&str], locale: Option<&str>) -> PageLocation {
     PageLocation {
         segments: segments.iter().map(|segment| segment.to_string()).collect(),
-        locale: locale.map(str::to_string),
+        locale: locale.map(|tag| i18n_core::LocaleTag::parse(tag).unwrap()),
     }
 }
 
@@ -25,8 +25,8 @@ fn localized() -> SitePages {
             at(&[], Some("en")),
             at(&["projects"], Some("en")),
         ],
-        locales: vec!["es".to_string(), "en".to_string()],
-        base_locale: Some("es".to_string()),
+        locales: vec![i18n_core::locale_tag!("es"), i18n_core::locale_tag!("en")],
+        base_locale: Some(i18n_core::locale_tag!("es")),
         not_found: true,
         ..SitePages::default()
     }
@@ -77,7 +77,7 @@ fn a_page_is_served_at_its_directory_under_the_base() {
 fn a_site_that_says_nothing_describes_itself_as_the_app() {
     let tags = html(&site("").head_tags(&PageMeta {
         title: "demo",
-        lang: "en",
+        lang: &i18n_core::locale_tag!("en"),
         location: Some(&PageLocation::root()),
         pages: &SitePages::root_only(),
     }));
@@ -109,7 +109,7 @@ fn a_page_in_a_locale_links_its_translations_and_previews_its_own_picture() {
     let projects = at(&["projects"], Some("en"));
     let tags = html(&site.head_tags(&PageMeta {
         title: "Projects",
-        lang: "en",
+        lang: &i18n_core::locale_tag!("en"),
         location: Some(&projects),
         pages: &pages,
     }));
@@ -131,7 +131,7 @@ fn a_page_in_a_locale_links_its_translations_and_previews_its_own_picture() {
 
     let tags = html(&site.head_tags(&PageMeta {
         title: "Inicio",
-        lang: "es-CL",
+        lang: &i18n_core::locale_tag!("es-CL"),
         location: Some(&at(&[], Some("es"))),
         pages: &pages,
     }));
@@ -149,7 +149,7 @@ fn a_page_in_a_locale_links_its_translations_and_previews_its_own_picture() {
 fn a_site_served_under_a_path_says_so_first() {
     let tags = site("base = \"/docs/\"").head_tags(&PageMeta {
         title: "demo",
-        lang: "en",
+        lang: &i18n_core::locale_tag!("en"),
         location: None,
         pages: &SitePages::root_only(),
     });
@@ -173,10 +173,22 @@ fn the_description_is_read_from_the_catalog_in_the_page_locale() {
     );
     let site = Site::new(&web("description = \"meta.description\""), &root, "demo").unwrap();
     let _ = std::fs::remove_dir_all(&root);
-    assert_eq!(site.description("en"), "A portfolio");
-    assert_eq!(site.description("en-GB"), "A portfolio");
-    assert_eq!(site.description("es"), "Un portafolio");
-    assert_eq!(site.description("fr"), "Un portafolio");
+    assert_eq!(
+        site.description(&i18n_core::locale_tag!("en")),
+        "A portfolio"
+    );
+    assert_eq!(
+        site.description(&i18n_core::locale_tag!("en-GB")),
+        "A portfolio"
+    );
+    assert_eq!(
+        site.description(&i18n_core::locale_tag!("es")),
+        "Un portafolio"
+    );
+    assert_eq!(
+        site.description(&i18n_core::locale_tag!("fr")),
+        "Un portafolio"
+    );
 }
 
 #[test]

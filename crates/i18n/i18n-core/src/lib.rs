@@ -1,6 +1,6 @@
 //! Runtime for rsx internationalization: the baked message model, the reactive active-locale signal, the `translate` lookup that binds them, and the [`Direction`] a locale is written in.
 //!
-//! This crate is always-on and dependency-light (only `reactive-core`). The heavy work — parsing translation catalogs — happens at build time in the transpiler's i18n baker, which emits a `static CATALOG: Catalog` of pure `&'static` data. At runtime a translated string is nothing more than `translate(&CATALOG, key, args)`, which reads the active locale reactively and renders the matching [`Message`].
+//! This crate is always-on and dependency-light (`reactive-core`, and `semantics-core` for [`LocaleTag`]). The heavy work — parsing translation catalogs — happens at build time in the transpiler's i18n baker, which emits a `static CATALOG: Catalog` of pure `&'static` data. At runtime a translated string is nothing more than `translate(&CATALOG, key, args)`, which reads the active locale reactively and renders the matching [`Message`].
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
@@ -10,7 +10,6 @@ mod direction;
 mod english;
 mod installed;
 mod locale;
-mod locale_tag;
 mod message;
 mod negotiate;
 mod plural;
@@ -25,20 +24,20 @@ pub use installed::{catalog, default_locale, set_catalog, set_catalog_if_unset, 
 pub use locale::{
     LocaleContext, current_locale, set_locale, set_surface_locale, use_locale, use_surface_locale,
 };
-pub use locale_tag::canonical_tag;
 pub use message::{Catalog, Entry, Message, Part};
 pub use negotiate::negotiate_locale;
 pub use plural::{
     BuiltinPluralRules, PluralCategory, PluralOperands, PluralRules, plural_category,
     set_plural_rules,
 };
+pub use semantics_core::{LocaleTag, LocaleTagError, locale_tag};
 
 /// Looks up `key` in `catalog` for the currently active locale and renders it with `args`.
 ///
 /// The active locale is read reactively via [`use_locale`], so calling this inside a widget's `Fn() -> String` content closure subscribes that widget to locale changes — a language switch re-renders it automatically. Falls back to the catalog's default locale when no locale is set or the active one lacks the key, and to the raw `key` when the key is absent entirely (which the build-time validator normally prevents).
 pub fn translate(catalog: &Catalog, key: &str, args: &[(&str, &str)]) -> String {
     let active = use_locale();
-    let locale = active.as_deref().unwrap_or(catalog.default_locale);
+    let locale = active.as_ref().unwrap_or(&catalog.default_locale);
     catalog
         .message(key, locale)
         .map(|m| m.select(locale, args).render(args))
@@ -64,12 +63,12 @@ pub fn translate_with_override(
         return translate(catalog, key, args);
     };
     let active = use_locale();
-    let locale = active.as_deref().unwrap_or(app.default_locale);
+    let locale = active.as_ref().unwrap_or(&app.default_locale);
     let namespaced = format!("{namespace}.{key}");
     app.message_in(&namespaced, locale)
         .or_else(|| catalog.message_in(key, locale))
-        .or_else(|| app.message_in(&namespaced, app.default_locale))
-        .or_else(|| catalog.message_in(key, catalog.default_locale))
+        .or_else(|| app.message_in(&namespaced, &app.default_locale))
+        .or_else(|| catalog.message_in(key, &catalog.default_locale))
         .map(|m| m.select(locale, args).render(args))
         .unwrap_or_else(|| key.to_string())
 }

@@ -9,6 +9,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use i18n_core::LocaleTag;
 use telar_project::PageLocation;
 
 use super::MANIFEST_FILE;
@@ -164,7 +165,7 @@ fn redirects(site: &Site, pages: &SitePages) -> String {
     for page in pages
         .pages
         .iter()
-        .filter(|page| page.locale.as_deref() == Some(base_locale) && !page.segments.is_empty())
+        .filter(|page| page.locale.as_ref() == Some(base_locale) && !page.segments.is_empty())
     {
         let unlocalized = site.path_of(&PageLocation {
             segments: page.segments.clone(),
@@ -181,7 +182,7 @@ fn redirects(site: &Site, pages: &SitePages) -> String {
 }
 
 /// The worker answering `/`: a `302` to the root of the locale `Accept-Language` negotiates to, varying by that header; every other request is the files'.
-fn worker(site: &Site, locales: &[String], base_locale: &str) -> String {
+fn worker(site: &Site, locales: &[LocaleTag], base_locale: &LocaleTag) -> String {
     let json = |value: serde_json::Value| value.to_string();
     format!(
         r#"{NEGOTIATE_JS}
@@ -221,8 +222,10 @@ export default {{
   }},
 }};
 "#,
-        available = json(serde_json::Value::from(locales.to_vec())),
-        fallback = json(serde_json::Value::from(base_locale)),
+        available = json(serde_json::Value::from(
+            locales.iter().map(ToString::to_string).collect::<Vec<_>>()
+        )),
+        fallback = json(serde_json::Value::from(base_locale.to_string())),
         base = json(serde_json::Value::from(site.base())),
     )
 }

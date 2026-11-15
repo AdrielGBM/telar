@@ -3,6 +3,8 @@
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
+use semantics_core::LocaleTag;
+
 mod css_string;
 mod dash;
 mod declared;
@@ -229,8 +231,8 @@ pub struct TextStyle {
     pub text_case: TextCase,
     /// The line drawn along the glyphs. See [`TextDecoration`].
     pub decoration: TextDecoration,
-    /// The language the text is written in, as a BCP 47 tag, whose rules [`text_case`](Self::text_case) follows; `None` takes the language-neutral ones.
-    pub lang: Option<Arc<str>>,
+    /// The language the text is written in, whose rules [`text_case`](Self::text_case) follows; `None` takes the language-neutral ones.
+    pub lang: Option<LocaleTag>,
 }
 
 impl TextStyle {
@@ -381,8 +383,8 @@ impl TextStyle {
         self
     }
 
-    pub fn with_lang(mut self, lang: impl Into<Arc<str>>) -> Self {
-        self.lang = Some(lang.into());
+    pub fn with_lang(mut self, lang: LocaleTag) -> Self {
+        self.lang = Some(lang);
         self
     }
 

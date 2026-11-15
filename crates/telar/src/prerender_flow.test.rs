@@ -220,10 +220,16 @@ fn a_page_links_under_the_base_it_is_served_at() {
 
 #[test]
 fn a_page_says_which_locale_its_address_falls_back_to() {
-    follow_location_locale(["en", "es"], "es");
+    follow_location_locale(
+        [telar::locale_tag!("en"), telar::locale_tag!("es")],
+        telar::locale_tag!("es"),
+    );
     let page = written(docs());
-    assert_eq!(page.locales, ["en", "es"]);
-    assert_eq!(page.base_locale.as_deref(), Some("es"));
+    assert_eq!(
+        page.locales,
+        [telar::locale_tag!("en"), telar::locale_tag!("es")]
+    );
+    assert_eq!(page.base_locale, Some(telar::locale_tag!("es")));
     assert_eq!(page.state.location.as_deref(), Some("/es/docs"));
     assert!(
         page.markup.contains("href=\"/site/es/docs\""),

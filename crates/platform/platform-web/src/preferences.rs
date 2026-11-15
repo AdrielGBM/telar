@@ -1,6 +1,6 @@
 //! The browser's [`SystemPreferences`]: media queries for appearance, `navigator.languages` for locales and the root font size for the text scale, with the listeners that report changes.
 
-use platform_core::{ColorScheme, SystemPreferences, TextScale};
+use platform_core::{ColorScheme, LocaleTag, SystemPreferences, TextScale};
 
 use crate::dom;
 
@@ -27,7 +27,7 @@ impl MediaAnswers {
     /// A forced-colours mode is the platform's own high-contrast theme (Windows' contrast themes reach a page this way), so it counts as asking for more contrast.
     pub fn into_preferences(
         self,
-        locales: Vec<String>,
+        locales: Vec<LocaleTag>,
         text_scale: TextScale,
     ) -> SystemPreferences {
         let color_scheme = match (self.dark, self.light) {
@@ -85,7 +85,7 @@ pub fn media_query(query: &str) -> Option<web_sys::MediaQueryList> {
     dom::window().match_media(query).ok().flatten()
 }
 
-fn languages() -> Vec<String> {
+fn languages() -> Vec<LocaleTag> {
     let navigator = dom::window().navigator();
     let listed: Vec<String> = navigator
         .languages()
@@ -94,7 +94,7 @@ fn languages() -> Vec<String> {
         .filter(|language| !language.is_empty())
         .collect();
     if !listed.is_empty() {
-        return listed;
+        return platform_core::platform_locales(listed);
     }
-    navigator.language().into_iter().collect()
+    platform_core::platform_locales(navigator.language())
 }

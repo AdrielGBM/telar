@@ -311,9 +311,9 @@ fn an_undeserializable_value_warns_once_and_leaves_the_other_keys() {
 
 #[test]
 fn the_locale_survives_snapshot_restore() {
-    i18n_core::set_locale("es");
+    i18n_core::set_locale(crate::locale_tag!("es"));
     let blob = hot_snapshot_json();
-    i18n_core::set_locale("en");
+    i18n_core::set_locale(crate::locale_tag!("en"));
     hot_restore_json(&blob);
-    assert_eq!(i18n_core::current_locale().as_deref(), Some("es"));
+    assert_eq!(i18n_core::current_locale(), Some(crate::locale_tag!("es")));
 }

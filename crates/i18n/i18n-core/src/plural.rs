@@ -6,7 +6,7 @@
 
 use std::sync::RwLock;
 
-use crate::locale_tag::LocaleTag;
+use semantics_core::LocaleTag;
 
 /// The CLDR plural categories. A catalog entry never has to define all six — only the ones its language uses, plus `Other`, which CLDR requires as the fallback for every language.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -113,9 +113,9 @@ operands_from_unsigned!(u8, u16, u32, u64, usize);
 
 /// The rules that pick a [`PluralCategory`] for a count in a locale, installed for the process with [`set_plural_rules`].
 ///
-/// `locale` is the tag the catalog is being read in, as the application spelled it (`"pt-BR"`, `"ru_RU"`), and may be empty when a message is rendered with no locale at all. A provider answers [`PluralCategory::Other`] for a locale it cannot place rather than guessing, since every plural message has an `other` branch.
+/// `locale` is the tag the catalog is being read in (`pt-BR`, `ru-RU`). A provider answers [`PluralCategory::Other`] for a locale it cannot place rather than guessing, since every plural message has an `other` branch.
 pub trait PluralRules: Send + Sync {
-    fn category(&self, locale: &str, operands: PluralOperands) -> PluralCategory;
+    fn category(&self, locale: &LocaleTag, operands: PluralOperands) -> PluralCategory;
 }
 
 /// The rules core ships: a hand-written subset of CLDR covering the language families that differ structurally, and the English rule (one/other) for every other language — right for most of them, and wrong in a way that is visible rather than silent.
@@ -124,13 +124,12 @@ pub trait PluralRules: Send + Sync {
 pub struct BuiltinPluralRules;
 
 impl PluralRules for BuiltinPluralRules {
-    fn category(&self, locale: &str, operands: PluralOperands) -> PluralCategory {
+    fn category(&self, locale: &LocaleTag, operands: PluralOperands) -> PluralCategory {
         if !operands.is_integer() {
             return PluralCategory::Other;
         }
-        let lang = LocaleTag::parse(locale).language.to_ascii_lowercase();
         let n = operands.integer;
-        match lang.as_str() {
+        match locale.language() {
             "ja" | "zh" | "ko" | "vi" | "th" | "id" | "ms" | "my" | "lo" | "km" => {
                 PluralCategory::Other
             }
@@ -174,7 +173,7 @@ pub fn set_plural_rules(rules: &'static dyn PluralRules) {
 }
 
 /// The category `operands` falls into for `locale`, by the installed [`PluralRules`], or by [`BuiltinPluralRules`] when none is installed.
-pub fn plural_category(locale: &str, operands: impl Into<PluralOperands>) -> PluralCategory {
+pub fn plural_category(locale: &LocaleTag, operands: impl Into<PluralOperands>) -> PluralCategory {
     let operands = operands.into();
     match *INSTALLED.read().unwrap_or_else(|e| e.into_inner()) {
         Some(rules) => rules.category(locale, operands),

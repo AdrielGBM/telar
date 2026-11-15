@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use i18n_core::{LocaleTag, locale_tag};
 use telar_project::{FontDeclaration, PageLocation, WebHost, WebSection};
 
 use super::{dist_dir, tool_missing};
@@ -269,9 +270,9 @@ fn write_sitemap(out: &Path, site: &Site, pages: &SitePages) -> Result<(), Strin
     }
 }
 
-/// The locale the plain page is written in: the project's default in BCP 47 form, `en` where it names none.
-fn page_locale(default_locale: Option<String>) -> String {
-    default_locale.map_or_else(|| "en".to_string(), |tag| i18n_core::canonical_tag(&tag))
+/// The locale the plain page is written in: the project's default, `en` where it names none.
+fn page_locale(default_locale: Option<LocaleTag>) -> LocaleTag {
+    default_locale.unwrap_or(locale_tag!("en"))
 }
 
 /// What the page around the app is built from, beyond the project's own files.
@@ -279,7 +280,7 @@ struct Shell<'a> {
     app_name: &'a str,
     renderer: WebRenderer,
     /// The locale the plain page is written in.
-    locale: &'a str,
+    locale: &'a LocaleTag,
     site: &'a Site,
     /// The paths of the output a public file may not take.
     reserved: &'a [&'a str],
@@ -321,7 +322,7 @@ fn assemble(
     }
 
     let mut page = Page::new(shell.app_name, Bootstrap { glue, module });
-    page.lang = shell.locale.to_string();
+    page.lang = shell.locale.clone();
     page.dir = i18n_core::Direction::for_locale(shell.locale);
     page.renderer = shell.renderer;
     page.base = shell.site.base().to_string();

@@ -22,7 +22,7 @@ fn the_baked_catalog_is_installed_without_a_call() {
 fn an_rtl_locale_mirrors_the_shell() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
     telar::follow_locale_direction();
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
     let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
     let resize = Event::WindowResized {
         width: 1200,
@@ -31,11 +31,11 @@ fn an_rtl_locale_mirrors_the_shell() {
     tree.on_event(&resize);
     let ltr = nav_rail_center_x(&tree);
 
-    telar::set_locale("ar");
+    telar::set_locale(telar::locale_tag!("ar"));
     tree.on_event(&resize);
     let rtl = nav_rail_center_x(&tree);
 
-    telar::set_locale("en");
+    telar::set_locale(telar::locale_tag!("en"));
     assert!(
         ltr < 300.0,
         "the rail sits on the left under LTR, got {ltr}"

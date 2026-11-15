@@ -6,6 +6,7 @@ use std::ops::Range;
 use icu_casemap::options::{TitlecaseOptions, TrailingCase};
 use icu_casemap::{CaseMapper, TitlecaseMapper};
 use icu_locale_core::LanguageIdentifier;
+use semantics_core::LocaleTag;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{Span, TextStyle, span_segments};
@@ -22,19 +23,18 @@ pub enum TextCase {
 }
 
 impl TextCase {
-    /// `text` in this case, by the rules of `lang` (a BCP 47 tag; Turkish dots its capital `İ`, Greek drops its accents), or the language-neutral rules when there is none or it does not parse.
-    pub fn apply<'a>(self, text: &'a str, lang: Option<&str>) -> Cow<'a, str> {
+    /// `text` in this case, by the rules of `lang` (Turkish dots its capital `İ`, Greek drops its accents), or the language-neutral rules when there is none.
+    pub fn apply<'a>(self, text: &'a str, lang: Option<&LocaleTag>) -> Cow<'a, str> {
         if self == TextCase::AsWritten {
             return Cow::Borrowed(text);
         }
-        let lang = lang
-            .and_then(|tag| LanguageIdentifier::try_from_str(tag).ok())
-            .unwrap_or(LanguageIdentifier::UNKNOWN);
+        const NEUTRAL: &LanguageIdentifier = &LanguageIdentifier::UNKNOWN;
+        let lang = lang.map_or(NEUTRAL, LocaleTag::identifier);
         match self {
             TextCase::AsWritten => Cow::Borrowed(text),
-            TextCase::Upper => CaseMapper::new().uppercase_to_string(text, &lang),
-            TextCase::Lower => CaseMapper::new().lowercase_to_string(text, &lang),
-            TextCase::Capitalize => capitalize(text, &lang),
+            TextCase::Upper => CaseMapper::new().uppercase_to_string(text, lang),
+            TextCase::Lower => CaseMapper::new().lowercase_to_string(text, lang),
+            TextCase::Capitalize => capitalize(text, lang),
         }
     }
 
@@ -109,7 +109,7 @@ pub fn case_text<'a>(text: &'a str, spans: Option<&'a [Span]>, style: &TextStyle
             pieces: Vec::new(),
         };
     }
-    let lang = style.lang.as_deref();
+    let lang = style.lang.as_ref();
     let Some(spans) = spans else {
         let cased = style.text_case.apply(text, lang);
         let pieces = match &cased {

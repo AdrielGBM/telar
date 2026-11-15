@@ -106,7 +106,7 @@ fn a_run_names_the_language_of_a_canvas_that_names_none() {
     assert_eq!(missing_lang(&check(&entry, None, A11yLevel::Warn, None)), 1);
     speak_the_app_language();
     assert_eq!(
-        i18n_core::current_locale().as_deref(),
+        i18n_core::current_locale().as_ref(),
         Some(i18n_core::default_locale())
     );
     assert_eq!(missing_lang(&check(&entry, None, A11yLevel::Warn, None)), 0);
@@ -114,9 +114,9 @@ fn a_run_names_the_language_of_a_canvas_that_names_none() {
 
 #[test]
 fn a_run_keeps_the_language_the_app_chose() {
-    i18n_core::set_locale("es");
+    i18n_core::set_locale(crate::locale_tag!("es"));
     speak_the_app_language();
-    assert_eq!(i18n_core::current_locale().as_deref(), Some("es"));
+    assert_eq!(i18n_core::current_locale(), Some(crate::locale_tag!("es")));
 }
 
 fn panics_when_torn_down(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {

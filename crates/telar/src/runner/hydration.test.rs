@@ -14,12 +14,12 @@ fn the_client_reads_the_format_the_packager_writes() {
     let written = PrerenderState {
         version: STATE_VERSION,
         location: Some("/es/proyectos".to_string()),
-        locale: Some("es".to_string()),
+        locale: Some(crate::locale_tag!("es")),
         preferences: Preferences {
             color_scheme: Some(ColorScheme::Dark),
             reduced_motion: Some(true),
             high_contrast: None,
-            locales: vec!["es-CL".to_string(), "en".to_string()],
+            locales: vec![crate::locale_tag!("es-CL"), crate::locale_tag!("en")],
         },
         surface: Surface {
             width: 1280,

@@ -10,7 +10,7 @@ ordered preferred locales and text scale. Each backend sends this whole snapshot
 `Event::SystemPreferencesChanged` before a surface first resumes and again whenever any field changes. Every
 field but the text scale can be unknown (`None`, or an empty locale list), and a backend never fills an
 unknown field with a guess; a text scale it cannot read is `TextScale::UNSCALED`. `locales_from_env` turns a POSIX
-environment into ordered BCP 47 tags. See
+environment into ordered `LocaleTag`s. See
 [docs/system-preferences.md](https://github.com/AdrielGBM/telar/blob/main/docs/system-preferences.md) for
 where each target reads them.
 

@@ -152,7 +152,7 @@ pub fn hot_snapshot_json() -> String {
         map.insert(HIGH_CONTRAST_OVERRIDE_KEY.to_string(), high.to_string());
     }
     if let Some(locale) = i18n_core::current_locale() {
-        map.insert(LOCALE_KEY.to_string(), locale);
+        map.insert(LOCALE_KEY.to_string(), locale.to_string());
     }
     serde_json::to_string(&map).unwrap_or_default()
 }
@@ -187,7 +187,10 @@ pub(crate) fn restore(map: impl IntoIterator<Item = (String, String)>) {
     {
         preferences_core::set_high_contrast_override(Some(high));
     }
-    if let Some(locale) = map.remove(LOCALE_KEY) {
+    if let Some(locale) = map
+        .remove(LOCALE_KEY)
+        .and_then(|tag| i18n_core::LocaleTag::parse(&tag).ok())
+    {
         i18n_core::set_locale(locale);
     }
     if let Some(name) = map.remove(THEME_MODE_KEY) {

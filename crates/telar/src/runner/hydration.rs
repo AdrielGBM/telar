@@ -18,7 +18,7 @@ pub(crate) struct Hydration {
     pub(crate) preferences: SystemPreferences,
     /// The surface size the page was laid out at, in CSS pixels.
     pub(crate) surface: (u32, u32),
-    locale: Option<String>,
+    locale: Option<i18n_core::LocaleTag>,
     signals: Vec<(String, String)>,
     /// What the platform reports before the tree is built, held back until it has been built from what the page assumed.
     pub(crate) reported: Option<SystemPreferences>,
@@ -47,7 +47,7 @@ impl Hydration {
         version: u32,
         preferences: SystemPreferences,
         surface: (u32, u32),
-        locale: Option<String>,
+        locale: Option<i18n_core::LocaleTag>,
         signals: Vec<(String, String)>,
     ) -> Option<Self> {
         if version != STATE_VERSION {

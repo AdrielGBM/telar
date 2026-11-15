@@ -676,7 +676,7 @@ fn a_covered_link_run_takes_no_shape_and_follows_nothing() {
 fn a_text_is_written_in_the_language_said_nearest_above_it_or_the_locale() {
     std::thread::spawn(|| {
         reset_layout_runtime();
-        i18n_core::set_locale("en");
+        i18n_core::set_locale(i18n_core::locale_tag!("en"));
         let text = Text::declaring(
             || "istanbul".to_string(),
             LayoutStyle::new(),
@@ -684,13 +684,13 @@ fn a_text_is_written_in_the_language_said_nearest_above_it_or_the_locale() {
         )
         .unwrap();
         let outer = new_container(LayoutStyle::new(), &[text.layout_node()]).unwrap();
-        assert_eq!((text.style)().lang.as_deref(), Some("en"));
+        assert_eq!((text.style)().lang, Some(i18n_core::locale_tag!("en")));
 
         let slot = crate::annotation::slot(outer);
         let mut said = slot.peek();
-        said.lang = Some("tr".into());
+        said.lang = Some(i18n_core::locale_tag!("tr"));
         slot.set(said);
-        assert_eq!((text.style)().lang.as_deref(), Some("tr"));
+        assert_eq!((text.style)().lang, Some(i18n_core::locale_tag!("tr")));
     })
     .join()
     .unwrap();

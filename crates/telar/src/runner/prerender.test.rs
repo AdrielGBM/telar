@@ -8,13 +8,13 @@ fn an_assumed_scheme_is_reported_as_the_platform_would() {
         color_scheme: Some(ColorScheme::Dark),
         reduced_motion: Some(true),
         high_contrast: None,
-        locales: vec!["es-CL".to_string()],
+        locales: vec![crate::locale_tag!("es-CL")],
     };
     let reported = system_preferences(&preferences);
     assert_eq!(reported.color_scheme, Some(ColorScheme::Dark));
     assert_eq!(reported.reduced_motion, Some(true));
     assert_eq!(reported.high_contrast, None);
-    assert_eq!(reported.locales, ["es-CL"]);
+    assert_eq!(reported.locales, [crate::locale_tag!("es-CL")]);
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn a_page_is_opened_at_its_location_in_its_locale() {
     let page = PageRequest::At {
         location: PageLocation {
             segments: vec!["acts".to_string(), "2".to_string()],
-            locale: Some("es".to_string()),
+            locale: Some(crate::locale_tag!("es")),
         },
     };
     assert_eq!(
@@ -30,7 +30,7 @@ fn a_page_is_opened_at_its_location_in_its_locale() {
         Location::root()
             .segment("acts")
             .segment("2")
-            .with_locale("es")
+            .with_locale(crate::locale_tag!("es"))
     );
 }
 

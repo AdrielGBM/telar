@@ -1280,7 +1280,7 @@ where
         self.entered_ref(|this| ui_core::accessibility::snapshot(&this.frame_text))
     }
 
-    fn root_language(&self) -> Option<String> {
+    fn root_language(&self) -> Option<i18n_core::LocaleTag> {
         self.entered_ref(|_| i18n_core::use_locale())
     }
 

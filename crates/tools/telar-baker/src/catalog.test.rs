@@ -1,5 +1,6 @@
 use super::*;
 use crate::problem::{Origin, Severity};
+use i18n_core::LocaleTag;
 use i18n_core::SourceProblem;
 
 #[test]
@@ -19,8 +20,8 @@ fn bakes_catalog_from_disk() {
     .unwrap();
 
     let model = parse_catalog(&root).unwrap().unwrap();
-    assert_eq!(model.locales, vec!["en", "es"]);
-    assert_eq!(model.default_locale, "en");
+    assert_eq!(model.locales, [tag("en"), tag("es")]);
+    assert_eq!(model.default_locale, tag("en"));
     assert!(
         model.contains_key("battery.remaining"),
         "the parsed model is missing a key: {model:?}"
@@ -28,7 +29,7 @@ fn bakes_catalog_from_disk() {
     assert_eq!(model.arg_names("battery.remaining").unwrap(), vec!["time"]);
 
     let src = to_source(&model);
-    assert!(src.contains("default_locale: \"en\""), "{src}");
+    assert!(src.contains("default_locale: locale_tag!(\"en\")"), "{src}");
     assert!(src.contains("Entry { key: \"battery.remaining\""), "{src}");
     assert!(src.contains("Message::Plain(\"Ajustes\")"), "{src}");
     assert!(src.contains("Part::Arg(\"time\")"), "{src}");
@@ -58,7 +59,7 @@ fn merges_per_module_files_in_a_locale_dir() {
     .unwrap();
 
     let model = parse_catalog(&root).unwrap().unwrap();
-    assert_eq!(model.locales, vec!["en", "es"]);
+    assert_eq!(model.locales, [tag("en"), tag("es")]);
     assert!(
         model.contains_key("settings.title"),
         "a per-module file was dropped in the merge: {model:?}"
@@ -84,7 +85,7 @@ fn merges_per_module_files_in_a_locale_dir() {
             &problem.kind,
             ProblemKind::CatalogInvalid {
                 problem: SourceProblem::DuplicateKey { key, locale },
-            } if key == "settings.title" && locale == "en"
+            } if key == "settings.title" && *locale == tag("en")
         ),
         "{problem:?}"
     );
@@ -118,7 +119,7 @@ fn discovers_co_located_module_catalogs() {
     std::fs::write(root.join("locales/en.toml"), "[common]\non = \"On\"\n").unwrap();
 
     let model = parse_catalog(&root).unwrap().unwrap();
-    assert_eq!(model.locales, vec!["en", "es"]);
+    assert_eq!(model.locales, [tag("en"), tag("es")]);
     assert!(
         model.contains_key("battery.full"),
         "a co-located module catalog was missed: {model:?}"
@@ -143,7 +144,7 @@ fn discovers_co_located_module_catalogs() {
         !model2.contains_key("battery.full"),
         "the renamed scan dir no longer matches i18n/"
     );
-    assert_eq!(model2.default_locale, "es");
+    assert_eq!(model2.default_locale, tag("es"));
     assert!(
         model2.contains_key("common.on"),
         "the project-wide root is unaffected by the scan name"
@@ -316,7 +317,7 @@ fn text_direction_controls_in_a_catalog_bake_to_rust_that_compiles_and_reads_bac
     let reversed = "Order \u{202E}lanif\u{202C} placed";
     let isolated = "\u{2066}{name}\u{2069} and \u{2067}\u{2068}x\u{2069}";
     let english = format!("plain = \"{reversed}\"\nformatted = \"{isolated}\"\n");
-    let model = CatalogModel::from_sources(&[("en", &english, "en.toml")], Some("en"))
+    let model = CatalogModel::from_sources(&[("en", &english, "en.toml")], Some(&tag("en")))
         .unwrap()
         .unwrap();
 
@@ -347,4 +348,35 @@ fn text_direction_controls_in_a_catalog_bake_to_rust_that_compiles_and_reads_bac
             .any(|value| value == "\u{2069} and \u{2067}\u{2068}x\u{2069}"),
         "{values:?}"
     );
+}
+
+#[test]
+fn a_locale_file_named_after_no_locale_is_an_error_naming_it() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_no_locale_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
+    std::fs::write(
+        root.join("locales/english_UK.toml"),
+        "title = \"Settings\"\n",
+    )
+    .unwrap();
+
+    let problem = parse_catalog(&root).unwrap_err();
+    assert!(
+        matches!(
+            &problem.kind,
+            ProblemKind::CatalogInvalid {
+                problem: SourceProblem::NotALocale(error),
+            } if error.tag() == "english_UK"
+        ),
+        "{problem:?}"
+    );
+    assert_eq!(problem.file, root.join("locales").join("english_UK.toml"));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn tag(text: &str) -> LocaleTag {
+    LocaleTag::parse(text).unwrap()
 }
