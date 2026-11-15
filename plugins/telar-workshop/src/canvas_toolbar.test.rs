@@ -285,10 +285,10 @@ fn mode_locale_and_direction_restyle_the_canvas_and_never_the_chrome() {
 
 #[test]
 fn the_canvas_follows_the_system_scheme_as_it_changes_until_a_scheme_is_picked() {
-    telar::register_mode("day", || {});
-    telar::set_mode_scheme("day", ColorScheme::Light);
-    telar::register_mode_theme("night", Night);
-    telar::set_mode_scheme("night", ColorScheme::Dark);
+    let day = telar::register_mode("day", || {});
+    telar::set_mode_scheme(&day, ColorScheme::Light);
+    let night = telar::register_mode_theme("night", Night);
+    telar::set_mode_scheme(&night, ColorScheme::Dark);
     telar::register_mode("dusk", || {});
     let mut workshop = Workshop::open(entries(environment));
     let canvas = workshop.canvas_rect("env");
@@ -769,8 +769,8 @@ fn a_secondary_press_on_the_stage_offers_every_tool() {
 /// The theme mode is in the canvas's own menu too, so changing it does not mean going to the top bar.
 #[test]
 fn the_canvas_menu_switches_the_theme_mode() {
-    telar::register_mode_theme("night", Night);
-    telar::set_mode_scheme("night", ColorScheme::Dark);
+    let night = telar::register_mode_theme("night", Night);
+    telar::set_mode_scheme(&night, ColorScheme::Dark);
     let mut workshop = Workshop::open(entries(environment));
     let canvas = workshop.canvas_rect("env");
     let night = |workshop: &Workshop| {

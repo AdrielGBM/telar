@@ -1,7 +1,7 @@
 //! What the canvas shows in place of a preview: that there are none, or the card for one that failed.
 
 use telar::preview::PreviewEntry;
-use telar::{BuildFailure, LayoutError, LayoutItem, Uri, UriError, open_uri};
+use telar::{BuildFailure, LayoutError, LayoutItem, UnknownMode, Uri, UriError, open_uri};
 
 use super::failure_card::{FailureCardProps, failure_card};
 use super::no_previews::{NoPreviewsProps, no_previews};
@@ -22,6 +22,25 @@ pub(crate) fn failure(
         BuildFailure::Failed(err) => (BUILD_FAILED, err.to_string(), false),
         BuildFailure::Panicked(message) => (PANICKED, message, true),
     };
+    card(state, entry, heading, detail, panicked)
+}
+
+/// The card a preview's canvas shows when the canvas could not be set up for it, such as for a preview asking for a mode the application has not registered.
+pub(crate) fn unready(
+    state: &WorkshopState,
+    entry: &PreviewEntry,
+    error: UnknownMode,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    card(state, entry, BUILD_FAILED, error.to_string(), false)
+}
+
+fn card(
+    state: &WorkshopState,
+    entry: &PreviewEntry,
+    heading: &'static str,
+    detail: String,
+    panicked: bool,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     failure_card(
         FailureCardProps::props()
             .state(state.clone())

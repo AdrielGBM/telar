@@ -112,6 +112,7 @@ impl Play {
     pub fn mount(entry: &PreviewEntry) -> Result<Self, PlayError> {
         Self::mount_in_owner(entry, Self::DEFAULT_VIEWPORT, || {
             PreviewCtx::for_entry_with(entry, Args::in_memory_for(entry))
+                .map_err(|error| PlayError::new(error.to_string()))
         })
     }
 
@@ -121,7 +122,7 @@ impl Play {
         ctx: PreviewCtx,
         viewport: Size,
     ) -> Result<Self, PlayError> {
-        Self::mount_in_owner(entry, viewport, || ctx)
+        Self::mount_in_owner(entry, viewport, || Ok(ctx))
     }
 
     /// Drives `canvas`, on which a host already mounted `entry` against `ctx` its own way — a workshop canvas, with its own card for a build that fails — rather than mounting one; the host's failure handler records into `failures`.
@@ -146,12 +147,19 @@ impl Play {
     fn mount_in_owner(
         entry: &PreviewEntry,
         viewport: Size,
-        ctx: impl FnOnce() -> PreviewCtx,
+        ctx: impl FnOnce() -> Result<PreviewCtx, PlayError>,
     ) -> Result<Self, PlayError> {
         crate::install_default_text_metrics();
         let scope = owner_scope();
         let owner = scope.id();
-        let ctx = ctx();
+        let ctx = match ctx() {
+            Ok(ctx) => ctx,
+            Err(error) => {
+                drop(scope);
+                dispose_owner(owner);
+                return Err(error);
+            }
+        };
         let failures = CaughtFailures::default();
         let canvas = canvas(entry, &ctx, viewport, &failures);
         drop(scope);

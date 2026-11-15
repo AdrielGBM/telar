@@ -104,12 +104,13 @@ fn contrast(tree: &ComponentList) -> f32 {
 }
 
 fn in_scheme(scheme: ColorScheme) {
-    let id = match scheme {
+    let name = match scheme {
         ColorScheme::Dark => "tag-dark",
         _ => "tag-light",
     };
-    telar::set_mode_scheme(id, scheme);
-    telar::set_mode(id);
+    let id = telar::register_mode(name, || {});
+    telar::set_mode_scheme(&id, scheme);
+    telar::set_mode(&id);
 }
 
 fn played(build: fn(&PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError>) -> Play {

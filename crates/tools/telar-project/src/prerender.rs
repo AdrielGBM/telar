@@ -120,9 +120,8 @@ impl Default for Surface {
 /// The system preferences a page is built under: the ones a reader nobody has asked yet is assumed to have. `None` is a preference left unknown, which is what a browser reports before the app has read it.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Preferences {
-    /// `"light"` or `"dark"`.
     #[serde(default)]
-    pub color_scheme: Option<String>,
+    pub color_scheme: Option<platform_core::ColorScheme>,
     #[serde(default)]
     pub reduced_motion: Option<bool>,
     #[serde(default)]

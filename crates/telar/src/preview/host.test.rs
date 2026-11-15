@@ -43,7 +43,7 @@ fn a_preview_with_no_file_is_named_instead() {
 #[test]
 fn a_canvas_for_an_entry_is_seeded_from_its_env() {
     let entry = PreviewEntry::new("demo--card--a", "card", "A", empty).locale("ar");
-    let ctx = PreviewCtx::for_entry(&entry);
+    let ctx = PreviewCtx::for_entry(&entry).unwrap();
     assert_eq!(ctx.globals().locale().get().as_deref(), Some("ar"));
     assert_eq!(ctx.globals().mode().get(), None);
     assert_eq!(ctx.actions().count(), 0);
@@ -57,9 +57,10 @@ fn a_host_shares_its_log_and_globals_with_every_canvas_it_builds() {
         .with_actions(actions)
         .with_globals(globals);
     ctx.clone().actions().log("on_press", Vec::new());
-    ctx.globals().mode().set(Some("dark".to_string()));
+    let dark = crate::register_mode("dark", || {});
+    ctx.globals().mode().set(Some(dark.clone()));
     assert_eq!(actions.count_of("on_press"), 1);
-    assert_eq!(globals.mode().get().as_deref(), Some("dark"));
+    assert_eq!(globals.mode().get(), Some(dark));
 }
 
 fn titled(id: &'static str, component: &'static str, title: &'static str) -> PreviewEntry {

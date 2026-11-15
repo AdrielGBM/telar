@@ -9,6 +9,7 @@ fn resolve(settings: &CanvasSettings, env: PreviewEnv) -> CanvasEnv {
 
 #[test]
 fn settings_left_at_their_defaults_take_what_the_preview_asks_for() {
+    let night = telar::register_mode("night", || {});
     let env = PreviewEnv::NONE
         .mode("night")
         .locale("fr")
@@ -17,7 +18,7 @@ fn settings_left_at_their_defaults_take_what_the_preview_asks_for() {
     assert_eq!(
         resolve(&CanvasSettings::default(), env),
         CanvasEnv {
-            mode: Some("night".into()),
+            mode: Some(night),
             locale: Some("fr".into()),
             direction: Some(Direction::Ltr),
             high_contrast: None,
@@ -43,6 +44,8 @@ fn settings_left_at_their_defaults_take_what_the_preview_asks_for() {
 
 #[test]
 fn a_setting_wins_over_what_the_preview_asks_for() {
+    let day = telar::register_mode("day", || {});
+    telar::register_mode("night", || {});
     let settings = CanvasSettings {
         mode: ModeChoice::Named("day".into()),
         locale: Some("en".into()),
@@ -56,7 +59,7 @@ fn a_setting_wins_over_what_the_preview_asks_for() {
         .viewport(300.0, 200.0)
         .background(RED);
     let resolved = resolve(&settings, env);
-    assert_eq!(resolved.mode.as_deref(), Some("day"));
+    assert_eq!(resolved.mode, Some(day));
     assert_eq!(resolved.locale.as_deref(), Some("en"));
     assert_eq!(resolved.background, Some(DARK_BACKGROUND));
     assert_eq!(resolved.viewport, Some(Size::new(768.0, 1024.0)));
@@ -292,9 +295,9 @@ fn register_modes() {
         ("sepia", None),
         ("ink", Some(ColorScheme::Dark)),
     ] {
-        telar::register_mode(id, || {});
+        let mode = telar::register_mode(id, || {});
         if let Some(scheme) = scheme {
-            telar::set_mode_scheme(id, scheme);
+            telar::set_mode_scheme(&mode, scheme);
         }
     }
 }
@@ -304,7 +307,10 @@ fn mode_under(mode: ModeChoice, env: PreviewEnv, scheme: ColorScheme) -> Option<
         mode,
         ..CanvasSettings::default()
     };
-    settings.resolve(&env, true, PROJECT, scheme).mode
+    settings
+        .resolve(&env, true, PROJECT, scheme)
+        .mode
+        .map(|mode| mode.name().to_string())
 }
 
 #[test]
@@ -443,10 +449,16 @@ fn a_kept_mode_reads_back_from_what_earlier_workshops_kept() {
 #[test]
 fn a_mode_is_chosen_as_the_scheme_it_stands_for() {
     register_modes();
-    assert_eq!(ModeChoice::for_mode("paper"), ModeChoice::Light);
-    assert_eq!(ModeChoice::for_mode("ink"), ModeChoice::Dark);
     assert_eq!(
-        ModeChoice::for_mode("sepia"),
+        ModeChoice::for_mode(&ModeId::registered("paper").unwrap()),
+        ModeChoice::Light
+    );
+    assert_eq!(
+        ModeChoice::for_mode(&ModeId::registered("ink").unwrap()),
+        ModeChoice::Dark
+    );
+    assert_eq!(
+        ModeChoice::for_mode(&ModeId::registered("sepia").unwrap()),
         ModeChoice::Named("sepia".into())
     );
 }

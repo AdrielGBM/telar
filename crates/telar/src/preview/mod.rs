@@ -64,8 +64,8 @@ pub use entry::{
 pub use frame::{Frame, FrameAccess};
 pub use globals::Globals;
 pub use matrix::{
-    Axis, CellGlobals, MATRIX_CELL_CAP, Matrices, Matrix, MatrixCell, MatrixError, NamedMatrix,
-    ViewportPreset, direction_word, parse_direction, parse_size,
+    Axis, CellError, CellGlobals, MATRIX_CELL_CAP, Matrices, Matrix, MatrixCell, MatrixError,
+    NamedMatrix, ViewportPreset, direction_word, parse_direction, parse_size,
 };
 pub use play::{CaughtFailures, Play, PlayError, PlayFn, PlayResult, PlayStep};
 pub use props::{HasPropsSchema, PropDefault, PropField, PropsSchema};

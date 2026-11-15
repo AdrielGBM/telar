@@ -1043,9 +1043,9 @@ fn framed_window(canvas: &Rc<NestedCanvas>, chrome: Box<dyn LayoutItem>) -> Wind
 #[test]
 fn a_frame_in_the_dark_mode_paints_dark_defaults_inside_a_light_window() {
     reset_layout_runtime();
-    theme_core::register_mode("light", || {});
-    theme_core::register_mode("dark", || {});
-    theme_core::follow_system("light", "dark");
+    let light_mode = theme_core::register_mode("light", || {});
+    let dark_mode = theme_core::register_mode("dark", || {});
+    theme_core::follow_system(&light_mode, &dark_mode);
     theme_core::set_scheme_preference(theme_core::SchemePreference::Light);
     let ink = |tokens: &dyn theme_core::ThemeTokens| tokens.ink();
     let canvas =
@@ -1066,8 +1066,8 @@ fn a_frame_in_the_dark_mode_paints_dark_defaults_inside_a_light_window() {
         |commands: &[DrawCommand]| (fills(commands, light).len(), fills(commands, dark).len());
     assert_eq!(inks(&window.frame()), (2, 0));
 
-    canvas.set_mode(Some("dark"));
-    assert_eq!(canvas.mode().as_deref(), Some("dark"));
+    canvas.set_mode(Some(&dark_mode));
+    assert_eq!(canvas.mode(), Some(dark_mode));
     let frame = window.frame();
     assert_eq!(
         inks(&frame),
@@ -1079,7 +1079,7 @@ fn a_frame_in_the_dark_mode_paints_dark_defaults_inside_a_light_window() {
         Some(FRAME),
         "the dark ink is the frame's"
     );
-    assert_eq!(theme_core::active_mode().as_deref(), Some("light"));
+    assert_eq!(theme_core::active_mode(), Some(light_mode));
 
     canvas.set_mode(None);
     assert_eq!(
@@ -1116,9 +1116,9 @@ impl theme_core::ThemeTokens for Night {
 #[test]
 fn a_frame_in_a_mode_registered_with_its_theme_restyles_inside_only() {
     reset_layout_runtime();
-    theme_core::register_mode_theme("day", Day);
-    theme_core::register_mode_theme("night", Night);
-    theme_core::set_mode("day");
+    let day = theme_core::register_mode_theme("day", Day);
+    let night = theme_core::register_mode_theme("night", Night);
+    theme_core::set_mode(&day);
     let primary = |tokens: &dyn theme_core::ThemeTokens| tokens.primary();
     let canvas = Rc::new(
         NestedCanvas::new(Size::new(1.0, 1.0), move || Ok(painted(primary, fill()))).unwrap(),
@@ -1135,7 +1135,7 @@ fn a_frame_in_a_mode_registered_with_its_theme_restyles_inside_only() {
     };
     assert_eq!(primaries(&window.frame()), (2, 0));
 
-    canvas.set_mode(Some("night"));
+    canvas.set_mode(Some(&night));
     let frame = window.frame();
     assert_eq!(
         primaries(&frame),
@@ -1144,8 +1144,8 @@ fn a_frame_in_a_mode_registered_with_its_theme_restyles_inside_only() {
     );
     assert_eq!(fills(&frame, Color::BLACK)[0].1, Some(FRAME));
 
-    theme_core::set_mode("night");
-    canvas.set_mode(Some("day"));
+    theme_core::set_mode(&night);
+    canvas.set_mode(Some(&day));
     assert_eq!(
         primaries(&window.frame()),
         (1, 1),

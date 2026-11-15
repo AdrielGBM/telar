@@ -117,9 +117,9 @@ fn the_knob_stands_out_from_its_track_in_either_scheme_and_on_a_light_primary() 
     for dark in [false, true] {
         for light_primary in [false, true] {
             crate::test_support::fresh_layout_runtime();
-            telar::register_mode("light", || {});
-            telar::register_mode("dark", || {});
-            telar::follow_system("light", "dark");
+            let light_mode = telar::register_mode("light", || {});
+            let dark_mode = telar::register_mode("dark", || {});
+            telar::follow_system(&light_mode, &dark_mode);
             telar::set_scheme_preference(if dark {
                 telar::SchemePreference::Dark
             } else {

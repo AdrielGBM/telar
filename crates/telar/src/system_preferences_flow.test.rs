@@ -30,7 +30,7 @@ impl App for Recorder {
     }
 
     fn on_frame(&mut self, _ctx: &mut telar::AppCtx) {
-        *self.mode_in_frame.borrow_mut() = telar::active_mode();
+        *self.mode_in_frame.borrow_mut() = telar::active_mode().map(|mode| mode.name().to_string());
     }
 
     fn on_system_preferences(&self, preferences: &SystemPreferences) {
@@ -57,9 +57,9 @@ fn run(preferences: SystemPreferences) -> Recorder {
         seen_at_build: recorder.seen_at_build.clone(),
         reduced_motion_at_build: recorder.reduced_motion_at_build.clone(),
     };
-    telar::register_mode("day", || {});
-    telar::register_mode("night", || {});
-    telar::follow_system("day", "night");
+    let day = telar::register_mode("day", || {});
+    let night = telar::register_mode("night", || {});
+    telar::follow_system(&day, &night);
     run_with_platform::<_, _, ()>(
         HeadlessPlatform::new(8, 8).with_system_preferences(preferences),
         AppConfig::default(),

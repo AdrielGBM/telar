@@ -2,7 +2,9 @@
 
 use reactive_core::RwSignal;
 
-use crate::{Children, Color, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Size};
+use crate::{
+    Children, Color, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Size, UnknownMode,
+};
 
 use super::a11y::Rule;
 use super::host::Args;
@@ -20,14 +22,14 @@ pub struct PreviewCtx {
 }
 
 impl PreviewCtx {
-    /// The canvas `entry` mounts in: its args persisted under its id, a fresh action log, and globals seeded from its [`PreviewEnv`].
-    pub fn for_entry(entry: &PreviewEntry) -> Self {
+    /// The canvas `entry` mounts in: its args persisted under its id, a fresh action log, and globals seeded from its [`PreviewEnv`], or why it cannot be: the env names a mode the application has not registered.
+    pub fn for_entry(entry: &PreviewEntry) -> Result<Self, UnknownMode> {
         Self::for_entry_with(entry, Args::for_entry(entry))
     }
 
-    /// The canvas `entry` mounts in with `args`: a fresh action log, and globals seeded from its [`PreviewEnv`].
-    pub fn for_entry_with(entry: &PreviewEntry, args: Args) -> Self {
-        Self::from(args).with_globals(Globals::seeded(&entry.env))
+    /// The canvas `entry` mounts in with `args`: a fresh action log, and globals seeded from its [`PreviewEnv`], or why it cannot be, as [`Self::for_entry`] says.
+    pub fn for_entry_with(entry: &PreviewEntry, args: Args) -> Result<Self, UnknownMode> {
+        Ok(Self::from(args).with_globals(Globals::seeded(&entry.env)?))
     }
 
     /// This canvas with `actions` as its action log.
@@ -156,7 +158,7 @@ pub struct PreviewEnv {
     pub viewport: Option<Size>,
     /// The canvas background colour.
     pub background: Option<Color>,
-    /// A mode registered with `register_mode`, by id.
+    /// The name of a mode the application registers, looked up when a canvas is seeded from the environment.
     pub mode: Option<&'static str>,
     /// A BCP 47 language tag.
     pub locale: Option<&'static str>,
@@ -387,7 +389,7 @@ impl PreviewEntry {
         Self { env, ..self }
     }
 
-    /// A mode registered with `register_mode`, by id.
+    /// The name of a mode the application registers.
     pub const fn mode(self, mode: &'static str) -> Self {
         let env = self.env.mode(mode);
         Self { env, ..self }

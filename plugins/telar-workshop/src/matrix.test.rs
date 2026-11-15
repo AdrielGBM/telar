@@ -9,9 +9,9 @@ use telar::preview::{
 use telar::testing::{Scoped, centre, mount, named as named_key, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, Direction, DrawCommand, Event,
-    LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect, Role, Size, SystemPreferences,
-    Text, TextStyle, box_item, focus, for_each_with_matrix, reset_layout_runtime,
-    set_system_preferences, transform_clip_rect,
+    LayoutError, LayoutItem, LayoutStyle, LocalApp, ModeId, NamedKey, Rect, Role, Size,
+    SystemPreferences, Text, TextStyle, box_item, focus, for_each_with_matrix,
+    reset_layout_runtime, set_system_preferences, transform_clip_rect,
 };
 use telar_components::{ButtonProps, ModalProps, button, modal};
 
@@ -46,9 +46,11 @@ impl telar::ThemeTokens for Night {
     }
 }
 
-fn register_modes() {
-    telar::register_mode_theme("day", Day);
-    telar::register_mode_theme("night", Night);
+fn register_modes() -> (ModeId, ModeId) {
+    (
+        telar::register_mode_theme("day", Day),
+        telar::register_mode_theme("night", Night),
+    )
 }
 
 fn widget(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -323,9 +325,9 @@ fn the_themes_matrix_shows_the_preview_in_every_registered_mode_side_by_side() {
 
 #[test]
 fn the_cells_follow_the_system_scheme_as_it_changes() {
-    register_modes();
-    telar::set_mode_scheme("day", ColorScheme::Light);
-    telar::set_mode_scheme("night", ColorScheme::Dark);
+    let (day, night) = register_modes();
+    telar::set_mode_scheme(&day, ColorScheme::Light);
+    telar::set_mode_scheme(&night, ColorScheme::Dark);
     let workshop = Workshop::open(BOTH_WAYS);
     assert_eq!(workshop.fills(DAY).len(), 2, "{:?}", workshop.texts());
     assert!(workshop.fills(NIGHT).is_empty());
@@ -602,6 +604,8 @@ fn a_capped_matrix_mounts_the_first_cells_and_warns() {
 
 #[test]
 fn a_grid_puts_the_last_axis_across_and_the_others_down() {
+    telar::register_mode("light", || {});
+    telar::register_mode("dark", || {});
     let entry = PreviewEntry::new("kit--x--y", "x", "Y", widget);
     let cells = Matrix::expand(
         &[
@@ -760,6 +764,7 @@ fn what_keeps_a_plan_from_having_cells_is_told_apart() {
 
 #[test]
 fn a_cell_is_set_up_in_the_toolbar_settings_under_its_own() {
+    let (_, night) = register_modes();
     let entry = PreviewEntry::new(PLAIN, "badge", "Plain", widget)
         .env(PreviewEnv::NONE.locale("en").mode("day"));
     let cell = Matrix::expand(&[Axis::Locale(&["ar"])], &entry, &Matrices::default())
@@ -771,9 +776,9 @@ fn a_cell_is_set_up_in_the_toolbar_settings_under_its_own() {
         background: Background::Dark,
         ..CanvasSettings::default()
     };
-    let globals = Globals::seeded(&entry.env);
+    let globals = Globals::seeded(&entry.env).unwrap();
     seed(&globals, &settings, ColorScheme::Light, &entry, &cell);
-    assert_eq!(globals.mode().peek().as_deref(), Some("night"));
+    assert_eq!(globals.mode().peek(), Some(night));
     assert_eq!(
         globals.locale().peek().as_deref(),
         Some("ar"),
@@ -832,7 +837,7 @@ fn a_play_that_clicks_sees_the_reactive_result_in_its_cell() {
 /// A cell of the themes matrix opens on the canvas in its mode, which is told for a scheme from the theme's own signals: read while the settings were held, it panicked.
 #[test]
 fn open_in_canvas_takes_the_focused_cell_s_mode() {
-    register_modes();
+    let (_, night) = register_modes();
     let mut workshop = Workshop::open(THEMED);
     let state = workshop.state().clone();
     workshop.click(Role::Button, "Focus mode: night");
@@ -840,7 +845,7 @@ fn open_in_canvas_takes_the_focused_cell_s_mode() {
     assert_eq!(state.view().peek(), ViewMode::Canvas);
     assert_eq!(
         state.canvas_settings().peek().mode,
-        crate::settings::ModeChoice::for_mode("night")
+        crate::settings::ModeChoice::for_mode(&night)
     );
 }
 

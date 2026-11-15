@@ -204,7 +204,7 @@ fn a_host_routes_overlays_before_its_tree() {
 fn a_canvas_in_an_environment_is_built_in_it() {
     reset_layout_runtime();
     let env = SurfaceEnv {
-        mode: Some(String::from("dusk")),
+        mode: Some(theme_core::register_mode("dusk", || {})),
         locale: Some(String::from("ar")),
         direction: Some(Direction::Rtl),
         high_contrast: Some(true),

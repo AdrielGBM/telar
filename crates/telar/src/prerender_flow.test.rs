@@ -83,7 +83,7 @@ fn request(page: PageRequest) -> PrerenderRequest {
             height: HEIGHT,
         },
         preferences: Preferences {
-            color_scheme: Some("light".to_string()),
+            color_scheme: Some(telar::ColorScheme::Light),
             ..Preferences::default()
         },
         base: BASE.to_string(),
@@ -172,8 +172,8 @@ fn a_page_carries_what_it_was_built_from() {
     assert_eq!(page.state.location.as_deref(), Some("/docs"));
     assert_eq!(page.state.surface.width, WIDTH);
     assert_eq!(
-        page.state.preferences.color_scheme.as_deref(),
-        Some("light")
+        page.state.preferences.color_scheme,
+        Some(telar::ColorScheme::Light)
     );
     assert_eq!(
         page.state.signals.get("site::visits").map(String::as_str),

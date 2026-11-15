@@ -2,11 +2,54 @@
 //!
 //! Every field but the text scale can be unknown. A platform that cannot answer says so with `None` (or an empty locale list) rather than guessing, so a consumer can tell "the user wants light" from "nobody said" and keep its own default for the second. The text scale has no such gap: an unset scale and one the platform cannot read both mean text at its designed size, so a platform says [`TextScale::UNSCALED`] for either.
 
-/// The light/dark preference.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// The light/dark preference, written `light` or `dark` wherever it is spelled out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(into = "&'static str", try_from = "String")]
 pub enum ColorScheme {
     Light,
     Dark,
+}
+
+impl ColorScheme {
+    pub const ALL: [ColorScheme; 2] = [ColorScheme::Light, ColorScheme::Dark];
+
+    /// The word the scheme is written as.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ColorScheme::Light => "light",
+            ColorScheme::Dark => "dark",
+        }
+    }
+}
+
+/// A word that names no [`ColorScheme`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("unknown colour scheme `{0}`, expected `light` or `dark`")]
+pub struct UnknownColorScheme(pub String);
+
+impl std::str::FromStr for ColorScheme {
+    type Err = UnknownColorScheme;
+
+    fn from_str(word: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|scheme| scheme.as_str() == word)
+            .ok_or_else(|| UnknownColorScheme(word.to_string()))
+    }
+}
+
+impl TryFrom<String> for ColorScheme {
+    type Error = UnknownColorScheme;
+
+    fn try_from(word: String) -> Result<Self, Self::Error> {
+        word.parse()
+    }
+}
+
+impl From<ColorScheme> for &'static str {
+    fn from(scheme: ColorScheme) -> Self {
+        scheme.as_str()
+    }
 }
 
 /// The user's system-wide presentation preferences, as one snapshot.

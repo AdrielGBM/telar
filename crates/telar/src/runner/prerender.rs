@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use platform_core::{ColorScheme, Event, Location, SystemPreferences, TextScale};
+use platform_core::{Event, Location, SystemPreferences, TextScale};
 use services_core::NoPaths;
 use telar_project::{
     PRERENDER_ENV, PageLocation, PageRequest, Preferences, PrerenderRequest, PrerenderState,
@@ -176,14 +176,7 @@ fn settle(app: &mut LocalApp<impl App>, tree: &dyn crate::tree::UiTree) -> bool 
 /// The preferences a reader nobody has asked yet is assumed to have, as the platform would report them. Text is assumed at its designed size: the page writes its type relative to the root font size, so the reader's browser scales it before the app reads the scale it asked for.
 fn system_preferences(preferences: &Preferences) -> SystemPreferences {
     SystemPreferences {
-        color_scheme: preferences
-            .color_scheme
-            .as_deref()
-            .and_then(|scheme| match scheme {
-                "light" => Some(ColorScheme::Light),
-                "dark" => Some(ColorScheme::Dark),
-                _ => None,
-            }),
+        color_scheme: preferences.color_scheme,
         reduced_motion: preferences.reduced_motion,
         high_contrast: preferences.high_contrast,
         locales: preferences.locales.clone(),

@@ -127,9 +127,9 @@ high-contrast set, in the mode in force where it is called, so an application te
 ```rust
 #[test]
 fn both_variants_read_well() {
-    register_modes();
-    for (mode, theme) in [("light", AppTheme::light()), ("dark", AppTheme::dark())] {
-        set_mode(mode);
+    let [light, dark] = register_modes();
+    for (mode, theme) in [(light, AppTheme::light()), (dark, AppTheme::dark())] {
+        set_mode(&mode);
         let shortfalls = contrast_shortfalls(theme);
         assert!(shortfalls.is_empty(), "{mode}: {shortfalls:?}");
     }

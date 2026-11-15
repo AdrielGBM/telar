@@ -77,9 +77,9 @@ fn rects(tree: &ComponentList) -> Vec<RectStyle> {
 
 fn in_mode(scheme: ColorScheme) {
     let id = format!("{scheme:?}");
-    register_mode(id.clone(), || {});
-    set_mode_scheme(id.clone(), scheme);
-    set_mode(id);
+    let id = register_mode(id, || {});
+    set_mode_scheme(&id, scheme);
+    set_mode(&id);
 }
 
 /// What the keyboard reaching the first control changes on screen: the paint of the control that wears the ring, and every band of the ring.

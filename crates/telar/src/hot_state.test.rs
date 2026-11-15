@@ -26,14 +26,22 @@ fn missing_or_corrupt_values_fall_back_to_init() {
 
 #[test]
 fn theme_mode_survives_snapshot_restore() {
-    theme_core::register_mode("midnight", || {});
-    theme_core::set_mode("midnight");
+    let midnight = theme_core::register_mode("midnight", || {});
+    theme_core::set_mode(&midnight);
     let blob = hot_snapshot_json();
 
-    theme_core::register_mode("modern", || {});
-    theme_core::set_mode("modern");
+    let modern = theme_core::register_mode("modern", || {});
+    theme_core::set_mode(&modern);
     hot_restore_json(&blob);
-    assert_eq!(theme_core::active_mode().as_deref(), Some("midnight"));
+    assert_eq!(theme_core::active_mode(), Some(midnight));
+}
+
+#[test]
+fn a_snapshot_naming_a_mode_the_new_library_dropped_keeps_the_mode_setup_chose() {
+    let dusk = theme_core::register_mode("dusk", || {});
+    theme_core::set_mode(&dusk);
+    restore([(THEME_MODE_KEY.to_string(), "renamed-away".to_string())]);
+    assert_eq!(theme_core::active_mode(), Some(dusk));
 }
 
 #[test]
@@ -136,14 +144,16 @@ fn a_theme_extension_follows_the_restored_mode() {
         }
     }
 
-    fn setup() {
-        theme_core::register_mode("midnight", || theme_core::set_theme(Chipped(12.0)));
-        theme_core::register_mode("modern", || theme_core::set_theme(Chipped(4.0)));
-        theme_core::set_mode("modern");
+    fn setup() -> theme_core::ModeId {
+        let midnight =
+            theme_core::register_mode("midnight", || theme_core::set_theme(Chipped(12.0)));
+        let modern = theme_core::register_mode("modern", || theme_core::set_theme(Chipped(4.0)));
+        theme_core::set_mode(&modern);
+        midnight
     }
 
-    setup();
-    theme_core::set_mode("midnight");
+    let midnight = setup();
+    theme_core::set_mode(&midnight);
     let blob = hot_snapshot_json();
 
     setup();

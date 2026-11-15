@@ -33,10 +33,11 @@ pub fn run_preview_png(
         failed: fail_duplicate_ids(&entries),
     };
     for entry in &entries {
-        let opening = PreviewCtx::for_entry_with(entry, Args::in_memory_for(entry));
+        let opening = PreviewCtx::for_entry_with(entry, Args::in_memory_for(entry))
+            .map_err(|error| error.to_string());
         tally.record(
             entry.id,
-            write_png(entry, entry.id, Ok(opening), viewport, out_dir),
+            write_png(entry, entry.id, opening, viewport, out_dir),
         );
         let Some(matrix) = entry.matrix else {
             continue;

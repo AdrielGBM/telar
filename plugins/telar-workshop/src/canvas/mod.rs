@@ -78,7 +78,10 @@ fn mount(
     actions.clear();
     let args = state.args(&entry);
     args.restore();
-    let ctx = PreviewCtx::for_entry_with(&entry, args).with_actions(actions);
+    let ctx = match PreviewCtx::for_entry_with(&entry, args) {
+        Ok(ctx) => ctx.with_actions(actions),
+        Err(error) => return states::unready(state, &entry, error),
+    };
     let globals = ctx.globals();
     let failing = state.clone();
     let failures = CaughtFailures::default();

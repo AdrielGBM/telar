@@ -1,9 +1,8 @@
 //! The sandbox's themes, and the modes the sidebar switches between.
 
-use telar::{Color, ColorScheme, ThemeTokens, register_mode_theme, set_mode_scheme, use_theme};
-
-/// Mode id applied on first launch (and the fallback when a restored/unknown id has no variant).
-pub const DEFAULT_MODE: &str = "modern";
+use telar::{
+    Color, ColorScheme, ModeId, ThemeTokens, register_mode_theme, set_mode_scheme, use_theme,
+};
 
 /// Semantic color tokens for the documentation app. Every `.rsx` color reference (`fill:primary`, `color:muted`, …) resolves to one of these fields via `use_theme`, so swapping the whole struct at runtime re-colors the entire UI reactively.
 #[derive(Clone, ThemeTokens)]
@@ -117,7 +116,7 @@ impl SandboxTheme {
 }
 
 impl SandboxTheme {
-    /// Single source of truth mapping a mode id to its variant; shared by the mode registry and the hot-reload bridge. Unknown ids fall back to the default so a stale restored id never panics.
+    /// The variant named `mode`, as a mode and a themed panel name it. Unknown names fall back to the default.
     pub fn by_mode(mode: &str) -> Self {
         match mode {
             "pastel" => Self::pastel(),
@@ -127,18 +126,24 @@ impl SandboxTheme {
     }
 }
 
-/// Registers every theme variant under its mode id. Called from the `app!` setup closure (and any test that switches themes via the sidebar buttons) so `set_mode("pastel")` installs the matching `SandboxTheme`, and a canvas shown in one of these modes takes its variant without installing it.
-pub fn register_modes() {
-    for mode in ["modern", "pastel", "midnight"] {
-        register_mode_theme(mode, SandboxTheme::by_mode(mode));
-        set_mode_scheme(
-            mode,
-            if mode == "midnight" {
-                ColorScheme::Dark
-            } else {
-                ColorScheme::Light
-            },
-        );
+/// The modes the sandbox registers, one per theme variant.
+pub struct SandboxModes {
+    pub modern: ModeId,
+    pub pastel: ModeId,
+    pub midnight: ModeId,
+}
+
+/// Registers every theme variant as a mode named after it. Called from the `app!` setup closure (and any test that switches themes via the sidebar buttons), so selecting one installs the matching `SandboxTheme`, and a canvas shown in one of these modes takes its variant without installing it.
+pub fn register_modes() -> SandboxModes {
+    let register = |name: &str, scheme| {
+        let mode = register_mode_theme(name, SandboxTheme::by_mode(name));
+        set_mode_scheme(&mode, scheme);
+        mode
+    };
+    SandboxModes {
+        modern: register("modern", ColorScheme::Light),
+        pastel: register("pastel", ColorScheme::Light),
+        midnight: register("midnight", ColorScheme::Dark),
     }
 }
 

@@ -10,6 +10,13 @@ fn entry() -> PreviewEntry {
     PreviewEntry::new("kit--button--primary", "button", "Primary", empty)
 }
 
+fn modes(names: &[&str]) -> Vec<ModeId> {
+    names
+        .iter()
+        .map(|name| crate::register_mode(*name, || {}))
+        .collect()
+}
+
 fn ids(cells: &[MatrixCell]) -> Vec<&str> {
     cells.iter().map(|cell| cell.id.as_str()).collect()
 }
@@ -29,6 +36,7 @@ const PACKAGE: &[NamedMatrix] = &[
 
 #[test]
 fn an_inline_matrix_is_a_constant_a_preview_writes_in_place() {
+    modes(&["light", "dark"]);
     let entry = entry().matrix(Matrix::Axes(&[
         Axis::Mode(&["light", "dark"]),
         Axis::Locale(&["en", "ar"]),
@@ -51,7 +59,7 @@ fn an_inline_matrix_is_a_constant_a_preview_writes_in_place() {
         cells[1].coordinates,
         [("mode", "light".to_string()), ("locale", "ar".to_string())]
     );
-    assert_eq!(cells[1].globals.mode.as_deref(), Some("light"));
+    assert_eq!(cells[1].globals.mode, ModeId::registered("light").ok());
     assert_eq!(cells[1].globals.locale.as_deref(), Some("ar"));
     assert_eq!(cells[1].globals.direction, None);
 }
@@ -101,7 +109,7 @@ fn an_arg_axis_reads_each_value_in_its_text_form() {
 
 #[test]
 fn a_named_matrix_is_the_packages_and_then_a_built_in_one() {
-    let matrices = Matrices::new(PACKAGE, PHONES).with_modes(["light", "dark", "contrast"]);
+    let matrices = Matrices::new(PACKAGE, PHONES).with_modes(modes(&["light", "dark", "contrast"]));
     let rtl = Matrix::Named("rtl").cells(&entry(), &matrices).unwrap();
     assert_eq!(
         ids(&rtl),
@@ -127,14 +135,16 @@ fn a_named_matrix_is_the_packages_and_then_a_built_in_one() {
 
 #[test]
 fn a_package_may_replace_a_built_in_matrix() {
+    modes(&["paper"]);
     const OWN_THEMES: &[NamedMatrix] = &[NamedMatrix::new("themes", &[Axis::Mode(&["paper"])])];
-    let matrices = Matrices::new(OWN_THEMES, &[]).with_modes(["light", "dark"]);
+    let matrices = Matrices::new(OWN_THEMES, &[]).with_modes(modes(&["light", "dark"]));
     let cells = Matrix::Named("themes").cells(&entry(), &matrices).unwrap();
     assert_eq!(ids(&cells), ["kit--button--primary--mode=paper"]);
 }
 
 #[test]
 fn a_viewport_is_a_size_or_a_name_the_package_declares() {
+    modes(&["light"]);
     let matrices = Matrices::new(PACKAGE, PHONES);
     let cells = Matrix::Named("phones").cells(&entry(), &matrices).unwrap();
     assert_eq!(
@@ -182,7 +192,7 @@ fn the_project_viewports_axis_takes_every_viewport_the_package_names() {
 
 #[test]
 fn axes_chosen_as_the_program_runs_expand_as_a_written_matrix_does() {
-    let matrices = Matrices::default().with_modes(["light", "dark"]);
+    let matrices = Matrices::default().with_modes(modes(&["light", "dark"]));
     let chosen = vec![
         Axis::RegisteredModes,
         Axis::Dir(&[Direction::Ltr, Direction::Rtl]),
@@ -268,7 +278,7 @@ fn a_catalog_locales_axis_takes_the_locales_the_catalog_has() {
 
 #[test]
 fn the_cell_count_is_known_before_expanding() {
-    let matrices = Matrices::default().with_modes(["light", "dark"]);
+    let matrices = Matrices::default().with_modes(modes(&["light", "dark"]));
     let matrix = Matrix::Axes(&[
         Axis::RegisteredModes,
         Axis::Locale(&["en", "ar", "ja"]),
@@ -284,7 +294,8 @@ fn the_cell_count_is_known_before_expanding() {
 
 #[test]
 fn a_matrix_that_cannot_name_its_cells_apart_is_refused() {
-    let matrices = Matrices::default().with_modes(["light"]);
+    modes(&["dark"]);
+    let matrices = Matrices::default().with_modes(modes(&["light"]));
     for (matrix, expected) in [
         (
             Matrix::Axes(&[Axis::Mode(&["dark"]), Axis::RegisteredModes]),
@@ -324,7 +335,33 @@ fn a_matrix_that_cannot_name_its_cells_apart_is_refused() {
 }
 
 #[test]
+fn a_matrix_naming_a_mode_nobody_registered_is_refused_by_name() {
+    modes(&["dark"]);
+    let matrix = Matrix::Axes(&[Axis::Mode(&["dark", "drak"])]);
+    let error = matrix
+        .cells(&entry(), &Matrices::default())
+        .expect_err("drak is not a mode");
+    assert_eq!(error, MatrixError::Mode { name: "drak" });
+    assert!(error.to_string().contains("`drak`"), "{error}");
+}
+
+#[test]
+fn a_cell_of_a_preview_asking_for_a_mode_nobody_registered_cannot_be_set_up() {
+    let entry = entry()
+        .mode("drak")
+        .matrix(Matrix::Axes(&[Axis::Locale(&["ar"])]));
+    let cells = entry
+        .matrix
+        .unwrap()
+        .cells(&entry, &Matrices::default())
+        .unwrap();
+    let error = cells[0].ctx(&entry).expect_err("drak is not a mode");
+    assert_eq!(error, CellError::Mode(UnknownMode("drak".to_string())));
+}
+
+#[test]
 fn a_cell_mounts_with_the_preview_env_under_its_own() {
+    let dark = crate::register_mode("dark", || {});
     let entry = entry().mode("dark").locale("es").matrix(Matrix::Axes(&[
         Axis::Locale(&["ar"]),
         Axis::Arg("size", &["16"]),
@@ -336,7 +373,7 @@ fn a_cell_mounts_with_the_preview_env_under_its_own() {
         .unwrap();
     let ctx = cells[0].ctx(&entry).unwrap();
     let globals = ctx.globals();
-    assert_eq!(globals.mode().get().as_deref(), Some("dark"));
+    assert_eq!(globals.mode().get(), Some(dark));
     assert_eq!(globals.locale().get().as_deref(), Some("ar"));
     assert_eq!(ctx.arg("size", 12u32), 16);
 }
@@ -393,7 +430,7 @@ fn the_installed_matrices_take_the_modes_registered_when_they_are_read() {
 #[test]
 fn with_modes_overrides_the_registered_modes() {
     theme_core::register_mode("light", || {});
-    let matrices = Matrices::installed().with_modes(["paper"]);
+    let matrices = Matrices::installed().with_modes([theme_core::register_mode("paper", || {})]);
     let cells = Matrix::Named("themes").cells(&entry(), &matrices).unwrap();
     assert_eq!(ids(&cells), ["kit--button--primary--mode=paper"]);
 }

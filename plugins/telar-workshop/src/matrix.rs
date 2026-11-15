@@ -256,7 +256,7 @@ pub(super) fn open_cell(state: &WorkshopState, entry: &PreviewEntry, cell: &Matr
     batch(|| {
         let globals = &cell.globals;
         // Read before the update: telling a mode for a scheme reads the theme's signals, which the settings' borrow would already hold.
-        let mode = globals.mode.as_deref().map(ModeChoice::for_mode);
+        let mode = globals.mode.as_ref().map(ModeChoice::for_mode);
         state.canvas_settings().update(|settings| {
             if let Some(mode) = mode {
                 settings.mode = mode;

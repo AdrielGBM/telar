@@ -1,9 +1,11 @@
+use platform_core::ColorScheme;
+
 use super::*;
 
 #[test]
 fn an_assumed_scheme_is_reported_as_the_platform_would() {
     let preferences = Preferences {
-        color_scheme: Some("dark".to_string()),
+        color_scheme: Some(ColorScheme::Dark),
         reduced_motion: Some(true),
         high_contrast: None,
         locales: vec!["es-CL".to_string()],
@@ -13,15 +15,6 @@ fn an_assumed_scheme_is_reported_as_the_platform_would() {
     assert_eq!(reported.reduced_motion, Some(true));
     assert_eq!(reported.high_contrast, None);
     assert_eq!(reported.locales, ["es-CL"]);
-}
-
-#[test]
-fn a_scheme_nobody_knows_is_left_unknown() {
-    let preferences = Preferences {
-        color_scheme: Some("sepia".to_string()),
-        ..Preferences::default()
-    };
-    assert_eq!(system_preferences(&preferences).color_scheme, None);
 }
 
 #[test]

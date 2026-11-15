@@ -147,9 +147,9 @@ fn the_error_and_its_mark_read_at_body_contrast_in_either_mode() {
                 false => telar::set_theme(Plain),
             }
             let id = format!("{scheme:?}");
-            register_mode(id.clone(), || {});
-            set_mode_scheme(id.clone(), scheme);
-            set_mode(id);
+            let id = register_mode(id, || {});
+            set_mode_scheme(&id, scheme);
+            set_mode(&id);
             let tree = mounted(
                 TextFieldProps::props()
                     .label("Email")

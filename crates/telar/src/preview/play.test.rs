@@ -227,8 +227,8 @@ fn ink_read_once(_: &PreviewCtx) -> Built {
 
 #[test]
 fn a_token_read_once_at_build_is_read_in_the_canvas_environment() {
-    theme_core::register_mode("play-dusk", || {});
-    theme_core::set_mode_scheme("play-dusk", crate::ColorScheme::Dark);
+    let dusk = theme_core::register_mode("play-dusk", || {});
+    theme_core::set_mode_scheme(&dusk, crate::ColorScheme::Dark);
     let host = format!("{:?}", crate::use_theme_tokens().ink());
     let play = Play::mount(&entry(ink_read_once).mode("play-dusk")).unwrap();
     let dark = play
@@ -359,7 +359,7 @@ fn a_drag_carries_the_pointer_from_the_node_and_lets_go_there() {
 
 fn hosted(entry: PreviewEntry, failures: &CaughtFailures) -> (PreviewCtx, Rc<NestedCanvas>) {
     crate::install_default_text_metrics();
-    let ctx = PreviewCtx::for_entry_with(&entry, Args::in_memory_for(&entry));
+    let ctx = PreviewCtx::for_entry_with(&entry, Args::in_memory_for(&entry)).unwrap();
     let (built, record) = (ctx.clone(), failures.clone());
     let size = Size::new(320.0, 240.0);
     let canvas = NestedCanvas::new(size, move || {

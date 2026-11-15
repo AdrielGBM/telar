@@ -111,9 +111,9 @@ fn frames(tree: &ComponentList) -> Vec<Color> {
 
 fn in_mode(scheme: ColorScheme) {
     let id = format!("{scheme:?}");
-    register_mode(id.clone(), || {});
-    set_mode_scheme(id.clone(), scheme);
-    set_mode(id);
+    let id = register_mode(id, || {});
+    set_mode_scheme(&id, scheme);
+    set_mode(&id);
 }
 
 #[test]

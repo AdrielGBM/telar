@@ -8,9 +8,9 @@ use super::*;
 use crate::use_theme_tokens;
 
 fn in_scheme(color_scheme: ColorScheme) {
-    crate::register_mode("light", || {});
-    crate::register_mode("dark", || {});
-    crate::follow_system("light", "dark");
+    let light = crate::register_mode("light", || {});
+    let dark = crate::register_mode("dark", || {});
+    crate::follow_system(&light, &dark);
     set_system_preferences(SystemPreferences {
         color_scheme: Some(color_scheme),
         ..SystemPreferences::default()

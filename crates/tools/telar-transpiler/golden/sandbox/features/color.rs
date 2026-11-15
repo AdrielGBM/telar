@@ -329,7 +329,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(8)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_13));
-                    let __node_14 = code_line(CodeLineProps::props().code("on_press:|| set_mode(\"midnight\")").build())?;
+                    let __node_14 = code_line(CodeLineProps::props().code("on_press:move || set_mode(&modes.midnight)").build())?;
                     __children.push(box_item(__node_14));
                     Ok(__children)
                 }

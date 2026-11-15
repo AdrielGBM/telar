@@ -133,14 +133,14 @@ fn a_provided_theme_supplies_its_own_extension_to_its_subtree() {
 
 #[test]
 fn a_mode_switch_re_runs_a_reader() {
-    register_mode("tight", || set_theme(AppTheme::with_radius(2.0)));
-    register_mode("soft", || set_theme(AppTheme::with_radius(16.0)));
-    set_mode("tight");
+    let tight = register_mode("tight", || set_theme(AppTheme::with_radius(2.0)));
+    let soft = register_mode("soft", || set_theme(AppTheme::with_radius(16.0)));
+    set_mode(&tight);
 
     let seen = Rc::new(RefCell::new(Vec::new()));
     let reader = Rc::clone(&seen);
     effect(move || reader.borrow_mut().push(chip_radius()));
-    set_mode("soft");
+    set_mode(&soft);
 
     assert_eq!(*seen.borrow(), vec![2.0, 16.0]);
 }

@@ -77,7 +77,7 @@ col gap:20
         card gap:8
             text "Because color:$theme.primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." font_size:13 color:$theme.muted
             text "Try the Modern / Pastel / Midnight buttons in the sidebar." font_size:13 color:$theme.primary
-        code_line code:"on_press:|| set_mode(\"midnight\")"
+        code_line code:"on_press:move || set_mode(&modes.midnight)"
     example title:"A theme for one subtree"
         card gap:8
             col theme:(if $night { crate::core::theme::SandboxTheme::midnight() } else { crate::core::theme::SandboxTheme::pastel() }) fill:$theme.surface pad:14 radius:10 gap:6

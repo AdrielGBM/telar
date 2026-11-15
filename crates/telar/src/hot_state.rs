@@ -138,7 +138,7 @@ pub fn hot_snapshot_json() -> String {
         map
     });
     if let Some(mode) = theme_core::active_mode() {
-        map.insert(THEME_MODE_KEY.to_string(), mode);
+        map.insert(THEME_MODE_KEY.to_string(), mode.name().to_string());
     }
     map.insert(
         SCHEME_PREFERENCE_KEY.to_string(),
@@ -190,8 +190,11 @@ pub(crate) fn restore(map: impl IntoIterator<Item = (String, String)>) {
     if let Some(locale) = map.remove(LOCALE_KEY) {
         i18n_core::set_locale(locale);
     }
-    if let Some(mode) = map.remove(THEME_MODE_KEY) {
-        theme_core::set_mode(mode);
+    if let Some(name) = map.remove(THEME_MODE_KEY) {
+        match theme_core::ModeId::registered(&name) {
+            Ok(mode) => theme_core::set_mode(&mode),
+            Err(error) => tracing::warn!("{error}, so the mode setup chose stays"),
+        }
     }
     PENDING.with(|p| p.borrow_mut().extend(map));
 }

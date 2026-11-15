@@ -17,6 +17,7 @@ fn new_globals_set_nothing() {
 
 #[test]
 fn a_preview_env_seeds_what_it_names() {
+    let dark = crate::register_mode("dark", || {});
     let env = PreviewEnv::NONE
         .mode("dark")
         .locale("ar")
@@ -24,9 +25,9 @@ fn a_preview_env_seeds_what_it_names() {
         .viewport(390.0, 844.0)
         .background(Color::rgba(0.0, 0.0, 0.0, 1.0))
         .high_contrast(true);
-    let globals = Globals::seeded(&env);
+    let globals = Globals::seeded(&env).unwrap();
     assert_eq!(globals.high_contrast().get(), Some(true));
-    assert_eq!(globals.mode().get().as_deref(), Some("dark"));
+    assert_eq!(globals.mode().get(), Some(dark));
     assert_eq!(globals.locale().get().as_deref(), Some("ar"));
     assert_eq!(globals.direction().get(), Some(Direction::Rtl));
     assert_eq!(globals.viewport().get(), Some(Size::new(390.0, 844.0)));
@@ -38,11 +39,23 @@ fn a_preview_env_seeds_what_it_names() {
 
 #[test]
 fn seeding_leaves_what_the_env_does_not_name_as_the_host_set_it() {
+    let dark = crate::register_mode("dark", || {});
     let globals = Globals::new();
     globals.locale().set(Some("es".to_string()));
-    globals.seed(&PreviewEnv::NONE.mode("dark"));
-    assert_eq!(globals.mode().get().as_deref(), Some("dark"));
+    globals.seed(&PreviewEnv::NONE.mode("dark")).unwrap();
+    assert_eq!(globals.mode().get(), Some(dark));
     assert_eq!(globals.locale().get().as_deref(), Some("es"));
+}
+
+#[test]
+fn a_preview_env_naming_an_unregistered_mode_is_refused_by_name_and_seeds_nothing() {
+    let globals = Globals::new();
+    let error = globals
+        .seed(&PreviewEnv::NONE.mode("drak").locale("ar"))
+        .unwrap_err();
+    assert_eq!(error, crate::UnknownMode("drak".to_string()));
+    assert_eq!(globals.mode().get(), None);
+    assert_eq!(globals.locale().get(), None);
 }
 
 #[test]
@@ -52,13 +65,14 @@ fn a_canvas_follows_the_globals() {
     let canvas = globals.canvas(Size::new(100.0, 100.0), empty).unwrap();
     assert_eq!(canvas.direction(), None);
 
-    globals.mode().set(Some("dark".to_string()));
+    let dark = crate::register_mode("dark", || {});
+    globals.mode().set(Some(dark.clone()));
     globals.direction().set(Some(Direction::Rtl));
     globals.locale().set(Some("ar".to_string()));
     globals.high_contrast().set(Some(true));
     globals.viewport().set(Some(Size::new(390.0, 844.0)));
     globals.safe_area().set(Insets::new(47.0, 0.0, 34.0, 0.0));
-    assert_eq!(canvas.mode().as_deref(), Some("dark"));
+    assert_eq!(canvas.mode(), Some(dark));
     assert_eq!(canvas.direction(), Some(Direction::Rtl));
     assert_eq!(canvas.locale().as_deref(), Some("ar"));
     assert_eq!(canvas.high_contrast(), Some(true));
@@ -76,7 +90,8 @@ fn a_canvas_follows_the_globals() {
 #[test]
 fn a_canvas_is_built_in_the_globals_it_starts_with() {
     crate::reset_layout_runtime();
-    let globals = Globals::seeded(&PreviewEnv::NONE.direction(Direction::Rtl).locale("ar"));
+    let globals =
+        Globals::seeded(&PreviewEnv::NONE.direction(Direction::Rtl).locale("ar")).unwrap();
     globals.safe_area().set(Insets::new(47.0, 0.0, 34.0, 0.0));
     let built_in = Rc::new(Cell::new(None));
     let seen = Rc::clone(&built_in);

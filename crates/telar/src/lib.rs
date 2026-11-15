@@ -346,9 +346,9 @@ pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
     CONTRAST_PAIRS, ColorToken, ContrastLevel, ContrastPair, ContrastShortfall, ContrastUse,
-    ControlSize, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions,
-    ThemeTokens, Tone, Variant, active_mode, contrast_shortfalls, follow_system, is_dark,
-    nearest_theme, register_mode, register_mode_theme, registered_modes, scheme_mode,
+    ControlSize, ModeId, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions,
+    ThemeTokens, Tone, UnknownMode, Variant, active_mode, contrast_shortfalls, follow_system,
+    is_dark, nearest_theme, register_mode, register_mode_theme, registered_modes, scheme_mode,
     scheme_preference, set_mode, set_mode_scheme, set_scheme_preference, set_theme, use_mode,
     use_resolved_scheme, use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
 };

@@ -57,7 +57,7 @@ own line, which lists the keys it takes.
 | `layout` | `padded`, `centered`, `fullscreen` | How the canvas places the preview: top-start with padding (the default), centred at its own size, or edge to edge with no frame |
 | `viewport` | `390x844` | The canvas size, in logical px |
 | `bg` | `#202020` | The canvas background |
-| `mode` | a registered mode's id | The theme mode the preview opens in |
+| `mode` | a registered mode's name | The theme mode the preview opens in; a name no mode is registered under fails the preview, saying so |
 | `locale` | a BCP 47 tag | The language the preview opens in |
 | `dir` | `ltr`, `rtl` | The writing direction, whatever the locale's own |
 | `tags` | `[stateful slow]` | Free-form labels the workshop filters by |

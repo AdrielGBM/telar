@@ -36,3 +36,10 @@ fn a_state_that_cannot_be_read_is_none() {
     assert_eq!(parse_served_state("{\"version\":"), None);
     assert_eq!(parse_served_state("{\"version\":1}"), None);
 }
+
+#[wasm_bindgen_test]
+fn a_state_naming_a_colour_scheme_no_reader_has_cannot_be_read() {
+    let drak = FIXTURE.replace("\"color_scheme\": \"dark\"", "\"color_scheme\": \"drak\"");
+    assert_ne!(drak, FIXTURE);
+    assert_eq!(parse_served_state(&drak), None);
+}

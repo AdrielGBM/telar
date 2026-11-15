@@ -252,19 +252,19 @@ fn a_frame_restyles_on_a_mode_switch_without_being_rebuilt() {
     crate::test_support::fresh_layout_runtime();
     let light = Color::rgba(1.0, 1.0, 1.0, 1.0);
     let dark = Color::rgba(0.0, 0.0, 0.0, 1.0);
-    telar::register_mode("frame-light", move || {
+    let frame_light = telar::register_mode("frame-light", move || {
         telar::set_theme(PaperTheme {
             primary: light,
             surface: light,
         })
     });
-    telar::register_mode("frame-dark", move || {
+    let frame_dark = telar::register_mode("frame-dark", move || {
         telar::set_theme(PaperTheme {
             primary: dark,
             surface: dark,
         })
     });
-    telar::set_mode("frame-light");
+    telar::set_mode(&frame_light);
 
     let style = SurfaceFrameStyle::default()
         .background(Reactive::of(|| telar::use_theme_tokens().surface()));
@@ -278,7 +278,7 @@ fn a_frame_restyles_on_a_mode_switch_without_being_rebuilt() {
     let tree = telar::ComponentList::new(frame);
     assert!(fills(&tree.commands()).contains(&light.into()));
 
-    telar::set_mode("frame-dark");
+    telar::set_mode(&frame_dark);
     let after = fills(&tree.commands());
     assert!(after.contains(&dark.into()), "the card kept its old colour");
     assert!(!after.contains(&light.into()));

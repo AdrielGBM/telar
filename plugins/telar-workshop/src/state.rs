@@ -602,8 +602,10 @@ impl WorkshopState {
         if !self.learned.borrow_mut().insert(entry.id) {
             return;
         }
-        let ctx =
-            PreviewCtx::for_entry_with(entry, self.args(entry)).with_actions(ActionLog::new());
+        let Ok(ctx) = PreviewCtx::for_entry_with(entry, self.args(entry)) else {
+            return;
+        };
+        let ctx = ctx.with_actions(ActionLog::new());
         let entry = *entry;
         let built = with_owner(Some(self.owner), || {
             NestedCanvas::new(Size::new(400.0, 300.0), move || {

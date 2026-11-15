@@ -18,6 +18,8 @@ fn entries() -> Vec<PreviewEntry> {
 }
 
 fn planned(filter: Option<&str>) -> Vec<String> {
+    crate::register_mode("light", || {});
+    crate::register_mode("dark", || {});
     let entries = entries();
     let filter = filter.map(PreviewFilter::new);
     plan(&entries, &Matrices::default(), filter.as_ref())

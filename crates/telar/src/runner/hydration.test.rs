@@ -16,7 +16,7 @@ fn the_client_reads_the_format_the_packager_writes() {
         location: Some("/es/proyectos".to_string()),
         locale: Some("es".to_string()),
         preferences: Preferences {
-            color_scheme: Some("dark".to_string()),
+            color_scheme: Some(ColorScheme::Dark),
             reduced_motion: Some(true),
             high_contrast: None,
             locales: vec!["es-CL".to_string(), "en".to_string()],
@@ -128,7 +128,7 @@ fn the_first_tree_is_built_from_the_page_and_then_follows_the_browser() {
             height: HEIGHT,
         },
         preferences: Preferences {
-            color_scheme: Some("dark".to_string()),
+            color_scheme: Some(ColorScheme::Dark),
             ..Preferences::default()
         },
         base: "/".to_string(),

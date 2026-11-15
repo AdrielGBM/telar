@@ -2,6 +2,20 @@ use std::collections::HashMap;
 
 use super::*;
 
+#[test]
+fn every_colour_scheme_reads_back_from_its_word() {
+    for scheme in ColorScheme::ALL {
+        assert_eq!(scheme.as_str().parse(), Ok(scheme));
+    }
+}
+
+#[test]
+fn an_unknown_colour_scheme_is_refused_by_name() {
+    let error = "drak".parse::<ColorScheme>().unwrap_err();
+    assert_eq!(error, UnknownColorScheme("drak".to_string()));
+    assert!(error.to_string().contains("`drak`"));
+}
+
 fn env(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
     let map: HashMap<String, String> = pairs
         .iter()

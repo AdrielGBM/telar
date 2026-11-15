@@ -179,8 +179,7 @@ pub struct PrerenderSection {
     pub width: Option<u32>,
     /// The surface height in CSS pixels. Default 800.
     pub height: Option<u32>,
-    /// `"light"` or `"dark"`.
-    pub color_scheme: Option<String>,
+    pub color_scheme: Option<platform_core::ColorScheme>,
     pub reduced_motion: Option<bool>,
     pub high_contrast: Option<bool>,
     /// The system locales assumed, most preferred first.
@@ -216,7 +215,7 @@ impl PrerenderSection {
     /// The preferences a page is built under.
     pub fn preferences(&self) -> crate::Preferences {
         crate::Preferences {
-            color_scheme: self.color_scheme.clone(),
+            color_scheme: self.color_scheme,
             reduced_motion: self.reduced_motion,
             high_contrast: self.high_contrast,
             locales: self.locales.clone(),

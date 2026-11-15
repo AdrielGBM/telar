@@ -465,9 +465,9 @@ fn frame_colours(element: &web_sys::Element) -> Vec<Color> {
 
 fn in_scheme(scheme: telar::ColorScheme) {
     let id = format!("{scheme:?}");
-    telar::register_mode(id.clone(), || {});
-    telar::set_mode_scheme(id.clone(), scheme);
-    telar::set_mode(id);
+    let id = telar::register_mode(id, || {});
+    telar::set_mode_scheme(&id, scheme);
+    telar::set_mode(&id);
 }
 
 /// The control's fill as it shows on `surface`, and the colours of every band of the ring the document paints on it and inside it.

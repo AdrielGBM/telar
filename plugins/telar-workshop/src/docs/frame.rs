@@ -59,7 +59,10 @@ pub(super) fn eager(
 }
 
 fn mount(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let ctx = PreviewCtx::for_entry_with(&entry, state.args(&entry)).with_actions(state.actions());
+    let ctx = match PreviewCtx::for_entry_with(&entry, state.args(&entry)) {
+        Ok(ctx) => ctx.with_actions(state.actions()),
+        Err(error) => return states::unready(state, &entry, error),
+    };
     let globals = ctx.globals();
     let drawn = signal(MIN_HEIGHT);
     let failing = state.clone();

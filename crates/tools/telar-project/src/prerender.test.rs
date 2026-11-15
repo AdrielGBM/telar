@@ -56,13 +56,14 @@ fn a_request_reads_back_as_it_was_written() {
         },
         surface: Surface::default(),
         preferences: Preferences {
-            color_scheme: Some("dark".to_string()),
+            color_scheme: Some(platform_core::ColorScheme::Dark),
             ..Preferences::default()
         },
         base: "/docs/".to_string(),
     };
     let written = serde_json::to_string(&request).unwrap();
     assert!(written.contains("\"kind\":\"at\""), "{written}");
+    assert!(written.contains("\"color_scheme\":\"dark\""), "{written}");
     assert_eq!(
         serde_json::from_str::<PrerenderRequest>(&written).unwrap(),
         request

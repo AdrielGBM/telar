@@ -17,6 +17,7 @@ pub fn sidebar(props: SidebarProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     // Reads through use_theme, so switching the theme re-runs this memo and updates the "Active" label.
     let theme_name = memo(move || theme.get().name.to_string());
+    let modes = registered_modes();
 
     let __col_0 = {
         let __col_1 = {
@@ -50,10 +51,13 @@ pub fn sidebar(props: SidebarProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             };
             let __col_3 = {
                 let __row_1 = {
-                    let __node_1 = button(ButtonProps::props().label("Modern").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("modern"))).build())?;
-                    let __node_2 = button(ButtonProps::props().label("Pastel").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("pastel"))).build())?;
-                    let __node_3 = button(ButtonProps::props().label("Midnight").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("midnight"))).build())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), children![__node_1, __node_2, __node_3])?
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    for mode in modes.clone() {
+                        let mode = mode.to_owned();
+                        let __node_1 = button(ButtonProps::props().label(crate::core::theme::SandboxTheme::by_mode(mode.name()).name).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let mode = mode.clone(); move || set_mode(&mode) })).build())?;
+                        __children.push(box_item(__node_1));
+                    }
+                    Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), __children)?
                 };
                 let __text_3 = {
                     let theme_name = theme_name.clone();

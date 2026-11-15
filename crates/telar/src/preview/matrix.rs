@@ -5,7 +5,7 @@
 use std::fmt;
 use std::sync::{PoisonError, RwLock};
 
-use crate::{Direction, Size};
+use crate::{Direction, ModeId, Size, UnknownMode};
 
 use super::args::unbuilt_control;
 use super::host::{ArgError, Args};
@@ -32,7 +32,7 @@ pub enum Matrix {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Axis {
-    /// Modes registered with `register_mode`, by id.
+    /// Modes the application registers, by name.
     Mode(&'static [&'static str]),
     /// Every mode registered when the matrix is expanded, as [`Matrices::installed`] reads them or [`Matrices::with_modes`] lists them.
     RegisteredModes,
@@ -85,8 +85,12 @@ impl Axis {
         Ok(match *self {
             Self::Mode(modes) => modes
                 .iter()
-                .map(|mode| Setting::Mode(mode.to_string()))
-                .collect(),
+                .map(|name| {
+                    ModeId::registered(name)
+                        .map(Setting::Mode)
+                        .map_err(|_| MatrixError::Mode { name })
+                })
+                .collect::<Result<_, _>>()?,
             Self::RegisteredModes => matrices.modes.iter().cloned().map(Setting::Mode).collect(),
             Self::Locale(locales) => locale_settings(locales),
             Self::CatalogLocales => locale_settings(matrices.locales),
@@ -142,7 +146,7 @@ fn arg_settings(
 /// One value of an axis, as a cell applies it.
 #[derive(Clone, Debug)]
 enum Setting {
-    Mode(String),
+    Mode(ModeId),
     Locale(String),
     Dir(Direction),
     Viewport(&'static str, Size),
@@ -152,7 +156,8 @@ enum Setting {
 impl Setting {
     fn label(&self) -> String {
         match self {
-            Self::Mode(text) | Self::Locale(text) => text.clone(),
+            Self::Mode(mode) => mode.name().to_string(),
+            Self::Locale(text) => text.clone(),
             Self::Dir(direction) => direction_word(*direction).to_string(),
             Self::Viewport(text, _) => text.trim().to_string(),
             Self::Arg(_, value) => value.to_string(),
@@ -242,7 +247,7 @@ impl ViewportPreset {
 pub struct Matrices {
     named: &'static [NamedMatrix],
     viewports: &'static [ViewportPreset],
-    modes: Vec<String>,
+    modes: Vec<ModeId>,
     locales: &'static [&'static str],
 }
 
@@ -278,9 +283,9 @@ impl Matrices {
     }
 
     /// The modes [`Axis::RegisteredModes`] takes, in order.
-    pub fn with_modes<M: Into<String>>(self, modes: impl IntoIterator<Item = M>) -> Self {
+    pub fn with_modes(self, modes: impl IntoIterator<Item = ModeId>) -> Self {
         Self {
-            modes: modes.into_iter().map(Into::into).collect(),
+            modes: modes.into_iter().collect(),
             ..self
         }
     }
@@ -320,7 +325,7 @@ impl Matrices {
     }
 
     /// The modes `Axis::RegisteredModes` takes.
-    pub fn modes(&self) -> &[String] {
+    pub fn modes(&self) -> &[ModeId] {
         &self.modes
     }
 
@@ -503,8 +508,8 @@ pub struct MatrixCell {
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CellGlobals {
-    /// A mode registered with `register_mode`, by id.
-    pub mode: Option<String>,
+    /// A mode the application registered.
+    pub mode: Option<ModeId>,
     /// A BCP 47 language tag.
     pub locale: Option<String>,
     /// The writing direction, whatever the locale's own.
@@ -557,7 +562,7 @@ impl MatrixCell {
     }
 
     /// The canvas this cell mounts `entry` in: args held in memory only, linked to its props and with its declared args listed, then set to the cell's; globals seeded from its [`PreviewEnv`](super::PreviewEnv), then from the cell.
-    pub fn ctx(&self, entry: &PreviewEntry) -> Result<PreviewCtx, ArgError> {
+    pub fn ctx(&self, entry: &PreviewEntry) -> Result<PreviewCtx, CellError> {
         let args = Args::new();
         if let Some(props) = entry.props {
             args.link_props(props());
@@ -566,7 +571,7 @@ impl MatrixCell {
         for (name, value) in &self.args {
             args.set(name, value.clone())?;
         }
-        let globals = Globals::seeded(&entry.env);
+        let globals = Globals::seeded(&entry.env)?;
         self.seed(&globals);
         Ok(PreviewCtx::from(args).with_globals(globals))
     }
@@ -612,6 +617,11 @@ pub enum MatrixError {
         /// The value as written.
         text: &'static str,
     },
+    /// [`Axis::Mode`] names a mode the application has not registered.
+    Mode {
+        /// The name as written.
+        name: &'static str,
+    },
     /// [`Axis::ArgValues`] names an arg whose control, as its declaration or its prop gives it, picks from no fixed set of values.
     NoFixedValues {
         /// The name of the arg.
@@ -641,6 +651,7 @@ impl fmt::Display for MatrixError {
             Self::ArgValue { axis, text } => {
                 write!(f, "matrix axis `{axis}` value `{text}` is not an arg value")
             }
+            Self::Mode { name } => write!(f, "matrix mode `{name}` is not a registered mode"),
             Self::NoFixedValues { axis } => write!(
                 f,
                 "matrix axis `{axis}` lists no values, and the preview has no prop `{axis}` that picks among a fixed set: list them, like `{axis}:[a b]`"
@@ -650,6 +661,39 @@ impl fmt::Display for MatrixError {
 }
 
 impl std::error::Error for MatrixError {}
+
+/// Why [`MatrixCell::ctx`] could not set up a cell's canvas.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+pub enum CellError {
+    /// The cell sets an arg to a value it cannot hold.
+    Arg(ArgError),
+    /// The preview's environment names a mode the application has not registered.
+    Mode(UnknownMode),
+}
+
+impl fmt::Display for CellError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Arg(error) => error.fmt(f),
+            Self::Mode(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for CellError {}
+
+impl From<ArgError> for CellError {
+    fn from(error: ArgError) -> Self {
+        Self::Arg(error)
+    }
+}
+
+impl From<UnknownMode> for CellError {
+    fn from(error: UnknownMode) -> Self {
+        Self::Mode(error)
+    }
+}
 
 #[cfg(test)]
 #[path = "matrix.test.rs"]

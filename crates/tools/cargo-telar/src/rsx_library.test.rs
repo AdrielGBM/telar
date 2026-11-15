@@ -406,7 +406,7 @@ telar::__previews! {
         telar::install_default_text_metrics();
         reset_layout_runtime();
         let ada = previews.iter().find(|entry| entry.id == "telar_rsx_fixture--greeting_card--ada").unwrap();
-        let drawn = texts(&mount(|| WindowRoot::new(ada.build_root(&telar::preview::PreviewCtx::for_entry(ada)).expect("the preview builds")), 480, 160));
+        let drawn = texts(&mount(|| WindowRoot::new(ada.build_root(&telar::preview::PreviewCtx::for_entry(ada).expect("the preview asks for no mode")).expect("the preview builds")), 480, 160));
         assert!(drawn.iter().any(|text| text == "Welcome aboard, Ada!"), "{drawn:?}");
     }
 }

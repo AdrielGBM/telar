@@ -72,9 +72,9 @@ fn a_themed_box() -> LocalTree {
 }
 
 fn following_the_system() {
-    telar::register_mode("day", || telar::set_theme(Day));
-    telar::register_mode("night", || telar::set_theme(Night));
-    telar::follow_system("day", "night");
+    let day = telar::register_mode("day", || telar::set_theme(Day));
+    let night = telar::register_mode("night", || telar::set_theme(Night));
+    telar::follow_system(&day, &night);
 }
 
 #[test]

@@ -26,8 +26,8 @@ fn mounts(entry: &PreviewEntry, matrices: &Matrices) -> Vec<(String, Play)> {
 
 #[test]
 fn the_themes_matrix_spans_both_modes() {
-    crate::theme::register_modes();
-    assert_eq!(Matrices::installed().modes(), ["light", "dark"]);
+    let modes = crate::theme::register_modes();
+    assert_eq!(Matrices::installed().modes(), modes);
 }
 
 #[test]

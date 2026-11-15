@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use telar::preview::{PreviewEnv, ViewportPreset};
-use telar::{Color, ColorScheme, Direction, Insets, Size, registered_modes, scheme_mode};
+use telar::{Color, ColorScheme, Direction, Insets, ModeId, Size, registered_modes, scheme_mode};
 
 use crate::strings::{
     self, DEVICE_COMPACT_PHONE, DEVICE_PHONE, DEVICE_TABLET, MODE_DARK, MODE_LIGHT, MODE_SYSTEM,
@@ -82,7 +82,7 @@ pub(crate) enum ModeChoice {
     Light,
     /// The application's dark mode ([`scheme_mode`]).
     Dark,
-    /// A mode registered with `register_mode`, by id.
+    /// A mode the application registered, by name.
     Named(String),
 }
 
@@ -97,14 +97,14 @@ impl ModeChoice {
     }
 
     /// The choice that shows the mode `id`: the scheme choice where `id` is the application's mode for that scheme, so the menu ticks it and it is kept as it was picked.
-    pub(crate) fn for_mode(id: &str) -> Self {
-        let stands_for = |scheme| scheme_mode(scheme).as_deref() == Some(id);
+    pub(crate) fn for_mode(id: &ModeId) -> Self {
+        let stands_for = |scheme| scheme_mode(scheme).as_ref() == Some(id);
         if stands_for(ColorScheme::Light) {
             Self::Light
         } else if stands_for(ColorScheme::Dark) {
             Self::Dark
         } else {
-            Self::Named(id.to_string())
+            Self::Named(id.name().to_string())
         }
     }
 
@@ -127,14 +127,14 @@ impl ModeChoice {
         }
     }
 
-    /// The mode a canvas is shown in for a preview asking for `asked`, while the workshop is in `scheme`. A scheme the application has no mode for leaves the preview its own, as a setting that names nothing does.
-    pub(crate) fn mode(&self, asked: Option<&str>, scheme: ColorScheme) -> Option<String> {
-        let asked = || asked.map(str::to_string);
+    /// The mode a canvas is shown in for a preview asking for the mode named `asked`, while the workshop is in `scheme`. A scheme the application has no mode for leaves the preview its own, as a setting that names nothing does, and so does a stored choice naming a mode the application no longer registers. A preview asking for a mode nobody registered fails to mount, saying so, so it is not this choice's to report.
+    pub(crate) fn mode(&self, asked: Option<&str>, scheme: ColorScheme) -> Option<ModeId> {
+        let asked = || asked.and_then(|name| ModeId::registered(name).ok());
         match self {
             Self::System => asked().or_else(|| scheme_mode(scheme)),
             Self::Light => scheme_mode(ColorScheme::Light).or_else(asked),
             Self::Dark => scheme_mode(ColorScheme::Dark).or_else(asked),
-            Self::Named(id) => Some(id.clone()),
+            Self::Named(name) => ModeId::registered(name).ok(),
         }
     }
 }
@@ -168,7 +168,7 @@ pub(crate) fn mode_choices() -> Vec<ModeChoice> {
         registered_modes()
             .into_iter()
             .filter(|id| Some(id) != light.as_ref() && Some(id) != dark.as_ref())
-            .map(|id| ModeChoice::parse(&id))
+            .map(|id| ModeChoice::parse(id.name()))
             .filter(|choice| matches!(choice, ModeChoice::Named(_))),
     );
     choices
@@ -382,7 +382,7 @@ impl CanvasSettings {
 /// What one canvas is given: [`CanvasSettings::resolve`]'s answer.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CanvasEnv {
-    pub(crate) mode: Option<String>,
+    pub(crate) mode: Option<ModeId>,
     pub(crate) locale: Option<String>,
     pub(crate) direction: Option<Direction>,
     pub(crate) high_contrast: Option<bool>,

@@ -37,8 +37,8 @@ pub struct SurfaceCanvas {
 /// The environment a [`SurfaceCanvas`] is built in: each value it names is the surface's own, as the canvas's setters give it, and each `None` follows the thread's.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SurfaceEnv {
-    /// A mode registered with [`register_mode`](theme_core::register_mode), by id.
-    pub mode: Option<String>,
+    /// A mode the application registered.
+    pub mode: Option<theme_core::ModeId>,
     /// A BCP 47 language tag.
     pub locale: Option<String>,
     pub direction: Option<Direction>,
@@ -52,7 +52,7 @@ pub struct SurfaceEnv {
 
 impl SurfaceEnv {
     fn apply(&self) {
-        theme_core::set_surface_mode(self.mode.as_deref());
+        theme_core::set_surface_mode(self.mode.as_ref());
         i18n_core::set_surface_locale(self.locale.as_deref());
         layout_reactive::set_surface_direction(self.direction);
         preferences_core::set_surface_high_contrast(self.high_contrast);
@@ -242,12 +242,12 @@ impl SurfaceCanvas {
     }
 
     /// The theme mode the surface is shown in, where it has one of its own; `None` where it follows [`set_mode`](theme_core::set_mode). Reactive.
-    pub fn mode(&self) -> Option<String> {
+    pub fn mode(&self) -> Option<theme_core::ModeId> {
         self.with_entered(theme_core::use_surface_mode)
     }
 
     /// Shows the surface in mode `id` whatever the thread's is, or with `None` in the thread's again. Its mode-following tokens resolve as that mode, and where the mode was registered with [`register_mode_theme`](theme_core::register_mode_theme), whatever inside has no theme provided resolves that theme. Re-runs only the readers inside; the application's theme stays installed as it is.
-    pub fn set_mode(&self, id: Option<&str>) {
+    pub fn set_mode(&self, id: Option<&theme_core::ModeId>) {
         self.with_entered(|| {
             theme_core::set_surface_mode(id);
         })

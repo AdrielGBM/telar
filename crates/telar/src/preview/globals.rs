@@ -6,8 +6,8 @@ use std::rc::Rc;
 use reactive_core::{RwSignal, effect, signal};
 
 use crate::{
-    Color, Direction, Insets, LayoutError, LayoutItem, NestedCanvas, Size, SurfaceCanvas,
-    SurfaceEnv,
+    Color, Direction, Insets, LayoutError, LayoutItem, ModeId, NestedCanvas, Size, SurfaceCanvas,
+    SurfaceEnv, UnknownMode,
 };
 
 use super::PreviewEnv;
@@ -17,7 +17,7 @@ use super::PreviewEnv;
 /// A cheap `Copy` handle over one signal per setting, so a toolbar writes the same signals a canvas reads. A preview's own [`PreviewEnv`] seeds them, and acts only as their default: [`seed`](Self::seed) sets what it names and leaves the rest as the host had them. The signals belong to the owner that was active when the globals were made.
 #[derive(Clone, Copy)]
 pub struct Globals {
-    mode: RwSignal<Option<String>>,
+    mode: RwSignal<Option<ModeId>>,
     locale: RwSignal<Option<String>>,
     direction: RwSignal<Option<Direction>>,
     viewport: RwSignal<Option<Size>>,
@@ -40,17 +40,18 @@ impl Globals {
         }
     }
 
-    /// Globals holding what `env` asks for.
-    pub fn seeded(env: &PreviewEnv) -> Self {
+    /// Globals holding what `env` asks for, or why they cannot: `env` names a mode the application has not registered.
+    pub fn seeded(env: &PreviewEnv) -> Result<Self, UnknownMode> {
         let globals = Self::new();
-        globals.seed(env);
-        globals
+        globals.seed(env)?;
+        Ok(globals)
     }
 
-    /// Sets each global `env` names, and leaves the ones it does not.
-    pub fn seed(&self, env: &PreviewEnv) {
-        if let Some(mode) = env.mode {
-            self.mode.set(Some(mode.to_string()));
+    /// Sets each global `env` names, and leaves the ones it does not; sets none where `env` names a mode the application has not registered.
+    pub fn seed(&self, env: &PreviewEnv) -> Result<(), UnknownMode> {
+        let mode = env.mode.map(ModeId::registered).transpose()?;
+        if let Some(mode) = mode {
+            self.mode.set(Some(mode));
         }
         if let Some(locale) = env.locale {
             self.locale.set(Some(locale.to_string()));
@@ -67,10 +68,11 @@ impl Globals {
         if let Some(high) = env.high_contrast {
             self.high_contrast.set(Some(high));
         }
+        Ok(())
     }
 
-    /// A mode registered with `register_mode`, by id.
-    pub fn mode(&self) -> RwSignal<Option<String>> {
+    /// A mode the application registered.
+    pub fn mode(&self) -> RwSignal<Option<ModeId>> {
         self.mode
     }
 
@@ -149,9 +151,7 @@ impl Globals {
             safe_area,
             ..
         } = *self;
-        follow(Box::new(move |canvas| {
-            canvas.set_mode(mode.get().as_deref())
-        }));
+        follow(Box::new(move |canvas| canvas.set_mode(mode.get().as_ref())));
         follow(Box::new(move |canvas| {
             canvas.set_direction(direction.get())
         }));
@@ -175,12 +175,6 @@ impl Globals {
 impl Default for Globals {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl From<&PreviewEnv> for Globals {
-    fn from(env: &PreviewEnv) -> Self {
-        Self::seeded(env)
     }
 }
 

@@ -376,8 +376,8 @@ impl ScopedTheme {
         Self(signal(None))
     }
 
-    /// A scoped theme holding the theme mode `id` was registered with through [`register_mode_theme`](crate::register_mode_theme), so a subtree shows that mode without it being installed for the application. `None` where no such theme is registered under `id`.
-    pub fn for_mode(id: &str) -> Option<Self> {
+    /// A scoped theme holding the theme mode `id` was registered with through [`register_mode_theme`](crate::register_mode_theme), so a subtree shows that mode without it being installed for the application. `None` where `id` was registered without a theme.
+    pub fn for_mode(id: &crate::ModeId) -> Option<Self> {
         crate::mode::mode_theme_now(id).map(|installed| Self(signal(Some(installed))))
     }
 

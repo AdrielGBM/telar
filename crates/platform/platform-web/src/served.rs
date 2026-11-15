@@ -19,7 +19,7 @@ pub struct ServedState {
     pub signals: Vec<(String, String)>,
 }
 
-/// The state in the page's element with `id`, or `None` for a page without one or with one that cannot be read.
+/// The state in the page's element with `id`, or `None` for a page without one or with one that cannot be read, such as one naming a colour scheme no [`ColorScheme`] spells.
 pub fn served_state(id: &str) -> Option<ServedState> {
     parse_served_state(&crate::dom::element_text(id)?)
 }
@@ -30,18 +30,15 @@ pub fn parse_served_state(json: &str) -> Option<ServedState> {
     let surface = field(&state, "surface")?;
     let preferences = field(&state, "preferences");
     let preference = |name: &str| preferences.as_ref().and_then(|p| field(p, name));
+    let color_scheme = match preference("color_scheme") {
+        Some(scheme) => Some(scheme.as_string()?.parse::<ColorScheme>().ok()?),
+        None => None,
+    };
     Some(ServedState {
         version: number(&field(&state, "version")?)?,
         locale: field(&state, "locale").and_then(|locale| locale.as_string()),
         preferences: SystemPreferences {
-            color_scheme: match preference("color_scheme")
-                .and_then(|scheme| scheme.as_string())
-                .as_deref()
-            {
-                Some("light") => Some(ColorScheme::Light),
-                Some("dark") => Some(ColorScheme::Dark),
-                _ => None,
-            },
+            color_scheme,
             reduced_motion: preference("reduced_motion").and_then(|on| on.as_bool()),
             high_contrast: preference("high_contrast").and_then(|on| on.as_bool()),
             locales: preference("locales")

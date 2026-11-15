@@ -10,9 +10,9 @@ impl ThemeTokens for Defaults {}
 
 fn in_mode(scheme: ColorScheme) {
     let id = format!("{scheme:?}");
-    register_mode(id.clone(), || {});
-    set_mode_scheme(id.clone(), scheme);
-    set_mode(id);
+    let id = register_mode(id, || {});
+    set_mode_scheme(&id, scheme);
+    set_mode(&id);
 }
 
 fn better_band(ring: FocusRing, against: Color) -> f32 {

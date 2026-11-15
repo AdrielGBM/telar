@@ -1,4 +1,6 @@
-use telar::{Color, ColorScheme, ThemeTokens, register_mode_theme, set_mode_scheme, use_theme};
+use telar::{
+    Color, ColorScheme, ModeId, ThemeTokens, register_mode_theme, set_mode_scheme, use_theme,
+};
 
 /// The application's design tokens. Every component reads these, so a restyle happens here and nowhere else.
 #[derive(Clone, ThemeTokens)]
@@ -80,15 +82,17 @@ pub fn theme() -> AppTheme {
     use_theme::<AppTheme>()
 }
 
-/// Registers both variants as modes, so `set_mode` switches between them and a preview's `themes` matrix renders each.
-pub fn register_modes() {
-    for (mode, variant, scheme) in [
+/// Registers both variants as modes, so `set_mode` switches between them and a preview's `themes` matrix renders each. Returns the light mode, then the dark one.
+pub fn register_modes() -> [ModeId; 2] {
+    [
         ("light", AppTheme::light(), ColorScheme::Light),
         ("dark", AppTheme::dark(), ColorScheme::Dark),
-    ] {
-        register_mode_theme(mode, variant);
-        set_mode_scheme(mode, scheme);
-    }
+    ]
+    .map(|(name, variant, scheme)| {
+        let mode = register_mode_theme(name, variant);
+        set_mode_scheme(&mode, scheme);
+        mode
+    })
 }
 
 #[cfg(test)]

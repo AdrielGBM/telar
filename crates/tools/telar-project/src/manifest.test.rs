@@ -345,9 +345,22 @@ fn a_prerender_table_names_the_reader_pages_are_written_for() {
         }
     );
     let preferences = prerender.preferences();
-    assert_eq!(preferences.color_scheme.as_deref(), Some("dark"));
+    assert_eq!(
+        preferences.color_scheme,
+        Some(platform_core::ColorScheme::Dark)
+    );
     assert_eq!(preferences.reduced_motion, None);
     assert_eq!(preferences.locales, ["es-CL"]);
+}
+
+#[test]
+fn a_prerender_colour_scheme_no_reader_has_is_an_error_naming_it() {
+    let root = package(
+        "web_prerender_scheme",
+        Some("[telar.web.prerender]\ncolor_scheme = \"drak\"\n"),
+    );
+    let error = TelarManifest::load(&root).unwrap_err().to_string();
+    assert!(error.contains("`drak`"), "{error}");
 }
 
 #[test]
