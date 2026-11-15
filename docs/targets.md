@@ -180,7 +180,7 @@ PNG from a test, a server, or a build script. `cargo telar test` is this target 
 accessibility-checks every `[preview]` and matrix cell, compares each with its snapshot, and reports the ones that failed (see [docs/previews.md](previews.md#cargo-telar-test)).
 
 It lays text out the way the target it stands in for would: with the glyph shaper over the faces `[[telar.fonts]]`
-declares on every target but the terminal, and in cells for `--target tui`. The harness installs the measurer
+declares on every target but the terminal, and in cells for `--target tui`. The harness opens the measurer
 itself, whichever features the project enables, so a preview containing text needs no setup of its own.
 
 Nothing is read from a real user: a caller declares the `SystemPreferences` snapshot and the sizes to

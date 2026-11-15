@@ -177,6 +177,7 @@ fn the_first_tree_is_built_from_the_page_and_then_follows_the_browser() {
         "telar-hydration-test",
         super::super::host::SurfaceRenderer::installed(renderer_record::RecordingFactory::new(
             recording.clone(),
+            std::sync::Arc::new(renderer_text::ShaperMetrics),
         )),
         None,
         Some(hydration),

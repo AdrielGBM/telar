@@ -28,7 +28,7 @@ fn boxes_of(tree: &telar::ComponentList) -> Vec<(f32, f32)> {
 #[test]
 fn every_box_keeps_its_height_at_every_scroll_offset() {
     let cell = CellSize::default();
-    renderer_core::set_text_metrics(CellMetrics::new(cell));
+    telar::open_surface_text_metrics(std::sync::Arc::new(CellMetrics::new(cell)));
     telar::set_layout_grid(telar::LayoutGrid::from(cell));
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
 
@@ -60,7 +60,7 @@ fn every_box_keeps_its_height_at_every_scroll_offset() {
 #[test]
 fn layout_is_told_only_whole_cells() {
     let cell = CellSize::default();
-    renderer_core::set_text_metrics(CellMetrics::new(cell));
+    telar::open_surface_text_metrics(std::sync::Arc::new(CellMetrics::new(cell)));
     telar::set_layout_grid(telar::LayoutGrid::from(cell));
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
 

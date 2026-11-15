@@ -94,8 +94,6 @@ impl TextureUi {
         fonts: crate::runner::font_config::FontSetup,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
-        // The tree built below measures its text, and a texture UI can be the only Telar in the process — there may be no runner that installed a measurer.
-        crate::install_default_text_metrics();
         let (width, height) = (target.width(), target.height());
         let family = fonts.family.clone();
         let renderer = HardwareRenderer::for_texture(
@@ -108,6 +106,7 @@ impl TextureUi {
 
         let pixel_ratio = pixel_ratio.max(f32::MIN_POSITIVE);
         let canvas = SurfaceCanvas::new(logical_size(width, height, pixel_ratio), || {
+            ui_core::open_surface_text_metrics(std::sync::Arc::new(renderer_text::ShaperMetrics));
             ui_core::open_surface_font_family(family);
             build()
         })?;

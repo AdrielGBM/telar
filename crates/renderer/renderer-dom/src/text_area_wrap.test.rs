@@ -8,7 +8,7 @@ use geometry_core::Size;
 use layout_core::LayoutStyle;
 use platform_core::Event;
 use reactive_core::signal;
-use renderer_core::{Color, RenderBackend, TextStyle, TextWrap};
+use renderer_core::{Color, RenderBackend, TextMetrics, TextStyle, TextWrap};
 use telar_renderer_dom::{CanvasTextMetrics, DomRenderer, ID_ATTRIBUTE};
 use ui_core::{ComponentList, Container, LayoutItem, TextArea, WindowRoot, box_item};
 use wasm_bindgen::JsCast;
@@ -59,7 +59,7 @@ fn top_of(node: &web_sys::Node, at: usize) -> f64 {
 
 #[wasm_bindgen_test]
 fn the_browser_breaks_a_wrapped_text_area_where_its_caret_does() {
-    renderer_core::set_text_metrics(CanvasTextMetrics);
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(CanvasTextMetrics));
     ui_tree::set_element_capture(true);
     ui_core::set_surface_size(Size::new(WIDTH, HEIGHT));
     let area = TextArea::new(signal(PARAGRAPH.to_string()), LayoutStyle::new(), style)
@@ -101,15 +101,16 @@ fn the_browser_breaks_a_wrapped_text_area_where_its_caret_does() {
         .expect("a valid selector")
         .expect("the area is in the document");
     let text = text_node(element.as_ref(), PARAGRAPH).expect("the area draws its text");
-    let starts: Vec<usize> = renderer_core::text_laid_lines(
-        PARAGRAPH,
-        None,
-        WIDTH,
-        &style().with_text_wrap(TextWrap::Wrap),
-    )
-    .into_iter()
-    .map(|line| line.range.start)
-    .collect();
+    let starts: Vec<usize> = CanvasTextMetrics
+        .laid_lines(
+            PARAGRAPH,
+            None,
+            WIDTH,
+            &style().with_text_wrap(TextWrap::Wrap),
+        )
+        .into_iter()
+        .map(|line| line.range.start)
+        .collect();
     assert!(starts.len() >= 3, "{starts:?}");
     let line = ui_core::line_box(&style());
     let area_height = ui_core::track_layout(area_node)

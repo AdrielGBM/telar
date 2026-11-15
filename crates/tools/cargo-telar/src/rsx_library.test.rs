@@ -342,7 +342,7 @@ use crate::theme::ConsumerTheme;
 use crate::welcome::{WelcomeProps, welcome};
 
 fn render() -> Scoped<ComponentList> {
-    telar::install_default_text_metrics();
+    telar::open_default_text_metrics();
     reset_layout_runtime();
     mount(|| WindowRoot::new(welcome(WelcomeProps::props().build()).expect("the page lays out")), 480, 160)
 }
@@ -403,7 +403,7 @@ telar::__previews! {
 
         telar::set_theme(ConsumerTheme::new());
         telar::set_locale(telar::locale_tag!("en"));
-        telar::install_default_text_metrics();
+        telar::open_default_text_metrics();
         reset_layout_runtime();
         let ada = previews.iter().find(|entry| entry.id == "telar_rsx_fixture--greeting_card--ada").unwrap();
         let drawn = texts(&mount(|| WindowRoot::new(ada.build_root(&telar::preview::PreviewCtx::for_entry(ada).expect("the preview asks for no mode")).expect("the preview builds")), 480, 160));

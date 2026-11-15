@@ -38,7 +38,7 @@ struct Form {
 
 impl EmbeddedApp for Form {
     fn build(&mut self) {
-        renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+        ui_core::open_surface_text_metrics(std::sync::Arc::new(renderer_text::ShaperMetrics));
         let value = signal(String::from("ab"));
         let presses = signal(0);
         let field = Input::new(value, LayoutStyle::new().width(100.0).height(20.0), || {

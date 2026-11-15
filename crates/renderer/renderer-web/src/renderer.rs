@@ -140,6 +140,11 @@ impl<W: 'static> RendererFactory<W> for WebGpuRendererFactory {
             },
         ))))
     }
+
+    /// The glyph shaper over the faces this renderer draws in.
+    fn text_metrics(&self) -> std::sync::Arc<dyn renderer_core::TextMetrics> {
+        std::sync::Arc::new(renderer_text::ShaperMetrics)
+    }
 }
 
 /// Puts the reason a frame will never arrive where somebody looking at the page can read it.

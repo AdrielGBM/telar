@@ -108,7 +108,7 @@ col pad_x:24
 | `fit($width)` | `FontFit::new(width.get())` | whatever `FitWidth` (or pixels) the expression gives, followed as it changes |
 | `fit(…, max_height:56sh)` | `.with_max_height(TextLength::SurfaceHeight(0.56))` | no taller than that, measured as its line box (`line_height` included) |
 
-Layout resolves it, on every target, through the installed `TextMetrics`: the text's measure measures the
+Layout resolves it, on every target, through the surface's `TextMetrics`: the text's measure measures the
 line at two sizes and solves for the size that sets it to the width, since a line's width grows in proportion
 to its size plus whatever does not grow with it (tracking or a span in pixels). It resolves again when the
 width of the box holding the text changes, and when the text, its style (family, weight, axes, features,

@@ -575,16 +575,6 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "the stamp a guest exports for its host to read",
     ),
     (
-        "crates/renderer/renderer-core/src/metrics.rs",
-        "TEXT_METRICS",
-        "a measurer is code: a guest installs its own, and a shaping one sets text in the host's faces through the font entries",
-    ),
-    (
-        "crates/renderer/renderer-core/src/metrics.rs",
-        "TEXT_METRICS_GENERATION",
-        "follows this copy's own measurer",
-    ),
-    (
         "crates/renderer/renderer-core/src/perf.rs",
         "DUMP",
         "the frame loop and window renderers that record into it are the host's; a guest draws only through a texture UI, which sets this copy from the same environment",
@@ -793,6 +783,11 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "crates/layout/layout-reactive/src/surface_size.rs",
         "SIDES",
         "the app's own per-surface size",
+    ),
+    (
+        "crates/ui/ui-core/src/text_metrics.rs",
+        "SURFACE_METRICS",
+        "the per-surface measurer, which is code and cannot cross the boundary: the guest opens the one its surface is drawn with",
     ),
     (
         "crates/motion/motion-core/src/ticker.rs",
@@ -1013,11 +1008,6 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "crates/ui/ui-core/src/drag.rs",
         "NEXT_LIVE",
         "the app's own drag state",
-    ),
-    (
-        "crates/ui/ui-core/src/text_metrics.rs",
-        "GENERATION",
-        "the app's own text-measure generation",
     ),
     (
         "crates/ui/ui-core/src/keyboard.rs",

@@ -1,4 +1,4 @@
-use renderer_core::{Color, FontFamily, FontWeight, TextStyle};
+use renderer_core::{Color, FontFamily, FontWeight, TextMetrics, TextStyle};
 
 use super::*;
 use crate::TextShaper;
@@ -49,7 +49,7 @@ fn the_database_only_grows_and_every_shaper_takes_a_face_that_arrives() {
     assert!(!drawing.family_available("Telar Declared"));
     let fallback = drawing.measure_text("Wide Words", None, 1000.0, &stack);
 
-    let generation = renderer_core::text_metrics_generation();
+    let generation = crate::ShaperMetrics.generation();
     let arrived = add_faces(vec![
         FontAsset::embedded(TEST_FACE)
             .named("Telar Declared")
@@ -61,7 +61,7 @@ fn the_database_only_grows_and_every_shaper_takes_a_face_that_arrives() {
         "a face that arrives must not take the default family away from the configuration that chose it"
     );
     assert!(
-        renderer_core::text_metrics_generation() > generation,
+        crate::ShaperMetrics.generation() > generation,
         "layout must hear that its measurements may be stale"
     );
     assert!(
@@ -88,7 +88,7 @@ fn the_database_only_grows_and_every_shaper_takes_a_face_that_arrives() {
         "the stack must re-resolve to the face that arrived rather than keep the fallback it cached"
     );
 
-    let generation = renderer_core::text_metrics_generation();
+    let generation = crate::ShaperMetrics.generation();
     let again = add_faces(vec![
         FontAsset::embedded(TEST_FACE)
             .named("Telar Declared")
@@ -96,7 +96,7 @@ fn the_database_only_grows_and_every_shaper_takes_a_face_that_arrives() {
     ]);
     assert!(Arc::ptr_eq(&arrived, &again));
     assert_eq!(
-        renderer_core::text_metrics_generation(),
+        crate::ShaperMetrics.generation(),
         generation,
         "a face already loaded changes no measurement"
     );

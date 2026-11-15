@@ -70,6 +70,11 @@ impl<W: 'static> RendererFactory<W> for DomRendererFactory {
             .map_err(RendererError::Backend)
     }
 
+    /// The browser that lays the elements out, so a box is sized by the engine that will draw its text.
+    fn text_metrics(&self) -> std::sync::Arc<dyn renderer_core::TextMetrics> {
+        std::sync::Arc::new(crate::CanvasTextMetrics)
+    }
+
     fn shapes_text(&self) -> bool {
         false
     }

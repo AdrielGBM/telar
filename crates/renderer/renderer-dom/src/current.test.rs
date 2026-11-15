@@ -87,7 +87,7 @@ fn mount() {
     }
     let root = document().document_element().expect("a root element");
     let (width, height) = (root.client_width() as f32, root.client_height() as f32);
-    renderer_core::set_text_metrics(CanvasTextMetrics);
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(CanvasTextMetrics));
     ui_tree::set_element_capture(true);
     ui_core::set_surface_size(Size::new(width, height));
     platform_core::set_event_sink(Arc::new(|event| REPORTED.lock().unwrap().push(event)));

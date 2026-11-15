@@ -592,7 +592,7 @@ pub fn is_hidden(node: NodeId) -> bool {
 
 /// Marks every measured leaf stale unless the active surface already measured at `generation`, so the next compute sizes its content again — once per generation, however many roots and frames follow.
 ///
-/// The generation is the caller's: whatever measures content says when its answers may have changed, and this only remembers the last one it was told. What moves it for text is `renderer_core::text_metrics_generation`.
+/// The generation is the caller's: whatever measures content says when its answers may have changed, and this only remembers the last one it was told. What moves it for text is the generation of the measurer the surface lays its text out with.
 pub fn remeasure_since(generation: u64) {
     with_runtime(|rt| {
         if rt.measured_at != generation {

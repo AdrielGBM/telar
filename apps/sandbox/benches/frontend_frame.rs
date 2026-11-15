@@ -60,14 +60,14 @@ impl CountingSink {
 }
 
 fn use_shaper_metrics() {
-    renderer_core::set_text_metrics(renderer_text::ShaperMetrics);
+    telar::open_surface_text_metrics(std::sync::Arc::new(renderer_text::ShaperMetrics));
 }
 
 fn use_cell_metrics(cell: CellSize) {
-    renderer_core::set_text_metrics(CellMetrics::new(cell));
+    telar::open_surface_text_metrics(std::sync::Arc::new(CellMetrics::new(cell)));
 }
 
-/// The real sandbox tree, laid out at `width`×`height` logical pixels, flattened to the command stream a backend receives. Whichever measurer is installed when this runs is the one the layout is sized by.
+/// The real sandbox tree, laid out at `width`×`height` logical pixels, flattened to the command stream a backend receives. Whichever measurer the surface has open when this runs is the one the layout is sized by.
 fn tree_at(width: u32, height: u32) -> telar::ComponentList {
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
     let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());

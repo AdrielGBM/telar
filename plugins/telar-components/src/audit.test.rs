@@ -301,7 +301,7 @@ fn mount() {
     if PAGE.with(|page| page.borrow().is_some()) {
         return;
     }
-    telar::set_text_metrics(CanvasTextMetrics);
+    telar::open_surface_text_metrics(std::sync::Arc::new(CanvasTextMetrics));
     telar::testing::set_element_capture(true);
     telar::set_surface_size(Size::new(WIDTH, HEIGHT));
     let mut tree = ComponentList::new(WindowRoot::new(controls().expect("the page builds")));

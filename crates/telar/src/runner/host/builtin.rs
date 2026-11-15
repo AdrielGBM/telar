@@ -259,6 +259,18 @@ impl<W: SurfaceWindow> RendererHost<W> for BuiltinHost<W> {
         }
     }
 
+    /// Both renderers shape glyphs, in the faces of the process's font database.
+    fn text_metrics(&self) -> Option<std::sync::Arc<dyn renderer_core::TextMetrics>> {
+        #[cfg(feature = "shaper")]
+        {
+            Some(std::sync::Arc::new(renderer_text::ShaperMetrics))
+        }
+        #[cfg(not(feature = "shaper"))]
+        {
+            None
+        }
+    }
+
     fn poll(&mut self) -> Option<RendererStart> {
         self.poll_hardware_build()
     }

@@ -26,7 +26,7 @@ fn resolved(build: impl FnOnce() -> Box<dyn LayoutItem>) -> TextStyle {
             "BaselineRoot"
         }
     }
-    // A tree measures its text as it lays out, and a test has no runner to have installed a measurer or chosen its faces.
+    // A tree measures its text as it lays out, and a test has no runner to have opened a measurer or chosen its faces.
     telar::testing::install_test_face();
     let tree = mount(|| Root(build()), 400, 200);
     let style = tree.commands().iter().find_map(|c| match c {

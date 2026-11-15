@@ -129,8 +129,13 @@ impl SurfaceCanvas {
         boundary: FocusBoundary,
         build: impl FnOnce() -> Result<(C, NodeId), LayoutError>,
     ) -> Result<Self, LayoutError> {
+        // Its frame is drawn by the renderer of the surface it is built in, so its text is measured the way that renderer draws it; one drawn by a renderer of its own opens that renderer's in `build`.
+        let measurer = crate::text_metrics::surface_text_metrics();
         let surface = Surface::new();
         let (tree, root, signals) = surface.with_entered(|| {
+            if let Some(measurer) = measurer {
+                crate::text_metrics::open_surface_text_metrics(measurer);
+            }
             crate::focus::set_boundary(boundary);
             let signals =
                 in_surface_world(|| (signal(size), signal(env.safe_area), signal(1.0f32)));

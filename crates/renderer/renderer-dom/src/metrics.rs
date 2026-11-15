@@ -358,7 +358,15 @@ impl TextMetrics for CanvasTextMetrics {
     fn line_height(&self, font_size: f32) -> f32 {
         natural(&TextStyle::new(font_size, renderer_core::Color::BLACK))
     }
+
+    /// How many batches of faces the page has finished loading since it started listening, see [`remeasure_on_font_load`].
+    fn generation(&self) -> u64 {
+        FONT_LOADS.load(std::sync::atomic::Ordering::Acquire)
+    }
 }
+
+/// The faces belong to the page rather than to any one surface on it, so every surface measuring with [`CanvasTextMetrics`] follows the same count.
+static FONT_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Measures every text again, once, each time the page finishes loading fonts.
 ///
@@ -387,7 +395,7 @@ pub fn remeasure_on_font_load() {
 fn fonts_loaded() {
     LINE_BOXES.with(|cache| cache.borrow_mut().clear());
     PROBED.with(|cache| cache.borrow_mut().clear());
-    renderer_core::invalidate_text_metrics();
+    FONT_LOADS.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     if let Some(wake) = platform_core::loop_waker() {
         wake();
     }

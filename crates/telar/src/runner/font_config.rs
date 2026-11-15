@@ -37,7 +37,7 @@ pub(super) fn install_window_fonts(fonts: &FontSetup, paths: &dyn AppPathsProvid
     ));
 }
 
-/// Loads the application's faces into the shaper and installs the shaper's measurer, for a process that lays text out without ever building a renderer.
+/// Loads the application's faces into the shaper and opens the shaper's measurer on the active surface, for a process that lays text out without ever building a renderer.
 ///
 /// No paths provider, as in [`prerender_page`](super::prerender_page): a measurement-only run has no platform to ask where the system fonts are.
 #[cfg(all(feature = "previews", not(target_os = "android")))]
@@ -47,6 +47,7 @@ pub(super) fn install_shaper_fonts(config: crate::AppConfig) {
         fonts,
         &SystemFonts::from_provider(&services_core::NoPaths),
     ));
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(renderer_text::ShaperMetrics));
 }
 
 #[cfg(feature = "hardware")]

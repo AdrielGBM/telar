@@ -42,7 +42,7 @@ impl From<f32> for FitWidth {
 
 /// A size that sets a text's single line to a width, and no taller than an optional height: `font_size:fit(60%, max_height:56sh)`.
 ///
-/// Layout resolves it where the width is known, through the installed [`TextMetrics`](crate::TextMetrics), and the line is scaled whole: what the text declares in `em` (its tracking) scales with it, and it never wraps.
+/// Layout resolves it where the width is known, through the surface's [`TextMetrics`](crate::TextMetrics), and the line is scaled whole: what the text declares in `em` (its tracking) scales with it, and it never wraps.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FontFit {
     pub width: FitWidth,

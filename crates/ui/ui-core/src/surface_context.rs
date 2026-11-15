@@ -1,6 +1,6 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, theme mode and high contrast it overrides the thread's with. Several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::with_entered`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, text measurer, window-command queue, and the writing direction, locale, theme mode and high contrast it overrides the thread's with. Several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::with_entered`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
 //! Single-window apps never build a `Surface`: the reactive current-surface stays `None`, every effect captures no surface, and entering none is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
@@ -34,6 +34,7 @@ use crate::presence::ExitsContext;
 use crate::scroll_viewports::ViewportsContext;
 use crate::surface_font::SurfaceFontContext;
 use crate::surface_title::SurfaceTitleContext;
+use crate::text_metrics::TextMetricsContext;
 
 macro_rules! surface_worlds {
     ($( $(#[$field_meta:meta])* $field:ident: $ty:ty, )*) => {
@@ -84,6 +85,7 @@ surface_worlds! {
     places: PlacesContext,
     title: SurfaceTitleContext,
     font: SurfaceFontContext,
+    text_metrics: TextMetricsContext,
     window_commands: WindowCommandContext,
     direction: DirectionContext,
     locale: LocaleContext,

@@ -146,7 +146,7 @@ fn the_runner_builds_the_tree_the_page_was_written_from() {
                 ..SystemPreferences::default()
             })
             .with_frames(3),
-        RecordingFactory::new(recording.clone()),
+        RecordingFactory::new(recording.clone(), Arc::new(renderer_text::ShaperMetrics)),
         AppConfig::default(),
         Arc::new(NoPaths) as Arc<dyn AppPathsProvider>,
         Site,

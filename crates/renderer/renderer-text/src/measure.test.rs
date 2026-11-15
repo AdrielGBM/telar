@@ -3,6 +3,9 @@ use super::{measure_min_content, measure_text};
 // Constraining a box to its own measured width must not push the text onto an extra line, so the measured width must cover the line's full advance.
 #[test]
 fn measured_width_does_not_rewrap() {
+    let _stable = crate::fonts::FACES_STABLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let style = renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK);
     let (w, h_unbounded) = measure_text("Features", None, 1.0e6, &style);
     let (_, h_at_measured) = measure_text("Features", None, w, &style);
@@ -15,6 +18,9 @@ fn measured_width_does_not_rewrap() {
 /// A box squeezed to a text's min-content width holds each word whole, one to a line; only a box narrower than that breaks a word, which is why min-content cannot be asked as a measure at width zero.
 #[test]
 fn min_content_is_the_longest_word_and_keeps_every_word_whole() {
+    let _stable = crate::fonts::FACES_STABLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let style = renderer_core::TextStyle::new(16.0, renderer_core::Color::BLACK);
     let (overview, line) = measure_text("Overview", None, 1.0e6, &style);
     let (pricing, _) = measure_text("Pricing", None, 1.0e6, &style);
@@ -33,6 +39,9 @@ fn min_content_is_the_longest_word_and_keeps_every_word_whole() {
 /// What a host does to a hot-reloaded copy's thread before unloading it, and what any thread does as it exits: the measurer is freed, and a measurement after that builds it again.
 #[test]
 fn a_released_thread_frees_its_measurer_and_measures_the_same_again() {
+    let _stable = crate::fonts::FACES_STABLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let style = renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK);
     let before = measure_text("Features", None, 1.0e6, &style);
     reactive_local::thread_exit::release_thread();

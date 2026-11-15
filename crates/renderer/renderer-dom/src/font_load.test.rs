@@ -47,17 +47,17 @@ async fn a_face_that_lands_is_measured_in_once_the_page_says_so() {
     let metrics = CanvasTextMetrics;
     let fallback = metrics.measure("Wide Words", None, 1000.0, &style());
     let fallback_line = metrics.line_height(24.0);
-    let generation = renderer_core::text_metrics_generation();
+    let generation = metrics.generation();
 
     load_face().await;
     let mut waited = 0;
-    while renderer_core::text_metrics_generation() == generation && waited < 100 {
+    while metrics.generation() == generation && waited < 100 {
         pause().await;
         waited += 1;
     }
 
     assert!(
-        renderer_core::text_metrics_generation() > generation,
+        metrics.generation() > generation,
         "the page's `loadingdone` must tell layout its measurements are stale"
     );
     let arrived = metrics.measure("Wide Words", None, 1000.0, &style());

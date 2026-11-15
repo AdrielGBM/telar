@@ -5,7 +5,7 @@
 use renderer_tui::CellMetrics;
 use telar::CellSize;
 
-/// Both halves install the same two process globals before reading them back, so running in parallel in one binary makes each observe the other's setup. Poison is stepped over rather than propagated, or a failing half would mask the other's real assertion.
+/// Both halves install the process-wide layout grid before reading it back, so running in parallel in one binary makes each observe the other's grid. Poison is stepped over rather than propagated, or a failing half would mask the other's real assertion.
 static GLOBALS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// A raster surface has room between lines to spend, and how much is a design decision this app made long before any of this existed. Changing it would be a visible regression on every desktop and browser build, for a reason that belongs to neither.
@@ -13,7 +13,7 @@ static GLOBALS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 fn a_surface_without_a_grid_keeps_the_leading_it_always_had() {
     let _globals = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
     telar::set_layout_grid(telar::LayoutGrid::UNIT);
-    renderer_core::set_text_metrics(renderer_text::ShaperMetrics);
+    telar::open_surface_text_metrics(std::sync::Arc::new(renderer_text::ShaperMetrics));
     for size in [11.0f32, 14.0, 32.0] {
         assert_eq!(
             ui_core::single_line_box(size),
@@ -28,7 +28,7 @@ fn a_surface_without_a_grid_keeps_the_leading_it_always_had() {
 fn a_terminal_reserves_one_cell_whatever_the_font_size() {
     let _globals = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
     let cell = CellSize::default();
-    renderer_core::set_text_metrics(CellMetrics::new(cell));
+    telar::open_surface_text_metrics(std::sync::Arc::new(CellMetrics::new(cell)));
     telar::set_layout_grid(telar::LayoutGrid::from(cell));
     for size in [11.0f32, 14.0, 32.0] {
         assert_eq!(

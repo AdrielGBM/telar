@@ -90,7 +90,9 @@ mod text_place;
 mod theme_provider;
 mod transform_origin;
 pub use text_metrics::{
-    BoxText, SINGLE_LINE_LEADING, line_box, single_line_box, use_text_metrics_generation,
+    BoxText, SINGLE_LINE_LEADING, fitted_font_size, line_box, measure_ink_bounds, measure_text,
+    open_surface_text_metrics, single_line_box, surface_text_metrics, text_metrics_generation,
+    use_text_metrics_generation,
 };
 mod virtual_list;
 mod visual_lines;

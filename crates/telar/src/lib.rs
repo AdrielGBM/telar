@@ -238,17 +238,15 @@ pub use renderer_core::{
     ImageSlice, LayerMask, LineCap, LineHeight, LineJoin, Paint, PathData, PathStyle, PathVerb,
     Raster, RectStyle, RendererError, Role, Scale, Semantics, Shadow, ShapeStyle, Span, Stroke,
     TextAlign, TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap,
-    fitted_font_size, for_each_with_matrix, hash_draw_commands, measure_ink_bounds, measure_text,
-    text_metrics_generation, transform_clip_rect,
+    for_each_with_matrix, hash_draw_commands, transform_clip_rect,
 };
-// The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
+// The drawing half of the backend-author API: a frontend implements `RendererFactory`, whose `TextMetrics` says what "how wide is this string" means on the surface it draws.
 #[cfg(feature = "runtime")]
 pub use geometry_core::{InvalidStep, LayoutGrid, layout_grid, set_layout_grid};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     DebugSettings, FontAsset, FontAxis, FontConfig, FontSource, FontWeight, RenderBackend,
-    RendererBuild, RendererFactory, TextMetrics, WeightRangeError, set_default_text_metrics,
-    set_text_metrics,
+    RendererBuild, RendererFactory, TextMetrics, WeightRangeError,
 };
 
 /// Whether this build turns font files into glyphs itself.
@@ -276,12 +274,14 @@ pub fn font_families() -> Vec<String> {
     renderer_text::font_families()
 }
 
-/// Installs the glyph-shaping text measurer, for code that lays out text with no runner behind it — a layout test, or a tool that composes a tree only to measure it.
+/// Opens the glyph-shaping text measurer on the active surface, for code that lays out text with no runner behind it — a layout test, or a tool that composes a tree only to measure it.
 ///
-/// An app never needs this: the runner installs it on resume with the app's own fonts. Nothing happens if a measurer is already installed.
+/// An app never needs this: the runner opens the measurer of the renderer that draws the surface before it builds the tree. Nothing happens if the surface already has one.
 #[cfg(feature = "shaper")]
-pub fn install_default_text_metrics() {
-    renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+pub fn open_default_text_metrics() {
+    if ui_core::surface_text_metrics().is_none() {
+        ui_core::open_surface_text_metrics(std::sync::Arc::new(renderer_text::ShaperMetrics));
+    }
 }
 
 #[cfg(feature = "font-faces")]
@@ -368,7 +368,6 @@ pub use ui_core::{
 pub use ui_core::{
     Breakpoints, breakpoint, set_safe_area_insets, set_surface_maximized, set_surface_size,
     surface_size, use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
-    use_text_metrics_generation,
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{NestedCanvas, SurfaceCanvas, SurfaceEnv, SurfaceFrame, composite_surface};
@@ -378,6 +377,11 @@ pub use ui_core::{SurfaceAmendment, SurfaceStyle, amend_surface};
 pub use ui_core::{
     TitleParts, compose_title, open_surface_title, set_page_title, set_title_format, surface_title,
     use_surface_title,
+};
+#[cfg(feature = "runtime")]
+pub use ui_core::{
+    fitted_font_size, measure_ink_bounds, measure_text, open_surface_text_metrics,
+    surface_text_metrics, text_metrics_generation, use_text_metrics_generation,
 };
 // The family a surface's text shapes in where nothing above it names one: seeded from `AppConfig::font_family`, changed live with `set_font_family`.
 #[cfg(feature = "runtime")]
@@ -417,15 +421,15 @@ pub use ui_core::{
 #[cfg(feature = "runtime")]
 pub use ui_core::{Movable, MovableOutlet};
 
-/// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
+/// Empties the layout runtime for a fresh tree, and opens the glyph measurer on the active surface if it has none.
 ///
-/// The measurer rides along because sizing text is part of laying it out, and this is the first call every tree makes: a tree built with no runner behind it — a layout test, a tool measuring a page — would otherwise have to ask for one separately. A frontend that installed its own keeps it; see [`install_default_text_metrics`].
+/// The measurer rides along because sizing text is part of laying it out, and this is the first call every tree makes: a tree built with no runner behind it — a layout test, a tool measuring a page — would otherwise have to ask for one separately. A surface the runner opened its renderer's measurer on keeps it; see [`open_default_text_metrics`].
 ///
-/// A build with no shaper has no measurer to fall back to, and needs none: the only frontend that comes without one draws as a document, which measures with the engine that will draw the text and installs that before the first tree is built.
+/// A build with no shaper has no measurer to fall back to, and needs none: the only frontend that comes without one draws as a document, whose runner opens the measurer of the engine that will draw the text before the first tree is built.
 #[cfg(feature = "runtime")]
 pub fn reset_layout_runtime() {
     #[cfg(feature = "shaper")]
-    install_default_text_metrics();
+    open_default_text_metrics();
     ui_core::reset_layout_runtime();
 }
 

@@ -46,7 +46,7 @@ impl CapBandCache {
 
     fn band(&self, style: &TextStyle) -> CapBand {
         let face = face_of(style);
-        let generation = renderer_core::text_metrics_generation();
+        let generation = crate::text_metrics::text_metrics_generation();
         let mut cache = self.0.borrow_mut();
         if let Some((cached_face, cached_generation, band)) = cache.as_ref()
             && *cached_generation == generation

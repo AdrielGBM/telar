@@ -12,11 +12,11 @@ use renderer_core::{
     GenericFamilies,
 };
 
-use crate::measure::ShaperMetrics;
-
 /// The faces every shaper in this process shapes and measures in.
 ///
 /// One database, handed out as an `Arc` and cloned into each shaper's `FontSystem`, is what makes measuring and drawing agree by construction: the same faces, the same `fontdb::ID`s, the same resolved sans-serif family. Two shapers is fine — the renderer's may live on a render thread — but two databases means layout can reserve room in one font while the frame is drawn in another, and where the platform keeps its fonts somewhere a bare scan does not look, it means no fonts at all.
+///
+/// Shared by every surface rather than kept per surface because it holds what the process has loaded, not a choice: which family a surface's text sets in is that surface's own, carried in its text styles, and a surface says it measures in these faces at all by laying out with the [`ShaperMetrics`](crate::ShaperMetrics) its renderer hands it.
 pub struct Fonts {
     locale: String,
     /// As loaded, before any family is routed to `sans-serif` — see [`Fonts::font_system`].
@@ -154,7 +154,7 @@ fn host() -> Option<Arc<dyn FontHost>> {
 ///
 /// For a library whose text another copy of the shaper draws: a hot-reloaded app's, an embedded one's. From then on every face this copy is asked to add, by [`install`], [`add_faces`], [`install_face`] or [`install_only`], is added to `host`'s database instead, and this copy loads what `host` then holds, so the faces text is measured in here are the ones it is drawn in there. Asked for faces before anything installed any, it has `host` load its own rather than loading the platform's itself.
 ///
-/// Loads nothing and asks `host` nothing until this copy is first asked for faces, so a library that links the shaper but never shapes text, one that measures in terminal cells, defers at no cost and keeps whichever measurer it installs.
+/// Loads nothing and asks `host` nothing until this copy is first asked for faces, so a library that links the shaper but never shapes text, one that measures in terminal cells, defers at no cost.
 ///
 /// `host` is another copy's database, never this one's own [`served`]: a copy deferring to itself would call itself back without end. Code this process serves itself already sets text in the one database, and is handed none.
 pub fn defer_to(host: Arc<dyn FontHost>) {
@@ -249,10 +249,8 @@ pub(crate) fn faces_generation() -> u64 {
 
 /// Loads the faces `config` names and makes them the ones every shaper in this process uses.
 ///
-/// Every [`TextShaper`](crate::TextShaper) calls this as it is built, so the fonts a renderer is configured with are the fonts layout measures in without anyone having to say so twice. What `config` names is *added* to the faces already loaded — a shaper built earlier keeps every face it was built from, so no later surface can pull one out from under it. Three cases, cheapest first: a config naming nothing of its own keeps what is installed exactly, because a default-configured shaper built after the application's must not throw the application's fonts away; a config whose faces are all loaded already changes only the family routed in front of them, which is what makes a family change and a surface rebuild cost no load at all; and one naming faces nobody has read yet reads those, and only those, into a copy of the database.
+/// Every [`TextShaper`](crate::TextShaper) calls this as it is built, so the fonts a renderer is configured with are the fonts a surface measuring with [`ShaperMetrics`](crate::ShaperMetrics) lays out in without anyone having to say so twice. What `config` names is *added* to the faces already loaded — a shaper built earlier keeps every face it was built from, so no later surface can pull one out from under it. Three cases, cheapest first: a config naming nothing of its own keeps what is installed exactly, because a default-configured shaper built after the application's must not throw the application's fonts away; a config whose faces are all loaded already changes only the family routed in front of them, which is what makes a family change and a surface rebuild cost no load at all; and one naming faces nobody has read yet reads those, and only those, into a copy of the database.
 pub fn install(config: FontConfig) -> Arc<Fonts> {
-    // Configuring the fonts a raster surface measures in says which measurer you want, so it is installed here rather than left to every runtime to remember. It yields to a frontend that installed its own.
-    renderer_core::set_default_text_metrics(ShaperMetrics);
     if let Some(host) = host() {
         return mirror(host.install(config));
     }
@@ -297,7 +295,6 @@ pub fn installed_sources() -> Option<FontSources> {
 ///
 /// A hot-reloaded library links a copy of its own, whose database starts empty. Loading one itself, it lacks the application's faces and resolves the generic families as a bare platform scan does rather than as the host's configuration did, so it lays text out in a face other than the one the host draws it in. Additive like [`install`]: what is already loaded stays.
 pub fn install_sources(sources: FontSources) -> Arc<Fonts> {
-    renderer_core::set_default_text_metrics(ShaperMetrics);
     install_sources_into(&mut installed_slot(), &FACES_GENERATION, sources)
 }
 
@@ -326,7 +323,6 @@ fn install_sources_into(
     resolve_generic_families(&mut db, &generic);
     // A generic family resolving to another face changes what a shaper already built sets text in, as a face arriving does.
     let faces = generation.fetch_add(1, Ordering::AcqRel) + 1;
-    renderer_core::invalidate_text_metrics();
     replace(
         slot,
         Fonts {
@@ -349,7 +345,6 @@ pub fn install_only(
     faces: Vec<FontAsset>,
     families: Vec<String>,
 ) -> Result<Arc<Fonts>, ExclusiveFontsError> {
-    renderer_core::set_default_text_metrics(ShaperMetrics);
     if let Some(host) = host() {
         return match host.install_only(faces, families) {
             Some(only) => only.map(install_sources),
@@ -463,9 +458,8 @@ fn add_into(
     missing.load_into(&mut db);
     let mut sources = loaded.sources.clone();
     sources.absorb(missing);
-    let faces = generation.fetch_add(1, Ordering::AcqRel) + 1;
     // Text measured before this may have been measured in a fallback for a family that has a face now.
-    renderer_core::invalidate_text_metrics();
+    let faces = generation.fetch_add(1, Ordering::AcqRel) + 1;
     replace(
         slot,
         Fonts {

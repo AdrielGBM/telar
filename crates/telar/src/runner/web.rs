@@ -136,8 +136,7 @@ fn start<A: App>(
     let platform = WebPlatform::with_host(host.clone(), platform_config);
 
     let result = if document {
-        // Boxes are placed by CSS from what each one declared, so what measures text has to be the engine that will draw it — and the elements have to carry their declarations at all.
-        renderer_core::set_text_metrics(renderer_dom::CanvasTextMetrics);
+        // Boxes are placed by CSS from what each one declared, so the elements have to carry their declarations at all; what measures their text is the renderer's, the engine that will draw it.
         renderer_dom::remeasure_on_font_load();
         ui_tree::set_element_capture(true);
         super::generic::run_on_platform::<_, A, ()>(

@@ -299,7 +299,7 @@ fn report(name: &str, mut sample: Sample) -> f64 {
 #[test]
 #[ignore = "a timing, not a check: run it in release with --ignored --nocapture"]
 fn layout_cost_of_a_leaf_change_in_one_fullscreen_root() {
-    renderer_core::set_text_metrics(CountingMetrics);
+    crate::open_surface_text_metrics(std::sync::Arc::new(CountingMetrics));
     reset_layout_runtime();
 
     let scene = layer_scene();

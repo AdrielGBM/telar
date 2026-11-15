@@ -98,7 +98,7 @@ fn placed(canvas: &SurfaceCanvas, rect: Rect) -> Rect {
 
 #[test]
 fn the_window_and_the_canvas_agree_on_what_a_reader_is_told_inside_the_canvas() {
-    crate::install_default_text_metrics();
+    crate::open_default_text_metrics();
     crate::reset_layout_runtime();
     crate::focus::clear();
     let canvas = canvas();
@@ -173,7 +173,7 @@ fn a_surface_nobody_can_enter_any_more_is_left_out_rather_than_read_in_the_wrong
 
 #[test]
 fn text_a_canvas_draws_on_nothing_of_its_own_is_judged_against_what_the_window_shows_behind_it() {
-    crate::install_default_text_metrics();
+    crate::open_default_text_metrics();
     crate::reset_layout_runtime();
     crate::focus::clear();
     let canvas = Rc::new(

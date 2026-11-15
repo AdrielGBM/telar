@@ -264,7 +264,7 @@ fn mount() {
     if APP.with(|app| app.borrow().is_some()) {
         return;
     }
-    renderer_core::set_text_metrics(CanvasTextMetrics);
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(CanvasTextMetrics));
     ui_core::set_surface_size(Size::new(300.0, 120.0));
     let pressed = signal(0u32);
     let button = StyledContainer::new(

@@ -341,6 +341,10 @@ impl RendererHost<HeadlessWindow> for BackgroundHost {
         })
     }
 
+    fn text_metrics(&self) -> Option<Arc<dyn renderer_core::TextMetrics>> {
+        Some(Arc::new(renderer_text::ShaperMetrics))
+    }
+
     fn channels(&self) -> Option<&RenderChannels> {
         None
     }
@@ -608,6 +612,10 @@ impl LoggedHost {
 impl RendererHost<HeadlessWindow> for LoggedHost {
     fn start(&mut self, window: &HeadlessWindow, req: &RendererRequest<'_>) -> RendererStart {
         self.inner.start(window, req)
+    }
+
+    fn text_metrics(&self) -> Option<Arc<dyn renderer_core::TextMetrics>> {
+        Some(Arc::new(renderer_text::ShaperMetrics))
     }
 
     fn channels(&self) -> Option<&RenderChannels> {
@@ -1155,7 +1163,7 @@ fn drawn_family(handler: &AppHandler<HeadlessWindow, ()>) -> renderer_core::Font
 /// The family a surface is configured with is where its text starts, and the app moves it while the surface runs without building anything again.
 #[test]
 fn a_surface_opens_in_its_configured_family_and_follows_a_new_one() {
-    crate::install_default_text_metrics();
+    crate::open_default_text_metrics();
     let mut handler = build_app_handler::<HeadlessWindow, ()>(
         Box::new(LocalApp(Labelled)),
         Arc::new(services_core::NoPaths),
@@ -1440,7 +1448,7 @@ fn counted(snapshots: &Rc<Cell<u32>>) -> Box<dyn AppRuntime> {
 
 #[test]
 fn an_overlay_that_asks_reads_the_window_as_a_screen_reader_would() {
-    crate::install_default_text_metrics();
+    crate::open_default_text_metrics();
     let snapshots = Rc::new(Cell::new(0));
     let window = HeadlessWindow::new(200, 40);
     let mut handler = overlaid::<Watching>(counted(&snapshots));
@@ -1460,7 +1468,7 @@ fn an_overlay_that_asks_reads_the_window_as_a_screen_reader_would() {
 /// Building the snapshot walks the focus registry and every drawn text, which a frame with no reader for it must not pay for.
 #[test]
 fn no_snapshot_is_built_unless_the_overlay_asks() {
-    crate::install_default_text_metrics();
+    crate::open_default_text_metrics();
     let window = HeadlessWindow::new(200, 40);
 
     let snapshots = Rc::new(Cell::new(0));
@@ -1526,7 +1534,7 @@ impl DevOverlay for Inspecting {
 
 #[test]
 fn an_overlay_reads_the_apps_frame_with_what_the_checks_found_and_not_its_own() {
-    crate::install_default_text_metrics();
+    crate::open_default_text_metrics();
     let window = HeadlessWindow::new(200, 40);
     let mut handler = overlaid::<Inspecting>(Box::new(LocalApp(Labelled)));
     handler.new_events();
@@ -2167,6 +2175,10 @@ impl RendererHost<HeadlessWindow> for ForgettingHost {
         self.0.start(window, req)
     }
 
+    fn text_metrics(&self) -> Option<Arc<dyn renderer_core::TextMetrics>> {
+        Some(Arc::new(renderer_text::ShaperMetrics))
+    }
+
     fn channels(&self) -> Option<&RenderChannels> {
         self.0.channels()
     }
@@ -2258,6 +2270,10 @@ impl RendererHost<HeadlessWindow> for DeadThreadHost {
             keepalive: false,
             label: "test",
         }
+    }
+
+    fn text_metrics(&self) -> Option<Arc<dyn renderer_core::TextMetrics>> {
+        Some(Arc::new(renderer_text::ShaperMetrics))
     }
 
     fn channels(&self) -> Option<&RenderChannels> {
@@ -2496,6 +2512,10 @@ impl renderer_core::RendererFactory<HeadlessWindow> for SettingsSeen {
         self.seen.set(Some(build.debug));
         self.renderer.build(window, build)
     }
+
+    fn text_metrics(&self) -> Arc<dyn renderer_core::TextMetrics> {
+        renderer_core::RendererFactory::<HeadlessWindow>::text_metrics(&self.renderer)
+    }
 }
 
 #[test]
@@ -2515,7 +2535,10 @@ fn a_renderer_is_built_with_the_debug_settings_its_surface_was_started_with() {
         "debug-settings-test".to_string(),
         SurfaceRenderer::installed(SettingsSeen {
             seen: Rc::clone(&seen),
-            renderer: renderer_record::RecordingFactory::new(renderer_record::Recording::new()),
+            renderer: renderer_record::RecordingFactory::new(
+                renderer_record::Recording::new(),
+                Arc::new(renderer_text::ShaperMetrics),
+            ),
         }),
     );
     resume(&mut handler, &HeadlessWindow::new(120, 80));

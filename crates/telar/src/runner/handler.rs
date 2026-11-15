@@ -419,6 +419,9 @@ where
         if let Some(title) = &self.title {
             self.app.open_title(&title.app, &title.showing);
         }
+        if let Some(metrics) = self.renderer_host.text_metrics() {
+            ui_core::open_surface_text_metrics(metrics);
+        }
         self.app.open_font_family(self.fonts.family.as_ref());
         self.app.set_focus_boundary(self.focus_boundary);
         self.tree = Some(self.app.mount());
@@ -1214,7 +1217,7 @@ where
     }
 
     fn resume(&mut self, window: &W) -> bool {
-        // Before the tree measures a word of text. Building a renderer loads them too — which is what makes measure and draw agree — but a hardware renderer builds on its own thread, so the first layout would be sized in the platform's fonts. A renderer that does not shape glyphs skips the scan, keeping its own measurer.
+        // Before the tree measures a word of text. Building a renderer loads them too — which is what makes measure and draw agree — but a hardware renderer builds on its own thread, so the first layout would be sized in the platform's fonts. A renderer that does not shape glyphs skips the scan.
         #[cfg(feature = "shaper")]
         if self.renderer_host.shapes_text() {
             super::font_config::install_window_fonts(&self.fonts, self.env.paths.as_ref());

@@ -40,7 +40,7 @@ fn style() -> TextStyle {
 
 /// The measurer, the capture and the surface a document backend runs with, before anything is built against them.
 fn as_a_document() {
-    renderer_core::set_text_metrics(CanvasTextMetrics);
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(CanvasTextMetrics));
     ui_tree::set_element_capture(true);
     ui_core::set_surface_size(Size::new(WIDTH, HEIGHT));
 }

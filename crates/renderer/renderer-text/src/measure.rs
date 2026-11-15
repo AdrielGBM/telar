@@ -38,7 +38,7 @@ fn release_shaper() {
     MEASURE_SHAPER.with(|slot| slot.borrow_mut().take());
 }
 
-/// [`renderer_core::TextMetrics`] over the layout-thread shaper: the answer for any surface whose text is glyphs.
+/// [`renderer_core::TextMetrics`] over the layout-thread shaper, in the faces of the process's font database: what a renderer that draws glyphs hands the surface it draws.
 pub struct ShaperMetrics;
 
 impl renderer_core::TextMetrics for ShaperMetrics {
@@ -62,6 +62,11 @@ impl renderer_core::TextMetrics for ShaperMetrics {
 
     fn line_height(&self, font_size: f32) -> f32 {
         font_size * crate::LINE_HEIGHT_FACTOR
+    }
+
+    /// Moves as faces arrive in the database it measures in, since a family that was falling back may resolve to a face of its own.
+    fn generation(&self) -> u64 {
+        fonts::faces_generation()
     }
 
     fn laid_lines(

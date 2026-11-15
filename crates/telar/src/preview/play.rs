@@ -150,7 +150,7 @@ impl Play {
         viewport: Size,
         ctx: impl FnOnce() -> Result<PreviewCtx, PlayError>,
     ) -> Result<Self, PlayError> {
-        crate::install_default_text_metrics();
+        crate::open_default_text_metrics();
         let scope = owner_scope();
         let owner = scope.id();
         let ctx = match ctx() {

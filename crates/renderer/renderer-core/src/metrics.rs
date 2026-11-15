@@ -1,13 +1,10 @@
-//! The installed text measurer: how wide a string is, asked without naming a shaper.
-
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+//! The text measurer a surface lays out with: how wide a string is, asked without naming a shaper.
 
 use crate::{Span, TextLine, TextStyle};
 
 /// How much room a string takes — all a widget tree needs to know about text before anything is drawn.
 ///
-/// A seam rather than a call into the shaper, because the answer belongs to the target: on a raster surface it is cosmic-text's shaped advance, on a terminal it is `unicode-width` times a cell.
+/// A seam rather than a call into the shaper, because the answer belongs to the target: on a raster surface it is cosmic-text's shaped advance, on a terminal it is `unicode-width` times a cell. The renderer that draws a surface says which one it measures with ([`RendererFactory::text_metrics`](crate::RendererFactory::text_metrics)), so two surfaces drawn by two renderers each lay their text out the way it will be drawn.
 pub trait TextMetrics: Send + Sync + 'static {
     /// The logical `(width, height)` of `text` wrapped to `max_width` under `style`, with `spans` overriding it over their byte ranges. Weight, slant, `max_lines` and `ellipsis` all change the extent, so measuring and drawing must be handed the same style — and the same spans.
     fn measure(
@@ -26,6 +23,11 @@ pub trait TextMetrics: Send + Sync + 'static {
 
     /// The height of one line at `font_size`. A question rather than a constant because a terminal's line height is a cell, not a multiple of a font size.
     fn line_height(&self, font_size: f32) -> f32;
+
+    /// How many times this measurer may have started answering differently for the same text and style: a face arrived, so a family that was falling back resolves to a face of its own. Layout compares it against the one it last measured at and measures every text again when the two differ, so a measurer whose answers never change keeps the default.
+    fn generation(&self) -> u64 {
+        0
+    }
 
     /// The lines of `text` laid out at `max_width` as they are drawn, with the same breaks, alignment and reordering, each cut into the grapheme clusters a caret steps over, in bytes of `text` as written. What an editor breaks its rows at and places its caret, its selection and a press by, so a surface that reorders right-to-left runs answers with them reordered, and one that does not answers in the order the text is written.
     fn laid_lines(
@@ -78,107 +80,6 @@ pub trait TextMetrics: Send + Sync + 'static {
 
 const FIT_PROBE_SIZE: f32 = 100.0;
 const FIT_UNBOUNDED_WIDTH: f32 = 1.0e6;
-
-static TEXT_METRICS: RwLock<Option<Arc<dyn TextMetrics>>> = RwLock::new(None);
-
-/// Installs the process-wide text measurer, replacing whatever was there.
-pub fn set_text_metrics(metrics: impl TextMetrics) {
-    *TEXT_METRICS.write().expect("text metrics lock") = Some(Arc::new(metrics));
-}
-
-/// Installs `metrics` only if nothing is installed yet, and reports whether it took.
-///
-/// What a runtime uses, so a frontend that already installed metrics of its own — cells for a terminal, a fixed advance for a test — keeps them when the raster default is offered later.
-pub fn set_default_text_metrics(metrics: impl TextMetrics) -> bool {
-    let mut slot = TEXT_METRICS.write().expect("text metrics lock");
-    if slot.is_some() {
-        return false;
-    }
-    *slot = Some(Arc::new(metrics));
-    true
-}
-
-fn metrics() -> Arc<dyn TextMetrics> {
-    TEXT_METRICS
-        .read()
-        .expect("text metrics lock")
-        .as_ref()
-        .cloned()
-        .expect(
-            "no TextMetrics installed, so nothing can size text: install one with \
-             renderer_core::set_text_metrics (renderer_text::ShaperMetrics is the raster default, and \
-             building any renderer_text::TextShaper installs it for you)",
-        )
-}
-
-/// Measures the logical `(width, height)` of `text` wrapped to `max_width`. See [`TextMetrics::measure`].
-pub fn measure_text(
-    text: &str,
-    spans: Option<&[Span]>,
-    max_width: f32,
-    style: &TextStyle,
-) -> (f32, f32) {
-    metrics().measure(text, spans, max_width, style)
-}
-
-/// The narrowest `(width, height)` `text` lays out in without breaking inside a word. See [`TextMetrics::min_content`].
-pub fn measure_min_content(text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
-    metrics().min_content(text, spans, style)
-}
-
-/// The text's drawn glyph extent `(ink_top, ink_height)`. See [`TextMetrics::ink_bounds`].
-pub fn measure_ink_bounds(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
-    metrics().ink_bounds(text, max_width, style)
-}
-
-/// The byte offset of the character under `at` in `text`. See [`TextMetrics::index_at`].
-pub fn text_index_at(
-    text: &str,
-    spans: Option<&[Span]>,
-    max_width: f32,
-    style: &TextStyle,
-    at: (f32, f32),
-) -> Option<usize> {
-    metrics().index_at(text, spans, max_width, style, at)
-}
-
-/// The lines of `text` laid out at `max_width` as they are drawn, cut into grapheme clusters. See [`TextMetrics::laid_lines`].
-pub fn text_laid_lines(
-    text: &str,
-    spans: Option<&[Span]>,
-    max_width: f32,
-    style: &TextStyle,
-) -> Vec<TextLine> {
-    metrics().laid_lines(text, spans, max_width, style)
-}
-
-/// The size that sets `text`'s line to `width`, no taller than `max_height`. See [`TextMetrics::fitted_size`].
-pub fn fitted_font_size(
-    text: &str,
-    spans: Option<&[Span]>,
-    width: f32,
-    max_height: Option<f32>,
-    style_at: &dyn Fn(f32) -> TextStyle,
-) -> Option<f32> {
-    metrics().fitted_size(text, spans, width, max_height, style_at)
-}
-
-/// The height of one line of text at `font_size`. See [`TextMetrics::line_height`].
-pub fn line_height(font_size: f32) -> f32 {
-    metrics().line_height(font_size)
-}
-
-static TEXT_METRICS_GENERATION: AtomicU64 = AtomicU64::new(0);
-
-/// How many times the installed measurer may have started answering differently for the same text and style. Layout compares it against the one it last measured at, and measures every text again when the two differ.
-pub fn text_metrics_generation() -> u64 {
-    TEXT_METRICS_GENERATION.load(Ordering::Acquire)
-}
-
-/// Says that a measurement taken before now may be wrong: a face arrived, so a family that was falling back resolves to a face of its own. The next layout measures every text again, once, however many faces arrived in between.
-pub fn invalidate_text_metrics() {
-    TEXT_METRICS_GENERATION.fetch_add(1, Ordering::AcqRel);
-}
 
 #[cfg(test)]
 #[path = "metrics.test.rs"]

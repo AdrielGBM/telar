@@ -358,7 +358,7 @@ fn a_drag_carries_the_pointer_from_the_node_and_lets_go_there() {
 }
 
 fn hosted(entry: PreviewEntry, failures: &CaughtFailures) -> (PreviewCtx, Rc<NestedCanvas>) {
-    crate::install_default_text_metrics();
+    crate::open_default_text_metrics();
     let ctx = PreviewCtx::for_entry_with(&entry, Args::in_memory_for(&entry)).unwrap();
     let (built, record) = (ctx.clone(), failures.clone());
     let size = Size::new(320.0, 240.0);

@@ -2,9 +2,9 @@
 
 #![allow(dead_code)]
 
-/// Installs the glyph measurer layout sizes text with, which a gallery test has no runner to do for it.
-pub fn install_text_metrics() {
-    renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+/// Opens the glyph measurer layout sizes text with on the test's surface, which a gallery test has no runner to do for it.
+pub fn open_text_metrics() {
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(renderer_text::ShaperMetrics));
 }
 
 /// Writes an RGBA8 buffer out as a PNG, for the visual harnesses that exist to be looked at.

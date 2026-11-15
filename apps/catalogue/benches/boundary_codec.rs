@@ -42,7 +42,7 @@ fn sidebar_rows(commands: &[DrawCommand]) -> [(f64, f64); 2] {
 }
 
 fn bench_workshop(c: &mut Criterion) {
-    telar::install_default_text_metrics();
+    telar::open_default_text_metrics();
     catalogue::theme::register_modes();
     telar::set_theme(catalogue::theme::AppTheme::light());
     telar::set_surface_size(Size::new(WINDOW_W as f32, WINDOW_H as f32));

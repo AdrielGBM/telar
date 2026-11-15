@@ -131,6 +131,9 @@ pub(super) trait RendererHost<W>: 'static {
         true
     }
 
+    /// What the surface this host draws lays its text out with, opened on it before its tree is built: see [`RendererFactory::text_metrics`]. `None` for a host with no renderer it could build.
+    fn text_metrics(&self) -> Option<std::sync::Arc<dyn renderer_core::TextMetrics>>;
+
     /// The renderer [`start`](Self::start) built that cannot leave the calling thread, for the handler to drive inline. `None` for a host whose renderer went to a thread of its own, which is every native one.
     fn take_inline(&mut self) -> Option<Box<dyn RenderBackend>> {
         None
@@ -237,6 +240,10 @@ where
 
     fn shapes_text(&self) -> bool {
         self.factory.shapes_text()
+    }
+
+    fn text_metrics(&self) -> Option<std::sync::Arc<dyn renderer_core::TextMetrics>> {
+        Some(self.factory.text_metrics())
     }
 
     fn take_inline(&mut self) -> Option<Box<dyn RenderBackend>> {

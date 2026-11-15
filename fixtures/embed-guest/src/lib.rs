@@ -86,7 +86,7 @@ impl Fixture {
 
 impl EmbeddedApp for Fixture {
     fn build(&mut self) {
-        telar::install_default_text_metrics();
+        telar::open_default_text_metrics();
         let moves = self.moves;
         let label = Text::new(
             move || format!("moved over {} times", moves.get()),

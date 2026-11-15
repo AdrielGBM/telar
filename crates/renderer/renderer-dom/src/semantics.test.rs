@@ -245,7 +245,7 @@ fn a_role_said_from_outside_is_the_element_a_group_becomes_and_never_a_controls(
         Accessible, ComponentList, Container, StyledContainer, Text, WindowRoot, box_item,
     };
 
-    renderer_core::set_text_metrics(telar_renderer_dom::CanvasTextMetrics);
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(telar_renderer_dom::CanvasTextMetrics));
     let capturing = ui_tree::set_element_capture(true);
     ui_core::reset_layout_runtime();
     ui_core::set_surface_size(geometry_core::Size::new(400.0, 200.0));

@@ -139,6 +139,11 @@ impl<W: 'static> RendererFactory<W> for TuiRendererFactory {
         ))))
     }
 
+    /// Cells of the size this renderer draws, since a terminal shows one glyph per cell whatever size the text claims.
+    fn text_metrics(&self) -> std::sync::Arc<dyn renderer_core::TextMetrics> {
+        std::sync::Arc::new(crate::CellMetrics::new(self.config.cell))
+    }
+
     /// The terminal draws the characters; this renderer never opens a font file.
     fn shapes_text(&self) -> bool {
         false

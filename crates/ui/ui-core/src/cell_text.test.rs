@@ -1,10 +1,10 @@
-//! Text placed in a stretched leaf under cell metrics, in a process of its own because the text metrics and layout grid are process-wide. A terminal draws each glyph inside its cell, so the band a line is centred on is the whole row.
+//! Text placed in a stretched leaf under cell metrics, in a process of its own because the layout grid is process-wide. A terminal draws each glyph inside its cell, so the band a line is centred on is the whole row.
 
 use geometry_core::CellSize;
 use geometry_core::{LayoutGrid, Rect, Size, set_layout_grid};
 use layout_core::LayoutStyle;
 use platform_core::Event;
-use renderer_core::{Color, DrawCommand, TextStyle, set_text_metrics};
+use renderer_core::{Color, DrawCommand, TextStyle};
 use renderer_tui::CellMetrics;
 use telar_ui_core::{ComponentList, Container, Input, LayoutItem, Text, WindowRoot, box_item};
 
@@ -25,7 +25,9 @@ fn lines(tree: &ComponentList) -> Vec<Rect> {
 }
 
 fn on_cells() {
-    set_text_metrics(CellMetrics::new(CellSize::default()));
+    telar_ui_core::open_surface_text_metrics(std::sync::Arc::new(CellMetrics::new(
+        CellSize::default(),
+    )));
     set_layout_grid(LayoutGrid::new(8.0, ROW).expect("a positive, finite step"));
 }
 

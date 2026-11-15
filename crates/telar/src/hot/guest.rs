@@ -63,7 +63,7 @@ pub unsafe fn create(
     })
 }
 
-/// Fills this copy's stores from the host's table, has its shaper defer to the host's font database, and installs the shaper's measurer as the runner of the app this library swaps in does on resume. The table is the host's, kept until it has unloaded this copy.
+/// Fills this copy's stores from the host's table, has its shaper defer to the host's font database, and opens the shaper's measurer on this copy's surface, as the runner of the app this library swaps in opens its renderer's: the dev host draws with the glyph shaper, and a measurer is code that cannot cross. The table is the host's, kept until it has unloaded this copy.
 pub(super) unsafe extern "C" fn install_services(
     services: HostServices<UpperTable>,
 ) -> CallOutcome {
@@ -76,7 +76,7 @@ pub(super) unsafe extern "C" fn install_services(
         #[cfg(not(any(feature = "shaper", feature = "font-faces")))]
         drop(fonts);
         #[cfg(feature = "shaper")]
-        crate::install_default_text_metrics();
+        crate::open_default_text_metrics();
     })
 }
 

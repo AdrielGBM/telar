@@ -26,7 +26,7 @@ fn hover(y: f64) -> Event {
 }
 
 fn bench_sandbox(c: &mut Criterion) {
-    renderer_core::set_text_metrics(renderer_text::ShaperMetrics);
+    telar::open_surface_text_metrics(std::sync::Arc::new(renderer_text::ShaperMetrics));
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
     let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());
     tree.on_event(&Event::WindowResized {

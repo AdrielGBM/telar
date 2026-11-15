@@ -29,7 +29,7 @@ fn document() -> web_sys::Document {
 
 #[wasm_bindgen_test]
 fn the_entry_stands_on_the_row_a_wrapped_area_has_its_caret_on() {
-    renderer_core::set_text_metrics(CanvasTextMetrics);
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(CanvasTextMetrics));
     ui_tree::set_element_capture(true);
     ui_core::set_surface_size(Size::new(WIDTH, HEIGHT));
     let style = || TextStyle::new(16.0, Color::BLACK);

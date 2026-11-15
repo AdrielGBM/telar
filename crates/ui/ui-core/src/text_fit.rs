@@ -144,7 +144,7 @@ impl Fitting {
             content: content.to_owned(),
             spans: spans.map(<[Span]>::to_vec),
             target: fit.target(inherited.font_size, surface, containing_width),
-            generation: renderer_core::text_metrics_generation(),
+            generation: crate::text_metrics::text_metrics_generation(),
             declared: (self.amend)(inherited.clone()),
         };
         if let Some((before, size)) = self.answered.borrow().as_ref()

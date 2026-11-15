@@ -20,7 +20,7 @@ pub(crate) struct VisualLines {
 }
 
 impl VisualLines {
-    /// `text` broken at every `\n` and, given a width, wherever the installed measurer wraps it at that width.
+    /// `text` broken at every `\n` and, given a width, wherever the surface's measurer wraps it at that width.
     pub(crate) fn of(text: &str, style: &TextStyle, wrap_width: Option<f32>) -> Self {
         match wrap_width {
             Some(width) => Self::drawn(text, &crate::text_metrics::laid_lines(text, width, style)),

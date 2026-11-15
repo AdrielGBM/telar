@@ -108,7 +108,7 @@ fn an_installed_renderer_draws_an_app_on_a_window_with_no_os_handles() {
 
     telar::run_with_platform_and_renderer::<CellPlatform, _, _, ()>(
         CellPlatform { frames: 3 },
-        RecordingFactory::new(recording.clone()),
+        RecordingFactory::new(recording.clone(), Arc::new(renderer_text::ShaperMetrics)),
         AppConfig::default(),
         std::sync::Arc::new(NoPaths),
         Panel {
@@ -156,7 +156,7 @@ fn a_recording_is_readable_after_the_render_thread_is_gone() {
 
     telar::run_with_platform_and_renderer::<CellPlatform, _, _, ()>(
         CellPlatform { frames: 2 },
-        RecordingFactory::new(recording.clone()),
+        RecordingFactory::new(recording.clone(), Arc::new(renderer_text::ShaperMetrics)),
         AppConfig::default(),
         std::sync::Arc::new(NoPaths),
         Panel {

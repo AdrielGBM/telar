@@ -42,6 +42,9 @@ fn a_normal_start_aligned_style_keeps_the_default_key() {
 
 #[test]
 fn a_height_grown_after_first_shaping_shows_every_line() {
+    let _stable = crate::fonts::FACES_STABLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut shaper = TextShaper::new();
     let text = "one two three four five six seven eight nine ten eleven twelve ".repeat(4);
     let style = TextStyle::new(16.0, Color::BLACK);
@@ -61,6 +64,9 @@ fn a_height_grown_after_first_shaping_shows_every_line() {
 
 #[test]
 fn a_fractional_width_is_a_different_key_from_its_ceiling() {
+    let _stable = crate::fonts::FACES_STABLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut shaper = TextShaper::new();
     let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda";
     let style = TextStyle::new(16.0, Color::BLACK);

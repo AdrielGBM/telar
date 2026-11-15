@@ -14,7 +14,8 @@ mod text;
 use std::sync::{Arc, Mutex};
 
 use renderer_core::{
-    BuiltRenderer, Color, DrawCommand, RenderBackend, RendererBuild, RendererError, RendererFactory,
+    BuiltRenderer, Color, DrawCommand, RenderBackend, RendererBuild, RendererError,
+    RendererFactory, TextMetrics,
 };
 
 pub use text::draw_text;
@@ -128,12 +129,13 @@ impl RenderBackend for RecordingRenderer {
 /// Installs a [`RecordingRenderer`] on any window, since it needs nothing from one.
 pub struct RecordingFactory {
     recording: Recording,
+    metrics: Arc<dyn TextMetrics>,
 }
 
 impl RecordingFactory {
-    /// A factory whose renderers record into `recording`.
-    pub fn new(recording: Recording) -> Self {
-        Self { recording }
+    /// A factory whose renderers record into `recording`, on a surface that lays its text out with `metrics`: a recording draws no text, so what it is measured with is the test's to say.
+    pub fn new(recording: Recording, metrics: Arc<dyn TextMetrics>) -> Self {
+        Self { recording, metrics }
     }
 }
 
@@ -144,6 +146,10 @@ impl<W> RendererFactory<W> for RecordingFactory {
         _build: RendererBuild<'_>,
     ) -> Result<BuiltRenderer, RendererError> {
         Ok(BuiltRenderer::Threaded(Box::new(self.recording.backend())))
+    }
+
+    fn text_metrics(&self) -> Arc<dyn TextMetrics> {
+        Arc::clone(&self.metrics)
     }
 }
 

@@ -113,7 +113,7 @@ fn mount() {
     if PAGE.with(|page| page.borrow().is_some()) {
         return;
     }
-    renderer_core::set_text_metrics(CanvasTextMetrics);
+    ui_core::open_surface_text_metrics(std::sync::Arc::new(CanvasTextMetrics));
     ui_tree::set_element_capture(true);
     ui_core::set_surface_size(Size::new(400.0, 200.0));
     let calm = signal(false);

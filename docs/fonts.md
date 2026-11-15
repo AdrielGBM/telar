@@ -46,6 +46,20 @@ size_adjust = 1.05                    # web only: scales the glyphs, written as 
 Nothing waits for a face. Text is laid out and drawn in its fallback until the face lands, then measured
 again once; hydration of a prerendered page does not wait for fonts either.
 
+### Who measures a surface's text
+
+Each surface lays its text out with the measurer of the renderer that draws it
+(`RendererFactory::text_metrics`): the glyph shaper on desktop, Android, a canvas page and headless, the
+browser's own text engine on web-dom, whole cells on the terminal. The runner opens it on the surface before
+it builds the tree, so two surfaces drawn by different renderers each measure a string the way it is drawn. A
+`SurfaceCanvas` measures with the surface it is built in, whose renderer draws it. A tree built with no runner
+behind it, in a test or a tool, opens one itself: `telar::open_default_text_metrics()` for the glyph shaper,
+`telar::open_surface_text_metrics(...)` for any other.
+
+The font database is the process's, shared by every surface that measures in glyphs: it holds the faces
+loaded so far, and which family a surface's text sets in is that surface's own (see
+[The default family](#the-default-family)).
+
 ## Variation axes and features
 
 ```rsx
@@ -84,8 +98,9 @@ next frame:
 
 - every shaper, including a renderer's that was built before, takes the new faces and drops what it cached
   without them, so a `FontFamily::Stack` whose first member just arrived resolves to it;
-- `renderer_core::text_metrics_generation()` moves, and `ui_core`'s `relayout_if_dirty`/`compute_layout`
-  mark every measured leaf dirty, so each text is measured again once per generation;
+- the generation of every surface measuring in those faces (`text_metrics_generation()`) moves, and
+  `ui_core`'s `relayout_if_dirty`/`compute_layout` mark every measured leaf dirty, so each text is measured
+  again once per generation;
 - `use_text_metrics_generation()` moves to the same generation, before that frame lays out, so whatever reads
   it runs again (see [Text measured by hand](#text-measured-by-hand));
 - the loop is woken, so this happens without waiting for input.

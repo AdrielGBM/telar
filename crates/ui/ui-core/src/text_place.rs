@@ -1,6 +1,6 @@
 //! Where an editor draws its text: the rows it is broken into, and the x of every offset along them, which is where the caret, the selection, the underlines and a press all meet the letters.
 //!
-//! Every x is read off the lines the installed measurer lays the text out in, cluster by cluster, so a right-to-left run is placed where it is drawn rather than where its bytes fall.
+//! Every x is read off the lines the surface's measurer lays the text out in, cluster by cluster, so a right-to-left run is placed where it is drawn rather than where its bytes fall.
 
 use std::cell::{OnceCell, RefCell};
 use std::ops::Range;
@@ -45,7 +45,7 @@ impl RowCache {
         width: Option<f32>,
         mask: Option<char>,
     ) -> (Rc<VisualLines>, Rc<OnceCell<f32>>, Drawn) {
-        let generation = renderer_core::text_metrics_generation();
+        let generation = crate::text_metrics::text_metrics_generation();
         if let Some(laid) = self.0.borrow().as_ref()
             && laid.text == text
             && laid.width == width

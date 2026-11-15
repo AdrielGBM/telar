@@ -85,6 +85,7 @@ pub fn prerender_page<A: App>(
         fonts,
         &SystemFonts::from_provider(&NoPaths),
     ));
+    ui_core::open_surface_text_metrics(Arc::new(renderer_text::ShaperMetrics));
     let window = super::resolved_window(window, &app, app_name);
     let mut app = LocalApp(app);
     let surface = request.surface;

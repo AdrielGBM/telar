@@ -23,6 +23,7 @@ fn input_visual_png() {
     let (w, h) = (520u32, 160u32);
     let ink = Color::from_rgb_u8(230, 232, 240);
     reset_layout_runtime();
+    common::open_text_metrics();
 
     let value = signal("Hello, rsx".to_string());
     let input = Input::new(
@@ -103,6 +104,7 @@ fn slider_visual_png() {
 
     let (w, h) = (360u32, 120u32);
     reset_layout_runtime();
+    common::open_text_metrics();
 
     let value = 0.4f32;
     let thumb = StyledContainer::new(
@@ -165,6 +167,7 @@ fn overlay_visual_png() {
     let (w, h) = (420u32, 260u32);
     let ink = Color::from_rgb_u8(230, 232, 240);
     reset_layout_runtime();
+    common::open_text_metrics();
 
     let label = Text::new(
         || "Page content behind".to_string(),

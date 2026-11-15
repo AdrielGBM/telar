@@ -202,7 +202,7 @@ fn a_face_a_hot_guest_adds_while_it_runs_reaches_the_host() {
     );
     drop(tree);
     drop(app);
-    telar::install_default_text_metrics();
+    telar::open_default_text_metrics();
     let arriving =
         TextStyle::new(14.0, Color::BLACK).with_font_family(FontFamily::named("Arriving Face"));
     let (width, _) = telar::measure_text("Arrived", None, f32::INFINITY, &arriving);

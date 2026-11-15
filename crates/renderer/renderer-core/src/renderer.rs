@@ -149,6 +149,11 @@ impl From<Box<dyn RenderBackend + Send>> for BuiltRenderer {
 pub trait RendererFactory<W>: 'static {
     fn build(&self, window: &W, build: RendererBuild<'_>) -> Result<BuiltRenderer, RendererError>;
 
+    /// What the surface this renderer draws lays its text out with, handed to the surface before its tree is built.
+    ///
+    /// Asked of the factory rather than of a built renderer because a tree is measured before the first renderer lands, and it has to be measured the way that renderer will draw it: in shaped glyphs, in a terminal's cells, by the engine that draws a document.
+    fn text_metrics(&self) -> std::sync::Arc<dyn crate::TextMetrics>;
+
     /// Whether this renderer draws text by shaping glyphs from font files.
     ///
     /// `false` for a backend whose text is somebody else's to draw — a terminal writes the characters and lets the terminal emulator pick the face. Saying so keeps the runtime from scanning the system font directories on startup for a renderer that will never open one of them.

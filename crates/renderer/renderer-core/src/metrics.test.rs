@@ -34,38 +34,6 @@ impl TextMetrics for Fixed {
     }
 }
 
-// One test rather than three: the installed measurer is process-wide, so separate tests would race over it.
-#[test]
-fn a_frontends_own_metrics_survive_the_runtimes_default() {
-    let style = TextStyle::new(14.0, crate::Color::BLACK);
-
-    assert!(
-        set_default_text_metrics(Fixed(10.0)),
-        "the first default install takes"
-    );
-    assert_eq!(measure_text("ab", None, 1.0e6, &style).0, 20.0);
-
-    assert!(
-        !set_default_text_metrics(Fixed(1.0)),
-        "a second default must not displace metrics already in force — that is the whole point of it"
-    );
-    assert_eq!(line_height(14.0), 10.0);
-
-    set_text_metrics(Fixed(2.0));
-    assert_eq!(
-        line_height(14.0),
-        2.0,
-        "an explicit install replaces, so a frontend can change its mind"
-    );
-}
-
-#[test]
-fn invalidating_moves_the_generation_forward() {
-    let before = text_metrics_generation();
-    invalidate_text_metrics();
-    assert!(text_metrics_generation() > before);
-}
-
 struct Proportional;
 
 impl TextMetrics for Proportional {
@@ -182,7 +150,7 @@ fn a_line_whose_extent_does_not_grow_cannot_be_fitted() {
 }
 
 #[test]
-fn the_installed_measurer_answers_where_each_cluster_is_drawn() {
+fn a_measurer_answers_where_each_cluster_is_drawn() {
     let style = TextStyle::new(14.0, crate::Color::BLACK);
     let lines = Fixed(10.0).laid_lines("ab\nxe\u{301}", None, 1.0e6, &style);
     assert_eq!(lines.len(), 2);
