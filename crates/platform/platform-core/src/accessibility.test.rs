@@ -13,6 +13,10 @@ fn node(role: Role, name: &str) -> AccessNode {
         enabled: true,
         toggled: None,
         value: None,
+        description: None,
+        invalid: false,
+        required: false,
+        readonly: false,
         lang: None,
         url: None,
         current: None,
@@ -33,7 +37,7 @@ fn node(role: Role, name: &str) -> AccessNode {
 #[test]
 fn a_transcript_reads_each_node_as_a_line() {
     let mut agree = node(Role::CheckBox, "I agree");
-    agree.toggled = Some(false);
+    agree.toggled = Some(Toggle::Off);
     let mut send = node(Role::Button, "Send");
     send.enabled = false;
     let nodes = [
@@ -69,7 +73,7 @@ fn the_focused_node_says_so_last() {
 fn a_state_is_read_in_the_words_of_its_role() {
     let toggled = |role: Role, name: &str, on: bool| {
         let mut node = node(role, name);
-        node.toggled = Some(on);
+        node.toggled = Some(Toggle::from(on));
         node
     };
     let nodes = [
@@ -94,7 +98,7 @@ fn a_state_is_read_in_the_words_of_its_role() {
 fn a_tree_row_is_read_as_selected_and_open_or_shut() {
     let row = |name: &str, selected: bool, expanded: Option<bool>| {
         let mut node = node(Role::TreeItem, name);
-        node.toggled = Some(selected);
+        node.toggled = Some(Toggle::from(selected));
         node.expanded = expanded;
         node
     };
@@ -193,9 +197,9 @@ fn a_list_of_several_choices_says_so() {
     let mut list = node(Role::ListBox, "Recipients");
     list.multiselectable = true;
     let mut ada = node(Role::Option, "Ada");
-    ada.toggled = Some(true);
+    ada.toggled = Some(Toggle::On);
     let mut alan = node(Role::Option, "Alan");
-    alan.toggled = Some(false);
+    alan.toggled = Some(Toggle::Off);
     assert_eq!(
         transcript(&[list, ada, alan, node(Role::ListBox, "Sender")]),
         "Recipients, listbox, multiselectable\nAda, option, selected\nAlan, option\nSender, listbox"
@@ -259,5 +263,72 @@ fn a_heading_is_read_with_its_level() {
             node(Role::Heading(3), "Privacy")
         ]),
         "Settings, heading, level 1\nPrivacy, heading, level 3"
+    );
+}
+
+/// A mixed checkbox and a mixed toggle button say so; a selection cannot be partial, so a mixed one is said as not selected.
+#[test]
+fn a_mixed_state_is_read_as_partial_where_its_role_can_be() {
+    let mixed = |role: Role, name: &str| {
+        let mut node = node(role, name);
+        node.toggled = Some(Toggle::Mixed);
+        node
+    };
+    assert_eq!(
+        transcript(&[
+            mixed(Role::CheckBox, "Select all"),
+            mixed(Role::Button, "Bold"),
+            mixed(Role::Tab, "General"),
+        ]),
+        "Select all, checkbox, partially checked\nBold, button, partially pressed\nGeneral, tab"
+    );
+}
+
+/// A value is read after the role: a number's own words where it has them, the bare number otherwise, and a field's text as it is.
+#[test]
+fn a_value_is_read_after_the_role() {
+    let valued = |role: Role, name: &str, value: Value| {
+        let mut node = node(role, name);
+        node.value = Some(value);
+        node
+    };
+    let reading = NumericValue {
+        now: 2.0,
+        min: 1.0,
+        max: 3.0,
+    };
+    assert_eq!(
+        transcript(&[
+            valued(Role::Slider, "Volume", Value::from(reading)),
+            valued(
+                Role::Slider,
+                "Quality",
+                Value::Number {
+                    reading,
+                    text: Some("Medium".into()),
+                },
+            ),
+            valued(
+                Role::TextInput,
+                "Email",
+                Value::Text("ada@example.com".into())
+            ),
+        ]),
+        "Volume, slider, 2\nQuality, slider, Medium\nEmail, textbox, ada@example.com"
+    );
+}
+
+/// A field says it must be filled in, that what it holds is wrong, or that it cannot be changed, and then what it describes itself as.
+#[test]
+fn a_field_is_read_with_its_validity_and_its_description() {
+    let mut email = node(Role::TextInput, "Email");
+    email.required = true;
+    email.invalid = true;
+    email.description = Some("Enter an address with an @".to_string());
+    let mut id = node(Role::TextInput, "Account id");
+    id.readonly = true;
+    assert_eq!(
+        transcript(&[email, id]),
+        "Email, textbox, required, invalid, Enter an address with an @\nAccount id, textbox, read only"
     );
 }

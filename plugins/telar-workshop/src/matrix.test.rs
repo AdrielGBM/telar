@@ -252,7 +252,7 @@ impl Workshop {
     }
 
     /// Whether `axis` is on in the header's menu of axes.
-    fn picked(&mut self, axis: &str) -> Option<bool> {
+    fn picked(&mut self, axis: &str) -> Option<telar::Toggle> {
         self.click(Role::Button, AXES_MENU);
         let on = self.axis_row(axis).toggled;
         self.send(named_key(NamedKey::Escape));
@@ -399,7 +399,7 @@ fn a_preview_with_no_matrix_builds_one_from_the_axes_picked() {
 #[test]
 fn picking_an_axis_changes_the_preview_s_matrix_and_restoring_brings_it_back() {
     let mut workshop = Workshop::open(BOTH_WAYS);
-    assert_eq!(workshop.picked("Direction"), Some(true));
+    assert_eq!(workshop.picked("Direction"), Some(telar::Toggle::On));
     assert_eq!(workshop.state().matrix_axes().peek(), MatrixAxes::Declared);
 
     workshop.pick("ghost");
@@ -456,7 +456,7 @@ fn the_first_cell_is_focused_and_a_press_focuses_another_for_the_panels_to_follo
     );
     assert_eq!(
         workshop.node(Role::Button, "Focus dir: ltr").toggled,
-        Some(true)
+        Some(telar::Toggle::On)
     );
     assert!(!state.inspection().nodes().is_empty());
     let first = state.inspection().placement();
@@ -468,11 +468,11 @@ fn the_first_cell_is_focused_and_a_press_focuses_another_for_the_panels_to_follo
     );
     assert_eq!(
         workshop.node(Role::Button, "Focus dir: rtl").toggled,
-        Some(true)
+        Some(telar::Toggle::On)
     );
     assert_eq!(
         workshop.node(Role::Button, "Focus dir: ltr").toggled,
-        Some(false)
+        Some(telar::Toggle::Off)
     );
     state.panel_tab().set(PanelTab::Accessibility);
     workshop.settle();

@@ -65,15 +65,15 @@ impl Workshop {
 #[test]
 fn the_top_bar_switches_between_the_canvas_the_matrix_and_the_docs() {
     let mut workshop = Workshop::open();
-    assert_eq!(workshop.tab("Canvas").toggled, Some(true));
-    assert_eq!(workshop.tab("Matrix").toggled, Some(false));
-    assert_eq!(workshop.tab("Docs").toggled, Some(false));
+    assert_eq!(workshop.tab("Canvas").toggled, Some(telar::Toggle::On));
+    assert_eq!(workshop.tab("Matrix").toggled, Some(telar::Toggle::Off));
+    assert_eq!(workshop.tab("Docs").toggled, Some(telar::Toggle::Off));
     workshop.click("Matrix");
     assert_eq!(workshop.view(), ViewMode::Matrix);
-    assert_eq!(workshop.tab("Matrix").toggled, Some(true));
+    assert_eq!(workshop.tab("Matrix").toggled, Some(telar::Toggle::On));
     workshop.click("Docs");
     assert_eq!(workshop.view(), ViewMode::Docs);
-    assert_eq!(workshop.tab("Docs").toggled, Some(true));
+    assert_eq!(workshop.tab("Docs").toggled, Some(telar::Toggle::On));
     workshop.click("Canvas");
     assert_eq!(workshop.view(), ViewMode::Canvas);
 }

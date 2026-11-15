@@ -29,7 +29,7 @@ pub use keys::ConsumedKeys;
 pub use location::Location;
 pub use modal::Modal;
 pub use outline::{Positioning, SetPosition};
-pub use reading::{NumericValue, Orientation, SortDirection};
+pub use reading::{NumericValue, Orientation, SortDirection, Value};
 pub use uri::{
     DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, RouteAddress, Uri, UriError, allow_uri_scheme,
     is_uri_scheme_allowed,
@@ -140,6 +140,8 @@ pub enum Role {
     Status,
     /// A feed of entries added over time, newest last, announced as they arrive without taking focus: a console, a build output.
     Log,
+    /// A message that needs the reader's attention now, announced at once over whatever is being read without taking focus: an error, a warning that cannot wait.
+    Alert,
     /// Not a control at all: text the interface is showing. Never focusable — it is here because a reader given only the buttons cannot say what the buttons are for.
     Label,
     /// Keys a person presses, shown as a hint beside the command they run: `Ctrl+K`, a sequence of chords. Read as text, its name in place of what it draws; never focusable. A document writes it as `<kbd>`, which has no ARIA role of its own.
@@ -197,7 +199,12 @@ impl Role {
         self.is_region()
             || matches!(
                 self,
-                Self::Group | Self::Heading(_) | Self::ListItem | Self::Status | Self::Log
+                Self::Group
+                    | Self::Heading(_)
+                    | Self::ListItem
+                    | Self::Status
+                    | Self::Log
+                    | Self::Alert
             )
     }
 
@@ -277,8 +284,20 @@ impl Role {
             Self::Splitter => "separator",
             Self::Status => "status",
             Self::Log => "log",
+            Self::Alert => "alert",
             Self::Label => "label",
             Self::KeyboardInput => "keyboardinput",
+        }
+    }
+
+    /// How urgently a reader announces a change inside a box of this role, or `None` for a role whose changes it is not told of unasked.
+    ///
+    /// Read through the role rather than set beside it, so an alert can never be announced politely nor a status interrupt.
+    pub fn live(&self) -> Option<Live> {
+        match self {
+            Self::Status | Self::Log => Some(Live::Polite),
+            Self::Alert => Some(Live::Assertive),
+            _ => None,
         }
     }
 
@@ -374,6 +393,7 @@ impl Role {
             "splitter" | "separator" => Self::Splitter,
             "status" => Self::Status,
             "log" => Self::Log,
+            "alert" => Self::Alert,
             "label" | "text" => Self::Label,
             "keyboardinput" => Self::KeyboardInput,
             _ => return None,
@@ -392,6 +412,39 @@ pub enum ToggleKind {
     Selected,
     /// A disclosure whose content is showing.
     Expanded,
+}
+
+/// The on/off state a control is in, read through its role's [`Role::toggle_kind`].
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Toggle {
+    Off,
+    On,
+    /// Partly on: a checkbox standing for a set of which some are ticked, a toggle button whose selection is partly bold. Said only by a checked or a pressed state; a selection or an expansion is there or not, so a mixed one is said as off.
+    Mixed,
+}
+
+impl From<bool> for Toggle {
+    fn from(on: bool) -> Self {
+        if on { Self::On } else { Self::Off }
+    }
+}
+
+/// How urgently a reader announces a change inside a live region, as ARIA's `aria-live` says it; see [`Role::live`].
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Live {
+    /// Once the reader has finished what it is saying.
+    Polite,
+    /// At once, cutting off what it is saying.
+    Assertive,
+}
+
+impl Live {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Polite => "polite",
+            Self::Assertive => "assertive",
+        }
+    }
 }
 
 /// What a control opens, as ARIA's `aria-haspopup` says it: a reader names the kind before the control is pressed, so the user knows what Enter is about to put in front of them.
@@ -422,16 +475,24 @@ pub struct Semantics {
     ///
     /// Left `None` wherever the drawn text already says it, which is the common case and the one that cannot fall out of step with what is on screen.
     pub label: Option<Arc<str>>,
+    /// What a reader says after the name, role and state, as help rather than identity: the hint under a field, the message that says why it is invalid, a tooltip's text. `None` where nothing more is said.
+    pub description: Option<Arc<str>>,
     /// Where a [`Link`](Role::Link) goes. Absent on every other role.
     pub link: Option<Destination>,
     /// Whether the box is where the keyboard currently is.
     ///
     /// A target that draws its own focus ring does not need telling; one that hands the box to a document does, because the document has a focus of its own and the two must be the same box.
     pub focused: bool,
-    /// Whether a control carrying an on/off state is in it; what that state is — checked, pressed, selected, expanded — is its role's [`Role::toggle_kind`]. `None` for the roles that have no such state — never a default of `false` for the ones that do, which announces every checkbox as unticked.
-    pub toggled: Option<bool>,
+    /// The on/off state a control that carries one is in — on, off or mixed; what that state is — checked, pressed, selected, expanded — is its role's [`Role::toggle_kind`]. `None` for the roles that have no such state — never a default of [`Toggle::Off`] for the ones that do, which announces every checkbox as unticked.
+    pub toggled: Option<Toggle>,
     /// Whether the box is present but not operable. Announced rather than hidden: a control that is genuinely not there is absent instead.
     pub disabled: bool,
+    /// Whether what a field holds fails its checks, so a reader says so before the person moves on.
+    pub invalid: bool,
+    /// Whether a field must be filled in before what it belongs to can be submitted.
+    pub required: bool,
+    /// Whether a field shows a value the person can read, select and copy but not change. Unlike [`disabled`](Self::disabled), it still takes focus.
+    pub readonly: bool,
     /// Whether the box refuses pointer events, so what is drawn under it takes them instead.
     pub click_through: bool,
     /// How the keyboard reaches the box. `None` for a box that cannot hold focus.
@@ -444,8 +505,8 @@ pub struct Semantics {
     pub anchor: Option<Arc<str>>,
     /// Whether a link is the current one of its set: the page being shown, the place on the page the reader is at. Read through [`current_kind`](Self::current_kind), since what it is the current one of is its destination's to say.
     pub current: bool,
-    /// Where a control that carries a number stands. `None` for the roles that carry none.
-    pub value: Option<NumericValue>,
+    /// What a control shows as its value: where a slider stands, what a field holds, the choice a select has made. `None` for a box that carries none.
+    pub value: Option<Value>,
     /// The axis a splitter, slider or other oriented control runs along. `None` where the role has no axis or none was declared.
     pub orientation: Option<Orientation>,
     /// Whether a row that has rows under it shows them; apart from [`toggled`](Self::toggled) because a tree row is selected and expanded at once. `None` for a leaf and for every role that does not expand this way.
@@ -606,7 +667,7 @@ impl Semantics {
     }
 
     /// The state a control is in, as the thing operating it reports it.
-    pub fn in_state(mut self, focused: bool, toggled: Option<bool>, disabled: bool) -> Self {
+    pub fn in_state(mut self, focused: bool, toggled: Option<Toggle>, disabled: bool) -> Self {
         self.focused = focused;
         self.toggled = toggled;
         self.disabled = disabled;

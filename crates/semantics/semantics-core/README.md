@@ -9,9 +9,11 @@ Besides roles, it defines `ConsumedKeys`, the keys a focused box keeps from its 
 paging and Home/End), with each role's default in `Role::consumed_keys`. `Semantics::focusable` carries the
 set and whether the box is a Tab stop right now. See [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
 
-A control's on/off state is one flag, `Semantics::toggled`, read through its role: `Role::toggle_kind` says whether
-it is checked (checkbox, radio, switch), pressed (a button, which makes it a toggle button), selected (a tab) or
-expanded (a disclosure). See [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#controls-and-their-state).
+A control's on/off state is one `Toggle` (`Off`, `On`, `Mixed`), `Semantics::toggled`, read through its role:
+`Role::toggle_kind` says whether it is checked (checkbox, radio, switch), pressed (a button, which makes it a toggle
+button), selected (a tab) or expanded (a disclosure). Its value is a `Value`, a number with optional words or a
+text; `description`, `invalid`, `required` and `readonly` say the rest of what a field is. A live region's urgency,
+`Live`, is its role's to say (`Role::live`): `status` and `log` are polite, `alert` assertive. See [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#controls-and-their-state).
 
 A link marked current is `Semantics::current`, and what it is the current one of (`CurrentKind`: a page, a
 location on the page, or plainly the current item) is its destination's to say, through

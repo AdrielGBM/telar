@@ -6,7 +6,7 @@ use telar::preview::{Play, PreviewCtx, PreviewEntry, by_role, by_text};
 use telar::{
     Accessible, AvailableSpace, BorderRadius, Color, ColorScheme, ComponentList, DrawCommand,
     Event, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Paint, PointerButton,
-    PointerSource, Rect, RectStyle, Role, SurfaceAmendment, compute_layout, new_container,
+    PointerSource, Rect, RectStyle, Role, SurfaceAmendment, Toggle, compute_layout, new_container,
     track_layout,
 };
 
@@ -118,7 +118,7 @@ fn played(build: fn(&PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError>) ->
     Play::mount(&entry).unwrap_or_else(|error| panic!("the tag mounts: {error}"))
 }
 
-fn buttons(play: &Play) -> Vec<(String, Option<bool>)> {
+fn buttons(play: &Play) -> Vec<(String, Option<Toggle>)> {
     play.snapshot()
         .into_iter()
         .filter(|node| node.role == Role::Button)
@@ -449,7 +449,7 @@ fn a_tag_with_none_of_the_behaviours_is_text_and_no_tab_stop() {
 fn selected_alone_makes_a_filter_bound_to_it() {
     let mut play = played(bound);
     let images = || by_role(Role::Button).named("Images");
-    assert_eq!(buttons(&play), [("Images".to_string(), Some(false))]);
+    assert_eq!(buttons(&play), [("Images".to_string(), Some(Toggle::Off))]);
     play.click(images()).unwrap();
     play.expect_toggled(images(), true).unwrap();
     assert!(play_signal(&play), "the press flips the bound state");
@@ -466,7 +466,7 @@ fn selected_alone_makes_a_filter_bound_to_it() {
 fn on_toggle_alone_makes_a_filter_that_keeps_its_own_state() {
     let mut play = played(uncontrolled);
     let images = || by_role(Role::Button).named("Images");
-    assert_eq!(buttons(&play), [("Images".to_string(), Some(false))]);
+    assert_eq!(buttons(&play), [("Images".to_string(), Some(Toggle::Off))]);
     play.click(images()).unwrap();
     play.expect_toggled(images(), true).unwrap();
     play.expect_focused(images()).unwrap();
@@ -506,7 +506,7 @@ fn a_filter_with_an_action_is_a_toggle_with_the_action_beside_it() {
     assert_eq!(
         buttons(&play),
         [
-            ("Images".to_string(), Some(true)),
+            ("Images".to_string(), Some(Toggle::On)),
             ("Remove Images".to_string(), None),
         ]
     );

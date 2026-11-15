@@ -530,7 +530,7 @@ fn every_row_says_it_is_a_tree_item_selected_open_and_where_it_sits() {
         1,
         "the tree is one control"
     );
-    let rows: Vec<(Option<bool>, Option<bool>, Option<SetPosition>)> = exposed
+    let rows: Vec<(Option<telar::Toggle>, Option<bool>, Option<SetPosition>)> = exposed
         .iter()
         .filter(|e| e.role == Role::TreeItem)
         .map(|e| (e.toggled, e.expanded, e.position))
@@ -543,11 +543,11 @@ fn every_row_says_it_is_a_tree_item_selected_open_and_where_it_sits() {
         })
     };
     for expected in [
-        (Some(false), Some(true), place(1, 1, 3)),
-        (Some(true), Some(false), place(2, 1, 2)),
-        (Some(false), None, place(2, 2, 2)),
-        (Some(false), Some(false), place(1, 2, 3)),
-        (Some(false), None, place(1, 3, 3)),
+        (Some(telar::Toggle::Off), Some(true), place(1, 1, 3)),
+        (Some(telar::Toggle::On), Some(false), place(2, 1, 2)),
+        (Some(telar::Toggle::Off), None, place(2, 2, 2)),
+        (Some(telar::Toggle::Off), Some(false), place(1, 2, 3)),
+        (Some(telar::Toggle::Off), None, place(1, 3, 3)),
     ] {
         assert!(rows.contains(&expected), "{expected:?} is among {rows:?}");
     }

@@ -504,7 +504,7 @@ fn the_results_are_a_named_list_box_whose_cursor_row_is_selected() {
     let selected = |mounted: &Mounted| -> Vec<String> {
         telar::inspect::snapshot(&mounted.tree.commands())
             .into_iter()
-            .filter(|node| node.role == Role::Option && node.toggled == Some(true))
+            .filter(|node| node.role == Role::Option && node.toggled == Some(telar::Toggle::On))
             .map(|node| node.name)
             .collect()
     };

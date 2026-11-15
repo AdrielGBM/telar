@@ -35,6 +35,7 @@ ask nothing of what it holds:
 | `article` | A self-contained piece, whatever is inside it. |
 | `h1` … `h6` | A heading, at the depth of the outline the call sits in — which the component cannot know. Named by the words drawn in it unless `a11y_label:` names it. |
 | `status`, `log` | A live region: what changes in it is announced without taking focus. |
+| `alert` | A live region that interrupts: what changes in it is announced at once, over what a reader is saying, without taking focus. |
 | `listitem` (`item`) | One item of the list the call sits in. The list is the call site's own box, so the call is where the pair is kept true. |
 | `group` | Says nothing: over a region the component made, it takes the landmark away on every target, and it adds no node of its own on any. |
 
@@ -125,6 +126,10 @@ says what it means, the way AccessKit models it:
 | `button` | pressed: a toggle button, such as bold in a toolbar |
 | `tab`, `option` | selected |
 
+What it reads is a `bool` or a `Toggle`: `Off`, `On`, or `Mixed` for a checkbox standing for a set of which some are
+ticked, or a toggle button whose selection is partly bold. Only checked and pressed can be mixed; a tab or an option
+that reads `Mixed` is said as not selected.
+
 ```text
 box role:button a11y_label:"Add one" on_press:(|| $count += 1)
     text "+1"
@@ -144,15 +149,28 @@ the catalogue's accordion uses the same flag for expanded.
 
 | Target | Role | State |
 | --- | --- | --- |
-| Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button, `aria-selected` on a tab or an option, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
-| Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus` and `Click` actions. | AccessKit `toggled` for checked and pressed (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
-| Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`, `pressed`/`not pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
+| Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button (either one `mixed` when partly on), `aria-selected` on a tab or an option, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
+| Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus` and `Click` actions. | AccessKit `toggled` for checked and pressed, `Mixed` included (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
+| Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`/`partially checked`, `pressed`/`not pressed`/`partially pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
 | Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
 | Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to: the canvas, which is only built when `--renderer canvas` asks for it, carries no accessibility tree yet, so the document renderer (`web-dom`, the default) is the browser build assistive technology can read. | — |
 
 A link has one state of its own: `current:` marks it as the current one of its set, the page being shown or
 the place on the page the reader is at. It is `aria-current` in a document, AccessKit's `aria_current` on the
 desktop and `, current` in the terminal's reading; see [docs/links.md](links.md#the-current-link).
+
+A control can also say what it shows and how it stands. Its value is a `Value`: `Number` for a slider, a spin
+button or a splitter, with the words a reader says for it where the bare number would not ("Medium" for 2 of 3),
+or `Text` for what a field holds and the choice a select has made. A `description` is what a reader says after
+the name, role and state, as help rather than identity: a field's hint, why it is invalid, a tooltip's text.
+`invalid`, `required` and `readonly` say that what a field holds fails its checks, that it must be filled in,
+and that it can be read but not changed.
+
+| Target | Value | Description and validity |
+| --- | --- | --- |
+| Browser, document (`web-dom`) | `aria-valuenow`, `aria-valuemin`, `aria-valuemax`, and `aria-valuetext` for its words on a slider, spin button, progress bar or splitter. A text value writes no attribute: the text the element holds is its value. | `aria-description`, `aria-invalid`, `aria-required`, `aria-readonly`. |
+| Desktop | AccessKit's numeric value and bounds, and its `value` for the words or the text. | AccessKit's `description`, `invalid`, `required` and `read_only`. |
+| Terminal | After the role: the words where it has them, the number otherwise (`Volume, slider, 40`). | `, required`, `, invalid`, `, read only`, then the description. |
 
 ## Lists that open from a control
 
@@ -410,7 +428,7 @@ nearest box around it, along the frame's element nesting, that is a node itself:
 named, a box that says where it sits, or a box given no name whose role is a structure — a `tablist`, `tabpanel`,
 `menu`, `listbox`, `tree`, `grid`, `row`, `toolbar`, `list`, `dialog`, `status`, `log`, `article` or a landmark
 (`banner`, `navigation`, `main`, `complementary`, `contentinfo`, `search`) — as long as it holds a node; holding
-none, it is left out. A box whose role an application said with `role:` on a call (`a11y_role`) is such a node for any role a call may say but `group` — a `listitem`, an unnamed `section` or `form` included — since a role said on purpose is never scaffolding; one a widget gave its own wrapper is a node only as above. The boxes between them, plain groups and scroll areas, are not nodes. AccessKit gets each landmark as its own role (`search` as `Search`), and `status` and `log` as polite live regions. A box named as a group
+none, it is left out. A box whose role an application said with `role:` on a call (`a11y_role`) is such a node for any role a call may say but `group` — a `listitem`, an unnamed `section` or `form` included — since a role said on purpose is never scaffolding; one a widget gave its own wrapper is a node only as above. The boxes between them, plain groups and scroll areas, are not nodes. AccessKit gets each landmark as its own role (`search` as `Search`), `status` and `log` as polite live regions and `alert` as an assertive one. A box named as a group
 reads as a label beside what it groups rather than around it. A heading given no name is a node too, as the
 document's `<h2>` is: a heading of its level named by the words drawn in it, and by the names of the boxes with no
 role of their own inside it, holding the link runs and controls among them; its words name it and are not read

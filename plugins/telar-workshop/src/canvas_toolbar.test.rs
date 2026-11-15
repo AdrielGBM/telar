@@ -427,7 +427,7 @@ fn reduced_motion_is_switched_for_the_whole_application() {
         workshop
             .control(Role::MenuItemCheckBox, "Reduce motion")
             .toggled,
-        Some(true),
+        Some(telar::Toggle::On),
         "the row is announced as on, under the name it had while off"
     );
     workshop.key(NamedKey::Escape);
@@ -516,7 +516,10 @@ fn the_grid_lines_the_canvas_every_eight_of_its_px() {
     let canvas = workshop.canvas_rect("env");
     let before = hairlines(&workshop, canvas);
     workshop.click(Role::Button, "Grid");
-    assert_eq!(workshop.control(Role::Button, "Grid").toggled, Some(true));
+    assert_eq!(
+        workshop.control(Role::Button, "Grid").toggled,
+        Some(telar::Toggle::On)
+    );
     assert_eq!(
         hairlines(&workshop, canvas) - before,
         49 + 37,

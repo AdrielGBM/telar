@@ -7,7 +7,7 @@ use geometry_core::{Insets, Rect};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
     ConsumedKeys, Cursor, Destination, DragOutcome, DroppedData, Event, IntoDestination, Key,
-    NamedKey, NumericValue, Orientation, OutgoingDrag, PointerButton, PointerSource,
+    NamedKey, Orientation, OutgoingDrag, PointerButton, PointerSource, Toggle, Value,
 };
 use reactive_core::{Reactive, RwSignal, effect, signal};
 use renderer_core::{BlendMode, Border, Declared, RectStyle};
@@ -698,15 +698,15 @@ impl StyledContainer {
     /// Declares that this control carries an on/off state, and how to read it: checked on a checkbox, radio or switch, pressed on a button (a toggle button), selected on a tab and expanded on a disclosure, as [`Role::toggle_kind`](renderer_core::Role::toggle_kind) says.
     ///
     /// Only meaningful after [`control`](Self::control), and only for the roles that have one; any other role ignores it. Without it a reader announces "checkbox" and stops — and a default of "unticked" would be worse, since it would be confidently wrong for half of them.
-    pub fn toggled(self, state: impl Fn() -> bool + 'static) -> Self {
+    pub fn toggled<S: Into<Toggle>>(self, state: impl Fn() -> S + 'static) -> Self {
         if let Some(id) = self.focusable.id {
             focus::set_toggled(id, state);
         }
         self
     }
 
-    /// Declares the number this box carries, so a reader says where a slider stands and not only that it is one. The counterpart of [`toggled`](Self::toggled) for a control whose state is a value.
-    pub fn valued(self, read: impl Fn() -> NumericValue + 'static) -> Self {
+    /// Declares the value this box carries, so a reader says where a slider stands or what a field holds and not only that it is one: a [`NumericValue`](platform_core::NumericValue) or a [`Value`]. The counterpart of [`toggled`](Self::toggled) for a control whose state is a value.
+    pub fn valued<V: Into<Value>>(self, read: impl Fn() -> V + 'static) -> Self {
         if let Some(id) = self.focusable.id {
             focus::set_value(id, read);
         }

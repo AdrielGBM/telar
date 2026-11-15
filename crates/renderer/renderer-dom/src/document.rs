@@ -18,7 +18,7 @@ use platform_core::{
 };
 use renderer_core::{
     BlendMode, Color, CurrentKind, DrawCommand, Element, Focusable, ImageData, Modal, Picture,
-    Role, TextStyle, ToggleKind,
+    Role, TextStyle, Toggle, ToggleKind, Value,
 };
 
 use crate::box_key::BoxKey;
@@ -199,6 +199,7 @@ pub(crate) struct PaintNode {
 pub(crate) struct Described {
     pub role: Option<&'static str>,
     pub label: Option<String>,
+    pub description: Option<String>,
     pub link: Option<String>,
     // Whether the link is an external one, which a page must not be able to reach back from.
     pub external: bool,
@@ -210,11 +211,15 @@ pub(crate) struct Described {
     pub inert: bool,
     /// Whether the box is a dialog inside the modal layer that is up.
     pub modal: bool,
+    /// How urgently a reader announces a change inside the box, as its role says.
+    pub live: Option<&'static str>,
     /// A control's on/off state and what its role makes it, which decides the attribute that carries it.
-    pub toggled: Option<(ToggleKind, bool)>,
+    pub toggled: Option<(ToggleKind, Toggle)>,
     /// What a link marked current is the current one of.
     pub current: Option<CurrentKind>,
     pub value: Option<NumericValue>,
+    /// The words a reader says for the value, on a role that carries a range.
+    pub value_text: Option<String>,
     pub orientation: Option<Orientation>,
     /// Whether a tree row with rows under it shows them, beside the selection its `toggled` carries.
     pub expanded: Option<bool>,
@@ -243,6 +248,9 @@ pub(crate) struct Described {
     /// Whether a box points at this one with `aria-controls`, which takes an `id` to point at.
     pub is_controlled: bool,
     pub disabled: bool,
+    pub invalid: bool,
+    pub required: bool,
+    pub readonly: bool,
     /// Part of the record even though it writes no attribute: a box that has just become the focused one is a box the reconcile has to act on, and comparing without it made the acting unreachable.
     pub focused: bool,
     pub control: bool,
@@ -277,6 +285,7 @@ impl Described {
             attributes.push(("aria-label", label));
         }
         attributes.extend([
+            ("aria-description", self.description.clone()),
             ("href", self.link.clone()),
             ("target", self.opens_beside.then(|| "_blank".to_string())),
             ("rel", self.external.then(|| "noopener".to_string())),
@@ -285,6 +294,7 @@ impl Described {
             ("aria-hidden", flag(self.hidden)),
             ("inert", self.inert.then(String::new)),
             ("aria-modal", flag(self.modal)),
+            ("aria-live", self.live.map(str::to_string)),
             ("aria-checked", self.state_of(ToggleKind::Checked)),
             ("aria-pressed", self.state_of(ToggleKind::Pressed)),
             ("aria-selected", self.state_of(ToggleKind::Selected)),
@@ -320,6 +330,7 @@ impl Described {
                     .filter(|v| v.max.is_finite())
                     .map(|v| v.max.to_string()),
             ),
+            ("aria-valuetext", self.value_text.clone()),
             (
                 "aria-orientation",
                 self.orientation.map(|o| o.as_str().to_string()),
@@ -345,6 +356,9 @@ impl Described {
                 self.row_count.map(|count| count.to_string()),
             ),
             ("aria-disabled", flag(self.disabled)),
+            ("aria-invalid", flag(self.invalid)),
+            ("aria-required", flag(self.required)),
+            ("aria-readonly", flag(self.readonly)),
             ("tabindex", tabindex.map(str::to_string)),
             (CONSUMED_KEYS_ATTRIBUTE, keys),
             (FOCUS_BOX_ATTRIBUTE, self.focusable.map(|_| key.to_string())),
@@ -366,11 +380,17 @@ impl Described {
             .map(|(_, position)| number(position).to_string())
     }
 
-    /// The value of the state attribute for `kind`: written only on the role that state belongs to, so a switch never carries `aria-pressed` and a toggle button never `aria-checked`.
+    /// The value of the state attribute for `kind`: written only on the role that state belongs to, so a switch never carries `aria-pressed` and a toggle button never `aria-checked`. Only a checked or a pressed state can be `mixed`; a selection or an expansion is there or not.
     fn state_of(&self, kind: ToggleKind) -> Option<String> {
-        self.toggled
-            .filter(|(carried, _)| *carried == kind)
-            .map(|(_, on)| on.to_string())
+        let (_, state) = self.toggled.filter(|(carried, _)| *carried == kind)?;
+        Some(
+            match (kind, state) {
+                (ToggleKind::Checked | ToggleKind::Pressed, Toggle::Mixed) => "mixed",
+                (_, Toggle::On) => "true",
+                (_, Toggle::Off | Toggle::Mixed) => "false",
+            }
+            .to_string(),
+        )
     }
 }
 
@@ -1621,6 +1641,7 @@ fn describe(element: &Element, tag: &'static str) -> Described {
     Described {
         role,
         label: label.map(str::to_string),
+        description: semantics.description.as_deref().map(str::to_string),
         link: link.map(platform_core::address_of),
         external: matches!(link, Some(Destination::External(_))),
         opens_beside: matches!(link, Some(Destination::External(uri)) if uri.is_web()),
@@ -1629,11 +1650,18 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         hidden,
         inert: false,
         modal: false,
+        live: semantics.role.live().map(|live| live.as_str()),
         toggled: semantics
             .toggled
-            .and_then(|on| Some((semantics.role.toggle_kind()?, on))),
+            .and_then(|state| Some((semantics.role.toggle_kind()?, state))),
         current: semantics.current_kind().filter(|_| link.is_some()),
-        value: semantics.value,
+        value: semantics.value.as_ref().and_then(Value::reading),
+        value_text: semantics
+            .value
+            .as_ref()
+            .and_then(Value::text)
+            .filter(|_| carries_range(semantics.role))
+            .map(str::to_string),
         orientation: semantics.orientation,
         expanded: semantics.expanded,
         has_popup: semantics.has_popup,
@@ -1651,6 +1679,9 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         controls: None,
         is_controlled: false,
         disabled: semantics.disabled,
+        invalid: semantics.invalid,
+        required: semantics.required,
+        readonly: semantics.readonly,
         focused: semantics.focused,
         control: semantics.role.is_control(),
         focusable: semantics.focusable,
@@ -1808,6 +1839,14 @@ pub(crate) fn aria_role(role: Role) -> Option<&'static str> {
         Role::ListItem => Some("listitem"),
         other => Some(other.as_str()),
     }
+}
+
+/// Whether ARIA reads `aria-valuetext` on a box of this role: only a range carries it. A field's or a select's text value has no attribute of its own, because a document reads the text the element holds as its value.
+fn carries_range(role: Role) -> bool {
+    matches!(
+        role,
+        Role::Slider | Role::SpinButton | Role::ProgressBar | Role::Splitter
+    )
 }
 
 #[cfg(test)]

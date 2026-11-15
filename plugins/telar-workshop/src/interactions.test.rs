@@ -186,7 +186,7 @@ fn a_failed_step_is_red_with_why_and_the_frame_it_left() {
     workshop.next_turn();
     assert!(workshop.draws("Failed at step 2 of 2"));
     let failed = workshop.step("Step 2: expect text \"Pressed 9\", failed");
-    assert_eq!(failed.toggled, Some(false));
+    assert_eq!(failed.toggled, Some(telar::Toggle::Off));
     assert!(
         texts(&workshop.tree)
             .iter()
@@ -234,13 +234,13 @@ fn picking_a_step_shows_its_frame_in_place_of_the_live_canvas_until_back_to_live
     workshop.next_turn();
     let first = workshop.step("Step 1:").rect;
     workshop.press_at(first);
-    assert_eq!(workshop.step("Step 1:").toggled, Some(true));
+    assert_eq!(workshop.step("Step 1:").toggled, Some(telar::Toggle::On));
     assert!(workshop.shows_frame_of(1));
     assert!(workshop.draws(&format!("Step 1 of 2: {CLICKED}")));
 
     workshop.click(Role::Button, "Back to live");
     assert!(!workshop.shows_frame_of(1));
-    assert_eq!(workshop.step("Step 1:").toggled, Some(false));
+    assert_eq!(workshop.step("Step 1:").toggled, Some(telar::Toggle::Off));
     assert!(!workshop.has(Role::Button, "Back to live"));
 }
 
@@ -314,7 +314,7 @@ fn whether_a_play_runs_on_mount_survives_a_hot_reload() {
     let mut workshop = Workshop::open_with(PASSING, &snapshot);
     assert_eq!(
         workshop.control(Role::Switch, "Run on mount").toggled,
-        Some(false)
+        Some(telar::Toggle::Off)
     );
     workshop.next_turn();
     assert!(workshop.has(Role::Button, "Pressed 0"));

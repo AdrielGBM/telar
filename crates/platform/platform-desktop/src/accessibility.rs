@@ -5,12 +5,13 @@
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
 use accesskit::{
-    Action, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Live, Node, NodeId,
-    Orientation as AkOrientation, Rect as AkRect, Role as AkRole, SortDirection as AkSortDirection,
-    Toggled, TreeId, TreeInfo, TreeUpdate,
+    Action, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Invalid, Live as AkLive, Node,
+    NodeId, Orientation as AkOrientation, Rect as AkRect, Role as AkRole,
+    SortDirection as AkSortDirection, Toggled, TreeId, TreeInfo, TreeUpdate,
 };
 use platform_core::{
-    AccessNode, CurrentKind, HasPopup, Orientation, Positioning, Role, SortDirection, ToggleKind,
+    AccessNode, CurrentKind, HasPopup, Live, Orientation, Positioning, Role, SortDirection, Toggle,
+    ToggleKind, Value,
 };
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
@@ -88,14 +89,24 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
             focus = id;
         }
         // A role carrying a state has to say which, or a reader announces "checkbox" and stops. Defaulting the answer would be worse than silence, since every box would read as unticked.
-        if let Some(on) = node.toggled {
-            set_toggle_state(&mut ak, node.role, on);
+        if let Some(state) = node.toggled {
+            set_toggle_state(&mut ak, node.role, state);
         }
         // A slider that says only "slider" has not reported the one thing it is for.
-        if let Some(v) = node.value {
-            ak.set_numeric_value(v.now);
-            ak.set_min_numeric_value(v.min);
-            ak.set_max_numeric_value(v.max);
+        if let Some(value) = &node.value {
+            set_value(&mut ak, value);
+        }
+        if let Some(description) = &node.description {
+            ak.set_description(description.as_str());
+        }
+        if node.invalid {
+            ak.set_invalid(Invalid::True);
+        }
+        if node.required {
+            ak.set_required();
+        }
+        if node.readonly {
+            ak.set_read_only();
         }
         if let Some(orientation) = node.orientation {
             ak.set_orientation(match orientation {
@@ -128,8 +139,11 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         if let Some(target) = node.controls.and_then(control_named) {
             ak.set_controls(vec![target]);
         }
-        if matches!(node.role, Role::Status | Role::Log) {
-            ak.set_live(Live::Polite);
+        if let Some(live) = node.role.live() {
+            ak.set_live(match live {
+                Live::Polite => AkLive::Polite,
+                Live::Assertive => AkLive::Assertive,
+            });
         }
         // AccessKit counts from zero.
         if let Role::Heading(level) = node.role {
@@ -275,10 +289,27 @@ fn label_id(index: usize) -> NodeId {
     NodeId(OWN | (index as u64 + 1))
 }
 
+/// The value as numbers where it is one, and as the words a reader says for it where it has any: a field's text, a select's choice, a slider's "Medium".
+fn set_value(ak: &mut Node, value: &Value) {
+    if let Some(reading) = value.reading() {
+        ak.set_numeric_value(reading.now);
+        ak.set_min_numeric_value(reading.min);
+        ak.set_max_numeric_value(reading.max);
+    }
+    if let Some(text) = value.text() {
+        ak.set_value(text);
+    }
+}
+
 /// The on/off state, in the property AccessKit reads it from for this role: `toggled` is checked on a checkbox or switch and pressed on a button, while a tab is selected and a disclosure expanded.
-fn set_toggle_state(ak: &mut Node, role: Role, on: bool) {
+fn set_toggle_state(ak: &mut Node, role: Role, state: Toggle) {
+    let on = state == Toggle::On;
     match role.toggle_kind() {
-        Some(ToggleKind::Checked | ToggleKind::Pressed) => ak.set_toggled(Toggled::from(on)),
+        Some(ToggleKind::Checked | ToggleKind::Pressed) => ak.set_toggled(match state {
+            Toggle::Off => Toggled::False,
+            Toggle::On => Toggled::True,
+            Toggle::Mixed => Toggled::Mixed,
+        }),
         Some(ToggleKind::Selected) => ak.set_selected(on),
         Some(ToggleKind::Expanded) => ak.set_expanded(on),
         None => {}
@@ -328,6 +359,7 @@ fn role_of(role: Role) -> AkRole {
         Role::Splitter => AkRole::Splitter,
         Role::Status => AkRole::Status,
         Role::Log => AkRole::Log,
+        Role::Alert => AkRole::Alert,
         Role::Label => AkRole::Label,
         // Static text, so a reader reads its name where a generic container's may be passed over.
         Role::KeyboardInput => AkRole::Label,

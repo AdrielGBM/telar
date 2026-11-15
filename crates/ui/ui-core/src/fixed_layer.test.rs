@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use geometry_core::{Rect, Size};
 use layout_core::{AvailableSpace, LayoutStyle, NodeId, SizeDimension};
-use platform_core::{PointerButton, PointerSource};
+use platform_core::{PointerButton, PointerSource, Toggle};
 use renderer_core::{DrawCommand, ElementId};
 use ui_tree::SegmentRoot;
 
@@ -323,7 +323,7 @@ fn a_switch_in_a_layer_is_reached_by_tab_and_flipped_by_the_keyboard() {
         .find(|exposed| exposed.id == landed)
         .expect("the switch is exposed");
     assert_eq!(switch.role, focus::Role::Switch);
-    assert_eq!(switch.toggled, Some(true));
+    assert_eq!(switch.toggled, Some(Toggle::On));
 }
 
 /// A box in a layer scaled from its start grows where its origin says, in the surface's coordinates the layer lays it out in, however far the page under it has scrolled; the layer takes the pointer over what it draws, not over the box it laid out.

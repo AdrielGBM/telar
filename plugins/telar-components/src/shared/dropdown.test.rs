@@ -1,5 +1,7 @@
 use telar::testing::{Scoped, centre, named, press, release, route};
-use telar::{AvailableSpace, ComponentList, NamedKey, compute_layout, relayout_if_dirty, signal};
+use telar::{
+    AvailableSpace, ComponentList, NamedKey, Toggle, compute_layout, relayout_if_dirty, signal,
+};
 
 use super::*;
 use crate::inputs::select::select::{SelectProps, select};
@@ -243,14 +245,17 @@ fn every_way_of_closing_a_select_leaves_the_keyboard_on_it() {
 #[test]
 fn a_select_s_rows_are_options_that_say_which_one_is_chosen() {
     let (mut tree, picked) = opened(3, 0.0);
-    let selection = || -> Vec<Option<bool>> {
+    let selection = || -> Vec<Option<Toggle>> {
         telar::focus::exposed()
             .into_iter()
             .filter(|exposed| exposed.role == Role::Option)
             .map(|exposed| exposed.toggled)
             .collect()
     };
-    assert_eq!(selection(), [Some(true), Some(false), Some(false)]);
+    assert_eq!(
+        selection(),
+        [Some(Toggle::On), Some(Toggle::Off), Some(Toggle::Off)]
+    );
     assert!(
         telar::focus::exposed()
             .iter()
@@ -262,7 +267,7 @@ fn a_select_s_rows_are_options_that_say_which_one_is_chosen() {
     settle(&tree);
     assert_eq!(
         selection(),
-        [Some(true), Some(false), Some(false)],
+        [Some(Toggle::On), Some(Toggle::Off), Some(Toggle::Off)],
         "moving the cursor chooses nothing"
     );
 
@@ -271,7 +276,10 @@ fn a_select_s_rows_are_options_that_say_which_one_is_chosen() {
     assert_eq!(picked.get(), 1);
     route(&mut tree, &named(NamedKey::Enter));
     settle(&tree);
-    assert_eq!(selection(), [Some(false), Some(true), Some(false)]);
+    assert_eq!(
+        selection(),
+        [Some(Toggle::Off), Some(Toggle::On), Some(Toggle::Off)]
+    );
 }
 
 #[test]

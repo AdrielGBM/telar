@@ -475,15 +475,15 @@ fn ticked_rows_say_what_they_are_and_whether_they_are_on() {
     lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
     let tree = ComponentList::new(menu);
     settle(&tree);
-    let toggled = |role: Role| -> Vec<Option<bool>> {
+    let toggled = |role: Role| -> Vec<Option<telar::Toggle>> {
         focus::exposed()
             .into_iter()
             .filter(|exposed| exposed.role == role)
             .map(|exposed| exposed.toggled)
             .collect()
     };
-    assert_eq!(toggled(Role::MenuItemCheckBox), vec![Some(true)]);
-    assert_eq!(toggled(Role::MenuItemRadio), vec![Some(false), Some(true)]);
+    assert_eq!(toggled(Role::MenuItemCheckBox), vec![Some(telar::Toggle::On)]);
+    assert_eq!(toggled(Role::MenuItemRadio), vec![Some(telar::Toggle::Off), Some(telar::Toggle::On)]);
 }
 
 /// Every row of a panel keeps the column a tick stands in once one row draws a tick, so the labels line up whether or not their row carries one.
@@ -1190,7 +1190,7 @@ fn a_switch_row_draws_its_switch_at_the_end_and_names_it_once() {
         .filter(|exposed| exposed.role == Role::MenuItemCheckBox)
         .collect();
     assert_eq!(checkboxes.len(), 1);
-    assert_eq!(checkboxes[0].toggled, Some(false));
+    assert_eq!(checkboxes[0].toggled, Some(telar::Toggle::Off));
     assert!(
         focus::exposed()
             .iter()
@@ -1229,7 +1229,7 @@ fn a_switch_row_toggles_without_closing_the_panel() {
         .into_iter()
         .find(|exposed| exposed.role == Role::MenuItemCheckBox)
         .expect("the row is exposed");
-    assert_eq!(checkbox.toggled, Some(true));
+    assert_eq!(checkbox.toggled, Some(telar::Toggle::On));
 
     route(&mut tree, &named(NamedKey::Escape));
     assert_eq!(*said.borrow(), vec!["cerrar"], "Escape still closes it");

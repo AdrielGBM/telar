@@ -41,6 +41,7 @@ fn a_role_reads_back_as_the_name_it_was_written_with() {
         "separator",
         "status",
         "log",
+        "alert",
         "label",
         "group",
     ] {
@@ -223,7 +224,7 @@ fn only_a_link_with_somewhere_to_go_is_current() {
 #[test]
 fn a_tree_row_carries_its_openness_and_its_place_beside_its_selection() {
     let row = Semantics {
-        toggled: Some(true),
+        toggled: Some(Toggle::On),
         expanded: Some(false),
         position: Some(SetPosition {
             level: 2,
@@ -256,7 +257,7 @@ fn a_reading_is_compared_by_its_numbers() {
         max: 10.0,
     };
     let with = |now: f64| Semantics {
-        value: Some(reading(now)),
+        value: Some(Value::from(reading(now))),
         orientation: Some(Orientation::Vertical),
         ..Semantics::of(Role::Splitter)
     };
@@ -429,6 +430,7 @@ fn only_the_roles_that_describe_a_box_can_be_said_from_outside_it() {
         Role::ListItem,
         Role::Status,
         Role::Log,
+        Role::Alert,
     ] {
         assert!(role.is_annotatable(), "{role:?}");
     }
@@ -494,4 +496,69 @@ fn a_box_the_keyboard_reaches_keeps_the_role_it_was_made_with() {
         Semantics::of(Role::Button).annotated(&said).role,
         Role::Button
     );
+}
+
+#[test]
+fn a_live_region_says_how_urgently_it_is_announced_through_its_role() {
+    assert_eq!(Role::Status.live(), Some(Live::Polite));
+    assert_eq!(Role::Log.live(), Some(Live::Polite));
+    assert_eq!(Role::Alert.live(), Some(Live::Assertive));
+    assert_eq!(Role::Button.live(), None);
+    assert_eq!(Role::Label.live(), None);
+    assert_eq!(Live::Polite.as_str(), "polite");
+    assert_eq!(Live::Assertive.as_str(), "assertive");
+}
+
+#[test]
+fn a_flag_is_an_on_or_off_toggle_and_mixed_is_a_state_of_its_own() {
+    assert_eq!(Toggle::from(true), Toggle::On);
+    assert_eq!(Toggle::from(false), Toggle::Off);
+    let checkbox =
+        |state: Toggle| Semantics::of(Role::CheckBox).in_state(false, Some(state), false);
+    assert_ne!(checkbox(Toggle::Mixed), checkbox(Toggle::On));
+    assert_ne!(checkbox(Toggle::Mixed), checkbox(Toggle::Off));
+}
+
+#[test]
+fn a_value_is_a_number_with_or_without_words_or_text() {
+    let reading = NumericValue {
+        now: 2.0,
+        min: 1.0,
+        max: 3.0,
+    };
+    let bare = Value::from(reading);
+    assert_eq!(bare.reading(), Some(reading));
+    assert_eq!(bare.text(), None);
+    let worded = Value::Number {
+        reading,
+        text: Some(Arc::from("Medium")),
+    };
+    assert_eq!(worded.reading(), Some(reading));
+    assert_eq!(worded.text(), Some("Medium"));
+    let text = Value::Text(Arc::from("hello@example.com"));
+    assert_eq!(text.reading(), None);
+    assert_eq!(text.text(), Some("hello@example.com"));
+}
+
+#[test]
+fn a_field_says_its_description_and_validity_apart_from_its_name() {
+    let field = Semantics {
+        description: Some(Arc::from("At least 8 characters")),
+        invalid: true,
+        required: true,
+        readonly: false,
+        ..Semantics::of(Role::TextInput).with_label("Password")
+    };
+    assert_eq!(field.label.as_deref(), Some("Password"));
+    assert_ne!(
+        field,
+        Semantics {
+            invalid: false,
+            ..field.clone()
+        },
+        "becoming valid is a change a target has to act on"
+    );
+    let plain = Semantics::of(Role::TextInput);
+    assert_eq!(plain.description, None);
+    assert!(!plain.invalid && !plain.required && !plain.readonly);
 }

@@ -247,7 +247,7 @@ impl Workshop {
     }
 
     fn shows_tab(&self, name: &str) -> bool {
-        self.control(Role::Tab, name).toggled == Some(true)
+        self.control(Role::Tab, name).toggled == Some(telar::Toggle::On)
     }
 }
 
@@ -375,7 +375,11 @@ fn a_ranged_number_is_a_slider() {
     let mut workshop = Workshop::open(entries(), BADGE);
     let count = workshop.control(Role::Slider, "count");
     assert_eq!(
-        count.value.map(|value| (value.min, value.max)),
+        count
+            .value
+            .as_ref()
+            .and_then(telar::Value::reading)
+            .map(|value| (value.min, value.max)),
         Some((0.0, 10.0))
     );
     workshop.click(Role::Slider, "count");
@@ -436,14 +440,14 @@ fn an_optional_arg_is_set_by_its_control_and_unset_by_its_switch() {
     let mut workshop = Workshop::open(entries(), BADGE);
     assert_eq!(
         workshop.control(Role::Switch, "Unset note").toggled,
-        Some(true)
+        Some(telar::Toggle::On)
     );
     workshop.click(Role::TextInput, "note");
     workshop.type_text("hi");
     assert!(workshop.draws("note=Some(\"hi\")"));
     assert_eq!(
         workshop.control(Role::Switch, "Unset note").toggled,
-        Some(false)
+        Some(telar::Toggle::Off)
     );
     workshop.click(Role::Switch, "Unset note");
     assert!(workshop.draws("note=None"));
@@ -493,7 +497,10 @@ fn reset_all_puts_every_arg_back() {
     assert!(workshop.draws("on=false"));
     assert!(workshop.draws("tone=Warm"));
     assert!(!workshop.draws("Reset all"));
-    assert_eq!(workshop.control(Role::Switch, "on").toggled, Some(false));
+    assert_eq!(
+        workshop.control(Role::Switch, "on").toggled,
+        Some(telar::Toggle::Off)
+    );
 }
 
 #[test]
@@ -505,7 +512,10 @@ fn edited_args_survive_a_hot_reload() {
     telar::hot_restore_json(&snapshot);
     let workshop = Workshop::open(entries(), BADGE);
     assert!(workshop.draws("on=true"));
-    assert_eq!(workshop.control(Role::Switch, "on").toggled, Some(true));
+    assert_eq!(
+        workshop.control(Role::Switch, "on").toggled,
+        Some(telar::Toggle::On)
+    );
     workshop.control(Role::Button, "Reset on");
 }
 

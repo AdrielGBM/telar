@@ -355,7 +355,7 @@ impl Several {
         self.chosen.get().iter().map(|id| id.to_string()).collect()
     }
 
-    fn options(&self) -> Vec<(String, Option<bool>)> {
+    fn options(&self) -> Vec<(String, Option<telar::Toggle>)> {
         telar::inspect::snapshot(&self.tree.commands())
             .into_iter()
             .filter(|node| node.role == Role::Option)
@@ -398,10 +398,10 @@ fn a_list_of_several_choices_is_multiselectable_and_each_option_says_if_it_is_ch
     assert_eq!(
         list.options(),
         [
-            ("Apple 3".to_string(), Some(true)),
-            ("Banana".to_string(), Some(false)),
-            ("Blueberry".to_string(), Some(false)),
-            ("Cherry".to_string(), Some(true)),
+            ("Apple 3".to_string(), Some(telar::Toggle::On)),
+            ("Banana".to_string(), Some(telar::Toggle::Off)),
+            ("Blueberry".to_string(), Some(telar::Toggle::Off)),
+            ("Cherry".to_string(), Some(telar::Toggle::On)),
         ]
     );
     assert_eq!(

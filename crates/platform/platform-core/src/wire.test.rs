@@ -11,7 +11,7 @@ use crate::{
     Event, FullscreenMode, HasPopup, HistoryStep, HistoryUpdate, Ime, Key, KeyboardConvention,
     Location, MimeType, ModifiersState, NamedKey, NumericValue, Orientation, OutgoingDrag,
     PointerButton, PointerSource, ResizeEdge, Role, ScrollDelta, SetPosition, SortDirection,
-    SystemPreferences, TextInput, WindowCommand, WindowConfig, WindowPosition,
+    SystemPreferences, TextInput, Toggle, Value, WindowCommand, WindowConfig, WindowPosition,
 };
 
 fn round_trip<T: Wire + PartialEq + Debug>(value: T) {
@@ -341,12 +341,19 @@ fn node() -> AccessNode {
         rect: Rect::new(1.0, 2.0, 3.0, 4.0),
         focused: true,
         enabled: false,
-        toggled: Some(true),
-        value: Some(NumericValue {
-            now: 5.0,
-            min: 0.0,
-            max: 10.0,
+        toggled: Some(Toggle::Mixed),
+        value: Some(Value::Number {
+            reading: NumericValue {
+                now: 5.0,
+                min: 0.0,
+                max: 10.0,
+            },
+            text: Some("cinco".into()),
         }),
+        description: Some("Abre la sección".into()),
+        invalid: true,
+        required: true,
+        readonly: true,
         lang: Some("es".into()),
         url: Some("/docs#intro".into()),
         current: Some(CurrentKind::Location),
@@ -380,6 +387,10 @@ fn audit() -> AccessAudit {
                 enabled: true,
                 toggled: None,
                 value: None,
+                description: None,
+                invalid: false,
+                required: false,
+                readonly: false,
                 lang: None,
                 url: None,
                 current: None,

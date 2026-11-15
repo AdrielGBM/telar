@@ -9,7 +9,8 @@ use wire_core::{
 
 use crate::{
     ConsumedKeys, CurrentKind, Destination, Focusable, HasPopup, Location, Modal, NumericValue,
-    Orientation, Role, RouteAddress, Semantics, SetPosition, SortDirection, Uri, UriError,
+    Orientation, Role, RouteAddress, Semantics, SetPosition, SortDirection, Toggle, Uri, UriError,
+    Value,
 };
 
 wire_enum!(Role {
@@ -62,6 +63,12 @@ wire_enum!(Role {
     Log = 46,
     Label = 47,
     KeyboardInput = 48,
+    Alert = 49,
+});
+wire_enum!(Toggle {
+    Off = 0,
+    On = 1,
+    Mixed = 2
 });
 wire_enum!(Orientation {
     Horizontal = 0,
@@ -82,6 +89,10 @@ wire_enum!(CurrentKind {
 });
 
 wire_struct!(NumericValue { now, min, max });
+wire_enum!(Value {
+    Number { reading, text } = 0,
+    Text(text) = 1,
+});
 wire_struct!(SetPosition {
     level,
     position,
@@ -241,7 +252,14 @@ pub fn take_link(r: &mut Reader<'_>) -> Result<Option<Destination>, WireError> {
 
 impl Shaped for Semantics {
     const SHAPE: u64 = {
-        let hash = fold_fields!(shape_named("Semantics"), Semantics { role, label });
+        let hash = fold_fields!(
+            shape_named("Semantics"),
+            Semantics {
+                role,
+                label,
+                description
+            }
+        );
         let hash = fold_shape(fold(hash, b"link"), LINK_SHAPE);
         fold_fields!(
             hash,
@@ -249,6 +267,9 @@ impl Shaped for Semantics {
                 focused,
                 toggled,
                 disabled,
+                invalid,
+                required,
+                readonly,
                 click_through,
                 focusable,
                 lang,
@@ -275,10 +296,14 @@ impl Wire for Semantics {
     fn put(&self, w: &mut Writer) {
         self.role.put(w);
         self.label.put(w);
+        self.description.put(w);
         put_link(w, self.link.as_ref());
         self.focused.put(w);
         self.toggled.put(w);
         self.disabled.put(w);
+        self.invalid.put(w);
+        self.required.put(w);
+        self.readonly.put(w);
         self.click_through.put(w);
         self.focusable.put(w);
         self.lang.put(w);
@@ -301,10 +326,14 @@ impl Wire for Semantics {
         Ok(Self {
             role: Wire::take(r)?,
             label: Wire::take(r)?,
+            description: Wire::take(r)?,
             link: take_link(r)?,
             focused: Wire::take(r)?,
             toggled: Wire::take(r)?,
             disabled: Wire::take(r)?,
+            invalid: Wire::take(r)?,
+            required: Wire::take(r)?,
+            readonly: Wire::take(r)?,
             click_through: Wire::take(r)?,
             focusable: Wire::take(r)?,
             lang: Wire::take(r)?,

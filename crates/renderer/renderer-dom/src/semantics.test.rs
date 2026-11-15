@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use renderer_core::{
-    Color, DrawCommand, Element, ElementId, RenderBackend, Role, Semantics, TextStyle,
+    Color, DrawCommand, Element, ElementId, RenderBackend, Role, Semantics, TextStyle, Toggle,
+    Value,
 };
 use telar_renderer_dom::DomRenderer;
 use wasm_bindgen::JsCast;
@@ -191,7 +192,10 @@ fn a_state_follows_the_role_it_belongs_to() {
     let mut renderer = DomRenderer::new(host.clone()).expect("a renderer on the host");
     let frame = |role: Role, on: bool| {
         [
-            open(50, Semantics::of(role).in_state(false, Some(on), false)),
+            open(
+                50,
+                Semantics::of(role).in_state(false, Some(Toggle::from(on)), false),
+            ),
             text("x"),
             DrawCommand::PopElement,
         ]
@@ -352,4 +356,82 @@ fn a_name_said_in_place_of_the_words_follows_the_annotation() {
     let node = host.first_element_child().expect("a box");
     assert_eq!(node.text_content().as_deref(), Some("3 unread comments3"));
     assert_eq!(attribute(&node, "aria-label"), None);
+}
+
+/// A checkbox standing for a set some of which are ticked reaches the document as `aria-checked="mixed"`.
+#[wasm_bindgen_test]
+fn a_mixed_checkbox_is_checked_mixed() {
+    let checkbox = rendered(&[
+        open(
+            1,
+            Semantics::of(Role::CheckBox)
+                .with_label("Select all")
+                .in_state(false, Some(Toggle::Mixed), false),
+        ),
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(attribute(&checkbox, "role").as_deref(), Some("checkbox"));
+    assert_eq!(
+        attribute(&checkbox, "aria-checked").as_deref(),
+        Some("mixed")
+    );
+}
+
+/// A field's description, its validity and a slider's words for its value reach the document as the attributes a browser reads them from.
+#[wasm_bindgen_test]
+fn a_fields_description_validity_and_value_words_reach_the_document() {
+    let field = rendered(&[
+        open(
+            1,
+            Semantics {
+                description: Some(Arc::from("At least 8 characters")),
+                invalid: true,
+                required: true,
+                readonly: true,
+                ..Semantics::of(Role::TextInput).with_label("Password")
+            },
+        ),
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(
+        attribute(&field, "aria-description").as_deref(),
+        Some("At least 8 characters")
+    );
+    assert_eq!(attribute(&field, "aria-invalid").as_deref(), Some("true"));
+    assert_eq!(attribute(&field, "aria-required").as_deref(), Some("true"));
+    assert_eq!(attribute(&field, "aria-readonly").as_deref(), Some("true"));
+
+    let slider = rendered(&[
+        open(
+            2,
+            Semantics {
+                value: Some(Value::Number {
+                    reading: platform_core::NumericValue {
+                        now: 2.0,
+                        min: 1.0,
+                        max: 3.0,
+                    },
+                    text: Some(Arc::from("Medium")),
+                }),
+                ..Semantics::of(Role::Slider).with_label("Quality")
+            },
+        ),
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(
+        attribute(&slider, "aria-valuetext").as_deref(),
+        Some("Medium")
+    );
+}
+
+/// An alert reaches the document as a live region that interrupts.
+#[wasm_bindgen_test]
+fn an_alert_is_an_assertive_live_region() {
+    let alert = rendered(&[
+        open(1, Semantics::of(Role::Alert)),
+        text("Could not save"),
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(attribute(&alert, "role").as_deref(), Some("alert"));
+    assert_eq!(attribute(&alert, "aria-live").as_deref(), Some("assertive"));
 }

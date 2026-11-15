@@ -6,8 +6,8 @@ use geometry_core::Rect;
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
 pub use semantics_core::{
-    CurrentKind, HasPopup, Modal, NumericValue, Orientation, Positioning, Role, SetPosition,
-    SortDirection, ToggleKind,
+    CurrentKind, HasPopup, Live, Modal, NumericValue, Orientation, Positioning, Role, SetPosition,
+    SortDirection, Toggle, ToggleKind, Value,
 };
 
 /// One thing a screen reader can land on.
@@ -26,12 +26,20 @@ pub struct AccessNode {
     pub focused: bool,
     /// `false` announces "unavailable"; a control that is genuinely not there is absent instead.
     pub enabled: bool,
-    /// Whether a control that carries an on/off state is in it, read through its role's [`Role::toggle_kind`]: checked, pressed, selected or expanded. `None` for the roles that have no such state — and never a default of `false` for the ones that do, which would announce every checkbox as unticked.
-    pub toggled: Option<bool>,
-    /// Where a control that carries a number stands, and between which bounds.
+    /// The on/off state a control that carries one is in — on, off or mixed — read through its role's [`Role::toggle_kind`]: checked, pressed, selected or expanded. `None` for the roles that have no such state — and never a default of [`Toggle::Off`] for the ones that do, which would announce every checkbox as unticked.
+    pub toggled: Option<Toggle>,
+    /// What the control shows as its value: where a slider stands and between which bounds, what a field holds, the choice a select has made.
     ///
-    /// Without it a slider announces "Volume, slider" and stops — the reader can say what the control is and not what it says, which is the one thing a value control exists to report. `None` for the roles that carry no number.
-    pub value: Option<NumericValue>,
+    /// Without it a slider announces "Volume, slider" and stops — the reader can say what the control is and not what it says, which is the one thing a value control exists to report. `None` for a node that carries none.
+    pub value: Option<Value>,
+    /// What a reader says after the name, role and state, as help rather than identity: a field's hint, why it is invalid. `None` where nothing more is said.
+    pub description: Option<String>,
+    /// Whether what a field holds fails its checks.
+    pub invalid: bool,
+    /// Whether a field must be filled in before what it belongs to can be submitted.
+    pub required: bool,
+    /// Whether a field shows a value that can be read and copied but not changed.
+    pub readonly: bool,
     /// The language the node is in, as a BCP 47 tag, where the application said. `None` is the surface's own.
     pub lang: Option<String>,
     /// Where a link goes, written as [`address_of`](crate::address_of) writes it. `None` for everything that is not a link.
@@ -111,6 +119,10 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         if let Role::Heading(level) = node.role {
             out.push_str(&format!(", level {level}"));
         }
+        if let Some(value) = &node.value {
+            out.push_str(", ");
+            out.push_str(&value_words(value));
+        }
         if let Some(place) = node
             .position
             .and_then(|place| Some(place_words(node.role.positioning()?, place)))
@@ -118,9 +130,21 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
             out.push_str(", ");
             out.push_str(&place);
         }
-        if let Some(state) = node.toggled.and_then(|on| toggle_words(node.role, on)) {
+        if let Some(state) = node
+            .toggled
+            .and_then(|state| toggle_words(node.role, state))
+        {
             out.push_str(", ");
             out.push_str(state);
+        }
+        if node.required {
+            out.push_str(", required");
+        }
+        if node.invalid {
+            out.push_str(", invalid");
+        }
+        if node.readonly {
+            out.push_str(", read only");
         }
         if let Some(popup) = node.has_popup {
             out.push_str(", has ");
@@ -145,6 +169,10 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         }
         if !node.enabled {
             out.push_str(", unavailable");
+        }
+        if let Some(description) = &node.description {
+            out.push_str(", ");
+            out.push_str(description);
         }
         if focus == Some(index) {
             out.push_str(", focused");
@@ -175,17 +203,33 @@ fn place_words(kind: Positioning, place: SetPosition) -> String {
     }
 }
 
+/// What a reader says for a value: its own words where it has them, the number otherwise.
+fn value_words(value: &Value) -> String {
+    match value {
+        Value::Number {
+            reading,
+            text: None,
+        } => reading.now.to_string(),
+        Value::Number {
+            text: Some(text), ..
+        }
+        | Value::Text(text) => text.to_string(),
+    }
+}
+
 /// The words a reader says for a role's on/off state, or `None` where it says nothing: an unselected tab is every tab but one, and announcing each of them is noise.
-fn toggle_words(role: Role, on: bool) -> Option<&'static str> {
-    Some(match (role.toggle_kind()?, on) {
-        (ToggleKind::Checked, true) => "checked",
-        (ToggleKind::Checked, false) => "not checked",
-        (ToggleKind::Pressed, true) => "pressed",
-        (ToggleKind::Pressed, false) => "not pressed",
-        (ToggleKind::Selected, true) => "selected",
-        (ToggleKind::Selected, false) => return None,
-        (ToggleKind::Expanded, true) => "expanded",
-        (ToggleKind::Expanded, false) => "collapsed",
+fn toggle_words(role: Role, state: Toggle) -> Option<&'static str> {
+    Some(match (role.toggle_kind()?, state) {
+        (ToggleKind::Checked, Toggle::On) => "checked",
+        (ToggleKind::Checked, Toggle::Off) => "not checked",
+        (ToggleKind::Checked, Toggle::Mixed) => "partially checked",
+        (ToggleKind::Pressed, Toggle::On) => "pressed",
+        (ToggleKind::Pressed, Toggle::Off) => "not pressed",
+        (ToggleKind::Pressed, Toggle::Mixed) => "partially pressed",
+        (ToggleKind::Selected, Toggle::On) => "selected",
+        (ToggleKind::Selected, Toggle::Off | Toggle::Mixed) => return None,
+        (ToggleKind::Expanded, Toggle::On) => "expanded",
+        (ToggleKind::Expanded, Toggle::Off | Toggle::Mixed) => "collapsed",
     })
 }
 

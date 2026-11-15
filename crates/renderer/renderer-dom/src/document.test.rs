@@ -204,6 +204,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
         [
             "role",
             "aria-label",
+            "aria-description",
             "href",
             "target",
             "rel",
@@ -212,6 +213,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-hidden",
             "inert",
             "aria-modal",
+            "aria-live",
             "aria-checked",
             "aria-pressed",
             "aria-selected",
@@ -226,6 +228,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-valuenow",
             "aria-valuemin",
             "aria-valuemax",
+            "aria-valuetext",
             "aria-orientation",
             "aria-level",
             "aria-posinset",
@@ -233,6 +236,9 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-rowindex",
             "aria-rowcount",
             "aria-disabled",
+            "aria-invalid",
+            "aria-required",
+            "aria-readonly",
             "tabindex",
             CONSUMED_KEYS_ATTRIBUTE,
             FOCUS_BOX_ATTRIBUTE,
@@ -255,7 +261,10 @@ fn a_picture_is_named_by_its_alt_even_when_nobody_named_it() {
 fn state_attributes(role: Role, on: bool) -> (&'static str, Vec<(&'static str, String)>) {
     let frame = describe_frame(
         &[
-            open(1, Semantics::of(role).in_state(false, Some(on), false)),
+            open(
+                1,
+                Semantics::of(role).in_state(false, Some(Toggle::from(on)), false),
+            ),
             DrawCommand::PopElement,
         ],
         None,
@@ -338,7 +347,7 @@ fn a_tree_row_writes_its_selection_its_openness_and_its_place() {
             position: 2,
             size: 4,
         }),
-        ..Semantics::of(Role::TreeItem).in_state(false, Some(true), false)
+        ..Semantics::of(Role::TreeItem).in_state(false, Some(Toggle::On), false)
     };
     assert_eq!(
         attributes_of(branch),
@@ -351,7 +360,7 @@ fn a_tree_row_writes_its_selection_its_openness_and_its_place() {
             ("aria-setsize", "4".to_string()),
         ]
     );
-    let leaf = Semantics::of(Role::TreeItem).in_state(false, Some(false), false);
+    let leaf = Semantics::of(Role::TreeItem).in_state(false, Some(Toggle::Off), false);
     assert_eq!(
         attributes_of(leaf),
         [
@@ -641,11 +650,11 @@ fn the_workbench_roles_are_the_aria_roles_of_the_same_name() {
 #[test]
 fn a_splitter_writes_its_value_and_its_orientation() {
     let semantics = Semantics {
-        value: Some(platform_core::NumericValue {
+        value: Some(Value::from(platform_core::NumericValue {
             now: 240.0,
             min: 180.0,
             max: 400.0,
-        }),
+        })),
         orientation: Some(platform_core::Orientation::Vertical),
         ..Semantics::of(Role::Splitter)
     };
@@ -740,7 +749,7 @@ fn a_grid_writes_its_roles_and_the_header_it_is_sorted_by() {
         (Some("columnheader".to_string()), None, None)
     );
     let row = Semantics {
-        toggled: Some(true),
+        toggled: Some(Toggle::On),
         ..Semantics::of(Role::Row)
     };
     assert_eq!(
@@ -1002,11 +1011,11 @@ fn a_named_box_with_a_role_or_content_of_its_own_names_itself() {
 #[test]
 fn an_unbounded_value_writes_no_bounds() {
     let semantics = Semantics {
-        value: Some(platform_core::NumericValue {
+        value: Some(Value::from(platform_core::NumericValue {
             now: 3.0,
             min: f64::NEG_INFINITY,
             max: f64::INFINITY,
-        }),
+        })),
         ..Semantics::of(Role::SpinButton)
     };
     let frame = describe_frame(
@@ -1019,6 +1028,117 @@ fn an_unbounded_value_writes_no_bounds() {
     assert_eq!(attribute(node, "aria-valuenow").as_deref(), Some("3"));
     assert_eq!(attribute(node, "aria-valuemin"), None);
     assert_eq!(attribute(node, "aria-valuemax"), None);
+}
+
+fn described_alone(semantics: Semantics) -> BoxNode {
+    let frame = describe_frame(
+        &[open(1, semantics), DrawCommand::PopElement],
+        None,
+        &mut Fixed,
+        false,
+    );
+    match frame.children.into_iter().next() {
+        Some(Node::Box(node)) => *node,
+        _ => panic!("one box at the top"),
+    }
+}
+
+/// A checkbox standing for a set some of which are ticked, and a toggle button partly pressed, say `mixed`; a selection is there or not, so a mixed one is written as not selected.
+#[test]
+fn a_mixed_state_is_written_as_mixed_where_its_role_can_say_it() {
+    let mixed = |role: Role| {
+        described_alone(Semantics::of(role).in_state(false, Some(Toggle::Mixed), false))
+    };
+    assert_eq!(
+        attribute(&mixed(Role::CheckBox), "aria-checked").as_deref(),
+        Some("mixed")
+    );
+    assert_eq!(
+        attribute(&mixed(Role::Button), "aria-pressed").as_deref(),
+        Some("mixed")
+    );
+    assert_eq!(
+        attribute(&mixed(Role::Tab), "aria-selected").as_deref(),
+        Some("false")
+    );
+}
+
+/// A range writes the words it is read as beside its number, and a field's text value writes no `aria-valuetext`: the text the element holds is what a document reads as its value.
+#[test]
+fn a_value_writes_its_words_only_on_a_range() {
+    let slider = described_alone(Semantics {
+        value: Some(Value::Number {
+            reading: platform_core::NumericValue {
+                now: 2.0,
+                min: 1.0,
+                max: 3.0,
+            },
+            text: Some(Arc::from("Medium")),
+        }),
+        ..Semantics::of(Role::Slider)
+    });
+    assert_eq!(attribute(&slider, "aria-valuenow").as_deref(), Some("2"));
+    assert_eq!(
+        attribute(&slider, "aria-valuetext").as_deref(),
+        Some("Medium")
+    );
+    let progress = described_alone(Semantics {
+        value: Some(Value::Text(Arc::from("Loading"))),
+        ..Semantics::of(Role::ProgressBar)
+    });
+    assert_eq!(attribute(&progress, "aria-valuenow"), None);
+    assert_eq!(
+        attribute(&progress, "aria-valuetext").as_deref(),
+        Some("Loading")
+    );
+    let field = described_alone(Semantics {
+        value: Some(Value::Text(Arc::from("ada@example.com"))),
+        ..Semantics::of(Role::TextInput)
+    });
+    assert_eq!(attribute(&field, "aria-valuetext"), None);
+    assert_eq!(attribute(&field, "aria-valuenow"), None);
+}
+
+/// A field writes its description, whether it must be filled in, whether what it holds is wrong and whether it can be changed; a plain field writes none of them.
+#[test]
+fn a_field_writes_its_description_and_its_validity() {
+    let field = described_alone(Semantics {
+        description: Some(Arc::from("At least 8 characters")),
+        invalid: true,
+        required: true,
+        readonly: true,
+        ..Semantics::of(Role::TextInput)
+    });
+    assert_eq!(
+        attribute(&field, "aria-description").as_deref(),
+        Some("At least 8 characters")
+    );
+    assert_eq!(attribute(&field, "aria-invalid").as_deref(), Some("true"));
+    assert_eq!(attribute(&field, "aria-required").as_deref(), Some("true"));
+    assert_eq!(attribute(&field, "aria-readonly").as_deref(), Some("true"));
+    let plain = described_alone(Semantics::of(Role::TextInput));
+    for name in [
+        "aria-description",
+        "aria-invalid",
+        "aria-required",
+        "aria-readonly",
+    ] {
+        assert_eq!(attribute(&plain, name), None, "{name}");
+    }
+}
+
+/// An alert interrupts and a status waits its turn, each written with the `aria-live` its role carries; a box that is no live region writes none.
+#[test]
+fn a_live_region_writes_how_urgently_it_is_announced() {
+    let live = |role: Role| attribute(&described_alone(Semantics::of(role)), "aria-live");
+    assert_eq!(live(Role::Alert).as_deref(), Some("assertive"));
+    assert_eq!(live(Role::Status).as_deref(), Some("polite"));
+    assert_eq!(live(Role::Log).as_deref(), Some("polite"));
+    assert_eq!(live(Role::Button), None);
+    assert_eq!(
+        attribute(&described_alone(Semantics::of(Role::Alert)), "role").as_deref(),
+        Some("alert")
+    );
 }
 
 /// A host away from the viewport's corner, so a box placed against the viewport and one placed inside a box are told apart.
@@ -1375,12 +1495,12 @@ fn a_combobox_names_the_list_it_controls_and_points_into_it() {
             open(3, Semantics::of(Role::ListBox)),
             open(
                 4,
-                Semantics::of(Role::Option).in_state(false, Some(true), false),
+                Semantics::of(Role::Option).in_state(false, Some(Toggle::On), false),
             ),
             DrawCommand::PopElement,
             open(
                 5,
-                Semantics::of(Role::Option).in_state(false, Some(false), false),
+                Semantics::of(Role::Option).in_state(false, Some(Toggle::Off), false),
             ),
             DrawCommand::PopElement,
             DrawCommand::PopElement,

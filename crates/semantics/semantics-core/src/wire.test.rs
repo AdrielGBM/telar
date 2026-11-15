@@ -22,18 +22,18 @@ fn link_round_trip(link: Option<Destination>) -> Option<Destination> {
 #[test]
 fn every_role_tag_reads_back_as_a_role_of_its_own() {
     let mut roles = HashSet::new();
-    for tag in 0..=48u8 {
+    for tag in 0..=49u8 {
         let bytes = if tag == 10 { vec![tag, 2] } else { vec![tag] };
         let role = decode::<Role>(&bytes).unwrap();
         round_trip(role);
         roles.insert(role);
     }
-    assert_eq!(roles.len(), 49);
+    assert_eq!(roles.len(), 50);
     assert_eq!(
-        decode::<Role>(&[49]),
+        decode::<Role>(&[50]),
         Err(WireError::Tag {
             of: "Role",
-            tag: 49
+            tag: 50
         })
     );
 }
@@ -49,6 +49,18 @@ fn every_reading_value_round_trips() {
     round_trip(CurrentKind::Page);
     round_trip(CurrentKind::Location);
     round_trip(CurrentKind::Item);
+    round_trip(Toggle::Off);
+    round_trip(Toggle::On);
+    round_trip(Toggle::Mixed);
+    round_trip(Value::Text(Arc::from("ada@example.com")));
+    round_trip(Value::Number {
+        reading: NumericValue {
+            now: 2.0,
+            min: 1.0,
+            max: 3.0,
+        },
+        text: Some(Arc::from("Medium")),
+    });
     round_trip(NumericValue {
         now: 0.25,
         min: -1.0,
@@ -125,10 +137,14 @@ fn every_field_set() -> Semantics {
     Semantics {
         role: Role::Heading(3),
         label: Some(Arc::from("Title")),
+        description: Some(Arc::from("The page's own title")),
         link: Some(Destination::anchor("top")),
         focused: true,
-        toggled: Some(false),
+        toggled: Some(Toggle::Mixed),
         disabled: true,
+        invalid: true,
+        required: true,
+        readonly: true,
         click_through: true,
         focusable: Some(Focusable {
             tab_stop: false,
@@ -138,10 +154,13 @@ fn every_field_set() -> Semantics {
         hidden: true,
         anchor: Some(Arc::from("here")),
         current: true,
-        value: Some(NumericValue {
-            now: 1.0,
-            min: 0.0,
-            max: 2.0,
+        value: Some(Value::Number {
+            reading: NumericValue {
+                now: 1.0,
+                min: 0.0,
+                max: 2.0,
+            },
+            text: Some(Arc::from("Half")),
         }),
         orientation: Some(Orientation::Vertical),
         expanded: Some(true),
@@ -241,6 +260,8 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
         Role::Status,
         Role::Log,
         Role::Label,
+        Role::KeyboardInput,
+        Role::Alert,
     ];
     let mut bytes: Vec<u8> = roles.iter().flat_map(encode).collect();
     bytes.extend(encode(&Role::Heading(6)));
@@ -256,6 +277,10 @@ fn the_bytes_of_every_semantic_value_are_pinned_to_the_wire_version() {
     for value in [CurrentKind::Page, CurrentKind::Location, CurrentKind::Item] {
         bytes.extend(encode(&value));
     }
+    for value in [Toggle::Off, Toggle::On, Toggle::Mixed] {
+        bytes.extend(encode(&value));
+    }
+    bytes.extend(encode(&Value::Text(Arc::from("ada@example.com"))));
     bytes.extend(encode(&NumericValue {
         now: 0.25,
         min: -1.0,

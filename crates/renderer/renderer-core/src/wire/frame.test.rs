@@ -4,7 +4,7 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect, Transform};
 use semantics_core::{
     ConsumedKeys, Destination, HasPopup, Location, Modal, NumericValue, Orientation, SetPosition,
-    SortDirection, Uri,
+    SortDirection, Toggle, Uri, Value,
 };
 
 use super::*;
@@ -122,10 +122,14 @@ fn semantics() -> Semantics {
     Semantics {
         role: Role::Heading(3),
         label: Some("Settings".into()),
+        description: Some("Where the app is set up".into()),
         link: Some(Destination::anchor("settings")),
         focused: true,
-        toggled: Some(false),
+        toggled: Some(Toggle::Mixed),
         disabled: true,
+        invalid: true,
+        required: true,
+        readonly: true,
         click_through: true,
         focusable: Some(Focusable {
             tab_stop: true,
@@ -135,10 +139,13 @@ fn semantics() -> Semantics {
         hidden: true,
         anchor: Some("top".into()),
         current: true,
-        value: Some(NumericValue {
-            now: 0.3,
-            min: -1.0,
-            max: 2.5,
+        value: Some(Value::Number {
+            reading: NumericValue {
+                now: 0.3,
+                min: -1.0,
+                max: 2.5,
+            },
+            text: Some("a third".into()),
         }),
         orientation: Some(Orientation::Vertical),
         expanded: Some(true),

@@ -156,6 +156,8 @@ fn each_splitter_is_named_and_reports_the_room_its_pane_has() {
     let tree = lay_out(&runtime.0);
     let sidebar = splitter(&runtime, &tree, "Resize the sidebar")
         .value
+        .as_ref()
+        .and_then(telar::Value::reading)
         .expect("the sidebar's splitter carries its width");
     assert_eq!(
         (sidebar.now, sidebar.min, sidebar.max),
@@ -167,6 +169,8 @@ fn each_splitter_is_named_and_reports_the_room_its_pane_has() {
     );
     let panels = splitter(&runtime, &tree, "Resize the panels")
         .value
+        .as_ref()
+        .and_then(telar::Value::reading)
         .expect("the panels' splitter carries their size");
     assert_eq!(panels.now, f64::from(PANEL_DEFAULT_SIZE));
     assert_eq!(panels.min, f64::from(PANEL_MIN_SIZE));
@@ -193,6 +197,8 @@ fn collapsed_panes_keep_their_sizes_for_when_they_open() {
     assert_eq!(runtime.0.entries.len(), 2);
     let folded = splitter(&runtime, &tree, "Resize the panels")
         .value
+        .as_ref()
+        .and_then(telar::Value::reading)
         .unwrap()
         .now;
     assert!(

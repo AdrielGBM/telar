@@ -2319,7 +2319,7 @@ fn a_presented_box_is_announced_but_a_tap_leaves_focus_alone() {
 
     let said = semantics_of(&row);
     assert_eq!(said.role, focus::Role::TreeItem);
-    assert_eq!(said.toggled, Some(true));
+    assert_eq!(said.toggled, Some(Toggle::On));
     assert_eq!(said.expanded, Some(false));
     assert_eq!(said.position, Some(place));
     assert_eq!(said.focusable.map(|f| f.tab_stop), Some(false));

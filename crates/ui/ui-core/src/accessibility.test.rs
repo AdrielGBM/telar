@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use layout_core::NodeId;
 use layout_core::{AvailableSpace, LayoutStyle};
+use platform_core::{Toggle, Value};
 use renderer_core::{RectStyle, TextStyle};
 
 use super::*;
@@ -126,7 +127,11 @@ fn a_valued_control_reports_where_it_stands() {
 
     let nodes = snapshot(&[]);
     let slider = nodes.iter().find(|n| n.id.is_some()).expect("exposed");
-    let value = slider.value.expect("a slider carries a number");
+    let value = slider
+        .value
+        .as_ref()
+        .and_then(Value::reading)
+        .expect("a slider carries a number");
     assert_eq!(value.now, 0.25);
     assert_eq!((value.min, value.max), (0.0, 1.0));
 }
@@ -154,7 +159,7 @@ fn a_control_that_carries_a_state_reports_it() {
 
     let nodes = snapshot(&[]);
     let tab = nodes.iter().find(|n| n.id.is_some()).expect("exposed");
-    assert_eq!(tab.toggled, Some(true));
+    assert_eq!(tab.toggled, Some(Toggle::On));
 }
 
 /// The reading order a reader walks is the order things sit on screen, not the order they were built — which is what tab order is, and stays.
@@ -1040,6 +1045,10 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         enabled: true,
         toggled: None,
         value: None,
+        description: None,
+        invalid: false,
+        required: false,
+        readonly: false,
         orientation: None,
         expanded: None,
         position: None,

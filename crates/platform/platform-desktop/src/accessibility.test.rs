@@ -13,6 +13,10 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         enabled: true,
         toggled: None,
         value: None,
+        description: None,
+        invalid: false,
+        required: false,
+        readonly: false,
         lang: None,
         url: None,
         current: None,
@@ -234,7 +238,7 @@ fn a_current_link_says_what_it_is_the_current_one_of() {
 #[test]
 fn a_state_lands_where_its_role_is_read_from() {
     let toggled = |role: Role, on: bool| AccessNode {
-        toggled: Some(on),
+        toggled: Some(Toggle::from(on)),
         ..node(Some(1), role, "Control")
     };
     let published = |node: AccessNode| tree_update(&[node], "States", None).nodes[0].1.clone();
@@ -279,7 +283,7 @@ fn a_state_lands_where_its_role_is_read_from() {
 #[test]
 fn a_tree_row_says_it_is_chosen_open_and_where_it_sits() {
     let row = AccessNode {
-        toggled: Some(true),
+        toggled: Some(Toggle::On),
         expanded: Some(true),
         position: Some(platform_core::SetPosition {
             level: 2,
@@ -297,7 +301,7 @@ fn a_tree_row_says_it_is_chosen_open_and_where_it_sits() {
     assert_eq!(ak.position_in_set(), Some(2));
 
     let leaf = AccessNode {
-        toggled: Some(false),
+        toggled: Some(Toggle::Off),
         ..node(Some(5), Role::TreeItem, "Primary")
     };
     let update = tree_update(&[leaf], "Explorer", None);
@@ -354,7 +358,7 @@ fn an_open_combobox_names_the_list_it_controls() {
     };
     let list = node(Some(7), Role::ListBox, "Size");
     let row = AccessNode {
-        toggled: Some(true),
+        toggled: Some(Toggle::On),
         ..node(Some(8), Role::Option, "Large")
     };
     let update = tree_update(&[combobox.clone(), list, row], "Form", None);
@@ -920,11 +924,11 @@ fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
 #[test]
 fn a_splitter_publishes_its_value_and_its_orientation() {
     let splitter = AccessNode {
-        value: Some(platform_core::NumericValue {
+        value: Some(Value::from(platform_core::NumericValue {
             now: 240.0,
             min: 180.0,
             max: 400.0,
-        }),
+        })),
         orientation: Some(Orientation::Vertical),
         ..node(Some(1), Role::Splitter, "Sidebar")
     };
@@ -951,6 +955,80 @@ fn a_splitter_publishes_its_value_and_its_orientation() {
     );
 }
 
+fn published_alone(node: AccessNode) -> Node {
+    tree_update(&[node], "Window", None).nodes[0].1.clone()
+}
+
+/// A checkbox standing for a set some of which are ticked, and a toggle button partly pressed, publish `mixed`; a selection is there or not, so a mixed one is published as not selected.
+#[test]
+fn a_mixed_state_is_published_as_mixed_where_its_role_can_say_it() {
+    let mixed = |role: Role| AccessNode {
+        toggled: Some(Toggle::Mixed),
+        ..node(Some(1), role, "Control")
+    };
+    assert_eq!(
+        published_alone(mixed(Role::CheckBox)).toggled(),
+        Some(Toggled::Mixed)
+    );
+    assert_eq!(
+        published_alone(mixed(Role::Button)).toggled(),
+        Some(Toggled::Mixed)
+    );
+    assert_eq!(
+        published_alone(mixed(Role::Option)).is_selected(),
+        Some(false)
+    );
+}
+
+/// A field publishes the text it holds as its value, and a slider with words for its number publishes both.
+#[test]
+fn a_value_is_published_as_its_text_and_its_number() {
+    let field = published_alone(AccessNode {
+        value: Some(Value::Text("ada@example.com".into())),
+        ..node(Some(1), Role::TextInput, "Email")
+    });
+    assert_eq!(field.value(), Some("ada@example.com"));
+    assert_eq!(field.numeric_value(), None);
+
+    let slider = published_alone(AccessNode {
+        value: Some(Value::Number {
+            reading: platform_core::NumericValue {
+                now: 2.0,
+                min: 1.0,
+                max: 3.0,
+            },
+            text: Some("Medium".into()),
+        }),
+        ..node(Some(2), Role::Slider, "Quality")
+    });
+    assert_eq!(slider.value(), Some("Medium"));
+    assert_eq!(slider.numeric_value(), Some(2.0));
+    assert_eq!(slider.min_numeric_value(), Some(1.0));
+    assert_eq!(slider.max_numeric_value(), Some(3.0));
+}
+
+/// A field publishes its description, whether it must be filled in, whether what it holds is wrong and whether it can be changed; a plain field publishes none of them.
+#[test]
+fn a_field_publishes_its_description_and_its_validity() {
+    let field = published_alone(AccessNode {
+        description: Some("At least 8 characters".to_string()),
+        invalid: true,
+        required: true,
+        readonly: true,
+        ..node(Some(1), Role::TextInput, "Password")
+    });
+    assert_eq!(field.description(), Some("At least 8 characters"));
+    assert_eq!(field.invalid(), Some(Invalid::True));
+    assert!(field.is_required());
+    assert!(field.is_read_only());
+
+    let plain = published_alone(node(Some(2), Role::TextInput, "Name"));
+    assert_eq!(plain.description(), None);
+    assert_eq!(plain.invalid(), None);
+    assert!(!plain.is_required());
+    assert!(!plain.is_read_only());
+}
+
 /// A control that runs the same command as a key publishes it as the node's keyboard shortcut; one with no such key publishes none.
 #[test]
 fn a_control_publishes_the_keys_that_run_its_command() {
@@ -975,7 +1053,7 @@ fn a_grid_says_its_rows_its_cells_and_how_it_is_sorted() {
     };
     let unsorted = node(Some(3), Role::ColumnHeader, "Size");
     let row = AccessNode {
-        toggled: Some(true),
+        toggled: Some(Toggle::On),
         ..node(Some(4), Role::Row, "")
     };
     let nodes = [
@@ -1239,6 +1317,7 @@ fn every_role_said_from_outside_is_published_as_the_role_a_reader_knows() {
         (Role::ListItem, AkRole::ListItem),
         (Role::Status, AkRole::Status),
         (Role::Log, AkRole::Log),
+        (Role::Alert, AkRole::Alert),
     ] {
         assert!(role.is_annotatable(), "{role:?}");
         let update = tree_update(&[node(None, role, "Item")], "Window", None);
@@ -1246,7 +1325,11 @@ fn every_role_said_from_outside_is_published_as_the_role_a_reader_knows() {
         assert_eq!(published.role(), expected, "{role:?}");
         let level = matches!(role, Role::Heading(_)).then_some(3);
         assert_eq!(published.level(), level, "{role:?}");
-        let live = matches!(role, Role::Status | Role::Log).then_some(accesskit::Live::Polite);
+        let live = match role {
+            Role::Status | Role::Log => Some(accesskit::Live::Polite),
+            Role::Alert => Some(accesskit::Live::Assertive),
+            _ => None,
+        };
         assert_eq!(published.live(), live, "{role:?}");
     }
 }

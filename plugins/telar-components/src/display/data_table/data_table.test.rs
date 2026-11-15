@@ -269,7 +269,7 @@ fn the_arrows_walk_a_cursor_from_cell_to_cell_and_enter_chooses_its_row() {
     let chosen: Vec<bool> = mounted
         .of_role(Role::Row)
         .into_iter()
-        .map(|row| row.toggled == Some(true))
+        .map(|row| row.toggled == Some(telar::Toggle::On))
         .collect();
     assert_eq!(
         chosen,
@@ -484,7 +484,7 @@ impl Grid {
         self.read()
             .into_iter()
             .filter(|node| node.role == Role::Row)
-            .map(|node| node.toggled == Some(true))
+            .map(|node| node.toggled == Some(telar::Toggle::On))
             .collect()
     }
 }
@@ -544,13 +544,13 @@ fn a_resizable_column_s_header_holds_a_splitter_that_reads_its_width() {
     );
     assert_eq!(grid.names(Role::ColumnHeader), ["Name", "Size", "Kind"]);
     let size = grid.find(Role::Splitter, "Resize Size column");
-    let value = size.value.expect("a splitter reads a value");
+    let value = size.value.as_ref().and_then(telar::Value::reading).expect("a splitter reads a value");
     assert_eq!((value.now, value.min), (80.0, MIN_COLUMN_WIDTH as f64));
     assert_eq!(size.orientation, Some(telar::Orientation::Vertical));
     let name = grid.find(Role::Splitter, "Resize Name column");
-    assert_eq!(name.value.map(|value| value.min), Some(100.0));
+    assert_eq!(name.value.as_ref().and_then(telar::Value::reading).map(|value| value.min), Some(100.0));
     assert_eq!(
-        name.value.map(|value| value.now as f32),
+        name.value.as_ref().and_then(telar::Value::reading).map(|value| value.now as f32),
         Some(grid.width_of("Name"))
     );
 }
@@ -1050,7 +1050,7 @@ fn narrowing_a_wrapping_column_runs_its_cells_onto_more_lines() {
     let chosen = grid
         .read()
         .into_iter()
-        .filter(|node| node.role == Role::Row && node.toggled == Some(true))
+        .filter(|node| node.role == Role::Row && node.toggled == Some(telar::Toggle::On))
         .count();
     assert!(
         chosen > 1,

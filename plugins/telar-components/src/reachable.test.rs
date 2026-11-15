@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use telar::testing::named;
 use telar::{
-    AvailableSpace, ComponentList, Container, LayoutItem, LayoutStyle, NamedKey, box_item,
+    AvailableSpace, ComponentList, Container, LayoutItem, LayoutStyle, NamedKey, Toggle, box_item,
     compute_layout,
     focus::{self, Role},
     signal,
@@ -112,11 +112,11 @@ fn a_checked_box_is_announced_as_checked() {
     .unwrap();
     let _tree = mount(vec![item]);
 
-    assert_eq!(focus::exposed()[0].toggled, Some(true));
+    assert_eq!(focus::exposed()[0].toggled, Some(Toggle::On));
     checked.set(false);
     assert_eq!(
         focus::exposed()[0].toggled,
-        Some(false),
+        Some(Toggle::Off),
         "and follows it without the widget being rebuilt"
     );
 }

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use layout_core::NodeId;
 use platform_core::{
-    Chord, ConsumedKeys, Event, Key, ModifiersState, NamedKey, NumericValue, Orientation,
+    Chord, ConsumedKeys, Event, Key, ModifiersState, NamedKey, Orientation, Toggle, Value,
     keyboard_convention,
 };
 use reactive_core::{RwSignal, effect, signal};
@@ -98,8 +98,8 @@ struct Entry {
     /// For a scroll area, whether its content can scroll now: it is a stop only then, and only while no stop inside it is reachable. See [`register_scroller`].
     scrolls: Option<Rc<dyn Fn() -> bool>>,
     /// A checked state, for the controls that have one. A closure and not a flag, for the same reason "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to get the answer that is true then.
-    toggled: Option<Rc<dyn Fn() -> bool>>,
-    value: Option<Rc<dyn Fn() -> NumericValue>>,
+    toggled: Option<Rc<dyn Fn() -> Toggle>>,
+    value: Option<Rc<dyn Fn() -> Value>>,
     orientation: Option<Orientation>,
     outline: Outline,
     active_descendant: Option<Rc<dyn Fn() -> Option<FocusId>>>,
@@ -903,8 +903,8 @@ fn scope_views() -> Vec<ScopeView> {
 /// Declares that `id` carries an on/off state, and how to read it now. What the state is — checked, pressed, selected, expanded — is its role's [`Role::toggle_kind`].
 ///
 /// Separate from registering the control because the two are known at different moments: a box declares what it *is* as it is built, and what it is *bound to* when the caller hands it a signal.
-pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
-    let state: Rc<dyn Fn() -> bool> = Rc::new(state);
+pub fn set_toggled<S: Into<Toggle>>(id: FocusId, state: impl Fn() -> S + 'static) {
+    let state: Rc<dyn Fn() -> Toggle> = Rc::new(move || state().into());
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.toggled = Some(state);
@@ -912,9 +912,9 @@ pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
     });
 }
 
-/// Declares that `id` carries a number, and how to read it now. The counterpart of [`set_toggled`] for the roles whose state is a value rather than a flag.
-pub fn set_value(id: FocusId, read: impl Fn() -> NumericValue + 'static) {
-    let read: Rc<dyn Fn() -> NumericValue> = Rc::new(read);
+/// Declares that `id` carries a value, and how to read it now: a number, or the text a field holds. The counterpart of [`set_toggled`] for the roles whose state is a value rather than a flag.
+pub fn set_value<V: Into<Value>>(id: FocusId, read: impl Fn() -> V + 'static) {
+    let read: Rc<dyn Fn() -> Value> = Rc::new(move || read().into());
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.value = Some(read);
@@ -1031,9 +1031,9 @@ pub struct Exposed {
     /// Available to be activated. `false` is *announced*, not hidden — see [`ScopeReason`].
     pub enabled: bool,
     /// Its on/off state, for the controls that carry one: checked, pressed, selected or expanded as its role says.
-    pub toggled: Option<bool>,
-    /// Its numeric reading, for the controls that carry one.
-    pub value: Option<NumericValue>,
+    pub toggled: Option<Toggle>,
+    /// Its value, for the controls that carry one.
+    pub value: Option<Value>,
     pub orientation: Option<Orientation>,
     /// Whether a tree row with rows under it shows them; `None` for a leaf and for every other control.
     pub expanded: Option<bool>,
@@ -1058,8 +1058,8 @@ pub fn exposed() -> Vec<Exposed> {
             FocusId,
             Option<NodeId>,
             Role,
-            Option<Rc<dyn Fn() -> bool>>,
-            Option<Rc<dyn Fn() -> NumericValue>>,
+            Option<Rc<dyn Fn() -> Toggle>>,
+            Option<Rc<dyn Fn() -> Value>>,
             Option<Orientation>,
             Outline,
         );
@@ -1405,13 +1405,13 @@ mod order_tests;
 /// The checked state `id` declared, read now.
 ///
 /// `None` both for a control that carries no such state and for one nothing has registered. Reading it here rather than through [`exposed`] is what lets a widget put its own state on the box it draws: the reading happens inside `view()`, so the box re-emits when the state changes, which a snapshot taken afterwards could never do.
-pub fn toggled_state(id: FocusId) -> Option<bool> {
+pub fn toggled_state(id: FocusId) -> Option<Toggle> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.toggled.clone()))?;
     Some(read())
 }
 
-/// The number `id` declared, read now. Read inside `view()` for the same reason as [`toggled_state`].
-pub fn value_state(id: FocusId) -> Option<NumericValue> {
+/// The value `id` declared, read now. Read inside `view()` for the same reason as [`toggled_state`].
+pub fn value_state(id: FocusId) -> Option<Value> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.value.clone()))?;
     Some(read())
 }

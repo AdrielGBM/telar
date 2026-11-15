@@ -9,7 +9,7 @@ use reactive_core::{OwnerId, dispose_owner, owner_scope};
 
 use crate::{
     AccessNode, BuildFailure, Color, Event, EventResult, Key, LayoutError, LayoutItem, LayoutStyle,
-    ModifiersState, NamedKey, NestedCanvas, Size, Text, TextStyle, motion, testing,
+    ModifiersState, NamedKey, NestedCanvas, Size, Text, TextStyle, Toggle, Value, motion, testing,
 };
 
 use super::a11y::{self, Severity};
@@ -428,21 +428,22 @@ impl Play {
         self.step(format!("expect focus on {query}"), outcome)
     }
 
-    /// That the node `query` matches is in its on state — checked, pressed, selected or expanded, as its role says — or out of it.
-    pub fn expect_toggled(&mut self, query: Query, on: bool) -> PlayResult {
+    /// That the node `query` matches is in `expected` — on, off or mixed, where on is checked, pressed, selected or expanded as its role says. A `bool` says on or off.
+    pub fn expect_toggled(&mut self, query: Query, expected: impl Into<Toggle>) -> PlayResult {
+        let expected = expected.into();
         let outcome = self.find(&query).and_then(|node| match node.toggled {
-            Some(state) if state == on => Ok(()),
+            Some(state) if state == expected => Ok(()),
             Some(state) => Err(PlayError::new(format!(
                 "expected {query} to be {}, but it is {}",
-                on_off(on),
-                on_off(state)
+                toggle_word(expected),
+                toggle_word(state)
             ))),
             None => Err(PlayError::new(format!(
                 "expected {query} to be {}, but it has no on/off state",
-                on_off(on)
+                toggle_word(expected)
             ))),
         });
-        self.step(format!("expect {query} {}", on_off(on)), outcome)
+        self.step(format!("expect {query} {}", toggle_word(expected)), outcome)
     }
 
     /// That the node `query` matches is expanded — its popup open, its branch shown — or collapsed.
@@ -465,11 +466,18 @@ impl Play {
 
     /// That the node `query` matches reads `value` now, as a slider or a spin button tells a reader.
     pub fn expect_value(&mut self, query: Query, value: f64) -> PlayResult {
-        let outcome = self.find(&query).and_then(|node| match node.value {
-            Some(read) if (read.now - value).abs() <= VALUE_TOLERANCE => Ok(()),
-            Some(read) => Err(PlayError::new(format!(
+        let outcome = self.find(&query).and_then(|node| match &node.value {
+            Some(Value::Number { reading, .. })
+                if (reading.now - value).abs() <= VALUE_TOLERANCE =>
+            {
+                Ok(())
+            }
+            Some(Value::Number { reading, .. }) => Err(PlayError::new(format!(
                 "expected {query} to read {value}, but it reads {}",
-                read.now
+                reading.now
+            ))),
+            Some(Value::Text(text)) => Err(PlayError::new(format!(
+                "expected {query} to read {value}, but it reads the text {text:?}"
             ))),
             None => Err(PlayError::new(format!(
                 "expected {query} to read {value}, but it has no value"
@@ -681,8 +689,12 @@ fn describe(node: &AccessNode) -> String {
     format!("{} {:?}", node.role.as_str(), node.name)
 }
 
-fn on_off(on: bool) -> &'static str {
-    if on { "on" } else { "off" }
+fn toggle_word(state: Toggle) -> &'static str {
+    match state {
+        Toggle::Off => "off",
+        Toggle::On => "on",
+        Toggle::Mixed => "mixed",
+    }
 }
 
 fn key_name(key: &Key) -> String {

@@ -241,7 +241,7 @@ fn a_swatch_picks_its_colour_and_the_swatches_follow_the_value() {
     let mut mounted = Mounted::new(Color::rgb(0.2, 0.2, 0.2), true);
     assert_eq!(
         mounted.node(Role::Radio, "Blue").unwrap().toggled,
-        Some(false)
+        Some(telar::Toggle::Off)
     );
     let blue = mounted.rect(Role::Radio, "Blue");
     mounted.click(blue.x + blue.width / 2.0, blue.y + blue.height / 2.0);
@@ -251,7 +251,7 @@ fn a_swatch_picks_its_colour_and_the_swatches_follow_the_value() {
     mounted.settle();
     assert_eq!(
         mounted.node(Role::Radio, "Red").unwrap().toggled,
-        Some(true)
+        Some(telar::Toggle::On)
     );
 }
 

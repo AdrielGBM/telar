@@ -20,7 +20,7 @@ Each role has a default, `Role::consumed_keys()`:
 | menu item, combobox | Space, Enter, Up/Down, Home/End |
 | slider, splitter, toolbar | the arrows |
 | tree, tree item | the arrows (Up/Down walk the rows, Right/Left expand, collapse or step between parent and child), Home/End, Space, Enter. Typeahead is characters, which are never in the set |
-| status, log | nothing |
+| status, log, alert | nothing |
 | spin button | the arrows, Enter |
 | text field | the arrows, Home/End, Space, Enter, Backspace |
 | multi-line editor | a text field's keys; Tab too when it indents (see [Tab in a field of several lines](#tab-in-a-field-of-several-lines)) |

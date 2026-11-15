@@ -177,6 +177,7 @@ impl Role {
             | Self::ProgressBar
             | Self::Status
             | Self::Log
+            | Self::Alert
             | Self::Label
             | Self::KeyboardInput => K::EMPTY,
             // A document activates a link on Enter by itself and scrolls on Space, and a link keeping either would take that from it.

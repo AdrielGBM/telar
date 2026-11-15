@@ -90,9 +90,9 @@ fn the_pressed_state_follows_its_signal_into_the_semantics() {
     .unwrap();
     let _tree = mount(button);
 
-    assert_eq!(exposed_button().toggled, Some(false));
+    assert_eq!(exposed_button().toggled, Some(telar::Toggle::Off));
     on.set(true);
-    assert_eq!(exposed_button().toggled, Some(true));
+    assert_eq!(exposed_button().toggled, Some(telar::Toggle::On));
 }
 
 #[test]

@@ -377,7 +377,7 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
         "What the box is, beyond a box: a region, a list, a heading. A role a person operates (`button`, `switch`, `checkbox`, `radio`, `tab`, `slider`…) also makes the box a control: a Tab stop with the theme's focus ring, pressed by Enter and Space the way `on_press` is by a tap. An expression yielding a `Role` (`role:(Role::Heading(level))`) only describes the box, so a control's role is written by name.",
     ),
     AttrSpec::free("toggled").doc(
-        "The on/off state of a control, re-read when what it reads changes: `toggled:$on`. Checked on `role:switch`/`checkbox`/`radio`, pressed on `role:button` (a toggle button), selected on `role:tab`.",
+        "The on/off state of a control, re-read when what it reads changes: `toggled:$on`, a `bool` or a `Toggle` (`Off`, `On`, `Mixed`). Checked on `role:switch`/`checkbox`/`radio`, pressed on `role:button` (a toggle button), selected on `role:tab`.",
     ),
     AttrSpec::free("to").doc(
         "Makes the box a link: a typed route, `anchor(\"name\")` on this page, `in_locale(\"en\")` for this place in another language, or `external(\"https://…\")` outside the app. Focusable, followed on a tap or Enter, and a real `<a href>` in a document.",
