@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "The shape of a Telar project: source discovery, output paths, naming, and the build artifacts a transpile leaves behind."
 keywords = ["telar", "build", "codegen", "gui"]
 categories = ["development-tools::build-utils", "gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
