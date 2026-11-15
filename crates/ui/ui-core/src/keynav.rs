@@ -2,16 +2,16 @@
 //!
 //! It is deliberately *not* the focus system. That answers "which widget receives keys" — one focusable per widget, driven by Tab. This answers "which row of a list is selected", which is one focusable holding a cursor over N rows, and the two compose: a search field keeps focus while these keys drive the list underneath it.
 //!
-//! The important half of the contract is the negative one: **everything [`KeyNav::interpret`] returns `None` for must still reach a focused text field as typing.** A list that swallows `j` cannot also be searched, which is why the vim bindings are off unless a caller asks for them.
+//! The important half of the contract is the negative one: **everything [`KeyNav::interpret`] returns `None` for must still reach a focused text field as typing.** A list that swallows `j` cannot also be searched, which is why the letter keys (h/j/k/l) are off unless a caller asks for them.
 
 use i18n_core::Direction;
 use platform_core::{Key, NamedKey};
 
-/// A default vertical list: arrows, Home/End, Enter and Escape, and no vim bindings.
+/// A default vertical list: arrows, Home/End, Enter and Escape, and no letter keys (h/j/k/l).
 impl Default for KeyNav {
     fn default() -> Self {
         Self {
-            vim: false,
+            letter_keys: false,
             horizontal: false,
             grid: false,
             right_to_left: false,
@@ -35,17 +35,17 @@ pub enum KeyNavMove {
     Cancel,
 }
 
-/// How a list reads keys: the arrows always, and optionally the vim bindings on top.
+/// How a list reads keys: the arrows always, and optionally the letter keys (h/j/k/l) on top.
 ///
-/// `vim` is off by default because a list that swallows `j` cannot also be typed into, and a launcher whose main list is a search field is the common case. A surface with no text input can turn it on freely; one with a field should only do so if its user asked for it.
+/// Letter keys are off by default because a list that swallows `j` cannot also be typed into, and a launcher whose main list is a search field is the common case. A surface with no text input can turn it on freely; one with a field should only do so if its user asked for it.
 #[derive(Clone, Copy)]
 pub struct KeyNav {
-    pub vim: bool,
+    pub letter_keys: bool,
     /// The list runs along the screen's horizontal, so Left/Right move it rather than Up/Down.
     pub horizontal: bool,
     /// The list wraps into rows, so it uses *both* pairs of arrows: Left/Right for one tile and Up/Down for a whole row. Only a grid can, which is why it is a mode rather than the default.
     pub grid: bool,
-    /// Left/Right follow the writing direction, so in a right-to-left surface Left moves forward. Only the arrows flip: the vim letters name physical keys.
+    /// Left/Right follow the writing direction, so in a right-to-left surface Left moves forward. Only the arrows flip: the letter keys name physical keys.
     pub right_to_left: bool,
 }
 
@@ -101,10 +101,10 @@ impl KeyNav {
                 _ => None,
             };
         }
-        if !self.vim {
+        if !self.letter_keys {
             return None;
         }
-        // Vim's own pairs plus the readline pair. `G` before `g`, since the shift distinction is their whole difference.
+        // Letter pairs (j/k, g/G) and Ctrl-N/Ctrl-P as the down/up pair. `G` before `g`, since the shift distinction is their whole difference.
         let (down, up) = if self.grid {
             (KeyNavMove::NextRow, KeyNavMove::PreviousRow)
         } else {

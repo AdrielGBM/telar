@@ -2,16 +2,16 @@ use super::*;
 
 fn arrows() -> KeyNav {
     KeyNav {
-        vim: false,
+        letter_keys: false,
         horizontal: false,
         grid: false,
         right_to_left: false,
     }
 }
 
-fn vim() -> KeyNav {
+fn letter_keys() -> KeyNav {
     KeyNav {
-        vim: true,
+        letter_keys: true,
         horizontal: false,
         grid: false,
         right_to_left: false,
@@ -27,7 +27,7 @@ fn character(c: char) -> Key {
 }
 
 #[test]
-fn the_arrows_always_navigate_and_the_letters_only_do_in_vim_mode() {
+fn the_arrows_always_navigate_and_the_letters_only_do_when_letter_keys_are_on() {
     assert_eq!(
         arrows().interpret(&named(NamedKey::ArrowDown)),
         Some(KeyNavMove::Next)
@@ -49,22 +49,34 @@ fn the_arrows_always_navigate_and_the_letters_only_do_in_vim_mode() {
     assert_eq!(arrows().interpret(&character('k')), None);
     assert_eq!(arrows().interpret(&character('G')), None);
 
-    assert_eq!(vim().interpret(&character('j')), Some(KeyNavMove::Next));
-    assert_eq!(vim().interpret(&character('k')), Some(KeyNavMove::Previous));
-    assert_eq!(vim().interpret(&character('g')), Some(KeyNavMove::First));
-    assert_eq!(vim().interpret(&character('G')), Some(KeyNavMove::Last));
     assert_eq!(
-        vim().interpret(&character('\u{e}')),
+        letter_keys().interpret(&character('j')),
+        Some(KeyNavMove::Next)
+    );
+    assert_eq!(
+        letter_keys().interpret(&character('k')),
+        Some(KeyNavMove::Previous)
+    );
+    assert_eq!(
+        letter_keys().interpret(&character('g')),
+        Some(KeyNavMove::First)
+    );
+    assert_eq!(
+        letter_keys().interpret(&character('G')),
+        Some(KeyNavMove::Last)
+    );
+    assert_eq!(
+        letter_keys().interpret(&character('\u{e}')),
         Some(KeyNavMove::Next),
         "Ctrl-N"
     );
     assert_eq!(
-        vim().interpret(&character('\u{10}')),
+        letter_keys().interpret(&character('\u{10}')),
         Some(KeyNavMove::Previous),
         "Ctrl-P"
     );
     assert_eq!(
-        vim().interpret(&character('q')),
+        letter_keys().interpret(&character('q')),
         None,
         "an unbound letter is still typing"
     );
@@ -197,7 +209,7 @@ fn a_grid_uses_both_pairs_of_arrows() {
     assert_eq!(grid.interpret(&character('j')), None);
     assert_eq!(grid.interpret(&character('h')), None);
 
-    let keys = vim().grid();
+    let keys = letter_keys().grid();
     assert_eq!(keys.interpret(&character('j')), Some(KeyNavMove::NextRow));
     assert_eq!(
         keys.interpret(&character('k')),
