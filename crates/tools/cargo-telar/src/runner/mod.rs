@@ -1,4 +1,4 @@
-//! The subcommands: dev, check, fmt, preview, test, build, package, publish and migrate.
+//! The subcommands: dev, check, fmt, preview, test, build, package and publish.
 
 use std::path::Path;
 use std::process::Command;
@@ -22,7 +22,6 @@ mod fmt;
 mod interrupt;
 mod junit;
 mod library;
-mod migrate;
 mod new;
 mod package;
 mod scratch;
@@ -44,7 +43,6 @@ use config::{TelarSection, load_config, missing_workshop, resolve_package};
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
 use library::{run_package_cmd, run_publish_cmd};
-use migrate::run_migrate_cmd;
 use new::{run_init_cmd, run_new_cmd};
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis, build_web};
 use test_cmd::run_test_cmd;
@@ -72,7 +70,6 @@ pub fn run(args: Vec<String>) {
             | TelarCommand::Init(_)
             | TelarCommand::Doctor
             | TelarCommand::Fmt(_)
-            | TelarCommand::Migrate(_)
             | TelarCommand::Bake
             | TelarCommand::Transpile
             | TelarCommand::Package(_)
@@ -107,7 +104,6 @@ pub fn run(args: Vec<String>) {
         TelarCommand::Publish(args) => run_publish_cmd(args),
         TelarCommand::Doctor => run_doctor_cmd(),
         TelarCommand::Fmt(args) => run_fmt_cmd(args),
-        TelarCommand::Migrate(args) => run_migrate_cmd(args),
     }
 }
 

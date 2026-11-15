@@ -445,29 +445,6 @@ impl Wiring {
     }
 }
 
-/// Refuses a build driven by a `cargo-telar` older than this `telar`.
-///
-/// The two halves agree on the build shape through a feature. An older CLI asks for it by setting `TELAR_HOT_RELOAD_BUILD` and pushing `--cfg=telar_hot_reload` into `RUSTFLAGS`, and neither is read any more — so nothing fails: the project compiles, the window opens, and hot reload simply never happens, because the dylib exports no factory and the host branch was never generated. `cargo telar dev` then reports only that the app is not connected to its own channel, which describes the symptom and names nothing that could be done about it.
-///
-/// The variable is read here and nowhere else, and only ever to refuse. What a build *is* still comes from the feature alone, so this cannot reintroduce an output cargo does not track.
-fn check_cli_is_current() -> Result<(), TokenStream2> {
-    let Some(message) = stale_cli_message(std::env::var_os("TELAR_HOT_RELOAD_BUILD").is_some())
-    else {
-        return Ok(());
-    };
-    Err(quote! { compile_error!(#message); })
-}
-
-fn stale_cli_message(hot_requested_by_env: bool) -> Option<String> {
-    if !hot_requested_by_env || cfg!(feature = "hot-reload") {
-        return None;
-    }
-    Some(format!(
-        "rsx: this build was started by a `cargo-telar` older than telar {v}, which asks for a hot-reload build through an environment variable this version no longer reads — so the build would come out with no hot reload in it and nothing would say so. Run: cargo install cargo-telar --version {v} --force",
-        v = env!("CARGO_PKG_VERSION")
-    ))
-}
-
 /// Refuses an invocation that contradicts `[telar] theme`. Naming nothing is not a contradiction: the key is the declaration, and repeating it at every invocation is what the key exists to spare.
 ///
 /// Nothing else in the build reads that key — the macro is handed the type directly — but everything that transpiles the same file *without* a macro to read does: the editor's live mirror and the golden harness both resolve the theme through `telar_transpiler::resolve_theme_type`, which answers with this key when it is set. Two answers means two different files generated from one source, and the last writer wins.
@@ -734,7 +711,6 @@ fn transpile_project(
     invocation: Invocation,
     theme_type_str: Option<&str>,
 ) -> Result<TranspileOutput, TokenStream2> {
-    check_cli_is_current()?;
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set"); })?;

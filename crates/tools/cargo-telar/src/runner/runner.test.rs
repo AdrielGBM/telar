@@ -101,3 +101,11 @@ fn the_renderer_names_the_browser_feature_it_needs() {
     assert_eq!(Target::Web.feature(WebRenderer::Dom), "web-dom");
     assert_eq!(Target::Web.feature(WebRenderer::Canvas), "web");
 }
+
+#[test]
+fn migrate_is_an_unknown_subcommand() {
+    let error = Cli::try_parse_from(["cargo-telar", "migrate"])
+        .err()
+        .expect("`migrate` no longer exists");
+    assert_eq!(error.kind(), clap::error::ErrorKind::InvalidSubcommand);
+}

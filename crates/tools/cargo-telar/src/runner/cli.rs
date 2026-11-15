@@ -44,8 +44,6 @@ pub(crate) enum TelarCommand {
     Doctor,
     /// Format every `.rsx` and `.rs` file in the project
     Fmt(FmtArgs),
-    /// Apply the migrations a release needs; none exists yet
-    Migrate(MigrateArgs),
 }
 
 /// The whole of choosing a target: the generated `Cargo.toml` names one and lists the other three, each a single word.
@@ -119,20 +117,6 @@ pub(crate) struct PublishArgs {
     /// Extra args passed directly to `cargo publish` (after --), such as `--registry` or `--no-verify`
     #[arg(last = true)]
     pub(crate) cargo_args: Vec<String>,
-}
-
-/// Kept so scripts calling it keep working; with no migration to run, the arguments change nothing.
-#[derive(clap::Args)]
-#[expect(
-    dead_code,
-    reason = "accepted for compatibility, read once a release ships a migration"
-)]
-pub(crate) struct MigrateArgs {
-    /// Report which files would change and exit non-zero, without writing
-    #[arg(long)]
-    pub(crate) check: bool,
-    /// Directories or files to migrate; defaults to the current directory
-    pub(crate) paths: Vec<std::path::PathBuf>,
 }
 
 /// `cargo fmt` cannot do this job: it never sees a `.rsx` file, and the `.rs` modules a telar crate declares come out of a macro it does not expand, so it walks into `lib.rs` and stops there — reporting a clean tree it never looked at.
