@@ -282,8 +282,14 @@ fn an_embedded_guests_surface_is_read_acted_on_and_typed_into_where_the_host_dra
     assert!(!decided.get());
     let commit = Event::Ime(Ime::Commit("c".into()));
     assert!(embed.on_event(&commit));
-    let typed = control(&telar::inspect::snapshot(&frame()), focus::Role::TextInput).name;
-    assert!(typed.contains('c'), "the commit reaches the field: {typed}");
+    let typed = control(&telar::inspect::snapshot(&frame()), focus::Role::TextInput).value;
+    assert!(
+        typed
+            .as_ref()
+            .and_then(platform_core::Value::text)
+            .is_some_and(|text| text.contains('c')),
+        "the commit reaches the field: {typed:?}"
+    );
 
     assert!(embed.on_event(&tab(false)));
     assert!(focus::is_focused(stop), "Tab moves on inside");
