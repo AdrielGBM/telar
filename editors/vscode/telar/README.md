@@ -29,12 +29,12 @@ A Rust toolchain on `PATH`. The server discovers the sysroot through `rustc` and
 
 ## Commands
 
-| Command                                     | Description                                                                      |
-| ------------------------------------------- | -------------------------------------------------------------------------------- |
-| `Telar: Show preview at cursor in workshop` | Moves the running workshop to the `[preview]` at the cursor, or starts one on it |
-| `Telar: Open workshop`                      | Brings forward the workshop that lists the active file's previews, or starts it  |
-| `Telar: Show preview at cursor in panel`    | Opens the preview panel beside the editor on the `[preview]` at the cursor       |
-| `Telar: Show server log`                    | Opens the language server's output channel                                       |
+| Command                                     | Description                                                                       |
+| ------------------------------------------- | --------------------------------------------------------------------------------- |
+| `Telar: Show preview at cursor in workshop` | Moves the running workshop to the `[preview]` at the cursor, or starts one on it  |
+| `Telar: Open workshop`                      | Brings forward the workshop that lists the active file's previews, or starts it   |
+| `Telar: Show preview at cursor in panel`    | Opens the preview panel beside the editor on the `[preview]` at the cursor        |
+| `Telar: Run play at cursor`                 | Runs the `[play]` of the `[preview]` at the cursor, in a terminal in its package  |
 
 ## Preview panel
 

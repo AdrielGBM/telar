@@ -108,21 +108,23 @@ export async function activate(
       "telar.showInPanel",
       async (target?: unknown) => {
         if (isPreviewTarget(target)) return PreviewPanel.show(launches, target);
-        const editor = vscode.window.activeTextEditor;
-        const atCursor = editor
-          ? await previewAt(editor.document, editor.selection.active)
-          : undefined;
-        await PreviewPanel.show(launches, atCursor);
+        await PreviewPanel.show(launches, await previewUnderCursor());
       },
     ),
-    vscode.commands.registerCommand("telar.runPlay", (target?: unknown) => {
-      if (!isPreviewTarget(target)) return;
-      runInTerminal(
-        "Telar play",
-        target.packageDir,
-        `cargo telar test --preview ${target.id} --no-snapshots`,
-      );
-    }),
+    vscode.commands.registerCommand(
+      "telar.runPlay",
+      async (target?: unknown) => {
+        const play = isPreviewTarget(target)
+          ? target
+          : await previewUnderCursor();
+        if (!play) return;
+        runInTerminal(
+          "Telar play",
+          play.packageDir,
+          `cargo telar test --preview ${play.id} --no-snapshots`,
+        );
+      },
+    ),
   );
 }
 
@@ -138,6 +140,13 @@ interface LanguageClient {
 function analyzerClient(): LanguageClient | undefined {
   return vscode.extensions.getExtension("rust-lang.rust-analyzer")?.exports
     ?.client;
+}
+
+async function previewUnderCursor(): Promise<PreviewTarget | undefined> {
+  const editor = vscode.window.activeTextEditor;
+  return editor
+    ? previewAt(editor.document, editor.selection.active)
+    : undefined;
 }
 
 async function previewAt(

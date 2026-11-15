@@ -58,6 +58,11 @@
         "title": "Show preview at cursor in panel",
         "category": "Telar",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "telar.runPlay",
+        "title": "Run play at cursor",
+        "category": "Telar"
       }
     ],
     "menus": {
