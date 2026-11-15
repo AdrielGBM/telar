@@ -152,6 +152,15 @@ impl Mounted {
         self.settle();
     }
 
+    fn focused_name(&self) -> String {
+        let held = focus::current();
+        telar::inspect::snapshot(&self.tree.commands())
+            .into_iter()
+            .find(|node| node.id.is_some() && node.id == held)
+            .map(|node| node.name)
+            .unwrap_or_default()
+    }
+
     fn click(&mut self, x: f32, y: f32) {
         self.send(press(x as f64, y as f64));
         self.send(release(x as f64, y as f64));
@@ -165,7 +174,7 @@ impl Mounted {
 #[test]
 fn pressing_the_area_sets_saturation_across_and_brightness_up() {
     let mut mounted = Mounted::new(Color::rgb(1.0, 0.0, 0.0), true);
-    let area = mounted.rect(Role::Slider, "Saturation and brightness");
+    let area = mounted.rect(Role::Slider, "Saturation");
     mounted.click(area.x + area.width - 0.5, area.y + 0.5);
     assert!(close(mounted.value.get(), Color::rgb(1.0, 0.0, 0.0)));
 
@@ -183,10 +192,15 @@ fn pressing_the_area_sets_saturation_across_and_brightness_up() {
 #[test]
 fn the_arrows_step_the_area_and_the_sliders() {
     let mut mounted = Mounted::new(Color::rgb(0.5, 0.25, 0.25), true);
-    mounted.focus(Role::Slider, "Saturation and brightness");
+    mounted.focus(Role::Slider, "Saturation");
     mounted.key(NamedKey::ArrowUp);
     let (_, _, v) = to_hsv(mounted.value.get());
     assert!((v - 0.51).abs() < 0.005, "{v}");
+    assert_eq!(
+        mounted.focused_name(),
+        "Brightness",
+        "the arrow up moved brightness, so its slider is what a reader hears"
+    );
 
     mounted.focus(Role::Slider, "Hue");
     mounted.key(NamedKey::End);
@@ -203,6 +217,51 @@ fn the_arrows_step_the_area_and_the_sliders() {
     mounted.focus(Role::Slider, "Opacity");
     mounted.key(NamedKey::Home);
     assert_eq!(mounted.value.get().a, 0.0);
+}
+
+/// A reader meets the area as two sliders and steps each without moving the other.
+#[test]
+fn each_axis_of_the_area_steps_on_its_own() {
+    use telar::focus::AccessAction;
+    let mut mounted = Mounted::new(Color::rgb(0.5, 0.25, 0.25), true);
+    let reading = |mounted: &Mounted, name: &str| {
+        mounted
+            .node(Role::Slider, name)
+            .and_then(|node| node.value)
+            .and_then(|value| value.reading())
+            .map(|reading| reading.now)
+            .unwrap_or_else(|| panic!("a slider named `{name}` with a value"))
+    };
+    let id = |mounted: &Mounted, name: &str| {
+        mounted
+            .node(Role::Slider, name)
+            .and_then(|node| node.id)
+            .expect("a focusable slider")
+    };
+    assert_eq!(reading(&mounted, "Saturation"), 50.0);
+    assert_eq!(reading(&mounted, "Brightness"), 50.0);
+
+    assert!(focus::perform(
+        id(&mounted, "Saturation"),
+        AccessAction::Increment
+    ));
+    mounted.settle();
+    assert_eq!(reading(&mounted, "Saturation"), 51.0);
+    assert_eq!(reading(&mounted, "Brightness"), 50.0, "brightness stayed");
+
+    assert!(focus::perform(
+        id(&mounted, "Brightness"),
+        AccessAction::Decrement
+    ));
+    mounted.settle();
+    assert_eq!(reading(&mounted, "Brightness"), 49.0);
+    assert_eq!(reading(&mounted, "Saturation"), 51.0, "saturation stayed");
+
+    let stops = focus::tab_order()
+        .into_iter()
+        .filter(|stop| [id(&mounted, "Saturation"), id(&mounted, "Brightness")].contains(&stop.id))
+        .count();
+    assert_eq!(stops, 1, "the two sliders are one Tab stop");
 }
 
 #[test]

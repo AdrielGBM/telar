@@ -11,12 +11,12 @@ element group
             end
           end
           element group
-            element slider
+            element group
               rect 288,178 224x139 fill=#00ff85ff radius=10
-              element group
+              element slider
                 rect 288,178 224x139 fill=linear(288,178>512,178;#ffffffff@0;#ffffff00@1) radius=10
               end
-              element group
+              element slider
                 rect 288,178 224x139 fill=linear(288,178>288,317;#00000000@0;#000000ff@1) radius=10
               end
               element group

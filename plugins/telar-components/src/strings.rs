@@ -4,6 +4,7 @@ use telar::i18n::{Catalog, Entry, Message, Part, translate_with_override};
 
 const NAMESPACE: &str = "telar_components";
 
+pub(crate) const BRIGHTNESS: &str = "brightness";
 pub(crate) const CHARACTERS: &str = "characters";
 pub(crate) const CHARACTERS_OF: &str = "characters_of";
 pub(crate) const CLEAR_SEARCH: &str = "clear_search";
@@ -13,14 +14,12 @@ pub(crate) const COMMAND_PALETTE: &str = "command_palette";
 pub(crate) const COMMANDS: &str = "commands";
 pub(crate) const COPIED: &str = "copied";
 pub(crate) const COPY: &str = "copy";
-pub(crate) const DECREASE: &str = "decrease";
 pub(crate) const DISMISS: &str = "dismiss";
 pub(crate) const DRAWER: &str = "drawer";
 pub(crate) const ERROR: &str = "error";
 pub(crate) const EXTERNAL_LINK: &str = "external_link";
 pub(crate) const HEX: &str = "hex";
 pub(crate) const HUE: &str = "hue";
-pub(crate) const INCREASE: &str = "increase";
 pub(crate) const INFORMATION: &str = "information";
 pub(crate) const MAXIMIZE: &str = "maximize";
 pub(crate) const MINIMIZE: &str = "minimize";
@@ -34,6 +33,7 @@ pub(crate) const RESIZE_COLUMN: &str = "resize_column";
 pub(crate) const RESIZE_HEIGHT: &str = "resize_height";
 pub(crate) const RESIZE_WIDTH: &str = "resize_width";
 pub(crate) const RESTORE: &str = "restore";
+pub(crate) const SATURATION: &str = "saturation";
 pub(crate) const SATURATION_BRIGHTNESS: &str = "saturation_brightness";
 pub(crate) const SEARCH: &str = "search";
 pub(crate) const SEARCH_COMMANDS: &str = "search_commands";
@@ -49,6 +49,14 @@ static CATALOG: Catalog = Catalog {
     default_locale: "en",
     // Sorted by key: a lookup is a binary search, and an entry out of order is never found.
     entries: &[
+        Entry {
+            key: BRIGHTNESS,
+            messages: &[
+                ("ar", Message::Plain("السطوع")),
+                ("en", Message::Plain("Brightness")),
+                ("es", Message::Plain("Brillo")),
+            ],
+        },
         Entry {
             key: CHARACTERS,
             messages: &[
@@ -155,14 +163,6 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
-            key: DECREASE,
-            messages: &[
-                ("ar", Message::Plain("إنقاص")),
-                ("en", Message::Plain("Decrease")),
-                ("es", Message::Plain("Disminuir")),
-            ],
-        },
-        Entry {
             key: DISMISS,
             messages: &[
                 ("ar", Message::Plain("تجاهل")),
@@ -217,14 +217,6 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("درجة اللون")),
                 ("en", Message::Plain("Hue")),
                 ("es", Message::Plain("Tono")),
-            ],
-        },
-        Entry {
-            key: INCREASE,
-            messages: &[
-                ("ar", Message::Plain("زيادة")),
-                ("en", Message::Plain("Increase")),
-                ("es", Message::Plain("Aumentar")),
             ],
         },
         Entry {
@@ -354,6 +346,14 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("استعادة")),
                 ("en", Message::Plain("Restore")),
                 ("es", Message::Plain("Restaurar")),
+            ],
+        },
+        Entry {
+            key: SATURATION,
+            messages: &[
+                ("ar", Message::Plain("التشبع")),
+                ("en", Message::Plain("Saturation")),
+                ("es", Message::Plain("Saturación")),
             ],
         },
         Entry {

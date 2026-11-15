@@ -101,6 +101,7 @@ fn button(id: u64, name: &str) -> AccessNode {
         multiselectable: false,
         modal: false,
         selection: None,
+        line_starts: Vec::new(),
         supports: Default::default(),
     }
 }

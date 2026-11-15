@@ -363,6 +363,7 @@ wire_struct!(AccessNode {
     multiselectable,
     modal,
     selection,
+    line_starts,
     supports,
 });
 wire_struct!(TextSelection { anchor, focus });

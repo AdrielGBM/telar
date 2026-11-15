@@ -4,9 +4,11 @@ element group
   element group
     element group
       element group
-        element group
+        element spinbutton
+          rect 357,284 86x32 border=2 border-color=#4261edff radius=10
+          rect 359,286 82x28 border=1 border-color=#ffffffff radius=8
           element button
-            rect 357,284 32x32 fill=#3852caff radius=10
+            rect 357,284 32x32 fill=#4261edff radius=10
             element group
               matrix 1,0,0,1,368,284
                 text 0,8 9.27x16.8 "−" size=14 family=sans-serif weight=400 color=#ffffffff lang=en

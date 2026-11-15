@@ -406,6 +406,7 @@ fn node() -> AccessNode {
             anchor: 3,
             focus: 0,
         }),
+        line_starts: vec![5, 12],
         supports: ActionSupport {
             step: true,
             set_value: false,
@@ -445,6 +446,7 @@ fn audit() -> AccessAudit {
                 multiselectable: false,
                 modal: false,
                 selection: None,
+                line_starts: Vec::new(),
                 supports: Default::default(),
             },
             node(),

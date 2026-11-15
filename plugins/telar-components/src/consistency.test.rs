@@ -23,8 +23,24 @@ struct Probe {
 enum Surface {
     /// The control's own box.
     Root,
-    /// The first focusable of this role inside the control: a tab of a tab list, the − of a stepper.
+    /// The first focusable of this role inside the control: a tab of a tab list.
     First(Role),
+    /// The first box the control fills, for a surface the pointer alone reaches: the − of a stepper.
+    FirstFilled,
+}
+
+impl Surface {
+    /// Where the surface is drawn, in a control laid out at `own` that draws `commands`.
+    fn located(self, own: Rect, commands: &[DrawCommand]) -> Option<Rect> {
+        match self {
+            Self::Root => Some(own),
+            Self::First(role) => drawn(role).into_iter().next(),
+            Self::FirstFilled => commands.iter().find_map(|command| match command {
+                DrawCommand::Rect { rect, style, .. } if style.fill.is_some() => Some(*rect),
+                _ => None,
+            }),
+        }
+    }
 }
 
 /// A theme whose control radius no primitive step happens to equal, so a component rounding by `radius()`, `radius_md()` or a factor of either shows up as a mismatch.
@@ -145,7 +161,7 @@ fn probes() -> Vec<Probe> {
     probes.push(Probe {
         name: "stepper",
         build: |size| crate::stepper(crate::StepperProps::props().size(size).build()),
-        surface: Surface::First(Role::Button),
+        surface: Surface::FirstFilled,
     });
     probes
 }
@@ -190,10 +206,7 @@ fn measure(probe: &Probe, size: ControlSize) -> Measured {
     let (rect, tree) = &*built;
     let commands = tree.commands();
     let root = rect.get();
-    let surface = match probe.surface {
-        Surface::Root => Some(root),
-        Surface::First(role) => drawn(role).into_iter().next(),
-    };
+    let surface = probe.surface.located(root, &commands);
     let radius = surface.and_then(|surface| {
         commands.iter().rev().find_map(|command| match command {
             DrawCommand::Rect { rect, style, .. } if same(*rect, surface) => Some(style.radius),
@@ -560,10 +573,7 @@ fn every_row_of_every_list_is_the_one_row_height_at_every_size() {
             let (own, tree) = &mut *built;
             (probe.open)(tree);
             settle(tree);
-            let row = match probe.row {
-                Surface::Root => Some(own.get()),
-                Surface::First(role) => drawn(role).into_iter().next(),
-            };
+            let row = probe.row.located(own.get(), &tree.commands());
             match row {
                 None => failures.push(format!("`{}` at {size:?} shows no row", probe.name)),
                 Some(row) if (row.height - want).abs() >= 0.5 => failures.push(format!(

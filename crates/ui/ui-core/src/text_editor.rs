@@ -265,6 +265,7 @@ impl Editor {
             Caret { at: caret, anchor },
             affinity,
         );
+        answer_line_starts(id, &shape, &style, LayoutLeaf { node, rect }, value);
         if lines == Lines::Multi {
             remeasure(&shape, &style, node, rect, value, caret, composition);
         }
@@ -942,6 +943,29 @@ impl Drop for Editor {
             focus::unregister(self.id);
         });
     }
+}
+
+/// Tells a reader where each row the editor `id` draws its text in begins after the first, so it moves through the text line by line as it is drawn, a row the width wrapped included.
+fn answer_line_starts(
+    id: FocusId,
+    shape: &Rc<Shape>,
+    style: &Rc<dyn Fn() -> TextStyle>,
+    leaf: LayoutLeaf,
+    value: RwSignal<String>,
+) {
+    let (shape, style) = (Rc::clone(shape), Rc::clone(style));
+    focus::set_line_starts(id, move || {
+        let style = style();
+        let area = leaf.rect.get();
+        let frame = shape.frame(laid_width(leaf.node, area), area.height, &style, 0.0);
+        let mask = shape.mask.get();
+        // Copied out rather than read in place: laying the text out asks for the writing direction, which may not be read while the value is borrowed.
+        let text = value.get();
+        let lines = Placed::new(&shape.rows, &text, &style, mask, frame).lines;
+        (1..lines.len())
+            .map(|row| shown_characters(&text[..lines.row(row).start], mask))
+            .collect()
+    });
 }
 
 /// Tells a reader what the editor `id` shows, as its value, and takes from one a whole text to hold and a place to put the caret or the selection, each counted in what it shows: a secret field is read, and selected in, as its mask.

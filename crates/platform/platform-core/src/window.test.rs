@@ -49,6 +49,7 @@ impl EventHandler<TestWindow> for TestHandler {
             multiselectable: false,
             modal: false,
             selection: None,
+            line_starts: Vec::new(),
             supports: Default::default(),
         }]
     }

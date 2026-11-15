@@ -73,6 +73,7 @@ fn node(role: Role, name: &str, parent: Option<usize>) -> AccessNode {
         multiselectable: false,
         modal: false,
         selection: None,
+        line_starts: Vec::new(),
         supports: ActionSupport::default(),
     }
 }

@@ -526,6 +526,38 @@ fn a_wrapping_area_is_as_tall_as_the_rows_it_wraps_into_and_draws_them_at_its_wi
     assert_eq!(drawn(&wrapping.area).1[0].width, 160.0);
 }
 
+/// A reader is told where each line the area draws begins, a line the width wrapped as much as one a line break ended, so it reads the text line by line as it is shown.
+#[test]
+fn a_wrapping_area_tells_a_reader_where_each_drawn_line_begins() {
+    let text = format!("{PARAGRAPH}\nend");
+    let wrapping = Wrapping::new(&text, 160.0);
+    let starts = focus::line_starts_state(wrapping.area.editor.id);
+    assert_eq!(
+        starts.len() + 1,
+        wrapping.lines().len(),
+        "a start for every line after the first: {starts:?}"
+    );
+    let characters: Vec<char> = text.chars().collect();
+    let last = *starts.last().expect("the paragraph wraps");
+    assert_eq!(
+        characters[last..].iter().collect::<String>(),
+        "end",
+        "the line after the break begins after it"
+    );
+    let first: String = characters[..starts[0]].iter().collect();
+    assert!(
+        PARAGRAPH.starts_with(&first) && first.len() < PARAGRAPH.len(),
+        "the first line ends where the width wrapped it: {first:?}"
+    );
+
+    wrapping.lay_out(2000.0);
+    assert_eq!(
+        focus::line_starts_state(wrapping.area.editor.id),
+        vec![PARAGRAPH.chars().count() + 1],
+        "laid out wide, only the line break starts a line"
+    );
+}
+
 #[test]
 fn typing_past_the_edge_grows_the_area_a_row_and_taking_it_back_shrinks_it() {
     let mut wrapping = Wrapping::new("abc", 160.0);

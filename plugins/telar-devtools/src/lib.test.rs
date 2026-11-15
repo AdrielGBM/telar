@@ -522,6 +522,7 @@ fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
         multiselectable: false,
         modal: false,
         selection: None,
+        line_starts: Vec::new(),
         supports: Default::default(),
     }]);
     dev.on_violations(&[telar::AccessViolation::new(

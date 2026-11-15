@@ -47,6 +47,7 @@ fn label(name: &str) -> AccessNode {
         multiselectable: false,
         modal: false,
         selection: None,
+        line_starts: Vec::new(),
         supports: Default::default(),
     }
 }

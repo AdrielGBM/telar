@@ -1063,6 +1063,7 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         multiselectable: false,
         modal: false,
         selection: None,
+        line_starts: Vec::new(),
         supports: Default::default(),
     };
     let nested = |surface| NestedSurface {

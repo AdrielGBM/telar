@@ -31,6 +31,7 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         multiselectable: false,
         modal: false,
         selection: None,
+        line_starts: Vec::new(),
         supports: Default::default(),
     }
 }
@@ -1440,11 +1441,12 @@ fn a_slider_that_steps_claims_and_receives_its_steps() {
     );
 }
 
-/// A field's text is read as a run a line, and the caret of the field holding the keyboard is placed in those runs: on the line break that ends a line, at the start of the next line once past it.
+/// A field's text is read as a run a laid-out line, and the caret of the field holding the keyboard is placed in those runs: on the line break that ends a line, at the start of the next line once past it.
 #[test]
 fn a_field_publishes_its_text_as_runs_and_its_caret_in_them() {
     let field = AccessNode {
         value: Some(Value::Text("añil\nazul".into())),
+        line_starts: vec![5],
         selection: Some(TextSelection {
             anchor: 4,
             focus: 6,
@@ -1485,6 +1487,7 @@ fn a_field_publishes_its_text_as_runs_and_its_caret_in_them() {
 fn a_reader_placing_a_fields_caret_names_a_place_in_its_text() {
     let field = AccessNode {
         value: Some(Value::Text("añil\nazul".into())),
+        line_starts: vec![5],
         supports: ActionSupport {
             step: false,
             set_value: true,
@@ -1526,6 +1529,35 @@ fn a_reader_placing_a_fields_caret_names_a_place_in_its_text() {
         requested_action(&written, &nodes),
         Some((3, AccessAction::SetValue(Value::Text("verde".into()))))
     );
+}
+
+/// A line the width wrapped is a run of its own, as a line break makes one: a reader moves through the field line by line as it is drawn.
+#[test]
+fn a_soft_wrapped_field_publishes_a_run_per_line_it_is_drawn_in() {
+    let field = AccessNode {
+        value: Some(Value::Text("one two three".into())),
+        line_starts: vec![4, 8],
+        selection: Some(TextSelection {
+            anchor: 8,
+            focus: 8,
+        }),
+        ..node(Some(3), Role::MultilineTextInput, "Notes")
+    };
+    let update = tree_update(&[field], "Form", None);
+    let ak = &update.nodes[0].1;
+    let runs: Vec<Option<&str>> = ak
+        .children()
+        .iter()
+        .map(|id| update_of(&update, *id).value())
+        .collect();
+    assert_eq!(runs, [Some("one "), Some("two "), Some("three")]);
+    let caret = ak.text_selection().expect("the caret is published").focus;
+    assert_eq!(
+        caret.node,
+        ak.children()[2],
+        "past a wrap, on the next line"
+    );
+    assert_eq!(caret.character_index, 0);
 }
 
 /// An empty field is still a run a reader can put the caret in.

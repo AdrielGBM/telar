@@ -5,9 +5,11 @@ use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Canvas, Clip, ClippedItem, Color, Container,
     Cursor, Gradient, Key, LayoutError, LayoutItem, LayoutStyle, ModifiersState, NamedKey,
-    NumericValue, Paint, Point, Props, Reactive, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceAmendment, amend_surface, box_item, box_transform, children, effect,
-    focus::Role, signal, step_factor,
+    NumericValue, Orientation, Paint, Point, Props, Reactive, Rect, RectStyle, RenderNode,
+    RovingAxis, RovingGroup, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
+    amend_surface, box_item, box_transform, children, effect,
+    focus::{self, FocusId, Role, Step},
+    signal, step_factor,
 };
 
 use crate::shared;
@@ -280,7 +282,121 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
     shared::captioned(size, box_item(picker_box), label, width, false)
 }
 
-/// The saturation (across) and brightness (up) of the current hue, dragged or stepped with the arrows.
+/// One of the area's two axes, each a slider of its own to a reader: saturation runs across it, brightness up it.
+#[derive(Clone, Copy, PartialEq)]
+enum Axis {
+    Saturation,
+    Brightness,
+}
+
+impl Axis {
+    fn of(self, hsv: Hsv) -> f32 {
+        match self {
+            Self::Saturation => hsv.s,
+            Self::Brightness => hsv.v,
+        }
+    }
+
+    fn set(self, hsv: Hsv, to: f32) -> Hsv {
+        let to = to.clamp(0.0, 1.0);
+        match self {
+            Self::Saturation => Hsv { s: to, ..hsv },
+            Self::Brightness => Hsv { v: to, ..hsv },
+        }
+    }
+
+    /// Its place in the area's roving group, and among the area's sliders.
+    fn index(self) -> usize {
+        match self {
+            Self::Saturation => 0,
+            Self::Brightness => 1,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Saturation => strings::SATURATION,
+            Self::Brightness => strings::BRIGHTNESS,
+        }
+    }
+
+    fn orientation(self) -> Orientation {
+        match self {
+            Self::Saturation => Orientation::Horizontal,
+            Self::Brightness => Orientation::Vertical,
+        }
+    }
+
+    /// The axis an arrow key moves along, and which way.
+    fn of_arrow(key: &NamedKey) -> Option<(Self, f32)> {
+        match key {
+            NamedKey::ArrowRight => Some((Self::Saturation, 1.0)),
+            NamedKey::ArrowLeft => Some((Self::Saturation, -1.0)),
+            NamedKey::ArrowUp => Some((Self::Brightness, 1.0)),
+            NamedKey::ArrowDown => Some((Self::Brightness, -1.0)),
+            _ => None,
+        }
+    }
+}
+
+/// Makes `layer` the slider for `axis`: one stop of the area's `group`, valued and stepped along its axis alone.
+fn axis_control(
+    layer: StyledContainer,
+    axis: Axis,
+    picker: &Picker,
+    group: &RovingGroup,
+) -> StyledContainer {
+    let (announced, stepped) = (picker.clone(), picker.clone());
+    layer
+        .control(Role::Slider)
+        .roving(group, axis.index())
+        .a11y_label(move || strings::text(axis.name()))
+        .oriented(axis.orientation())
+        .valued(move || NumericValue {
+            now: (f64::from(axis.of(announced.hsv.get())) * 100.0).round(),
+            min: 0.0,
+            max: 100.0,
+        })
+        .stepped(move |direction| {
+            let hsv = stepped.hsv.peek();
+            let before = axis.of(hsv);
+            let by = match direction {
+                Step::Increment => KEY_STEP,
+                Step::Decrement => -KEY_STEP,
+            };
+            let next = axis.set(hsv, before + by);
+            stepped.set_hsv(next);
+            axis.of(next) != before
+        })
+}
+
+/// What a key does on the slider for `own`: the arrows move the axis they point along and hand focus to its slider, so a reader hears the value that moved; Home and End take `own` to its ends.
+fn area_key(picker: &Picker, own: Axis, sliders: [Option<FocusId>; 2], key: &Key) -> bool {
+    let Key::Named(named) = key else {
+        return false;
+    };
+    let hsv = picker.hsv.peek();
+    let (axis, next) = match named {
+        NamedKey::Home => (own, own.set(hsv, 0.0)),
+        NamedKey::End => (own, own.set(hsv, 1.0)),
+        arrow => match Axis::of_arrow(arrow) {
+            Some((axis, way)) => {
+                let step = KEY_STEP * step_factor(telar::modifiers()) * way;
+                (axis, axis.set(hsv, axis.of(hsv) + step))
+            }
+            None => return false,
+        },
+    };
+    picker.set_hsv(next);
+    if axis != own
+        && let Some(id) = sliders[axis.index()]
+    {
+        focus::request(id);
+    }
+    true
+}
+
+/// The saturation (across) and brightness (up) of the current hue, dragged as one or stepped as two sliders, one per axis, that are one Tab stop between them.
 fn area(
     picker: &Picker,
     width: f32,
@@ -288,6 +404,7 @@ fn area(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let height = (width * AREA_RATIO).round();
     let hsv = picker.hsv;
+    let group = RovingGroup::new(RovingAxis::Both, || Some(0), |_| {});
     let whiten = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         |r: Rect| {
@@ -301,6 +418,7 @@ fn area(
         },
         vec![],
     )?;
+    let whiten = axis_control(whiten, Axis::Saturation, picker, &group);
     let darken = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         |r: Rect| {
@@ -314,6 +432,16 @@ fn area(
         },
         vec![],
     )?;
+    let darken = axis_control(darken, Axis::Brightness, picker, &group);
+    let sliders = [whiten.focus_id(), darken.focus_id()];
+    let whiten = {
+        let keys = picker.clone();
+        whiten.on_focused_key(move |key: &Key| area_key(&keys, Axis::Saturation, sliders, key))
+    };
+    let darken = {
+        let keys = picker.clone();
+        darken.on_focused_key(move |key: &Key| area_key(&keys, Axis::Brightness, sliders, key))
+    };
     let size = thumb_size(picker.size);
     let thumb = StyledContainer::new(
         LayoutStyle::new().absolute().width(size).height(size),
@@ -339,7 +467,6 @@ fn area(
     })
     .a11y_hidden();
 
-    let keys = picker.clone();
     let drag = picker.clone();
     let area = StyledContainer::new(
         LayoutStyle::new().width(width).height(height),
@@ -360,34 +487,8 @@ fn area(
         children![whiten, darken, thumb],
     )?
     .colour_content()
-    .control(Role::Slider)
     .a11y_label(|| strings::text(strings::SATURATION_BRIGHTNESS))
-    .valued(move || NumericValue {
-        now: (hsv.get().s * 100.0).round() as f64,
-        min: 0.0,
-        max: 100.0,
-    })
     .cursor(Cursor::Crosshair)
-    .on_focused_key(move |key: &Key| {
-        let Key::Named(named) = key else {
-            return false;
-        };
-        let step = KEY_STEP * step_factor(telar::modifiers());
-        let Hsv { h, s, v } = keys.hsv.peek();
-        let (s, v) = match named {
-            NamedKey::ArrowRight => (s + step, v),
-            NamedKey::ArrowLeft => (s - step, v),
-            NamedKey::ArrowUp => (s, v + step),
-            NamedKey::ArrowDown => (s, v - step),
-            _ => return false,
-        };
-        keys.set_hsv(Hsv {
-            h,
-            s: s.clamp(0.0, 1.0),
-            v: v.clamp(0.0, 1.0),
-        });
-        true
-    })
     .on_drag(move |x, y| {
         let h = drag.hsv.peek().h;
         drag.set_hsv(Hsv {

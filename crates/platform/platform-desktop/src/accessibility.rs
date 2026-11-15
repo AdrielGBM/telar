@@ -419,18 +419,18 @@ fn claim_actions(ak: &mut Node, supports: ActionSupport) {
     }
 }
 
-/// One line of the text a field holds, as the run a reader moves its caret through.
+/// One line of the text a field holds as it is laid out, as the run a reader moves its caret through.
 struct TextRun {
     /// The field, by its place in the snapshot.
     field: usize,
     id: NodeId,
     /// Where the line begins in the field's text, in characters.
     start: usize,
-    /// The line, with the line break that ends it.
+    /// The line, with the line break that ends it where one does.
     text: String,
 }
 
-/// The runs of every field holding text, a line each, numbered after the labels: a reader reads a field's text, and places its caret in it, only through runs.
+/// The runs of every field holding text, one per line it is laid out in, numbered after the labels: a reader reads a field's text, and places its caret in it, only through runs.
 fn text_runs(nodes: &[AccessNode]) -> Vec<TextRun> {
     let mut runs = Vec::new();
     for (field, node) in nodes.iter().enumerate() {
@@ -440,20 +440,18 @@ fn text_runs(nodes: &[AccessNode]) -> Vec<TextRun> {
         let Some(Value::Text(text)) = &node.value else {
             continue;
         };
+        let characters: Vec<char> = text.chars().collect();
+        let ends = node.line_starts.iter().copied().chain([characters.len()]);
         let mut start = 0;
-        let last = if text.is_empty() || text.ends_with('\n') {
-            Some("")
-        } else {
-            None
-        };
-        for line in text.split_inclusive('\n').chain(last) {
+        for end in ends {
+            let end = end.clamp(start, characters.len());
             runs.push(TextRun {
                 field,
                 id: label_id(nodes.len() + runs.len()),
                 start,
-                text: line.to_string(),
+                text: characters[start..end].iter().collect(),
             });
-            start += line.chars().count();
+            start = end;
         }
     }
     runs

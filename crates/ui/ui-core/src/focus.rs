@@ -114,6 +114,8 @@ struct Entry {
     text_input: Option<TextInputSource>,
     /// Where the caret and the selection of a field are, in the characters it shows. See [`set_text_selection`].
     text_selection: Option<Rc<dyn Fn() -> TextSelection>>,
+    /// Where the lines of a field's text begin as it is laid out. See [`set_line_starts`].
+    line_starts: Option<Rc<dyn Fn() -> Vec<usize>>>,
 }
 
 /// Whether Tab stops at an entry, and whether the entry may hold focus at all.
@@ -692,6 +694,7 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                     keyboard: None,
                     text_input: None,
                     text_selection: None,
+                    line_starts: None,
                 });
                 true
             }
@@ -1220,6 +1223,16 @@ pub fn set_text_selection(id: FocusId, read: impl Fn() -> TextSelection + 'stati
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.text_selection = Some(read);
+        }
+    });
+}
+
+/// Declares how to read where each line of the field `id` after the first begins as its text is laid out, in the characters of what the field shows: after a line break, and where the width wraps the line before.
+pub fn set_line_starts(id: FocusId, read: impl Fn() -> Vec<usize> + 'static) {
+    let read: Rc<dyn Fn() -> Vec<usize>> = Rc::new(read);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.line_starts = Some(read);
         }
     });
 }
@@ -1792,6 +1805,12 @@ fn help_state(id: FocusId) -> HelpNow {
 pub fn text_selection_state(id: FocusId) -> Option<TextSelection> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.text_selection.clone()))?;
     Some(read())
+}
+
+/// Where each line of the field `id` after the first begins, read now; empty for text on one line and for a control that is no field.
+pub fn line_starts_state(id: FocusId) -> Vec<usize> {
+    with_focus(|s| s.entry(id).and_then(|e| e.line_starts.clone()))
+        .map_or_else(Vec::new, |read| read())
 }
 
 /// The axis `id` declared, if any.

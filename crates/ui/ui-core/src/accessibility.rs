@@ -136,6 +136,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 selection: (focused == Some(e.id))
                     .then(|| focus::text_selection_state(e.id))
                     .flatten(),
+                line_starts: focus::line_starts_state(e.id),
             };
             Found::holding(node, e.node, &reading)
         })
@@ -350,6 +351,7 @@ fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
         multiselectable: false,
         modal: false,
         selection: None,
+        line_starts: Vec::new(),
         supports: ActionSupport::default(),
     }
 }

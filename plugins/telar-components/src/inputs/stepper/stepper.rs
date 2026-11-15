@@ -1,15 +1,16 @@
-//! [`stepper`]: a value between a minus and a plus button, clamped to its range.
+//! [`stepper`]: a value between a minus and a plus button, clamped to its range, that a reader and the arrow keys step as one control.
 
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Color, Container, JustifyContent, LayoutError,
-    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    SurfaceAmendment, Text, amend_surface, box_item, children, focus::Role, signal,
+    Accessible, AlignItems, BorderRadius, Color, JustifyContent, Key, LayoutError, LayoutItem,
+    LayoutStyle, NamedKey, NumericValue, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, SurfaceAmendment, Text, amend_surface, box_item, children,
+    focus::{Role, Step},
+    signal,
 };
 
 use crate::shared;
-use crate::strings;
 use telar::ControlSize;
 
 /// A stepper's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -45,7 +46,7 @@ fn button_box(size: ControlSize) -> LayoutStyle {
         .height(shared::control_height(size))
 }
 
-/// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see `button.rs`) plus a reactive `Text::new` readout; lives in `telar-components`, not the kernel. `None` for `value` is uncontrolled: the widget owns a signal starting at the start of its range.
+/// A numeric stepper: `[−]  value  [+]`, one spin button a reader steps or sets and the arrow keys move while it holds focus; the − and + boxes are there for the pointer. Name it with `a11y_label`, since what it counts is said by whatever stands beside it. `None` for `value` is uncontrolled: the widget owns a signal starting at the start of its range.
 #[derive(Props)]
 pub struct StepperProps {
     /// Bound value. `None` (the default) is uncontrolled — the widget makes its own, starting at the start of its range.
@@ -54,7 +55,7 @@ pub struct StepperProps {
     /// The values the stepper keeps to, its start no further than its end: from zero up, unbounded, by default. A range whose start lies past its end is an error when the stepper is built.
     #[props(default = 0.0..=f32::INFINITY)]
     pub range: RangeInclusive<f32>,
-    /// What one press adds or takes away. One by default; a step that is not above zero is an error when the stepper is built.
+    /// What one press, arrow key or reader's step adds or takes away, and the spacing a value a reader sets is rounded to, counted from the start of the range. One by default; a step that is not above zero is an error when the stepper is built.
     #[props(default = 1.0)]
     pub step: f32,
     /// How large the stepper is drawn: its buttons, gaps and value, as [`ControlSize`] works them out.
@@ -63,7 +64,7 @@ pub struct StepperProps {
     /// − / + fill. `None` (the default) is the theme's primary token.
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
-    /// Fires with the new (already clamped) value on every − / + press.
+    /// Fires with the new (already clamped) value whenever a press, an arrow key or a reader moves it.
     #[props(some, default)]
     pub on_change: Option<Rc<dyn Fn(f32)>>,
     /// Amends the paint of the − and + buttons — the stepper's **principal surface** — at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`StepperTokens`] is the right instrument instead.
@@ -88,45 +89,86 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let value = value.unwrap_or_else(|| signal(min));
     let paint = Paint { color, style };
 
-    let minus = stepper_button(size, "−", strings::DECREASE, paint.clone(), {
-        let on_change = on_change.clone();
+    let commit: Rc<dyn Fn(f32) -> bool> = Rc::new(move |next: f32| {
+        let next = next.clamp(min, max);
+        if next == value.peek() {
+            return false;
+        }
+        value.set(next);
+        if let Some(cb) = &on_change {
+            cb(next);
+        }
+        true
+    });
+    let step_by = {
+        let commit = Rc::clone(&commit);
+        move |direction: Step| match direction {
+            Step::Increment => commit(value.peek() + step),
+            Step::Decrement => commit(value.peek() - step),
+        }
+    };
+
+    let minus = stepper_button(size, "−", paint.clone(), {
+        let step_by = step_by.clone();
         move || {
-            let v = (value.get() - step).clamp(min, max);
-            value.set(v);
-            if let Some(cb) = &on_change {
-                cb(v);
-            }
+            step_by(Step::Decrement);
+        }
+    })?;
+    let plus = stepper_button(size, "+", paint, {
+        let step_by = step_by.clone();
+        move || {
+            step_by(Step::Increment);
         }
     })?;
 
-    let plus = stepper_button(size, "+", strings::INCREASE, paint, {
-        let on_change = on_change.clone();
-        move || {
-            let v = (value.get() + step).clamp(min, max);
-            value.set(v);
-            if let Some(cb) = &on_change {
-                cb(v);
-            }
-        }
-    })?;
-
-    let display_value = value;
     let display = Text::declaring(
-        move || {
-            let v = display_value.get();
-            if v.fract() == 0.0 {
-                format!("{}", v as i64)
-            } else {
-                format!("{v}")
-            }
-        },
+        move || readout(value.get()),
         LayoutStyle::new(),
         move |t| shared::control_text(size, t, 1.0),
     )?;
 
-    let row = Container::new(row_box(size), children![minus, display, plus])?
-        .styled_by(move || row_box(size));
-    Ok(box_item(row))
+    let origin = if min.is_finite() { min } else { 0.0 };
+    let spin = StyledContainer::new(
+        row_box(size),
+        |_r| RectStyle::default().with_radius(BorderRadius::all(StepperTokens::current().radius())),
+        children![minus, display, plus],
+    )?
+    .styled_by(move || row_box(size))
+    .control(Role::SpinButton)
+    .valued(move || NumericValue {
+        now: value.get() as f64,
+        min: min as f64,
+        max: max as f64,
+    })
+    .stepped(step_by.clone())
+    .assigned(move |assigned| {
+        assigned.reading().is_some_and(|reading| {
+            let steps = ((reading.now as f32 - origin) / step).round();
+            commit(origin + steps * step);
+            true
+        })
+    })
+    .on_focused_key(move |key: &Key| match key {
+        Key::Named(NamedKey::ArrowUp | NamedKey::ArrowRight) => {
+            step_by(Step::Increment);
+            true
+        }
+        Key::Named(NamedKey::ArrowDown | NamedKey::ArrowLeft) => {
+            step_by(Step::Decrement);
+            true
+        }
+        _ => false,
+    });
+    Ok(box_item(spin))
+}
+
+/// How the readout draws `value`: a whole number without a fraction.
+fn readout(value: f32) -> String {
+    if value.fract() == 0.0 {
+        format!("{}", value as i64)
+    } else {
+        format!("{value}")
+    }
 }
 
 /// Which of its paints a − / + button is showing.
@@ -164,11 +206,10 @@ impl Paint {
     }
 }
 
-/// A square pressable box one control tall with a centred glyph, filled like a solid `button`.
+/// A square pressable box one control tall with a centred glyph, filled like a solid `button`. Hidden from readers and out of the Tab order: the spin button around it steps the same value.
 fn stepper_button(
     size: ControlSize,
     glyph: &'static str,
-    name: &'static str,
     paint: Paint,
     on_press: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -187,9 +228,8 @@ fn stepper_button(
     .styled_by(move || button_box(size))
     .hover_style(move |_r| hover.surface(State::Hovered))
     .active_style(move |_r| press.surface(State::Pressed))
-    .control(Role::Button)
-    .a11y_label(move || strings::text(name))
-    .on_press(on_press);
+    .on_press(on_press)
+    .a11y_hidden();
     Ok(box_item(container))
 }
 

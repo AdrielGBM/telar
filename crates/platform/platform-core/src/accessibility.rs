@@ -68,6 +68,8 @@ pub struct AccessNode {
     pub modal: bool,
     /// Where the caret is, and what is selected, in the text a field holds as its [`value`](Self::value): what a reader follows as a person types and moves through it. `None` for every node but the field that holds the keyboard.
     pub selection: Option<TextSelection>,
+    /// The character of the text a field holds as its [`value`](Self::value) that each of its lines after the first begins at, as the text is laid out: after a line break, and where the width wraps the line before. A reader moves through a field line by line as it is drawn. Empty for text laid out on one line, and for every node that is no field.
+    pub line_starts: Vec<usize>,
     /// The actions with a value or a selection in them that the control answers, so a platform offers a reader those and no others.
     pub supports: ActionSupport,
 }

@@ -756,3 +756,54 @@ fn a_releasing_boundary_still_wraps_inside_a_modal() {
     unregister_scope(scope);
     forget(&[first, last]);
 }
+
+/// A reader asking for a control scrolled out of sight gets it shown: the scroll it sits in moves until the control is inside the view.
+#[test]
+fn scroll_into_view_brings_a_control_below_the_view_into_it() {
+    use crate::context::{compute_layout, relayout_if_dirty};
+    use crate::{Container, LayoutItem, LayoutScrollArea, StyledContainer, box_item};
+    use layout_core::{AvailableSpace, LayoutStyle};
+
+    crate::context::reset_layout_runtime();
+    clear();
+    let made: Rc<std::cell::Cell<Option<(FocusId, NodeId)>>> = Rc::default();
+    let sink = Rc::clone(&made);
+    let scroll =
+        LayoutScrollArea::new_with(LayoutStyle::new().width(100.0).height(100.0), move |_| {
+            let spacer = Container::new(LayoutStyle::new().width(100.0).height(400.0), vec![])?;
+            let control = StyledContainer::new(
+                LayoutStyle::new().width(50.0).height(20.0),
+                |_r| renderer_core::RectStyle::default(),
+                vec![],
+            )?
+            .control(Role::Button);
+            sink.set(Some((
+                control.focus_id().expect("a control holds focus"),
+                control.layout_node(),
+            )));
+            Ok(box_item(Container::new(
+                LayoutStyle::column(),
+                vec![box_item(spacer), box_item(control)],
+            )?))
+        })
+        .unwrap();
+    compute_layout(
+        scroll.layout_node(),
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let (id, control) = made.get().expect("the content was built");
+    let view = crate::visible_rect(scroll.layout_node()).expect("the scroll is laid out");
+    let shown = || {
+        let at = crate::visible_rect(control).expect("the control is laid out");
+        at.y >= view.y && at.y + at.height <= view.y + view.height
+    };
+    assert!(!shown(), "the control starts below the view");
+
+    assert!(perform(id, AccessAction::ScrollIntoView));
+    relayout_if_dirty();
+    reactive_core::batch(|| {});
+    assert!(shown(), "asking for it scrolled it into the view");
+    clear();
+}
