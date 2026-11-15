@@ -307,14 +307,14 @@ fn tab_stops_are_the_boxes_telar_says_and_in_its_order() {
 }
 
 #[wasm_bindgen_test]
-fn a_slider_keeps_the_arrows_and_leaves_tab_and_paging_to_the_page() {
+fn a_slider_keeps_the_arrows_and_paging_and_leaves_tab_and_space_to_the_page() {
     render(SLIDER);
     let slider = element(SLIDER);
     assert_eq!(active().as_ref(), Some(slider.as_ref()));
     assert!(press_on_focus("ArrowDown"));
     assert!(press_on_focus("ArrowLeft"));
+    assert!(press_on_focus("PageDown"));
     assert!(!press_on_focus("Tab"), "Tab walks the page's own order");
-    assert!(!press_on_focus("PageDown"), "the page scrolls");
     assert!(!press_on_focus(" "), "the page scrolls");
 }
 

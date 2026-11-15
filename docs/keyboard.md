@@ -19,7 +19,8 @@ Each role has a default, `Role::consumed_keys()`:
 | button, checkbox, radio, switch, tab, disclosure | Space, Enter |
 | link | nothing: a document follows it on Enter by itself and scrolls on Space |
 | menu item, combobox | Space, Enter, Up/Down, Home/End |
-| slider, splitter, toolbar | the arrows |
+| slider | the arrows, Home/End, PageUp/PageDown (a tenth of the range) |
+| splitter, toolbar | the arrows |
 | tree, tree item | the arrows (Up/Down walk the rows, Right/Left expand, collapse or step between parent and child), Home/End, Space, Enter. Typeahead is characters, which are never in the set |
 | status, log, alert | nothing |
 | spin button | the arrows, Enter |

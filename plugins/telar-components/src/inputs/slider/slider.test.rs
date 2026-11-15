@@ -188,6 +188,53 @@ fn a_reader_steps_the_slider_and_sets_it_to_a_step() {
     );
 }
 
+#[test]
+fn home_end_and_the_page_keys_move_the_focused_slider() {
+    crate::test_support::fresh_layout_runtime();
+    telar::testing::reset_keyboard();
+    telar::focus::clear();
+    let value = signal(5.0f32);
+    let mut widget = slider(
+        SliderProps::props()
+            .value(value)
+            .range(0.0..=100.0)
+            .build(),
+    )
+    .unwrap();
+    telar::focus::focus_next();
+    let mut press_key = |key| widget.on_event(&telar::testing::named(key));
+
+    press_key(telar::NamedKey::PageUp);
+    assert!((value.peek() - 15.0).abs() < 1e-4, "{}", value.peek());
+    press_key(telar::NamedKey::PageDown);
+    press_key(telar::NamedKey::PageDown);
+    assert_eq!(value.peek(), 0.0, "a page stops at the start");
+    press_key(telar::NamedKey::End);
+    assert_eq!(value.peek(), 100.0);
+    press_key(telar::NamedKey::Home);
+    assert_eq!(value.peek(), 0.0);
+}
+
+#[test]
+fn a_page_of_a_stepped_slider_is_whole_steps() {
+    crate::test_support::fresh_layout_runtime();
+    telar::testing::reset_keyboard();
+    telar::focus::clear();
+    let value = signal(0.0f32);
+    let mut widget = slider(
+        SliderProps::props()
+            .value(value)
+            .range(0.0..=100.0)
+            .step(3.0)
+            .build(),
+    )
+    .unwrap();
+    telar::focus::focus_next();
+
+    widget.on_event(&telar::testing::named(telar::NamedKey::PageUp));
+    assert_eq!(value.peek(), 9.0);
+}
+
 #[derive(Clone, Default)]
 struct Plain {
     sliders: Option<SliderTokens>,

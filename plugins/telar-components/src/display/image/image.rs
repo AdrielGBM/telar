@@ -175,12 +175,8 @@ impl Size {
 }
 
 fn named(item: impl Accessible + 'static, alt: &Reactive<String>) -> Box<dyn LayoutItem> {
-    if alt.get().is_empty() {
-        box_item(item.a11y_hidden())
-    } else {
-        let alt = alt.clone();
-        box_item(item.a11y_label(move || alt.get()))
-    }
+    let alt = alt.clone();
+    box_item(item.a11y_decorative().a11y_label(move || alt.get()))
 }
 
 fn picture(

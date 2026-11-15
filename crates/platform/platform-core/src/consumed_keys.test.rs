@@ -21,19 +21,22 @@ fn a_key_no_host_acts_on_is_never_kept() {
 }
 
 #[test]
-fn a_slider_keeps_the_arrows_and_lets_tab_and_space_through() {
+fn a_slider_keeps_its_arrows_paging_and_edges_and_lets_tab_and_space_through() {
     let keys = Role::Slider.consumed_keys();
-    for arrow in [
+    for key in [
         NamedKey::ArrowUp,
         NamedKey::ArrowDown,
         NamedKey::ArrowLeft,
         NamedKey::ArrowRight,
+        NamedKey::PageUp,
+        NamedKey::PageDown,
+        NamedKey::Home,
+        NamedKey::End,
     ] {
-        assert!(consumes(keys, &named(arrow.clone())), "{arrow:?}");
+        assert!(consumes(keys, &named(key.clone())), "{key:?}");
     }
     assert!(!consumes(keys, &named(NamedKey::Tab)));
     assert!(!consumes(keys, &named(NamedKey::Space)));
-    assert!(!consumes(keys, &named(NamedKey::PageDown)));
 }
 
 #[test]

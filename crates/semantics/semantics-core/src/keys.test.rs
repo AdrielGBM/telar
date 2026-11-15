@@ -75,7 +75,7 @@ fn a_link_leaves_its_keys_to_the_host_that_follows_it() {
 #[test]
 fn a_slider_keeps_the_arrows_and_not_space() {
     let keys = Role::Slider.consumed_keys();
-    assert!(keys.contains(ConsumedKeys::ARROWS));
+    assert!(keys.contains(ConsumedKeys::ARROWS | ConsumedKeys::PAGING | ConsumedKeys::EDGES));
     assert!(!keys.intersects(ConsumedKeys::SPACE | ConsumedKeys::TAB));
 }
 

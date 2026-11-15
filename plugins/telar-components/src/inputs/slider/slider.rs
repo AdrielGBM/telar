@@ -160,9 +160,17 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     };
     // One step per press, or a twentieth of the range when the caller named none — the granularity a continuous value has to invent for a keyboard.
     let stride = step.unwrap_or((max - min) / 20.0);
-    let step_by = {
+    let page = match step {
+        Some(step) => (((max - min) / 10.0 / step).round().max(1.0)) * step,
+        None => (max - min) / 10.0,
+    };
+    let shift_by = {
         let commit = Rc::clone(&commit);
-        move |steps: f32| commit((value.peek() + steps * stride).clamp(min, max))
+        move |distance: f32| commit((value.peek() + distance).clamp(min, max))
+    };
+    let step_by = {
+        let shift_by = shift_by.clone();
+        move |steps: f32| shift_by(steps * stride)
     };
 
     // An `absolute_fill` child, so it exactly overlays the track, scaled horizontally from the left edge — cheaper than relaying out a narrower box on every drag move.
@@ -250,15 +258,32 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .is_some_and(|reading| commit(snap(reading.now as f32)))
         }
     })
-    .on_focused_key(move |key: &telar::Key| {
-        let delta = match key {
-            telar::Key::Named(telar::NamedKey::ArrowRight)
-            | telar::Key::Named(telar::NamedKey::ArrowUp) => 1.0,
-            telar::Key::Named(telar::NamedKey::ArrowLeft)
-            | telar::Key::Named(telar::NamedKey::ArrowDown) => -1.0,
-            _ => return,
-        };
-        step_by(delta * telar::step_factor(telar::modifiers()));
+    .on_focused_key({
+        let commit = Rc::clone(&commit);
+        move |key: &telar::Key| {
+        use telar::NamedKey::*;
+        match key {
+            telar::Key::Named(ArrowRight | ArrowUp) => {
+                step_by(telar::step_factor(telar::modifiers()));
+            }
+            telar::Key::Named(ArrowLeft | ArrowDown) => {
+                step_by(-telar::step_factor(telar::modifiers()));
+            }
+            telar::Key::Named(PageUp) => {
+                shift_by(page);
+            }
+            telar::Key::Named(PageDown) => {
+                shift_by(-page);
+            }
+            telar::Key::Named(Home) => {
+                commit(min);
+            }
+            telar::Key::Named(End) => {
+                commit(max);
+            }
+            _ => {}
+        }
+        }
     })
     .on_drag(move |px, _py| {
         let t = (px / width).clamp(0.0, 1.0);

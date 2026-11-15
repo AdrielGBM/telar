@@ -146,7 +146,8 @@ impl Role {
             | Self::ListBox
             | Self::Option
             | Self::ComboBox => K::ACTIVATION | K::VERTICAL_ARROWS | K::EDGES,
-            Self::Slider | Self::Toolbar => K::ARROWS,
+            Self::Toolbar => K::ARROWS,
+            Self::Slider => K::ARROWS | K::PAGING | K::EDGES,
             Self::Splitter => K::ARROWS | K::EDGES | K::ENTER,
             Self::Tree | Self::TreeItem => K::ARROWS | K::EDGES | K::ENTER | K::SPACE,
             Self::Grid | Self::Row | Self::GridCell | Self::ColumnHeader => {

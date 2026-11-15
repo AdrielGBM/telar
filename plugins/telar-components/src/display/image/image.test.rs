@@ -74,6 +74,30 @@ fn a_picture_with_no_words_only_decorates_and_a_reader_steps_over_it() {
 }
 
 #[test]
+fn a_picture_whose_words_arrive_later_is_met_by_a_reader_under_them() {
+    let alt = signal(String::new());
+    let tree = mounted(
+        ImageProps::props()
+            .source(ImageSource::from(pixels(8, 8)))
+            .alt(alt)
+            .build(),
+    );
+    assert!(read(&tree).iter().all(|node| node.role != Role::Drawing));
+
+    alt.set("A red kite".to_string());
+    settle(&tree);
+    let picture = read(&tree)
+        .into_iter()
+        .find(|node| node.role == Role::Drawing)
+        .expect("a reader meets the picture once it is named");
+    assert_eq!(picture.name, "A red kite");
+
+    alt.set(String::new());
+    settle(&tree);
+    assert!(read(&tree).iter().all(|node| node.role != Role::Drawing));
+}
+
+#[test]
 fn one_side_given_takes_the_other_from_the_picture() {
     let tree = mounted(
         ImageProps::props()
