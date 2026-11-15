@@ -384,7 +384,7 @@ fn a_measured_label_re_measures_when_its_content_changes() {
     space();
     let short = label.leaf.rect.get().width;
 
-    title.set("hyprshell - Rust - Visual Studio Code".to_string());
+    title.set("a full document title, far longer than the first".to_string());
     relayout_if_dirty();
     let long = label.leaf.rect.get().width;
 

@@ -1402,7 +1402,7 @@ fn transitioning_the_layout_box_is_still_refused() {
     );
 }
 
-/// The shape `if` could never express, and the reason 14 of hyprshell's 16 `widget "…"` escapes are icons: three arms of different structure, a payload bound out of the matched variant, and a key that is the payload's own identity rather than the variant — so re-arriving at the same picture does not rebuild.
+/// The shape `if` could never express, and the reason 14 of the 16 `widget "…"` escapes in a real launcher config are icons: three arms of different structure, a payload bound out of the matched variant, and a key that is the payload's own identity rather than the variant — so re-arriving at the same picture does not rebuild.
 #[test]
 fn a_reactive_match_extracts_a_payload_and_keys_on_it() {
     let src = "[logic]\nlet state = signal(AssetState::Loading);\n[view]\ncol\n    match $state as s key s.as_ready().map(|svg| svg.id())\n        AssetState::Ready(svg)\n            svg src:svg\n        AssetState::Failed(_)\n            box width:16 height:16\n        _\n            text \"…\"\n";

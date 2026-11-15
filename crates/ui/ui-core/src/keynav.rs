@@ -37,7 +37,7 @@ pub enum KeyNavMove {
 
 /// How a list reads keys: the arrows always, and optionally the vim bindings on top.
 ///
-/// `vim` is off by default because a list that swallows `j` cannot also be typed into, and hyprshell's biggest list — the launcher — is a search field. A surface with no text input can turn it on freely; one with a field should only do so if its user asked for it.
+/// `vim` is off by default because a list that swallows `j` cannot also be typed into, and a launcher whose main list is a search field is the common case. A surface with no text input can turn it on freely; one with a field should only do so if its user asked for it.
 #[derive(Clone, Copy)]
 pub struct KeyNav {
     pub vim: bool,
