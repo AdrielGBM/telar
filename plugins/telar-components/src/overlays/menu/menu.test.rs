@@ -243,7 +243,9 @@ fn the_keyboard_steps_over_what_it_cannot_commit() {
             crate::layout::list::list::SeparatorProps::props().build(),
         )?);
         items.push(crate::layout::list::list::group(
-            crate::layout::list::list::GroupProps::props().label("Danger").build(),
+            crate::layout::list::list::GroupProps::props()
+                .label("Danger")
+                .build(),
         )?);
         items.push(row("Delete", false)?);
         Ok(items)
@@ -718,7 +720,10 @@ fn the_trigger_follows_the_control_role_until_the_trigger_tokens_name_their_own(
         Some([crate::shared::border_width(); 4])
     );
     let width = crate::test_support::drawn(telar::focus::Role::Button)[0].width;
-    assert_eq!(width, crate::shared::dropdown::width(ControlSize::Regular, None));
+    assert_eq!(
+        width,
+        crate::shared::dropdown::width(ControlSize::Regular, None)
+    );
 
     telar::set_theme(Themed {
         control: 7.0,
@@ -1249,9 +1254,10 @@ fn a_menu_layer_shows_the_rows_of_what_was_asked() {
     assert_eq!(shown_rows(), 0);
 
     let under = Rect::new(10.0, 10.0, 80.0, 24.0);
-    mounted
-        .asked
-        .set(Some((MenuPlace::Under(under), &["Rename", "Copy", "Paste"])));
+    mounted.asked.set(Some((
+        MenuPlace::Under(under),
+        &["Rename", "Copy", "Paste"],
+    )));
     settle(&mounted.tree);
     assert_eq!(shown_rows(), 3);
 }

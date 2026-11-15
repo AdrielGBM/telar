@@ -1,11 +1,13 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Chord, Container, Key, LayoutError, NamedKey, Role, box_item};
 
 use crate::inputs::button::button::{ButtonProps, button};
-use crate::overlays::command_palette::command_palette::{Command, CommandPaletteProps, command_palette};
+use crate::overlays::command_palette::command_palette::{
+    Command, CommandPaletteProps, command_palette,
+};
 use telar::ControlSize;
 
 fn commands() -> Vec<Command> {

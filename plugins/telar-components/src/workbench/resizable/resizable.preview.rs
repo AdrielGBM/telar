@@ -5,7 +5,9 @@ use telar::{
 };
 
 use super::sample;
-use crate::workbench::resizable::resizable::{ResizableProps, ResizeEdges, ResizeGrowth, resizable};
+use crate::workbench::resizable::resizable::{
+    ResizableProps, ResizeEdges, ResizeGrowth, resizable,
+};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![

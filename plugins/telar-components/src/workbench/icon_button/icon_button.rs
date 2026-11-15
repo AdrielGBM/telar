@@ -193,19 +193,15 @@ impl Square {
                 activate();
             }
         };
-        let button = StyledContainer::new(
-            shell(size),
-            move |_| rest(State::Rest),
-            vec![picture],
-        )?
-        .styled_by(move || shell(size))
-        .hover_style(move |_| hover(State::Hovered))
-        .active_style(move |_| pressing(State::Pressed))
-        .keyboard_cursor(cursor)
-        .disabled(is_disabled)
-        .disabled_style(move |_| idle(State::Rest))
-        .on_press(press)
-        .a11y_label(move || label.get());
+        let button = StyledContainer::new(shell(size), move |_| rest(State::Rest), vec![picture])?
+            .styled_by(move || shell(size))
+            .hover_style(move |_| hover(State::Hovered))
+            .active_style(move |_| pressing(State::Pressed))
+            .keyboard_cursor(cursor)
+            .disabled(is_disabled)
+            .disabled_style(move |_| idle(State::Rest))
+            .on_press(press)
+            .a11y_label(move || label.get());
 
         let button = match (&toolbar, index) {
             (Some(toolbar), Some(index)) => {

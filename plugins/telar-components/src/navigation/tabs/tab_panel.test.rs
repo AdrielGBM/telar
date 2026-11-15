@@ -1,6 +1,6 @@
 use telar::{
-    AccessNode, AvailableSpace, ComponentList, Container, DrawCommand, NodeId, RwSignal, Text, compute_layout,
-    focus, signal,
+    AccessNode, AvailableSpace, ComponentList, Container, DrawCommand, NodeId, RwSignal, Text,
+    compute_layout, focus, signal,
 };
 
 use super::*;

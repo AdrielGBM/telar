@@ -1,6 +1,6 @@
-use telar::{Accessible, Color};
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use telar::{Accessible, Color};
 
 use crate::feedback::spinner::spinner::{SpinnerProps, spinner};
 use telar::ControlSize;

@@ -555,7 +555,10 @@ pub(crate) fn frame() -> RectStyle {
     let tokens = TextFieldTokens::current();
     RectStyle::default()
         .with_fill(shared::surface_alt())
-        .with_border(Border::uniform(shared::control_border(), tokens.border_width()))
+        .with_border(Border::uniform(
+            shared::control_border(),
+            tokens.border_width(),
+        ))
         .with_radius(BorderRadius::all(tokens.radius()))
 }
 

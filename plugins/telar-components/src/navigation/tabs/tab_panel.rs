@@ -5,8 +5,8 @@ use std::rc::Rc;
 
 use telar::focus::{self, FocusId, Role};
 use telar::{
-    Accessible, Children, LayoutError, LayoutItem, LayoutStyle, Props, RectStyle,
-    StyledContainer, box_item,
+    Accessible, Children, LayoutError, LayoutItem, LayoutStyle, Props, RectStyle, StyledContainer,
+    box_item,
 };
 
 /// What joins a row of tabs to the panel showing the chosen tab's content: a reader is told the chosen tab controls the panel, and the panel is called by that tab's name.
@@ -64,8 +64,8 @@ fn fill() -> LayoutStyle {
 /// A column that fills the room it is given and holds the content its tab shows: a tab panel, called by the name of the tab chosen in the row its [`TabPanelLink`] joins it to. It is no Tab stop; a reader asked to move to it takes the keyboard to the first control inside it.
 pub fn tab_panel(props: TabPanelProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TabPanelProps { link, children } = props;
-    let panel = StyledContainer::new(fill(), |_r| RectStyle::default(), children.build()?)?
-        .styled_by(fill);
+    let panel =
+        StyledContainer::new(fill(), |_r| RectStyle::default(), children.build()?)?.styled_by(fill);
     let node = panel.layout_node();
     let named = link.clone();
     let panel = panel

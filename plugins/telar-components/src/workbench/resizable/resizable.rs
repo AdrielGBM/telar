@@ -10,10 +10,10 @@ use telar::{
 };
 use telar::{Children, Clip, ClippedItem, Container, RwSignal};
 
+use crate::shared;
 use crate::shared::edit::Stroke;
 use crate::shared::edit::write_through;
 use crate::shared::resize::{DRAG_THRESHOLD, Latch};
-use crate::shared;
 use crate::strings;
 use telar::ControlSize;
 

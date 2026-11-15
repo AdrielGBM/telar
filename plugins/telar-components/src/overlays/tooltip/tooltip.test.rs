@@ -677,7 +677,10 @@ fn hovered(
     style: Option<telar::SurfaceAmendment>,
 ) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
-    let mut props = TooltipProps::props().text("Move").children(trigger()).build();
+    let mut props = TooltipProps::props()
+        .text("Move")
+        .children(trigger())
+        .build();
     props.color = color.map(Into::into);
     props.style = style;
     let mut tree = telar::testing::scoped(|| {

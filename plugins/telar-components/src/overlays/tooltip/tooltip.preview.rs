@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Role, Side};
 
 use crate::inputs::button::button::{ButtonProps, button};

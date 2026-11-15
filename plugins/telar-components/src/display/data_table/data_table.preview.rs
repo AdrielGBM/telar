@@ -3,11 +3,13 @@ use std::rc::Rc;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Role, signal};
 
-use crate::display::data_table::data_table::{CellAlign, Column, DataTableProps, TableRow, data_table};
+use crate::display::data_table::data_table::{
+    CellAlign, Column, DataTableProps, TableRow, data_table,
+};
 use crate::shared::selection::SelectionMode;
 use telar::ControlSize;
 

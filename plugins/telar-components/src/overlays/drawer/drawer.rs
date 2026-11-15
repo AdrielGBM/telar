@@ -8,8 +8,8 @@ use telar::{
     box_item, children, current_direction, focus::Role,
 };
 
-use crate::shared::scrim;
 use crate::shared;
+use crate::shared::scrim;
 use crate::strings;
 use telar::ControlSize;
 
@@ -169,7 +169,9 @@ fn build_open_drawer(
                 .max_height(room.height)
                 .min_width(0.0),
         };
-        sheet.gap(shared::gap_lg(size)).padding_all(tokens.pad(size))
+        sheet
+            .gap(shared::gap_lg(size))
+            .padding_all(tokens.pad(size))
     };
     let name = Rc::new(move || match &label {
         Some(label) => label.get(),

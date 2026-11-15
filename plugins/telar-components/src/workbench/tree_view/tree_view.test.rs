@@ -730,9 +730,8 @@ fn a_tree_s_rows_are_as_tall_as_every_other_list_s() {
     let rows = crate::test_support::drawn(Role::TreeItem);
     assert!(!rows.is_empty());
     assert!(
-        rows.iter()
-            .all(|row| row.height
-                == crate::layout::list::list::ListTokens::default().row_height(ControlSize::Regular)),
+        rows.iter().all(|row| row.height
+            == crate::layout::list::list::ListTokens::default().row_height(ControlSize::Regular)),
         "{rows:?}"
     );
     drop(tree);

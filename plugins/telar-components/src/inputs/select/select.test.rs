@@ -564,7 +564,10 @@ fn the_rows_take_the_list_tokens_height_and_the_chosen_one_the_selection_wash() 
             ..crate::ListTokens::default()
         }),
     });
-    let tree = mounted(SelectProps::props().selected(signal(Some(1usize))).build(), true);
+    let tree = mounted(
+        SelectProps::props().selected(signal(Some(1usize))).build(),
+        true,
+    );
     let options = crate::test_support::drawn(telar::focus::Role::Option);
     assert_eq!(options.len(), 3);
     assert!(options.iter().all(|row| row.height == 40.0), "{options:?}");

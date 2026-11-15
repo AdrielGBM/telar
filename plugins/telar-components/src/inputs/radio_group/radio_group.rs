@@ -107,7 +107,11 @@ pub fn radio_group(props: RadioGroupProps) -> Result<Box<dyn LayoutItem>, Layout
     });
     let group = {
         let choose = Rc::clone(&choose);
-        RovingGroup::new(RovingAxis::Both, move || selected.get(), move |at| choose(at))
+        RovingGroup::new(
+            RovingAxis::Both,
+            move || selected.get(),
+            move |at| choose(at),
+        )
     };
     let options = items
         .into_iter()

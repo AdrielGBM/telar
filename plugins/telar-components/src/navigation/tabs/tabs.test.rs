@@ -1,7 +1,7 @@
 use telar::testing::{named, press, release, route};
 use telar::{
-    AvailableSpace, Component, ComponentList, ConsumedKeys, Direction, DrawCommand, NamedKey, NodeId,
-    compute_layout, new_container,
+    AvailableSpace, Component, ComponentList, ConsumedKeys, Direction, DrawCommand, NamedKey,
+    NodeId, compute_layout, new_container,
 };
 
 use super::*;
@@ -133,15 +133,7 @@ fn pages() -> Vec<Tab<Page>> {
 fn focused_row(selected: RwSignal<Page>) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let item = tab_list(
-        selected,
-        pages(),
-        None,
-        None,
-        None,
-        ControlSize::Regular,
-    )
-    .unwrap();
+    let item = tab_list(selected, pages(), None, None, None, ControlSize::Regular).unwrap();
     let r = lay_out(item.layout_node());
     let mut tree = ComponentList::new(item);
     let (x, y) = ((r.x + 2.0) as f64, (r.y + r.height / 2.0) as f64);
@@ -244,7 +236,10 @@ fn enter_and_space_select_the_focused_tab() {
         let selected = signal(Page::First);
         let mut tree = focused_row(selected);
         let third = tab_named(&tree, "Third");
-        assert!(telar::focus::perform(third, telar::focus::AccessAction::Focus));
+        assert!(telar::focus::perform(
+            third,
+            telar::focus::AccessAction::Focus
+        ));
         assert_eq!(selected.get(), Page::First, "{activation:?}");
         route(&mut tree, &named(activation.clone()));
         assert_eq!(selected.get(), Page::Third, "{activation:?}");
@@ -475,15 +470,7 @@ fn a_tab_list_stands_its_tabs_at_its_size() {
     for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
         crate::test_support::fresh_layout_runtime();
         telar::focus::clear();
-        let item = tab_list(
-            signal(Page::First),
-            pages(),
-            None,
-            None,
-            None,
-            size,
-        )
-        .unwrap();
+        let item = tab_list(signal(Page::First), pages(), None, None, None, size).unwrap();
         lay_out(item.layout_node());
         let _tree = ComponentList::new(item);
         let drawn = crate::test_support::drawn(Role::Tab);

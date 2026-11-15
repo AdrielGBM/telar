@@ -2,7 +2,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::testing::{named, press, release};
-use telar::{Component, ComponentList, ConsumedKeys, DrawCommand, LayoutItem, NamedKey, Rect, signal};
+use telar::{
+    Component, ComponentList, ConsumedKeys, DrawCommand, LayoutItem, NamedKey, Rect, signal,
+};
 
 use super::*;
 

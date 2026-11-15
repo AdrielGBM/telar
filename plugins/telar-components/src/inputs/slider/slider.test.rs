@@ -181,7 +181,10 @@ fn a_reader_steps_the_slider_and_sets_it_to_a_step() {
     assert!(telar::focus::perform(id, to(0.83)));
     assert!((value.peek() - 0.8).abs() < 1e-4, "{}", value.peek());
     assert!(
-        !telar::focus::perform(id, AccessAction::SetValue(telar::Value::Text("loud".into()))),
+        !telar::focus::perform(
+            id,
+            AccessAction::SetValue(telar::Value::Text("loud".into()))
+        ),
         "a slider holds no text"
     );
 }
@@ -192,13 +195,7 @@ fn home_end_and_the_page_keys_move_the_focused_slider() {
     telar::testing::reset_keyboard();
     telar::focus::clear();
     let value = signal(5.0f32);
-    let mut widget = slider(
-        SliderProps::props()
-            .value(value)
-            .range(0.0..=100.0)
-            .build(),
-    )
-    .unwrap();
+    let mut widget = slider(SliderProps::props().value(value).range(0.0..=100.0).build()).unwrap();
     telar::focus::focus_next();
     let mut press_key = |key| widget.on_event(&telar::testing::named(key));
 

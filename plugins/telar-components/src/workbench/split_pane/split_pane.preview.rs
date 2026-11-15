@@ -2,7 +2,9 @@ use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
 use telar::{Children, Key, NamedKey, Role};
 
 use super::sample::{self, Given};
-use crate::workbench::split_pane::split_pane::{PaneLimit, SizedPane, SplitDirection, SplitPaneProps, split_pane};
+use crate::workbench::split_pane::split_pane::{
+    PaneLimit, SizedPane, SplitDirection, SplitPaneProps, split_pane,
+};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![

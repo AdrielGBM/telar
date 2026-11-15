@@ -10,8 +10,8 @@ use telar::{
 };
 
 use crate::navigation::tabs::tab_panel::TabPanelLink;
-use crate::workbench::icon_button::icon_button::picture;
 use crate::shared;
+use crate::workbench::icon_button::icon_button::picture;
 use telar::ControlSize;
 
 /// The tabs' own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -214,7 +214,8 @@ where
         }
     };
     if let Some(panel) = &panel {
-        let names: Vec<Reactive<String>> = entries.iter().map(|entry| entry.label.clone()).collect();
+        let names: Vec<Reactive<String>> =
+            entries.iter().map(|entry| entry.label.clone()).collect();
         let chosen = chosen.clone();
         panel.name_by(move || {
             chosen()
@@ -430,12 +431,7 @@ where
         .then(|| (button.entry.label.clone(), button.entry.shortcut.clone()));
     let size = button.size;
     if let Some((text, shortcut)) = hint {
-        return shared::hinted(
-            move || button.build(),
-            size,
-            text,
-            shortcut,
-        );
+        return shared::hinted(move || button.build(), size, text, shortcut);
     }
     button.build()
 }
@@ -506,9 +502,7 @@ where
             None => tab,
         };
         let tab = match panel {
-            Some(panel) => {
-                tab.controls(move || panel.panel().filter(|_| selected.get() == value))
-            }
+            Some(panel) => tab.controls(move || panel.panel().filter(|_| selected.get() == value)),
             None => tab,
         };
         Ok(box_item(tab))

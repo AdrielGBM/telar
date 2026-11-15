@@ -108,9 +108,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
         on_select,
         style,
     } = props;
-    let diameter = move || {
-        diameter.unwrap_or_else(|| SwatchesTokens::current().size(size))
-    };
+    let diameter = move || diameter.unwrap_or_else(|| SwatchesTokens::current().size(size));
     let selected = selected.unwrap_or_else(|| signal(None::<u32>));
     let group = {
         let on_select = on_select.clone();

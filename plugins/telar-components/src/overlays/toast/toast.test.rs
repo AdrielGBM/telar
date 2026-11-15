@@ -35,9 +35,10 @@ impl Mounted {
                 )?],
             )?
             .role(Role::Dialog);
-            let layer = telar::Overlay::toggleable(LayoutStyle::new(), children![dialog], move || {
-                up.get()
-            })?;
+            let layer =
+                telar::Overlay::toggleable(LayoutStyle::new(), children![dialog], move || {
+                    up.get()
+                })?;
             Ok(box_item(Container::column(vec![toaster, box_item(layer)])?))
         });
         (mounted, *open.get().expect("the layer was built"))
@@ -476,7 +477,9 @@ fn a_warning_or_an_error_interrupts_and_every_notice_says_its_tone() {
     mounted
         .queue
         .push(Toast::new("The disk is almost full.").tone(ToastTone::Warning));
-    mounted.queue.push(Toast::new("A new version is available."));
+    mounted
+        .queue
+        .push(Toast::new("A new version is available."));
     mounted
         .queue
         .push(Toast::new("Your changes are saved.").tone(ToastTone::Success));

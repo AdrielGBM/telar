@@ -13,9 +13,9 @@ use telar::{
     run_after, signal,
 };
 
-use crate::workbench::line_gutter::line_gutter::LineGutter;
 use crate::shared;
 use crate::strings;
+use crate::workbench::line_gutter::line_gutter::LineGutter;
 use crate::{IconButtonProps, icon_button};
 use telar::ControlSize;
 

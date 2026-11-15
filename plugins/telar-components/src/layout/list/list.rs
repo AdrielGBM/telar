@@ -12,9 +12,9 @@ use telar::{
     signal, use_context,
 };
 
-use crate::shared::{self, shown_chord};
 use crate::inputs::toggle::toggle::{SwitchSize, switch_track};
 use crate::shared::type_ahead::TypeAhead;
+use crate::shared::{self, shown_chord};
 use telar::ControlSize;
 
 /// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them read as secondary without becoming a second colour a theme has to answer for.
@@ -300,13 +300,7 @@ impl ListContext {
 
     /// What committing the row at `index` from the keyboard does.
     pub(crate) fn act_of(&self, index: usize) -> Option<Act> {
-        self.0
-            .rows
-            .borrow()
-            .get(index)?
-            .act
-            .borrow()
-            .clone()
+        self.0.rows.borrow().get(index)?.act.borrow().clone()
     }
 
     /// Commits the row at `index` as a press on it would: the list's pick, then the row's own action.
@@ -380,11 +374,10 @@ impl ListContext {
     pub(crate) fn type_ahead(&self, c: char, from: Option<usize>) -> Option<usize> {
         let needle = self.0.search.borrow_mut().extend(c);
         let rows = self.0.rows.borrow();
-        needle
-            .find(from, rows.len(), |i| {
-                let row = &rows[i];
-                row.reachable.get().then(|| row.label.get())
-            })
+        needle.find(from, rows.len(), |i| {
+            let row = &rows[i];
+            row.reachable.get().then(|| row.label.get())
+        })
     }
 
     /// The pointer came to rest on row `index`. In a menu that is where the cursor goes, and it opens the submenu the row hangs or closes one another row had open; any other list leaves its cursor where the keyboard put it.
@@ -525,13 +518,8 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     }
     if let Some(on) = &switch {
         let on = on.clone();
-        let track = switch_track(
-            move || on.get(),
-            None,
-            None,
-            move || SwitchSize::row(size),
-        )?
-        .a11y_hidden();
+        let track = switch_track(move || on.get(), None, None, move || SwitchSize::row(size))?
+            .a11y_hidden();
         content.push(box_item(track));
     }
 
@@ -814,7 +802,12 @@ fn row_layout(size: ControlSize, look: RowLook) -> LayoutStyle {
 }
 
 impl ListContext {
-    pub(crate) fn present(&self, row: StyledContainer, index: usize, mark: Mark) -> StyledContainer {
+    pub(crate) fn present(
+        &self,
+        row: StyledContainer,
+        index: usize,
+        mark: Mark,
+    ) -> StyledContainer {
         let highlighted = self.0.highlighted;
         let reach = move || {
             highlighted.set_if_changed(Some(index));
@@ -835,7 +828,10 @@ impl ListContext {
     }
 
     fn is_selected(&self, index: usize) -> bool {
-        self.0.selected.as_ref().is_some_and(|s| s.get() == Some(index))
+        self.0
+            .selected
+            .as_ref()
+            .is_some_and(|s| s.get() == Some(index))
     }
 
     fn highlight(&self) -> Color {

@@ -3,8 +3,8 @@ use std::rc::Rc;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
 use crate::workbench::tree_view::tree_view::{TreeNode, TreeViewProps, tree_view};

@@ -9,8 +9,8 @@ use telar::{
 };
 
 use crate::layout::heading::heading::{HeadingProps, heading};
-use crate::shared::scrim;
 use crate::shared;
+use crate::shared::scrim;
 use crate::strings;
 use telar::ControlSize;
 

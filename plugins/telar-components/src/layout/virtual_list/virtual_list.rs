@@ -15,11 +15,11 @@ use telar::{
 };
 
 use crate::layout::list::list::ListTokens;
+use crate::shared;
 use crate::shared::rows::{
     BuiltRows, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
 };
 use crate::shared::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
-use crate::shared;
 use crate::shared::type_ahead::TypeAhead;
 use telar::ControlSize;
 
@@ -482,7 +482,6 @@ fn build_row(
     let cursor = {
         let (list, id, color) = (list.clone(), id.clone(), color.clone());
         move || list.shows_cursor(&id).then(|| cursor_ring(&color))
-
     };
     let places = list.places.clone();
     let row_box = move || {

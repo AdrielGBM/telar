@@ -68,9 +68,7 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         diameter,
         style,
     } = props;
-    let size = move || {
-        diameter.unwrap_or_else(|| SpinnerTokens::current().size(size))
-    };
+    let size = move || diameter.unwrap_or_else(|| SpinnerTokens::current().size(size));
     let head_box = move || {
         let head = size() * HEAD_FRACTION;
         LayoutStyle::new().width(head).height(head)

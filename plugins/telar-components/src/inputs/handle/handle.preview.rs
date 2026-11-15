@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{
     BorderRadius, Key, LayoutError, LayoutStyle, NamedKey, RectStyle, Role, ShapeStyle,
     StyledContainer, box_item,

@@ -184,7 +184,11 @@ impl Toast {
         match &self.title {
             Some(title) => strings::text_with(
                 strings::TITLED_NOTICE,
-                &[("tone", &tone), ("title", title), ("message", &self.message)],
+                &[
+                    ("tone", &tone),
+                    ("title", title),
+                    ("message", &self.message),
+                ],
             ),
             None => strings::text_with(
                 strings::NOTICE,
@@ -367,10 +371,7 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     } = props;
     let queue = queue.unwrap_or_else(toasts);
     let max_visible = max_visible as usize;
-    let width = Width {
-        named: width,
-        size,
-    };
+    let width = Width { named: width, size };
     let held = Rc::new(Hold::default());
     effect({
         let held = held.clone();
@@ -528,10 +529,12 @@ fn notice(
             .min_width(0.0)
             .gap(shared::gap_xs(size))
     };
-    let text = Container::new(column(), words)?.styled_by(column).a11y_label({
-        let toast = toast.clone();
-        move || toast.spoken()
-    });
+    let text = Container::new(column(), words)?
+        .styled_by(column)
+        .a11y_label({
+            let toast = toast.clone();
+            move || toast.spoken()
+        });
 
     let mut parts: Vec<Box<dyn LayoutItem>> =
         vec![stripe(size, toast.tone.tone())?, box_item(text)];

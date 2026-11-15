@@ -545,7 +545,11 @@ fn a_resizable_column_s_header_holds_a_splitter_that_reads_its_width() {
     );
     assert_eq!(grid.names(Role::ColumnHeader), ["Name", "Size", "Kind"]);
     let size = grid.find(Role::Splitter, "Resize Size column");
-    let value = size.value.as_ref().and_then(telar::Value::reading).expect("a splitter reads a value");
+    let value = size
+        .value
+        .as_ref()
+        .and_then(telar::Value::reading)
+        .expect("a splitter reads a value");
     assert_eq!((value.now(), value.min()), (80.0, MIN_COLUMN_WIDTH as f64));
     assert_eq!(size.orientation, Some(telar::Orientation::Vertical));
     let name = grid.find(Role::Splitter, "Resize Name column");

@@ -3,8 +3,7 @@ use std::rc::Rc;
 
 use telar::testing::{centre, named, press, release};
 use telar::{
-    AccessNode, BorderRadius, ComponentList, ConsumedKeys, LayoutItem, NamedKey,
-    Toggle, signal,
+    AccessNode, BorderRadius, ComponentList, ConsumedKeys, LayoutItem, NamedKey, Toggle, signal,
 };
 
 use super::*;
@@ -142,9 +141,8 @@ fn left_moves_on_in_a_right_to_left_surface() {
 
 #[test]
 fn every_radio_keeps_both_arrows_the_edges_and_its_activation_keys() {
-    let keys = crate::test_support::declared_keys(Role::Radio, || {
-        group(signal(None), &Rc::default())
-    });
+    let keys =
+        crate::test_support::declared_keys(Role::Radio, || group(signal(None), &Rc::default()));
     assert_eq!(
         keys,
         vec![ConsumedKeys::ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ACTIVATION; 3],
@@ -251,8 +249,7 @@ fn a_style_amendment_reshapes_the_ring() {
     crate::test_support::fresh_layout_runtime();
     let square: telar::SurfaceAmendment =
         Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
-    let [(_, ring), (_, dot)] = ring_and_dot(chosen(ControlSize::Regular, Some(square)))[..]
-    else {
+    let [(_, ring), (_, dot)] = ring_and_dot(chosen(ControlSize::Regular, Some(square)))[..] else {
         panic!("a chosen radio paints its ring and its dot");
     };
     assert_eq!(ring.radius, BorderRadius::all(0.0));

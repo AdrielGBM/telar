@@ -1,7 +1,9 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, RwSignal, children};
+use telar::{
+    Children, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, RwSignal, children,
+};
 
 use crate::inputs::button::button::{ButtonProps, button};
 use crate::layout::list::list::{ItemProps, SeparatorProps, item, separator};

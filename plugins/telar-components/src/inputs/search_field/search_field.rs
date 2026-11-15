@@ -11,9 +11,11 @@ use telar::{
     signal,
 };
 
+use crate::inputs::text_field::text_field::{
+    Adornments, FieldKeyHandler, TextFieldProps, adorned_field,
+};
 use crate::shared;
 use crate::strings;
-use crate::inputs::text_field::text_field::{Adornments, FieldKeyHandler, TextFieldProps, adorned_field};
 use telar::ControlSize;
 
 /// What [`SearchFieldProps::on_submit`] is called with: the query as it stands.

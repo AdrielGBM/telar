@@ -1,5 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
 use crate::navigation::tabs::tabs::{TabsProps, tabs};

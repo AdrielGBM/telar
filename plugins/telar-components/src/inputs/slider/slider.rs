@@ -263,28 +263,28 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     .on_focused_key({
         let commit = Rc::clone(&commit);
         move |key: &telar::Key| {
-        use telar::NamedKey::*;
-        match key {
-            telar::Key::Named(ArrowRight | ArrowUp) => {
-                step_by(telar::step_factor(telar::modifiers()));
+            use telar::NamedKey::*;
+            match key {
+                telar::Key::Named(ArrowRight | ArrowUp) => {
+                    step_by(telar::step_factor(telar::modifiers()));
+                }
+                telar::Key::Named(ArrowLeft | ArrowDown) => {
+                    step_by(-telar::step_factor(telar::modifiers()));
+                }
+                telar::Key::Named(PageUp) => {
+                    shift_by(page);
+                }
+                telar::Key::Named(PageDown) => {
+                    shift_by(-page);
+                }
+                telar::Key::Named(Home) => {
+                    commit(min);
+                }
+                telar::Key::Named(End) => {
+                    commit(max);
+                }
+                _ => {}
             }
-            telar::Key::Named(ArrowLeft | ArrowDown) => {
-                step_by(-telar::step_factor(telar::modifiers()));
-            }
-            telar::Key::Named(PageUp) => {
-                shift_by(page);
-            }
-            telar::Key::Named(PageDown) => {
-                shift_by(-page);
-            }
-            telar::Key::Named(Home) => {
-                commit(min);
-            }
-            telar::Key::Named(End) => {
-                commit(max);
-            }
-            _ => {}
-        }
         }
     })
     .on_drag(move |px, _py| {

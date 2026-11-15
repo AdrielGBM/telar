@@ -3,12 +3,12 @@ use std::rc::Rc;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
-use crate::shared::selection::SelectionMode;
 use crate::layout::virtual_list::virtual_list::{ListRow, VirtualListProps, virtual_list};
+use crate::shared::selection::SelectionMode;
 use telar::ControlSize;
 
 fn contacts() -> Vec<ListRow> {

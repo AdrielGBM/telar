@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use telar::{
     AnchorAlign, Anchoring, Border, Children, Color, Container, HasPopup, Key, LayoutError,
-    LayoutItem, LayoutStyle, NamedKey, NodeId, Overlay, Side, PointerButton, Props, Reactive,
-    Rect, RectStyle, RwSignal, ScrollViewport, StyledContainer, SurfaceStyle, amend_surface,
+    LayoutItem, LayoutStyle, NamedKey, NodeId, Overlay, PointerButton, Props, Reactive, Rect,
+    RectStyle, RwSignal, ScrollViewport, Side, StyledContainer, SurfaceStyle, amend_surface,
     box_item, children, effect,
     focus::{self, FocusId},
     memo, on_cleanup, signal, track_layout, use_context,
@@ -16,8 +16,8 @@ use telar::{
 
 use crate::layout::list::list::{self, Act, ListContext, Mark, RowLook};
 use crate::overlays::menu::menu::MenuTokens;
-use crate::shared::popup;
 use crate::shared;
+use crate::shared::popup;
 use telar::ControlSize;
 
 pub(crate) type Anchored = Rc<dyn Fn() -> Anchoring>;
@@ -349,7 +349,7 @@ fn beside(row: NodeId, size: ControlSize, cascade: &Rc<Cascade>) -> Anchored {
             kept_inside(cascade.config.within),
             telar::use_direction(),
         )
-            .align(AnchorAlign::Start)
+        .align(AnchorAlign::Start)
     })
 }
 

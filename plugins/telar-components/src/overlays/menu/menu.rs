@@ -6,15 +6,15 @@ use std::rc::Rc;
 
 use telar::{
     Anchoring, Children, Color, ConsumedKeys, Container, HasPopup, Key, LayoutError, LayoutItem,
-    LayoutStyle, NamedKey, Side, Props, Reactive, ReactiveList, Rect, RwSignal,
-    SurfaceAmendment, box_item, effect,
+    LayoutStyle, NamedKey, Props, Reactive, ReactiveList, Rect, RwSignal, Side, SurfaceAmendment,
+    box_item, effect,
     focus::{self, FocusId, Role},
     memo, signal, track_layout, use_direction,
 };
 
-use crate::shared::dropdown;
 use crate::overlays::menu::menu_panel::{self, Config, Keys, Level, Spec};
 use crate::shared;
+use crate::shared::dropdown;
 use telar::ControlSize;
 // What the test module below reads via `use super::*` to compute click points.
 #[cfg(test)]
@@ -392,7 +392,9 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
     let anchoring: menu_panel::Anchored = Rc::new(move || {
         let inside = menu_panel::kept_inside(within);
         match around {
-            Some(control) => Anchoring::new(control, Side::Below, inside, use_direction()).gap(offset.get()),
+            Some(control) => {
+                Anchoring::new(control, Side::Below, inside, use_direction()).gap(offset.get())
+            }
             None => Anchoring::new(
                 Rect::new(at.0, at.1, 0.0, 0.0),
                 Side::Below,

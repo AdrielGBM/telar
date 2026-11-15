@@ -6,8 +6,12 @@ use telar::testing::{
 use telar::{ComponentList, Container, ModifiersState, RectStyle, ThemeTokens, relayout_if_dirty};
 
 use super::*;
-use crate::layout::list::list::{GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator};
-use crate::overlays::menu::menu::{ContextMenuProps, MenuProps, context_menu, is_context_menu_key, menu};
+use crate::layout::list::list::{
+    GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator,
+};
+use crate::overlays::menu::menu::{
+    ContextMenuProps, MenuProps, context_menu, is_context_menu_key, menu,
+};
 use crate::test_support::{drawn, fresh_layout_runtime};
 use telar::focus::Role;
 
@@ -482,8 +486,14 @@ fn ticked_rows_say_what_they_are_and_whether_they_are_on() {
             .map(|exposed| exposed.toggled)
             .collect()
     };
-    assert_eq!(toggled(Role::MenuItemCheckBox), vec![Some(telar::Toggle::On)]);
-    assert_eq!(toggled(Role::MenuItemRadio), vec![Some(telar::Toggle::Off), Some(telar::Toggle::On)]);
+    assert_eq!(
+        toggled(Role::MenuItemCheckBox),
+        vec![Some(telar::Toggle::On)]
+    );
+    assert_eq!(
+        toggled(Role::MenuItemRadio),
+        vec![Some(telar::Toggle::Off), Some(telar::Toggle::On)]
+    );
 }
 
 /// Every row of a panel keeps the column a tick stands in once one row draws a tick, so the labels line up whether or not their row carries one.

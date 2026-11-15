@@ -316,7 +316,10 @@ fn the_panel_s_width_follows_the_drawer_s_size() {
         pad: Some(10.0),
         ..DrawerTokens::default()
     };
-    assert_eq!(tokens.extent(ControlSize::Large), (250.0 * 1.125f32).round());
+    assert_eq!(
+        tokens.extent(ControlSize::Large),
+        (250.0 * 1.125f32).round()
+    );
     assert_eq!(tokens.pad(ControlSize::Large), 12.5);
 }
 

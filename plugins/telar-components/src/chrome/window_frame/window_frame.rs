@@ -12,9 +12,11 @@ use telar::{
     focus::Role, track_layout,
 };
 
-use crate::shared::resize::Latch;
+use crate::chrome::title_bar::title_bar::{
+    TitleBarOptions, WindowControlsProps, title_bar, window_controls,
+};
 use crate::shared;
-use crate::chrome::title_bar::title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
+use crate::shared::resize::Latch;
 use telar::ControlSize;
 
 /// Which window-management controls a frame draws, beside the close button it always has.

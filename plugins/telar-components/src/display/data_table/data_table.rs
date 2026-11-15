@@ -17,11 +17,11 @@ use telar::{
     key_nav_apply_grid, memo, signal, track_layout,
 };
 
-use crate::workbench::resizable::resizable::{ResizeEdge, ResizeHandleProps, resize_handle};
 use crate::shared::rows::{
     BuiltRows, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
 };
 use crate::shared::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
+use crate::workbench::resizable::resizable::{ResizeEdge, ResizeHandleProps, resize_handle};
 use crate::{shared, strings};
 use telar::ControlSize;
 

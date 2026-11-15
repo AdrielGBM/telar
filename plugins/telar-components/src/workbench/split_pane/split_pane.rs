@@ -186,7 +186,11 @@ impl Limits {
     /// `min` and `max`, or the error a split is built with when either cannot be a size or `max` is below `min` in the same unit. A px bound and a fraction are compared once the split's size is known, and the larger one then wins.
     fn new(min: PaneLimit, max: Option<PaneLimit>) -> Result<Self, LayoutError> {
         let refused = |reason: String| Err(LayoutError::Engine(format!("split_pane: {reason}")));
-        if let Some(limit) = [Some(min), max].into_iter().flatten().find(|limit| !limit.valid()) {
+        if let Some(limit) = [Some(min), max]
+            .into_iter()
+            .flatten()
+            .find(|limit| !limit.valid())
+        {
             return refused(format!("{limit:?} is not a size a pane can take"));
         }
         let inverted = match (min, max) {

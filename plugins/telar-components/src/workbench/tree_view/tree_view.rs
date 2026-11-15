@@ -7,17 +7,17 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Clip, ClippedItem, Color, Container, Direction, FocusRing, JustifyContent, Key,
-    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey, PointerButton, Props,
-    Reactive, Rect, RectStyle, RwSignal, StyledContainer, Text, TextWrap, box_item,
-    current_direction,
+    Accessible, AlignItems, Clip, ClippedItem, Color, Container, Direction, FocusRing,
+    JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey,
+    PointerButton, Props, Reactive, Rect, RectStyle, RwSignal, StyledContainer, Text, TextWrap,
+    box_item, current_direction,
     focus::{self, FocusId, Role, SetPosition},
     memo, signal,
 };
 
 use crate::overlays::menu::menu::{MenuPlace, focused_rect, is_context_menu_key};
-use crate::shared::rows::{BuiltRows, RowPlaces, RowState, cursor_ring, row_wash};
 use crate::shared;
+use crate::shared::rows::{BuiltRows, RowPlaces, RowState, cursor_ring, row_wash};
 use crate::shared::type_ahead::TypeAhead;
 use telar::ControlSize;
 

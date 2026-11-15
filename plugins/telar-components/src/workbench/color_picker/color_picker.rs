@@ -12,10 +12,10 @@ use telar::{
     signal, step_factor,
 };
 
-use crate::shared;
-use crate::strings;
 use crate::inputs::swatches::swatches::{SwatchesProps, swatches};
 use crate::inputs::text_field::text_field::{TextFieldProps, text_field};
+use crate::shared;
+use crate::strings;
 use telar::ControlSize;
 
 /// A colour picker's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.

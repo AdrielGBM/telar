@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role};
 
-use crate::layout::list::list::{ItemProps, item};
 use crate::inputs::select::select::{SelectProps, select};
+use crate::layout::list::list::{ItemProps, item};
 use telar::ControlSize;
 
 fn sizes(size: ControlSize) -> Children {

@@ -1,5 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
 use telar::{Color, Role};
 
 use super::sample;

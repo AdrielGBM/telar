@@ -6,8 +6,8 @@ use telar::{
     Children, Color, LayoutError, LayoutItem, Props, Reactive, RwSignal, SurfaceAmendment, signal,
 };
 
-use crate::shared::dropdown;
 use crate::shared;
+use crate::shared::dropdown;
 use crate::strings;
 use telar::ControlSize;
 // What the test module below reads via `use super::*` to compute click points.

@@ -5,9 +5,10 @@ use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Border, BorderRadius, Container, Cursor, DragAxis, Input, Key, LayoutError, LayoutItem,
-    LayoutStyle, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    SurfaceAmendment, Text, Transaction, amend_surface, box_item, children, effect,
+    AlignItems, Border, BorderRadius, Container, Cursor, DragAxis, Input, Key, LayoutError,
+    LayoutItem, LayoutStyle, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, SurfaceAmendment, Text, Transaction, amend_surface, box_item, children,
+    effect,
     focus::{self, Role},
     signal, step_factor, style_follows,
 };
@@ -118,7 +119,12 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
     let parse = parse.unwrap_or_else(|| Rc::new(decimal));
 
     let step_by = move |factor: f32| {
-        let next = snap(value.peek() + factor * step, step * factor.abs().min(1.0), min, max);
+        let next = snap(
+            value.peek() + factor * step,
+            step * factor.abs().min(1.0),
+            min,
+            max,
+        );
         write_through(transaction, next);
     };
     let draft = signal(String::new());

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role, RwSignal};
 
 use crate::layout::list::list::{ItemProps, SeparatorProps, item, separator};

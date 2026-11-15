@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
+use super::sample::Given;
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use super::sample::Given;
 
 use crate::workbench::code_view::code_view::{CodeSpan, CodeViewProps, TokenKind, code_view};
 use telar::ControlSize;

@@ -9,20 +9,19 @@ use telar::{
     Accessible, AlignItems, Border, BorderRadius, Chord, Clip, ClippedItem, Color, Container,
     Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
     ModifiersState, NamedKey, NodeId, OverlayControl, Props, Reactive, ReactiveList, RectStyle,
-    RwSignal,
-    ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap,
+    RwSignal, ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap,
     amend_surface, box_item, children, effect,
     focus::{FocusId, Role},
     memo, signal,
 };
 
-use crate::overlays::command_palette::fuzzy::fuzzy_match;
+use crate::inputs::text_field::text_field::{TextFieldProps, text_field};
 use crate::layout::list::list::{ListTokens, row_paint, tinted};
+use crate::overlays::command_palette::fuzzy::fuzzy_match;
+use crate::shared;
 use crate::shared::rows::{BuiltRows, RowPlaces, cursor_ring};
 use crate::shared::scrim;
-use crate::shared;
 use crate::strings;
-use crate::inputs::text_field::text_field::{TextFieldProps, text_field};
 use crate::{KbdProps, kbd};
 use telar::ControlSize;
 

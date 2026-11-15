@@ -10,8 +10,8 @@ use telar::{
     Transaction, amend_surface, box_item, focus::Role, signal, step_factor, use_theme_tokens,
 };
 
-use crate::shared::edit::{Stroke, write_through};
 use crate::shared;
+use crate::shared::edit::{Stroke, write_through};
 use telar::ControlSize;
 
 /// Where on the canvas the pointer asks for a value, as `(x, y)` → value.
@@ -39,7 +39,10 @@ impl HandleTokens {
     /// The diameter of the dot of a handle of `size`.
     pub fn size(&self, size: ControlSize) -> f32 {
         self.size.map_or_else(
-            || crate::inputs::slider::slider::SliderTokens::current().thumb(size) - shared::gap_sm(size),
+            || {
+                crate::inputs::slider::slider::SliderTokens::current().thumb(size)
+                    - shared::gap_sm(size)
+            },
             |diameter| diameter * size.scale(),
         )
     }
@@ -129,9 +132,7 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         on_end,
         style,
     } = props;
-    let size = move || {
-        diameter.unwrap_or_else(|| HandleTokens::current().size(size))
-    };
+    let size = move || diameter.unwrap_or_else(|| HandleTokens::current().size(size));
     let dot_box = move || {
         LayoutStyle::new()
             .absolute()

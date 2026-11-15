@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use super::sample::Given;
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, LayoutError, LayoutStyle, Reactive, Role};
 
 use crate::inputs::checkbox::checkbox::{CheckboxProps, checkbox};
