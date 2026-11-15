@@ -165,7 +165,7 @@ fn start<A: App>(
             };
             renderer_web::load_page_fonts(telar_project::FONT_FAMILY_ATTRIBUTE);
             crate::runner::run_with_platform_and_renderer::<_, _, A, ()>(
-                platform,
+                described::DescribedCanvas::new(platform, canvas.clone()),
                 WebGpuRendererFactory::new(canvas),
                 config,
                 paths,
@@ -179,5 +179,124 @@ fn start<A: App>(
     };
     if let Err(e) = result {
         tracing::error!("telar could not start: {e}");
+    }
+}
+
+/// A canvas told to assistive technology. Only a build that carries the canvas has it: a document is already what a reader reads, and the page loop drives its handler without ever asking it for a snapshot.
+#[cfg(feature = "web")]
+mod described {
+    use platform_core::{AccessAction, AccessNode, Event, EventHandler, Platform, PlatformError};
+    use platform_web::{WebPlatform, WebWindow};
+    use renderer_web::CanvasSurface;
+
+    /// The browser platform, driving a handler whose every frame the canvas's mirror then describes.
+    pub(super) struct DescribedCanvas {
+        platform: WebPlatform,
+        canvas: CanvasSurface,
+    }
+
+    impl DescribedCanvas {
+        pub(super) fn new(platform: WebPlatform, canvas: CanvasSurface) -> Self {
+            Self { platform, canvas }
+        }
+    }
+
+    impl Platform for DescribedCanvas {
+        type Window = WebWindow;
+
+        fn location_source(&mut self) -> Option<Box<dyn platform_core::LocationSource>> {
+            self.platform.location_source()
+        }
+
+        fn keyboard_convention(&self) -> platform_core::KeyboardConvention {
+            self.platform.keyboard_convention()
+        }
+
+        fn focus_boundary(&self) -> platform_core::FocusBoundary {
+            self.platform.focus_boundary()
+        }
+
+        fn run<H: EventHandler<WebWindow> + 'static>(
+            self,
+            config: platform_core::WindowConfig,
+            handler: H,
+        ) -> Result<(), PlatformError> {
+            self.platform.run(
+                config,
+                Describing {
+                    handler,
+                    canvas: self.canvas,
+                },
+            )
+        }
+    }
+
+    /// `handler`, with the canvas describing the window after each frame from the snapshot the desktop hands its reader. What a reader does to the description comes back through the platform's events, as [`Event::AccessAction`].
+    struct Describing<H> {
+        handler: H,
+        canvas: CanvasSurface,
+    }
+
+    impl<H: EventHandler<WebWindow>> EventHandler<WebWindow> for Describing<H> {
+        fn on_resume(&mut self, window: &WebWindow) -> bool {
+            self.handler.on_resume(window)
+        }
+
+        fn on_event(&mut self, event: Event, window: &WebWindow) {
+            self.handler.on_event(event, window);
+        }
+
+        fn on_redraw(&mut self, window: &WebWindow) {
+            self.handler.on_redraw(window);
+            self.canvas.describe(&self.handler.accessibility());
+        }
+
+        fn on_suspend(&mut self) {
+            self.handler.on_suspend();
+        }
+
+        fn accessibility(&self) -> Vec<AccessNode> {
+            self.handler.accessibility()
+        }
+
+        fn root_language(&self) -> Option<String> {
+            self.handler.root_language()
+        }
+
+        fn on_accessibility_action(&mut self, id: u64, action: AccessAction) {
+            self.handler.on_accessibility_action(id, action);
+        }
+
+        fn on_back(&mut self, window: &WebWindow) -> bool {
+            self.handler.on_back(window)
+        }
+
+        fn remount(&mut self, window: &WebWindow) {
+            self.handler.remount(window);
+        }
+
+        fn owe_presentation(&mut self) {
+            self.handler.owe_presentation();
+        }
+
+        fn new_events(&mut self) {
+            self.handler.new_events();
+        }
+
+        fn about_to_wait(&mut self) -> Option<std::time::Duration> {
+            self.handler.about_to_wait()
+        }
+
+        fn take_exit_request(&mut self) -> bool {
+            self.handler.take_exit_request()
+        }
+
+        fn last_frame_rgba(&self) -> Option<Vec<u8>> {
+            self.handler.last_frame_rgba()
+        }
+
+        fn interactive_rects(&self) -> Vec<geometry_core::Rect> {
+            self.handler.interactive_rects()
+        }
     }
 }

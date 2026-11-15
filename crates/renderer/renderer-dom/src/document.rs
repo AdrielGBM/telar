@@ -14,7 +14,8 @@ use std::sync::Arc;
 use geometry_core::{Insets, Rect};
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
 use platform_core::{
-    Destination, HasPopup, NumericValue, Orientation, Positioning, SetPosition, SortDirection,
+    AccessNode, Destination, HasPopup, NumericValue, Orientation, Positioning, SetPosition,
+    SortDirection,
 };
 use renderer_core::{
     BlendMode, Color, CurrentKind, DrawCommand, Editing, Element, Focusable, ForcedColors,
@@ -1676,18 +1677,9 @@ fn piece(painted: Painted) -> PaintNode {
 fn describe(element: &Element, tag: &'static str) -> Described {
     let semantics = &element.semantics;
     let label = semantics.label.as_deref();
-    let role = match (tag == "div" || tag == "svg")
-        .then(|| aria_role(semantics.role))
-        .flatten()
-    {
-        // A plain `div` may not carry a name, and a browser drops one it does; `group` is the generic role a name is allowed on.
-        None if tag == "div" && label.is_some() => Some("group"),
-        role => role,
-    };
-    // Artwork nobody named is decoration, and a graphic with no accessible name is noise to read out.
+    let role = element_role(semantics.role, tag, label.is_some());
     let picture = tag == "img";
-    let hidden =
-        semantics.hidden || (semantics.role == Role::Drawing && label.is_none() && !picture);
+    let hidden = semantics.hidden || is_decoration(semantics.role, label.is_some(), picture);
     // An `<a>` without an `href` is no link, which is what a disabled one has to be.
     let link = semantics.link.as_ref().filter(|_| !semantics.disabled);
     Described {
@@ -1739,6 +1731,101 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         focusable: semantics.focusable,
         picture,
     }
+}
+
+/// What a node of an accessibility snapshot is, as the attributes that say so, for an element that stands in for the node rather than draws it: the words [`describe`] gives a box of the same role and state.
+///
+/// Its name is the element's `aria-label`, except on static text, whose name is the text the element holds ([`text_of_access_node`]). What points at another node points at the `id` that node's element takes once it is pointed at; whether a node is pointed at, and how many rows a grid has, the caller reads off the rest of the snapshot.
+pub(crate) fn describe_access_node(node: &AccessNode) -> Described {
+    let tag = tag_of(&node.role);
+    let label =
+        Some(node.name.as_str()).filter(|name| !name.is_empty() && !names_with_its_text(node.role));
+    let link = node.url.as_ref().filter(|_| node.enabled);
+    let pointed_at = |id: u64| format!("{BOX_ID_PREFIX}{}", BoxKey::from(id));
+    Described {
+        role: element_role(node.role, tag, label.is_some()),
+        label: label.map(str::to_string),
+        description: node.description.clone(),
+        link: link.cloned(),
+        external: false,
+        opens_beside: false,
+        lang: node.lang.clone(),
+        anchor: None,
+        hidden: is_decoration(node.role, label.is_some(), false),
+        inert: false,
+        modal: node.modal,
+        live: node.role.live().map(|live| live.as_str()),
+        toggled: node
+            .toggled
+            .and_then(|state| Some((node.role.toggle_kind()?, state))),
+        current: node.current.filter(|_| link.is_some()),
+        value: node.value.as_ref().and_then(Value::reading),
+        value_text: node
+            .value
+            .as_ref()
+            .and_then(Value::text)
+            .filter(|_| carries_range(node.role))
+            .map(str::to_string),
+        orientation: node.orientation,
+        expanded: node.expanded,
+        has_popup: node.has_popup,
+        keyboard_shortcut: node.keyboard_shortcut.clone(),
+        position: node
+            .position
+            .and_then(|position| Some((node.role.positioning()?, position))),
+        row_count: None,
+        sort: node.sort,
+        multiselectable: node.multiselectable,
+        descendant_box: None,
+        active_descendant: node.active_descendant.map(pointed_at),
+        is_active_descendant: false,
+        controls_box: None,
+        controls: node.controls.map(pointed_at),
+        is_controlled: false,
+        disabled: !node.enabled,
+        invalid: node.invalid,
+        required: node.required,
+        readonly: node.readonly,
+        focused: node.focused,
+        control: node.id.is_some(),
+        focusable: None,
+        picture: false,
+    }
+}
+
+/// The words an element standing for a node holds as its own text rather than in an attribute: static text is named by what it says, and a field or a select is read by the text inside it as its value, as a document reads one.
+pub(crate) fn text_of_access_node(node: &AccessNode) -> Option<&str> {
+    match names_with_its_text(node.role) {
+        true => Some(node.name.as_str()),
+        false => node
+            .value
+            .as_ref()
+            .and_then(Value::text)
+            .filter(|_| !carries_range(node.role)),
+    }
+    .filter(|text| !text.is_empty())
+}
+
+/// Whether a node of this role is static text: a reader drops an `aria-label` on an element with no role, and one given a role to carry it would announce that role.
+fn names_with_its_text(role: Role) -> bool {
+    matches!(role, Role::Label | Role::KeyboardInput)
+}
+
+/// The `role` an element of `tag` carries for a box of `role`: only where the tag does not already say it.
+fn element_role(role: Role, tag: &'static str, named: bool) -> Option<&'static str> {
+    match (tag == "div" || tag == "svg")
+        .then(|| aria_role(role))
+        .flatten()
+    {
+        // A plain `div` may not carry a name, and a browser drops one it does; `group` is the generic role a name is allowed on.
+        None if tag == "div" && named => Some("group"),
+        role => role,
+    }
+}
+
+/// Whether a box is artwork nobody named, which is decoration: a graphic with no accessible name is noise to read out.
+fn is_decoration(role: Role, named: bool, picture: bool) -> bool {
+    role == Role::Drawing && !named && !picture
 }
 
 /// Whether a painted rect is the box it was painted in, in either of the two ways a widget can say so: a box that draws its own frame knows where it is, and a leaf that draws inside itself starts at its corner.
@@ -1886,6 +1973,8 @@ pub(crate) fn aria_role(role: Role) -> Option<&'static str> {
         Role::ScrollArea => None,
         // `<kbd>` says it, and ARIA has no role for keyboard input.
         Role::KeyboardInput => None,
+        // Static text is the element's own text, which needs no role, and ARIA has none called `label`.
+        Role::Label => None,
         // `ul` and `li` are a pair with a content model and nothing here can promise an author marked both. The ARIA roles are announced the same and are valid anywhere.
         Role::List => Some("list"),
         Role::ListItem => Some("listitem"),

@@ -107,8 +107,10 @@ Two ways to draw, and they are genuinely different rather than a fallback order:
   searchable, and screen readers see a document.
 - **`web`** adds pixels on a canvas through WebGPU, which draws exactly what the desktop build draws. It
   carries a glyph shaper and needs a face, because a canvas has no fonts of its own. It is chosen only
-  explicitly, with `--renderer canvas`, and the canvas exposes no accessibility tree to assistive
-  technology yet: a screen reader finds nothing on it, while the document renderer is read as a document.
+  explicitly, with `--renderer canvas`. A screen reader reads the canvas through a document nobody sees
+  beside it, built after each frame from the accessibility snapshot the desktop publishes and saying each
+  control in the document renderer's words; what is drawn is not itself text, so it cannot be selected or
+  found. See [docs/accessibility.md](accessibility.md#the-canvas-tree).
 
 The two also share the keyboard differently. A document keeps the browser's own Tab walk and keyboard
 scrolling, and prevents only the keys the focused control declares. A canvas keeps Tab, Space, the arrows and

@@ -6473,6 +6473,7 @@ dependencies = [
  "telar-geometry-core",
  "telar-platform-core",
  "telar-renderer-core",
+ "telar-renderer-dom",
  "telar-renderer-hardware",
  "telar-renderer-text",
  "tracing",

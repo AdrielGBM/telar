@@ -32,6 +32,8 @@ mod links;
 #[cfg(target_arch = "wasm32")]
 mod metrics;
 #[cfg(target_arch = "wasm32")]
+mod mirror;
+#[cfg(target_arch = "wasm32")]
 mod picture;
 #[cfg(target_arch = "wasm32")]
 mod reconcile;
@@ -43,5 +45,7 @@ pub use html::{Prerendered, prerender, reset_stylesheet};
 pub use markup::escape_html;
 #[cfg(target_arch = "wasm32")]
 pub use metrics::{CanvasTextMetrics, remeasure_on_font_load};
+#[cfg(target_arch = "wasm32")]
+pub use mirror::AccessMirror;
 #[cfg(target_arch = "wasm32")]
 pub use renderer::{DomRenderer, DomRendererFactory};

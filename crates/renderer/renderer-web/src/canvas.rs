@@ -8,6 +8,7 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
     RawWindowHandle, WebDisplayHandle, WebWindowHandle,
 };
+use renderer_dom::AccessMirror;
 use wasm_bindgen::JsCast;
 
 /// Hands out the `data-raw-handle` values wgpu looks a canvas up by. Starts at 1 because 0 reads as "unset" in the DOM attribute and would collide with a canvas somebody else put on the page.
@@ -22,6 +23,8 @@ pub struct CanvasSurface {
     handle: u32,
     /// What the page was served with inside the host, shown until the first frame is drawn over it: a prerendered page, readable before the module has loaded.
     served: Rc<RefCell<Vec<web_sys::Node>>>,
+    /// What a reader reads in place of the pixels, from the first snapshot with anything in it.
+    mirror: Rc<RefCell<Option<AccessMirror>>>,
 }
 
 #[cfg(all(target_arch = "wasm32", target_feature = "atomics"))]
@@ -56,6 +59,53 @@ impl CanvasSurface {
             if let Some(parent) = node.parent_node() {
                 let _ = parent.remove_child(&node);
             }
+        }
+    }
+
+    /// Tells assistive technology what the canvas shows, as `nodes` — the window's accessibility snapshot — say it: in a visually hidden [`AccessMirror`] beside the canvas, whose elements hand what a reader does to them back as the platform's events.
+    ///
+    /// The page the host was served with stays the one a reader reads until the mirror has something to say. From then on it is withdrawn from readers and from the keyboard, though still shown until the first frame is drawn over it, so a reader never meets the page twice.
+    pub fn describe(&self, nodes: &[platform_core::AccessNode]) {
+        let mut mirror = self.mirror.borrow_mut();
+        if mirror.is_none() {
+            if nodes.is_empty() {
+                return;
+            }
+            match AccessMirror::before(self.canvas.as_ref()) {
+                Ok(made) => *mirror = Some(made),
+                Err(e) => {
+                    tracing::warn!("the canvas has no accessibility mirror: {e}");
+                    return;
+                }
+            }
+            self.withdraw_served();
+        }
+        if let Some(mirror) = mirror.as_mut() {
+            mirror.show(nodes);
+        }
+    }
+
+    /// Takes what the page was served with away from readers and from the keyboard, handing the surface the focus a reader left in it.
+    fn withdraw_served(&self) {
+        let host = self
+            .canvas
+            .parent_element()
+            .and_then(|host| host.dyn_into::<web_sys::HtmlElement>().ok());
+        let active = host
+            .as_ref()
+            .and_then(|host| host.owner_document())
+            .and_then(|document| document.active_element());
+        for node in self.served.borrow().iter() {
+            let Some(element) = node.dyn_ref::<web_sys::Element>() else {
+                continue;
+            };
+            if let (Some(active), Some(host)) = (&active, &host)
+                && element.contains(Some(active.as_ref()))
+            {
+                let _ = host.focus();
+            }
+            let _ = element.set_attribute("inert", "");
+            let _ = element.set_attribute("aria-hidden", "true");
         }
     }
 }
@@ -117,6 +167,7 @@ impl CanvasSurface {
             canvas,
             handle,
             served: Rc::default(),
+            mirror: Rc::default(),
         }
     }
 }

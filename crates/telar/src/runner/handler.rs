@@ -329,6 +329,20 @@ where
     }
 
     /// Hands `event` to the app's overlays, and to its tree where no overlay took it.
+    /// Follows a box event the window reported, or carries out a screen reader's action, as [`ui_core::follow_box_event`] does: `None` for any other event, otherwise whether it was taken. What has to travel through the tree to a nested surface goes the way [`dispatch_to_app`](Self::dispatch_to_app) sends an event, overlays first.
+    fn follow_box_event(&mut self, event: &Event) -> Option<bool> {
+        let (app, tree) = (&self.app, &mut self.tree);
+        ui_core::follow_box_event(event, |event| {
+            app.event_batch(|| {
+                if !app.dispatch_overlays(event)
+                    && let Some(tree) = tree
+                {
+                    tree.on_event(event);
+                }
+            });
+        })
+    }
+
     fn dispatch_to_app(&mut self, event: &Event) -> EventResult {
         // A hot-reloaded app dylib links its own reactive-core copy, which the host's batch cannot reach; a handler's signal write would flush immediately and re-run a segment's effect while its widget is still borrowed for `on_event`, silently dropping that segment's subscriptions.
         let (app, tree) = (&self.app, &mut self.tree);
@@ -1124,32 +1138,13 @@ where
                 self.follow_location(history.clone(), window);
                 return;
             }
-            Event::BoxFocused { box_id } => {
-                if ui_core::focus::follow_box(*box_id) {
-                    window.request_redraw();
-                }
-                return;
-            }
-            Event::BoxActivated { box_id } => {
-                if ui_core::activate_box(*box_id) {
-                    window.request_redraw();
-                }
-                return;
-            }
-            Event::RunActivated { box_id, run } => {
-                if ui_core::activate_run(*box_id, *run) {
-                    window.request_redraw();
-                }
-                return;
-            }
-            Event::FocusLeftBoxes => {
-                if ui_core::focus::current().is_some() {
-                    ui_core::focus::clear();
-                    window.request_redraw();
-                }
-                return;
-            }
             _ => {}
+        }
+        if let Some(followed) = self.follow_box_event(&event) {
+            if followed {
+                window.request_redraw();
+            }
+            return;
         }
         let overlay = self.dev.on_event(&event);
         if let Some(action) = overlay.action {
@@ -1291,16 +1286,7 @@ where
 
     fn on_accessibility_action(&mut self, id: u64, action: platform_core::AccessAction) {
         self.entered(|this| {
-            let (app, tree) = (&this.app, &mut this.tree);
-            ui_core::accessibility::perform_action(id, action, |event| {
-                app.event_batch(|| {
-                    if !app.dispatch_overlays(event)
-                        && let Some(tree) = tree
-                    {
-                        tree.on_event(event);
-                    }
-                });
-            });
+            this.follow_box_event(&Event::AccessAction { id, action });
         });
     }
 

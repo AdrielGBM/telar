@@ -159,7 +159,8 @@ the lint reads.
 | Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus`, `Click` and `ScrollIntoView` actions, and `Increment` and `Decrement`, `SetValue` and `SetTextSelection` on a control that answers them. | AccessKit `toggled` for checked and pressed, `Mixed` included (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
 | Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`/`partially checked`, `pressed`/`not pressed`/`partially pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
 | Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
-| Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to: the canvas, which is only built when `--renderer canvas` asks for it, carries no accessibility tree yet, so the document renderer (`web-dom`, the default) is the browser build assistive technology can read. | — |
+| Browser, canvas (`web`) | Focus and keyboard activation as on the desktop, and the role as the document says it, on the control's element in the [canvas tree](#the-canvas-tree): `tabindex="-1"`, since the app walks its own Tab order. A reader's activation of the element reaches the control as `Activate`. | As the document says it. |
+| Headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to. | — |
 
 A reader's request reaches a control through the focus order, not through the keyboard, as one of a closed set
 of `AccessAction`s carried out by `focus::perform`: `Focus` moves the keyboard to it; `Activate` (a desktop
@@ -384,7 +385,8 @@ has no way to make a `scroll` one, so there `a11y_label:` always means the stop'
 | --- | --- |
 | Browser, document (`web-dom`) | `tabindex="0"`, with `role="group"` and `aria-label` once it is named, and `data-telar-keys` holding only the keys for the axes it overflows. The browser scrolls the element itself, the way Telar asks it to. |
 | Desktop | An AccessKit `ScrollView` with `Focus`, named by its name, with the text it draws read inside it, or, without one, named by that text. |
-| Terminal, browser canvas (`web`), Android and headless | A stop in Telar's own Tab order, ringed when focused, and a scroll area with its name in the snapshot. |
+| Browser, canvas (`web`) | A stop in Telar's own Tab order, ringed when focused, and in the [canvas tree](#the-canvas-tree) an element with `role="group"` and `aria-label` once it is named, which takes the document's focus while the app's is on it. |
+| Terminal, Android and headless | A stop in Telar's own Tab order, ringed when focused, and a scroll area with its name in the snapshot. |
 
 ## Shortcuts
 
@@ -413,7 +415,8 @@ the pointer and belongs to the control, not to the bubble.
 | Desktop | AccessKit node label. A named control is called that instead of by the text it draws; a named box that is not a control is a label, or an image when it draws only artwork, and a label's name replaces the text drawn in it outside its controls. | AccessKit `language` | The subtree, controls included, is left out of the tree. |
 | Terminal | Used in the plain-text reading (below). | Not in the reading: plain text has no voice to switch. | Left out of the reading. |
 | Android | Not yet: Telar has no Android accessibility bridge. The snapshot already carries all three, and a bridge maps them to `contentDescription`, the locale of the node and `importantForAccessibility="no"`. | — | — |
-| Browser, canvas (`web`) and headless | The canvas has no accessibility tree to hand them to; headless has no reader. The snapshot (`ui_core::accessibility::snapshot`) still resolves them, which is what the tests read. | — | — |
+| Browser, canvas (`web`) | The name of the node's element in the [canvas tree](#the-canvas-tree): its `aria-label`, or its own text where it is static text. | `lang` on the node's element | Left out of the snapshot, so no element stands for it. |
+| Headless | No reader. The snapshot (`ui_core::accessibility::snapshot`) still resolves them, which is what the tests read. | — | — |
 
 `lang:` is per subtree. The surface's own language — the root the subtrees differ from — is the active
 locale's (`use_locale()`), and each target says it in its own idiom:
@@ -525,6 +528,7 @@ a box under `a11y:hidden`.
 | `plugins/telar-components/src/audit.test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document, and that a dialog whose body scrolls makes the body a named Tab stop that Page Down scrolls. The page holds a list and a table with more rows than they show, which say where each built row sits, and an open menu leaves them and the rest of the page inert until it closes. |
 | `crates/platform/platform-desktop/src/accessibility.test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, that the heading is a heading named by its text at its level, that a role said from outside a widget is published over a plain box and never over a control, and that the tree's focus follows the Tab order. |
 | `crates/renderer/renderer-dom/src/controls.test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics.test.rs` checks that a box whose role changes drops the state attribute of the old one. |
+| `crates/renderer/renderer-dom/src/mirror.test.rs` | The canvas tree: that a snapshot's roles, names, values and states are said on the elements standing for its nodes, nested as the snapshot nests them and none a Tab stop; that a click on a control's element activates the control through the platform; and that focus follows between the elements and the app both ways. |
 | `crates/tools/cargo-telar/src/workshop_audit.test.rs` | The exported `apps/catalogue` workshop in headless Chrome: axe-core over the canvas of every preview and matrix page, with the same rules (`crates/renderer/renderer-dom/axe.json`), and over the workshop's chrome once with `region` on. See [previews.md](previews.md#auditing-the-exported-workshop). |
 
 axe-core is MPL-2.0 and is not vendored into the repository. The flake fetches the published npm tarball by its
@@ -566,3 +570,35 @@ same nodes between updates.
 Siblings are in reading order, by where they show — of two at the same corner the larger first — except that a box
 held at the edge of a scrolled view (`sticky`) is read where the flow puts it rather than where it shows. A table's
 header row is read before the rows built above the view and the rows scrolled under it, as the document reads it.
+
+## The canvas tree
+
+A canvas is pixels, so the browser has nothing in it to read. After each frame the canvas runner hands the same
+snapshot the desktop publishes to `CanvasSurface::describe`, which keeps a document nobody sees beside the canvas
+(`renderer_dom::AccessMirror`): an element for each node, nested as the snapshot nests them and placed on the rect
+the node is drawn on, so a reader that outlines what it reads, or finds what is under a finger, finds the drawing.
+The mirror is transparent and takes no pointer; the canvas under it gets every click and touch.
+
+Each element says what its node is in the document renderer's words, through the same mapping (`Described` in
+`renderer-dom`): the same tag or `role`, `aria-label` for the name, the same state attributes, `aria-valuenow`,
+`-valuemin`, `-valuemax` and `-valuetext` on a range, `aria-invalid`, `aria-required`, `aria-readonly`,
+`aria-disabled`, `aria-description`, `lang`, `aria-level`/`-posinset`/`-setsize`, a grid's `aria-rowcount` and the
+`id`s `aria-activedescendant` and `aria-controls` point at. Static text is the element's own text, and a field or a
+select holds the text it shows as its value, as a document's would. A control keeps its element between frames,
+so a reader resting on it stays there.
+
+What a reader does to an element comes back as the platform's own event, `Event::AccessAction`, which the runner
+carries out through `focus::perform` as it does a desktop reader's request: focus landing on an element asks its
+control to take focus, and a click on one (a reader's activation) activates it, giving it focus first as a tap
+does. The other way, while the keyboard is in the surface, the element of the control holding the app's focus holds
+the document's, which is what a reader announces as the app's Tab moves. No element is a Tab stop
+(`tabindex="-1"`): the app walks its own Tab order, and a Tab it releases at an end of that order (see
+[keyboard.md](keyboard.md#where-tab-goes-at-the-ends)) moves the browser's focus out of the surface rather than
+onto the next element. Enter and Space on an element reach the app as keys, never also as a click of the
+element's own.
+
+A prerendered page stays what a reader reads until the mirror has something to say. From then on the page the
+host was served with is `inert` and `aria-hidden`, and it is taken away once the first frame is drawn over it.
+
+A link run, which the snapshot names but gives no id, is read as a link and cannot be followed from the mirror,
+as on the desktop; a link box, which is a control, can.

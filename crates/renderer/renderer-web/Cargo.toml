@@ -20,6 +20,7 @@ tracing = { workspace = true }
 js-sys = { workspace = true }
 platform-core = { workspace = true }
 raw-window-handle = { workspace = true }
+renderer-dom = { workspace = true }
 renderer-hardware = { workspace = true }
 renderer-text = { workspace = true }
 wasm-bindgen = { workspace = true }
