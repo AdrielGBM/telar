@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use telar_project::protocol::{
-    DEVTOOLS_VAR, HOT_LIB_VAR, HOT_PORT_VAR, HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotEvent, HotOutcome,
-    HotReply, PREVIEW_VAR, RENDERER_BACKEND_VAR, TARGET_VAR, TERMINAL_TARGET, TEST_TARGET_DIR_VAR,
+    DEVTOOLS_VAR, Frontend, HOT_LIB_VAR, HOT_PORT_VAR, HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotEvent,
+    HotOutcome, HotReply, PREVIEW_VAR, RENDERER_BACKEND_VAR, TARGET_VAR, TEST_TARGET_DIR_VAR,
     WORKSPACE_DIR_VAR, dev_window_env, encode_flag,
 };
 use telar_project::{AssetKind, DEVTOOLS_PACKAGE, ManifestError, TelarManifest, WORKSHOP_PACKAGE};
@@ -906,7 +906,7 @@ fn launch_envs(
         ));
     }
     if terminal {
-        envs.push((TARGET_VAR.to_string(), TERMINAL_TARGET.to_string()));
+        envs.push((TARGET_VAR.to_string(), Frontend::Tui.as_str().to_string()));
     }
     if config.dev.devtools == Some(false) {
         envs.push((DEVTOOLS_VAR.to_string(), encode_flag(false).to_string()));

@@ -74,7 +74,7 @@ impl SurfaceBoot {
     ) -> Self {
         install_app(app_name, paths.clone(), choices);
         let backend =
-            crate::user_preferences::stored_backend().unwrap_or_else(config::compile_time_backend);
+            crate::user_preferences::stored_backend().unwrap_or(config::COMPILE_TIME_BACKEND);
         Self {
             app_name: app_name.to_owned(),
             paths,

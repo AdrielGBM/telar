@@ -329,6 +329,33 @@ fn an_unknown_renderer_backend_is_refused_with_the_choices() {
 }
 
 #[test]
+fn a_build_names_each_renderer_backend_by_its_spelling_and_no_other() {
+    const NAMED: Option<RendererBackend> = RendererBackend::named("software");
+    assert_eq!(NAMED, Some(RendererBackend::Software));
+    for backend in RendererBackend::ALL {
+        assert_eq!(RendererBackend::named(backend.as_str()), Some(backend));
+    }
+    assert_eq!(RendererBackend::named("soft"), None);
+    assert_eq!(RendererBackend::named("Software"), None);
+}
+
+#[test]
+fn every_frontend_reads_back_from_its_own_spelling() {
+    for frontend in Frontend::ALL {
+        assert_eq!(Frontend::parse(frontend.as_str()), Ok(frontend));
+    }
+}
+
+#[test]
+fn an_unknown_frontend_is_refused_with_the_choices() {
+    let error = Frontend::parse("tty").expect_err("not a frontend");
+    assert_eq!(
+        error.to_string(),
+        "unknown value `tty`, expected `desktop` or `tui`"
+    );
+}
+
+#[test]
 fn the_renderer_backend_var_names_the_same_variable_as_its_literal() {
     assert_eq!(RENDERER_BACKEND_VAR, crate::renderer_backend_var!());
 }

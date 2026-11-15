@@ -797,7 +797,7 @@ where
         self.backend = if self.recovery.software_forced() {
             RendererBackend::Software
         } else {
-            user_preferences::stored_backend().unwrap_or_else(config::compile_time_backend)
+            user_preferences::stored_backend().unwrap_or(config::COMPILE_TIME_BACKEND)
         };
         // Before creating the new one, to avoid peak memory overlap. A restart exists to change what a renderer is baked with, so nothing is kept warm.
         drop(self.renderer.take());

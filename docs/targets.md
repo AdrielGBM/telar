@@ -203,7 +203,8 @@ tui = ["telar/tui"]
 The cost is additive, so this is worth doing when you ship both and not worth doing to keep options open.
 
 A build carrying two of them picks with `TELAR_TARGET` — `TELAR_TARGET=tui ./app` runs the terminal
-frontend of a binary that also has a window. That is a build you asked for by naming both features
+frontend of a binary that also has a window, and `TELAR_TARGET=desktop` keeps the window; any other value
+stops the binary with an error naming it. That is a build you asked for by naming both features
 yourself: `cargo telar dev --target tui` compiles one frontend, and there is nothing left to pick between.
 
 ## The rest of the features

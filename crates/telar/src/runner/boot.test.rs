@@ -239,7 +239,7 @@ fn the_backend_and_the_history_kept_by_one_boot_are_found_by_the_next_and_no_pre
         &[
             |root| {
                 let boot = boot_under(root);
-                assert_eq!(boot.backend, config::compile_time_backend());
+                assert_eq!(boot.backend, config::COMPILE_TIME_BACKEND);
                 crate::user_preferences::store_backend(RendererBackend::Software);
                 crate::user_preferences::store_history(&[
                     "/".to_owned(),

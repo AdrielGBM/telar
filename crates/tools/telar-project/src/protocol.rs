@@ -46,10 +46,14 @@ pub(crate) fn parse_word<T: Copy>(
     all.iter()
         .copied()
         .find(|value| as_str(*value) == word)
-        .ok_or_else(|| UnknownValue {
-            value: word.to_string(),
-            expected: one_of(&all.iter().map(|value| as_str(*value)).collect::<Vec<_>>()),
-        })
+        .ok_or_else(|| unknown_word(all, as_str, word))
+}
+
+fn unknown_word<T: Copy>(all: &[T], as_str: fn(T) -> &'static str, word: &str) -> UnknownValue {
+    UnknownValue {
+        value: word.to_string(),
+        expected: one_of(&all.iter().map(|value| as_str(*value)).collect::<Vec<_>>()),
+    }
 }
 
 fn one_of(words: &[&str]) -> String {
@@ -74,7 +78,7 @@ pub enum RendererBackend {
 impl RendererBackend {
     pub const ALL: [Self; 3] = [Self::Auto, Self::Hardware, Self::Software];
 
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "auto",
             Self::Hardware => "hardware",
@@ -82,9 +86,35 @@ impl RendererBackend {
         }
     }
 
-    pub fn parse(word: &str) -> Result<Self, UnknownValue> {
-        parse_word(&Self::ALL, Self::as_str, word)
+    /// The backend spelled `word`, found while compiling where a build reads it from [`RENDERER_BACKEND_VAR`].
+    pub const fn named(word: &str) -> Option<Self> {
+        let mut index = 0;
+        while index < Self::ALL.len() {
+            if same_bytes(Self::ALL[index].as_str().as_bytes(), word.as_bytes()) {
+                return Some(Self::ALL[index]);
+            }
+            index += 1;
+        }
+        None
     }
+
+    pub fn parse(word: &str) -> Result<Self, UnknownValue> {
+        Self::named(word).ok_or_else(|| unknown_word(&Self::ALL, Self::as_str, word))
+    }
+}
+
+const fn same_bytes(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut index = 0;
+    while index < a.len() {
+        if a[index] != b[index] {
+            return false;
+        }
+        index += 1;
+    }
+    true
 }
 
 impl TryFrom<String> for RendererBackend {
@@ -121,10 +151,32 @@ pub const PREVIEW_PNG_VAR: &str = "TELAR_PREVIEW_PNG";
 /// The env var turning the devtools overlay off when it is [`encode_flag`]`(false)`.
 pub const DEVTOOLS_VAR: &str = "TELAR_DEVTOOLS";
 
-/// The env var naming the frontend a build carrying several runs; [`TERMINAL_TARGET`] is the one a binary is asked for by name.
+/// The env var naming the [`Frontend`] a build carrying several runs.
 pub const TARGET_VAR: &str = "TELAR_TARGET";
 
-pub const TERMINAL_TARGET: &str = "tui";
+/// A frontend a binary that carries both a window and a terminal can be asked to run on through [`TARGET_VAR`], spelled as `cargo telar --target` names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Frontend {
+    /// A native window.
+    Desktop,
+    /// The terminal the binary was launched from.
+    Tui,
+}
+
+impl Frontend {
+    pub const ALL: [Self; 2] = [Self::Desktop, Self::Tui];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Desktop => "desktop",
+            Self::Tui => "tui",
+        }
+    }
+
+    pub fn parse(word: &str) -> Result<Self, UnknownValue> {
+        parse_word(&Self::ALL, Self::as_str, word)
+    }
+}
 
 pub const DEV_WINDOW_TITLE_VAR: &str = "TELAR_DEV_WINDOW_TITLE";
 pub const DEV_WINDOW_WIDTH_VAR: &str = "TELAR_DEV_WINDOW_WIDTH";

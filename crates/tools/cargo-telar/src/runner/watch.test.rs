@@ -837,7 +837,7 @@ fn env_of<'a>(envs: &'a [(String, String)], name: &str) -> Option<&'a str> {
 fn a_terminal_run_launches_the_app_on_the_terminal_frontend() {
     let config = TelarSection::default();
     let envs = launch_envs(&config, Path::new("."), false, true, Vec::new());
-    assert_eq!(env_of(&envs, TARGET_VAR), Some(TERMINAL_TARGET));
+    assert_eq!(env_of(&envs, TARGET_VAR), Some(Frontend::Tui.as_str()));
     let envs = launch_envs(&config, Path::new("."), false, false, Vec::new());
     assert_eq!(env_of(&envs, TARGET_VAR), None);
 }

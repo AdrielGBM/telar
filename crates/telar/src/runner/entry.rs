@@ -41,19 +41,23 @@ pub fn run_app_with_devtools<A: App, D: crate::DevOverlay>(
 }
 
 /// Whether this run should go to the terminal: because it is the only frontend compiled in, or because it was asked for.
+///
+/// # Panics
+///
+/// When [`TARGET_VAR`](telar_project::protocol::TARGET_VAR) names no [`Frontend`](telar_project::protocol::Frontend).
 #[cfg(feature = "tui")]
 fn tui_selected() -> bool {
+    use telar_project::protocol::{Frontend, TARGET_VAR};
+    let asked = std::env::var(TARGET_VAR)
+        .ok()
+        .map(|word| Frontend::parse(&word).unwrap_or_else(|error| panic!("{TARGET_VAR}: {error}")));
     let has_window = cfg!(all(
         feature = "desktop-bare",
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ));
     let has_page = cfg!(all(feature = "web-dom", target_arch = "wasm32"));
-    if !has_window && !has_page {
-        return true;
-    }
-    std::env::var(telar_project::protocol::TARGET_VAR)
-        .is_ok_and(|target| target.eq_ignore_ascii_case(telar_project::protocol::TERMINAL_TARGET))
+    !has_window && !has_page || asked == Some(Frontend::Tui)
 }
 
 #[allow(
