@@ -440,42 +440,12 @@ fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
     None
 }
 
+#[cfg(feature = "dev")]
+pub use telar_project::protocol::HotEvent;
 #[cfg(feature = "desktop-bare")]
-use telar_project::protocol::{
-    BUILD_ERROR_PREFIX, FOCUS_LINE, GOTO_PREFIX, HOT_RELOAD_PREFIX, HOT_REPLIES_LINE,
-    HOT_TOKEN_VAR, unescape_lines,
-};
+use telar_project::protocol::{HOT_REPLIES_LINE, HOT_TOKEN_VAR};
 #[cfg(feature = "dev")]
 pub(crate) use telar_project::protocol::{HotOutcome, HotReply};
-
-#[cfg(feature = "dev")]
-/// What `cargo telar dev` sends the running app: a rebuild landed, a build failed, a location to open, or a request to come forward.
-#[derive(Debug, PartialEq)]
-pub enum HotEvent {
-    /// The app was rebuilt and its library at this path is ready to load.
-    Reload(std::path::PathBuf),
-    /// A rebuild failed; the text says why.
-    BuildError(String),
-    /// A location reference, as `LocationFormat::parse` reads one, to open as a link into the running app would: `cargo telar preview <ID>` moving the workshop already open.
-    Goto(String),
-    /// `cargo telar preview` finding the workshop already open: its window comes forward, showing what it was.
-    Focus,
-}
-
-/// The event one line of the channel carries, or `None` for a line with a prefix this host does not know.
-#[cfg(feature = "desktop-bare")]
-fn hot_event(line: &str) -> Option<HotEvent> {
-    if let Some(path) = line.strip_prefix(HOT_RELOAD_PREFIX) {
-        Some(HotEvent::Reload(std::path::PathBuf::from(path)))
-    } else if let Some(message) = line.strip_prefix(BUILD_ERROR_PREFIX) {
-        Some(HotEvent::BuildError(unescape_lines(message)))
-    } else if line == FOCUS_LINE {
-        Some(HotEvent::Focus)
-    } else {
-        line.strip_prefix(GOTO_PREFIX)
-            .map(|reference| HotEvent::Goto(reference.to_string()))
-    }
-}
 
 #[cfg(feature = "dev")]
 pub(crate) struct HotLink {
@@ -538,7 +508,7 @@ pub(crate) fn listen_hot_reload(port: u16) -> HotLink {
                 if line.is_empty() {
                     continue;
                 }
-                let Some(event) = hot_event(line) else {
+                let Some(event) = HotEvent::parse(line) else {
                     continue;
                 };
                 if tx.send(event).is_err() {

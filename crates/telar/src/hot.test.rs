@@ -1,26 +1,5 @@
 use super::*;
 
-#[cfg(feature = "desktop-bare")]
-#[test]
-fn each_line_of_the_channel_is_the_event_its_prefix_names() {
-    assert_eq!(
-        hot_event("hot:/target/debug/libapp.so"),
-        Some(HotEvent::Reload("/target/debug/libapp.so".into()))
-    );
-    assert_eq!(
-        hot_event("err:line\\none"),
-        Some(HotEvent::BuildError("line\none".to_string()))
-    );
-    assert_eq!(
-        hot_event("goto:/preview/demo--card--a?args=label:%22Hi%22"),
-        Some(HotEvent::Goto(
-            "/preview/demo--card--a?args=label:%22Hi%22".to_string()
-        ))
-    );
-    assert_eq!(hot_event("focus"), Some(HotEvent::Focus));
-    assert_eq!(hot_event("/target/debug/libapp.so"), None);
-}
-
 use platform_core::guest::{Lifecycle, Timestamp};
 use services_core::guest::UpperTable;
 

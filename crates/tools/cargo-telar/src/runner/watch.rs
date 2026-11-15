@@ -11,10 +11,9 @@ use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use telar_project::protocol::{
-    BUILD_ERROR_PREFIX, DEVTOOLS_VAR, HOT_LIB_VAR, HOT_PORT_VAR, HOT_RELOAD_PREFIX,
-    HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotOutcome, HotReply, PREVIEW_VAR, RENDERER_BACKEND_VAR,
-    TARGET_VAR, TERMINAL_TARGET, TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR, dev_window_env,
-    encode_flag, escape_lines,
+    DEVTOOLS_VAR, HOT_LIB_VAR, HOT_PORT_VAR, HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotEvent, HotOutcome,
+    HotReply, PREVIEW_VAR, RENDERER_BACKEND_VAR, TARGET_VAR, TERMINAL_TARGET, TEST_TARGET_DIR_VAR,
+    WORKSPACE_DIR_VAR, dev_window_env, encode_flag,
 };
 use telar_project::{
     ASSET_KINDS, DEVTOOLS_PACKAGE, ManifestError, TelarManifest, WORKSHOP_PACKAGE,
@@ -198,28 +197,43 @@ impl HotChannel {
         }
     }
 
-    fn notify_hot_reload(&mut self, lib_path: &str) {
-        if self.send(&format!("{HOT_RELOAD_PREFIX}{lib_path}")) {
-            self.reloads.sent(lib_path, Instant::now());
+    fn notify_hot_reload(&mut self, lib_path: &Path) {
+        if self.send(&HotEvent::Reload(lib_path.to_path_buf())) {
+            self.reloads
+                .sent(&lib_path.to_string_lossy(), Instant::now());
         }
     }
 
     fn notify_build_error(&mut self, message: &str) {
-        self.send(&format!("{BUILD_ERROR_PREFIX}{}", escape_lines(message)));
+        self.send(&HotEvent::BuildError(message.to_owned()));
     }
 
-    /// Answers whether the line reached the app.
-    fn send(&mut self, message: &str) -> bool {
+    /// Answers whether the event reached the app. An event with no line, a library path that is not text, is reported and not sent.
+    fn send(&mut self, event: &HotEvent) -> bool {
+        let line = match event.line() {
+            Ok(line) => line,
+            Err(error) => {
+                eprintln!("[cargo-telar] Not sent to the app: {error}.");
+                return false;
+            }
+        };
         self.accept_waiting();
         if self.stream.is_none() {
             eprintln!("[cargo-telar] App not connected to the hot reload channel.");
             return false;
         }
-        self.deliver(message)
+        self.write_line(&line)
     }
 
-    /// [`Self::send`] for a line that waits for the app: not having connected yet is not worth saying.
-    fn deliver(&mut self, message: &str) -> bool {
+    /// [`Self::send`] for an event that waits for the app: not having connected yet is not worth saying, and one with no line is dropped rather than waited on forever.
+    fn deliver(&mut self, event: &HotEvent) -> bool {
+        match event.line() {
+            Ok(line) => self.write_line(&line),
+            Err(_) => true,
+        }
+    }
+
+    fn write_line(&mut self, message: &str) -> bool {
         use std::io::Write;
         self.accept_waiting();
         let Some(stream) = &mut self.stream else {
@@ -660,7 +674,7 @@ fn watch_and_hot_reload(
 
         if let Some(workshop) = &workshop {
             waiting = workshop.take(waiting);
-            if waiting.as_deref().is_some_and(|line| channel.deliver(line)) {
+            if waiting.as_ref().is_some_and(|event| channel.deliver(event)) {
                 waiting = None;
             }
         }
@@ -687,7 +701,7 @@ fn watch_and_hot_reload(
                 artifacts::cdylib(report.artifacts(), &package_dir, DLL_EXTENSION),
             ) {
                 (true, Some(rebuilt)) => {
-                    channel.notify_hot_reload(rebuilt.to_str().unwrap_or_default());
+                    channel.notify_hot_reload(&rebuilt);
                 }
                 (true, None) => eprintln!(
                     "[cargo-telar] The rebuild succeeded but cargo reported no dynamic library for the package in {}, so nothing was reloaded.",

@@ -1,6 +1,6 @@
 use super::super::interrupt::removes_on_interrupt;
 use super::*;
-use telar_project::protocol::{workshop_channel_file, workshop_server_file};
+use telar_project::protocol::{HotEvent, workshop_channel_file, workshop_server_file};
 use test_process::OwnProcess;
 
 fn scratch(name: &str) -> PathBuf {
@@ -41,11 +41,11 @@ fn a_running_session_takes_each_request_and_says_so() {
     let channel = WorkshopChannel::open(file.clone()).expect("a loopback port");
     assert!(goto(&file, "/preview/demo--card--a"));
     assert_eq!(
-        channel.take(None).as_deref(),
-        Some("goto:/preview/demo--card--a")
+        channel.take(None),
+        Some(HotEvent::Goto("/preview/demo--card--a".into()))
     );
     assert!(focus(&file));
-    assert_eq!(channel.take(None).as_deref(), Some("focus"));
+    assert_eq!(channel.take(None), Some(HotEvent::Focus));
     assert_eq!(channel.take(None), None, "each request is taken once");
 }
 
@@ -58,25 +58,17 @@ fn a_request_waits_for_the_workshop_and_the_latest_location_wins() {
     assert!(goto(&file, "/preview/demo--card--b"));
     assert!(focus(&file));
     assert_eq!(
-        channel.take(None).as_deref(),
-        Some("goto:/preview/demo--card--b")
+        channel.take(None),
+        Some(HotEvent::Goto("/preview/demo--card--b".into()))
     );
 }
 
 #[test]
 fn a_focus_does_not_replace_a_location_still_waiting() {
-    assert_eq!(
-        supersede(Some("goto:/preview/a".to_string()), "focus".to_string()).as_deref(),
-        Some("goto:/preview/a")
-    );
-    assert_eq!(
-        supersede(Some("focus".to_string()), "goto:/preview/a".to_string()).as_deref(),
-        Some("goto:/preview/a")
-    );
-    assert_eq!(
-        supersede(None, "focus".to_string()).as_deref(),
-        Some("focus")
-    );
+    let goto = || HotEvent::Goto("/preview/a".to_string());
+    assert_eq!(supersede(Some(goto()), HotEvent::Focus), Some(goto()));
+    assert_eq!(supersede(Some(HotEvent::Focus), goto()), Some(goto()));
+    assert_eq!(supersede(None, HotEvent::Focus), Some(HotEvent::Focus));
 }
 
 #[test]
@@ -97,7 +89,10 @@ fn a_line_that_is_no_request_is_refused() {
     let dir = scratch("refused");
     let file = workshop_channel_file(&dir, "demo");
     let channel = WorkshopChannel::open(file.clone()).expect("a loopback port");
-    assert!(!request(&file, "hot:/target/debug/libdemo.so"));
+    assert!(!request(
+        &file,
+        &HotEvent::Reload("/target/debug/libdemo.so".into())
+    ));
     assert_eq!(channel.take(None), None);
 }
 

@@ -314,19 +314,68 @@ pub const WORKSPACE_DIR_VAR: &str = "TELAR_WORKSPACE_DIR";
 /// The env var `cargo telar dev` hands the app the hot-reload channel's secret in. The app sends it as the channel's first line, and a connection that does not is never adopted, so no other local process can drive the app.
 pub const HOT_TOKEN_VAR: &str = "TELAR_HOT_TOKEN";
 
-/// Starts a hot-reload channel line carrying the path of a freshly built dylib.
-pub const HOT_RELOAD_PREFIX: &str = "hot:";
+const HOT_RELOAD_PREFIX: &str = "hot:";
 
-/// Starts a hot-reload channel line carrying a failed build's message, with its line breaks escaped.
-pub const BUILD_ERROR_PREFIX: &str = "err:";
+const BUILD_ERROR_PREFIX: &str = "err:";
 
-/// Starts a hot-reload channel line carrying a location for the running app to open.
-pub const GOTO_PREFIX: &str = "goto:";
+const GOTO_PREFIX: &str = "goto:";
 
-/// A whole hot-reload channel line, and a workshop channel request, asking the running app to bring its window forward where it is.
-pub const FOCUS_LINE: &str = "focus";
+const FOCUS_LINE: &str = "focus";
 
-/// The line the app sends right after its token when it answers each [`HOT_RELOAD_PREFIX`] line with one [`HotReply`]; a `cargo telar` that does not know this version treats the app as one that does not answer.
+/// What `cargo telar dev` sends the running app: a rebuild landed, a build failed, a location to open, or a request to come forward. One event is one channel line, and a workshop channel request is the same line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HotEvent {
+    /// The app was rebuilt and its library at this path is ready to load.
+    Reload(PathBuf),
+    /// A rebuild failed; the text says why.
+    BuildError(String),
+    /// A location reference, as `LocationFormat::parse` reads one, to open as a link into the running app would: `cargo telar preview <ID>` moving the workshop already open.
+    Goto(String),
+    /// `cargo telar preview` finding the workshop already open: its window comes forward, showing what it was.
+    Focus,
+}
+
+/// A path the channel cannot carry, because it is not text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NonUtf8Path(pub PathBuf);
+
+impl fmt::Display for NonUtf8Path {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} is not valid UTF-8", self.0.display())
+    }
+}
+
+impl std::error::Error for NonUtf8Path {}
+
+impl HotEvent {
+    /// The event as one channel line, its free text escaped by [`escape_lines`] so no value can start a line of its own. A reload of a path that is not UTF-8 has no line.
+    pub fn line(&self) -> Result<String, NonUtf8Path> {
+        Ok(match self {
+            Self::Reload(path) => {
+                let text = path.to_str().ok_or_else(|| NonUtf8Path(path.clone()))?;
+                format!("{HOT_RELOAD_PREFIX}{}", escape_lines(text))
+            }
+            Self::BuildError(message) => format!("{BUILD_ERROR_PREFIX}{}", escape_lines(message)),
+            Self::Goto(reference) => format!("{GOTO_PREFIX}{}", escape_lines(reference)),
+            Self::Focus => FOCUS_LINE.to_owned(),
+        })
+    }
+
+    /// The event one line carries, or `None` for a line this version does not know.
+    pub fn parse(line: &str) -> Option<Self> {
+        if let Some(path) = line.strip_prefix(HOT_RELOAD_PREFIX) {
+            Some(Self::Reload(PathBuf::from(unescape_lines(path))))
+        } else if let Some(message) = line.strip_prefix(BUILD_ERROR_PREFIX) {
+            Some(Self::BuildError(unescape_lines(message)))
+        } else if let Some(reference) = line.strip_prefix(GOTO_PREFIX) {
+            Some(Self::Goto(unescape_lines(reference)))
+        } else {
+            (line == FOCUS_LINE).then_some(Self::Focus)
+        }
+    }
+}
+
+/// The line the app sends right after its token when it answers each [`HotEvent::Reload`] line with one [`HotReply`]; a `cargo telar` that does not know this version treats the app as one that does not answer.
 pub const HOT_REPLIES_LINE: &str = "replies:3";
 
 pub const HOT_LOADED_PREFIX: &str = "loaded:";
@@ -459,7 +508,7 @@ pub const TEST_REPORT_FILE: &str = "report.json";
 /// The name of the test `library_previews!` emits in a library's preview build, which `cargo telar test -p <library>` runs by this name alone, wherever the macro sits in the module tree: no other test should contain it.
 pub const LIBRARY_TEST_NAME: &str = "__telar_library_previews";
 
-/// Where the session running `package`'s workshop names the loopback port it takes `goto:` and [`FOCUS_LINE`] requests on.
+/// Where the session running `package`'s workshop names the loopback port it takes [`HotEvent::Goto`] and [`HotEvent::Focus`] requests on.
 pub fn workshop_channel_file(workspace_root: &Path, package: &str) -> PathBuf {
     workshop_dir(workspace_root).join(format!("{package}.channel"))
 }

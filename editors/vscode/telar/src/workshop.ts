@@ -46,18 +46,26 @@ export function isPreviewTarget(value: unknown): value is PreviewTarget {
   );
 }
 
-// The wire format of cargo-telar's `runner/workshop_channel.rs`: one `goto:<location>` or `focus` line, answered `ok` once the session has taken it.
+// The wire format of cargo-telar's `runner/workshop_channel.rs`: one `goto:<location>` (line breaks and backslashes escaped) or `focus` line, answered `ok` once the session has taken it.
 const GOTO_PREFIX = "goto:";
 const FOCUS_LINE = "focus";
 const ACCEPTED = "ok";
 const ANSWER_TIMEOUT_MS = 2000;
 
 export function goto(workshop: Workshop, location: string): Promise<boolean> {
-  return request(workshop.channel, `${GOTO_PREFIX}${location}`);
+  return request(workshop.channel, `${GOTO_PREFIX}${escapeLines(location)}`);
 }
 
 export function focus(workshop: Workshop): Promise<boolean> {
   return request(workshop.channel, FOCUS_LINE);
+}
+
+function escapeLines(text: string): string {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/\t/g, "\\t")
+    .replace(/\r/g, "");
 }
 
 async function request(channel: string, line: string): Promise<boolean> {

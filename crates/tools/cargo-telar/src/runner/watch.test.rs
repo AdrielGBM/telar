@@ -569,7 +569,7 @@ fn the_connection_opening_with_the_token_is_adopted_and_later_ones_are_not() {
         );
         std::thread::sleep(Duration::from_millis(10));
     }
-    assert!(channel.deliver("focus"));
+    assert!(channel.deliver(&HotEvent::Focus));
     assert_eq!(first_line(app), "focus\n");
     assert_eq!(first_line(impostor), "");
 }
@@ -797,7 +797,7 @@ fn the_app_s_answer_to_a_reload_comes_back_over_the_authenticated_channel() {
     assert!(adopted_within(&mut channel, Duration::from_secs(5)));
     drop(impostor);
 
-    channel.notify_hot_reload(LIBRARY);
+    channel.notify_hot_reload(Path::new(LIBRARY));
     let mut reader = BufReader::new(app.try_clone().unwrap());
     let mut line = String::new();
     reader.read_line(&mut line).unwrap();

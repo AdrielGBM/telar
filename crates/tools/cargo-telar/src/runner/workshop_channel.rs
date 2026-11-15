@@ -14,7 +14,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use telar_project::protocol::{
-    FOCUS_LINE, GOTO_PREFIX, ServerFile, parse_server_file, preview_location, starting_server_line,
+    HotEvent, ServerFile, parse_server_file, preview_location, starting_server_line,
 };
 
 use super::interrupt::{keep_on_interrupt, remove_on_interrupt};
@@ -39,16 +39,16 @@ pub(crate) fn is_preview_id(target: &str) -> bool {
 
 /// Asks the workshop the channel at `file` names to open `location`, and answers whether it took the request.
 pub(crate) fn goto(file: &Path, location: &str) -> bool {
-    request(file, &format!("{GOTO_PREFIX}{location}"))
+    request(file, &HotEvent::Goto(location.to_owned()))
 }
 
 /// Asks the workshop the channel at `file` names to bring its window forward, and answers whether it took the request.
 pub(crate) fn focus(file: &Path) -> bool {
-    request(file, FOCUS_LINE)
+    request(file, &HotEvent::Focus)
 }
 
-/// Sends `line` to the session the channel at `file` names. A file left behind by a session that is gone is removed.
-fn request(file: &Path, line: &str) -> bool {
+/// Sends `event` to the session the channel at `file` names. A file left behind by a session that is gone is removed.
+fn request(file: &Path, event: &HotEvent) -> bool {
     let Some(port) = std::fs::read_to_string(file)
         .ok()
         .and_then(|text| text.trim().parse::<u16>().ok())
@@ -59,7 +59,10 @@ fn request(file: &Path, line: &str) -> bool {
         let _ = std::fs::remove_file(file);
         return false;
     };
-    ask(stream, line)
+    let Ok(line) = event.line() else {
+        return false;
+    };
+    ask(stream, &line)
 }
 
 fn ask(mut stream: TcpStream, line: &str) -> bool {
@@ -71,21 +74,21 @@ fn ask(mut stream: TcpStream, line: &str) -> bool {
     BufReader::new(stream).read_line(&mut answer).is_ok() && answer.trim() == ACCEPTED
 }
 
-fn is_request(line: &str) -> bool {
-    line.starts_with(GOTO_PREFIX) || line == FOCUS_LINE
+fn is_request(event: &HotEvent) -> bool {
+    matches!(event, HotEvent::Goto(_) | HotEvent::Focus)
 }
 
-/// The request to hand the workshop once it can take one, after `line` arrives with `waiting` not yet handed over: the newer, except that a `focus` does not replace a location, which brings the window forward too.
-pub(crate) fn supersede(waiting: Option<String>, line: String) -> Option<String> {
+/// The request to hand the workshop once it can take one, after `event` arrives with `waiting` not yet handed over: the newer, except that a `focus` does not replace a location, which brings the window forward too.
+pub(crate) fn supersede(waiting: Option<HotEvent>, event: HotEvent) -> Option<HotEvent> {
     match waiting {
-        Some(waiting) if line == FOCUS_LINE => Some(waiting),
-        _ => Some(line),
+        Some(waiting) if event == HotEvent::Focus => Some(waiting),
+        _ => Some(event),
     }
 }
 
 /// The listening half, held by the session running a workshop in a window. Requests are answered on a thread of its own, so one sent while the session is still building is taken rather than left to time out. Dropping it removes the file that names the port, and so does an interruption.
 pub(crate) struct WorkshopChannel {
-    requests: mpsc::Receiver<String>,
+    requests: mpsc::Receiver<HotEvent>,
     file: PathBuf,
 }
 
@@ -113,13 +116,13 @@ impl WorkshopChannel {
     }
 
     /// `waiting` with every request taken since folded in by [`supersede`]. Never blocks.
-    pub(crate) fn take(&self, waiting: Option<String>) -> Option<String> {
+    pub(crate) fn take(&self, waiting: Option<HotEvent>) -> Option<HotEvent> {
         self.requests.try_iter().fold(waiting, supersede)
     }
 }
 
 /// Reads one request from `stream`, passes it to `taken` and answers whether it was. `false` once the session has stopped taking requests.
-fn answer(stream: TcpStream, taken: &mpsc::Sender<String>) -> bool {
+fn answer(stream: TcpStream, taken: &mpsc::Sender<HotEvent>) -> bool {
     if stream.set_read_timeout(Some(ANSWER_TIMEOUT)).is_err() {
         return true;
     }
@@ -131,12 +134,12 @@ fn answer(stream: TcpStream, taken: &mpsc::Sender<String>) -> bool {
         return true;
     }
     let line = line.trim_end_matches(['\r', '\n']);
-    let (accepted, open) = match is_request(line) {
-        true => match taken.send(line.to_string()) {
+    let (accepted, open) = match HotEvent::parse(line).filter(is_request) {
+        Some(event) => match taken.send(event) {
             Ok(()) => (true, true),
             Err(_) => (false, false),
         },
-        false => (false, true),
+        None => (false, true),
     };
     let _ = writeln!(writer, "{}", if accepted { ACCEPTED } else { REFUSED });
     open

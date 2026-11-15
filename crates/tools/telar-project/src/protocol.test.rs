@@ -267,6 +267,41 @@ fn each_reload_reply_survives_the_channel_as_one_line_naming_its_library() {
 }
 
 #[test]
+fn each_hot_event_survives_the_channel_as_one_line() {
+    let events = [
+        HotEvent::Reload(PathBuf::from("/t/debug/libapp.so")),
+        HotEvent::Reload(PathBuf::from("/t/odd\nerr:forged\\dir/libapp.so")),
+        HotEvent::BuildError("error: expected `;`\n --> src/app.rs:4".into()),
+        HotEvent::Goto("/preview/demo--card--a?args=label:%22Hi%22".into()),
+        HotEvent::Goto("/preview/a\nfocus".into()),
+        HotEvent::Focus,
+    ];
+    for event in events {
+        let line = event.line().expect("a text path has a line");
+        assert!(!line.contains('\n'), "one line per event: {line:?}");
+        assert_eq!(HotEvent::parse(&line), Some(event));
+    }
+}
+
+#[test]
+fn a_line_with_no_known_prefix_is_no_hot_event() {
+    assert_eq!(HotEvent::parse("/target/debug/libapp.so"), None);
+    assert_eq!(HotEvent::parse("focus now"), None);
+    assert_eq!(HotEvent::parse(HOT_REPLIES_LINE), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_reload_of_a_path_that_is_not_text_is_an_error() {
+    use std::os::unix::ffi::OsStringExt;
+    let path = PathBuf::from(std::ffi::OsString::from_vec(b"/t/\xff/libapp.so".to_vec()));
+    assert_eq!(
+        HotEvent::Reload(path.clone()).line(),
+        Err(NonUtf8Path(path))
+    );
+}
+
+#[test]
 fn a_line_that_is_no_reply_is_not_read_as_one() {
     assert_eq!(HotReply::parse(HOT_REPLIES_LINE), None);
     assert_eq!(HotReply::parse("loaded"), None, "a reply of version 1");
