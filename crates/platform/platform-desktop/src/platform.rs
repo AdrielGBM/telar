@@ -91,7 +91,7 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
             AkEvent::InitialTreeRequested => self.publish_accessibility(),
             AkEvent::ActionRequested(request) => {
                 let Some((id, action)) =
-                    crate::accessibility::requested_action(&request, &self.a11y_nodes)
+                    platform_accesskit::requested_action(&request, &self.a11y_nodes)
                 else {
                     return;
                 };
@@ -106,14 +106,16 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
 
     /// Hands the current tree over, and only if something is listening — which is what keeps the cost of all this at nothing for the overwhelmingly common case of nobody being.
     fn publish_accessibility(&mut self) {
-        let Some(adapter) = &mut self.a11y else {
+        let (Some(adapter), Some(window)) = (&mut self.a11y, &self.window) else {
             return;
         };
         let nodes = self.handler.accessibility();
         let title = self.config.shown_title().to_owned();
         let lang = self.handler.root_language();
-        adapter
-            .update_if_active(|| crate::accessibility::tree_update(&nodes, &title, lang.as_ref()));
+        let scale_factor = window.scale_factor();
+        adapter.update_if_active(|| {
+            platform_accesskit::tree_update(&nodes, &title, lang.as_ref(), scale_factor)
+        });
         self.a11y_nodes = nodes;
     }
 }
@@ -456,8 +458,10 @@ impl SurfaceRunner {
         let nodes = self.handler.accessibility();
         let title = self.title.clone();
         let lang = self.handler.root_language();
-        adapter
-            .update_if_active(|| crate::accessibility::tree_update(&nodes, &title, lang.as_ref()));
+        let scale_factor = self.window.scale_factor();
+        adapter.update_if_active(|| {
+            platform_accesskit::tree_update(&nodes, &title, lang.as_ref(), scale_factor)
+        });
         self.a11y_nodes = nodes;
     }
 }
@@ -622,7 +626,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                     AkEvent::InitialTreeRequested => surface.publish_accessibility(),
                     AkEvent::ActionRequested(request) => {
                         let Some((id, action)) =
-                            crate::accessibility::requested_action(&request, &surface.a11y_nodes)
+                            platform_accesskit::requested_action(&request, &surface.a11y_nodes)
                         else {
                             return;
                         };

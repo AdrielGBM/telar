@@ -64,7 +64,7 @@ tui = [
 ## An Android `NativeActivity`, drawn by the GPU where there is one and the CPU where there is not. Opt-in
 ## like every other frontend, so a terminal build on Android, an ordinary command-line process with no
 ## activity behind it, links no window system and no activity.
-android = ["android-bare", "hardware", "software"]
+android = ["android-bare", "hardware", "software", "a11y"]
 
 ## A browser, drawing as a document: real elements laid out by CSS, measured with the browser's own
 ## canvas. No GPU and no shaper, which keeps a web build light.
@@ -140,12 +140,13 @@ icons = ["dep:icons-core"]
 #!
 #! Every one of these is in `desktop`, so a desktop build has the lot and nobody has to ask. They are
 #! nameable so that `default-features = false` can finally leave one out — a kiosk with no file picker, a
-#! packager who knows the target has XWayland — and for no other reason. Each is inert off the desktop.
+#! packager who knows the target has XWayland — and for no other reason. Each is inert off the desktop but
+#! `a11y`, which `android` carries too.
 
-## Screen-reader support, over AccessKit and the platform's own accessibility bus. The heaviest of the four
-## by some way, and still the last one to turn off: what it costs is build time, and what it buys is an
-## application a blind user can operate at all.
-a11y = ["platform-desktop?/a11y"]
+## Screen-reader support, over AccessKit and the platform's own accessibility bus, on the desktop and on
+## Android. The heaviest of the four by some way, and still the last one to turn off: what it costs is build
+## time, and what it buys is an application a blind user can operate at all.
+a11y = ["platform-desktop?/a11y", "platform-android?/a11y"]
 
 ## The system clipboard: X11 on Linux, the native one on Windows and macOS.
 clipboard = ["platform-desktop?/clipboard"]

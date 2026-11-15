@@ -10,6 +10,11 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+default = ["a11y"]
+# Screen-reader support: the window's tree published to the activity's view through AccessKit's Android adapter. On by default, and the last thing anybody should turn off.
+a11y = ["dep:accesskit_android", "dep:platform-accesskit"]
+
 [dependencies]
 platform-core = { workspace = true }
 services-core = { workspace = true }
@@ -18,12 +23,19 @@ raw-window-handle = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 
+# `embedded-dex` because an APK built from this crate carries no Java of its own: the view delegate the adapter installs is loaded from the dex the crate embeds.
+accesskit_android = { version = "0.8.0", features = ["embedded-dex"], optional = true }
 android-activity = { version = "0.6", features = ["native-activity"] }
 geometry-core = { workspace = true }
 jni = { version = "0.22.4", default-features = false }
 libc = { workspace = true }
 paranoid-android = "0.2.2"
+platform-accesskit = { workspace = true, optional = true }
 platform-winit = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 winit = { workspace = true, features = ["android-native-activity"] }
+
+[dev-dependencies]
+geometry-core = { workspace = true }
+platform-accesskit = { workspace = true }

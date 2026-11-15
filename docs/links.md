@@ -132,7 +132,7 @@ compares its route with the location being shown.
 | Desktop | AccessKit's `aria_current` (`Page`, `Location`, `True`) on its `Link` node. The Windows adapter hands it to UI Automation; the AT-SPI (Linux) and macOS adapters of this AccessKit release do not pass it on yet, so a reader there announces the link without it. |
 | Terminal | `, current` after its role in the plain-text reading (`Web, link, current`). |
 | Web canvas, headless | Carried in the snapshot for tests; there is no reader to hand it to. |
-| Android | Nothing yet: no accessibility bridge (as for every role and state). |
+| Android | In the tree as on the desktop, and not passed on: the Android adapter of this AccessKit release carries a link's address but not that it is current, so a reader announces the link without it. |
 
 ## Links inside a paragraph
 

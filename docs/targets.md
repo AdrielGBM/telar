@@ -10,11 +10,11 @@ and no row below that pays for another:
 
 | Your app runs in | `default = [...]` | Crates compiled |
 | --- | --- | --- |
-| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 432 |
+| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 433 |
 | The terminal it was launched from | `["tui"]` | 163 |
 | A browser, drawing as a document | `["web-dom"]` | 127 |
 | A browser, document **and** WebGPU canvas | `["web"]` | 256 |
-| Android | `["android"]` | 343 |
+| Android | `["android"]` | 359 |
 | Nothing — draw commands in, pixels out | `["headless"]` | 214 |
 
 Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all --prefix none`,
@@ -168,6 +168,9 @@ Termux is an ordinary Linux process with no activity behind it, and linking one 
 Reads colour scheme, reduced motion, high contrast, the font scale and the locale list over JNI, polled every
 500 ms (see [docs/system-preferences.md](system-preferences.md)); surface size comes from the same winit
 `Resized` path desktop uses (see [docs/surface-size.md](surface-size.md)).
+
+Hands a screen reader the same accessibility tree the desktop does, on API 26 and later (see
+[docs/accessibility.md](accessibility.md#the-android-tree)); `a11y`, which `android` turns on, is what carries it.
 
 ## Headless
 

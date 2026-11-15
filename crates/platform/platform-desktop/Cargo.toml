@@ -14,7 +14,7 @@ repository = { workspace = true }
 # All four on, so a desktop build is as complete as it has always been. They exist to be nameable, not to be off: what changes is that `default-features = false` finally leaves something out.
 default = ["a11y", "clipboard-wayland", "dialogs", "system-theme"]
 # Screen-reader support, over AccessKit and the platform's own accessibility bus. The heaviest of the four by some way, and the last one anybody should turn off.
-a11y = ["dep:accesskit", "dep:accesskit_winit"]
+a11y = ["dep:accesskit_winit", "dep:platform-accesskit"]
 # The system clipboard: X11 on Linux, the native one on Windows and macOS. Without it a paste does nothing rather than failing loudly.
 clipboard = ["dep:arboard"]
 # X11's clipboard reaches a Wayland session only through XWayland. This covers a compositor without it, at the price of `wl-clipboard-rs`; a build that knows XWayland is there can keep plain `clipboard`.
@@ -25,14 +25,13 @@ dialogs = ["dep:rfd"]
 system-theme = ["dep:zbus"]
 
 [dependencies]
-geometry-core = { workspace = true }
+platform-accesskit = { workspace = true, optional = true }
 platform-core = { workspace = true }
 platform-winit = { workspace = true }
 reactive-local = { workspace = true }
 renderer-core = { workspace = true }
 services-core = { workspace = true, features = ["system-opener", "system-paths"] }
 
-accesskit = { version = "0.25.0", optional = true }
 accesskit_winit = { version = "0.34.0", optional = true }
 arboard = { version = "3.6.1", default-features = false, optional = true }
 rfd = { version = "0.17.2", default-features = false, features = [
@@ -58,9 +57,3 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_UI_Accessibility", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
-
-[dev-dependencies]
-layout-core = { workspace = true }
-reactive-core = { workspace = true }
-renderer-text = { workspace = true }
-ui-core = { workspace = true }

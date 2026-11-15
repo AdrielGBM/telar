@@ -158,7 +158,7 @@ the lint reads.
 | Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button (either one `mixed` when partly on), `aria-selected` on a tab or an option, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
 | Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus`, `Click` and `ScrollIntoView` actions, and `Increment` and `Decrement`, `SetValue` and `SetTextSelection` on a control that answers them. | AccessKit `toggled` for checked and pressed, `Mixed` included (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
 | Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`/`partially checked`, `pressed`/`not pressed`/`partially pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
-| Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
+| Android | The same AccessKit tree as the desktop, read as the widget class its role maps to (`Button`, `CheckBox`, `RadioButton`, `ToggleButton` for a switch, `SeekBar` for a slider, `EditText` for a field…). A control is clickable and focusable; a control that steps is also scrollable, and the reader's scroll forward and backward reach it as `Increment` and `Decrement`. See [The Android tree](#the-android-tree). | `checked` for checked and pressed, a mixed state read as checked, and `selected` for a tab or an option. Expanded is not carried. |
 | Browser, canvas (`web`) | Focus and keyboard activation as on the desktop, and the role as the document says it, on the control's element in the [canvas tree](#the-canvas-tree): `tabindex="-1"`, since the app walks its own Tab order. A reader's activation of the element reaches the control as `Activate`. | As the document says it. |
 | Headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to. | — |
 
@@ -199,6 +199,7 @@ trigger by what it says, showing for the keyboard as it does for the pointer and
 | Browser, document (`web-dom`) | `aria-valuenow`, `aria-valuemin`, `aria-valuemax`, and `aria-valuetext` for its words on a slider, spin button, progress bar or splitter. A text value writes no attribute: the text the element holds is its value. | `aria-description`, `aria-invalid`, `aria-required`, `aria-readonly`. |
 | Desktop | AccessKit's numeric value and bounds, and its `value` for the words or the text; a field's text is also a text run a line under it, and the caret and the selection of the field holding the keyboard are its text selection in those runs. | AccessKit's `description`, `invalid`, `required` and `read_only`. |
 | Terminal | After the role: the words where it has them, the number otherwise (`Volume, slider, 40`). | `, required`, `, invalid`, `, read only`, then the description. |
+| Android | The node's range where the value is a number with no words, its text otherwise: the words, or what a field holds, whose caret and selection are the field's text selection, which a reader moves by character, word, line and paragraph. | A read-only field is not editable; description, invalid and required are not carried. |
 
 ## Lists that open from a control
 
@@ -389,7 +390,8 @@ has no way to make a `scroll` one, so there `a11y_label:` always means the stop'
 | Browser, document (`web-dom`) | `tabindex="0"`, with `role="group"` and `aria-label` once it is named, and `data-telar-keys` holding only the keys for the axes it overflows. The browser scrolls the element itself, the way Telar asks it to. |
 | Desktop | An AccessKit `ScrollView` with `Focus`, named by its name, with the text it draws read inside it, or, without one, named by that text. |
 | Browser, canvas (`web`) | A stop in Telar's own Tab order, ringed when focused, and in the [canvas tree](#the-canvas-tree) an element with `role="group"` and `aria-label` once it is named, which takes the document's focus while the app's is on it. |
-| Terminal, Android and headless | A stop in Telar's own Tab order, ringed when focused, and a scroll area with its name in the snapshot. |
+| Android | A stop in Telar's own Tab order, ringed when focused; to a reader, the desktop's `ScrollView` read as a list (`ListView`) named by its name, which the reader does not stop on itself. |
+| Terminal and headless | A stop in Telar's own Tab order, ringed when focused, and a scroll area with its name in the snapshot. |
 
 ## Shortcuts
 
@@ -419,7 +421,7 @@ the pointer and belongs to the control, not to the bubble.
 | Browser, document (`web-dom`) | `aria-label`. A named box with no role of its own that draws words outside its controls says its name instead as visually hidden text, its first child (`<span data-telar-spoken>`), and its words are `aria-hidden`, its controls left as they are; one that draws none, such as a group of radios, gets `role="group"`, since a plain `div` may not carry a name. A picture is an `<svg role="img">`, where `aria-label` is its `alt`. | `lang` | `aria-hidden="true"` |
 | Desktop | AccessKit node label. A named control is called that instead of by the text it draws; a named box that is not a control is a label, or an image when it draws only artwork, and a label's name replaces the text drawn in it outside its controls. | AccessKit `language` | The subtree, controls included, is left out of the tree. |
 | Terminal | Used in the plain-text reading (below). | Not in the reading: plain text has no voice to switch. | Left out of the reading. |
-| Android | Not yet: Telar has no Android accessibility bridge. The snapshot already carries all three, and a bridge maps them to `contentDescription`, the locale of the node and `importantForAccessibility="no"`. | — | — |
+| Android | The node's `contentDescription`, from the same tree as the desktop, so a control, a label and an image are called what they are on the desktop. | Not carried: the adapter sets no locale on a node, so the reader speaks it in the device's language. | The subtree, controls included, is left out of the tree, as on the desktop. |
 | Browser, canvas (`web`) | The name of the node's element in the [canvas tree](#the-canvas-tree): its `aria-label`, or its own text where it is static text. | `lang` on the node's element | Left out of the snapshot, so no element stands for it. |
 | Headless | No reader. The snapshot (`ui_core::accessibility::snapshot`) still resolves them, which is what the tests read. | — | — |
 
@@ -431,7 +433,7 @@ locale's (`use_locale()`), and each target says it in its own idiom:
 | Browser, document and canvas (`web-dom`, `web`) | `<html lang>`, kept in sync with the active locale at runtime; `<html dir>` follows it the same way `i18n_core::Direction::for_locale` resolves the writing direction, and both start from `[telar.web]`'s packaged page (see [web-packaging.md](web-packaging.md)). |
 | Desktop | The AccessKit root node's language. A node under it that carries no `lang:` of its own inherits this — the nearest one wins, root included. |
 | Terminal | Nothing to set: the reading is plain text, and a reading has no voice to switch (as above). |
-| Android | Not yet: same as `lang:` itself, there is no accessibility bridge to carry it. The intended target is the view's own locale (`Configuration.locale` via JNI) once one exists. |
+| Android | Not carried, as for `lang:` itself: the root's language is in the tree, and the adapter gives a reader no locale to read it in, so the device's language is spoken. |
 | Headless | No reader, so nothing to carry it to. |
 
 ## The terminal's plain-text reading
@@ -531,7 +533,8 @@ a box under `a11y:hidden`.
 | Test | What it checks |
 | --- | --- |
 | `plugins/telar-components/src/audit.test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document, and that a dialog whose body scrolls makes the body a named Tab stop that Page Down scrolls. The page holds a list and a table with more rows than they show, which say where each built row sits, and an open menu leaves them and the rest of the page inert until it closes. |
-| `crates/platform/platform-desktop/src/accessibility.test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, that the heading is a heading named by its text at its level, that a role said from outside a widget is published over a plain box and never over a control, and that the tree's focus follows the Tab order. |
+| `crates/platform/platform-accesskit/src/lib.test.rs` (`from_a_screen`) | The AccessKit tree a desktop or Android window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, that the heading is a heading named by its text at its level, that a role said from outside a widget is published over a plain box and never over a control, and that the tree's focus follows the Tab order. |
+| `crates/platform/platform-android/src/stepping.test.rs` | That on Android a control that steps is offered to the reader as adjustable and one that does not is not, and that the reader's scroll forward and backward on it come back as `Increment` and `Decrement` while every other request is the one it made. Runs on the host. |
 | `crates/renderer/renderer-dom/src/controls.test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics.test.rs` checks that a box whose role changes drops the state attribute of the old one. |
 | `crates/renderer/renderer-dom/src/mirror.test.rs` | The canvas tree: that a snapshot's roles, names, values and states are said on the elements standing for its nodes, nested as the snapshot nests them and none a Tab stop; that a click on a control's element activates the control through the platform; and that focus follows between the elements and the app both ways. |
 | `crates/tools/cargo-telar/src/workshop_audit.test.rs` | The exported `apps/catalogue` workshop in headless Chrome: axe-core over the canvas of every preview and matrix page, with the same rules (`crates/renderer/renderer-dom/axe.json`), and over the workshop's chrome once with `region` on. See [previews.md](previews.md#auditing-the-exported-workshop). |
@@ -576,6 +579,35 @@ cursor rests on stay the same nodes between updates.
 Siblings are in reading order, by where they show — of two at the same corner the larger first — except that a box
 held at the edge of a scrolled view (`sticky`) is read where the flow puts it rather than where it shows. A table's
 header row is read before the rows built above the view and the rows scrolled under it, as the document reads it.
+
+The snapshot is laid out in logical pixels and a reader works in the screen's own, so the window node scales the
+whole tree by the window's scale factor: on a dense screen the reader's highlight sits on the control and a touch
+to explore lands on the one drawn under it.
+
+## The Android tree
+
+Android publishes the desktop's tree: one mapping, `telar-platform-accesskit`, turns the snapshot into an
+AccessKit tree for both, and a request coming back is the same `AccessAction` either way, so a control reads and
+answers alike on both. On Android the tree hangs on the activity's decor view as its virtual views, through
+AccessKit's Android adapter, whose view delegate is loaded from the dex the adapter embeds, since an APK built
+from Telar carries no Java of its own. That loader is API 26 and later; on an older device nothing is published
+and the app says so in the log.
+
+The adapter is attached each time the activity's window comes back and dropped when it goes, so it always hangs on
+the activity that is showing. Nothing is built until a service first asks for the tree; from then on the tree is
+published after every frame, since Android never says the service stopped listening. A request arrives on
+Android's UI thread and is carried to the thread the UI lives on, where it takes the same path a tap or a key does.
+
+What the adapter hands a reader is a subset of the tree: each node's role as a widget class, its name, its text or
+range, checked and selected, enabled, focusable and focused, editable, the text selection of a field, its link,
+its live region, and click, focus and text navigation. Expanded, description, validity, required, the language,
+`controls`, the active descendant, a node's place in its set and a grid's counts are in the tree and not carried
+on. A slider is adjusted with scroll forward and backward, the gesture a reader on Android adjusts with, which the
+adapter hands on as scrolls: a control that steps offers them, and they reach it as its steps.
+
+Touch to explore does not reach the tree yet. The system sends it as hover events through the activity's input
+queue, and the event loop takes them there without passing them on to the view, so they never reach the adapter.
+Swiping from node to node, a double tap to activate, and adjusting a slider all go through the tree and work.
 
 ## The canvas tree
 

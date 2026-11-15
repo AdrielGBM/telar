@@ -3,8 +3,6 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
-#[cfg(feature = "a11y")]
-mod accessibility;
 #[cfg(feature = "clipboard")]
 mod clipboard;
 #[cfg(feature = "dialogs")]

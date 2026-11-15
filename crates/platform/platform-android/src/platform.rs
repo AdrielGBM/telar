@@ -108,13 +108,13 @@ mod choreographer {
         // Clear pending first so about_to_wait sees the frame was delivered.
         cb_data.is_pending.store(false, Ordering::Release);
         // Wake the winit event loop. Ignore errors — the loop may have already exited.
-        let _ = cb_data.proxy.send_event(());
+        let _ = cb_data.proxy.send_event(super::UserEvent::Frame);
     }
 
     /// Heap-allocated state shared between the runner and the vsync callback. The pointer lives for the full duration of the AndroidRunner.
     pub struct VsyncCallbackData {
         pub is_pending: Arc<AtomicBool>,
-        pub proxy: winit::event_loop::EventLoopProxy<()>,
+        pub proxy: winit::event_loop::EventLoopProxy<super::UserEvent>,
     }
 
     pub struct Choreographer {
@@ -130,7 +130,7 @@ mod choreographer {
     impl Choreographer {
         /// Returns None if AChoreographer is not available on this device/API level.
         pub fn new(
-            proxy: winit::event_loop::EventLoopProxy<()>,
+            proxy: winit::event_loop::EventLoopProxy<super::UserEvent>,
             pending: Arc<AtomicBool>,
         ) -> Option<Self> {
             let get_instance = unsafe { instance_fn()? };
@@ -170,11 +170,22 @@ use winit::window::{WindowAttributes, WindowId};
 
 use platform_winit::{SurfaceIntent, TouchDrag, map_window_event};
 
+#[cfg(feature = "a11y")]
+use crate::accessibility::{AccessRequest, Accessibility};
 use crate::window::AndroidWindow;
+
+/// What wakes the loop from another thread.
+pub(crate) enum UserEvent {
+    /// The choreographer's vsync: time to draw the next frame.
+    Frame,
+    /// A screen reader asked for something, on Android's UI thread; the UI that answers is not `Send`.
+    #[cfg(feature = "a11y")]
+    Accessibility(AccessRequest),
+}
 
 /// The Android event loop, driven by `android-activity` and paced by the choreographer.
 pub struct AndroidPlatform {
-    event_loop: EventLoop<()>,
+    event_loop: EventLoop<UserEvent>,
     // winit's `theme()` is always `None` on Android and the `Window` never sees the activity's configuration, so the system preferences have to be read from here.
     app: AndroidApp,
 }
@@ -195,7 +206,7 @@ impl AndroidPlatform {
         let logcat = paranoid_android::layer("telar").with_filter(LevelFilter::DEBUG);
         tracing_subscriber::registry().with(logcat).try_init().ok();
 
-        let event_loop = EventLoop::builder()
+        let event_loop = EventLoop::<UserEvent>::with_user_event()
             .with_android_app(app.clone())
             .build()
             .map_err(|e| PlatformError(e.to_string()))?;
@@ -225,9 +236,21 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     choreographer: Option<choreographer::Choreographer>,
     #[cfg(target_os = "android")]
     is_animation_pending: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    #[cfg(feature = "a11y")]
+    proxy: winit::event_loop::EventLoopProxy<UserEvent>,
+    // Attached at every resume and dropped at every suspend, so it always hangs on the view of the activity that is showing, which may be a new one.
+    #[cfg(feature = "a11y")]
+    a11y: Option<Accessibility>,
 }
 
 impl<H: EventHandler<AndroidWindow>> AndroidRunner<H> {
+    #[cfg(feature = "a11y")]
+    fn publish_accessibility(&mut self) {
+        if let Some(a11y) = &mut self.a11y {
+            a11y.publish(&self.handler, self.config.shown_title(), self.scale_factor);
+        }
+    }
+
     /// Reports the window's safe area when it moved: the bars show and hide, the device turns, a cutout comes round to another edge.
     fn reread_safe_area(&mut self, window: &AndroidWindow) {
         let Some(insets) = crate::insets::read(&self.app, self.scale_factor) else {
@@ -256,7 +279,7 @@ impl<H: EventHandler<AndroidWindow>> AndroidRunner<H> {
     }
 }
 
-impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H> {
+impl<H: EventHandler<AndroidWindow>> ApplicationHandler<UserEvent> for AndroidRunner<H> {
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
         self.handler.new_events();
         // Polled rather than pushed: `onConfigurationChanged` is the very notification that does not always arrive, and the settings providers send none to native code. Done here so the event lands inside the batch `new_events` just opened, like a real input event.
@@ -304,10 +327,24 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
         }
     }
 
-    // about_to_wait handles frame scheduling; user_event fires when the vsync callback wakes the loop.
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: ()) {
-        if let Some(window) = &self.window {
-            window.request_redraw();
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::Frame => {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            #[cfg(feature = "a11y")]
+            UserEvent::Accessibility(request) => {
+                if let Some(a11y) = &mut self.a11y {
+                    a11y.answer(
+                        request,
+                        &mut self.handler,
+                        self.config.shown_title(),
+                        self.scale_factor,
+                    );
+                }
+            }
         }
     }
 
@@ -348,6 +385,10 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 }
                 window.request_redraw();
                 self.window = Some(window);
+                #[cfg(feature = "a11y")]
+                {
+                    self.a11y = Accessibility::attach(&self.app, self.proxy.clone());
+                }
             }
             Err(e) => tracing::error!(error = %e, "failed to create window"),
         }
@@ -357,6 +398,10 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
         self.handler.on_suspend();
         // On Android the native window is destroyed on suspend; drop our reference so it can be recreated on resume.
         self.window = None;
+        #[cfg(feature = "a11y")]
+        {
+            self.a11y = None;
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -381,7 +426,12 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 self.reread_safe_area(&window);
                 window.request_redraw();
             }
-            SurfaceIntent::Redraw => self.handler.on_redraw(&window),
+            SurfaceIntent::Redraw => {
+                self.handler.on_redraw(&window);
+                // After the frame rather than before, so what is announced is the frame that was drawn.
+                #[cfg(feature = "a11y")]
+                self.publish_accessibility();
+            }
             SurfaceIntent::Close(e) => {
                 self.handler.on_event(e, &window);
                 event_loop.exit();
@@ -437,6 +487,10 @@ impl Platform for AndroidPlatform {
             choreographer,
             #[cfg(target_os = "android")]
             is_animation_pending: animation_pending,
+            #[cfg(feature = "a11y")]
+            proxy: self.event_loop.create_proxy(),
+            #[cfg(feature = "a11y")]
+            a11y: None,
         };
         self.event_loop
             .run_app(&mut runner)

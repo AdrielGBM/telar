@@ -1,13 +1,19 @@
-//! The bridge from Telar's accessibility tree to the platform's.
+//! The bridge from Telar's accessibility tree to AccessKit's, which the desktop and Android backends both publish through their platform's adapter.
 //!
-//! Telar describes its window as a tree of [`AccessNode`]s listed in reading order — what each control is, what it says, where it sits, and what it sits in — and this turns that into the tree AccessKit hands to a screen reader, and turns the requests coming back into ordinary input.
+//! Telar describes its window as a tree of [`AccessNode`]s listed in reading order — what each control is, what it says, where it sits, and what it sits in — and this turns that into the tree AccessKit hands to a screen reader, and turns the requests coming back into ordinary input. One mapping for every platform, so a control reads and answers the same whichever one it runs on.
 //!
-//! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
+//! Built only once something has asked for the tree: with no assistive technology attached, nothing here runs at all.
+
+#![warn(missing_docs)]
+#![warn(rustdoc::broken_intra_doc_links)]
 
 use std::num::NonZeroU32;
 
+/// The AccessKit the tree is built from, so a platform adapter names the very version this crate publishes to.
+pub use accesskit;
+
 use accesskit::{
-    Action, ActionData, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Invalid,
+    Action, ActionData, ActionRequest, Affine, AriaCurrent, HasPopup as AkHasPopup, Invalid,
     Live as AkLive, Node, NodeId, Orientation as AkOrientation, Rect as AkRect, Role as AkRole,
     SortDirection as AkSortDirection, TextPosition, TextSelection as AkTextSelection, Toggled,
     TreeId, TreeInfo, TreeUpdate,
@@ -27,12 +33,16 @@ const OWN: u64 = 1 << 63;
 /// Turns Telar's description of the window into the tree AccessKit publishes.
 ///
 /// The nesting is the snapshot's own — the nesting of *meaning*, a grid around its rows and a row around its cells, a list box around its options, a dialog around what it asks — not the nesting of every box a layout happened to need, and each node's children are in the reading order the snapshot lists them in. What a reader counts off a container is said on it: a grid's rows and columns, a set's size where every item in it says the same one.
-pub(crate) fn tree_update(
+///
+/// `scale_factor` is the window's physical pixels per logical one: the snapshot is laid out in logical pixels and every adapter reads bounds in physical ones, so the window scales its whole tree by it and a reader's highlight and a touch to explore land on the control drawn there.
+pub fn tree_update(
     nodes: &[AccessNode],
     title: &str,
     lang: Option<&LocaleTag>,
+    scale_factor: f64,
 ) -> TreeUpdate {
     let mut root = Node::new(AkRole::Window);
+    root.set_transform(Affine::scale(scale_factor));
     root.set_label(title.to_string());
     if let Some(lang) = lang {
         root.set_language(lang.to_string());
@@ -355,7 +365,7 @@ fn aria_current(current: CurrentKind) -> AriaCurrent {
 
 /// Telar's roles, mapped outwards. One-way and lossy by design: Telar names what its catalogue actually has, and each platform names rather more.
 ///
-/// The regions are here because a reader offers "jump to the navigation" and cannot until something says which box that is. They arrived with the document backend, and this is the half of that work that a screen reader on a desktop gets out of it.
+/// The regions are here because a reader offers "jump to the navigation" and cannot until something says which box that is. They arrived with the document backend, and this is the half of that work that a screen reader on the desktop and on Android gets out of it.
 fn role_of(role: &Role) -> AkRole {
     match role {
         Role::Button | Role::Disclosure => AkRole::Button,
@@ -504,7 +514,7 @@ fn character_at(runs: &[TextRun], position: TextPosition) -> Option<(usize, usiz
 }
 
 /// What a reader asked for, as the focus id of the control it names and the action it asked of it. `None` for a request naming the window or a label, one for a node that has since gone, and one for an action no control answers.
-pub(crate) fn requested_action(
+pub fn requested_action(
     request: &ActionRequest,
     nodes: &[AccessNode],
 ) -> Option<(AccessId, AccessAction)> {
@@ -547,5 +557,5 @@ pub(crate) fn requested_action(
 }
 
 #[cfg(test)]
-#[path = "accessibility.test.rs"]
+#[path = "lib.test.rs"]
 mod tests;
