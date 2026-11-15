@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
 use crate::shared::selection::SelectionMode;
@@ -66,7 +67,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .selected(signal(Some(Arc::from("contact-2"))))
                     .label(p.arg("label", "Contacts"))
                     .size(p.arg("size", ControlSize::Regular))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )?;
             Ok::<_, LayoutError>(framed(list)?)
@@ -95,7 +96,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .selection_mode(p.arg("selection_mode", SelectionMode::Multiple))
                     .selected_rows(signal(chosen))
                     .label(p.arg("label", "Recipients"))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )?;
             Ok::<_, LayoutError>(framed(list)?)
@@ -126,7 +127,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .wrap(p.arg("wrap", true))
                     .selected(signal(Some(Arc::from("message-1"))))
                     .label(p.arg("label", "Messages"))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )?;
             Ok::<_, LayoutError>(framed(list)?)

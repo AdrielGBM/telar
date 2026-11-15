@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Color, Role};
 
 use crate::inputs::stepper::stepper::{StepperProps, stepper};
@@ -13,11 +14,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 StepperProps::props()
                     .on_change(Rc::new(|_| {}))
                     .value(p.signal("value", 2.0f32))
-                    .min(p.arg("min", 0.0f32))
-                    .max(p.arg("max", 10.0f32))
+                    .range(p.arg("min", 0.0f32)..=p.arg("max", 10.0f32))
                     .step(p.arg("step", 1.0f32))
                     .size(p.arg("size", ControlSize::Regular))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )
         })

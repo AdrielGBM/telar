@@ -144,48 +144,78 @@ impl SplitRegion {
     }
 }
 
-/// The room the sized pane may take, in px or as a fraction of the whole split.
+/// How far the sized pane may shrink or grow along the split: in px, or as a fraction of the whole split.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PaneLimit {
+    Px(f32),
+    /// A share of the whole split, from `0.0` to `1.0`.
+    Fraction(f32),
+}
+
+impl PaneLimit {
+    fn px(self, total: f32) -> f32 {
+        match self {
+            Self::Px(px) => px,
+            Self::Fraction(fraction) => fraction * total,
+        }
+    }
+
+    fn dimension(self) -> SizeDimension {
+        match self {
+            Self::Px(px) => SizeDimension::Px(px),
+            Self::Fraction(fraction) => SizeDimension::Percent(fraction),
+        }
+    }
+
+    fn valid(self) -> bool {
+        match self {
+            Self::Px(px) => px >= 0.0,
+            Self::Fraction(fraction) => (0.0..=1.0).contains(&fraction),
+        }
+    }
+}
+
+/// The room the sized pane may take: at least `min`, and at most `max` where there is one.
 #[derive(Clone, Copy)]
 struct Limits {
-    min: f32,
-    max: f32,
-    min_fraction: f32,
-    max_fraction: f32,
+    min: PaneLimit,
+    max: Option<PaneLimit>,
 }
 
 impl Limits {
+    /// `min` and `max`, or the error a split is built with when either cannot be a size or `max` is below `min` in the same unit. A px bound and a fraction are compared once the split's size is known, and the larger one then wins.
+    fn new(min: PaneLimit, max: Option<PaneLimit>) -> Result<Self, LayoutError> {
+        let refused = |reason: String| Err(LayoutError::Engine(format!("split_pane: {reason}")));
+        if let Some(limit) = [Some(min), max].into_iter().flatten().find(|limit| !limit.valid()) {
+            return refused(format!("{limit:?} is not a size a pane can take"));
+        }
+        let inverted = match (min, max) {
+            (PaneLimit::Px(min), Some(PaneLimit::Px(max)))
+            | (PaneLimit::Fraction(min), Some(PaneLimit::Fraction(max))) => max < min,
+            _ => false,
+        };
+        match inverted {
+            true => refused(format!("its max {max:?} is below its min {min:?}")),
+            false => Ok(Self { min, max }),
+        }
+    }
+
     fn range(self, total: f32, bar: f32) -> (f32, f32) {
-        let room = if total > 0.0 {
-            (total - bar).max(0.0)
-        } else {
-            f32::INFINITY
+        let measured = total > 0.0;
+        let room = match measured {
+            true => (total - bar).max(0.0),
+            false => f32::INFINITY,
         };
-        let lo = match self.min_fraction > 0.0 && total > 0.0 {
-            true => self.min_fraction * total,
-            false => self.min,
+        let lo = match (measured, self.min) {
+            (false, PaneLimit::Fraction(_)) => 0.0,
+            (_, min) => min.px(total),
         };
-        let hi = match (self.max_fraction > 0.0 && total > 0.0, self.max > 0.0) {
-            (true, _) => self.max_fraction * total,
-            (false, true) => self.max,
-            (false, false) => room,
+        let hi = match (measured, self.max) {
+            (_, None) | (false, Some(PaneLimit::Fraction(_))) => room,
+            (_, Some(max)) => max.px(total),
         };
         let hi = hi.min(room);
         (lo.min(hi), hi)
-    }
-
-    fn min_dimension(self) -> SizeDimension {
-        match self.min_fraction > 0.0 {
-            true => SizeDimension::Percent(self.min_fraction),
-            false => SizeDimension::Px(self.min),
-        }
-    }
-
-    fn max_dimension(self) -> Option<SizeDimension> {
-        match (self.max_fraction > 0.0, self.max > 0.0) {
-            (true, _) => Some(SizeDimension::Percent(self.max_fraction)),
-            (false, true) => Some(SizeDimension::Px(self.max)),
-            (false, false) => None,
-        }
     }
 }
 
@@ -200,21 +230,15 @@ pub struct SplitPaneProps {
     /// Bound size of the sized pane along the split, in px. `None` (the default) is uncontrolled: the widget owns a signal starting at [`default_size`](Self::default_size). It keeps the size a collapse will restore, so a caller persisting it never stores zero.
     #[props(some, into, default)]
     pub size: Option<RwSignal<f32>>,
-    /// Starting size when [`size`](Self::size) is not bound. `0.0` (the default) means 240.
-    #[props(default)]
+    /// Starting size when [`size`](Self::size) is not bound, in px. 240 by default.
+    #[props(default = DEFAULT_SIZE)]
     pub default_size: f32,
-    /// Smallest size of the sized pane, in px.
-    #[props(default)]
-    pub min: f32,
-    /// Largest size of the sized pane, in px. `0.0` (the default) leaves it bounded only by the room the split has.
-    #[props(default)]
-    pub max: f32,
-    /// Smallest size of the sized pane as a fraction of the whole split (`0.0..=1.0`); when above zero it replaces [`min`](Self::min).
-    #[props(default)]
-    pub min_fraction: f32,
-    /// Largest size of the sized pane as a fraction of the whole split (`0.0..=1.0`); when above zero it replaces [`max`](Self::max).
-    #[props(default)]
-    pub max_fraction: f32,
+    /// Smallest size of the sized pane. Nothing by default.
+    #[props(default = PaneLimit::Px(0.0))]
+    pub min: PaneLimit,
+    /// Largest size of the sized pane. `None` (the default) leaves it bounded only by the room the split has. One below [`min`](Self::min) in the same unit, a negative size or a fraction outside `0.0..=1.0` is an error when the split is built.
+    #[props(some, default)]
+    pub max: Option<PaneLimit>,
     /// Bound collapsed state. `None` (the default) is uncontrolled. A collapsed pane is zero-sized while [`size`](Self::size) keeps its last value.
     #[props(some, into, default)]
     pub collapsed: Option<RwSignal<bool>>,
@@ -227,8 +251,8 @@ pub struct SplitPaneProps {
     /// Whether a quiet rule shows in the gap at rest. On by default, for panes that do not set themselves apart; an application whose panes are framed surfaces turns it off, and the gap is only the background between them. A drag shows the rule either way.
     #[props(default = true)]
     pub divider: bool,
-    /// One unscaled arrow-key step in px. Non-positive means 16; Shift makes it larger.
-    #[props(default)]
+    /// One unscaled arrow-key step in px, 16 by default; Shift makes it larger. A step that is not above zero is an error when the split is built.
+    #[props(default = DEFAULT_STEP)]
     pub step: f32,
     /// What a reader calls the splitter. `None` (the default) uses the localized `telar_components.resize` message, which an application can override in its catalog.
     #[props(some, into, default)]
@@ -255,8 +279,6 @@ pub fn split_pane(props: SplitPaneProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         default_size,
         min,
         max,
-        min_fraction,
-        max_fraction,
         collapsed,
         collapsed_size,
         collapsible,
@@ -268,21 +290,11 @@ pub fn split_pane(props: SplitPaneProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         first,
         second,
     } = props;
-    let default_size = if default_size > 0.0 {
-        default_size
-    } else {
-        DEFAULT_SIZE
-    };
-    let step = if step > 0.0 { step } else { DEFAULT_STEP };
+    let limits = Limits::new(min, max)?;
+    let step = shared::positive_step("split_pane", step)?;
     let size = size.unwrap_or_else(|| signal(default_size));
     let collapsed = collapsed.unwrap_or_else(|| signal(false));
     let transaction = Transaction::new(size);
-    let limits = Limits {
-        min: min.max(0.0),
-        max,
-        min_fraction,
-        max_fraction,
-    };
 
     let fixed = move || {
         let style = LayoutStyle::column().flex_shrink(0.0);
@@ -292,9 +304,9 @@ pub fn split_pane(props: SplitPaneProps) -> Result<Box<dyn LayoutItem>, LayoutEr
                 false => style.shown(false),
             };
         }
-        let style = direction.at_least(direction.sized(style, size.get()), limits.min_dimension());
-        match limits.max_dimension() {
-            Some(max) => direction.at_most(style, max),
+        let style = direction.at_least(direction.sized(style, size.get()), limits.min.dimension());
+        match limits.max {
+            Some(max) => direction.at_most(style, max.dimension()),
             None => style,
         }
     };

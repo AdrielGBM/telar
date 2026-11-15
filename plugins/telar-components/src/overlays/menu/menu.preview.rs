@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Children, Color, Key, NamedKey, Reactive, Role, RwSignal};
 
 use crate::layout::list::list::{ItemProps, SeparatorProps, item, separator};
@@ -136,7 +137,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .on_select(Rc::new(|_| {}))
                     .label(p.arg("label", "File"))
                     .size(size)
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .bordered(p.arg("bordered", false))
                     .caret(p.arg("caret", true))
                     .stretch(p.arg("stretch", false))

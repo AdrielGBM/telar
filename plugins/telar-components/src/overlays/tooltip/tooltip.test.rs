@@ -281,6 +281,83 @@ fn an_absent_shortcut_and_description_take_no_room() {
     );
 }
 
+/// Where the bubble's name is drawn, across the line, while a trigger spanning 160 to 240 of a 400-wide surface is hovered with the bubble asked for on `side` in a surface reading `direction`.
+fn name_span_beside(side: Side, direction: telar::Direction) -> (f32, f32) {
+    crate::test_support::fresh_layout_runtime();
+    telar::set_direction(direction);
+    let mut tree = telar::testing::scoped(|| {
+        let tooltip = tooltip(
+            TooltipProps::props()
+                .text("Move")
+                .side(side)
+                .children(trigger())
+                .build(),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(400.0)
+                .height(400.0)
+                .padding_horizontal(160.0)
+                .padding_vertical(180.0),
+            &[tooltip.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        ComponentList::new(tooltip)
+    });
+    let _ = tree.commands();
+    tree.on_event(&moved(200.0, 195.0));
+    relayout_if_dirty();
+    let mut shifts = vec![0.0f32];
+    let mut span = None;
+    for command in tree.commands().iter() {
+        match command {
+            DrawCommand::PushMatrix { matrix } => {
+                shifts.push(shifts.last().copied().unwrap_or(0.0) + matrix[4]);
+            }
+            DrawCommand::PopMatrix => {
+                shifts.pop();
+            }
+            DrawCommand::Text { text, rect, .. } if text.as_ref() == "Move" => {
+                let x = rect.x + shifts.last().copied().unwrap_or(0.0);
+                span = Some((x, x + rect.width));
+            }
+            _ => {}
+        }
+    }
+    telar::set_direction(telar::Direction::Ltr);
+    span.expect("the bubble says its name")
+}
+
+#[test]
+fn a_bubble_at_the_start_or_the_end_takes_the_side_the_surface_reads_it_on() {
+    let (left, right) = (160.0, 240.0);
+    let (_, end) = name_span_beside(Side::Start, telar::Direction::Ltr);
+    assert!(end <= left, "before the trigger in a left-to-right surface");
+    let (start, _) = name_span_beside(Side::Start, telar::Direction::Rtl);
+    assert!(start >= right, "after it in a right-to-left one");
+    let (start, _) = name_span_beside(Side::End, telar::Direction::Ltr);
+    assert!(start >= right);
+    let (_, end) = name_span_beside(Side::End, telar::Direction::Rtl);
+    assert!(end <= left);
+}
+
+#[test]
+fn a_bubble_given_a_transparent_colour_is_drawn_transparent() {
+    let tree = hovered(Some(Color::TRANSPARENT), None);
+    assert_eq!(
+        bubble(&tree).0.fill,
+        Some(telar::Paint::Solid(Color::TRANSPARENT))
+    );
+}
+
 #[test]
 fn builds_without_hover() {
     crate::test_support::fresh_layout_runtime();
@@ -313,17 +390,15 @@ impl telar::ThemeTokens for Themed {
 
 /// A hovered tooltip saying "Move", with `color` and `style` given.
 fn hovered(
-    color: Color,
+    color: Option<Color>,
     style: Option<telar::SurfaceAmendment>,
 ) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
-    let props = TooltipProps::props().text("Move").color(color);
-    let props = match style {
-        Some(style) => props.style(style),
-        None => props,
-    };
+    let mut props = TooltipProps::props().text("Move").children(trigger()).build();
+    props.color = color.map(Into::into);
+    props.style = style;
     let mut tree = telar::testing::scoped(|| {
-        let tooltip = tooltip(props.children(trigger()).build()).unwrap();
+        let tooltip = tooltip(props).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             &[tooltip.layout_node()],
@@ -371,7 +446,7 @@ fn a_bubble_is_the_theme_s_inverse_surface_under_its_inverse_ink() {
 
     let theme = Themed { tooltips: None };
     telar::set_theme(theme.clone());
-    let tree = hovered(Color::TRANSPARENT, None);
+    let tree = hovered(None, None);
     let (chip, ink) = bubble(&tree);
     assert_eq!(chip.fill, Some(Paint::Solid(theme.inverse_surface())));
     assert_eq!(chip.radius, BorderRadius::all(theme.radius_surface()));
@@ -383,7 +458,7 @@ fn a_bubble_is_the_theme_s_inverse_surface_under_its_inverse_ink() {
 fn a_bubble_in_a_colour_of_its_own_is_inked_to_read_on_it() {
     telar::set_theme(Themed { tooltips: None });
     let pale = Color::rgba(0.95, 0.9, 0.6, 1.0);
-    let tree = hovered(pale, None);
+    let tree = hovered(Some(pale), None);
     let (_, ink) = bubble(&tree);
     assert_eq!(ink, crate::shared::ink_on(pale));
 }
@@ -398,13 +473,13 @@ fn the_bubble_s_corner_follows_the_tooltip_tokens_and_its_caller_s_amendment() {
             ..TooltipTokens::default()
         }),
     });
-    let tree = hovered(Color::TRANSPARENT, None);
+    let tree = hovered(None, None);
     assert_eq!(bubble(&tree).0.radius, BorderRadius::all(1.0));
     drop(tree);
 
     let green = Color::rgba(0.1, 0.6, 0.2, 1.0);
     let tree = hovered(
-        Color::TRANSPARENT,
+        None,
         Some(std::rc::Rc::new(move |style: RectStyle| {
             style.with_fill(green)
         })),

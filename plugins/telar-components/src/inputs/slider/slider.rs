@@ -1,5 +1,6 @@
 //! [`slider`]: a track and thumb dragged, or stepped with the arrow keys, over a range.
 
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 use telar::{
     Accessible, Border, Color, Insets, LayoutError, LayoutItem, LayoutStyle, Props, Reactive,
@@ -77,37 +78,34 @@ fn grab_outset(size: ControlSize) -> Insets {
     Insets::new(reach, 0.0, reach, 0.0)
 }
 
-/// A drag-driven `min..=max` control: a rounded track, an accent fill up to `value`, and a thumb positioned by it. This is the canonical demo of the `on_drag` primitive (see `StyledContainer::on_drag`): the widget just encapsulates the press/move -> value mapping (and the fill/thumb repaint) an app would otherwise wire up by hand. High-level sugar over the primitives; lives in `telar-components`, not the kernel, so an app can drop it. `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal), `Some` is caller-bound.
+/// A drag-driven control over a range: a rounded track, an accent fill up to `value`, and a thumb positioned by it. This is the canonical demo of the `on_drag` primitive (see `StyledContainer::on_drag`): the widget just encapsulates the press/move -> value mapping (and the fill/thumb repaint) an app would otherwise wire up by hand. High-level sugar over the primitives; lives in `telar-components`, not the kernel, so an app can drop it.
 #[derive(Props)]
 pub struct SliderProps {
-    /// Bound value, reported in `min..=max` (out-of-range inputs are clamped on every drag report, not here). `None` (the default) is uncontrolled — the widget makes its own `signal(min)`.
+    /// Bound value, reported in its range (out-of-range inputs are clamped on every drag report, not here). `None` (the default) is uncontrolled — the widget makes its own, starting at the start of its range.
     #[props(some, into, default)]
     pub value: Option<RwSignal<f32>>,
-    /// Fill/thumb accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
-    /// Track (rail) colour; `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's muted token.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub track_color: Reactive<Color>,
-    /// Track width in px. `0.0` (the default) means "unset": the [`SliderTokens`] width at its size.
-    #[props(default)]
-    pub width: f32,
+    /// Fill/thumb accent. `None` (the default) is the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
+    /// Track (rail) colour; `None` (the default) is the theme's muted token.
+    #[props(some, into, default)]
+    pub track_color: Option<Reactive<Color>>,
+    /// Track width in px. `None` (the default) is the [`SliderTokens`] width at its size.
+    #[props(some, default)]
+    pub width: Option<f32>,
     /// How large the slider is drawn: its track, thumb and caption, and the length it takes when its call names none, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// Lower bound of the reported value. Default `0.0`.
-    #[props(default)]
-    pub min: f32,
-    /// Upper bound of the reported value. Default `1.0`. If `max <= min` (the degenerate/unset state), the slider falls back to `min=0.0, max=1.0` rather than dividing by zero.
-    #[props(default)]
-    pub max: f32,
-    /// Quantization step applied to the reported value. `0.0` (the default) means "unset" — continuous, no snapping, following the same `0.0 == unset` sentinel convention as `width`.
-    #[props(default)]
-    pub step: f32,
+    /// The values the slider reports, from its start at the left end of the track to its end at the right; `0.0..=1.0` by default. A range whose start is not below its end is an error when the slider is built.
+    #[props(default = 0.0..=1.0)]
+    pub range: RangeInclusive<f32>,
+    /// The step a reported value snaps to and an arrow key moves by. `None` (the default) is continuous, the keys moving a twentieth of the range; a step that is not above zero is an error when the slider is built.
+    #[props(some, default)]
+    pub step: Option<f32>,
     /// A small caption stacked above the track; omitted entirely (no extra row) when empty.
     #[props(into, default)]
     pub label: Reactive<String>,
-    /// Fires with the new `min..=max` value on every drag report (the press and each subsequent move).
+    /// Fires with the new value, inside the range, on every drag report (the press and each subsequent move).
     #[props(some, default)]
     pub on_change: Option<Rc<dyn Fn(f32)>>,
     /// Amends the paint of the track — the slider's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`SliderTokens`] is the right instrument instead.
@@ -123,29 +121,31 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         track_color,
         width,
         size,
-        min,
-        max,
+        range,
         step,
         label,
         on_change,
         style,
     } = props;
-    let (min, max) = if max <= min { (0.0, 1.0) } else { (min, max) };
+    let (min, max) = shared::ordered("slider", range)?;
+    if min == max {
+        return Err(LayoutError::Engine(format!(
+            "slider: its range holds the one value {min}, which leaves nothing to slide over"
+        )));
+    }
+    let step = step
+        .map(|step| shared::positive_step("slider", step))
+        .transpose()?;
     let value = value.unwrap_or_else(|| signal(min));
-    let width = if width > 0.0 {
-        width
-    } else {
-        SliderTokens::current().width(size)
-    };
+    let width = width.unwrap_or_else(|| SliderTokens::current().width(size));
     let announced_value = value;
-    let snap = move |v: f32| {
-        if step > 0.0 {
+    let snap = move |v: f32| match step {
+        Some(step) => {
             // Rounding can walk a boundary value just past min or max.
             let steps = ((v - min) / step).round();
             (min + steps * step).clamp(min, max)
-        } else {
-            v.clamp(min, max)
         }
+        None => v.clamp(min, max),
     };
     let commit: Rc<dyn Fn(f32) -> bool> = {
         let on_change = on_change.clone();
@@ -159,7 +159,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         })
     };
     // One step per press, or a twentieth of the range when the caller named none — the granularity a continuous value has to invent for a keyboard.
-    let stride = if step > 0.0 { step } else { (max - min) / 20.0 };
+    let stride = step.unwrap_or((max - min) / 20.0);
     let step_by = {
         let commit = Rc::clone(&commit);
         move |steps: f32| commit((value.peek() + steps * stride).clamp(min, max))

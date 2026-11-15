@@ -192,8 +192,6 @@ fn with_slider(
     let slider = slider(
         SliderProps::props()
             .value(value)
-            .min(0.0)
-            .max(1.0)
             .width(SLIDER_WIDTH)
             .label(strings::reactive(label))
             .build(),

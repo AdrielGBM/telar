@@ -156,14 +156,14 @@ pub struct ResizableProps {
     /// Bound size of the content, in px. `None` (the default) is uncontrolled: the widget owns a signal starting at [`default_size`](Self::default_size).
     #[props(some, into, default)]
     pub size: Option<RwSignal<Size>>,
-    /// Starting size when [`size`](Self::size) is not bound. `Size::ZERO` (the default) means 240 × 160.
-    #[props(default)]
+    /// Starting size when [`size`](Self::size) is not bound. 240 × 160 by default.
+    #[props(default = DEFAULT_SIZE)]
     pub default_size: Size,
     /// Smallest size of the content, in px.
     #[props(default)]
     pub min: Size,
-    /// Largest size of the content, in px. A side left `0.0` (the default) is bounded only by [`room`](Self::room).
-    #[props(default)]
+    /// Largest size of the content, in px. Unbounded on both sides by default, so only [`room`](Self::room) bounds it; a side below [`min`](Self::min) is an error when the resizable is built.
+    #[props(default = Size::new(f32::INFINITY, f32::INFINITY))]
     pub max: Size,
     /// The most the content may take right now, such as the space its parent leaves, read whenever a resize is bounded. It narrows [`max`](Self::max), never below [`min`](Self::min). `None` (the default) leaves `max` alone.
     #[props(some, into, default)]
@@ -174,8 +174,8 @@ pub struct ResizableProps {
     /// Whether the content stays put at its start or is centred as it grows.
     #[props(default)]
     pub growth: ResizeGrowth,
-    /// One unscaled arrow-key step in px. Non-positive means 16; Shift makes it larger.
-    #[props(default)]
+    /// One unscaled arrow-key step in px, 16 by default; Shift makes it larger. A step that is not above zero is an error when the resizable is built.
+    #[props(default = DEFAULT_STEP)]
     pub step: f32,
     /// What a reader calls the width handle. `None` (the default) uses the localized `telar_components.resize_width` message, which an application can override in its catalog.
     #[props(some, into, default)]
@@ -220,12 +220,12 @@ pub struct ResizeHandleProps {
     /// Pointer px per unit of size: content drawn zoomed passes its zoom, so the edge dragged stays under the pointer. Default 1.
     #[props(into, default = Reactive::from(1.0_f32))]
     pub scale: Reactive<f32>,
-    /// One unscaled arrow-key step, in units of size. Non-positive means 16; Shift makes it larger.
-    #[props(default)]
+    /// One unscaled arrow-key step, in units of size, 16 by default; Shift makes it larger. A step that is not above zero is an error when the handle is built.
+    #[props(default = DEFAULT_STEP)]
     pub step: f32,
-    /// Thickness in px. `0.0` (the default) is the [`ResizableTokens`] thickness.
-    #[props(default)]
-    pub thickness: f32,
+    /// Thickness in px. `None` (the default) is the [`ResizableTokens`] thickness.
+    #[props(some, default)]
+    pub thickness: Option<f32>,
     /// What a reader calls an edge handle. `None` (the default) uses the localized `telar_components.resize_width` or `telar_components.resize_height` message. The corner has no name, since a reader never meets it.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
@@ -344,15 +344,13 @@ pub fn resizable(props: ResizableProps) -> Result<Box<dyn LayoutItem>, LayoutErr
         style,
         children,
     } = props;
-    let default_size = if default_size == Size::ZERO {
-        DEFAULT_SIZE
-    } else {
-        default_size
-    };
     let size = size.unwrap_or_else(|| signal(default_size));
     let transaction = Transaction::new(size);
-    let cap = |side: f32| if side > 0.0 { side } else { f32::INFINITY };
-    let max = Size::new(cap(max.width), cap(max.height));
+    if max.width < min.width || max.height < min.height {
+        return Err(LayoutError::Engine(format!(
+            "resizable: its max {max:?} is below its min {min:?}"
+        )));
+    }
     let shown = move || {
         let size = size.get();
         Size::new(
@@ -466,9 +464,9 @@ pub fn resize_handle(props: ResizeHandleProps) -> Result<Box<dyn LayoutItem>, La
         step,
     };
     let look = Look {
-        thickness: match thickness > 0.0 {
-            true => Rc::new(move || thickness),
-            false => Rc::new(|| ResizableTokens::current().thickness()),
+        thickness: match thickness {
+            Some(thickness) => Rc::new(move || thickness),
+            None => Rc::new(|| ResizableTokens::current().thickness()),
         },
         label,
         style,
@@ -489,12 +487,8 @@ fn build_handle(
         label,
         style,
     } = look;
-    let step = if target.step > 0.0 {
-        target.step
-    } else {
-        DEFAULT_STEP
-    };
-    let target = Rc::new(Target { step, ..target });
+    shared::positive_step("resizable", target.step)?;
+    let target = Rc::new(target);
     let stroke = Rc::new(stroke);
     let latch = Rc::new(Latch::default());
     let (hovered, dragging) = (signal(false), signal(false));

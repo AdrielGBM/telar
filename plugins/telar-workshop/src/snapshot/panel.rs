@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::snapshot::{FileStatus, Moment, SnapshotResult, SnapshotStatus};
 use telar::{
-    AlignItems, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
-    LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children, use_theme_tokens,
+    AlignItems, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle,
+    Reactive, ReactiveList, Role, Text, box_item, children, use_theme_tokens,
 };
 use telar::{ControlSize, Tone};
 use telar_components::{
@@ -212,7 +212,7 @@ fn moment_switch(
     tab_list(
         review.moment(),
         tabs,
-        Color::TRANSPARENT.into(),
+        None,
         Some(strings::reactive(SNAPSHOT_MOMENT)),
         ControlSize::Regular,
     )
@@ -300,7 +300,7 @@ fn mode_switch(review: &SnapshotReview) -> Result<Box<dyn LayoutItem>, LayoutErr
             Tab::new(CompareMode::Overlay, strings::reactive(SNAPSHOT_OVERLAY)),
             Tab::new(CompareMode::Swipe, strings::reactive(SNAPSHOT_SWIPE)),
         ],
-        Color::TRANSPARENT.into(),
+        None,
         Some(strings::reactive(SNAPSHOT_COMPARE)),
         ControlSize::Regular,
     )

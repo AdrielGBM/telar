@@ -1,5 +1,6 @@
 //! [`stepper`]: a value between a minus and a plus button, clamped to its range.
 
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, BorderRadius, Color, Container, JustifyContent, LayoutError,
@@ -44,27 +45,24 @@ fn button_box(size: ControlSize) -> LayoutStyle {
         .height(shared::control_height(size))
 }
 
-/// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see `button.rs`) plus a reactive `Text::new` readout; lives in `telar-components`, not the kernel. `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own `signal(min)`).
+/// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see `button.rs`) plus a reactive `Text::new` readout; lives in `telar-components`, not the kernel. `None` for `value` is uncontrolled: the widget owns a signal starting at the start of its range.
 #[derive(Props)]
 pub struct StepperProps {
-    /// Bound value. `None` (the default) is uncontrolled — the widget makes its own `signal(min)`.
+    /// Bound value. `None` (the default) is uncontrolled — the widget makes its own, starting at the start of its range.
     #[props(some, into, default)]
     pub value: Option<RwSignal<f32>>,
-    /// Lower bound. Default `0.0`.
-    #[props(default)]
-    pub min: f32,
-    /// Upper bound. `0.0` (the default) means "unset". Following the same `0.0 == unset` sentinel convention as `slider`'s `width`/`step`: an unset (or degenerate, `max <= min`) upper bound falls back to `f32::INFINITY` rather than the historical two-arg default, so an unset max never pins the value to `min` (a fixed fallback range would clamp any caller-supplied starting value above it back down).
-    #[props(default)]
-    pub max: f32,
-    /// Increment applied per press. `0.0` (the default) means "unset" — use `1.0`.
-    #[props(default)]
+    /// The values the stepper keeps to, its start no further than its end: from zero up, unbounded, by default. A range whose start lies past its end is an error when the stepper is built.
+    #[props(default = 0.0..=f32::INFINITY)]
+    pub range: RangeInclusive<f32>,
+    /// What one press adds or takes away. One by default; a step that is not above zero is an error when the stepper is built.
+    #[props(default = 1.0)]
     pub step: f32,
     /// How large the stepper is drawn: its buttons, gaps and value, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// − / + fill. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's primary token.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// − / + fill. `None` (the default) is the theme's primary token.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Fires with the new (already clamped) value on every − / + press.
     #[props(some, default)]
     pub on_change: Option<Rc<dyn Fn(f32)>>,
@@ -77,16 +75,15 @@ pub struct StepperProps {
 pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let StepperProps {
         value,
-        min,
-        max,
+        range,
         step,
         size,
         color,
         on_change,
         style,
     } = props;
-    let max = if max <= min { f32::INFINITY } else { max };
-    let step = if step == 0.0 { 1.0 } else { step };
+    let (min, max) = shared::ordered("stepper", range)?;
+    let step = shared::positive_step("stepper", step)?;
     // Uncontrolled: own the value so the stepper still works when the caller binds no signal.
     let value = value.unwrap_or_else(|| signal(min));
     let paint = Paint { color, style };
@@ -143,7 +140,7 @@ enum State {
 /// What both buttons paint with: the accent they fill with, and the caller's amendment.
 #[derive(Clone)]
 struct Paint {
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
     style: Option<SurfaceAmendment>,
 }
 

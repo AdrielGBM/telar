@@ -69,9 +69,9 @@ pub struct RadioProps {
     /// How large the radio is drawn: its ring, dot and label, and the control height its row stands at, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// Accent (the selected dot and border). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Accent (the selected dot and border). `None` (the default) is the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Fires with this button's `value` when it becomes selected.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(usize)>>,

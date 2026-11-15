@@ -32,21 +32,21 @@ pub struct WindowControlsProps {
     /// What the close button does. The default closes the window, and with it a single-window app.
     #[props(default = Rc::new(telar::window::close))]
     pub on_close: Rc<dyn Fn()>,
-    /// The marks' colour. `Color::TRANSPARENT` (the default) keeps the ink the controls inherit.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub glyph: Reactive<Color>,
-    /// Fill behind minimize and maximize under the pointer. `Color::TRANSPARENT` (the default) is the theme's hover wash.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub hover: Reactive<Color>,
-    /// The mark of minimize and maximize under the pointer, for a hover fill the resting mark cannot be read against. `Color::TRANSPARENT` (the default) keeps the mark as it is.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub hover_glyph: Reactive<Color>,
-    /// Fill behind close under the pointer, often louder than [`hover`](Self::hover) since closing is the one control that cannot be undone. `Color::TRANSPARENT` (the default) is the theme's hover wash.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub close_hover: Reactive<Color>,
-    /// The close mark under the pointer. `Color::TRANSPARENT` (the default) keeps the mark as it is.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub close_hover_glyph: Reactive<Color>,
+    /// The marks' colour. `None` (the default) keeps the ink the controls inherit.
+    #[props(some, into, default)]
+    pub glyph: Option<Reactive<Color>>,
+    /// Fill behind minimize and maximize under the pointer. `None` (the default) is the theme's hover wash.
+    #[props(some, into, default)]
+    pub hover: Option<Reactive<Color>>,
+    /// The mark of minimize and maximize under the pointer, for a hover fill the resting mark cannot be read against. `None` (the default) keeps the mark as it is.
+    #[props(some, into, default)]
+    pub hover_glyph: Option<Reactive<Color>>,
+    /// Fill behind close under the pointer, often louder than [`hover`](Self::hover) since closing is the one control that cannot be undone. `None` (the default) is the theme's hover wash.
+    #[props(some, into, default)]
+    pub close_hover: Option<Reactive<Color>>,
+    /// The close mark under the pointer. `None` (the default) keeps the mark as it is.
+    #[props(some, into, default)]
+    pub close_hover_glyph: Option<Reactive<Color>>,
     /// The least each button measures on either side, in px. `None` (the default) is [`metrics::MIN_TARGET`](crate::metrics::MIN_TARGET); a bar of other controls passes their [`metrics::control_height`](crate::metrics::control_height) so the window's controls stand as tall as the rest.
     #[props(some, into, default)]
     pub min_size: Option<Reactive<f32>>,
@@ -58,9 +58,9 @@ pub struct WindowControlsProps {
 /// What a window-control button is painted in: its mark at rest, and its fill and mark under the pointer.
 #[derive(Clone)]
 struct ControlPaint {
-    glyph: Reactive<Color>,
-    hover: Reactive<Color>,
-    hover_glyph: Reactive<Color>,
+    glyph: Option<Reactive<Color>>,
+    hover: Option<Reactive<Color>>,
+    hover_glyph: Option<Reactive<Color>>,
 }
 
 /// What every button of one [`window_controls`] shares: its size, its least size and the caller's amendment.
@@ -87,10 +87,8 @@ impl ControlLook {
     }
 }
 
-/// `color`, unless it is the `Color::TRANSPARENT` that leaves it unset.
-fn named(color: &Reactive<Color>) -> Option<Color> {
-    let color = color.get();
-    (color != Color::TRANSPARENT).then_some(color)
+fn named(color: &Option<Reactive<Color>>) -> Option<Color> {
+    color.as_ref().map(Reactive::get)
 }
 
 /// One window-control button under a tooltip naming it: a mark a reader hears by `name`. It holds every stroke started on it, so a title bar around it never takes a press on it for a move of the window.
@@ -110,7 +108,7 @@ fn control_button(
         look,
         press,
     };
-    shared::hinted(move || button.build(), size, name, Reactive::default())
+    shared::hinted(move || button.build(), size, name, None)
 }
 
 /// Everything one window-control button is built from, so the tooltip naming it can build it wherever and however often it places it.

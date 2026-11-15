@@ -1,4 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Color, Role};
 
 use crate::navigation::tabs::tabs::{TabsProps, tabs};
@@ -19,7 +20,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 TabsProps::props()
                     .items(labels(p.arg("count", 3u32)))
                     .size(p.arg("size", ControlSize::Regular))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )
         })

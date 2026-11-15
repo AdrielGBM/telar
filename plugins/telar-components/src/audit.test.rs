@@ -290,7 +290,7 @@ fn resizable_box() -> Result<Box<dyn LayoutItem>, LayoutError> {
         ResizableProps::props()
             .default_size(Size::new(160.0, 48.0))
             .min(Size::new(80.0, 32.0))
-            .max(Size::new(400.0, 0.0))
+            .max(Size::new(400.0, f32::INFINITY))
             .children(Children::one(|| Ok(box_item(words("Notes")?))))
             .build(),
     )

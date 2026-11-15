@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, Text, box_item};
 
 use crate::inputs::button::button::{ButtonProps, button};
@@ -53,7 +54,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .open(open)
                     .title(p.arg("title", "Confirm"))
                     .size(p.arg("size", ControlSize::Regular))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .children(body())
                     .build(),
             )?;

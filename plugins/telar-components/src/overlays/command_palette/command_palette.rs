@@ -160,15 +160,15 @@ pub struct CommandPaletteProps {
     /// Runs whenever the palette closes, whether a command ran or not.
     #[props(some, default)]
     pub on_close: Option<Rc<dyn Fn()>>,
-    /// The dialog's width in logical px. `0.0` (the default) is [`CommandPaletteTokens::width`].
-    #[props(default)]
-    pub width: f32,
+    /// The dialog's width in logical px. `None` (the default) is [`CommandPaletteTokens::width`].
+    #[props(some, default)]
+    pub width: Option<f32>,
     /// How large the dialog is drawn: its search field, rows, headings, key caps, padding and, unless it names one, its width, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// The colour the matched characters are drawn in and the cursor's wash is tinted with. `Color::TRANSPARENT` (the default) draws the matches in the theme accent and leaves the theme's wash as it is.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// The colour the matched characters are drawn in and the cursor's wash is tinted with. `None` (the default) draws the matches in the theme accent and leaves the theme's wash as it is.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Amends the paint of the dialog — this component's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`CommandPaletteTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -218,10 +218,10 @@ struct Parts {
     label: Option<Reactive<String>>,
     empty_label: Option<Reactive<String>>,
     on_run: Option<RunHandler>,
-    /// `0.0` for the tokens' width.
-    width: f32,
+    /// `None` for the tokens' width.
+    width: Option<f32>,
     size: ControlSize,
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
     style: SurfaceStyle,
 }
 
@@ -348,7 +348,7 @@ struct Palette {
     places: RowPlaces,
     built: BuiltRows<Arc<str>>,
     run: Rc<dyn Fn(&Command)>,
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
 }
 
 impl Palette {
@@ -459,11 +459,7 @@ fn build_open_palette(
         style,
     } = parts;
     let tokens = CommandPaletteTokens::current();
-    let width = if width > 0.0 {
-        width
-    } else {
-        tokens.width(size)
-    };
+    let width = width.unwrap_or_else(|| tokens.width(size));
     let row_height = ListTokens::current().row_height(size);
     let results = memo(move || {
         let commands = commands.get();

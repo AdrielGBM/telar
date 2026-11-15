@@ -6,10 +6,10 @@ use std::rc::Rc;
 
 use telar::{
     Anchoring, Children, Color, ConsumedKeys, Container, HasPopup, Key, LayoutError, LayoutItem,
-    LayoutStyle, NamedKey, Placement, Props, Reactive, ReactiveList, Rect, RwSignal,
+    LayoutStyle, NamedKey, Side, Props, Reactive, ReactiveList, Rect, RwSignal,
     SurfaceAmendment, box_item, effect,
     focus::{self, FocusId, Role},
-    memo, signal, track_layout,
+    memo, signal, track_layout, use_direction,
 };
 
 use crate::shared::dropdown;
@@ -181,9 +181,9 @@ pub struct MenuProps {
     /// Fired with the index of the row picked on the first panel, among its rows. A submenu's rows report to its own `on_select`.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(usize)>>,
-    /// The colour a bordered trigger is framed in and the rows' washes are tinted with. `Color::TRANSPARENT` (the default) frames it in the theme's `control_border` and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// The colour a bordered trigger is framed in and the rows' washes are tinted with. `None` (the default) frames it in the theme's `control_border` and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::stretch`]. The panel opens at least that wide.
     #[props(default)]
     pub stretch: bool,
@@ -344,9 +344,9 @@ pub struct ContextMenuProps {
     /// Run when the menu is done with: a row was picked, Escape was pressed, or the hand went elsewhere. The caller owns whether the menu exists, so this is how it says the answer is in.
     #[props(default = Rc::new(|| {}))]
     pub on_close: Rc<dyn Fn()>,
-    /// The least width of each panel in logical px; a panel widens to its widest row. `0.0` (the default) is [`MenuTokens::width`].
-    #[props(default)]
-    pub width: f32,
+    /// The least width of each panel in logical px; a panel widens to its widest row. `None` (the default) is [`MenuTokens::width`].
+    #[props(some, default)]
+    pub width: Option<f32>,
     /// How large its panel is drawn: its padding, width and offset, as [`ControlSize`] works them out. The rows are sized where they are written.
     #[props(default)]
     pub size: ControlSize,
@@ -382,18 +382,23 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
     } = props;
     let config = Rc::new(Config {
         tokens,
-        width: (width > 0.0).then_some(width),
+        width,
         within,
         style,
-        color: Reactive::of(|| Color::TRANSPARENT),
+        color: None,
         close: on_close.clone(),
     });
     let offset = memo(move || tokens.or(MenuTokens::current()).offset(size));
     let anchoring: menu_panel::Anchored = Rc::new(move || {
         let inside = menu_panel::kept_inside(within);
         match around {
-            Some(control) => Anchoring::new(control, Placement::Below, inside).gap(offset.get()),
-            None => Anchoring::new(Rect::new(at.0, at.1, 0.0, 0.0), Placement::Below, inside),
+            Some(control) => Anchoring::new(control, Side::Below, inside, use_direction()).gap(offset.get()),
+            None => Anchoring::new(
+                Rect::new(at.0, at.1, 0.0, 0.0),
+                Side::Below,
+                inside,
+                use_direction(),
+            ),
         }
     });
     let built = menu_panel::panel(

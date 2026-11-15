@@ -44,15 +44,15 @@ const ROTATION: Duration = Duration::from_millis(900);
 /// An indeterminate spinner: a static ring (the track) with a small accent dot orbiting it forever. A uniformly-stroked ring looks identical at every rotation angle, and a swept-colour stroke has no conic gradient to draw with (a linear `Gradient` stroke on a rect degrades to its first stop's flat colour on the hardware renderer, since `RectInstance` carries only `stroke_color`), so the motion is a solid dot whose parent rotates about its own centre through `box_transform`, driven by `telar::motion::Keyframes` under `Repeat::Loop`, with no per-frame trigonometry.
 #[derive(Props)]
 pub struct SpinnerProps {
-    /// Head (orbiting dot) accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Head (orbiting dot) accent. `None` (the default) is the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// How large the ring is drawn, as [`ControlSize`] works it out from [`SpinnerTokens::size`].
     #[props(default)]
     pub size: ControlSize,
-    /// The ring's diameter in px, over what [`size`](Self::size) works out. `0.0` (the default) means "unset".
-    #[props(default)]
-    pub diameter: f32,
+    /// The ring's diameter in px. `None` (the default) is what [`size`](Self::size) works out.
+    #[props(some, default)]
+    pub diameter: Option<f32>,
     /// Amends the paint of the ring — the spinner's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`SpinnerTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -67,11 +67,7 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         style,
     } = props;
     let size = move || {
-        if diameter > 0.0 {
-            diameter
-        } else {
-            SpinnerTokens::current().size(size)
-        }
+        diameter.unwrap_or_else(|| SpinnerTokens::current().size(size))
     };
     let head_box = move || {
         let head = size() * HEAD_FRACTION;

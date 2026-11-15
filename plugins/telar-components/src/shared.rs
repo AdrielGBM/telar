@@ -292,14 +292,33 @@ pub(crate) fn displayed_while(node: telar::NodeId, visible: impl Fn() -> bool + 
     });
 }
 
-/// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`. `color()` is evaluated once. Collapses the per-widget accent/track/surface/bubble resolvers into one shape.
-pub(crate) fn resolve(color: &Reactive<Color>, fallback: impl FnOnce() -> Color) -> Color {
-    let c = color.get();
-    if c == Color::TRANSPARENT {
-        fallback()
-    } else {
-        c
+/// The ends of `range`, or the error `component` is built with when its start lies past its end or either end is not a number.
+pub(crate) fn ordered(
+    component: &str,
+    range: std::ops::RangeInclusive<f32>,
+) -> Result<(f32, f32), LayoutError> {
+    let (start, end) = range.into_inner();
+    match start <= end {
+        true => Ok((start, end)),
+        false => Err(LayoutError::Engine(format!(
+            "{component}: its range starts at {start}, past its end at {end}"
+        ))),
     }
+}
+
+/// `step`, or the error `component` is built with when it would not move a value forward.
+pub(crate) fn positive_step(component: &str, step: f32) -> Result<f32, LayoutError> {
+    match step > 0.0 {
+        true => Ok(step),
+        false => Err(LayoutError::Engine(format!(
+            "{component}: a step of {step} moves nothing forward"
+        ))),
+    }
+}
+
+/// The colour a caller chose, read now, or `fallback()` where it chose none.
+pub(crate) fn resolve(color: &Option<Reactive<Color>>, fallback: impl FnOnce() -> Color) -> Color {
+    color.as_ref().map_or_else(fallback, Reactive::get)
 }
 
 /// The open/close state a scrim overlay is driven by: an explicitly bound `open` signal, else the shared state of the `id` it is named by, else `None` (unbound — it can never open).
@@ -594,16 +613,15 @@ pub(crate) fn hinted(
     build: impl Fn() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     size: ControlSize,
     text: Reactive<String>,
-    shortcut: Reactive<String>,
+    shortcut: Option<Reactive<String>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    crate::tooltip(
-        crate::TooltipProps::props()
-            .size(size)
-            .text(text)
-            .shortcut(shortcut)
-            .children(telar::Children::one(build))
-            .build(),
-    )
+    let mut props = crate::TooltipProps::props()
+        .size(size)
+        .text(text)
+        .children(telar::Children::one(build))
+        .build();
+    props.shortcut = shortcut;
+    crate::tooltip(props)
 }
 
 /// `chord` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere, a sequence step after step (`Ctrl+K, then S`): what a hint shows and a reader hears. Text that names no [`Chord`] is shown as written.

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use telar::{
     AnchorAlign, Anchoring, Border, Children, Color, Container, HasPopup, Key, LayoutError,
-    LayoutItem, LayoutStyle, NamedKey, NodeId, Overlay, Placement, PointerButton, Props, Reactive,
+    LayoutItem, LayoutStyle, NamedKey, NodeId, Overlay, Side, PointerButton, Props, Reactive,
     Rect, RectStyle, RwSignal, ScrollViewport, StyledContainer, SurfaceStyle, amend_surface,
     box_item, children, effect,
     focus::{self, FocusId},
@@ -38,8 +38,8 @@ pub(crate) struct Config {
     pub(crate) within: Rect,
     /// Amends every panel's paint.
     pub(crate) style: SurfaceStyle,
-    /// Tints the rows' washes. `Color::TRANSPARENT` leaves the theme's.
-    pub(crate) color: Reactive<Color>,
+    /// Tints the rows' washes. `None` leaves the theme's.
+    pub(crate) color: Option<Reactive<Color>>,
     /// Closes the whole menu: a pick, Escape on its first panel, a press away.
     pub(crate) close: Rc<dyn Fn()>,
 }
@@ -339,7 +339,12 @@ fn beside(row: NodeId, size: ControlSize, cascade: &Rc<Cascade>) -> Anchored {
         };
         // Its own padding above the row, so its first row lines up with the one it opened from.
         let anchor = Rect::new(side.x, row.y - padding, side.width, row.height);
-        Anchoring::new(anchor, Placement::End, kept_inside(cascade.config.within))
+        Anchoring::new(
+            anchor,
+            Side::End,
+            kept_inside(cascade.config.within),
+            telar::use_direction(),
+        )
             .align(AnchorAlign::Start)
     })
 }

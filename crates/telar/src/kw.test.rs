@@ -12,6 +12,9 @@ fn a_word_is_its_axis_s_value() {
     assert_eq!(Variant::from_word("outline"), Some(Variant::Outline));
     assert_eq!(Variant::from_word("Outline"), None);
     assert_eq!(<Tone as Word>::AXIS, "tone");
+    assert_eq!(end, Side::End);
+    assert_eq!(Side::Start.word(), Some("start"));
+    assert_eq!(<Side as Word>::AXIS, "side");
 }
 
 #[cfg(feature = "previews")]

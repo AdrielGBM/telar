@@ -1,6 +1,7 @@
 //! [`handle`]: a point on the canvas dragged to set a value, with the arrow keys as its keyboard path.
 
 use std::cell::Cell;
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use telar::{
@@ -54,7 +55,7 @@ fn grab_outset(size: f32) -> Insets {
     Insets::new(reach, reach, reach, reach)
 }
 
-/// A draggable point bound to a number, placed over its parent in that parent's coordinates; a drag keeps the grab offset so it doesn't jump, clamps to `min..=max`, and every drag or arrow-key step is its own [`Transaction`] (Escape reverts it).
+/// A draggable point bound to a number, placed over its parent in that parent's coordinates; a drag keeps the grab offset so it doesn't jump, clamps to its range, and every drag or arrow-key step is its own [`Transaction`] (Escape reverts it).
 #[derive(Props)]
 pub struct HandleProps {
     /// Bound value. Ignored when [`transaction`](Self::transaction) is given: its signal is the value.
@@ -66,30 +67,29 @@ pub struct HandleProps {
     pub to_value: ToValue,
     #[props(default = Rc::new(|value| (value, 0.0)))]
     pub to_point: ToPoint,
-    #[props(default = f32::NEG_INFINITY)]
-    pub min: f32,
-    #[props(default = f32::INFINITY)]
-    pub max: f32,
-    /// One unscaled arrow-key step. Non-positive falls back to `1.0`.
+    /// The values the handle keeps to, unbounded by default. A range whose start lies past its end is an error when the handle is built.
+    #[props(default = f32::NEG_INFINITY..=f32::INFINITY)]
+    pub range: RangeInclusive<f32>,
+    /// One unscaled arrow-key step, one by default. A step that is not above zero is an error when the handle is built.
     #[props(default = 1.0)]
     pub step: f32,
     /// How large the dot is drawn, as [`ControlSize`] works it out from [`HandleTokens::size`]. Its grab area is at least the smallest pointer target at every size.
     #[props(default)]
     pub size: ControlSize,
-    /// The dot's diameter in px, over what [`size`](Self::size) works out. `0.0` (the default) means "unset".
-    #[props(default)]
-    pub diameter: f32,
+    /// The dot's diameter in px. `None` (the default) is what [`size`](Self::size) works out.
+    #[props(some, default)]
+    pub diameter: Option<f32>,
     #[props(default = Cursor::Grab)]
     pub cursor: Cursor,
     /// Mirrors whether the last request was clamped, for a caller that shows it elsewhere too.
     #[props(some, into, default)]
     pub clamped: Option<RwSignal<bool>>,
-    /// `Color::TRANSPARENT` (the default) falls back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
-    /// `Color::TRANSPARENT` (the default) falls back to the theme's warning colour.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub clamped_color: Reactive<Color>,
+    /// `None` (the default) falls back to the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
+    /// `None` (the default) falls back to the theme's warning colour.
+    #[props(some, into, default)]
+    pub clamped_color: Option<Reactive<Color>>,
     /// What a reader calls the handle: the value it sets, such as "Hue" or "Start time".
     #[props(into, default)]
     pub label: Reactive<String>,
@@ -116,8 +116,7 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         transaction,
         to_value,
         to_point,
-        min,
-        max,
+        range,
         step,
         size,
         diameter,
@@ -131,11 +130,7 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         style,
     } = props;
     let size = move || {
-        if diameter > 0.0 {
-            diameter
-        } else {
-            HandleTokens::current().size(size)
-        }
+        diameter.unwrap_or_else(|| HandleTokens::current().size(size))
     };
     let dot_box = move || {
         LayoutStyle::new()
@@ -145,8 +140,8 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .width(size())
             .height(size())
     };
-    let (min, max) = if max < min { (max, min) } else { (min, max) };
-    let step = if step > 0.0 { step } else { 1.0 };
+    let (min, max) = shared::ordered("handle", range)?;
+    let step = shared::positive_step("handle", step)?;
     let transaction = transaction.unwrap_or_else(|| {
         Transaction::new(value.unwrap_or_else(|| signal(0.0_f32.clamp(min, max))))
     });

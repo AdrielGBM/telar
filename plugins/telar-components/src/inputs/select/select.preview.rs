@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Children, Color, Key, NamedKey, Reactive, Role};
 
 use crate::layout::list::list::{ItemProps, item};
@@ -43,7 +44,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 SelectProps::props()
                     .on_select(Rc::new(|_| {}))
                     .size(size)
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .stretch(p.arg("stretch", false))
                     .children(sizes(size))
                     .build(),

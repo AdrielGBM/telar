@@ -4,8 +4,7 @@ fn expand_str(source: &str) -> syn::Result<String> {
     Ok(expand(syn::parse_str(source)?)?.to_string())
 }
 
-const AXES: &str =
-    "size => crate::ControlSize, variant => crate::Variant, tone => crate::Tone { Color }";
+const AXES: &str = "size => crate::ControlSize, variant => crate::Variant, tone => crate::Tone { Color }, side => crate::Side";
 
 #[test]
 fn each_word_names_its_axis_s_value() {
@@ -20,6 +19,10 @@ fn each_word_names_its_axis_s_value() {
     );
     assert!(
         out.contains("pub use crate :: Tone :: Danger as danger ;"),
+        "{out}"
+    );
+    assert!(
+        out.contains("pub use crate :: Side :: End as end ;"),
         "{out}"
     );
 }
@@ -40,5 +43,8 @@ fn a_value_no_word_names_has_none() {
 #[test]
 fn the_axes_are_the_list_s() {
     let err = expand_str("size => crate::ControlSize").unwrap_err();
-    assert!(err.to_string().contains("size, variant, tone"), "{err}");
+    assert!(
+        err.to_string().contains("size, variant, tone, side"),
+        "{err}"
+    );
 }

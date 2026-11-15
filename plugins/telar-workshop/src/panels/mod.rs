@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, Children, Color, Container, LayoutError, LayoutItem, LayoutStyle, Memo,
+    Accessible, AlignItems, Children, Container, LayoutError, LayoutItem, LayoutStyle, Memo,
     Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, ShapeStyle, StyledContainer, box_item,
     children, effect, memo, signal, track_layout,
 };
@@ -174,7 +174,7 @@ fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     tab_list(
         state.panel_tab(),
         tabs,
-        Color::TRANSPARENT.into(),
+        None,
         Some(strings::reactive(PANELS)),
         ControlSize::Regular,
     )

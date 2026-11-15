@@ -119,8 +119,8 @@ fn dragging_past_the_limits_clamps_to_them() {
     let mut split = Split::build(
         SplitPaneProps::props()
             .size(size)
-            .min(150.0)
-            .max(320.0)
+            .min(PaneLimit::Px(150.0))
+            .max(PaneLimit::Px(320.0))
             .build(),
     );
     split.drag_by(500.0);
@@ -135,14 +135,38 @@ fn fractions_bound_the_size_by_the_whole_split() {
     let mut split = Split::build(
         SplitPaneProps::props()
             .size(size)
-            .min_fraction(0.25)
-            .max_fraction(0.5)
+            .min(PaneLimit::Fraction(0.25))
+            .max(PaneLimit::Fraction(0.5))
             .build(),
     );
     split.drag_by(800.0);
     assert_eq!(size.get(), 300.0);
     split.drag_by(-800.0);
     assert_eq!(size.get(), 150.0);
+}
+
+#[test]
+fn limits_that_no_pane_can_keep_to_are_refused() {
+    crate::test_support::fresh_layout_runtime();
+    let built = |props: SplitPaneProps| split_pane(props).is_ok();
+    assert!(!built(
+        SplitPaneProps::props()
+            .min(PaneLimit::Px(300.0))
+            .max(PaneLimit::Px(200.0))
+            .build()
+    ));
+    assert!(!built(
+        SplitPaneProps::props()
+            .max(PaneLimit::Fraction(1.5))
+            .build()
+    ));
+    assert!(!built(SplitPaneProps::props().step(0.0).build()));
+    assert!(built(
+        SplitPaneProps::props()
+            .min(PaneLimit::Px(300.0))
+            .max(PaneLimit::Fraction(0.2))
+            .build()
+    ));
 }
 
 #[test]
@@ -227,8 +251,8 @@ fn home_and_end_go_to_the_limits() {
     let mut split = Split::build(
         SplitPaneProps::props()
             .size(size)
-            .min(120.0)
-            .max(400.0)
+            .min(PaneLimit::Px(120.0))
+            .max(PaneLimit::Px(400.0))
             .build(),
     );
     focus::focus_next();
@@ -310,8 +334,8 @@ fn the_splitter_reports_its_value_and_orientation() {
     let split = Split::build(
         SplitPaneProps::props()
             .size(size)
-            .min(100.0)
-            .max(400.0)
+            .min(PaneLimit::Px(100.0))
+            .max(PaneLimit::Px(400.0))
             .build(),
     );
     let exposed = focus::exposed();
@@ -408,8 +432,8 @@ fn fractions_bound_a_sized_second_pane_by_the_whole_split() {
         SplitPaneProps::props()
             .sized(SizedPane::Second)
             .size(size)
-            .min(160.0)
-            .max_fraction(0.6)
+            .min(PaneLimit::Px(160.0))
+            .max(PaneLimit::Fraction(0.6))
             .build(),
     );
     split.drag_by(-900.0);

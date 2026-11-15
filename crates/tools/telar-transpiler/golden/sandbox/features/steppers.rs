@@ -25,7 +25,7 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let last_change = signal("no change yet".to_string());
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Stepper").desc("stepper is a numeric input with − / + buttons that step a bound value within min/max. A component built on the button primitive; the value reads back in your own range, no memo needed.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Stepper").desc("stepper is a numeric input with − / + buttons that step a bound value within its range. A component built on the button primitive; the value reads back in your own range, no memo needed.").build())?;
         let __node_1 = {
             let __recipe_children = Children::new(
                 {
@@ -41,7 +41,7 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_3 = stepper(StepperProps::props().value(qty.clone()).min(::telar::Int(0)).max(::telar::Int(10)).step(::telar::Int(1)).build())?;
+                                    let __node_3 = stepper(StepperProps::props().value(qty.clone()).range(0.0..=10.0).step(::telar::Int(1)).build())?;
                                     let __text_0 = {
                                         let qty = qty.clone();
                                         Text::declaring(
@@ -60,13 +60,13 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("stepper value:$qty min:0 max:10 step:1").build())?;
+                    let __node_4 = code_line(CodeLineProps::props().code("stepper value:$qty range:(0.0..=10.0) step:1").build())?;
                     __children.push(box_item(__node_4));
                     Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("stepper — bound value, clamped to min/max, stepped by step").children(__recipe_children).build())?
+            example(ExampleProps::props().title("stepper — bound value, clamped to its range, stepped by step").children(__recipe_children).build())?
         };
         let __node_5 = {
             let __recipe_children = Children::new(
@@ -85,7 +85,7 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_7 = stepper(StepperProps::props().value(seats.clone()).min(::telar::Int(1)).max(::telar::Int(8)).step(::telar::Int(1)).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build())?;
+                                    let __node_7 = stepper(StepperProps::props().value(seats.clone()).range(1.0..=8.0).step(::telar::Int(1)).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build())?;
                                     let __text_1 = {
                                         let last_change = last_change.clone();
                                         Text::declaring(

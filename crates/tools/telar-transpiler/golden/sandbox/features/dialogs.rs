@@ -112,7 +112,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                         }
                                         }
                                     );
-                                    drawer(DrawerProps::props().id("nav").side("right").children(__recipe_children).build())?
+                                    drawer(DrawerProps::props().id("nav").side(::telar::kw::end).children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_9));
                                 Ok(__children)
@@ -122,7 +122,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_7));
-                    let __node_10 = code_line(CodeLineProps::props().code("drawer id:\"nav\" side:\"right\"  >  text \"Drawer content\"").build())?;
+                    let __node_10 = code_line(CodeLineProps::props().code("drawer id:\"nav\" side:end  >  text \"Drawer content\"").build())?;
                     __children.push(box_item(__node_10));
                     Ok(__children)
                 }

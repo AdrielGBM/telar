@@ -1,38 +1,25 @@
 use std::time::Duration;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Role};
+use super::sample::Given;
+use telar::{Children, Color, Role, Side};
 
 use crate::inputs::button::button::{ButtonProps, button};
 use crate::overlays::tooltip::tooltip::{TooltipProps, tooltip};
 use telar::ControlSize;
 
-#[derive(Clone, Copy, telar::PreviewArg)]
-enum Side {
-    Bottom,
-    Top,
-    Start,
-    End,
-}
-
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(tooltip: TooltipProps, "Default", |p| {
-            let side = match p.arg("side", Side::Bottom) {
-                Side::Bottom => "bottom",
-                Side::Top => "top",
-                Side::Start => "start",
-                Side::End => "end",
-            };
             let size = p.arg("size", ControlSize::Regular);
             tooltip(
                 TooltipProps::props()
                     .text(p.arg("text", "Save"))
                     .shortcut(p.arg("shortcut", "Mod+S"))
                     .description(p.arg("description", "Writes the file to disk."))
-                    .side(side)
+                    .side(p.arg("side", Side::Below))
                     .size(size)
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .children(Children::one(move || {
                         button(ButtonProps::props().label("Hover me").size(size).build())
                     }))

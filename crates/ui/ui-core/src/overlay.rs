@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use geometry_core::{Rect, Size};
+use i18n_core::Direction;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::RwSignal;
@@ -11,23 +12,39 @@ use ui_tree::{
     Component, EventResult, OverlaySink, RenderNode, register_overlay, unregister_overlay,
 };
 
-use crate::context::{attach_overlay, track_layout};
+use crate::context::{attach_overlay, current_direction, track_layout, use_direction};
 use crate::input_region::{InputHandle, receives_input, tracks_hidden, visible_rect, withhold};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::{dispatch_container_event, offset_pointer};
 use crate::surface_context::HomeSurface;
 
-/// Where an anchored overlay's content sits relative to its trigger widget. Maps to the `.rsx` `placement` attribute. Only vertical placements are provided today; horizontal ones would follow the same pattern.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Placement {
-    /// Content's top-left at the trigger's bottom-left — a menu dropping down from its button.
-    Below,
-    /// Content's bottom-left at the trigger's top-left — a menu opening upward.
+/// Which side of the thing it belongs to a panel opens on, written the way the line reads: [`Start`](Self::Start) and [`End`](Self::End) are the left and the right in a left-to-right surface and the other way round in a right-to-left one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    /// Above it — a menu opening upward.
     Above,
-    /// Beside the trigger on its leading side, centred on it — where a tooltip goes when the trigger sits in a vertical rail and the room is sideways.
+    /// Below it — a menu dropping down from its button.
+    Below,
+    /// Beside it on its leading side — where a tooltip goes when the trigger sits in a vertical rail and the room is sideways.
     Start,
-    /// Beside the trigger on its trailing side, centred on it.
+    /// Beside it on its trailing side.
     End,
+}
+
+impl Side {
+    /// Whether the side lies past the thing along its axis, below it or to its right, in a surface written `direction`.
+    fn after(self, direction: Direction) -> bool {
+        match self {
+            Self::Below => true,
+            Self::Above => false,
+            Self::End => direction == Direction::Ltr,
+            Self::Start => direction == Direction::Rtl,
+        }
+    }
+
+    fn vertical(self) -> bool {
+        matches!(self, Self::Above | Self::Below)
+    }
 }
 
 /// The world-vs-local anchor fallback shared by the anchored menu/select/tooltip panels.
@@ -42,7 +59,7 @@ pub fn anchor_rect(node: NodeId, fallback: &RwSignal<Rect>) -> Rect {
 struct Anchor {
     trigger: NodeId,
     laid: RwSignal<Rect>,
-    placement: Placement,
+    side: Side,
 }
 
 impl Anchor {
@@ -81,10 +98,11 @@ fn anchor_viewport() -> Rect {
 fn anchor_translate(
     trigger: Rect,
     panel: Rect,
-    placement: Placement,
+    side: Side,
     viewport: Rect,
+    direction: Direction,
 ) -> (f32, f32) {
-    let spot = Anchoring::new(trigger, placement, viewport)
+    let spot = Anchoring::new(trigger, side, viewport, direction)
         .gap(ANCHOR_GAP)
         .place(Size::new(panel.width, panel.height));
     ((spot.x - panel.x).round(), (spot.y - panel.y).round())
@@ -106,27 +124,30 @@ pub enum AnchorAlign {
 pub struct Anchoring {
     /// What the panel opens beside, as drawn: a trigger's on-screen rect, or a rect of no size at the point a context menu was asked for.
     pub anchor: Rect,
-    pub placement: Placement,
+    pub side: Side,
     pub align: AnchorAlign,
     /// Between the anchor and the panel.
     pub gap: f32,
     /// The area the panel has to stay inside: the overlay's, see [`overlay_viewport`](crate::overlay_viewport).
     pub viewport: Rect,
+    /// The way the surface reads, which [`Side::Start`], [`Side::End`] and [`AnchorAlign::Start`] are resolved against.
+    pub direction: Direction,
 }
 
 impl Anchoring {
-    /// No gap, and the alignment `placement` reads as: a panel above or below its anchor starts where the anchor starts, one beside it is centred on it.
-    pub fn new(anchor: Rect, placement: Placement, viewport: Rect) -> Self {
-        let align = match placement {
-            Placement::Below | Placement::Above => AnchorAlign::Start,
-            Placement::Start | Placement::End => AnchorAlign::Center,
+    /// No gap, and the alignment `side` reads as: a panel above or below its anchor starts where the anchor starts, one beside it is centred on it.
+    pub fn new(anchor: Rect, side: Side, viewport: Rect, direction: Direction) -> Self {
+        let align = match side.vertical() {
+            true => AnchorAlign::Start,
+            false => AnchorAlign::Center,
         };
         Self {
             anchor,
-            placement,
+            side,
             align,
             gap: 0.0,
             viewport,
+            direction,
         }
     }
 
@@ -140,27 +161,27 @@ impl Anchoring {
         self
     }
 
-    /// The largest panel [`place`](Self::place) sets down without leaving the viewport: the roomier side of the anchor along the placement, the whole viewport across it.
+    /// The largest panel [`place`](Self::place) sets down without leaving the viewport: the roomier side of the anchor along its side, the whole viewport across it.
     ///
     /// What a panel is capped to *before* it is laid out, so it can be sized by its content and placed after. The roomier side and not the side it opens on, because that side is not known until its size is — and it does not have to be: a panel that fits where it was asked to open is no bigger than the room there, and one that does not opens on the roomier side, which is this.
     pub fn room(&self) -> Size {
         let (after, before) = self.rooms();
         let along = after.max(before);
-        match self.placement {
-            Placement::Below | Placement::Above => Size::new(across(self.viewport.width), along),
-            Placement::Start | Placement::End => Size::new(along, across(self.viewport.height)),
+        match self.side.vertical() {
+            true => Size::new(across(self.viewport.width), along),
+            false => Size::new(along, across(self.viewport.height)),
         }
     }
 
     /// Where a panel of `size` goes and how big it may be there: the rect to draw it in, on whole pixels.
     pub fn place(&self, size: Size) -> Rect {
         let (after, before) = self.rooms();
-        let vertical = matches!(self.placement, Placement::Below | Placement::Above);
+        let vertical = self.side.vertical();
         let (along, across_size) = match vertical {
             true => (size.height, size.width),
             false => (size.width, size.height),
         };
-        let asked_after = matches!(self.placement, Placement::Below | Placement::End);
+        let asked_after = self.side.after(self.direction);
         let (asked, other) = match asked_after {
             true => (after, before),
             false => (before, after),
@@ -179,14 +200,21 @@ impl Anchoring {
             false => a_start - self.gap - along,
         };
         let across_size = across_size.min(across(v_cross_extent));
-        let cross = match self.align {
-            AnchorAlign::Start => a_cross,
-            AnchorAlign::Center => a_cross + (a_cross_extent - across_size) / 2.0,
+        let leads_from_right = vertical && self.direction == Direction::Rtl;
+        let cross = match (self.align, leads_from_right) {
+            (AnchorAlign::Start, false) => a_cross,
+            (AnchorAlign::Start, true) => a_cross + a_cross_extent - across_size,
+            (AnchorAlign::Center, _) => a_cross + (a_cross_extent - across_size) / 2.0,
         };
-        // Slid along the edge rather than clamped blindly, so a panel wider than the viewport keeps its leading edge — where its content starts — visible. LTR throughout, so RTL is one place to change.
-        let cross = cross
-            .min(v_cross + v_cross_extent - EDGE_MARGIN - across_size)
-            .max(v_cross + EDGE_MARGIN);
+        // Slid along the edge rather than clamped blindly, so a panel wider than the viewport keeps its leading edge — where its content starts — visible: the clamp applied last wins.
+        let (lowest, highest) = (
+            v_cross + EDGE_MARGIN,
+            v_cross + v_cross_extent - EDGE_MARGIN - across_size,
+        );
+        let cross = match leads_from_right {
+            false => cross.min(highest).max(lowest),
+            true => cross.max(lowest).min(highest),
+        };
         // A centred panel lands on a half pixel whenever the two differ by an odd size, and a surface at a half pixel has soft edges and softer text.
         let (main, cross) = (main.round(), cross.round());
         match vertical {
@@ -195,12 +223,12 @@ impl Anchoring {
         }
     }
 
-    /// The room past the anchor's far edge along the placement (below it, or after it) and before its near edge, each short of the gap and the edge margin.
+    /// The room past the anchor's far edge along its side's axis (below it, or to its right) and before its near edge, each short of the gap and the edge margin.
     fn rooms(&self) -> (f32, f32) {
         let (a, v) = (self.anchor, self.viewport);
-        let (a_start, a_end, v_start, v_end) = match self.placement {
-            Placement::Below | Placement::Above => (a.y, a.y + a.height, v.y, v.y + v.height),
-            Placement::Start | Placement::End => (a.x, a.x + a.width, v.x, v.x + v.width),
+        let (a_start, a_end, v_start, v_end) = match self.side.vertical() {
+            true => (a.y, a.y + a.height, v.y, v.y + v.height),
+            false => (a.x, a.x + a.width, v.x, v.x + v.width),
         };
         let after = v_end - EDGE_MARGIN - (a_end + self.gap);
         let before = a_start - self.gap - (v_start + EDGE_MARGIN);
@@ -225,8 +253,9 @@ fn anchored_placement(
     let (dx, dy) = anchor_translate(
         anchor.on_screen(&read),
         panel,
-        anchor.placement,
+        anchor.side,
         anchor_viewport(),
+        current_direction(),
     );
     (
         Rect::new(panel.x + dx, panel.y + dy, panel.width, panel.height),
@@ -342,7 +371,7 @@ impl Overlay {
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
         trigger: NodeId,
-        placement: Placement,
+        side: Side,
     ) -> Result<Self, LayoutError> {
         let laid = track_layout(trigger).ok_or_else(|| {
             LayoutError::Engine("an anchored overlay's trigger has no layout node".to_string())
@@ -354,7 +383,7 @@ impl Overlay {
             Some(Anchor {
                 trigger,
                 laid,
-                placement,
+                side,
             }),
             Rc::new(|| true),
         )
@@ -491,8 +520,9 @@ impl Component for Overlay {
                 let (dx, dy) = anchor_translate(
                     anchor.on_screen(|s| s.get()),
                     panel,
-                    anchor.placement,
+                    anchor.side,
                     anchor_viewport(),
+                    use_direction(),
                 );
                 // The content is laid out at the origin and drawn at the trigger.
                 RenderNode::overlay([RenderNode::transform_with(

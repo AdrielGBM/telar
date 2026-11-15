@@ -61,12 +61,8 @@ impl TextFieldTokens {
 }
 
 /// A field's width: `width` where its call names one, else [`TextFieldTokens::width`].
-pub(crate) fn field_width(size: ControlSize, width: f32) -> f32 {
-    if width > 0.0 {
-        width
-    } else {
-        TextFieldTokens::current().width(size)
-    }
+pub(crate) fn field_width(size: ControlSize, width: Option<f32>) -> f32 {
+    width.unwrap_or_else(|| TextFieldTokens::current().width(size))
 }
 
 /// The input is the whole height of the field, so the press and the audit see the whole field rather than the bare line inside it, and the line is centred in it. Beside an adornment it takes the room the adornments leave.
@@ -102,9 +98,9 @@ pub struct TextFieldProps {
     /// A small caption stacked above the box, and what a reader calls the field; omitted entirely (no extra row) when empty.
     #[props(into, default)]
     pub label: Reactive<String>,
-    /// Box width in logical px. `0.0` (the default) means "unset" and resolves to [`TextFieldTokens::width`].
-    #[props(default)]
-    pub width: f32,
+    /// Box width in logical px. `None` (the default) is [`TextFieldTokens::width`].
+    #[props(some, default)]
+    pub width: Option<f32>,
     /// How large the field is drawn: its height, padding, text, caption and counter, and the width it takes when its call names none, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
@@ -114,21 +110,21 @@ pub struct TextFieldProps {
     /// How many lines tall a [`multiline`](Self::multiline) field is with nothing in it. Three by default.
     #[props(default = ROWS)]
     pub rows: u32,
-    /// How many lines tall a [`multiline`](Self::multiline) field grows to as lines are typed before it scrolls. `0` (the default) keeps it at `rows`.
-    #[props(default)]
-    pub max_rows: u32,
+    /// How many lines tall a [`multiline`](Self::multiline) field grows to as lines are typed before it scrolls. `None` (the default) keeps it at `rows`; fewer than `rows` is an error when the field is built.
+    #[props(some, default)]
+    pub max_rows: Option<u32>,
     /// Whether a line longer than a [`multiline`](Self::multiline) field wraps onto the next row ([`TextWrap::Wrap`], the default) or stays whole and scrolls sideways. A field of one line never wraps.
     #[props(default)]
     pub text_wrap: TextWrap,
     /// Shows how many characters were typed, under the box. Off by default.
     #[props(default)]
     pub counter: bool,
-    /// The count the counter measures against, shown beside it and drawn in the theme's error colour once it is passed. `0` (the default) names no limit. Typing past it is not refused: the counter says so, and the form decides.
-    #[props(default)]
-    pub max_length: usize,
-    /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset", and leaves the field in whatever the region around it is written in. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`/`outline`.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// The count the counter measures against, shown beside it and drawn in the theme's error colour once it is passed. `None` (the default) names no limit. Typing past it is not refused: the counter says so, and the form decides.
+    #[props(some, default)]
+    pub max_length: Option<usize>,
+    /// The entered text's colour. `None` (the default) leaves the field in whatever the region around it is written in. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`/`outline`.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Runs when Enter is pressed while a field of one line is focused. A [`multiline`](Self::multiline) field breaks the line instead.
     #[props(some, default)]
     pub on_submit: Option<Rc<dyn Fn()>>,
@@ -199,13 +195,18 @@ pub(crate) fn adorned_field(
         style,
         focus_id,
     } = props;
+    if let Some(max_rows) = max_rows.filter(|max_rows| *max_rows < rows) {
+        return Err(LayoutError::Engine(format!(
+            "text_field: it grows to {max_rows} rows, fewer than the {rows} it starts at"
+        )));
+    }
     let value = value.unwrap_or_else(|| signal(String::new()));
     let width = move || field_width(size, width);
     let text = move |t: TextStyle| {
         let t = shared::control_text(size, t, 1.0);
-        match color.get() {
-            c if c == Color::TRANSPARENT => t,
-            c => t.with_color(c),
+        match &color {
+            Some(color) => t.with_color(color.get()),
+            None => t,
         }
     };
     let name = {
@@ -231,7 +232,7 @@ pub(crate) fn adorned_field(
         true => {
             let lines = Lines {
                 rows: rows.max(1),
-                max_rows: max_rows.max(rows.max(1)),
+                max_rows: max_rows.unwrap_or(rows).max(rows.max(1)),
                 wrap: text_wrap,
             };
             several_lines(size, value, &placeholder, name, text, on_key, lines)?
@@ -429,20 +430,20 @@ fn pad_y(size: ControlSize, node: NodeId) -> f32 {
 fn counted(
     size: ControlSize,
     value: RwSignal<String>,
-    max: usize,
+    max: Option<usize>,
     width: impl Fn() -> f32 + Clone + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let count = move || value.with(|text| text.chars().count());
-    let over = move || max > 0 && count() > max;
+    let over = move || max.is_some_and(|max| count() > max);
     let shown = move || match max {
-        0 => count().to_string(),
-        max => format!("{} / {max}", count()),
+        None => count().to_string(),
+        Some(max) => format!("{} / {max}", count()),
     };
     let said = move || {
         let n = count().to_string();
         match max {
-            0 => strings::text_with(strings::CHARACTERS, &[("count", &n)]),
-            max => strings::text_with(
+            None => strings::text_with(strings::CHARACTERS, &[("count", &n)]),
+            Some(max) => strings::text_with(
                 strings::CHARACTERS_OF,
                 &[("count", &n), ("max", &max.to_string())],
             ),

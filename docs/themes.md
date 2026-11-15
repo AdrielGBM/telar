@@ -168,7 +168,7 @@ component's `ControlSize` and scales it to that. Each field and what `None` fall
 | `ColorPickerTokens` | `width` → `measure(16)`; `radius` → `radius_control`; `ring` → `border_width_strong` |
 | `CommandPaletteTokens` | `width` → `measure(40)`; `radius` → `radius_dialog`; `inset_top` → six `gap_xl` |
 | `DataTableTokens` | `row_height` (the header's too) → `row_height`; `pad_x` → `gap_md`; `radius` (a row's wash and the cursor's ring) → `radius_item` |
-| `DrawerTokens` | `radius` → `radius_dialog`; `pad` → `gap_xl`; `width` → `measure(20)` |
+| `DrawerTokens` | `radius` → `radius_dialog`; `pad` → `gap_xl`; `extent` (its width at the start or the end, its height above or below) → `measure(20)` |
 | `HandleTokens` | `size` → a slider's thumb less `gap_sm`; `ring` → `border_width_strong` |
 | `IconButtonTokens` | `radius` → `radius_control` |
 | `ImageTokens` | `radius` (the picture and its placeholder; an image's own `radius` wins) → `radius_item` |
@@ -214,14 +214,15 @@ button label:"Undo" variant:ghost
 
 ## The words a component call writes bare
 
-`size`, `variant` and `tone` take a word in place of a Rust path: `size:small`, `variant:ghost`, `tone:danger`. The
-words are one closed vocabulary every component shares:
+`size`, `variant`, `tone` and `side` take a word in place of a Rust path: `size:small`, `variant:ghost`,
+`tone:danger`, `side:end`. The words are one closed vocabulary every component shares:
 
 | Prop | Words |
 | --- | --- |
 | `size` | `small`, `regular`, `large` |
 | `variant` | `solid`, `soft`, `outline`, `ghost` |
 | `tone` | `accent`, `neutral`, `info`, `success`, `warning`, `danger` |
+| `side` | `above`, `below`, `start`, `end` |
 
 A `.rsx` cannot see a prop's type, so a bare lowercase word on a component call that names no binding of the file
 becomes that name in `telar::kw`, which is the value itself: `telar::kw::small` is `telar::ControlSize::Small`. A
@@ -230,4 +231,5 @@ binding of the same name wins: with `let small = …` in `[logic]`, `size:small`
 (`size:(ControlSize::Small)`) still works.
 The same word is the arg's text form in a preview matrix, a link and stored state (see [previews](previews.md)).
 A component of your own takes the words by declaring the prop with one of these types, `telar::ControlSize`,
-`telar::Variant` or `telar::Tone`, as every catalogue component does.
+`telar::Variant`, `telar::Tone` or `telar::Side`, as every catalogue component does. `start` and `end` are the
+leading and trailing sides of a line, so they swap in a right-to-left surface.

@@ -168,19 +168,16 @@ pub fn window_frame(props: WindowFrameProps) -> Result<Box<dyn LayoutItem>, Layo
         move |inherited| chrome_text(size, inherited, title_color.as_ref().map(Reactive::get)),
     )?);
 
-    let or_unset = |color: &Option<Reactive<Color>>| {
-        color.clone().unwrap_or_else(|| Color::TRANSPARENT.into())
-    };
     let controls = window_controls(WindowControlsProps {
         minimize: style.controls.minimize,
         maximize: style.controls.maximize,
         size,
         on_close: close,
-        glyph: or_unset(&style.close),
-        hover: or_unset(&style.control_hover),
-        hover_glyph: or_unset(&style.control_hover_glyph),
-        close_hover: or_unset(&style.close_hover),
-        close_hover_glyph: or_unset(&style.close_hover_glyph),
+        glyph: style.close.clone(),
+        hover: style.control_hover.clone(),
+        hover_glyph: style.control_hover_glyph.clone(),
+        close_hover: style.close_hover.clone(),
+        close_hover_glyph: style.close_hover_glyph.clone(),
         min_size: None,
         style: None,
     })?;

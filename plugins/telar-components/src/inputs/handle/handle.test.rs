@@ -53,8 +53,7 @@ fn canvas_reporting(start: f32, ends: Ends) -> Canvas {
         .value(value)
         .to_value(Rc::new(|x, _| x))
         .to_point(Rc::new(|value| (value, 50.0)))
-        .min(0.0)
-        .max(100.0)
+        .range(0.0..=100.0)
         .clamped(clamped)
         .size(ends.size)
         .build();
@@ -365,4 +364,11 @@ fn a_style_amendment_reshapes_the_dot() {
         })
         .expect("the dot paints");
     assert_eq!(style.radius, telar::BorderRadius::all(0.0));
+}
+
+#[test]
+fn a_range_whose_start_lies_past_its_end_or_a_step_that_moves_nothing_is_refused() {
+    fresh_layout_runtime();
+    assert!(handle(HandleProps::props().range(100.0..=0.0).build()).is_err());
+    assert!(handle(HandleProps::props().step(-1.0).build()).is_err());
 }

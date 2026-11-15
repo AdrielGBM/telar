@@ -1,4 +1,5 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
+use super::sample::Given;
 use telar::{Color, Role};
 
 use super::sample;
@@ -13,7 +14,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .title(p.arg("title", "Shipping details"))
                     .size(p.arg("size", ControlSize::Regular))
                     .open(p.signal("open", true))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .children(sample::paragraph(
                         "Orders leave the warehouse within two working days.",
                     ))

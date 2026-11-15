@@ -102,9 +102,9 @@ pub struct VirtualListProps {
     /// What the list says while it has no rows and [`empty`](Self::empty) builds nothing, and a reader hears as a status. `None` (the default) uses the localized `telar_components.nothing_to_show` message.
     #[props(some, into, default)]
     pub empty_label: Option<Reactive<String>>,
-    /// Accent for the selection and the keyboard cursor. `Color::TRANSPARENT` (the default) falls back to the theme's washes and focus ring.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Accent for the selection and the keyboard cursor. `None` (the default) falls back to the theme's washes and focus ring.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// What the list shows while it has no rows, in place of [`empty_label`](Self::empty_label); when it builds nothing, the label shows instead.
     #[props(default)]
     pub empty: Children,
@@ -245,7 +245,7 @@ impl List {
     }
 
     /// The ring the list wears itself while it holds the keyboard: the cursor's, while the cursor rests on no row listed, so an empty list still shows where the keyboard is.
-    fn own_ring(&self, color: &Reactive<Color>) -> Option<FocusRing> {
+    fn own_ring(&self, color: &Option<Reactive<Color>>) -> Option<FocusRing> {
         Self::index_of(&self.rows(), self.cursor.get())
             .is_none()
             .then(|| cursor_ring(color))
@@ -445,7 +445,7 @@ fn build_row(
     row: ListRow,
     place: SetPosition,
     content: Option<&RowBuilder>,
-    color: &Reactive<Color>,
+    color: &Option<Reactive<Color>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let content = match content {
         Some(build) => vec![build(&row)?],

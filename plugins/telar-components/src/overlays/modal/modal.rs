@@ -112,9 +112,9 @@ pub struct ModalProps {
     /// The Close affordance's text. `None` (the default) uses the localized `telar_components.close` message, which an application can override in its catalog; `Some` wins over both.
     #[props(some, into, default)]
     pub close_label: Option<Reactive<String>>,
-    /// Dialog surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Dialog surface colour. `None` (the default) is the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Amends the paint of the dialog's card — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ModalTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -220,7 +220,7 @@ fn build_open_modal(
 }
 
 /// The card's paint before the caller's amendment.
-fn card_paint(color: &Reactive<Color>) -> RectStyle {
+fn card_paint(color: &Option<Reactive<Color>>) -> RectStyle {
     RectStyle::default()
         .with_fill(shared::resolve(color, shared::surface))
         .with_border(Border::uniform(shared::border(), shared::border_width()))

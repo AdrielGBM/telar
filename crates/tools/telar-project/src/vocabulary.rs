@@ -1,6 +1,6 @@
 //! The words a `.rsx` writes bare for a value every component shares: `size:small`, `variant:ghost`, `tone:danger`.
 //!
-//! The list is closed and is the one place the words are spelled. Each axis is one type, `ControlSize`, `Variant` or `Tone`, and the `telar` facade turns the list into `telar::kw`, a name per word for the value it writes, and into each type's words, matched exhaustively both ways so a word added here is a compile error until its type has the value. The editor completes a prop named after an axis from it, and the same word is the arg's text form wherever a preview, a matrix or a link writes the value.
+//! The list is closed and is the one place the words are spelled. Each axis is one type, `ControlSize`, `Variant`, `Tone` or `Side`, and the `telar` facade turns the list into `telar::kw`, a name per word for the value it writes, and into each type's words, matched exhaustively both ways so a word added here is a compile error until its type has the value. The editor completes a prop named after an axis from it, and the same word is the arg's text form wherever a preview, a matrix or a link writes the value.
 
 /// One axis of the vocabulary: the prop name every component that has it uses, and its words in the order a control lists them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,6 +24,10 @@ pub const VOCABULARY: &[VocabularyAxis] = &[
         words: &[
             "accent", "neutral", "info", "success", "warning", "danger", "ink",
         ],
+    },
+    VocabularyAxis {
+        name: "side",
+        words: &["above", "below", "start", "end"],
     },
 ];
 

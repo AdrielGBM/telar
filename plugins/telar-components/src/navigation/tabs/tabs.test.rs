@@ -136,7 +136,7 @@ fn focused_row(selected: RwSignal<Page>) -> ComponentList {
     let item = tab_list(
         selected,
         pages(),
-        Reactive::of(|| Color::TRANSPARENT),
+        None,
         None,
         ControlSize::Regular,
     )
@@ -213,7 +213,7 @@ fn a_trailing_item_is_drawn_but_not_part_of_the_tabs_name() {
     let item = tab_list(
         selected,
         vec![Tab::new(Page::First, "Actions").trailing(count_badge())],
-        Reactive::of(|| Color::TRANSPARENT),
+        None,
         None,
         ControlSize::Regular,
     )
@@ -237,7 +237,7 @@ fn a_reactive_label_follows_what_it_reads() {
     let item = tab_list(
         signal(Page::First),
         vec![Tab::new(Page::First, word)],
-        Reactive::of(|| Color::TRANSPARENT),
+        None,
         None,
         ControlSize::Regular,
     )
@@ -257,7 +257,7 @@ fn an_icon_tab_is_the_same_square_as_an_icon_button() {
     let tab_list = tab_list(
         signal(0usize),
         vec![Tab::new(0usize, "One").icon(telar::icon!("lucide:square"))],
-        Color::TRANSPARENT.into(),
+        None,
         None,
         ControlSize::Regular,
     )
@@ -385,7 +385,7 @@ fn a_tab_list_stands_its_tabs_at_its_size() {
         let item = tab_list(
             signal(Page::First),
             pages(),
-            Color::TRANSPARENT.into(),
+            None,
             None,
             size,
         )
@@ -408,7 +408,7 @@ fn a_trailing_item_keeps_a_gap_from_the_name() {
     let item = tab_list(
         signal(Page::First),
         vec![Tab::new(Page::First, "Actions").trailing(count_badge())],
-        Reactive::of(|| Color::TRANSPARENT),
+        None,
         None,
         ControlSize::Regular,
     )
@@ -448,7 +448,7 @@ fn strip_of(width: f32, selected: RwSignal<usize>) -> (ComponentList, NodeId) {
             .zip(0usize..)
             .map(|(name, i)| Tab::new(i, *name))
             .collect(),
-        Color::TRANSPARENT.into(),
+        None,
         None,
         ControlSize::Regular,
     )
@@ -586,7 +586,7 @@ fn a_tab_built_again_keeps_its_place_among_the_arrows() {
         entry: Tab::new(value, name),
         index,
         paint: Paint {
-            color: Reactive::of(|| Color::TRANSPARENT),
+            color: None,
             style: None,
         },
         values: Rc::clone(&values),

@@ -37,16 +37,12 @@ matrix 1,0,0,1,384,320
         end
       end
       element group
-        element group
-          matrix 1,0,0,1,60,5
-            text 0,0 32.41x12.85 "Ctrl+K" size=10.71 family=sans-serif weight=400 color=#646671ff wrap=none lang=en
-          end
+        matrix 1,0,0,1,60,4
+          text 0,1 32.41x12.85 "Ctrl+K" size=10.71 family=sans-serif weight=400 color=#646671ff wrap=none lang=en
         end
       end
     end
     element group
-      element group
-      end
     end
   end
 end

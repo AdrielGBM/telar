@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive, Role};
 
 use crate::inputs::button::button::{ButtonProps, button};
@@ -15,7 +16,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Save"))
                     .size(p.arg("size", ControlSize::Regular))
                     .variant(p.arg("variant", Variant::Solid))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )
         })
@@ -27,7 +28,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_action("on_press", 1)
         }),
         preview!(button: ButtonProps, "Variants", |p| {
-            let color = p.arg("color", Color::TRANSPARENT);
+            let color = p.arg("color", None::<Color>);
             let buttons = [
                 ("Solid", Variant::Solid),
                 ("Outline", Variant::Outline),
@@ -40,7 +41,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     ButtonProps::props()
                         .label(label)
                         .variant(variant)
-                        .color(color)
+                        .given(color, |props, color| props.color(color))
                         .build(),
                 )
             })

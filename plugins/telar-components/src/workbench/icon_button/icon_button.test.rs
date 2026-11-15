@@ -298,7 +298,7 @@ fn the_square_under_the_tooltip_builds_again_as_a_working_button() {
         icon: "lucide:search".into(),
         label: "Search".into(),
         size: telar::ControlSize::Regular,
-        shortcut: Reactive::default(),
+        shortcut: None,
         pressed: None,
         disabled: Reactive::default(),
         activate: Rc::new(move || sink.set(sink.get() + 1)),

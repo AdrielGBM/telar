@@ -17,9 +17,9 @@ col gap:20
     example title:"Drawer — a full-height side panel pinned to an edge, over the same scrim"
         card gap:10
             button label:"Open drawer" color:$theme.primary on_press:(|| open_overlay("nav"))
-            drawer id:"nav" side:"right"
+            drawer id:"nav" side:end
                 text "Drawer content" color:$theme.ink
-        code_line code:"drawer id:\"nav\" side:\"right\"  >  text \"Drawer content\""
+        code_line code:"drawer id:\"nav\" side:end  >  text \"Drawer content\""
     example title:"Tooltip — a hover popup anchored just below its trigger"
         card gap:10
             tooltip text:"Helpful hint"

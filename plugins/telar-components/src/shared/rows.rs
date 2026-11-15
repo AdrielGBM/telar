@@ -267,7 +267,11 @@ mod paint {
     }
 
     /// A row's paint, in a corner of `radius`: the selection's wash, else the pointer's, at the theme's strengths and in the list's `color` when it was given one.
-    pub(crate) fn row_wash(radius: f32, color: &Reactive<Color>, state: RowState) -> RectStyle {
+    pub(crate) fn row_wash(
+        radius: f32,
+        color: &Option<Reactive<Color>>,
+        state: RowState,
+    ) -> RectStyle {
         let style = RectStyle::default().with_radius(BorderRadius::all(radius));
         if state.selected {
             style.with_fill(tinted(color, shared::held_wash()))
@@ -279,7 +283,7 @@ mod paint {
     }
 
     /// The ring round the row the keyboard's cursor rests on, its band in the list's `color` when it was given one, so the cursor and the selection read apart when they are on different rows.
-    pub(crate) fn cursor_ring(color: &Reactive<Color>) -> FocusRing {
+    pub(crate) fn cursor_ring(color: &Option<Reactive<Color>>) -> FocusRing {
         let ring = shared::focus_ring();
         ring.with_band(shared::resolve(color, || ring.band))
     }

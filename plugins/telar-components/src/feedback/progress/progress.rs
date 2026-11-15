@@ -56,21 +56,21 @@ pub struct ProgressProps {
     /// How large the bar is drawn: its thickness and, unless it names one or stretches, its width, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// Fill accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
-    /// Track (rail) colour; `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's muted token.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub track_color: Reactive<Color>,
-    /// Track width in px. `0.0` (the default) means "unset" -> [`ProgressTokens::width`]. Ignored under [`stretch`](Self::stretch).
-    #[props(default)]
-    pub width: f32,
+    /// Fill accent. `None` (the default) is the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
+    /// Track (rail) colour; `None` (the default) is the theme's muted token.
+    #[props(some, into, default)]
+    pub track_color: Option<Reactive<Color>>,
+    /// Track width in px. `None` (the default) is [`ProgressTokens::width`]. Ignored under [`stretch`](Self::stretch).
+    #[props(some, default)]
+    pub width: Option<f32>,
     /// Fill the parent's width instead of taking a fixed one — what a bar inside a card wants, where a px track is either short of the card or past its edge.
     #[props(default)]
     pub stretch: bool,
-    /// Track height in px. `0.0` (the default) means "unset" -> [`ProgressTokens::height`].
-    #[props(default)]
-    pub height: f32,
+    /// Track height in px. `None` (the default) is [`ProgressTokens::height`].
+    #[props(some, default)]
+    pub height: Option<f32>,
     /// Amends the paint of the track — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ProgressTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -88,8 +88,6 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
         height,
         style,
     } = props;
-    let width = (width > 0.0).then_some(width);
-    let height = (height > 0.0).then_some(height);
 
     // An `absolute_fill` child, so it exactly overlays the track, scaled horizontally from the left edge — cheaper than relaying out a narrower box on every update. `box_transform` only pivots scale on the rect centre, so the raw matrix is needed to pin the left edge.
     let fill = StyledContainer::new(

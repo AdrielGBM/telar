@@ -20,7 +20,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .min(Size::new(120.0, 80.0))
                     .max(Size::new(
                         p.arg("max_width", 360.0f32),
-                        p.arg("max_height", 0.0f32),
+                        p.arg("max_height", None::<f32>).unwrap_or(f32::INFINITY),
                     ))
                     .edges(p.arg("edges", ResizeEdges::All))
                     .growth(p.arg("growth", ResizeGrowth::Anchored))

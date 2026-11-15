@@ -30,8 +30,7 @@ fn plus_increments_by_step_and_clamps_at_max() {
     let mut widget = stepper(
         StepperProps::props()
             .value(value)
-            .min(0.0)
-            .max(5.0)
+            .range(0.0..=5.0)
             .step(1.0)
             .build(),
     )
@@ -59,8 +58,7 @@ fn minus_decrements_by_step_and_clamps_at_min() {
     let mut widget = stepper(
         StepperProps::props()
             .value(value)
-            .min(0.0)
-            .max(5.0)
+            .range(0.0..=5.0)
             .step(1.0)
             .build(),
     )
@@ -88,8 +86,7 @@ fn on_change_fires_with_new_value() {
     crate::test_support::fresh_layout_runtime();
     let mut widget = stepper(
         StepperProps::props()
-            .min(0.0)
-            .max(5.0)
+            .range(0.0..=5.0)
             .step(1.0)
             .on_change(Rc::new(move |v| sink.set(v)))
             .build(),
@@ -119,7 +116,7 @@ fn uncontrolled_stepper_builds_with_default_value() {
 }
 
 #[test]
-fn unset_max_does_not_clamp_to_min() {
+fn a_stepper_whose_range_names_no_end_is_unbounded() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
     let mut widget = stepper(StepperProps::props().value(value).step(1.0).build()).unwrap();
@@ -188,4 +185,22 @@ fn a_style_amendment_reshapes_both_buttons_in_every_state() {
         BorderRadius::all(0.0),
         "on the amended shape"
     );
+}
+
+#[test]
+fn a_range_whose_start_lies_past_its_end_or_a_step_that_moves_nothing_is_refused() {
+    crate::test_support::fresh_layout_runtime();
+    assert!(stepper(StepperProps::props().range(5.0..=1.0).build()).is_err());
+    assert!(stepper(StepperProps::props().step(0.0).build()).is_err());
+}
+
+#[test]
+fn the_buttons_take_the_colour_given_even_a_transparent_one_and_the_accent_when_none_is() {
+    let fill =
+        |tree: &telar::ComponentList| buttons(tree)[0].fill.map(|paint| paint.solid_color());
+    let tree = mounted(StepperProps::props().color(Color::TRANSPARENT).build());
+    assert_eq!(fill(&tree), Some(Color::TRANSPARENT));
+    drop(tree);
+    let tree = mounted(StepperProps::props().build());
+    assert_eq!(fill(&tree), Some(shared::accent()));
 }

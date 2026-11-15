@@ -160,9 +160,9 @@ pub struct TreeViewProps {
     /// What a reader calls the tree.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
-    /// Accent for the selection and the keyboard cursor. `Color::TRANSPARENT` (the default) falls back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Accent for the selection and the keyboard cursor. `None` (the default) falls back to the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
 }
 
 /// What [`TreeViewProps::on_select`] is called with.
@@ -383,7 +383,7 @@ impl Tree {
     }
 
     /// The ring the tree wears itself while it holds the keyboard: the cursor's, while the cursor rests on no row showing, so an empty tree still shows where the keyboard is.
-    fn own_ring(&self, color: &Reactive<Color>) -> Option<FocusRing> {
+    fn own_ring(&self, color: &Option<Reactive<Color>>) -> Option<FocusRing> {
         Self::index_of(&self.rows(), self.cursor.get())
             .is_none()
             .then(|| cursor_ring(color))
@@ -596,7 +596,7 @@ fn build_row(
     tree: &Rc<Tree>,
     row: Rc<Row>,
     trailing: Option<&TrailingBuilder>,
-    color: &Reactive<Color>,
+    color: &Option<Reactive<Color>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let id = row.node.id.clone();
     let mut content: Vec<Box<dyn LayoutItem>> = vec![caret(tree, &row)?];
@@ -741,7 +741,7 @@ fn row_box(level: u32, places: &RowPlaces) -> LayoutStyle {
 }
 
 /// The selection and the pointer wash the row, at the theme's strengths and in the tree's colour when it was given one.
-fn row_paint(tree: &Tree, id: &str, color: &Reactive<Color>, hovered: bool) -> RectStyle {
+fn row_paint(tree: &Tree, id: &str, color: &Option<Reactive<Color>>, hovered: bool) -> RectStyle {
     row_wash(
         TreeViewTokens::current().radius(),
         color,

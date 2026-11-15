@@ -67,9 +67,9 @@ pub struct ButtonProps {
     /// How the button carries its colour.
     #[props(default)]
     pub variant: Variant,
-    /// The colour the variant is drawn in. `Color::TRANSPARENT` (the default) is the theme's primary. A closure, so a theme token re-reads on a switch.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// The colour the variant is drawn in. `None` (the default) is the theme's primary. A closure, so a theme token re-reads on a switch.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Runs when the button is pressed.
     #[props(default = Rc::new(|| {}))]
     pub on_press: Rc<dyn Fn()>,
@@ -127,9 +127,8 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 /// The colour the variant is drawn in, `None` where the caller left it to the theme.
-fn tone(color: &Reactive<Color>) -> Option<Color> {
-    let color = color.get();
-    (color != Color::TRANSPARENT).then_some(color)
+fn tone(color: &Option<Reactive<Color>>) -> Option<Color> {
+    color.as_ref().map(Reactive::get)
 }
 
 /// The box's paint in `state`, before the caller's amendment. A filled box darkens under the pointer; every other variant lays the theme's washes over what it shows at rest, so its label reads the same in every state.

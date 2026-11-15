@@ -77,9 +77,9 @@ pub struct TabsProps {
     /// Bound active index. `None` (the default) is uncontrolled — the widget owns its own `signal(0)`.
     #[props(some, into, default)]
     pub selected: Option<RwSignal<usize>>,
-    /// Accent (active tab fill). `Color::TRANSPARENT` (the default) means "unset": falls back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Accent (active tab fill). `None` (the default) is the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// What a reader calls the set of tabs: "Settings sections". `None` (the default) leaves the list unnamed.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
@@ -158,7 +158,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 pub fn tab_list<T>(
     selected: RwSignal<T>,
     entries: Vec<Tab<T>>,
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
     label: Option<Reactive<String>>,
     size: ControlSize,
 ) -> Result<Box<dyn LayoutItem>, LayoutError>
@@ -172,7 +172,7 @@ fn tab_row<T>(
     size: ControlSize,
     selected: RwSignal<T>,
     entries: Vec<Tab<T>>,
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
     label: Option<Reactive<String>>,
     style: Option<SurfaceAmendment>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError>
@@ -395,7 +395,7 @@ where
             move || button.build(),
             size,
             text,
-            shortcut.unwrap_or_default(),
+            shortcut,
         );
     }
     button.build()
@@ -551,7 +551,7 @@ enum State {
 /// What every tab of one bar paints with: the accent the selected tab fills with, and the caller's amendment.
 #[derive(Clone)]
 struct Paint {
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
     style: Option<SurfaceAmendment>,
 }
 

@@ -2,7 +2,7 @@
 
 use telar::{
     AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Overlay, Placement, Props, Reactive, ReactiveList, RectStyle, ShapeStyle,
+    LayoutStyle, Overlay, Props, Reactive, ReactiveList, RectStyle, ShapeStyle, Side,
     StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextStyle, TextWrap, amend_surface,
     box_item, children, signal, use_theme_tokens,
 };
@@ -68,23 +68,23 @@ const DESCRIPTION_RATIO: f32 = BUBBLE_RATIO * 0.92;
 pub struct TooltipProps {
     #[props(into, default)]
     pub text: Reactive<String>,
-    /// The binding that does the same thing, written portably as [`telar::Chord`] reads it (`"Mod+S"`) and shown as the platform writes it (`⌘S` on a Mac, `Ctrl+S` elsewhere), pushed to the far side of the first line. Empty means none.
+    /// The binding that does the same thing, written portably as [`telar::Chord`] reads it (`"Mod+S"`) and shown as the platform writes it (`⌘S` on a Mac, `Ctrl+S` elsewhere), pushed to the far side of the first line. `None` (the default) names none.
     ///
     /// A hint that names its own shortcut is how a keyboard gets learned — the pointer finds the control, and the bubble says which key would have got there first. Separate from `text` because it is *placed*, not worded: folded into the sentence it wraps with it and stops lining up down a toolbar.
-    #[props(into, default)]
-    pub shortcut: Reactive<String>,
-    /// A sentence under the name, saying what the control does rather than what it is called. Empty means none, which is the right shape for a control whose name already says everything.
-    #[props(into, default)]
-    pub description: Reactive<String>,
-    /// Which side of the trigger the bubble takes: `"bottom"` (the default), `"top"`, `"start"`/`"left"` or `"end"`/`"right"`. It still flips when that side has no room.
-    #[props(default = "")]
-    pub side: &'static str,
+    #[props(some, into, default)]
+    pub shortcut: Option<Reactive<String>>,
+    /// A sentence under the name, saying what the control does rather than what it is called. `None` (the default) is the right shape for a control whose name already says everything.
+    #[props(some, into, default)]
+    pub description: Option<Reactive<String>>,
+    /// Which side of the trigger the bubble takes, [`Side::Below`] by default; [`Side::Start`] and [`Side::End`] follow the way the surface reads. It still flips when that side has no room.
+    #[props(default = Side::Below)]
+    pub side: Side,
     /// How large the bubble is drawn: its padding, text and the width it wraps at, as [`ControlSize`] works them out. The trigger is the caller's, sized where it is written.
     #[props(default)]
     pub size: ControlSize,
-    /// Bubble surface colour, its text inked in whichever of the theme's inks reads on it. `Color::TRANSPARENT` (the default) is the theme's `inverse_surface`, under its `inverse_ink`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Bubble surface colour, its text inked in whichever of the theme's inks reads on it. `None` (the default) is the theme's `inverse_surface`, under its `inverse_ink`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Amends the paint of the bubble — this component's **principal surface**, the thing a caller means when they point at a tooltip. See [`telar::SurfaceStyle`] for when a theme token or [`TooltipTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -96,15 +96,6 @@ pub struct TooltipProps {
     /// The trigger the bubble describes.
     #[props(default)]
     pub children: Children,
-}
-
-fn placement_of(side: &str) -> Placement {
-    match side {
-        "top" | "above" => Placement::Above,
-        "start" | "left" => Placement::Start,
-        "end" | "right" => Placement::End,
-        _ => Placement::Below,
-    }
 }
 
 /// A bubble anchored to its trigger while the pointer is over it.
@@ -120,8 +111,7 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         stretch,
         children,
     } = props;
-    let placement = placement_of(side);
-    let shortcut = Reactive::of(move || shown_chord(&shortcut.get()));
+    let shortcut = shortcut.map(|shortcut| Reactive::of(move || shown_chord(&shortcut.get())));
     let trigger_content = children.build()?;
     let hovered = signal(false);
 
@@ -156,7 +146,7 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                 },
                 color.clone(),
                 style.clone(),
-                placement,
+                side,
                 trigger_node,
             )
         },
@@ -178,9 +168,9 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 fn build_bubble(
     size: ControlSize,
     content: Content,
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
     style: SurfaceStyle,
-    placement: Placement,
+    side: Side,
     trigger_node: telar::NodeId,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Laid out at the origin and translated to the trigger by the anchored overlay, rather than pushed there with a left margin: a margin eats the width the bubble had to lay out in, so a trigger near the right edge left it a 50px column. The translate happens after layout, when the real size is known, which is also what lets it flip and slide to stay on screen.
@@ -210,7 +200,7 @@ fn build_bubble(
         LayoutStyle::row().align_items(AlignItems::START),
         children![chip],
         trigger_node,
-        placement,
+        side,
     )?;
     Ok(box_item(overlay))
 }
@@ -218,18 +208,16 @@ fn build_bubble(
 /// What the bubble says, in the one shape every hint in an application takes.
 struct Content {
     text: Reactive<String>,
-    shortcut: Reactive<String>,
-    description: Reactive<String>,
+    shortcut: Option<Reactive<String>>,
+    description: Option<Reactive<String>>,
 }
 
 impl Content {
     /// The name line, with its shortcut pushed to the far edge, over an optional sentence.
-    ///
-    /// The two optional parts are mounted reactively rather than decided here, because the strings are closures: a hint whose shortcut arrives with a signal would otherwise be built once, empty, and stay that way.
     fn rows(
         self,
         size: ControlSize,
-        color: Reactive<Color>,
+        color: Option<Reactive<Color>>,
     ) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
         let Content {
             text,
@@ -266,50 +254,39 @@ impl Content {
     }
 }
 
-/// A line that is there only while its text is non-empty. Zero-sized otherwise, so the bubble keeps the height of what it actually says.
+/// A line where there is `text`, and a box of no size where there is none, so the bubble keeps the height of what it actually says.
 fn optional_line(
-    text: Reactive<String>,
-    style: impl Fn(TextStyle) -> TextStyle + Clone + 'static,
+    text: Option<Reactive<String>>,
+    style: impl Fn(TextStyle) -> TextStyle + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let present = text.clone();
-    Ok(box_item(ReactiveList::new(
-        move || vec![!present.get().is_empty()],
-        |shown: &bool| *shown,
-        move |shown| -> Result<Box<dyn LayoutItem>, LayoutError> {
-            if !shown {
-                return Ok(box_item(Container::new(
-                    LayoutStyle::new().width(0.0).height(0.0),
-                    vec![],
-                )?));
-            }
-            let text = text.clone();
-            Ok(box_item(Text::declaring(
-                move || text.get(),
-                LayoutStyle::new(),
-                style.clone(),
-            )?))
-        },
-        0.0,
-    )?))
+    match text {
+        Some(text) => Ok(box_item(Text::declaring(
+            move || text.get(),
+            LayoutStyle::new(),
+            style,
+        )?)),
+        None => Ok(box_item(Container::new(
+            LayoutStyle::new().width(0.0).height(0.0),
+            vec![],
+        )?)),
+    }
 }
 
 /// The bubble's surface: the theme's inverse surface, or the colour the caller chose.
-fn bubble_fill(color: &Reactive<Color>) -> Color {
+fn bubble_fill(color: &Option<Reactive<Color>>) -> Color {
     shared::resolve(color, || use_theme_tokens().inverse_surface())
 }
 
 /// The ink that reads on [`bubble_fill`]: the theme's inverse ink on its inverse surface, and on a colour the caller chose whichever ink reads on that.
-fn bubble_ink(color: &Reactive<Color>) -> Color {
-    let chosen = color.get();
-    if chosen == Color::TRANSPARENT {
-        use_theme_tokens().inverse_ink()
-    } else {
-        shared::ink_on(chosen)
+fn bubble_ink(color: &Option<Reactive<Color>>) -> Color {
+    match color {
+        Some(chosen) => shared::ink_on(chosen.get()),
+        None => use_theme_tokens().inverse_ink(),
     }
 }
 
 /// The ink of a line that ranks below the name: [`bubble_ink`] at `strength` over the bubble, taken back toward full strength only as far as it has to go to read on the bubble at 4.5:1. A shortcut faded to a fixed strength fell under that on the dark theme's light bubble.
-fn line_ink(color: &Reactive<Color>, strength: f32) -> Color {
+fn line_ink(color: &Option<Reactive<Color>>, strength: f32) -> Color {
     let fill = bubble_fill(color);
     let faded = bubble_ink(color).with_alpha(strength).over(fill);
     shared::readable_on(faded, fill)

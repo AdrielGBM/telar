@@ -978,7 +978,7 @@ fn an_anchored_panel_claims_and_takes_the_pointer_where_it_is_drawn() {
         LayoutStyle::new(),
         vec![Box::new(button)],
         trigger,
-        crate::overlay::Placement::Below,
+        crate::overlay::Side::Below,
     )
     .unwrap();
     lay_out(&overlay);
@@ -1006,7 +1006,7 @@ fn an_anchored_panel_opens_beside_a_trigger_where_a_transform_drew_it() {
         LayoutStyle::new(),
         vec![Box::new(bubble)],
         trigger_node,
-        crate::overlay::Placement::Below,
+        crate::overlay::Side::Below,
     )
     .unwrap();
     lay_out(&root);

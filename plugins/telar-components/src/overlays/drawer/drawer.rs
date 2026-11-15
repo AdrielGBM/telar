@@ -4,7 +4,7 @@ use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Direction,
     JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive,
-    RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item,
+    RectStyle, RwSignal, ShapeStyle, Side, StyledContainer, SurfaceAmendment, amend_surface, box_item,
     children, current_direction, focus::Role,
 };
 
@@ -22,8 +22,8 @@ pub struct DrawerTokens {
     pub radius: Option<f32>,
     /// Space between the panel's edge and its content, at the regular size, scaled with the drawer's own. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
     pub pad: Option<f32>,
-    /// The panel's width when the drawer names none, at the regular size, scaled with the drawer's own. `None` is 20 ems of the document's text.
-    pub width: Option<f32>,
+    /// How far the panel reaches in from its edge when the drawer names no extent, at the regular size, scaled with the drawer's own. `None` is 20 ems of the document's text.
+    pub extent: Option<f32>,
 }
 
 impl DrawerTokens {
@@ -42,13 +42,13 @@ impl DrawerTokens {
             .map_or_else(|| shared::gap_xl(size), |pad| pad * size.scale())
     }
 
-    /// The panel's width in a drawer of `size` whose call names none.
-    pub fn width(&self, size: ControlSize) -> f32 {
-        shared::width_or_measure(size, self.width, 20.0)
+    /// How far the panel reaches in from its edge in a drawer of `size` whose call names no extent.
+    pub fn extent(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.extent, 20.0)
     }
 }
 
-/// A side panel that covers the page from the left or right edge over a dimming scrim. When `open` is true it portals an `Overlay` with a translucent scrim and a full-height opaque panel pinned to `side`, holding its `children`; when false it collapses to a 0-size node. Tapping the scrim dismisses; tapping the panel does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
+/// A panel that covers the page from one of its edges over a dimming scrim. When `open` is true it portals an `Overlay` with a translucent scrim and an opaque panel pinned to `side` and spanning that edge, holding its `children`; when false it collapses to a 0-size node. Tapping the scrim dismisses; tapping the panel does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
 ///
 /// The panel snaps in (no slide animation): the overlay is built only while open, so there is no off-screen frame to animate from. A slide-in (a `telar::motion::Animated<f32>` x-offset kept mounted across the close transition) is a follow-up.
 #[derive(Props)]
@@ -59,13 +59,13 @@ pub struct DrawerProps {
     /// Names this drawer, so anything on the same surface can open it with `open_overlay(id)` without holding its signal; another surface has its own `id`. `""` (the default) leaves it unnamed. Ignored when `open` is bound.
     #[props(default = "")]
     pub id: &'static str,
-    /// Which edge the panel is pinned to: `"left"` (the default) or `"right"`.
-    #[props(default = "left")]
-    pub side: &'static str,
-    /// Panel width in logical px. `0.0` (the default) means "unset" -> [`DrawerTokens::width`].
-    #[props(default)]
-    pub width: f32,
-    /// How large the panel is drawn: its padding, gaps and, unless it names one, its width, as [`ControlSize`] works them out. What it holds is sized where it is written.
+    /// Which edge the panel is pinned to, [`Side::Start`] by default: the start and the end of a line follow the way the surface reads, so a drawer at the end opens on the right of a left-to-right surface and on the left of a right-to-left one.
+    #[props(default = Side::Start)]
+    pub side: Side,
+    /// How far the panel reaches in from its edge, in logical px: its width at the start or the end, its height above or below. `None` (the default) is [`DrawerTokens::extent`].
+    #[props(some, default)]
+    pub extent: Option<f32>,
+    /// How large the panel is drawn: its padding, gaps and, unless it names one, its extent, as [`ControlSize`] works them out. What it holds is sized where it is written.
     #[props(default)]
     pub size: ControlSize,
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
@@ -74,9 +74,9 @@ pub struct DrawerProps {
     /// Names the panel for a reader. `None` (the default) uses the localized `telar_components.drawer` message, which an application can override in its catalog.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
-    /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Panel surface colour. `None` (the default) is the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Amends the paint of the panel — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`DrawerTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -91,7 +91,7 @@ pub fn drawer(props: DrawerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         open,
         id,
         side,
-        width,
+        extent,
         size,
         on_close,
         label,
@@ -100,18 +100,15 @@ pub fn drawer(props: DrawerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         children,
     } = props;
     let open = shared::resolve_open(open, id);
-    let width = (width > 0.0).then_some(width);
-    // "right" pins the panel to the trailing edge; anything else (incl. the default "left") to the leading edge.
-    let at_start = side != "right";
-    let paint = Rc::new(move || amend_surface(panel_paint(&color, at_start), &style));
+    let paint = Rc::new(move || amend_surface(panel_paint(&color, side), &style));
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {
         // Built on the first open rather than here: a body built while the drawer has never opened would register its focus stops with nothing on screen to take them.
         let body = children.build()?;
         build_open_drawer(
             size,
-            width,
-            at_start,
+            extent,
+            side,
             body,
             label.clone(),
             paint.clone(),
@@ -120,49 +117,63 @@ pub fn drawer(props: DrawerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     })
 }
 
-/// The panel's paint before the caller's amendment: rounded only on the side that faces the page.
-fn panel_paint(color: &Reactive<Color>, at_start: bool) -> RectStyle {
+/// The panel's paint before the caller's amendment: rounded only on the corners that face the page.
+fn panel_paint(color: &Option<Reactive<Color>>, side: Side) -> RectStyle {
     RectStyle::default()
         .with_fill(shared::resolve(color, shared::surface))
         .with_border(Border::uniform(shared::border(), shared::border_width()))
-        .with_radius(inner_corners(at_start, DrawerTokens::current().radius()))
+        .with_radius(inner_corners(side, DrawerTokens::current().radius()))
 }
 
-/// `radius` on the two corners away from the edge the panel is pinned to, which is the leading edge when `at_start` and is on the right in a right-to-left line.
-fn inner_corners(at_start: bool, radius: f32) -> BorderRadius {
+/// `radius` on the two corners away from the edge the panel is pinned to, that edge resolved against the way the surface reads.
+fn inner_corners(side: Side, radius: f32) -> BorderRadius {
     let start_is_left = current_direction() != Direction::Rtl;
-    let (left, right) = if at_start == start_is_left {
-        (0.0, radius)
-    } else {
-        (radius, 0.0)
+    let left = match side {
+        Side::Start => start_is_left,
+        Side::End => !start_is_left,
+        Side::Above | Side::Below => false,
+    };
+    let right = matches!(side, Side::Start | Side::End) && !left;
+    let (top, bottom) = (side == Side::Above, side == Side::Below);
+    let corner = |on_pinned_edge: bool| match on_pinned_edge {
+        true => 0.0,
+        false => radius,
     };
     BorderRadius {
-        top_left: left,
-        top_right: right,
-        bottom_right: right,
-        bottom_left: left,
+        top_left: corner(top || left),
+        top_right: corner(top || right),
+        bottom_right: corner(bottom || right),
+        bottom_left: corner(bottom || left),
     }
 }
 
-/// Builds the scrim + full-height opaque panel for the open state: scrim (dims + dismisses) > panel pinned to `side`. The panel swallows its own taps so a click inside it never dismisses.
+/// Builds the scrim and the opaque panel for the open state: the scrim dims and dismisses, the panel is pinned to `side` and spans that edge. The panel swallows its own taps so a click inside it never dismisses.
 fn build_open_drawer(
     size: ControlSize,
-    width: Option<f32>,
-    at_start: bool,
+    extent: Option<f32>,
+    side: Side,
     body: Vec<Box<dyn LayoutItem>>,
     label: Option<Reactive<String>>,
     paint: Rc<dyn Fn() -> RectStyle>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let room = scrim::Room::new();
+    let across = matches!(side, Side::Start | Side::End);
     let sheet = move || {
         let tokens = DrawerTokens::current();
-        LayoutStyle::column()
-            .width(width.unwrap_or_else(|| tokens.width(size)))
-            .max_width(room.inside(0.0).width)
-            .min_height(0.0)
-            .gap(shared::gap_lg(size))
-            .padding_all(tokens.pad(size))
+        let reach = extent.unwrap_or_else(|| tokens.extent(size));
+        let room = room.inside(0.0);
+        let sheet = match across {
+            true => LayoutStyle::column()
+                .width(reach)
+                .max_width(room.width)
+                .min_height(0.0),
+            false => LayoutStyle::column()
+                .height(reach)
+                .max_height(room.height)
+                .min_width(0.0),
+        };
+        sheet.gap(shared::gap_lg(size)).padding_all(tokens.pad(size))
     };
     let name = Rc::new(move || match &label {
         Some(label) => label.get(),
@@ -186,17 +197,19 @@ fn build_open_drawer(
         // Swallow taps on the panel so only the scrim dismisses.
         .on_press(|| {});
 
-    // Cross axis (STRETCH) gives the panel full viewport height; the main axis (justify) pins it to the edge.
+    // The cross axis (STRETCH) spans the panel along its edge; the main axis (justify) pins it there, a row's start and end following the way the surface reads.
+    let flow = match across {
+        true => LayoutStyle::row().min_height(0.0),
+        false => LayoutStyle::column().min_width(0.0),
+    };
+    let pinned = match side {
+        Side::Start | Side::Above => JustifyContent::START,
+        Side::End | Side::Below => JustifyContent::END,
+    };
     let scrim = StyledContainer::new(
-        LayoutStyle::row()
-            .flex_grow(1.0)
+        flow.flex_grow(1.0)
             .align_items(AlignItems::STRETCH)
-            .min_height(0.0)
-            .justify_content(if at_start {
-                JustifyContent::START
-            } else {
-                JustifyContent::END
-            }),
+            .justify_content(pinned),
         |_r| RectStyle::default().with_fill(shared::overlay()),
         children![panel],
     )?;

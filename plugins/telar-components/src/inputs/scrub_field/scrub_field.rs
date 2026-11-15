@@ -1,6 +1,7 @@
 //! [`scrub_field`]: a number edited by dragging its label, by the arrow keys, or by typing it.
 
 use std::cell::Cell;
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use telar::{
@@ -39,11 +40,10 @@ pub struct ScrubFieldProps {
     /// How large the field is drawn: its height, padding, gaps and text, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    #[props(default = f32::NEG_INFINITY)]
-    pub min: f32,
-    #[props(default = f32::INFINITY)]
-    pub max: f32,
-    /// One unscaled step, for the keys and for the drag. Non-positive falls back to `1.0`.
+    /// The values the field keeps to, unbounded by default. A range whose start lies past its end is an error when the field is built.
+    #[props(default = f32::NEG_INFINITY..=f32::INFINITY)]
+    pub range: RangeInclusive<f32>,
+    /// One unscaled step, for the keys and for the drag, one by default. A step that is not above zero is an error when the field is built.
     #[props(default = 1.0)]
     pub step: f32,
     /// Pointer travel per unscaled step while scrubbing.
@@ -100,16 +100,15 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
         transaction,
         label,
         size,
-        min,
-        max,
+        range,
         step,
         pixels_per_step,
         format,
         parse,
         style,
     } = props;
-    let (min, max) = if max < min { (max, min) } else { (min, max) };
-    let step = if step > 0.0 { step } else { 1.0 };
+    let (min, max) = shared::ordered("scrub_field", range)?;
+    let step = shared::positive_step("scrub_field", step)?;
     let pixels_per_step = pixels_per_step.max(f32::EPSILON);
     let transaction = transaction.unwrap_or_else(|| {
         Transaction::new(value.unwrap_or_else(|| signal(0.0_f32.clamp(min, max))))

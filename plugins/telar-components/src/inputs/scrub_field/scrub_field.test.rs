@@ -22,8 +22,7 @@ fn field_over(value: RwSignal<f32>, transaction: Transaction<f32>, min: f32, max
         ScrubFieldProps::props()
             .transaction(transaction)
             .label("W")
-            .min(min)
-            .max(max)
+            .range(min..=max)
             .build(),
     )
     .unwrap();

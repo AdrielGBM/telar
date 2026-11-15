@@ -12,8 +12,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .value(p.signal("value", 12.0f32))
                     .label(p.arg("label", "Width"))
                     .size(p.arg("size", ControlSize::Regular))
-                    .min(p.arg("min", 0.0f32))
-                    .max(p.arg("max", 100.0f32))
+                    .range(p.arg("min", 0.0f32)..=p.arg("max", 100.0f32))
                     .step(p.arg("step", 1.0f32))
                     .pixels_per_step(p.arg("pixels_per_step", 4.0f32))
                     .build(),

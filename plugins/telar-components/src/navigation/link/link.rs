@@ -69,9 +69,9 @@ pub struct LinkProps {
     /// Marks the link as the current one of its set — the page being shown, in a navigation's links — so it is drawn in the theme's strong weight and announced as current. Off by default.
     #[props(into, default)]
     pub current: Reactive<bool>,
-    /// The colour the link is drawn in. `Color::TRANSPARENT` (the default) is the theme's primary; either way it is taken just far enough toward the ink to read on the theme's surface.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// The colour the link is drawn in. `None` (the default) is the theme's primary; either way it is taken just far enough toward the ink to read on the theme's surface.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Runs when the link is pressed, before it is followed.
     #[props(some, default)]
     pub on_press: Option<Rc<dyn Fn()>>,

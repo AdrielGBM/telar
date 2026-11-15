@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 
 use crate::workbench::code_view::code_view::{CodeSpan, CodeViewProps, TokenKind, code_view};
 use telar::ControlSize;
@@ -40,7 +41,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .line_numbers(p.arg("line_numbers", true))
                     .copyable(p.arg("copyable", true))
                     .highlighted(vec![p.arg("highlighted", 3u32)])
-                    .max_height(p.arg("max_height", 0.0f32))
+                    .given(p.arg("max_height", None::<f32>), |props, value| props.max_height(value))
                     .build(),
             )
         })

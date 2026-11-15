@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Color, Role};
 
 use crate::inputs::swatches::swatches::{SwatchesProps, swatches};
@@ -31,7 +32,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     )
                     .selected(p.signal("selected", Some(0u32)))
                     .size(p.arg("size", ControlSize::Regular))
-                    .diameter(p.arg("diameter", 0.0f32))
+                    .given(p.arg("diameter", None::<f32>), |props, value| props.diameter(value))
                     .build(),
             )
         })

@@ -121,20 +121,20 @@ fn an_anchored_panel_shifts_and_flips_to_stay_on_screen() {
 
     let trigger = Rect::new(100.0, 100.0, 40.0, 20.0);
     assert_eq!(
-        anchor_translate(trigger, panel, Placement::Below, viewport),
+        anchor_translate(trigger, panel, Side::Below, viewport, Direction::Ltr),
         (100.0, 120.0 + ANCHOR_GAP)
     );
 
     let right = Rect::new(380.0, 100.0, 20.0, 20.0);
-    let (dx, dy) = anchor_translate(right, panel, Placement::Below, viewport);
+    let (dx, dy) = anchor_translate(right, panel, Side::Below, viewport, Direction::Ltr);
     assert_eq!((dx, dy), (400.0 - 120.0 - EDGE_MARGIN, 120.0 + ANCHOR_GAP));
 
     let low = Rect::new(100.0, 270.0, 40.0, 20.0);
-    let (_, dy) = anchor_translate(low, panel, Placement::Below, viewport);
+    let (_, dy) = anchor_translate(low, panel, Side::Below, viewport, Direction::Ltr);
     assert_eq!(dy, 270.0 - 60.0 - ANCHOR_GAP, "opens upward instead");
 
     let tall = Rect::new(0.0, 0.0, 120.0, 400.0);
-    let (_, dy) = anchor_translate(low, tall, Placement::Below, viewport);
+    let (_, dy) = anchor_translate(low, tall, Side::Below, viewport, Direction::Ltr);
     assert_eq!(dy, EDGE_MARGIN, "the roomier side, as far up as the margin");
 }
 
@@ -147,7 +147,7 @@ fn window(height: f32) -> Rect {
 }
 
 fn below(anchor: Rect, viewport: Rect) -> Anchoring {
-    Anchoring::new(anchor, Placement::Below, viewport)
+    Anchoring::new(anchor, Side::Below, viewport, Direction::Ltr)
 }
 
 #[test]
@@ -224,12 +224,12 @@ fn a_point_anchor_opens_below_it_and_flips_above_it() {
 #[test]
 fn a_panel_beside_its_anchor_can_line_up_with_its_start() {
     let row = Rect::new(100.0, 250.0, 120.0, 30.0);
-    let spot = Anchoring::new(row, Placement::End, window(300.0))
+    let spot = Anchoring::new(row, Side::End, window(300.0), Direction::Ltr)
         .align(AnchorAlign::Start)
         .place(Size::new(120.0, 30.0));
     assert_eq!((spot.x, spot.y), (220.0, 250.0));
 
-    let spot = Anchoring::new(row, Placement::End, window(300.0))
+    let spot = Anchoring::new(row, Side::End, window(300.0), Direction::Ltr)
         .align(AnchorAlign::Start)
         .place(Size::new(120.0, 100.0));
     assert_eq!(
@@ -277,7 +277,7 @@ fn a_panel_placed_beside_its_trigger_centres_on_it_and_flips_when_it_has_to() {
     let panel = Rect::new(0.0, 0.0, 120.0, 60.0);
     let trigger = Rect::new(200.0, 100.0, 40.0, 20.0);
 
-    let (dx, dy) = anchor_translate(trigger, panel, Placement::End, viewport);
+    let (dx, dy) = anchor_translate(trigger, panel, Side::End, viewport, Direction::Ltr);
     assert_eq!(
         dx,
         240.0 + ANCHOR_GAP,
@@ -285,7 +285,7 @@ fn a_panel_placed_beside_its_trigger_centres_on_it_and_flips_when_it_has_to() {
     );
     assert_eq!(dy, 100.0 + (20.0 - 60.0) / 2.0, "centred on the trigger");
 
-    let (dx, _) = anchor_translate(trigger, panel, Placement::Start, viewport);
+    let (dx, _) = anchor_translate(trigger, panel, Side::Start, viewport, Direction::Ltr);
     assert_eq!(
         dx,
         80.0 - ANCHOR_GAP,
@@ -293,13 +293,39 @@ fn a_panel_placed_beside_its_trigger_centres_on_it_and_flips_when_it_has_to() {
     );
 
     let rail = Rect::new(4.0, 100.0, 40.0, 20.0);
-    let (dx, _) = anchor_translate(rail, panel, Placement::Start, viewport);
+    let (dx, _) = anchor_translate(rail, panel, Side::Start, viewport, Direction::Ltr);
     assert_eq!(dx, 44.0 + ANCHOR_GAP, "flipped to the trailing side");
 
     // A tooltip beside a 36px button was crisp and the same one under a 28px tab was blurred, from nothing but the half pixel each placement contributed.
     let odd = Rect::new(200.0, 100.0, 40.0, 21.0);
-    let (dx, dy) = anchor_translate(odd, panel, Placement::End, viewport);
+    let (dx, dy) = anchor_translate(odd, panel, Side::End, viewport, Direction::Ltr);
     assert_eq!((dx, dy), (dx.round(), dy.round()), "on the pixel grid");
+}
+
+/// The start and the end of a line are the left and the right in a left-to-right surface and the other way round in a right-to-left one, and a panel dropping below its trigger lines up with whichever edge the line starts from.
+#[test]
+fn start_and_end_follow_the_way_the_surface_reads() {
+    let trigger = Rect::new(200.0, 100.0, 40.0, 20.0);
+    let size = Size::new(120.0, 60.0);
+    let placed = |side: Side, direction: Direction| {
+        Anchoring::new(trigger, side, window(300.0), direction).place(size)
+    };
+    let left_of_trigger = |spot: Rect| spot.x + spot.width <= trigger.x;
+    let right_of_trigger = |spot: Rect| spot.x >= trigger.x + trigger.width;
+
+    assert!(right_of_trigger(placed(Side::End, Direction::Ltr)));
+    assert!(left_of_trigger(placed(Side::End, Direction::Rtl)));
+    assert!(left_of_trigger(placed(Side::Start, Direction::Ltr)));
+    assert!(right_of_trigger(placed(Side::Start, Direction::Rtl)));
+
+    let below_ltr = placed(Side::Below, Direction::Ltr);
+    assert_eq!(below_ltr.x, trigger.x, "its left edge on the trigger's");
+    let below_rtl = placed(Side::Below, Direction::Rtl);
+    assert_eq!(
+        below_rtl.x + below_rtl.width,
+        trigger.x + trigger.width,
+        "its right edge on the trigger's"
+    );
 }
 use crate::container::Container;
 use crate::context::compute_layout;
@@ -539,7 +565,7 @@ fn anchored_content_tracks_trigger() {
         Some(Anchor {
             trigger: node,
             laid: trigger,
-            placement: Placement::Below,
+            side: Side::Below,
         }),
         Rc::new(|| true),
     )
@@ -775,7 +801,7 @@ fn a_modal_overlay_marks_its_boxes_and_names_what_opened_it() {
         LayoutStyle::new(),
         vec![Box::new(tip)],
         trigger_node,
-        Placement::Below,
+        Side::Below,
     )
     .unwrap();
     let section = Container::new(

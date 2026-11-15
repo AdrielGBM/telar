@@ -1,8 +1,8 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
 use telar::{Children, Key, NamedKey, Role};
 
-use super::sample;
-use crate::workbench::split_pane::split_pane::{SizedPane, SplitDirection, SplitPaneProps, split_pane};
+use super::sample::{self, Given};
+use crate::workbench::split_pane::split_pane::{PaneLimit, SizedPane, SplitDirection, SplitPaneProps, split_pane};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
@@ -13,8 +13,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .sized(p.arg("sized", SizedPane::First))
                     .size(p.signal("size", 240.0f32))
                     .collapsed(p.signal("collapsed", false))
-                    .min(p.arg("min", 120.0f32))
-                    .max(p.arg("max", 0.0f32))
+                    .min(PaneLimit::Px(p.arg("min_px", 120.0f32)))
+                    .given(p.arg("max_px", None::<f32>), |props, max| props.max(PaneLimit::Px(max)))
                     .collapsible(p.arg("collapsible", true))
                     .first(Children::one(|| sample::text("Sidebar")))
                     .second(Children::one(|| sample::text("Editor")))

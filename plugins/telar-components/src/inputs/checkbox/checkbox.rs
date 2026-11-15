@@ -76,9 +76,9 @@ pub struct CheckboxProps {
     /// How large the checkbox is drawn: its box, mark and label, and the control height its row stands at, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// Accent (the checked fill). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Accent (the checked fill). `None` (the default) is the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Fires with the new state on every toggle.
     #[props(some, default)]
     pub on_toggle: Option<Rc<dyn Fn(bool)>>,

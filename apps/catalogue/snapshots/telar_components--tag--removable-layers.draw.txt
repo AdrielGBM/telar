@@ -83,13 +83,9 @@ matrix 1,0,0,1,455,320
         end
       end
       element group
-        element group
-        end
       end
     end
     element group
-      element group
-      end
     end
   end
 end

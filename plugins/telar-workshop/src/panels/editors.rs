@@ -181,19 +181,16 @@ fn number_editor(binding: &Binding, number: NumberControl) -> Result<Editor, Lay
     let name = binding.name;
     let item = match number.range {
         Some((min, max)) => {
-            let step = number
+            let mut props = SliderProps::props()
+                .value(bound.shown)
+                .range(min as f32..=max as f32)
+                .width(SLIDER_WIDTH)
+                .build();
+            props.step = number
                 .step
-                .map_or(if number.integer { 1.0 } else { 0.0 }, |step| step as f32);
-            let slider = slider(
-                SliderProps::props()
-                    .value(bound.shown)
-                    .min(min as f32)
-                    .max(max as f32)
-                    .step(step)
-                    .width(SLIDER_WIDTH)
-                    .build(),
-            )?
-            .a11y_label(move || name);
+                .map(|step| step as f32)
+                .or(number.integer.then_some(1.0));
+            let slider = slider(props)?.a11y_label(move || name);
             let shown = binding.clone();
             let value = Text::declaring(
                 move || shown.value_text(),

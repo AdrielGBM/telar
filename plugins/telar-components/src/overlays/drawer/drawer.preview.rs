@@ -1,18 +1,13 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Container, LayoutError, Role, box_item};
+use super::sample::Given;
+use telar::{Children, Color, Container, LayoutError, Role, Side, box_item};
 
 use super::sample;
 use crate::inputs::button::button::{ButtonProps, button};
 use crate::overlays::drawer::drawer::{DrawerProps, drawer};
 use telar::ControlSize;
-
-#[derive(Clone, Copy, telar::PreviewArg)]
-enum Side {
-    Left,
-    Right,
-}
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
@@ -24,18 +19,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .on_press(Rc::new(move || open.set(true)))
                     .build(),
             )?;
-            let side = match p.arg("side", Side::Left) {
-                Side::Left => "left",
-                Side::Right => "right",
-            };
             let panel = drawer(
                 DrawerProps::props()
                     .on_close(Rc::new(|| {}))
                     .open(open)
-                    .side(side)
-                    .width(p.arg("width", 0.0f32))
+                    .side(p.arg("side", Side::Start))
+                    .given(p.arg("extent", None::<f32>), |props, extent| props.extent(extent))
                     .size(p.arg("size", ControlSize::Regular))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .children(Children::new(|| {
                         Ok(vec![
                             sample::text("Filters")?,

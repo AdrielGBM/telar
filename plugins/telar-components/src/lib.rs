@@ -128,7 +128,7 @@ pub use workbench::resizable::resizable::{
     ResizableTokens, ResizeEdge, ResizeGrowth, ResizeHandleProps, resize_handle,
 };
 pub use workbench::split_pane::split_pane::{
-    SizedPane, SplitDirection, SplitPaneProps, SplitPaneTokens, SplitRegion, split_pane,
+    PaneLimit, SizedPane, SplitDirection, SplitPaneProps, SplitPaneTokens, SplitRegion, split_pane,
 };
 pub use workbench::toolbar::toolbar::{ToolbarProps, toolbar};
 pub use workbench::tree_view::tree_view::{

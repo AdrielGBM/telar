@@ -111,5 +111,7 @@
 110	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-818..824	2672	`volume`
-1124..1128	4998	`temp`
+762..773	2269	`0.0..=100.0`
+822..828	2649	`volume`
+1070..1081	4563	`60.0..=80.0`
+1140..1144	4952	`temp`

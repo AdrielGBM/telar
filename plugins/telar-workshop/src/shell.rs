@@ -13,8 +13,8 @@ use telar::{
     StyledContainer, box_item, effect, use_theme_tokens,
 };
 use telar_components::{
-    DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, metrics,
-    split_pane, window_edges,
+    DrawerProps, PaneLimit, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer,
+    metrics, split_pane, window_edges,
 };
 use telar_devtools::{use_workbench_tokens, workbench_card, workbench_fill};
 
@@ -118,8 +118,8 @@ fn beside_sidebar(
     split_pane(
         SplitPaneProps::props()
             .size(state.sidebar_width())
-            .min(SIDEBAR_MIN_WIDTH)
-            .max(SIDEBAR_MAX_WIDTH)
+            .min(PaneLimit::Px(SIDEBAR_MIN_WIDTH))
+            .max(PaneLimit::Px(SIDEBAR_MAX_WIDTH))
             .collapsed(state.sidebar_collapsed())
             .divider(false)
             .label(Reactive::of(|| strings::text(RESIZE_SIDEBAR)))
@@ -156,7 +156,7 @@ fn under_drawer(
     let drawer = drawer(
         DrawerProps::props()
             .open(state.sidebar_drawer())
-            .width(width)
+            .extent(width)
             .label(Reactive::of(|| strings::text(PREVIEWS)))
             .color(Reactive::of(|| -> Color {
                 use_workbench_tokens().sidebar_background
@@ -206,8 +206,8 @@ fn split_workspace(
             .direction(direction)
             .sized(SizedPane::Second)
             .size(state.panel_size())
-            .min(PANEL_MIN_SIZE)
-            .max_fraction(PANEL_MAX_FRACTION)
+            .min(PaneLimit::Px(PANEL_MIN_SIZE))
+            .max(PaneLimit::Fraction(PANEL_MAX_FRACTION))
             .collapsed(state.panel_collapsed())
             .collapsed_size(folded_to)
             .divider(false)

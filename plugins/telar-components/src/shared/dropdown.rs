@@ -4,8 +4,8 @@ use std::rc::Rc;
 use telar::{
     AlignItems, Anchoring, Border, BorderRadius, Children, Clip, ClippedItem, Color, ConsumedKeys,
     Container, DismissRegistration, HasPopup, JustifyContent, Key, LayoutError, LayoutItem,
-    LayoutStyle, Memo, NamedKey, NodeId, Overlay, Placement, Reactive, ReactiveList, Rect,
-    RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface,
+    LayoutStyle, Memo, NamedKey, NodeId, Overlay, Reactive, ReactiveList, Rect, RectStyle,
+    RwSignal, ShapeStyle, Side, StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface,
     box_item, children, effect,
     focus::{FocusId, Role},
     memo, signal, track_layout,
@@ -46,7 +46,7 @@ pub(crate) struct Face {
     /// The size of the control the trigger is.
     pub size: ControlSize,
     /// The colour a bordered trigger is framed in.
-    pub color: Reactive<Color>,
+    pub color: Option<Reactive<Color>>,
     pub bordered: bool,
     pub caret: bool,
     /// Whether the column the trigger stands in decides its width — a stretched or fitted trigger — rather than [`Geometry::width`].
@@ -151,8 +151,9 @@ pub(crate) fn below(
         laid.get();
         Anchoring::new(
             telar::anchor_rect(trigger, &laid),
-            Placement::Below,
+            Side::Below,
             popup::viewport(),
+            telar::use_direction(),
         )
         .gap(offset.get())
     })
@@ -193,7 +194,7 @@ pub(crate) struct Dropdown {
     pub size: ControlSize,
     /// The panel's rows, as the recipe for making them rather than the rows themselves — see [`Children`](telar::Children). Two things need it that way: the rows are remade on every open, and each one has to be built inside the [`ListContext`](crate::layout::list::list::ListContext) this scaffold provides.
     pub rows: Children,
-    pub color: Reactive<Color>,
+    pub color: Option<Reactive<Color>>,
     pub on_pick: Option<Rc<dyn Fn(usize)>>,
     pub selected: RwSignal<Option<usize>>,
     pub stretch: bool,
@@ -428,7 +429,11 @@ struct Shown {
 }
 
 /// A select is a form control and wears a border; a **menu** is a button that happens to open a list, so it wears none. A bordered menu trigger reads as a field with the caret in it — or, sitting alone in a header, as a button stuck in its focused state. `bordered` is there for the caller who wants the other reading.
-fn trigger_rect_style(color: &Reactive<Color>, face: Shown, geometry: Geometry) -> RectStyle {
+fn trigger_rect_style(
+    color: &Option<Reactive<Color>>,
+    face: Shown,
+    geometry: Geometry,
+) -> RectStyle {
     let rect = RectStyle::default().with_radius(BorderRadius::all(geometry.radius));
     if !face.bordered {
         return match (face.open, face.hovered) {

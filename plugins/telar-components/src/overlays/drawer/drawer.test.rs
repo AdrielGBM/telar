@@ -12,7 +12,7 @@ fn open_shows_panel_and_close_hides_it() {
     let drawer = drawer(
         DrawerProps::props()
             .open(open)
-            .side("right")
+            .side(Side::End)
             .children(text_body("Drawer body"))
             .build(),
     )
@@ -171,7 +171,7 @@ fn a_panel_pinned_to_the_right_rounds_its_left_corners() {
     let tree = open_drawer(
         DrawerProps::props()
             .open(signal(true))
-            .side("right")
+            .side(Side::End)
             .build(),
     );
     let (rect, paint) = panel(&tree);
@@ -179,10 +179,63 @@ fn a_panel_pinned_to_the_right_rounds_its_left_corners() {
     assert_eq!(paint.radius, rounded(9.0, 0.0));
 }
 
+/// Which edge of a 400 × 400 surface reading `direction` a drawer on `side` is pinned to, by the edges its panel touches.
+fn pinned_edges(side: Side, direction: telar::Direction) -> (bool, bool, bool, bool) {
+    telar::set_direction(direction);
+    let tree = open_drawer(DrawerProps::props().open(signal(true)).side(side).build());
+    let rect = panel(&tree).0;
+    telar::set_direction(telar::Direction::Ltr);
+    (
+        rect.y == 0.0,
+        rect.x + rect.width == 400.0,
+        rect.y + rect.height == 400.0,
+        rect.x == 0.0,
+    )
+}
+
 #[test]
-fn an_unset_width_is_the_tokens_and_a_named_one_wins() {
+fn a_drawer_at_the_end_opens_on_the_right_of_a_left_to_right_surface_and_on_the_left_of_a_right_to_left_one()
+ {
+    let (top, right, bottom, left) = pinned_edges(Side::End, telar::Direction::Ltr);
+    assert!(top && right && bottom && !left);
+    let (top, right, bottom, left) = pinned_edges(Side::End, telar::Direction::Rtl);
+    assert!(top && !right && bottom && left);
+    let (_, right, _, left) = pinned_edges(Side::Start, telar::Direction::Rtl);
+    assert!(right && !left, "and the start the other way round");
+}
+
+#[test]
+fn a_drawer_above_or_below_spans_the_surface_s_width_at_its_top_or_bottom() {
+    let (top, right, bottom, left) = pinned_edges(Side::Above, telar::Direction::Ltr);
+    assert!(top && right && !bottom && left);
+    let (top, right, bottom, left) = pinned_edges(Side::Below, telar::Direction::Ltr);
+    assert!(!top && right && bottom && left);
+}
+
+#[test]
+fn a_transparent_panel_is_drawn_transparent_and_an_absent_colour_is_the_surface() {
+    let tree = open_drawer(
+        DrawerProps::props()
+            .open(signal(true))
+            .color(Color::TRANSPARENT)
+            .build(),
+    );
+    assert_eq!(
+        panel(&tree).1.fill.map(|paint| paint.solid_color()),
+        Some(Color::TRANSPARENT)
+    );
+    drop(tree);
+    let tree = open_drawer(DrawerProps::props().open(signal(true)).build());
+    assert_eq!(
+        panel(&tree).1.fill.map(|paint| paint.solid_color()),
+        Some(shared::surface())
+    );
+}
+
+#[test]
+fn an_unset_extent_is_the_tokens_and_a_named_one_wins() {
     let tokens = DrawerTokens {
-        width: Some(250.0),
+        extent: Some(250.0),
         ..DrawerTokens::default()
     };
     telar::set_theme(crate::test_support::PanelTheme {
@@ -194,8 +247,8 @@ fn an_unset_width_is_the_tokens_and_a_named_one_wins() {
     assert_eq!(panel(&tree).0.width, 250.0);
     drop(tree);
 
-    let tree = open_drawer(DrawerProps::props().open(signal(true)).width(180.0).build());
-    assert_eq!(panel(&tree).0.width, 180.0, "the drawer's own width wins");
+    let tree = open_drawer(DrawerProps::props().open(signal(true)).extent(180.0).build());
+    assert_eq!(panel(&tree).0.width, 180.0, "the drawer's own extent wins");
 }
 
 /// An unset panel is the measure of the drawer's own size wide, and a width its tokens name at the regular size scales with the text to it.
@@ -215,11 +268,11 @@ fn the_panel_s_width_follows_the_drawer_s_size() {
         );
     }
     let tokens = DrawerTokens {
-        width: Some(250.0),
+        extent: Some(250.0),
         pad: Some(10.0),
         ..DrawerTokens::default()
     };
-    assert_eq!(tokens.width(ControlSize::Large), (250.0 * 1.125f32).round());
+    assert_eq!(tokens.extent(ControlSize::Large), (250.0 * 1.125f32).round());
     assert_eq!(tokens.pad(ControlSize::Large), 12.5);
 }
 
@@ -287,7 +340,7 @@ fn a_panel_wider_than_the_window_is_cut_to_the_window() {
         let tree = open_drawer_in(
             (width, 400.0),
             text_body("Drawer body"),
-            DrawerProps::props().open(signal(true)).width(500.0).build(),
+            DrawerProps::props().open(signal(true)).extent(500.0).build(),
         );
         let rect = panel(&tree).0;
         assert!(rect.x >= 0.0 && rect.x + rect.width <= width, "{rect:?}");

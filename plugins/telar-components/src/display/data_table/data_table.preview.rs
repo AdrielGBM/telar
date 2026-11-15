@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Color, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Role, signal};
 
 use crate::display::data_table::data_table::{CellAlign, Column, DataTableProps, TableRow, data_table};
@@ -107,7 +108,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .rows(files())
                     .label(p.arg("label", "Files"))
                     .size(p.arg("size", ControlSize::Regular))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )?;
             Ok::<_, LayoutError>(framed(table)?)
@@ -150,7 +151,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .selection_mode(p.arg("selection_mode", SelectionMode::Multiple))
                     .selected_rows(signal(chosen))
                     .label(p.arg("label", "Files"))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )?;
             Ok::<_, LayoutError>(framed(table)?)
@@ -179,7 +180,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .columns(task_columns())
                     .rows(tasks())
                     .label(p.arg("label", "Tasks"))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )?;
             Ok::<_, LayoutError>(framed(table)?)

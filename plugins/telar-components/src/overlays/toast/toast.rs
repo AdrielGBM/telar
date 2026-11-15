@@ -267,12 +267,12 @@ pub struct ToasterProps {
     pub toasts: Option<Toasts>,
     #[props(default)]
     pub placement: ToastPlacement,
-    /// How many notices show at once. `0` means 3.
-    #[props(default)]
+    /// How many notices show at once. Three by default.
+    #[props(default = 3)]
     pub max_visible: u32,
-    /// Each notice's width in logical px. `0.0` (the default) means "unset" -> [`ToastTokens::width`].
-    #[props(default)]
-    pub width: f32,
+    /// Each notice's width in logical px. `None` (the default) is [`ToastTokens::width`].
+    #[props(some, default)]
+    pub width: Option<f32>,
     /// How large the notices are drawn: their padding, text, buttons and the gaps between them, and the width they take when the toaster names none, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
@@ -296,13 +296,9 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         style,
     } = props;
     let queue = queue.unwrap_or_else(toasts);
-    let max_visible = if max_visible == 0 {
-        3
-    } else {
-        max_visible as usize
-    };
+    let max_visible = max_visible as usize;
     let width = Width {
-        named: (width > 0.0).then_some(width),
+        named: width,
         size,
     };
     let held = Rc::new(Hold::default());

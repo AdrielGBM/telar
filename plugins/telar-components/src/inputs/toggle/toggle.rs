@@ -98,7 +98,7 @@ fn track_box(SwitchSize { knob, inset }: SwitchSize) -> LayoutStyle {
 }
 
 /// The track's fill: the accent while on, else the strongest of the theme's washes.
-fn track_fill(on: bool, color: &Reactive<Color>) -> Color {
+fn track_fill(on: bool, color: &Option<Reactive<Color>>) -> Color {
     if on {
         shared::resolve(color, shared::accent)
     } else {
@@ -107,7 +107,7 @@ fn track_fill(on: bool, color: &Reactive<Color>) -> Color {
 }
 
 /// The track's paint: an off track is framed in the theme's `control_border`, since a wash alone does not tell it from the surface it sits on.
-fn track_style(on: bool, color: &Reactive<Color>, radius: BorderRadius) -> RectStyle {
+fn track_style(on: bool, color: &Option<Reactive<Color>>, radius: BorderRadius) -> RectStyle {
     let rest = RectStyle::default()
         .with_fill(track_fill(on, color))
         .with_radius(radius);
@@ -124,7 +124,7 @@ fn track_style(on: bool, color: &Reactive<Color>, radius: BorderRadius) -> RectS
 /// The drawing of a switch, shared by [`toggle`] and a menu row's switch: a pill track whose knob sits at the start while `on` reads false and at the end while it reads true, the track filling with `color` (the theme's accent when unset) while on.
 pub(crate) fn switch_track(
     on: impl Fn() -> bool + Clone + 'static,
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
     style: Option<SurfaceAmendment>,
     size: impl Fn() -> SwitchSize + Copy + 'static,
 ) -> Result<StyledContainer, LayoutError> {
@@ -169,9 +169,9 @@ pub struct ToggleProps {
     /// How large the switch is drawn: its knob, track, row and label, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// Accent (the on-track fill). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Accent (the on-track fill). `None` (the default) is the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Fires with the new state on every toggle.
     #[props(some, default)]
     pub on_toggle: Option<Rc<dyn Fn(bool)>>,

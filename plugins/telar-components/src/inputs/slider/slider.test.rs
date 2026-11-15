@@ -74,8 +74,7 @@ fn custom_range_maps_midpoint_to_range_midpoint() {
         SliderProps::props()
             .value(value)
             .width(200.0)
-            .min(0.0)
-            .max(100.0)
+            .range(0.0..=100.0)
             .build(),
     )
     .unwrap();
@@ -97,8 +96,7 @@ fn step_snaps_value_to_nearest_step() {
         SliderProps::props()
             .value(value)
             .width(100.0)
-            .min(0.0)
-            .max(100.0)
+            .range(0.0..=100.0)
             .step(10.0)
             .build(),
     )
@@ -129,7 +127,7 @@ fn only_the_focused_slider_answers_the_arrows() {
     let (volume, brightness) = (signal(0.5f32), signal(0.5f32));
     let mut sliders: Vec<_> = [volume, brightness]
         .into_iter()
-        .map(|value| slider(SliderProps::props().value(value).step(0.1).max(1.0).build()).unwrap())
+        .map(|value| slider(SliderProps::props().value(value).step(0.1).build()).unwrap())
         .collect();
     let right = telar::testing::named(telar::NamedKey::ArrowRight);
 
@@ -163,7 +161,6 @@ fn a_reader_steps_the_slider_and_sets_it_to_a_step() {
         SliderProps::props()
             .value(value)
             .step(0.1)
-            .max(1.0)
             .on_change(Rc::new(move |v| sink.set(v)))
             .build(),
     )
@@ -317,4 +314,40 @@ fn a_press_beside_the_thin_track_still_takes_hold_of_it() {
     let above = rect.y - (crate::metrics::MIN_TARGET - rect.height) / 2.0 + 1.0;
     widget.on_event(&press((rect.x + 100.0) as f64, above as f64));
     assert!((value.get() - 0.5).abs() < 1e-4, "got {}", value.get());
+}
+
+#[test]
+fn a_range_with_nothing_to_slide_over_or_a_step_that_moves_nothing_is_refused() {
+    crate::test_support::fresh_layout_runtime();
+    assert!(slider(SliderProps::props().range(1.0..=0.0).build()).is_err());
+    assert!(slider(SliderProps::props().range(2.0..=2.0).build()).is_err());
+    assert!(slider(SliderProps::props().step(-1.0).build()).is_err());
+}
+
+#[test]
+fn a_transparent_track_and_fill_are_drawn_transparent_and_absent_colours_follow_the_theme() {
+    crate::test_support::fresh_layout_runtime();
+    let ((_, track), _) = track_and_thumb(|| {
+        slider(
+            SliderProps::props()
+                .value(signal(0.5f32))
+                .color(Color::TRANSPARENT)
+                .track_color(Color::TRANSPARENT)
+                .build(),
+        )
+        .unwrap()
+    });
+    assert_eq!(
+        track.fill.map(|paint| paint.solid_color()),
+        Some(Color::TRANSPARENT)
+    );
+    let ((_, track), (_, thumb)) = track_and_thumb(|| plain_slider(None));
+    assert_eq!(
+        track.fill.map(|paint| paint.solid_color()),
+        Some(shared::muted())
+    );
+    assert_eq!(
+        thumb.fill.map(|paint| paint.solid_color()),
+        Some(shared::accent())
+    );
 }

@@ -1,10 +1,10 @@
-//! The words a `.rsx` writes bare for a value every component shares: `size:small`, `variant:ghost`, `tone:danger`.
+//! The words a `.rsx` writes bare for a value every component shares: `size:small`, `variant:ghost`, `tone:danger`, `side:end`.
 //!
 //! A `.rsx` transpiles knowing nothing of the props it calls, so a bare lowercase word that is no binding of its file is written as the name of that word here, `telar::kw::small`, which is the value itself, [`ControlSize::Small`]. A word no axis has, or one of another axis than the prop's, is the compiler's error on the line that wrote it. A binding of the same name wins, as it does for every bare word.
 //!
 //! The words are one closed list, which also feeds the editor's completion, and each is its value's text form as a preview arg, in a matrix (`size:[small regular large]`), a link and stored state.
 
-use crate::{ControlSize, Tone, Variant};
+use crate::{ControlSize, Side, Tone, Variant};
 
 /// A type whose values are written as words: which word writes a value, and which value a word writes.
 pub trait Word: Sized {
@@ -24,13 +24,14 @@ telar_macros::__vocabulary! {
     size => ControlSize,
     variant => Variant,
     tone => Tone { Color },
+    side => Side,
 }
 
 #[cfg(feature = "previews")]
 mod args {
     use super::Word;
     use crate::preview::{ArgValue, ControlKind, PreviewArg};
-    use crate::{ControlSize, Tone, Variant};
+    use crate::{ControlSize, Side, Tone, Variant};
 
     fn from_choice<T: Word>(value: &ArgValue) -> Option<T> {
         match value {
@@ -55,7 +56,7 @@ mod args {
         )*};
     }
 
-    worded!(ControlSize, Variant);
+    worded!(ControlSize, Variant, Side);
 
     // The control chooses among the named tones; a matrix or a stored arg may still hand it a colour.
     impl PreviewArg for Tone {

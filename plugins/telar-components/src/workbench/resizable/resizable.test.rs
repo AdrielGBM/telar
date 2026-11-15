@@ -163,7 +163,7 @@ fn a_drag_keeps_to_the_limits_and_the_room() {
         ResizableProps::props()
             .size(size)
             .min(Size::new(100.0, 80.0))
-            .max(Size::new(0.0, 260.0))
+            .max(Size::new(f32::INFINITY, 260.0))
             .room(room)
             .build(),
     );
@@ -227,7 +227,7 @@ fn home_and_end_take_the_focused_edge_to_its_limits() {
         ResizableProps::props()
             .size(size)
             .min(Size::new(120.0, 90.0))
-            .max(Size::new(400.0, 0.0))
+            .max(Size::new(400.0, f32::INFINITY))
             .build(),
     );
     focus::focus_next();

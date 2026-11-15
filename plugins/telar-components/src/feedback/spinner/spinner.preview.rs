@@ -1,5 +1,6 @@
 use telar::Color;
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use super::sample::Given;
 
 use crate::feedback::spinner::spinner::{SpinnerProps, spinner};
 use telar::ControlSize;
@@ -9,9 +10,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(spinner: SpinnerProps, "Default", |p| {
             spinner(
                 SpinnerProps::props()
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .size(p.arg("size", ControlSize::Regular))
-                    .diameter(p.arg("diameter", 0.0f32))
+                    .given(p.arg("diameter", None::<f32>), |props, value| props.diameter(value))
                     .build(),
             )
         })

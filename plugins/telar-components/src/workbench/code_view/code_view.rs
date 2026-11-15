@@ -123,18 +123,18 @@ pub struct CodeViewProps {
     /// What a reader calls the block, beyond its text.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
-    /// The tallest the block grows, in logical px, before it scrolls. `0.0` (the default) grows to fit every line.
-    #[props(default)]
-    pub max_height: f32,
+    /// The tallest the block grows, in logical px, before it scrolls. `None` (the default) grows to fit every line.
+    #[props(some, default)]
+    pub max_height: Option<f32>,
     /// Grows along its parent's main axis into the room the parent leaves, rather than keeping to its lines: blocks in a row of columns stand as tall as each other. Off by default.
     #[props(default)]
     pub grow: bool,
     /// Restyles each kind of token over the theme's own choice, for a palette of the caller's.
     #[props(some, default)]
     pub token_style: Option<TokenStyler>,
-    /// The marked lines' wash. `Color::TRANSPARENT` (the default) falls back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// The marked lines' wash. `None` (the default) falls back to the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Amends the paint of the block's frame — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`CodeViewTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -316,10 +316,9 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
         }
     };
     let content = Container::new(content_box(), row)?.styled_by(content_box);
-    let viewport_box = if max_height > 0.0 {
-        LayoutStyle::new().max_height(max_height)
-    } else {
-        LayoutStyle::new()
+    let viewport_box = match max_height {
+        Some(max_height) => LayoutStyle::new().max_height(max_height),
+        None => LayoutStyle::new(),
     };
     let stop_name = label.clone();
     let scroll = LayoutScrollArea::new(viewport_box, box_item(content))?.stop_label(move || {

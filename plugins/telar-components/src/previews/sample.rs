@@ -49,3 +49,15 @@ pub(super) fn expect_names(canvas: &mut Play, query: &Query, names: &[&str]) -> 
         )))
     }
 }
+
+/// Hands an optional arg to its prop's setter only while the control holds a value, so an unset control leaves the prop as the component defaults it.
+pub(super) trait Given: Sized {
+    fn given<T>(self, value: Option<T>, set: impl FnOnce(Self, T) -> Self) -> Self {
+        match value {
+            Some(value) => set(self, value),
+            None => self,
+        }
+    }
+}
+
+impl<B> Given for B {}

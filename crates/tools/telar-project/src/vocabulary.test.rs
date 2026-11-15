@@ -29,6 +29,10 @@ fn a_word_is_a_lowercase_identifier_no_other_text_form_reads() {
 #[test]
 fn a_prop_finds_its_axis_by_name() {
     assert_eq!(
+        vocabulary_axis("side").map(|axis| axis.words),
+        Some(&["above", "below", "start", "end"][..])
+    );
+    assert_eq!(
         vocabulary_axis("size").map(|axis| axis.words),
         Some(&["small", "regular", "large"][..])
     );

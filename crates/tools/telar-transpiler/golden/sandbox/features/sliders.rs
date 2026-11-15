@@ -23,7 +23,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let temp = signal(65.0f32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Slider").desc("A drag-driven control built on the on_drag primitive — track, fill, and thumb are wired up for you. Set min/max to read the value back in your own range (no memo needed), step to quantize it, and label to caption it.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Slider").desc("A drag-driven control built on the on_drag primitive — track, fill, and thumb are wired up for you. Set its range to read the value back in your own range (no memo needed), step to quantize it, and label to caption it.").build())?;
         let __node_1 = {
             let __recipe_children = Children::new(
                 {
@@ -38,7 +38,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = slider(SliderProps::props().value(volume.clone()).min(::telar::Int(0)).max(::telar::Int(100)).step(::telar::Int(1)).width(::telar::Int(260)).build())?;
+                                let __node_3 = slider(SliderProps::props().value(volume.clone()).range(0.0..=100.0).step(::telar::Int(1)).width(::telar::Int(260)).build())?;
                                 __children.push(box_item(__node_3));
                                 let __text_0 = {
                                     let volume = volume.clone();
@@ -56,13 +56,13 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(8)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("slider value:$volume min:0 max:100 step:1 width:260").build())?;
+                    let __node_4 = code_line(CodeLineProps::props().code("slider value:$volume range:(0.0..=100.0) step:1 width:260").build())?;
                     __children.push(box_item(__node_4));
                     Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("min / max — the value reads back in your range, not 0..1").children(__recipe_children).build())?
+            example(ExampleProps::props().title("range — the value reads back in your range, not 0..1").children(__recipe_children).build())?
         };
         let __node_5 = {
             let __recipe_children = Children::new(
@@ -78,7 +78,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_7 = slider(SliderProps::props().value(temp.clone()).min(::telar::Int(60)).max(::telar::Int(80)).step(::telar::Int(5)).label("Temperature").width(::telar::Int(260)).build())?;
+                                let __node_7 = slider(SliderProps::props().value(temp.clone()).range(60.0..=80.0).step(::telar::Int(5)).label("Temperature").width(::telar::Int(260)).build())?;
                                 __children.push(box_item(__node_7));
                                 let __text_1 = {
                                     let temp = temp.clone();
@@ -96,7 +96,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(8)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_6));
-                    let __node_8 = code_line(CodeLineProps::props().code("slider value:$temp min:60 max:80 step:5 label:'Temperature'").build())?;
+                    let __node_8 = code_line(CodeLineProps::props().code("slider value:$temp range:(60.0..=80.0) step:5 label:'Temperature'").build())?;
                     __children.push(box_item(__node_8));
                     Ok(__children)
                 }

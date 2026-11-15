@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
 use crate::workbench::tree_view::tree_view::{TreeNode, TreeViewProps, tree_view};
@@ -68,7 +69,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .select_branches(p.arg("select_branches", true))
                     .label(p.arg("label", "Files"))
                     .size(p.arg("size", ControlSize::Regular))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )?;
             Ok::<_, LayoutError>(Container::new(
@@ -103,7 +104,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .selected(signal(Some(Arc::from("views/lists"))))
                     .expanded(signal(expanded))
                     .label(p.arg("label", "Guide"))
-                    .color(p.arg("color", Color::TRANSPARENT))
+                    .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
             )?;
             Ok::<_, LayoutError>(Container::new(

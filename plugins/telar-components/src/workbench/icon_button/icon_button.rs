@@ -21,9 +21,9 @@ pub struct IconButtonProps {
     /// The button's name.
     #[props(into)]
     pub label: Reactive<String>,
-    /// The key binding that does the same thing, written portably (`"Mod+K"`) and shown in the tooltip as the platform writes it. Empty means none.
-    #[props(into, default)]
-    pub shortcut: Reactive<String>,
+    /// The key binding that does the same thing, written portably (`"Mod+K"`) and shown in the tooltip as the platform writes it. `None` (the default) names none.
+    #[props(some, into, default)]
+    pub shortcut: Option<Reactive<String>>,
     /// How large the button is drawn: its square and the icon in it, as [`ControlSize`] works them out. A small one is the smallest pointer target, so it fits a tag's `action` without making the tag taller.
     #[props(default)]
     pub size: ControlSize,
@@ -135,7 +135,7 @@ struct Square {
     icon: IconName,
     label: Reactive<String>,
     size: ControlSize,
-    shortcut: Reactive<String>,
+    shortcut: Option<Reactive<String>>,
     pressed: Option<Reactive<bool>>,
     disabled: Reactive<bool>,
     activate: Rc<dyn Fn()>,
@@ -214,7 +214,10 @@ impl Square {
             }
             _ => button.control(Role::Button),
         };
-        let button = button.keyboard_shortcut(move || shortcut.get());
+        let button = match shortcut {
+            Some(shortcut) => button.keyboard_shortcut(move || shortcut.get()),
+            None => button,
+        };
         let button = if pressed.is_some() {
             button.toggled(is_pressed)
         } else {

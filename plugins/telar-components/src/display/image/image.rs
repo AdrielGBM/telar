@@ -91,12 +91,12 @@ pub struct ImageProps {
     /// How the picture fills its box when the box is not its shape. Contained whole by default.
     #[props(default)]
     pub fit: ObjectFit,
-    /// Width in logical px. `0.0` (the default) is the picture's own, or what its proportions make of the height.
-    #[props(default)]
-    pub width: f32,
-    /// Height in logical px. `0.0` (the default) is the picture's own, or what its proportions make of the width.
-    #[props(default)]
-    pub height: f32,
+    /// Width in logical px. `None` (the default) is the picture's own, or what its proportions make of the height.
+    #[props(some, default)]
+    pub width: Option<f32>,
+    /// Height in logical px. `None` (the default) is the picture's own, or what its proportions make of the width.
+    #[props(some, default)]
+    pub height: Option<f32>,
     /// Corner of the picture. `None` (the default) is [`ImageTokens::radius`].
     #[props(some, default)]
     pub radius: Option<f32>,
@@ -145,31 +145,28 @@ pub fn image(props: ImageProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 #[derive(Clone, Copy)]
 struct Size {
-    width: f32,
-    height: f32,
+    width: Option<f32>,
+    height: Option<f32>,
 }
 
 impl Size {
     fn sized(self, style: LayoutStyle) -> LayoutStyle {
-        let style = if self.width > 0.0 {
-            style.width(self.width)
-        } else {
-            style
+        let style = match self.width {
+            Some(width) => style.width(width),
+            None => style,
         };
-        if self.height > 0.0 {
-            style.height(self.height)
-        } else {
-            style
+        match self.height {
+            Some(height) => style.height(height),
+            None => style,
         }
     }
 
     /// The box a picture not yet here stands in: the sides it was given, the one it was given on both sides, or a control's height square.
     fn standing_in(self) -> (f32, f32) {
-        match (self.width > 0.0, self.height > 0.0) {
-            (true, true) => (self.width, self.height),
-            (true, false) => (self.width, self.width),
-            (false, true) => (self.height, self.height),
-            (false, false) => (
+        match (self.width, self.height) {
+            (Some(width), Some(height)) => (width, height),
+            (Some(side), None) | (None, Some(side)) => (side, side),
+            (None, None) => (
                 shared::control_height(ControlSize::Regular),
                 shared::control_height(ControlSize::Regular),
             ),

@@ -102,16 +102,12 @@ matrix 1,0,0,1,367,320
         end
       end
       element group
-        element group
-          matrix 1,0,0,1,46,5
-            text 0,0 42.45x12.85 "Shift+F5" size=10.71 family=sans-serif weight=400 color=#646671ff wrap=none lang=en
-          end
+        matrix 1,0,0,1,46,4
+          text 0,1 42.45x12.85 "Shift+F5" size=10.71 family=sans-serif weight=400 color=#646671ff wrap=none lang=en
         end
       end
     end
     element group
-      element group
-      end
     end
   end
 end

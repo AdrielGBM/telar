@@ -6,7 +6,8 @@ use telar::{
     track_layout,
 };
 use telar_components::{
-    SizedPane, SplitDirection, SplitPaneProps, TreeNode, TreeViewProps, split_pane, tree_view,
+    PaneLimit, SizedPane, SplitDirection, SplitPaneProps, TreeNode, TreeViewProps, split_pane,
+    tree_view,
 };
 
 use super::tree_menu::TreeMenu;
@@ -58,8 +59,8 @@ fn split(
             .direction(direction)
             .sized(SizedPane::Second)
             .size(size)
-            .min(min)
-            .max_fraction(DETAILS_MAX_FRACTION)
+            .min(PaneLimit::Px(min))
+            .max(PaneLimit::Fraction(DETAILS_MAX_FRACTION))
             .label(Reactive::of(|| strings::text(RESIZE_DETAILS)))
             .first(Children::one(move || components(inspection)))
             .second(Children::one(move || details(inspection)))

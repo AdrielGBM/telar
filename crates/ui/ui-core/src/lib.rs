@@ -153,7 +153,7 @@ pub use link::{
 pub use mask::Mask;
 pub use movable::{Movable, MovableOutlet};
 pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};
-pub use overlay::{AnchorAlign, Anchoring, Overlay, Placement, anchor_rect};
+pub use overlay::{AnchorAlign, Anchoring, Overlay, Side, anchor_rect};
 pub use page_anchor::PageAnchor;
 pub use path::Path;
 pub use pointer::{

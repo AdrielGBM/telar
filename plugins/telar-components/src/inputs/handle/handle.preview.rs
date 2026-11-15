@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use super::sample::Given;
 use telar::{
     BorderRadius, Key, LayoutError, LayoutStyle, NamedKey, RectStyle, Role, ShapeStyle,
     StyledContainer, box_item,
@@ -19,11 +20,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .value(p.signal("value", 40.0f32))
                     .to_value(Rc::new(|x, _| x / TRACK * 100.0))
                     .to_point(Rc::new(|value| (value / 100.0 * TRACK, 12.0)))
-                    .min(p.arg("min", 0.0f32))
-                    .max(p.arg("max", 100.0f32))
+                    .range(p.arg("min", 0.0f32)..=p.arg("max", 100.0f32))
                     .step(p.arg("step", 1.0f32))
                     .size(p.arg("size", ControlSize::Regular))
-                    .diameter(p.arg("diameter", 0.0f32))
+                    .given(p.arg("diameter", None::<f32>), |props, value| props.diameter(value))
                     .label(p.arg("label", "Opacity"))
                     .build(),
             )?;

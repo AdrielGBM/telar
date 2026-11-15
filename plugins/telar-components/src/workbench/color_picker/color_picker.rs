@@ -96,9 +96,9 @@ pub struct ColorPickerProps {
     /// What each swatch is called, for a reader; one per colour.
     #[props(default)]
     pub swatch_names: Vec<String>,
-    /// Width in logical px. `0.0` (the default) means "unset" -> [`ColorPickerTokens::width`].
-    #[props(default)]
-    pub width: f32,
+    /// Width in logical px. `None` (the default) is [`ColorPickerTokens::width`].
+    #[props(some, default)]
+    pub width: Option<f32>,
     /// How large the picker is drawn: its thumbs, tracks, chip, hex field, swatches, caption and gaps and, unless it names one, its width, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
@@ -234,11 +234,7 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
         style,
     } = props;
     let value = value.unwrap_or_else(|| signal(shared::accent()));
-    let width = if width > 0.0 {
-        width
-    } else {
-        ColorPickerTokens::current().width(size)
-    };
+    let width = width.unwrap_or_else(|| ColorPickerTokens::current().width(size));
     let start = value.peek();
     let picker = Picker {
         size,

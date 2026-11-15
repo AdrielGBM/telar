@@ -3,12 +3,11 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, Children, Color, Container, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, Text,
-    box_item, children,
+    Accessible, AlignItems, Border, Children, Container, LayoutError, LayoutItem, LayoutStyle,
+    Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item, children,
 };
 use telar::{ControlSize, Variant};
-use telar_components::{ButtonProps, SplitPaneProps, Tab, button, split_pane, tab_list};
+use telar_components::{ButtonProps, PaneLimit, SplitPaneProps, Tab, button, split_pane, tab_list};
 
 use super::{DrawerTab, Model, banner, mounted_while, stats};
 use crate::panels::{accessibility_panel, inspection_toggles, inspector_panel};
@@ -26,8 +25,8 @@ pub(super) fn drawer(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             split_pane(
                 SplitPaneProps::props()
                     .size(model.drawer_width)
-                    .min(DRAWER_MIN_WIDTH)
-                    .max_fraction(DRAWER_MAX_FRACTION)
+                    .min(PaneLimit::Px(DRAWER_MIN_WIDTH))
+                    .max(PaneLimit::Fraction(DRAWER_MAX_FRACTION))
                     .collapsible(false)
                     .label(Reactive::of(|| strings::text(RESIZE_INSPECTOR)))
                     .first(Children::one(move || pane(model)))
@@ -113,7 +112,7 @@ fn strip(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 Reactive::of(|| strings::text(ACCESSIBILITY)),
             ),
         ],
-        Color::TRANSPARENT.into(),
+        None,
         Some(Reactive::of(|| strings::text(INSPECTOR))),
         ControlSize::Regular,
     )?;

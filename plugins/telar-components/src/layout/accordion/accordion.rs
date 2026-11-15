@@ -80,9 +80,9 @@ pub struct AccordionProps {
     /// How large the header is drawn: its height, padding, title and caret, as [`ControlSize`] works them out. The body is sized where it is written.
     #[props(default)]
     pub size: ControlSize,
-    /// Accent (the caret). `Color::TRANSPARENT` (the default) means "unset": falls back to the theme accent.
-    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
-    pub color: Reactive<Color>,
+    /// Accent (the caret). `None` (the default) is the theme accent.
+    #[props(some, into, default)]
+    pub color: Option<Reactive<Color>>,
     /// Amends the paint of the header — the accordion's **principal surface** — at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`AccordionTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,

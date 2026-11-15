@@ -86,7 +86,7 @@ impl Mounted {
 
 #[test]
 fn a_posted_notice_shows_its_title_and_message() {
-    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 0);
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 3);
     mounted
         .queue
         .push(Toast::new("Your changes are saved").titled("Saved"));
@@ -97,7 +97,7 @@ fn a_posted_notice_shows_its_title_and_message() {
 
 #[test]
 fn a_notice_puts_itself_away_when_its_time_is_up() {
-    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 0);
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 3);
     mounted
         .queue
         .push(Toast::new("Brief").lasting(Duration::from_secs(1)));
@@ -115,7 +115,7 @@ fn a_notice_puts_itself_away_when_its_time_is_up() {
 
 #[test]
 fn the_keyboard_on_the_stack_holds_every_clock() {
-    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 0);
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 3);
     mounted
         .queue
         .push(Toast::new("Read me").lasting(Duration::from_secs(1)));
@@ -138,7 +138,7 @@ fn the_keyboard_on_the_stack_holds_every_clock() {
 
 #[test]
 fn the_pointer_resting_on_the_stack_holds_every_clock() {
-    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 0);
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 3);
     mounted
         .queue
         .push(Toast::new("Read me").lasting(Duration::from_secs(1)));
@@ -165,7 +165,7 @@ fn the_pointer_resting_on_the_stack_holds_every_clock() {
 
 #[test]
 fn a_notice_arriving_under_a_resting_pointer_waits_too() {
-    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 0);
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 3);
     mounted.queue.push(Toast::new("First").until_dismissed());
     mounted.settle();
     let over = mounted.button("Dismiss");
@@ -181,7 +181,7 @@ fn a_notice_arriving_under_a_resting_pointer_waits_too() {
 
 #[test]
 fn the_dismiss_button_takes_its_notice_down() {
-    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 0);
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 3);
     mounted.queue.push(Toast::new("Bye").until_dismissed());
     mounted.settle();
     let dismiss = mounted.button("Dismiss");
@@ -192,7 +192,7 @@ fn the_dismiss_button_takes_its_notice_down() {
 
 #[test]
 fn an_action_runs_and_takes_its_notice_down() {
-    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 0);
+    let mut mounted = Mounted::new(ToastPlacement::BottomEnd, 3);
     let undone = Rc::new(Cell::new(false));
     let sink = undone.clone();
     mounted
@@ -223,7 +223,7 @@ fn notices_past_the_limit_wait_their_turn() {
 #[test]
 fn the_newest_notice_is_the_one_nearest_the_edge() {
     let order = |placement| {
-        let mut mounted = Mounted::new(placement, 0);
+        let mut mounted = Mounted::new(placement, 3);
         mounted.queue.push(Toast::new("Older").until_dismissed());
         mounted.queue.push(Toast::new("Newer").until_dismissed());
         mounted.settle();

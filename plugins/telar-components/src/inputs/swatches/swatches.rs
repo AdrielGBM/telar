@@ -83,9 +83,9 @@ pub struct SwatchesProps {
     /// How large the row is drawn: its swatches and the gap between them, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// Each swatch's drawn diameter in px. `0.0` (the default) means "unset": the [`SwatchesTokens`] size at the row's size. What takes the press around it is never smaller than 24 px, so a small swatch stays easy to hit.
-    #[props(default)]
-    pub diameter: f32,
+    /// Each swatch's drawn diameter in px. `None` (the default) is the [`SwatchesTokens`] size at the row's size. What takes the press around it is never smaller than 24 px, so a small swatch stays easy to hit.
+    #[props(some, default)]
+    pub diameter: Option<f32>,
     /// Fires with the index a press or a key selected.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(u32)>>,
@@ -106,11 +106,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
         style,
     } = props;
     let diameter = move || {
-        if diameter > 0.0 {
-            diameter
-        } else {
-            SwatchesTokens::current().size(size)
-        }
+        diameter.unwrap_or_else(|| SwatchesTokens::current().size(size))
     };
     let selected = selected.unwrap_or_else(|| signal(None::<u32>));
     let count = colors.len() as u32;

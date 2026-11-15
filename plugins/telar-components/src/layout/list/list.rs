@@ -94,7 +94,7 @@ impl RowLook {
 }
 
 /// `wash` as a list drawn in `color` lays it: the theme's own wash while `color` is unset, else `color` at the wash's strength, so a tinted list is as light or as strong as the theme's hover and selection.
-pub(crate) fn tinted(color: &Reactive<Color>, wash: Color) -> Color {
+pub(crate) fn tinted(color: &Option<Reactive<Color>>, wash: Color) -> Color {
     shared::resolve(color, || wash).with_alpha(wash.a)
 }
 
@@ -126,7 +126,7 @@ struct ListState {
     highlighted: RwSignal<Option<usize>>,
     /// The bound choice, for a list that has one (`select`) rather than one-shot actions (`menu`).
     selected: Option<RwSignal<Option<usize>>>,
-    color: Reactive<Color>,
+    color: Option<Reactive<Color>>,
     rows: RefCell<Vec<Row>>,
     /// A cursor asked for before there was anything to put it on. Opening with the down arrow happens in a key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
     seed: Cell<bool>,
@@ -153,7 +153,7 @@ impl ListContext {
         pick: Rc<dyn Fn(usize)>,
         highlighted: RwSignal<Option<usize>>,
         selected: Option<RwSignal<Option<usize>>>,
-        color: Reactive<Color>,
+        color: Option<Reactive<Color>>,
     ) -> Self {
         Self(Rc::new(ListState {
             pick,
@@ -173,7 +173,7 @@ impl ListContext {
     pub(crate) fn menu(
         pick: Rc<dyn Fn(usize)>,
         highlighted: RwSignal<Option<usize>>,
-        color: Reactive<Color>,
+        color: Option<Reactive<Color>>,
         cascade: Rc<crate::overlays::menu::menu_panel::Cascade>,
     ) -> Self {
         Self(Rc::new(ListState {
@@ -507,7 +507,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let on = on.clone();
         let track = switch_track(
             move || on.get(),
-            Reactive::of(|| Color::TRANSPARENT),
+            None,
             None,
             move || SwitchSize::row(size),
         )?
