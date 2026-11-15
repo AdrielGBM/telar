@@ -40,6 +40,7 @@ pub enum Axis {
     Locale(&'static [&'static str]),
     /// Every locale the application's catalog has, as [`Matrices::installed`] reads them or [`Matrices::with_locales`] lists them.
     CatalogLocales,
+    /// Writing directions.
     Dir(&'static [Direction]),
     /// Canvas sizes, each written `"390x844"` or named in `[telar.previews.viewports]`.
     Viewport(&'static [&'static str]),
@@ -200,7 +201,9 @@ pub fn parse_direction(word: &str) -> Option<Direction> {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NamedMatrix {
+    /// The name a preview refers to the matrix by.
     pub name: &'static str,
+    /// The axes the matrix varies, the first outermost.
     pub axes: &'static [Axis],
 }
 
@@ -208,6 +211,7 @@ impl NamedMatrix {
     /// Every registered mode, side by side: the matrix a widget's look is checked across. A package's own `themes` takes its place.
     pub const THEMES: Self = Self::new("themes", &[Axis::RegisteredModes]);
 
+    /// A matrix called `name` varying `axes`.
     pub const fn new(name: &'static str, axes: &'static [Axis]) -> Self {
         Self { name, axes }
     }
@@ -217,12 +221,14 @@ impl NamedMatrix {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewportPreset {
+    /// The name a viewport axis value refers to the size by.
     pub name: &'static str,
     /// In logical px.
     pub size: Size,
 }
 
 impl ViewportPreset {
+    /// A viewport called `name` of `width` by `height` logical px.
     pub const fn new(name: &'static str, width: f32, height: f32) -> Self {
         Self {
             name,
@@ -250,6 +256,7 @@ struct Installed {
 static INSTALLED: RwLock<Option<Installed>> = RwLock::new(None);
 
 impl Matrices {
+    /// Matrices over `named` and `viewports`, with no modes and no locales listed.
     pub fn new(named: &'static [NamedMatrix], viewports: &'static [ViewportPreset]) -> Self {
         Self {
             named,
@@ -302,18 +309,22 @@ impl Matrices {
             .or_else(|| parse_size(text))
     }
 
+    /// The matrices the package names.
     pub fn named(&self) -> &'static [NamedMatrix] {
         self.named
     }
 
+    /// The viewports the package names.
     pub fn viewports(&self) -> &'static [ViewportPreset] {
         self.viewports
     }
 
+    /// The modes `Axis::RegisteredModes` takes.
     pub fn modes(&self) -> &[String] {
         &self.modes
     }
 
+    /// The locales `Axis::CatalogLocales` takes.
     pub fn locales(&self) -> &'static [&'static str] {
         self.locales
     }
@@ -496,6 +507,7 @@ pub struct CellGlobals {
     pub mode: Option<String>,
     /// A BCP 47 language tag.
     pub locale: Option<String>,
+    /// The writing direction, whatever the locale's own.
     pub direction: Option<Direction>,
     /// The canvas size, in logical px.
     pub viewport: Option<Size>,
@@ -565,22 +577,46 @@ impl MatrixCell {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MatrixError {
     /// [`Matrix::Named`] names a matrix neither the package nor Telar has.
-    Unknown { name: &'static str },
+    Unknown {
+        /// The name that matches no matrix.
+        name: &'static str,
+    },
     /// Two axes vary the same thing.
-    RepeatedAxis { axis: &'static str },
+    RepeatedAxis {
+        /// The name of the axis that appears twice.
+        axis: &'static str,
+    },
     /// One axis lists a value twice, or two values that name the same cell.
-    RepeatedValue { axis: &'static str, value: String },
+    RepeatedValue {
+        /// The name of the axis that lists the value.
+        axis: &'static str,
+        /// The value listed more than once.
+        value: String,
+    },
     /// A value with no letter or digit to name its cell by.
-    Unnamed { axis: &'static str, value: String },
+    Unnamed {
+        /// The name of the axis that lists the value.
+        axis: &'static str,
+        /// The value that cannot name a cell.
+        value: String,
+    },
     /// A viewport that is neither a size nor a name in `[telar.previews.viewports]`.
-    Viewport { text: &'static str },
+    Viewport {
+        /// The viewport as written.
+        text: &'static str,
+    },
     /// An arg value that is not in [`ArgValue`]'s text form.
     ArgValue {
+        /// The name of the arg the value was listed for.
         axis: &'static str,
+        /// The value as written.
         text: &'static str,
     },
     /// [`Axis::ArgValues`] names an arg whose control, as its declaration or its prop gives it, picks from no fixed set of values.
-    NoFixedValues { axis: &'static str },
+    NoFixedValues {
+        /// The name of the arg.
+        axis: &'static str,
+    },
 }
 
 impl fmt::Display for MatrixError {

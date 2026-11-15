@@ -27,7 +27,9 @@ pub enum ArgBinding {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug)]
 pub struct ArgSpec {
+    /// The arg's name, as a preview reads it.
     pub name: &'static str,
+    /// How a change to the arg reaches the preview.
     pub binding: ArgBinding,
     /// The default in [`ArgValue`]'s text form.
     pub default: Option<&'static str>,
@@ -38,6 +40,7 @@ pub struct ArgSpec {
 }
 
 impl ArgSpec {
+    /// An arg named `name` that remounts the preview on change, with no default, control or doc declared.
     pub const fn new(name: &'static str) -> Self {
         Self {
             name,
@@ -48,10 +51,12 @@ impl ArgSpec {
         }
     }
 
+    /// This spec with `binding` as its binding.
     pub const fn binding(self, binding: ArgBinding) -> Self {
         Self { binding, ..self }
     }
 
+    /// This spec with `text`, in the text form of `ArgValue`, as its default.
     pub const fn default(self, text: &'static str) -> Self {
         Self {
             default: Some(text),
@@ -59,6 +64,7 @@ impl ArgSpec {
         }
     }
 
+    /// This spec with `control` naming the control the arg gets.
     pub const fn control(self, control: fn() -> ControlKind) -> Self {
         Self {
             control: Some(control),
@@ -66,6 +72,7 @@ impl ArgSpec {
         }
     }
 
+    /// This spec with `doc` as its description.
     pub const fn doc(self, doc: &'static str) -> Self {
         Self { doc, ..self }
     }
@@ -75,10 +82,15 @@ impl ArgSpec {
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct ArgState {
+    /// The arg's name.
     pub name: &'static str,
+    /// How a change to the arg reaches the preview.
     pub binding: ArgBinding,
+    /// The control the arg is edited with.
     pub control: ControlKind,
+    /// The arg's description, empty when it has none.
     pub doc: &'static str,
+    /// What the arg holds before anyone edits it, when that is known.
     pub default: Option<ArgValue>,
     /// `None` for a read-only arg, which is shown through [`Self::shown`] instead.
     pub value: Option<ArgValue>,
@@ -115,12 +127,16 @@ fn same_prop(a: Option<&'static PropField>, b: Option<&'static PropField>) -> bo
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum ArgError {
+    /// The arg is read-only, so nothing can be set on it.
     ReadOnly {
+        /// The arg's name.
         name: String,
     },
     /// The arg's type cannot hold the value: a number sent to a toggle, a variant the enum does not have.
     Rejected {
+        /// The arg's name.
         name: String,
+        /// The value that was refused.
         value: ArgValue,
     },
 }

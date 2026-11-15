@@ -14,9 +14,11 @@ use crate::{AccessNode, Color, Direction, DrawCommand, Size, SurfaceCanvas};
 #[non_exhaustive]
 #[derive(Clone)]
 pub struct Frame {
+    /// The draw commands of the frame, in paint order.
     pub commands: Arc<[DrawCommand]>,
     /// The canvas size, in logical px.
     pub size: Size,
+    /// The reading direction the canvas was drawn in.
     pub direction: Direction,
     /// The language the canvas is in, as a BCP 47 tag. `None` where it has none.
     pub lang: Option<String>,
@@ -55,6 +57,7 @@ impl FrameAccess {
 }
 
 impl Frame {
+    /// A frame of `commands` on a canvas of `size`, drawn left to right, with no language, background or access.
     pub fn new(commands: impl Into<Arc<[DrawCommand]>>, size: Size) -> Self {
         Self {
             commands: commands.into(),
@@ -79,18 +82,22 @@ impl Frame {
         })
     }
 
+    /// This frame drawn in `direction`.
     pub fn with_direction(self, direction: Direction) -> Self {
         Self { direction, ..self }
     }
 
+    /// This frame with the language the canvas is in.
     pub fn with_lang(self, lang: Option<String>) -> Self {
         Self { lang, ..self }
     }
 
+    /// This frame with what shows behind the commands.
     pub fn with_background(self, background: Option<Color>) -> Self {
         Self { background, ..self }
     }
 
+    /// This frame with what a reader and the keyboard were told about it.
     pub fn with_access(self, access: Option<FrameAccess>) -> Self {
         Self {
             access: access.map(Arc::new),

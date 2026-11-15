@@ -29,6 +29,7 @@ pub use platform_core::{
 /// Everything [`check`] found, in the order of [`Rule::ALL`].
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Report {
+    /// Every finding, in the order of [`Rule::ALL`].
     pub violations: Vec<Violation>,
 }
 
@@ -40,6 +41,7 @@ impl Report {
         self
     }
 
+    /// Whether nothing was found.
     pub fn is_clean(&self) -> bool {
         self.violations.is_empty()
     }
@@ -52,6 +54,7 @@ impl Report {
             .max()
     }
 
+    /// The violations of `rule`.
     pub fn of(&self, rule: Rule) -> impl Iterator<Item = &Violation> {
         self.violations
             .iter()

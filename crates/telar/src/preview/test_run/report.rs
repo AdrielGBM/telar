@@ -16,15 +16,20 @@ use crate::preview::snapshot::{SnapshotError, SnapshotReport};
 pub struct TestRun {
     /// The glob the run was narrowed to, if any.
     pub filter: Option<String>,
+    /// How loudly accessibility findings were reported in this run.
     pub a11y: A11yLevel,
+    /// What the run did with snapshots.
     pub snapshots: SnapshotSetting,
+    /// The run's results, counted.
     pub summary: TestSummary,
     /// What failed the run without belonging to one preview: two previews under one id, snapshots that could not be set up, a filter that matched nothing.
     pub errors: Vec<String>,
+    /// One report per preview the run checked.
     pub previews: Vec<PreviewReport>,
 }
 
 impl TestRun {
+    /// Whether nothing failed: no preview, cell or run-level error.
     pub fn passed(&self) -> bool {
         self.summary.failed == 0
     }
@@ -55,9 +60,11 @@ impl TestRun {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TestSummary {
+    /// How many previews the run covered.
     pub previews: usize,
     /// Previews and matrix cells checked, each counted once.
     pub checked: usize,
+    /// Previews and cells that passed, with or without warnings.
     pub passed: usize,
     /// Previews and cells that failed, and each of [`TestRun::errors`].
     pub failed: usize,
@@ -69,14 +76,19 @@ pub struct TestSummary {
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PreviewReport {
+    /// The preview's id, which its cells' ids start with.
     pub id: String,
+    /// The preview's title, as a panel lists it.
     pub title: String,
+    /// The component the preview shows.
     pub component: String,
+    /// The preview's name under its component.
     pub name: String,
     /// The file the preview is written in, empty when unknown.
     pub file: String,
     /// Its 1-based line there, 0 when unknown.
     pub line: u32,
+    /// The preview as it opens first, then each cell of its matrix.
     pub cells: Vec<CellReport>,
 }
 
@@ -88,11 +100,17 @@ pub struct CellReport {
     pub id: String,
     /// The cell's axis and value pairs, in axis order; empty for the preview itself.
     pub cell: Vec<(String, String)>,
+    /// Whether no check of this cell failed.
     pub passed: bool,
+    /// Building the preview and laying it out.
     pub build: BuildCheck,
+    /// Running the preview's play.
     pub play: PlayCheck,
+    /// The accessibility checks.
     pub a11y: A11yCheck,
+    /// The snapshot comparison.
     pub snapshot: SnapshotCheck,
+    /// Unmounting the preview.
     pub teardown: TeardownCheck,
 }
 
@@ -153,9 +171,11 @@ impl CellReport {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
+    /// The check ran and found nothing to fail on.
     Passed,
     /// Passed with findings worth reading: accessibility warnings, or errors under `--a11y warn`.
     Warned,
+    /// The check ran and failed the cell.
     Failed,
     /// Not run: turned off, nothing to run, or an earlier check failed.
     #[default]
@@ -166,9 +186,11 @@ pub enum CheckStatus {
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildCheck {
+    /// How the build came out.
     pub status: CheckStatus,
     /// How many draw commands the canvas opened on.
     pub draw_commands: usize,
+    /// Why the build failed.
     pub error: Option<String>,
 }
 
@@ -176,7 +198,9 @@ pub struct BuildCheck {
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayCheck {
+    /// How the play came out.
     pub status: CheckStatus,
+    /// Each step of the play, in the order run.
     pub steps: Vec<PlayStepReport>,
     /// Why the play stopped.
     pub error: Option<String>,
@@ -188,6 +212,7 @@ pub struct PlayCheck {
 pub struct PlayStepReport {
     /// What was done, as a panel lists it: `click button "Save"`.
     pub action: String,
+    /// Why the step failed, when it did.
     pub error: Option<String>,
 }
 
@@ -195,7 +220,9 @@ pub struct PlayStepReport {
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct A11yCheck {
+    /// How the accessibility checks came out.
     pub status: CheckStatus,
+    /// Every finding, errors and warnings alike.
     pub violations: Vec<A11yFinding>,
     /// Why the checks could not run.
     pub error: Option<String>,
@@ -209,6 +236,7 @@ pub struct A11yFinding {
     pub rule: String,
     /// `error` or `warning`.
     pub severity: String,
+    /// What the rule found, in words.
     pub message: String,
     /// Where, as `[x, y, width, height]` in the canvas's logical px.
     pub rect: Option<[f32; 4]>,
@@ -238,6 +266,7 @@ impl A11yFinding {
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SnapshotCheck {
+    /// How the snapshot comparison came out.
     pub status: CheckStatus,
     /// What the comparison found, in words.
     pub detail: Option<String>,
@@ -247,7 +276,9 @@ pub struct SnapshotCheck {
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TeardownCheck {
+    /// How the teardown came out.
     pub status: CheckStatus,
+    /// Why the teardown failed, when it did.
     pub error: Option<String>,
 }
 
@@ -278,20 +309,25 @@ pub struct TeardownCheck {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TestReport {
     #[serde(flatten)]
+    /// The snapshot report, whose fields sit at the top level of `report.json`.
     pub snapshots: SnapshotReport,
+    /// The test run, under `test` in `report.json`.
     pub test: TestRun,
 }
 
 impl TestReport {
+    /// A report of the snapshots a run took together with the test run that took them.
     pub fn new(snapshots: SnapshotReport, test: TestRun) -> Self {
         Self { snapshots, test }
     }
 
+    /// Reads a report a run wrote, or says why it cannot be read.
     pub fn read(path: &Path) -> io::Result<Self> {
         let text = std::fs::read_to_string(path)?;
         serde_json::from_str(&text).map_err(io::Error::other)
     }
 
+    /// Writes the report to `path`, replacing what is there in one step.
     pub fn write(&self, path: &Path) -> io::Result<()> {
         let json = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
         // Atomically, so a reader watching the report, as the workshop does, never reads one half written.

@@ -11,8 +11,10 @@ use crate::Color;
 ///
 /// Implemented for `bool`, the integer and float primitives, `&'static str`, `String`, [`Color`], `Option<T>`, [`Reactive<T>`] and [`RwSignal<T>`]. An enum gets it from `#[derive(PreviewArg)]`, which lists its variants for a choice control.
 pub trait PreviewArg: Sized + 'static {
+    /// The control an arg of this type gets before its prop refines it.
     const CONTROL: ControlKind;
 
+    /// This value in the form a control shows and edits.
     fn to_arg_value(&self) -> ArgValue;
 
     /// `None` when `value` is not one this type can hold, which the caller answers by keeping what it had.

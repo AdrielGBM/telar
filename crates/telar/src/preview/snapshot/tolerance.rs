@@ -12,6 +12,7 @@ pub struct Tolerance {
 }
 
 impl Tolerance {
+    /// A tolerance of `channel` steps a channel and `max_pixels` differing pixels.
     pub const fn new(channel: u8, max_pixels: u64) -> Self {
         Self {
             channel,

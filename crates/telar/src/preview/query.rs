@@ -64,6 +64,7 @@ impl Query {
         }
     }
 
+    /// Whether `node` has the role and name this query asks for, whatever its `nth`.
     pub fn matches(&self, node: &AccessNode) -> bool {
         let role = self.role.is_none_or(|role| node.role == role);
         let name = match &self.name {

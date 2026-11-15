@@ -12,9 +12,17 @@ use crate::{Color, DrawCommand};
 
 type Rasterizer = SoftwareRenderer<HeadlessWindow, HeadlessWindow>;
 
+/// Why an image could not be rasterized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RasterError {
-    EmptySize { width: u32, height: u32 },
+    /// The requested frame has no pixels.
+    EmptySize {
+        /// The requested width, in pixels.
+        width: u32,
+        /// The requested height, in pixels.
+        height: u32,
+    },
+    /// The rasterizer failed; the text says why.
     Render(String),
 }
 
@@ -31,9 +39,17 @@ impl fmt::Display for RasterError {
 
 impl std::error::Error for RasterError {}
 
+/// Why a partial redraw could not be shown equal to a redraw in full.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RedrawCheckError {
-    Mismatch { frame: usize, region: crate::Rect },
+    /// A partial redraw left pixels that a redraw in full did not.
+    Mismatch {
+        /// The index of the frame that differed.
+        frame: usize,
+        /// The smallest box holding every pixel that differed.
+        region: crate::Rect,
+    },
+    /// A frame could not be drawn at all.
     Raster(RasterError),
 }
 
@@ -210,7 +226,9 @@ pub fn check_partial_redraw(
 #[cfg(feature = "hardware")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuRedrawCheck {
+    /// Every frame matched a redraw in full.
     Passed,
+    /// No GPU adapter was found, so no frame was compared.
     NoAdapter,
 }
 

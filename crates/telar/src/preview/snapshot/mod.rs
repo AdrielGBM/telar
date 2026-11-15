@@ -80,6 +80,7 @@ pub enum Moment {
 }
 
 impl Moment {
+    /// The word that names the moment in reports and ids.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Start => "start",
@@ -100,6 +101,7 @@ pub struct SnapshotKey {
     pub subject: String,
     /// The cell's axis and value pairs, in axis order; empty for the preview itself.
     pub cell: Vec<(String, String)>,
+    /// Whether the snapshot is of the canvas as it opened or as its play left it.
     pub moment: Moment,
 }
 
@@ -171,6 +173,7 @@ impl SnapshotPaths {
         self.goldens.join(format!("{}.draw.txt", file_stem(id)))
     }
 
+    /// Where the run writes its report.
     pub fn report(&self) -> PathBuf {
         self.out.join(SnapshotReport::FILE_NAME)
     }
@@ -223,7 +226,9 @@ pub enum SnapshotError {
     Panicked,
     /// Two ids that differ only where a file name cannot, so they would share their goldens.
     SameFile {
+        /// The id of the first snapshot.
         id: String,
+        /// The id of the other snapshot that shares its file name.
         other: String,
     },
     /// The same id checked twice in one run.
@@ -232,8 +237,11 @@ pub enum SnapshotError {
     NothingToAccept(String),
     /// An id the report holds no snapshot of.
     NotInReport(String),
+    /// A golden or captured file could not be read, written or removed.
     Io {
+        /// The file the operation was on.
         path: PathBuf,
+        /// What the operating system reported.
         error: io::Error,
     },
 }

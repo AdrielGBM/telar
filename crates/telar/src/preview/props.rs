@@ -4,6 +4,7 @@ use super::ControlKind;
 
 /// A props struct the workshop can describe. `#[derive(Props)]` implements it in a build with previews, so naming it is how a preview points at its component's props: `.props(<ButtonProps as HasPropsSchema>::schema)`.
 pub trait HasPropsSchema {
+    /// The schema describing these props.
     fn schema() -> &'static PropsSchema;
 }
 
@@ -22,6 +23,7 @@ pub struct PropsSchema {
 }
 
 impl PropsSchema {
+    /// A schema for the props type `name`, with its doc comment, that lists no fields yet.
     pub const fn new(name: &'static str, doc: &'static str) -> Self {
         Self {
             name,
@@ -30,10 +32,12 @@ impl PropsSchema {
         }
     }
 
+    /// This schema with `fields` as its props.
     pub const fn fields(self, fields: &'static [PropField]) -> Self {
         Self { fields, ..self }
     }
 
+    /// The prop called `name`, when there is one.
     pub fn field(&self, name: &str) -> Option<&'static PropField> {
         self.fields.iter().find(|field| field.name == name)
     }
@@ -43,11 +47,13 @@ impl PropsSchema {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug)]
 pub struct PropField {
+    /// The prop's name.
     pub name: &'static str,
     /// The type as the struct declares it.
     pub ty: &'static str,
     /// `#[props(doc = "…")]`, or else the field's doc comment.
     pub doc: &'static str,
+    /// What the prop holds when the builder is not given it.
     pub default: PropDefault,
     /// `#[props(into)]`: the setter takes anything that converts into [`Self::ty`].
     pub into: bool,
@@ -71,26 +77,32 @@ impl PropField {
         }
     }
 
+    /// This prop with `doc` as its description.
     pub const fn doc(self, doc: &'static str) -> Self {
         Self { doc, ..self }
     }
 
+    /// This prop with `default` as what it holds when not set.
     pub const fn default(self, default: PropDefault) -> Self {
         Self { default, ..self }
     }
 
+    /// This prop with its setter taking anything that converts into its type.
     pub const fn takes_into(self) -> Self {
         Self { into: true, ..self }
     }
 
+    /// This prop with its setter taking what the `Option` field holds.
     pub const fn takes_some(self) -> Self {
         Self { some: true, ..self }
     }
 
+    /// Whether the builder needs the prop set before it can build.
     pub const fn is_required(&self) -> bool {
         matches!(self.default, PropDefault::Required)
     }
 
+    /// The control a preview arg feeding this prop gets.
     pub fn control(&self) -> ControlKind {
         (self.control)()
     }

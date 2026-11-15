@@ -30,10 +30,12 @@ impl PreviewCtx {
         Self::from(args).with_globals(Globals::seeded(&entry.env))
     }
 
+    /// This canvas with `actions` as its action log.
     pub fn with_actions(self, actions: ActionLog) -> Self {
         Self { actions, ..self }
     }
 
+    /// This canvas with `globals` as its environment.
     pub fn with_globals(self, globals: Globals) -> Self {
         Self { globals, ..self }
     }
@@ -105,12 +107,14 @@ pub enum Layout {
 pub struct PreviewSurface {
     /// The size the compositor would give the surface, in logical px.
     pub width: f32,
+    /// The height the compositor would give the surface, in logical px.
     pub height: f32,
     /// Play the root's enter transition, so a transition that never settles shows up as a window still half-transparent when the frames run out.
     pub animate: bool,
 }
 
 impl PreviewSurface {
+    /// A surface of `width` by `height` logical px whose root's enter transition is not played.
     pub const fn new(width: f32, height: f32) -> Self {
         Self {
             width,
@@ -119,6 +123,7 @@ impl PreviewSurface {
         }
     }
 
+    /// This surface with its root's enter transition played.
     pub const fn animated(self) -> Self {
         Self {
             animate: true,
@@ -149,17 +154,20 @@ impl PreviewSurface {
 pub struct PreviewEnv {
     /// The canvas size, in logical px.
     pub viewport: Option<Size>,
+    /// The canvas background colour.
     pub background: Option<Color>,
     /// A mode registered with `register_mode`, by id.
     pub mode: Option<&'static str>,
     /// A BCP 47 language tag.
     pub locale: Option<&'static str>,
+    /// The writing direction, whatever the locale's own.
     pub direction: Option<Direction>,
     /// `Some(true)` to show the preview with more contrast, `Some(false)` with the regular palette.
     pub high_contrast: Option<bool>,
 }
 
 impl PreviewEnv {
+    /// An environment that asks for nothing.
     pub const NONE: Self = Self {
         viewport: None,
         background: None,
@@ -169,6 +177,7 @@ impl PreviewEnv {
         high_contrast: None,
     };
 
+    /// This environment asking for a canvas of `width` by `height` logical px.
     pub const fn viewport(self, width: f32, height: f32) -> Self {
         Self {
             viewport: Some(Size::new(width, height)),
@@ -176,6 +185,7 @@ impl PreviewEnv {
         }
     }
 
+    /// This environment asking for `color` as the canvas background.
     pub const fn background(self, color: Color) -> Self {
         Self {
             background: Some(color),
@@ -183,6 +193,7 @@ impl PreviewEnv {
         }
     }
 
+    /// This environment asking for the mode registered under the id `mode`.
     pub const fn mode(self, mode: &'static str) -> Self {
         Self {
             mode: Some(mode),
@@ -190,6 +201,7 @@ impl PreviewEnv {
         }
     }
 
+    /// This environment asking for the BCP 47 language tag `locale`.
     pub const fn locale(self, locale: &'static str) -> Self {
         Self {
             locale: Some(locale),
@@ -197,6 +209,7 @@ impl PreviewEnv {
         }
     }
 
+    /// This environment asking for `direction` as the writing direction.
     pub const fn direction(self, direction: Direction) -> Self {
         Self {
             direction: Some(direction),
@@ -204,6 +217,7 @@ impl PreviewEnv {
         }
     }
 
+    /// This environment asking for more contrast when `high` is true, the regular palette when it is false.
     pub const fn high_contrast(self, high: bool) -> Self {
         Self {
             high_contrast: Some(high),
@@ -216,12 +230,16 @@ impl PreviewEnv {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SourceSpan {
+    /// Byte offset into the source where the range starts.
     pub start: u32,
+    /// Byte offset into the source where the range ends.
     pub end: u32,
+    /// 1-based line of the source file the range starts on.
     pub line: u32,
 }
 
 impl SourceSpan {
+    /// The range of `start` to `end` that begins on `line`.
     pub const fn new(start: u32, end: u32, line: u32) -> Self {
         Self { start, end, line }
     }
@@ -241,7 +259,9 @@ pub struct PreviewEntry {
     pub title: &'static str,
     /// Prose about the component, shown at the top of its docs page: the body of a `.rsx` file's `[previews]` section, which every preview of the file carries. Empty when there is none.
     pub docs: &'static str,
+    /// The component under preview, by name.
     pub component: &'static str,
+    /// The variant's name.
     pub name: &'static str,
     /// The absolute path of the file the preview is written in, as an editor opens it: its package's `CARGO_MANIFEST_DIR` joined to the path within the package, for a `.rsx` preview and a Rust one alike. Empty when unknown.
     pub file: &'static str,
@@ -249,18 +269,25 @@ pub struct PreviewEntry {
     pub line: u32,
     /// The preview's own source text, shown beside the canvas. Empty when not captured.
     pub source: &'static str,
+    /// The parts of `source` that belong to each preview written in it.
     pub source_spans: &'static [SourceSpan],
+    /// Free-form labels the workshop filters by.
     pub tags: &'static [&'static str],
+    /// How the canvas places the preview.
     pub layout: Layout,
+    /// The environment the preview asks its canvas for.
     pub env: PreviewEnv,
     /// Mount the preview the way a runner mounts a surface rather than as a tree.
     pub surface: Option<PreviewSurface>,
+    /// The matrix the preview is rendered across, once per cell, when it has one.
     pub matrix: Option<Matrix>,
     /// The args the preview declares, each of which gets a control.
     pub args: &'static [ArgSpec],
     /// Builds the bare tree. A host mounts [`Self::build_root`] instead, which applies [`Self::decorator`] and [`Self::surface`].
     pub build: BuildFn,
+    /// Wraps the root in the tree it builds, when set.
     pub decorator: Option<Decorator>,
+    /// Scripts an interaction against the mounted preview, when set.
     pub play: Option<PlayFn>,
     /// Which moments of the play its snapshots keep: the canvas as the play leaves it, unless set otherwise.
     pub snapshot: SnapshotAt,
@@ -271,6 +298,7 @@ pub struct PreviewEntry {
 }
 
 impl PreviewEntry {
+    /// A preview with the given id, component, variant name and builder, and every other setting at its default.
     pub const fn new(
         id: &'static str,
         component: &'static str,
@@ -303,6 +331,7 @@ impl PreviewEntry {
         }
     }
 
+    /// This entry with `package` as the package it is written in.
     pub const fn package(self, package: &'static str) -> Self {
         Self { package, ..self }
     }
@@ -317,10 +346,12 @@ impl PreviewEntry {
         Self { docs, ..self }
     }
 
+    /// This entry with the absolute path `file` and 1-based `line` it is written at.
     pub const fn location(self, file: &'static str, line: u32) -> Self {
         Self { file, line, ..self }
     }
 
+    /// This entry with its source text and the spans of it each preview owns.
     pub const fn source(self, source: &'static str, spans: &'static [SourceSpan]) -> Self {
         Self {
             source,
@@ -334,10 +365,12 @@ impl PreviewEntry {
         Self { tags, ..self }
     }
 
+    /// This entry with `layout` as the way its canvas places it.
     pub const fn layout(self, layout: Layout) -> Self {
         Self { layout, ..self }
     }
 
+    /// This entry asking `env` of its canvas, replacing what it asked before.
     pub const fn env(self, env: PreviewEnv) -> Self {
         Self { env, ..self }
     }
@@ -378,6 +411,7 @@ impl PreviewEntry {
         Self { env, ..self }
     }
 
+    /// This entry mounted as `surface` rather than as a tree.
     pub const fn surface(self, surface: PreviewSurface) -> Self {
         Self {
             surface: Some(surface),
@@ -393,6 +427,7 @@ impl PreviewEntry {
         }
     }
 
+    /// This entry declaring `args`, each of which gets a control.
     pub const fn args(self, args: &'static [ArgSpec]) -> Self {
         Self { args, ..self }
     }
@@ -418,6 +453,7 @@ impl PreviewEntry {
         }
     }
 
+    /// This entry with `props` giving the schema of the component under preview.
     pub const fn props(self, props: fn() -> &'static PropsSchema) -> Self {
         Self {
             props: Some(props),

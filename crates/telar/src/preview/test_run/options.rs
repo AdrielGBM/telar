@@ -23,6 +23,7 @@ pub enum A11yLevel {
 }
 
 impl A11yLevel {
+    /// The word that names the level on the command line and in the environment.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Off => "off",
@@ -31,6 +32,7 @@ impl A11yLevel {
         }
     }
 
+    /// The level `word` names, or `None` when it names none.
     pub fn parse(word: &str) -> Option<Self> {
         [Self::Off, Self::Warn, Self::Error]
             .into_iter()
@@ -52,6 +54,7 @@ pub enum SnapshotSetting {
 }
 
 impl SnapshotSetting {
+    /// The word that names the setting on the command line and in the environment.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Off => "off",
@@ -60,6 +63,7 @@ impl SnapshotSetting {
         }
     }
 
+    /// The setting `word` names, or `None` when it names none.
     pub fn parse(word: &str) -> Option<Self> {
         [Self::Off, Self::Compare, Self::Update]
             .into_iter()
@@ -73,7 +77,9 @@ impl SnapshotSetting {
 pub struct TestOptions {
     /// Only the previews, or the matrix cells, whose id this matches.
     pub filter: Option<PreviewFilter>,
+    /// How far accessibility findings count against a preview.
     pub a11y: A11yLevel,
+    /// What to do with snapshots.
     pub snapshots: SnapshotSetting,
     /// The package under test, whose `snapshots/` holds the goldens.
     pub package_dir: Option<PathBuf>,
@@ -126,7 +132,9 @@ fn parse<T>(
 /// A variable set to something a test run does not understand.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OptionsError {
+    /// The name of the variable.
     pub var: &'static str,
+    /// The value it was set to.
     pub value: String,
 }
 
@@ -149,14 +157,17 @@ pub struct PreviewFilter {
 }
 
 impl PreviewFilter {
+    /// A filter for the glob `glob`.
     pub fn new(glob: impl Into<String>) -> Self {
         Self { glob: glob.into() }
     }
 
+    /// The glob the filter was made from.
     pub fn glob(&self) -> &str {
         &self.glob
     }
 
+    /// Whether `id` matches the whole glob.
     pub fn matches(&self, id: &str) -> bool {
         glob_matches(
             &self.glob.chars().collect::<Vec<_>>(),

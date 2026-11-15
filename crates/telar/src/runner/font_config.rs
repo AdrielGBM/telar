@@ -7,6 +7,7 @@ use services_core::AppPathsProvider;
 /// One value because the two always travel together: they arrive from an [`AppConfig`](crate::AppConfig), cross the handler, and reach the builders that load the faces and the surface that takes the family.
 #[derive(Clone, Default)]
 pub struct FontSetup {
+    /// The faces to load.
     pub faces: Vec<renderer_core::FontAsset>,
     /// What this surface's text shapes in where nothing above it names a family: the root of its text cascade, seeded as the surface opens and changed while it runs with [`set_font_family`](crate::set_font_family). A property of *this* surface, so a second one built later renders in its own rather than in whichever was configured last.
     pub family: Option<String>,

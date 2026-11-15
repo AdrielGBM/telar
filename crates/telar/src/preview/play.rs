@@ -42,6 +42,7 @@ pub struct Play {
 pub struct CaughtFailures(Rc<RefCell<Vec<String>>>);
 
 impl CaughtFailures {
+    /// Remembers `failure`, to fail the step that is running when the play next reads what was caught.
     pub fn record(&self, failure: &BuildFailure) {
         self.0.borrow_mut().push(failure.to_string());
     }
@@ -57,7 +58,9 @@ impl CaughtFailures {
 pub struct PlayStep {
     /// What was done, as a panel lists it: `click button "Save"`.
     pub action: String,
+    /// Whether the step succeeded, or why it failed.
     pub outcome: PlayResult,
+    /// The canvas as the step left it.
     pub frame: Frame,
 }
 
@@ -65,10 +68,12 @@ pub struct PlayStep {
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PlayError {
+    /// What went wrong.
     pub message: String,
 }
 
 impl PlayError {
+    /// An error that says `message`.
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -84,8 +89,10 @@ impl fmt::Display for PlayError {
 
 impl std::error::Error for PlayError {}
 
+/// How a play, or one step of it, ended.
 pub type PlayResult = Result<(), PlayError>;
 
+/// A preview's play: the fn that scripts interactions against it.
 pub type PlayFn = fn(&mut Play) -> PlayResult;
 
 /// The most passes [`Play::settle`] takes for the animations a step started to reach their ends: one finishing can start the next.
@@ -187,6 +194,7 @@ impl Play {
         outcome
     }
 
+    /// The preview being played.
     pub fn entry(&self) -> &PreviewEntry {
         &self.entry
     }
@@ -196,6 +204,7 @@ impl Play {
         &self.ctx
     }
 
+    /// The log the preview's callbacks record their calls in.
     pub fn actions(&self) -> ActionLog {
         self.ctx.actions()
     }
@@ -212,6 +221,7 @@ impl Play {
         &self.steps
     }
 
+    /// Every step so far, handed over.
     pub fn into_steps(mut self) -> Vec<PlayStep> {
         std::mem::take(&mut self.steps)
     }

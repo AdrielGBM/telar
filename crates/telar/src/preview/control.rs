@@ -6,14 +6,20 @@ use super::ArgValue;
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ControlKind {
+    /// A switch for a `bool`.
     Toggle,
+    /// A number field, or a slider when its limits give a range.
     Number(NumberControl),
+    /// A text field.
     Text {
+        /// Whether the field takes several lines.
         multiline: bool,
     },
+    /// A colour picker.
     Color,
     /// One of a fixed set of names: an enum's variants, in declaration order.
     Choice {
+        /// The names offered, in declaration order.
         variants: &'static [&'static str],
     },
     /// The inner control plus a way to leave the value unset.
@@ -23,9 +29,13 @@ pub enum ControlKind {
 }
 
 impl ControlKind {
+    /// A control for whole numbers, with no limits.
     pub const INTEGER: Self = Self::Number(NumberControl::INTEGER);
+    /// A control for any number, with no limits.
     pub const FLOAT: Self = Self::Number(NumberControl::FLOAT);
+    /// A single-line text field.
     pub const TEXT: Self = Self::Text { multiline: false };
+    /// A multi-line text field.
     pub const MULTILINE: Self = Self::Text { multiline: true };
 
     /// The same control limited to `min..=max`, which turns a number field into a slider. Anything but a number is returned as it was.
@@ -57,6 +67,7 @@ impl ControlKind {
         matches!(self, Self::Choice { variants } if variants.len() <= 4)
     }
 
+    /// Whether the value is shown without being edited.
     pub const fn is_read_only(&self) -> bool {
         matches!(self, Self::ReadOnly)
     }
@@ -107,21 +118,25 @@ pub struct NumberControl {
     pub integer: bool,
     /// `(min, max)`, inclusive. A range is what makes the control a slider.
     pub range: Option<(f64, f64)>,
+    /// The increment a change moves by, when one is set.
     pub step: Option<f64>,
 }
 
 impl NumberControl {
+    /// Whole numbers, with no range and no step.
     pub const INTEGER: Self = Self {
         integer: true,
         range: None,
         step: None,
     };
+    /// Any number, with no range and no step.
     pub const FLOAT: Self = Self {
         integer: false,
         range: None,
         step: None,
     };
 
+    /// This control limited to `min..=max`.
     pub const fn range(self, min: f64, max: f64) -> Self {
         Self {
             range: Some((min, max)),
@@ -129,6 +144,7 @@ impl NumberControl {
         }
     }
 
+    /// This control moving in increments of `step`.
     pub const fn step(self, step: f64) -> Self {
         Self {
             step: Some(step),

@@ -6,6 +6,7 @@ use renderer_core::FontAsset;
 #[derive(Clone, Default)]
 /// What an application starts with: its window, its fonts and its renderer backend.
 pub struct AppConfig {
+    /// The window the application opens.
     pub window: WindowConfig,
     /// The faces this application ships, embedded in the binary or read from a file beside it. The faces `[[telar.fonts]]` declares in `telar.toml` are added by `telar::app!`; see `docs/fonts.md`.
     pub fonts: Vec<FontAsset>,

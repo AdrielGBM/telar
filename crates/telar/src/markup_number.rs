@@ -17,6 +17,7 @@ pub struct Float(pub f64);
     note = "a whole-number prop takes a whole number: write `3`, not `3.5`"
 )]
 pub trait PropNumber<T> {
+    /// Turns the value into the prop's type.
     fn into_prop(self) -> T;
 }
 

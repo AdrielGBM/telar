@@ -452,7 +452,9 @@ pub(crate) use telar_project::protocol::{HotOutcome, HotReply};
 /// What `cargo telar dev` sends the running app: a rebuild landed, a build failed, a location to open, or a request to come forward.
 #[derive(Debug, PartialEq)]
 pub enum HotEvent {
+    /// The app was rebuilt and its library at this path is ready to load.
     Reload(std::path::PathBuf),
+    /// A rebuild failed; the text says why.
     BuildError(String),
     /// A location reference, as `LocationFormat::parse` reads one, to open as a link into the running app would: `cargo telar preview <ID>` moving the workshop already open.
     Goto(String),

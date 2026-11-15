@@ -136,7 +136,9 @@ pub fn test_report_path() -> Option<std::path::PathBuf> {
 /// What `cargo telar preview` asked a host to open: a preview by id, a component by name, or neither.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PreviewRequest {
+    /// The id of the preview to open.
     pub id: Option<String>,
+    /// The name of the component whose previews to open.
     pub component: Option<String>,
 }
 

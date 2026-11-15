@@ -48,19 +48,24 @@ use super::{Moment, SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SnapshotReport {
+    /// The report format's version, `SnapshotReport::VERSION` when a run wrote it.
     pub version: u32,
+    /// Whether the run compared goldens or wrote them.
     pub mode: SnapshotMode,
     /// Where the goldens live: `<package>/snapshots`.
     pub goldens: PathBuf,
     /// Where the actual pictures, the diffs and this report are written: `target/telar-snapshots`.
     pub out: PathBuf,
+    /// How far a picture could drift from its golden and still match.
     pub tolerance: Tolerance,
+    /// The snapshots counted by how they ended.
     pub summary: SnapshotSummary,
     /// One per snapshot, in the order they were checked.
     pub snapshots: Vec<SnapshotResult>,
 }
 
 impl SnapshotReport {
+    /// The report format version this build writes.
     pub const VERSION: u32 = 2;
 
     /// The file name a run gives its report, inside [`out`](Self::out).
@@ -106,8 +111,11 @@ impl SnapshotReport {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SnapshotSummary {
+    /// Every snapshot checked.
     pub total: usize,
+    /// Snapshots that matched their goldens.
     pub matched: usize,
+    /// Snapshots whose goldens an update run wrote.
     pub updated: usize,
     /// Changed, missing or failed: what fails a test run.
     pub failed: usize,
@@ -139,9 +147,11 @@ pub struct SnapshotResult {
     pub cell: Vec<(String, String)>,
     /// Whether the snapshot is of the canvas as it opened or as its play left it.
     pub moment: Moment,
+    /// How the snapshot came out overall.
     pub status: SnapshotStatus,
     /// `None` when nothing was captured to compare.
     pub png: Option<PngCheck>,
+    /// The draw text against its golden, `None` when nothing was captured to compare.
     pub draw: Option<DrawCheck>,
     /// Why nothing was captured, or why a file could not be read or written.
     pub error: Option<String>,
@@ -232,8 +242,11 @@ impl SnapshotStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FileStatus {
+    /// The file is identical to its golden, within the tolerance for a picture.
     Matched,
+    /// The file differs from its golden.
     Changed,
+    /// There is no golden to compare the file with.
     Missing,
     /// An update run wrote it.
     Written,
@@ -243,7 +256,9 @@ pub enum FileStatus {
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PngCheck {
+    /// How the picture came out against its golden.
     pub status: FileStatus,
+    /// The golden picture, whether or not it exists.
     pub golden: PathBuf,
     /// The picture captured, written beside the diffs whenever the snapshot does not match, so accepting it is a copy.
     pub actual: Option<PathBuf>,
@@ -263,7 +278,9 @@ pub struct PngCheck {
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DrawCheck {
+    /// How the draw text came out against its golden.
     pub status: FileStatus,
+    /// The golden draw text, whether or not it exists.
     pub golden: PathBuf,
     /// The text captured, written beside the diffs whenever the snapshot does not match.
     pub actual: Option<PathBuf>,

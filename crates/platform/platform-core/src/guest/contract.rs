@@ -378,10 +378,16 @@ macro_rules! entry_table {
         #[repr(C)]
         #[derive(Clone, Copy)]
         pub struct $table {
+            /// The lifecycle entries the host calls to start, serve and stop the library.
             pub lifecycle: $crate::guest::Lifecycle<$upper>,
+            /// The entry that builds an instance.
             pub $create: $create_ty,
+            /// What a mounted instance tells the host about the surface it fills.
             pub report: $crate::guest::SurfaceReport<$surface>,
-            $(pub $field: unsafe extern "C" fn($($arg),*) -> $crate::guest::CallOutcome,)*
+            $(
+                #[doc = concat!("The entry that calls `", stringify!($field), "` on an instance of the guest.")]
+                pub $field: unsafe extern "C" fn($($arg),*) -> $crate::guest::CallOutcome,
+            )*
         }
 
         impl $table {

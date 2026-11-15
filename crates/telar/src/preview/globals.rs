@@ -79,6 +79,7 @@ impl Globals {
         self.locale
     }
 
+    /// The writing direction, whatever the locale's own.
     pub fn direction(&self) -> RwSignal<Option<Direction>> {
         self.direction
     }
@@ -93,6 +94,7 @@ impl Globals {
         self.safe_area
     }
 
+    /// The canvas background colour.
     pub fn background(&self) -> RwSignal<Option<Color>> {
         self.background
     }

@@ -28,11 +28,15 @@ use crate::Color;
 pub enum ArgValue {
     /// An `Option` arg holding `None`.
     Unset,
+    /// A `bool`.
     Bool(bool),
     /// Wide enough for every integer primitive but `u128`.
     Int(i128),
+    /// A floating-point number.
     Float(f64),
+    /// A text.
     Text(String),
+    /// A colour.
     Color(Color),
     /// One of a fixed set of names: a word of the shared vocabulary ([`crate::kw`]), or the variant of an enum deriving `PreviewArg`, by name.
     Choice(String),
@@ -42,6 +46,7 @@ pub enum ArgValue {
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ArgValueParseError {
+    /// The text that is not an arg value.
     pub text: String,
 }
 

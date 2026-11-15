@@ -17,6 +17,7 @@ pub struct TuiOptions {
     pub cell: CellSize,
     /// `None` asks the terminal what it can do. Set it to override a terminal that under-reports.
     pub depth: Option<ColorDepth>,
+    /// Whether the mouse is reported to the app.
     pub mouse: bool,
     /// Whether Ctrl+C asks the app to close. See `TuiPlatformConfig::quit_on_ctrl_c`.
     pub quit_on_ctrl_c: bool,

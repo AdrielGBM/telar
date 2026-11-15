@@ -22,6 +22,7 @@ pub struct ActionCall {
 }
 
 impl ActionCall {
+    /// A call numbered `seq` to the callback `name` with `args`.
     pub fn new(seq: u64, name: &'static str, args: Vec<String>) -> Self {
         Self { seq, name, args }
     }
@@ -44,8 +45,10 @@ struct Ring {
 }
 
 impl ActionLog {
+    /// How many calls `ActionLog::new` keeps.
     pub const DEFAULT_CAPACITY: usize = 200;
 
+    /// A log keeping `DEFAULT_CAPACITY` calls.
     pub fn new() -> Self {
         Self::with_capacity(Self::DEFAULT_CAPACITY)
     }
@@ -58,6 +61,7 @@ impl ActionLog {
         }
     }
 
+    /// How many calls the log keeps at most.
     pub fn capacity(&self) -> usize {
         self.capacity
     }
@@ -102,6 +106,7 @@ impl ActionLog {
             .with(|ring| ring.calls.iter().filter(|call| call.name == name).count())
     }
 
+    /// Forgets the calls kept and restarts `count` from zero; sequence numbers carry on.
     pub fn clear(&self) {
         self.ring.update(|ring| {
             ring.calls.clear();

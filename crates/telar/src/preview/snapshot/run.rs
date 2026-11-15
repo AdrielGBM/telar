@@ -29,6 +29,7 @@ pub struct Snapshots {
 }
 
 impl Snapshots {
+    /// Starts a run over `paths` in `mode`, installing the faces `config` declares as the only ones text sets in, or says why it cannot.
     pub fn new(
         paths: SnapshotPaths,
         mode: SnapshotMode,
@@ -49,18 +50,22 @@ impl Snapshots {
         })
     }
 
+    /// Runs with `tolerance` in place of the default one.
     pub fn with_tolerance(self, tolerance: Tolerance) -> Self {
         Self { tolerance, ..self }
     }
 
+    /// Where the run reads its goldens and writes what it finds.
     pub fn paths(&self) -> &SnapshotPaths {
         &self.paths
     }
 
+    /// Whether the run compares goldens or writes them.
     pub fn mode(&self) -> SnapshotMode {
         self.mode
     }
 
+    /// How far a picture may drift from its golden and still match.
     pub fn tolerance(&self) -> Tolerance {
         self.tolerance
     }

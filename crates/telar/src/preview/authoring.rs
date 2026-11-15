@@ -9,6 +9,7 @@ use crate::{LayoutError, LayoutItem, box_item};
     note = "a component call returns one: `tag(TagProps::props().build())`"
 )]
 pub trait IntoPreviewRoot {
+    /// Boxes this value as the canvas's root, or passes on the error that stopped it being built.
     fn into_preview_root(self) -> Result<Box<dyn LayoutItem>, LayoutError>;
 }
 

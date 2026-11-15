@@ -21,7 +21,9 @@ pub(crate) mod hot;
 
 /// One composed frame: borrowed straight from the segment cache when the tree is in this process, owned when it was decoded from what a dylib lent.
 pub enum Frame<'a> {
+    /// A frame read in place from the tree's segment cache.
     Borrowed(Ref<'a, Vec<DrawCommand>>),
+    /// A frame decoded from what a library lent, owned by the caller.
     Owned(Vec<DrawCommand>),
 }
 
@@ -38,6 +40,7 @@ impl Deref for Frame<'_> {
 
 /// The mounted UI the runner drives: event dispatch, composition, and the dirtiness/generation gates it uses to decide whether a frame is worth rendering.
 pub trait UiTree {
+    /// Handles one event, reporting whether the tree took it.
     fn on_event(&mut self, event: &Event) -> EventResult;
 
     /// Hands the tree a move the overlay layer took, with everything in it covered; see [`ui_core::covered`].
