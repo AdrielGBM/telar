@@ -6,7 +6,7 @@ use crate::app_config::AppConfig;
 
 /// Applies the dev-window overrides to `config`, and returns it unchanged in a build that is not a hot-reload one — so every boot path calls this the same way and the `cfg` lives in one place.
 ///
-/// **Precedence, deliberately**: these land on the config the caller passes, which [`super::resolved_window`] then lets [`crate::App::window_config`] replace outright. The app's own answer wins, and trinity's `[telar.dev.window]` depends on that order. Pinned by the test below.
+/// **Precedence, deliberately**: these land on the config the caller passes, which [`super::resolved_window`] then lets [`crate::App::window_config`] replace outright. The app's own answer wins, and a project's `[telar.dev.window]` depends on that order. Pinned by the test below.
 pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
     #[cfg(not(feature = "hot-reload"))]
     return config;
