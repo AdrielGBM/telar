@@ -513,6 +513,41 @@ fn character_at(runs: &[TextRun], position: TextPosition) -> Option<(usize, usiz
     Some((run.field, run.start + position.character_index))
 }
 
+/// The nodes last handed to a reader, kept so a request naming one can be mapped back to the control it means.
+#[derive(Debug, Default)]
+pub struct PublishedTree {
+    nodes: Vec<AccessNode>,
+}
+
+impl PublishedTree {
+    /// Hands the window's tree to `deliver`, which gives it to the platform's adapter only if a reader is attached. `snapshot` runs inside that hand-over, so a window nobody reads never assembles its nodes.
+    pub fn publish<'a>(
+        &'a mut self,
+        snapshot: impl FnOnce() -> (Vec<AccessNode>, Option<LocaleTag>) + 'a,
+        title: &'a str,
+        scale_factor: f64,
+        deliver: impl FnOnce(Box<dyn FnOnce() -> TreeUpdate + 'a>),
+    ) {
+        let published = &mut self.nodes;
+        deliver(Box::new(move || {
+            let (nodes, lang) = snapshot();
+            let update = tree_update(&nodes, title, lang.as_ref(), scale_factor);
+            *published = nodes;
+            update
+        }));
+    }
+
+    /// Forgets the nodes, once no reader is attached to name them.
+    pub fn clear(&mut self) {
+        self.nodes.clear();
+    }
+
+    /// What a reader's request means, against the nodes it was last shown.
+    pub fn requested_action(&self, request: &ActionRequest) -> Option<(AccessId, AccessAction)> {
+        requested_action(request, &self.nodes)
+    }
+}
+
 /// What a reader asked for, as the focus id of the control it names and the action it asked of it. `None` for a request naming the window or a label, one for a node that has since gone, and one for an action no control answers.
 pub fn requested_action(
     request: &ActionRequest,

@@ -1684,3 +1684,52 @@ fn a_touch_lands_on_the_control_drawn_under_it_at_the_windows_scale() {
     assert_eq!(touched(3.0, 450.0, 60.0).as_deref(), Some("Next"));
     assert_eq!(touched(1.0, 150.0, 20.0).as_deref(), Some("Next"));
 }
+
+/// With no reader attached the adapter never asks for the tree, and the window must not have assembled it.
+#[test]
+fn a_window_no_reader_is_attached_to_builds_no_snapshot() {
+    let mut tree = PublishedTree::default();
+    let mut built = 0;
+    tree.publish(
+        || {
+            built += 1;
+            (vec![node(Some(7), Role::Button, "Save")], None)
+        },
+        "Editor",
+        1.0,
+        |_build| {},
+    );
+
+    assert_eq!(built, 0);
+}
+
+/// Once a reader is attached each frame's tree is published, and a request naming a control reaches it.
+#[test]
+fn a_window_a_reader_is_attached_to_publishes_after_each_frame() {
+    let mut tree = PublishedTree::default();
+    let mut published = Vec::new();
+    for label in ["Save", "Saved"] {
+        tree.publish(
+            || (vec![node(Some(7), Role::Button, label)], None),
+            "Editor",
+            1.0,
+            |build| published.push(build()),
+        );
+    }
+
+    let names: Vec<_> = published
+        .iter()
+        .map(|update| update.nodes[0].1.label().unwrap().to_owned())
+        .collect();
+    assert_eq!(names, ["Save", "Saved"]);
+    let press = ActionRequest {
+        action: Action::Click,
+        target_tree: TreeId::ROOT,
+        target_node: NodeId(7),
+        data: None,
+    };
+    assert_eq!(
+        tree.requested_action(&press).map(|(id, _)| id),
+        Some(own(7))
+    );
+}

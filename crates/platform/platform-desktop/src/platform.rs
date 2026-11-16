@@ -79,7 +79,7 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     a11y_proxy: winit::event_loop::EventLoopProxy<UserEvent>,
     // The nodes last published, so a request naming one can be mapped back to the control it means.
     #[cfg(feature = "a11y")]
-    a11y_nodes: Vec<platform_core::AccessNode>,
+    a11y_tree: platform_accesskit::PublishedTree,
 }
 
 #[cfg(feature = "a11y")]
@@ -90,9 +90,7 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
         match event {
             AkEvent::InitialTreeRequested => self.publish_accessibility(),
             AkEvent::ActionRequested(request) => {
-                let Some((id, action)) =
-                    platform_accesskit::requested_action(&request, &self.a11y_nodes)
-                else {
+                let Some((id, action)) = self.a11y_tree.requested_action(&request) else {
                     return;
                 };
                 // Through the same door the keyboard uses: a reader activating a button takes the path a press takes, or the two grow apart and it is always the untested one that rots.
@@ -100,7 +98,7 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
                 self.publish_accessibility();
             }
             // The tree is only ever built on demand, so ceasing to be asked is the whole of stopping.
-            AkEvent::AccessibilityDeactivated => self.a11y_nodes.clear(),
+            AkEvent::AccessibilityDeactivated => self.a11y_tree.clear(),
         }
     }
 
@@ -109,14 +107,13 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
         let (Some(adapter), Some(window)) = (&mut self.a11y, &self.window) else {
             return;
         };
-        let nodes = self.handler.accessibility();
-        let title = self.config.shown_title().to_owned();
-        let lang = self.handler.root_language();
-        let scale_factor = window.scale_factor();
-        adapter.update_if_active(|| {
-            platform_accesskit::tree_update(&nodes, &title, lang.as_ref(), scale_factor)
-        });
-        self.a11y_nodes = nodes;
+        let handler = &self.handler;
+        self.a11y_tree.publish(
+            || (handler.accessibility(), handler.root_language()),
+            self.config.shown_title(),
+            window.scale_factor(),
+            |build| adapter.update_if_active(build),
+        );
     }
 }
 
@@ -353,7 +350,7 @@ impl Platform for WinitPlatform {
             #[cfg(feature = "a11y")]
             a11y_proxy: self.event_loop.create_proxy(),
             #[cfg(feature = "a11y")]
-            a11y_nodes: Vec::new(),
+            a11y_tree: Default::default(),
         };
         #[cfg(all(target_os = "linux", feature = "system-theme"))]
         watch_portal(&self.event_loop);
@@ -443,7 +440,7 @@ struct SurfaceRunner {
     #[cfg(feature = "a11y")]
     a11y: Option<accesskit_winit::Adapter>,
     #[cfg(feature = "a11y")]
-    a11y_nodes: Vec<platform_core::AccessNode>,
+    a11y_tree: platform_accesskit::PublishedTree,
     #[cfg(feature = "a11y")]
     title: String,
 }
@@ -455,14 +452,13 @@ impl SurfaceRunner {
         let Some(adapter) = &mut self.a11y else {
             return;
         };
-        let nodes = self.handler.accessibility();
-        let title = self.title.clone();
-        let lang = self.handler.root_language();
-        let scale_factor = self.window.scale_factor();
-        adapter.update_if_active(|| {
-            platform_accesskit::tree_update(&nodes, &title, lang.as_ref(), scale_factor)
-        });
-        self.a11y_nodes = nodes;
+        let handler = &self.handler;
+        self.a11y_tree.publish(
+            || (handler.accessibility(), handler.root_language()),
+            &self.title,
+            self.window.scale_factor(),
+            |build| adapter.update_if_active(build),
+        );
     }
 }
 
@@ -594,7 +590,7 @@ impl WinitMultiRunner {
             #[cfg(feature = "a11y")]
             a11y: Some(a11y),
             #[cfg(feature = "a11y")]
-            a11y_nodes: Vec::new(),
+            a11y_tree: Default::default(),
             #[cfg(feature = "a11y")]
             title: config.shown_title().to_owned(),
         };
@@ -625,15 +621,14 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                 match event.window_event {
                     AkEvent::InitialTreeRequested => surface.publish_accessibility(),
                     AkEvent::ActionRequested(request) => {
-                        let Some((id, action)) =
-                            platform_accesskit::requested_action(&request, &surface.a11y_nodes)
+                        let Some((id, action)) = surface.a11y_tree.requested_action(&request)
                         else {
                             return;
                         };
                         surface.handler.on_accessibility_action(id, action);
                         surface.publish_accessibility();
                     }
-                    AkEvent::AccessibilityDeactivated => surface.a11y_nodes.clear(),
+                    AkEvent::AccessibilityDeactivated => surface.a11y_tree.clear(),
                 }
             }
             #[cfg(all(target_os = "linux", feature = "system-theme"))]

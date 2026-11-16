@@ -6,8 +6,9 @@ use accesskit_android::InjectingAdapter;
 use accesskit_android::jni::objects::JObject;
 use accesskit_android::jni::{JNIEnv, JavaVM};
 use android_activity::AndroidApp;
+use platform_accesskit::PublishedTree;
 use platform_accesskit::accesskit::{ActionHandler, ActionRequest, ActivationHandler, TreeUpdate};
-use platform_core::{AccessNode, EventHandler, Window};
+use platform_core::{EventHandler, Window};
 use winit::event_loop::EventLoopProxy;
 
 use crate::platform::UserEvent;
@@ -27,7 +28,7 @@ pub(crate) struct Accessibility {
     adapter: InjectingAdapter,
     // Android never says a reader stopped listening, so this only ever turns on, and until it does no snapshot is built.
     asked: bool,
-    nodes: Vec<AccessNode>,
+    tree: PublishedTree,
 }
 
 /// Room for the local references one call into the adapter makes, which a frame of this size frees when the call returns.
@@ -65,7 +66,7 @@ impl Accessibility {
             vm,
             adapter,
             asked: false,
-            nodes: Vec::new(),
+            tree: PublishedTree::default(),
         })
     }
 
@@ -80,9 +81,7 @@ impl Accessibility {
         match request {
             AccessRequest::InitialTree => self.asked = true,
             AccessRequest::Action(request) => {
-                let Some((id, action)) =
-                    platform_accesskit::requested_action(&as_step(request), &self.nodes)
-                else {
+                let Some((id, action)) = self.tree.requested_action(&as_step(request)) else {
                     return;
                 };
                 handler.on_accessibility_action(id, action);
@@ -101,25 +100,29 @@ impl Accessibility {
         if !self.asked {
             return;
         }
-        let nodes = handler.accessibility();
-        let lang = handler.root_language();
         let adapter = &mut self.adapter;
+        let tree = &mut self.tree;
         // The main thread never returns to Java, so the references the adapter makes on every update are freed only by a frame popped here.
         let published = self.vm.get_env().and_then(|mut env| {
             env.with_local_frame(LOCAL_REFERENCES, |_| {
-                adapter.update_if_active(|| {
-                    let mut update =
-                        platform_accesskit::tree_update(&nodes, title, lang.as_ref(), scale_factor);
-                    offer_steps_as_scrolls(&mut update);
-                    update
-                });
+                tree.publish(
+                    || (handler.accessibility(), handler.root_language()),
+                    title,
+                    scale_factor,
+                    |build| {
+                        adapter.update_if_active(|| {
+                            let mut update = build();
+                            offer_steps_as_scrolls(&mut update);
+                            update
+                        })
+                    },
+                );
                 Ok::<_, accesskit_android::jni::errors::Error>(())
             })
         });
         if let Err(error) = published {
             tracing::warn!(%error, "the tree could not be published");
         }
-        self.nodes = nodes;
     }
 }
 
