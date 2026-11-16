@@ -68,7 +68,7 @@ pub use display::image::image::{ImageProps, ImageSource, ImageTokens, image};
 pub use display::kbd::kbd::{KbdCaps, KbdProps, KbdTokens, kbd};
 pub use display::tag::tag::{TagProps, TagTokens, tag};
 pub use feedback::progress::progress::{ProgressProps, ProgressTokens, progress};
-pub use feedback::spinner::spinner::{SpinnerProps, SpinnerTokens, spinner};
+pub use feedback::spinner::spinner::{SpinnerProps, spinner};
 pub use inputs::button::button::{ButtonProps, ButtonTokens, button};
 pub use inputs::checkbox::checkbox::{CheckboxProps, CheckboxTokens, checkbox};
 pub use inputs::handle::handle::{HandleProps, HandleTokens, ToPoint, ToValue, handle};

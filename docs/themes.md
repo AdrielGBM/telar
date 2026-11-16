@@ -235,7 +235,6 @@ component's `ControlSize` and scales it to that. Each field and what `None` fall
 | `ScrubFieldTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
 | `SelectTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)`; `offset` → `popup_offset` |
 | `SliderTokens` | `width` → `measure(16)`; `track` → `spacing`; `thumb` → `icon_size`; `ring` → `border_width_strong` |
-| `SpinnerTokens` | `size` → `control_height` |
 | `SplitPaneTokens` | `thickness` → `gap_sm`; `radius` → a pill |
 | `StepperTokens` | `radius` → `radius_control` |
 | `SwatchesTokens` | `size` → `icon_size` and `gap_sm`; `ring` → `border_width_strong` |

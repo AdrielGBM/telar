@@ -24,12 +24,13 @@ element group
             rect 354,288 83x24 fill=#6badfa1a border=1 border-color=#00000000 radius=6
             element group
               element progressbar
-                rect 362,294 12x12 border=1.44 border-color=#99a1b8ff radius=6
                 element group
                   matrix 1,0,0,1,0,0
                     rect 362,294 12x12
                     element group
-                      rect 367,294 3x3 fill=#6badfaff radius=1.5
+                      matrix 1,0,0,1,363,295
+                        path M5,0 C7.76,0 10,2.24 10,5 C10,7.76 7.76,10 5,10 C2.24,10 0,7.76 0,5 stroke=1.5 stroke-color=#6badfaff
+                      end
                     end
                   end
                 end

@@ -1,0 +1,20 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element progressbar
+          element group
+            matrix 1,0,0,1,0,0
+              rect 384,284 32x32
+              element group
+                rect 384,284 32x32 border=3 border-color=#4261edff radius=8
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

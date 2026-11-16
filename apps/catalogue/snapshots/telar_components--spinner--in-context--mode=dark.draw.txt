@@ -1,0 +1,51 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element progressbar
+              element group
+                matrix 1,0,0,1,0,0
+                  rect 309,275 16x16
+                  element group
+                    matrix 1,0,0,1,310,276
+                      path M7,0 C10.87,0 14,3.13 14,7 C14,10.87 10.87,14 7,14 C3.13,14 0,10.87 0,7 stroke=1.5 stroke-color=#ebedf5ff
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              matrix 1,0,0,1,329,275
+                text 0,0 142.14x16.8 "Exporting Logo.png…" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+              end
+            end
+          end
+          element group
+            rect 309,300 182x25 fill=#ebedf5ff radius=6
+            element progressbar
+              element group
+                matrix 1,0,0,1,0,0
+                  rect 317,304 16x16
+                  element group
+                    matrix 1,0,0,1,318,305
+                      path M7,0 C10.87,0 14,3.13 14,7 C14,10.87 10.87,14 7,14 C3.13,14 0,10.87 0,7 stroke=1.5 stroke-color=#1c1f29ff
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              matrix 1,0,0,1,337,304
+                text 0,0 146.36x16.8 "Saving version history" size=14 family=sans-serif weight=400 color=#1c1f29ff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

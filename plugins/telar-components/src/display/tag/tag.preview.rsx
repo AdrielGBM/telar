@@ -55,7 +55,7 @@ row gap:(metrics::gap_md(ControlSize::Regular))
     tag label:"Saved" tone:success
         box slot:"leading" width:6 height:6 radius:3 fill:$text.ink
     tag label:"Exporting" tone:info variant:soft
-        spinner slot:"leading" diameter:(metrics::icon_size(ControlSize::Regular) * 0.75) color:$theme.info a11y_label:"Exporting"
+        spinner slot:"leading" size:small a11y_label:"Exporting"
     tag label:"Layers" variant:outline
         text "12" slot:"trailing" font_weight:$theme.font_weight_strong
 

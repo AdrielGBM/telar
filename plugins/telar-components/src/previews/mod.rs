@@ -55,8 +55,6 @@ mod section;
 mod select;
 #[path = "../inputs/slider/slider.preview.rs"]
 mod slider;
-#[path = "../feedback/spinner/spinner.preview.rs"]
-mod spinner;
 #[path = "../workbench/split_pane/split_pane.preview.rs"]
 mod split_pane;
 #[path = "../inputs/stepper/stepper.preview.rs"]
@@ -107,7 +105,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(image::previews());
     entries.extend(link::previews());
     entries.extend(progress::previews());
-    entries.extend(spinner::previews());
     entries.extend(section::previews());
     entries.extend(list::previews());
     entries.extend(virtual_list::previews());

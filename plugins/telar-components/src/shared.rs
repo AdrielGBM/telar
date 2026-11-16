@@ -86,7 +86,7 @@ pub(crate) fn accent() -> Color {
 pub(crate) fn on_accent() -> Color {
     use_theme_tokens().on_primary()
 }
-/// Secondary text: captions, placeholders, and the rail a slider or a spinner runs along.
+/// Secondary text: captions, placeholders, and the rail a slider runs along.
 pub(crate) fn muted() -> Color {
     use_theme_tokens().muted()
 }
@@ -440,6 +440,8 @@ pub enum Mark {
     Maximize,
     Restore,
     Ring,
+    /// Three quarters of a circle, open over its upper left quarter: what a spinner turns.
+    Arc,
     /// A magnifying glass: a search field's.
     Search,
     /// An arrow leaving its box up and toward the end of the line: a link that leaves the application. Turns round in a right-to-left region.
@@ -451,6 +453,9 @@ const CHEVRON_RATIO: f32 = 0.7;
 
 /// The side of the square the other marks fill, as a share of the icon size: smaller than a chevron's span, since a cross or a box is dense where a chevron is two strokes.
 const SQUARE_RATIO: f32 = 0.6;
+
+/// The side of the square an arc fills, as a share of the icon size: two strokes with nothing inside, so it stands as large as an icon's drawing in its box.
+const ARC_RATIO: f32 = 0.875;
 
 /// How far the square behind a restore mark stands up and across from the one in front, as a share of the mark's side.
 const RESTORE_OFFSET: f32 = 0.3;
@@ -486,6 +491,7 @@ fn mark_box(size: ControlSize, shape: Mark) -> LayoutStyle {
         | Mark::Ring
         | Mark::Search
         | Mark::External => (whole(SQUARE_RATIO), whole(SQUARE_RATIO)),
+        Mark::Arc => (whole(ARC_RATIO), whole(ARC_RATIO)),
     };
     LayoutStyle::new()
         .width(width)
@@ -533,6 +539,7 @@ fn mark_path(shape: Mark, rect: Rect) -> telar::PathData {
             .line_to(at((w - offset, h - offset)))
         }
         (Mark::Ring, _) => ring(rect),
+        (Mark::Arc, _) => arc(rect),
         (Mark::Search, _) => {
             let lens = (w * SEARCH_LENS).round();
             let reach = lens * CIRCLE_EDGE;
@@ -571,6 +578,22 @@ fn ring(rect: Rect) -> telar::PathData {
         .cubic_to(at(0.0, ry - ky), at(rx - kx, 0.0), at(rx, 0.0))
         .cubic_to(at(rx + kx, 0.0), at(rx * 2.0, ry - ky), at(rx * 2.0, ry))
         .close()
+}
+
+/// Three quarters of the circle inscribed in `rect`: from its top clockwise round to its left side.
+fn arc(rect: Rect) -> telar::PathData {
+    let (rx, ry) = (rect.width / 2.0, rect.height / 2.0);
+    let (kx, ky) = (rx * CIRCLE_HANDLE, ry * CIRCLE_HANDLE);
+    let at = |x: f32, y: f32| telar::Point::new(x, y);
+    telar::PathData::new()
+        .move_to(at(rx, 0.0))
+        .cubic_to(at(rx + kx, 0.0), at(rx * 2.0, ry - ky), at(rx * 2.0, ry))
+        .cubic_to(
+            at(rx * 2.0, ry + ky),
+            at(rx + kx, ry * 2.0),
+            at(rx, ry * 2.0),
+        )
+        .cubic_to(at(rx - kx, ry * 2.0), at(0.0, ry + ky), at(0.0, ry))
 }
 
 /// A mark drawn rather than spelled, since a face cannot be relied on to carry a caret, a tick or a cross at the size and weight of the label beside it. Strokes are sized from the icon size at `size`. `ink` picks its colour from the text the tree above it declared, so it follows a region that declared its own. Hidden from readers: the control it sits in has the name.

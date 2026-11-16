@@ -24,7 +24,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
     let pct = memo(move || (p_rsx_mv.get() * 100.0) as i32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("FEEDBACK").title("Progress & spinner").desc("progress is a determinate bar you drive with a 0..1 signal; spinner is an indeterminate ring that animates itself. Both are components (from the components feature, not base tags).").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FEEDBACK").title("Progress & spinner").desc("progress is a determinate bar you drive with a 0..1 signal; spinner is an indeterminate icon that animates itself. Both are components (from the components feature, not base tags).").build())?;
         let __node_1 = {
             let __recipe_children = Children::new(
                 {
@@ -86,9 +86,9 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_9 = spinner(SpinnerProps::props().diameter(::telar::Int(28)).build())?;
+                                    let __node_9 = spinner(SpinnerProps::props().size(::telar::kw::large).build())?;
                                     let __node_9 = __node_9.a11y_label(|| "Working");
-                                    let __node_10 = spinner(SpinnerProps::props().diameter(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build())?;
+                                    let __node_10 = spinner(SpinnerProps::props().tone(::telar::kw::success).build())?;
                                     let __node_10 = __node_10.a11y_label(|| "Working");
                                     let __text_1 = {
                                         Text::declaring(
@@ -107,13 +107,13 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_11 = code_line(CodeLineProps::props().code("spinner diameter:28 a11y_label:\"Working\"").build())?;
+                    let __node_11 = code_line(CodeLineProps::props().code("spinner size:large a11y_label:\"Working\"").build())?;
                     __children.push(box_item(__node_11));
                     Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("spinner — an indeterminate ring; it drives its own rotation").children(__recipe_children).build())?
+            example(ExampleProps::props().title("spinner — an indeterminate icon; it drives its own rotation").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7])?
     };

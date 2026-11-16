@@ -124,3 +124,5 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 840..843	2858	`pct`
 1037..1042	3583	`ghost`
+1316..1321	5412	`large`
+1372..1379	5616	`success`

@@ -1,0 +1,22 @@
+frame 120x48 lang=en
+element group
+  rect 0,0 120x48 fill=#ffffffff
+  element group
+    element group
+      element group
+        element progressbar
+          element group
+            matrix 1,0,0,1,0,0
+              rect 52,16 16x16
+              element group
+                matrix 1,0,0,1,53,17
+                  path M7,0 C10.87,0 14,3.13 14,7 C14,10.87 10.87,14 7,14 C3.13,14 0,10.87 0,7 stroke=1.5 stroke-color=#995c05ff
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
