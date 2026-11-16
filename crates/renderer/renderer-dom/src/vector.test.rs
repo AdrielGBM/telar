@@ -218,7 +218,14 @@ fn text_carries_the_css_a_box_would_have_given_it() {
 fn groups_close_in_the_order_they_opened() {
     let mut d = drawing();
     d.open_layer(0.5, BlendMode::Normal, renderer_core::LayerMask::None);
-    d.open_matrix([2.0, 0.0, 0.0, 2.0, 4.0, 4.0]);
+    d.open_matrix(Transform {
+        a: 2.0,
+        b: 0.0,
+        c: 0.0,
+        d: 2.0,
+        e: 4.0,
+        f: 4.0,
+    });
     d.line(
         Point::new(0.0, 0.0),
         Point::new(4.0, 4.0),
@@ -437,7 +444,14 @@ fn paint_placed_on_the_surface_lands_in_the_innermost_box() {
     let mut d = Drawing::at(7, Rect::new(0.0, 300.0, 400.0, 200.0));
     d.open_box(Rect::new(56.0, 428.0, 200.0, 80.0));
     d.open_clip_on_surface(Rect::new(56.0, 428.0, 200.0, 80.0), BorderRadius::zero());
-    d.open_matrix_on_surface([1.5, 0.0, 0.0, 1.5, -28.0, -234.0]);
+    d.open_matrix_on_surface(Transform {
+        a: 1.5,
+        b: 0.0,
+        c: 0.0,
+        d: 1.5,
+        e: -28.0,
+        f: -234.0,
+    });
     d.rect_on_surface(
         Rect::new(56.0, 428.0, 200.0, 80.0),
         &RectStyle::default().with_fill(Paint::Gradient(Gradient::linear(

@@ -30,7 +30,10 @@ pub(crate) struct PathFillData {
 }
 
 impl PathFillData {
-    pub(crate) fn from_fill_style(fill: renderer_core::Paint, matrix: [f32; 6]) -> Self {
+    pub(crate) fn from_fill_style(
+        fill: renderer_core::Paint,
+        matrix: geometry_core::Transform,
+    ) -> Self {
         let enc = super::encode_fill_style::<8>(&fill, matrix);
         Self {
             fill_type: enc.fill_type,
@@ -238,7 +241,7 @@ pub(crate) fn prepare_path(
     style: &PathStyle,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,
-    matrix: [f32; 6],
+    matrix: geometry_core::Transform,
     out_fill_data: &mut Vec<PathFillData>,
 ) {
     let id = data.id();

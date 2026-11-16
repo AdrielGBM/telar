@@ -437,7 +437,7 @@ fn a_label_moved_into_place_by_a_matrix_names_its_control() {
 
     let frame = [
         DrawCommand::PushMatrix {
-            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 10.0, 105.0]),
+            transform: Transform::translate(10.0, 105.0),
         },
         text_at("Save", rect(0.0, 0.0, 40.0, 16.0)),
         DrawCommand::PopMatrix,
@@ -1131,7 +1131,7 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
     let nested = |surface| NestedSurface {
         surface,
         commands: 0..0,
-        placement: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        placement: Transform::IDENTITY,
     };
     let inside = AccessId {
         surface: Some(key(7)),

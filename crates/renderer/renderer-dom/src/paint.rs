@@ -2,7 +2,7 @@
 //!
 //! Separate from the layout half on purpose: layout comes from what the widget declared, paint comes from the `Rect` the widget drew. The two reach a document backend by different routes and are only joined here, in the string one element ends up with.
 
-use geometry_core::Rect;
+use geometry_core::{Point, Rect, Transform};
 use renderer_core::{
     Border, BorderKind, BorderRadius, Color, Gradient, GradientStops, Paint, RectStyle,
     ResolvedGradient, Shadow, TextStyle,
@@ -489,19 +489,23 @@ mod text_tests;
 /// Telar's matrices move points in the surface's coordinates: a rotation about a box's centre carries that centre, measured from the corner of the page. A CSS transform moves an element within its own coordinates instead, so the same six numbers written out unchanged displace it by its whole distance from that corner — which is a spinner orbiting the window rather than turning, and a slider's fill stretched across it.
 ///
 /// Rebasing puts the fixed point back where the widget meant it. Paired with `transform-origin: 0 0`, since the arithmetic assumes the element's own origin is what stays put, and CSS otherwise assumes its centre.
-pub fn matrix(m: [f32; 6], x: f32, y: f32) -> String {
+pub fn matrix(m: Transform, x: f32, y: f32) -> String {
     spelled(rebased(m, x, y))
 }
 
 /// An absolute-space matrix in the coordinates of a box whose own top-left is at `(x, y)`: see [`matrix`].
-pub fn rebased(m: [f32; 6], x: f32, y: f32) -> [f32; 6] {
-    let [a, b, c, d, e, f] = m;
-    [a, b, c, d, a * x + c * y + e - x, b * x + d * y + f - y]
+pub fn rebased(m: Transform, x: f32, y: f32) -> Transform {
+    let corner = m.apply(Point::new(x, y));
+    Transform {
+        e: corner.x - x,
+        f: corner.y - y,
+        ..m
+    }
 }
 
 /// A matrix as the `matrix()` function CSS and SVG both read.
-pub fn spelled(m: [f32; 6]) -> String {
-    let [a, b, c, d, e, f] = m.map(round);
+pub fn spelled(m: Transform) -> String {
+    let [a, b, c, d, e, f] = m.to_array().map(round);
     format!("matrix({a},{b},{c},{d},{e},{f})")
 }
 

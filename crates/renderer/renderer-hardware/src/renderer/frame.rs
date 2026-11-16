@@ -1057,7 +1057,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             let inst = crate::primitives::rect::prepare_rect(
                 bg_rect,
                 &bg_style,
-                geometry_core::Transform::IDENTITY.to_array(),
+                geometry_core::Transform::IDENTITY,
             );
             self.pending_instances.push(inst);
         }
@@ -1110,9 +1110,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     style,
                 } => {
                     let rect = *rect;
-                    let spans = spans_at_scale(spans, self.draw_state.scale());
+                    let spans = spans_at_scale(spans, self.draw_state.cumulative_matrix.scale());
                     // Laid out at the size the matrix makes it. The rect already goes through the matrix below; without this the box grows and the letters do not, so a zoomed subtree comes out with text of the wrong size.
-                    let style = at_scale((**style).clone(), self.draw_state.scale());
+                    let style =
+                        at_scale((**style).clone(), self.draw_state.cumulative_matrix.scale());
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
@@ -1220,7 +1221,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                         fill: Some(underline.paint),
                                         ..renderer_core::RectStyle::default()
                                     },
-                                    geometry_core::Transform::IDENTITY.to_array(),
+                                    geometry_core::Transform::IDENTITY,
                                 ));
                         }
                         self.flush_rect();

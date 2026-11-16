@@ -560,7 +560,14 @@ fn a_box_inside_a_drawing_transforms_and_cuts_itself_where_it_stands() {
             radius: renderer_core::BorderRadius::zero(),
         },
         DrawCommand::PushMatrix {
-            transform: Transform::from_array([1.5, 0.0, 0.0, 1.5, -28.0, -234.0]),
+            transform: Transform {
+                a: 1.5,
+                b: 0.0,
+                c: 0.0,
+                d: 1.5,
+                e: -28.0,
+                f: -234.0,
+            },
         },
         filled(at),
         DrawCommand::PopMatrix,
@@ -596,12 +603,26 @@ fn artwork_inside_a_drawing_keeps_its_own_coordinates() {
             Rect::new(40.0, 300.0, 100.0, 100.0),
         ),
         DrawCommand::PushMatrix {
-            transform: Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]),
+            transform: Transform {
+                a: 2.0,
+                b: 0.0,
+                c: 0.0,
+                d: 2.0,
+                e: 0.0,
+                f: 0.0,
+            },
         },
         filled(Rect::new(10.0, 10.0, 20.0, 20.0)),
         DrawCommand::PopMatrix,
         DrawCommand::PushMatrix {
-            transform: Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]),
+            transform: Transform {
+                a: 2.0,
+                b: 0.0,
+                c: 0.0,
+                d: 2.0,
+                e: 0.0,
+                f: 0.0,
+            },
         },
         filled(Rect::new(0.0, 0.0, 100.0, 100.0)),
         DrawCommand::PopMatrix,
@@ -621,7 +642,14 @@ fn a_matrix_around_a_frame_at_the_corner_is_already_the_boxs_own() {
         &[
             open_at(1, Semantics::group(), Rect::new(200.0, 100.0, 100.0, 50.0)),
             DrawCommand::PushMatrix {
-                transform: Transform::from_array([1.5, 0.0, 0.0, 1.5, 0.0, -12.5]),
+                transform: Transform {
+                    a: 1.5,
+                    b: 0.0,
+                    c: 0.0,
+                    d: 1.5,
+                    e: 0.0,
+                    f: -12.5,
+                },
             },
             filled(Rect::new(0.0, 0.0, 100.0, 50.0)),
             DrawCommand::PopMatrix,

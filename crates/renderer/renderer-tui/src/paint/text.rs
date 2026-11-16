@@ -89,7 +89,7 @@ impl Painter<'_> {
         if !self.clipped_in(col, row) {
             return width;
         }
-        let mapped = mapped(paint, self.matrix());
+        let mapped = mapped(paint, self.grid_matrix());
         let p = cell_center(col, row, self.cell);
         let color = sample(&mapped, p.x, p.y);
         self.put_glyph(col, row, Grapheme::new(grapheme), color, attrs)
@@ -97,7 +97,7 @@ impl Painter<'_> {
 
     /// Cells for a rect, mapped but *not* cut to the clip: alignment is measured against the box the text was given, not against the part of it that happens to be visible. Individual cells are clip-tested as they are written.
     fn cells_of_unclipped(&self, rect: Rect) -> super::CellRect {
-        let mapped = renderer_core::transform_clip_rect(self.matrix(), rect);
+        let mapped = renderer_core::transform_clip_rect(self.grid_matrix(), rect);
         super::CellRect::of(mapped, self.cell)
     }
 }

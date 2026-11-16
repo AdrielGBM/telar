@@ -4,7 +4,14 @@ use super::*;
 #[test]
 fn a_turn_about_a_box_far_down_the_page_stays_on_the_box() {
     // A 24x24 box at (300, 500): a 90 degree turn about (312, 512).
-    let turn = [0.0, 1.0, -1.0, 0.0, 312.0 + 512.0, 512.0 - 312.0];
+    let turn = Transform {
+        a: 0.0,
+        b: 1.0,
+        c: -1.0,
+        d: 0.0,
+        e: 312.0 + 512.0,
+        f: 512.0 - 312.0,
+    };
     let css = matrix(turn, 300.0, 500.0);
     // In the element's own coordinates the same turn is about (12, 12).
     assert_eq!(css, "matrix(0,1,-1,0,24,0)");
@@ -14,14 +21,21 @@ fn a_turn_about_a_box_far_down_the_page_stays_on_the_box() {
 #[test]
 fn a_scale_about_an_edge_keeps_that_edge() {
     // Half width about x = 200: x' = 0.5x + 100.
-    let half = [0.5, 0.0, 0.0, 1.0, 100.0, 0.0];
+    let half = Transform {
+        a: 0.5,
+        b: 0.0,
+        c: 0.0,
+        d: 1.0,
+        e: 100.0,
+        f: 0.0,
+    };
     assert_eq!(matrix(half, 200.0, 40.0), "matrix(0.5,0,0,1,0,0)");
 }
 
 /// What a scroll area emits. Rebasing must leave it exactly as it was, or every scrolled panel moves.
 #[test]
 fn a_plain_translation_is_the_same_wherever_it_is_measured_from() {
-    let scrolled = [1.0, 0.0, 0.0, 1.0, 0.0, -250.0];
+    let scrolled = Transform::translate(0.0, -250.0);
     assert_eq!(
         matrix(scrolled, 640.0, 480.0),
         "matrix(1,0,0,1,0,-250)",

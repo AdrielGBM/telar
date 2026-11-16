@@ -5,20 +5,18 @@ use geometry_core::{Point, Rect, Transform};
 use crate::DrawCommand;
 
 /// Maps clip rect `r` (in the currently-active transform's local space) to window space — the axis-aligned bounds of its four mapped corners. Widgets emit clip rects in their own local space, but the renderer clips in window space, so a clip must be mapped through the active cumulative matrix (scroll/layout translations) to compose correctly.
-pub fn transform_clip_rect(m: [f32; 6], r: Rect) -> Rect {
-    let [a, b, c, d, e, f] = m;
-    let map = |x: f32, y: f32| (a * x + c * y + e, b * x + d * y + f);
+pub fn transform_clip_rect(m: Transform, r: Rect) -> Rect {
     let corners = [
-        map(r.x, r.y),
-        map(r.x + r.width, r.y),
-        map(r.x, r.y + r.height),
-        map(r.x + r.width, r.y + r.height),
+        Point::new(r.x, r.y),
+        Point::new(r.x + r.width, r.y),
+        Point::new(r.x, r.y + r.height),
+        Point::new(r.x + r.width, r.y + r.height),
     ];
     let mut min_x = f32::INFINITY;
     let mut min_y = f32::INFINITY;
     let mut max_x = f32::NEG_INFINITY;
     let mut max_y = f32::NEG_INFINITY;
-    for (x, y) in corners {
+    for Point { x, y } in corners.map(|corner| m.apply(corner)) {
         min_x = min_x.min(x);
         min_y = min_y.min(y);
         max_x = max_x.max(x);
@@ -35,8 +33,8 @@ pub fn transform_clip_rect(m: [f32; 6], r: Rect) -> Rect {
 /// Flat draw state tracking clips and transforms. Note: `PushLayer` and `PopLayer` commands are intentionally not tracked here; layers are managed outside this struct by the caller.
 pub struct DrawState {
     clip_stack: Vec<Rect>,
-    transform_stack: Vec<[f32; 6]>,
-    pub cumulative_matrix: [f32; 6],
+    transform_stack: Vec<Transform>,
+    pub cumulative_matrix: Transform,
 }
 
 impl DrawState {
@@ -44,17 +42,8 @@ impl DrawState {
         Self {
             clip_stack: Vec::with_capacity(16),
             transform_stack: Vec::with_capacity(16),
-            cumulative_matrix: Transform::IDENTITY.to_array(),
+            cumulative_matrix: Transform::IDENTITY,
         }
-    }
-
-    /// How much the accumulated matrix scales what is drawn under it.
-    ///
-    /// The square root of the determinant, so a rotation counts as no scale at all and a squash counts as the average of its two axes. Text is laid out at a size and not stretched from one, so one number is what it can be given.
-    #[inline]
-    pub fn scale(&self) -> f32 {
-        let [a, b, c, d, _, _] = self.cumulative_matrix;
-        (a * d - b * c).abs().sqrt()
     }
 
     /// Pushes `rect` as a clip, intersected with whatever is already clipping, and returns the effective scissor.
@@ -88,9 +77,7 @@ impl DrawState {
     pub fn push_matrix(&mut self, transform: Transform) {
         self.transform_stack.push(self.cumulative_matrix);
         // Compose cumulative ∘ transform: `a.then(b)` yields `b ∘ a`, so `transform.then(cumulative)` maps a local point through `transform` first, then the accumulated parent chain.
-        self.cumulative_matrix = transform
-            .then(Transform::from_array(self.cumulative_matrix))
-            .to_array();
+        self.cumulative_matrix = transform.then(self.cumulative_matrix);
     }
 
     #[inline]
@@ -102,14 +89,14 @@ impl DrawState {
 
     #[inline]
     pub fn apply_point(&self, x: f32, y: f32) -> (f32, f32) {
-        let p = Transform::from_array(self.cumulative_matrix).apply(Point::new(x, y));
+        let p = self.cumulative_matrix.apply(Point::new(x, y));
         (p.x, p.y)
     }
 
     pub fn reset(&mut self) {
         self.clip_stack.clear();
         self.transform_stack.clear();
-        self.cumulative_matrix = Transform::IDENTITY.to_array();
+        self.cumulative_matrix = Transform::IDENTITY;
     }
 }
 
@@ -122,7 +109,7 @@ impl Default for DrawState {
 /// Iterates `cmds` calling `f(cmd, cumulative_matrix)` for every command. PushMatrix/PopMatrix update the matrix before the callback; all other commands see the matrix that was active when they were emitted.
 pub fn for_each_with_matrix<F>(cmds: &[DrawCommand], mut f: F)
 where
-    F: FnMut(&DrawCommand, [f32; 6]),
+    F: FnMut(&DrawCommand, Transform),
 {
     let mut state = DrawState::new();
     for cmd in cmds {

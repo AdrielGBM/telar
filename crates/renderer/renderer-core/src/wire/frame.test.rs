@@ -261,7 +261,14 @@ fn every_command() -> Vec<DrawCommand> {
             radius: BorderRadius::all(8.0),
         },
         DrawCommand::PushMatrix {
-            transform: Transform::from_array([1.0, 0.1, -0.1, 1.0, 20.0, -3.5]),
+            transform: Transform {
+                a: 1.0,
+                b: 0.1,
+                c: -0.1,
+                d: 1.0,
+                e: 20.0,
+                f: -3.5,
+            },
         },
         DrawCommand::PushLayer {
             opacity: 0.75,

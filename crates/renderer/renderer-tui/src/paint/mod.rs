@@ -5,7 +5,7 @@ mod image;
 mod shape;
 mod text;
 
-use geometry_core::{CellSize, Rect};
+use geometry_core::{CellSize, Rect, Transform};
 use renderer_core::{Color, Destination, DrawCommand, DrawState};
 
 pub use geom::CellRect;
@@ -135,25 +135,18 @@ impl<'a> Painter<'a> {
     /// The last line of defence for the invariant the layout grid sets up: a box that is a whole number of cells only *stays* one if whatever moves it is a whole number of cells too. Snapped sizes cover what layout builds and a snapped scroll offset covers the wheel, but a matrix can come from anywhere — an easing transition, a drag, a transform an app wrote by hand — and half a cell of translation reintroduces exactly the position-dependent rounding the rest of this exists to remove.
     ///
     /// The translation only. Scale and rotation change what a cell *means* rather than where it is, and a terminal has no answer for either that rounding could improve.
-    fn grid_matrix(&self) -> [f32; 6] {
+    pub(crate) fn grid_matrix(&self) -> Transform {
         let grid = geometry_core::LayoutGrid::from(self.cell);
         let m = self.state.cumulative_matrix;
-        [
-            m[0],
-            m[1],
-            m[2],
-            m[3],
-            grid.snap_pos_x(m[4]),
-            grid.snap_pos_y(m[5]),
-        ]
-    }
-
-    pub(crate) fn matrix(&self) -> [f32; 6] {
-        self.grid_matrix()
+        Transform {
+            e: grid.snap_pos_x(m.e),
+            f: grid.snap_pos_y(m.f),
+            ..m
+        }
     }
 
     pub(crate) fn scale(&self) -> f32 {
-        self.state.scale()
+        self.state.cumulative_matrix.scale()
     }
 
     fn link(&self) -> u16 {

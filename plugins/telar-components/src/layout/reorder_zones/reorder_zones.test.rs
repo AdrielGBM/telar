@@ -106,7 +106,7 @@ impl Board {
                 && rect.width == crate::shared::focus_ring_width()
                 && style.fill.is_some()
             {
-                found = Some((rect.x + matrix[4], rect.y + matrix[5]));
+                found = Some((rect.x + matrix.e, rect.y + matrix.f));
             }
         });
         found

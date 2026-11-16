@@ -56,7 +56,7 @@ pub fn inspection_marks(inspection: Inspection) -> Result<Box<dyn LayoutItem>, L
 }
 
 fn marks(inspection: Inspection, to_local: Transform) -> Vec<RenderNode> {
-    let place = |rect: Rect| transform_clip_rect(to_local.to_array(), rect);
+    let place = |rect: Rect| transform_clip_rect(to_local, rect);
     let tokens = use_theme_tokens();
     let accent = tokens.primary();
     let mut marks = Vec::new();

@@ -50,10 +50,7 @@ fn expand_for_shadow_expands_all_sides() {
 
 #[test]
 fn transform_clip_rect_identity() {
-    let r = transform_clip_rect(
-        Transform::IDENTITY.to_array(),
-        Rect::new(10.0, 20.0, 30.0, 40.0),
-    );
+    let r = transform_clip_rect(Transform::IDENTITY, Rect::new(10.0, 20.0, 30.0, 40.0));
     assert_eq!(r.x, 10.0);
     assert_eq!(r.y, 20.0);
     assert_eq!(r.width, 30.0);
@@ -62,7 +59,7 @@ fn transform_clip_rect_identity() {
 
 #[test]
 fn transform_clip_rect_scale() {
-    let scale = [2.0, 0.0, 0.0, 2.0, 0.0, 0.0];
+    let scale = Transform::scale_around(2.0, 2.0, 0.0, 0.0);
     let r = transform_clip_rect(scale, Rect::new(5.0, 5.0, 10.0, 10.0));
     assert!((r.x - 10.0).abs() < 1e-4, "{r:?}");
     assert!((r.y - 10.0).abs() < 1e-4, "{r:?}");
@@ -94,7 +91,7 @@ fn a_stroked_path_reaches_half_its_width_past_its_geometry() {
         }),
     };
 
-    let matrix = Transform::IDENTITY.to_array();
+    let matrix = Transform::IDENTITY;
     let metrics = FontMetrics::default();
     let bare = command_visual_rect(&bare, matrix, &metrics).expect("a path has bounds");
     let wide = command_visual_rect(&stroked, matrix, &metrics).expect("and so does a stroked one");

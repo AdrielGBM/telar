@@ -120,7 +120,14 @@ fn mount() {
     let name_node = html_name.layout_node();
     let art = Canvas::new(LayoutStyle::new().width(100.0).height(50.0), |_| {
         RenderNode::transform_with(
-            geometry_core::Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]),
+            geometry_core::Transform {
+                a: 2.0,
+                b: 0.0,
+                c: 0.0,
+                d: 2.0,
+                e: 0.0,
+                f: 0.0,
+            },
             [RenderNode::rect(
                 Rect::new(10.0, 10.0, 20.0, 20.0),
                 RectStyle::filled(fill(ART_FILL), 0.0),

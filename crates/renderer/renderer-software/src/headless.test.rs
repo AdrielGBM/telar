@@ -207,7 +207,7 @@ fn dense_ui() -> Vec<DrawCommand> {
         radius: BorderRadius::zero(),
     });
     cmds.push(DrawCommand::PushMatrix {
-        transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 0.0, 56.0]),
+        transform: Transform::translate(0.0, 56.0),
     });
 
     let cols = 5;
@@ -243,7 +243,7 @@ fn dense_ui() -> Vec<DrawCommand> {
                 style: panel_border.clone(),
             });
             cmds.push(DrawCommand::PushMatrix {
-                transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, x + 16.0, y + 16.0]),
+                transform: Transform::translate(x + 16.0, y + 16.0),
             });
             cmds.push(DrawCommand::Path {
                 data: icon.clone(),
@@ -342,7 +342,7 @@ fn clip_composes_with_active_matrix() {
     let red = Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(220, 40, 40)));
     let cmds = vec![
         DrawCommand::PushMatrix {
-            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 100.0, 80.0]),
+            transform: Transform::translate(100.0, 80.0),
         },
         DrawCommand::PushClip {
             rect: Rect::new(0.0, 0.0, 40.0, 30.0),
@@ -415,7 +415,7 @@ fn axis_aligned_scene_is_pixel_exact_on_every_platform() {
         },
         DrawCommand::PopClip,
         DrawCommand::PushMatrix {
-            transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 32.0, 32.0]),
+            transform: Transform::translate(32.0, 32.0),
         },
         DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 16.0, 16.0),
@@ -471,7 +471,7 @@ fn axis_aligned_scene_is_pixel_exact_on_every_platform() {
 /// This backend hands the matrix to the rasteriser, so the glyphs are transformed with everything else and nothing extra is needed. The hardware one only moves the box and lays the glyphs out itself, so there it has to be told. The bound below is what says the two agree: ink grows with the *area*, so twice the scale is about four times the ink. Scaling both the layout and the raster would be about sixteen.
 #[test]
 fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
-    let inked = |matrix: Option<[f32; 6]>| {
+    let inked = |matrix: Option<Transform>| {
         let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
             256,
             128,
@@ -480,9 +480,7 @@ fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
 
         let mut cmds = Vec::new();
         if let Some(matrix) = matrix {
-            cmds.push(DrawCommand::PushMatrix {
-                transform: Transform::from_array(matrix),
-            });
+            cmds.push(DrawCommand::PushMatrix { transform: matrix });
         }
         cmds.push(DrawCommand::Text {
             spans: None,
@@ -505,7 +503,7 @@ fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
     };
 
     let plain = inked(None);
-    let doubled = inked(Some([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]));
+    let doubled = inked(Some(Transform::scale_around(2.0, 2.0, 0.0, 0.0)));
 
     assert!(plain > 0, "the text was drawn at all");
     assert!(
@@ -519,7 +517,7 @@ fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
     );
 
     // A translation is not a scale, so text that is only moved is the size it was.
-    let moved = inked(Some([1.0, 0.0, 0.0, 1.0, 3.0, 3.0]));
+    let moved = inked(Some(Transform::translate(3.0, 3.0)));
     assert!(
         moved.abs_diff(plain) < plain / 4,
         "moving it changed its size: {plain} then {moved}"

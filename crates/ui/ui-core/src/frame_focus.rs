@@ -185,7 +185,7 @@ fn nested_text_input(
 ) -> Option<TextInput> {
     let input = TextInput {
         field: crate::accessibility::qualify(surface, inside.field)?,
-        caret: renderer_core::transform_clip_rect(placement.to_array(), inside.caret),
+        caret: renderer_core::transform_clip_rect(placement, inside.caret),
         secret: inside.secret,
     };
     crate::text_input::placed(node, input)

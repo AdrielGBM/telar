@@ -842,7 +842,7 @@ struct Open {
     /// The frame of the box's own paint when it is uneven on its sides, laid over the box once everything else is placed.
     frame: Option<Painted>,
     /// A transform whose subject is not yet known: the box itself if its own paint turns up inside, and the boxes it wraps otherwise.
-    moved: Option<[f32; 6]>,
+    moved: Option<Transform>,
     /// Whether this box scrolls its own content, which is what makes its clip an overflow rather than a cut.
     scrolls: bool,
     /// Whether this box is the surface's primary scroll, which the document scrolls for it: it neither cuts nor scrolls what it holds.
@@ -1136,7 +1136,7 @@ impl Walk<'_> {
             // A matrix moves whatever it wraps, and which that is only becomes clear inside it. A widget that transforms itself draws its own box in there; a scroll area wraps its content and nothing else.
             DrawCommand::PushMatrix { transform } => {
                 if *transform != Transform::IDENTITY {
-                    open.moved = Some(transform.to_array());
+                    open.moved = Some(*transform);
                 }
             }
             // Artwork reaches a document as an SVG, so one that arrives in a box means a widget drew geometry without saying its box was a drawing.
@@ -1937,9 +1937,9 @@ fn draw(
         }
         DrawCommand::PushClip { rect, radius } => drawing.open_clip(*rect, *radius),
         DrawCommand::PushMatrix { transform } if opens_onto_own_frame(rest, box_rect) => {
-            drawing.open_matrix_on_surface(transform.to_array())
+            drawing.open_matrix_on_surface(*transform)
         }
-        DrawCommand::PushMatrix { transform } => drawing.open_matrix(transform.to_array()),
+        DrawCommand::PushMatrix { transform } => drawing.open_matrix(*transform),
         DrawCommand::PushLayer {
             opacity,
             blend,

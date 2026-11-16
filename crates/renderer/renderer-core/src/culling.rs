@@ -60,7 +60,7 @@ pub fn expand_for_shadow(
 /// What a command paints, in window space, or `None` for one that paints nothing.
 pub fn command_visual_rect(
     cmd: &DrawCommand,
-    matrix: [f32; 6],
+    matrix: Transform,
     font_metrics: &FontMetrics,
 ) -> Option<Rect> {
     match cmd {
@@ -99,9 +99,8 @@ pub fn command_visual_rect(
         DrawCommand::Image { rect, .. } => Some(transform_clip_rect(matrix, *rect)),
         DrawCommand::Line { p1, p2, style } => {
             let half_w = style.width / 2.0;
-            let t = Transform::from_array(matrix);
-            let m1 = t.apply(*p1);
-            let m2 = t.apply(*p2);
+            let m1 = matrix.apply(*p1);
+            let m2 = matrix.apply(*p2);
             let x = m1.x.min(m2.x) - half_w;
             let y = m1.y.min(m2.y) - half_w;
             let right = m1.x.max(m2.x) + half_w;

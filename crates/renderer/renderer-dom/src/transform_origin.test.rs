@@ -226,7 +226,14 @@ fn artwork_scaled_by_its_own_transform_stays_in_its_canvas() {
             )),
         },
         DrawCommand::PushMatrix {
-            transform: Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]),
+            transform: Transform {
+                a: 2.0,
+                b: 0.0,
+                c: 0.0,
+                d: 2.0,
+                e: 0.0,
+                f: 0.0,
+            },
         },
         DrawCommand::Rect {
             rect: Rect::new(10.0, 10.0, 20.0, 20.0),

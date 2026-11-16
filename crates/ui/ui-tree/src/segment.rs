@@ -264,7 +264,7 @@ impl Segment {
                 _ => {
                     if let Some(rect) = renderer_core::culling::command_visual_rect(
                         cmd,
-                        top(&matrices, stratum).to_array(),
+                        top(&matrices, stratum),
                         &renderer_core::culling::FontMetrics::default(),
                     ) {
                         bounds = union_nonempty(bounds, rect);

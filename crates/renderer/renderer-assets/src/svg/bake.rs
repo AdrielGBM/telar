@@ -212,8 +212,8 @@ fn ser_gradient(g: &Gradient) -> String {
             stops,
         ),
         GradientKind::Radial { transform } => format!(
-            "Gradient::elliptical(Transform::from_array([{}]), {})",
-            transform.to_array().map(fmt_f32).join(", "),
+            "Gradient::elliptical({}, {})",
+            ser_transform(&transform),
             stops,
         ),
     }
@@ -276,6 +276,19 @@ fn ser_fill_rule(rule: FillRule) -> String {
 #[cfg(feature = "bake")]
 fn ser_point(p: &geometry_core::Point) -> String {
     format!("Point::new({}, {})", fmt_f32(p.x), fmt_f32(p.y))
+}
+
+#[cfg(feature = "bake")]
+fn ser_transform(t: &geometry_core::Transform) -> String {
+    format!(
+        "Transform {{ a: {}, b: {}, c: {}, d: {}, e: {}, f: {} }}",
+        fmt_f32(t.a),
+        fmt_f32(t.b),
+        fmt_f32(t.c),
+        fmt_f32(t.d),
+        fmt_f32(t.e),
+        fmt_f32(t.f),
+    )
 }
 
 #[cfg(feature = "bake")]

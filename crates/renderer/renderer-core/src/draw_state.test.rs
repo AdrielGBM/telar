@@ -3,23 +3,51 @@ use super::*;
 // Guards the push_matrix compose argument order (cumulative ∘ matrix) against the pre-refactor hand-rolled `compose_matrix(parent, child)`; a swapped order silently corrupts nested transforms.
 #[test]
 fn push_matrix_matches_legacy_compose_order() {
-    let cumulative = [2.0, 0.1, -0.2, 2.0, 10.0, 20.0];
-    let matrix = [1.0, 0.5, -0.5, 1.0, 5.0, 7.0];
+    let cumulative = Transform {
+        a: 2.0,
+        b: 0.1,
+        c: -0.2,
+        d: 2.0,
+        e: 10.0,
+        f: 20.0,
+    };
+    let matrix = Transform {
+        a: 1.0,
+        b: 0.5,
+        c: -0.5,
+        d: 1.0,
+        e: 5.0,
+        f: 7.0,
+    };
 
-    let [a1, b1, c1, d1, e1, f1] = matrix;
-    let [a2, b2, c2, d2, e2, f2] = cumulative;
-    let expected = [
-        a2 * a1 + c2 * b1,
-        b2 * a1 + d2 * b1,
-        a2 * c1 + c2 * d1,
-        b2 * c1 + d2 * d1,
-        a2 * e1 + c2 * f1 + e2,
-        b2 * e1 + d2 * f1 + f2,
-    ];
+    let Transform {
+        a: a1,
+        b: b1,
+        c: c1,
+        d: d1,
+        e: e1,
+        f: f1,
+    } = matrix;
+    let Transform {
+        a: a2,
+        b: b2,
+        c: c2,
+        d: d2,
+        e: e2,
+        f: f2,
+    } = cumulative;
+    let expected = Transform {
+        a: a2 * a1 + c2 * b1,
+        b: b2 * a1 + d2 * b1,
+        c: a2 * c1 + c2 * d1,
+        d: b2 * c1 + d2 * d1,
+        e: a2 * e1 + c2 * f1 + e2,
+        f: b2 * e1 + d2 * f1 + f2,
+    };
 
     let mut state = DrawState::new();
-    state.push_matrix(Transform::from_array(cumulative));
-    state.push_matrix(Transform::from_array(matrix));
+    state.push_matrix(cumulative);
+    state.push_matrix(matrix);
     assert_eq!(state.cumulative_matrix, expected);
 }
 
@@ -61,38 +89,18 @@ fn a_clip_outside_its_parent_clips_away_to_nothing() {
 #[test]
 fn the_scale_of_a_matrix_is_what_it_makes_things() {
     let mut state = DrawState::new();
-    assert_eq!(state.scale(), 1.0, "nothing scales nothing");
+    assert_eq!(
+        state.cumulative_matrix.scale(),
+        1.0,
+        "nothing scales nothing"
+    );
 
-    state.push_matrix(Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]));
-    assert_eq!(state.scale(), 2.0);
+    state.push_matrix(Transform::scale_around(2.0, 2.0, 0.0, 0.0));
+    assert_eq!(state.cumulative_matrix.scale(), 2.0);
 
-    state.push_matrix(Transform::from_array([3.0, 0.0, 0.0, 3.0, 0.0, 0.0]));
-    assert_eq!(state.scale(), 6.0);
+    state.push_matrix(Transform::scale_around(3.0, 3.0, 0.0, 0.0));
+    assert_eq!(state.cumulative_matrix.scale(), 6.0);
 
     state.pop_matrix();
-    assert_eq!(state.scale(), 2.0);
-}
-
-/// A translation moves things and does not make them bigger, so text under one is laid out at the size it was written with. Every leaf in the tree sits under one of these.
-#[test]
-fn moving_something_is_not_scaling_it() {
-    let mut state = DrawState::new();
-    state.push_matrix(Transform::from_array([1.0, 0.0, 0.0, 1.0, 40.0, 90.0]));
-    assert_eq!(state.scale(), 1.0);
-}
-
-/// A rotation is not a scale either, and reading one axis rather than the determinant would say it was.
-#[test]
-fn turning_something_is_not_scaling_it() {
-    let mut state = DrawState::new();
-    let turn = std::f32::consts::FRAC_PI_4;
-    state.push_matrix(Transform::from_array([
-        turn.cos(),
-        turn.sin(),
-        -turn.sin(),
-        turn.cos(),
-        0.0,
-        0.0,
-    ]));
-    assert!((state.scale() - 1.0).abs() < 1e-5, "{}", state.scale());
+    assert_eq!(state.cumulative_matrix.scale(), 2.0);
 }

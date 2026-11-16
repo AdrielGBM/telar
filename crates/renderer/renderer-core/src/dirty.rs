@@ -2,7 +2,7 @@
 
 use std::ops::ControlFlow;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use smallvec::SmallVec;
 
 use crate::align::{Aligner, Step};
@@ -147,12 +147,12 @@ impl Invariance {
 /// What a command leaves unchanged under a shift, for the paints where that is provable.
 ///
 /// Deliberately narrow: only a box, only a fill that is a solid colour or a linear gradient along one axis, and only the part of the box that fill covers evenly — a corner radius and a border each put an edge inside the bounds. Text, pictures, paths, shadows and a gradient with two directions are all left out, because a paint admitted here that does vary leaves stale pixels inside the clip that nothing will ever repaint.
-fn invariance(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Invariance> {
+fn invariance(cmd: &DrawCommand, matrix: Transform) -> Option<Invariance> {
     let DrawCommand::Rect { rect, style } = cmd else {
         return None;
     };
     // A rotation or a skew would carry a gradient's axis onto the other one, and a shadow ramps across ground the fill does not cover.
-    if matrix[1] != 0.0 || matrix[2] != 0.0 || style.shadow.is_some() {
+    if matrix.b != 0.0 || matrix.c != 0.0 || style.shadow.is_some() {
         return None;
     }
     let (horizontal, vertical) = match style.fill? {
@@ -232,7 +232,7 @@ struct Visit {
     paint: Option<Rect>,
     /// Set when the paint would survive a blit moving it; see [`Invariance`].
     invariance: Option<Invariance>,
-    matrix: [f32; 6],
+    matrix: Transform,
     closed: Option<Closed>,
 }
 
@@ -255,7 +255,7 @@ impl Replay {
     fn visit(
         &mut self,
         cmd: &DrawCommand,
-        visual_rect: &impl Fn(&DrawCommand, [f32; 6]) -> Option<Rect>,
+        visual_rect: &impl Fn(&DrawCommand, Transform) -> Option<Rect>,
     ) -> Visit {
         let mut closed = None;
         match cmd {
@@ -491,10 +491,10 @@ impl Scroll {
             return None;
         }
         let (n, o) = (new.state.cumulative_matrix, old.state.cumulative_matrix);
-        if n[..4] != o[..4] {
+        if (n.a, n.b, n.c, n.d) != (o.a, o.b, o.c, o.d) {
             return None;
         }
-        let (dx, dy) = (n[4] - o[4], n[5] - o[5]);
+        let (dx, dy) = (n.e - o.e, n.f - o.f);
         if !is_whole(dx) || !is_whole(dy) {
             return None;
         }
@@ -672,7 +672,7 @@ impl FrameDiff {
         &mut self,
         new_cmds: &[DrawCommand],
         old_cmds: &[DrawCommand],
-        visual_rect: impl Fn(&DrawCommand, [f32; 6]) -> Option<Rect>,
+        visual_rect: impl Fn(&DrawCommand, Transform) -> Option<Rect>,
     ) -> FrameChange {
         let Self {
             aligner,

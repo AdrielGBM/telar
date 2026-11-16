@@ -192,7 +192,7 @@ fn bench_scroll_tick(c: &mut Criterion) {
             b.iter(|| {
                 o += 1.0;
                 cached[mtx_idx] = renderer_core::DrawCommand::PushMatrix {
-                    transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 0.0, -o]),
+                    transform: Transform::translate(0.0, -o),
                 };
                 black_box(cached.len());
             });

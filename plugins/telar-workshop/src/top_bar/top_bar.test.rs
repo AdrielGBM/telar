@@ -385,8 +385,8 @@ fn drawn_text(workshop: &Workshop, label: &str) -> (Rect, telar::TextStyle) {
             && found.is_none()
         {
             let at = Rect::new(
-                matrix[4] + rect.x,
-                matrix[5] + rect.y,
+                matrix.e + rect.x,
+                matrix.f + rect.y,
                 rect.width,
                 rect.height,
             );

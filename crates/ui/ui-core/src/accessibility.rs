@@ -8,7 +8,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use i18n_core::LocaleTag;
 use layout_core::NodeId;
 use platform_core::{
@@ -1023,7 +1023,7 @@ impl Reading {
                         reading.parents.entry(node).or_insert(parent);
                     }
                     let (dx, dy) = layout_reactive::sticky_displacement(node);
-                    let [a, b, c, d, ..] = matrix;
+                    let Transform { a, b, c, d, .. } = matrix;
                     let shift = (
                         outer_shift.0 + a * dx + c * dy,
                         outer_shift.1 + b * dx + d * dy,
@@ -1229,7 +1229,7 @@ pub struct NestedSurface {
     /// Its own commands, between the markers, as a range of the frame they were found in. They are in its own coordinates.
     pub commands: Range<usize>,
     /// Maps a point in its coordinates to one in the frame's.
-    pub placement: [f32; 6],
+    pub placement: Transform,
 }
 
 impl NestedSurface {
@@ -1308,7 +1308,7 @@ pub fn perform_action(id: AccessId, action: AccessAction, dispatch: impl FnOnce(
 /// The surfaces drawn directly inside `commands`, in draw order. One nested deeper is inside one of these, and is found in its commands.
 pub fn nested_surfaces(commands: &[DrawCommand]) -> Vec<NestedSurface> {
     let mut found = Vec::new();
-    let mut open: Option<(SurfaceKey, usize, [f32; 6])> = None;
+    let mut open: Option<(SurfaceKey, usize, Transform)> = None;
     let mut depth = 0usize;
     let mut index = 0usize;
     renderer_core::for_each_with_matrix(commands, |command, matrix| {

@@ -55,7 +55,7 @@ fn nav_rail_center_x(tree: &telar::ComponentList) -> f32 {
             && rect.height > 700.0
             && rect.width < 400.0
         {
-            let cx = m[4] + rect.x + rect.width / 2.0;
+            let cx = m.e + rect.x + rect.width / 2.0;
             if widest.is_none_or(|(w, _)| rect.width > w) {
                 widest = Some((rect.width, cx));
             }
@@ -139,8 +139,8 @@ fn nav_tracks_theme_after_navigation() {
                     && let Some(fill) = style.fill.as_ref()
                 {
                     let at = telar::Rect {
-                        x: m[4] + rect.x,
-                        y: m[5] + rect.y,
+                        x: m.e + rect.x,
+                        y: m.f + rect.y,
                         ..*rect
                     };
                     drawn.push((at, fill.solid_color()));
@@ -285,7 +285,7 @@ fn nav_highlight_follows_selection() {
                     .map(|p| p.solid_color())
                     .is_some_and(|c| c.b > 0.7 && c.r < 0.45);
                 if blue && rect.width > 150.0 && rect.width < 240.0 {
-                    ys.push((m[5] + rect.y) as i32);
+                    ys.push((m.f + rect.y) as i32);
                 }
             }
         });
@@ -355,8 +355,8 @@ fn hidden_canvas_sections_do_not_bleed() {
                 .as_ref()
                 .map(|p| p.solid_color())
                 .is_some_and(|c| c.b > 0.7 && c.r < 0.45);
-            let eff_x = cur[0] * rect.x + cur[2] * rect.y + cur[4];
-            let eff_area = (rect.width * cur[0]).abs() * (rect.height * cur[3]).abs();
+            let eff_x = cur.a * rect.x + cur.c * rect.y + cur.e;
+            let eff_area = (rect.width * cur.a).abs() * (rect.height * cur.d).abs();
             if blue && eff_area > 1.0 && eff_x > 248.0 {
                 leaked += 1;
             }

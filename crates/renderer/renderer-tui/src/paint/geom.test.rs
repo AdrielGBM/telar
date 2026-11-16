@@ -61,7 +61,7 @@ fn mapping_moves_a_gradient_with_its_shape() {
         Point::new(10.0, 0.0),
         &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
     );
-    let moved = mapped(&Paint::Gradient(g), [1.0, 0.0, 0.0, 1.0, 100.0, 0.0]);
+    let moved = mapped(&Paint::Gradient(g), Transform::translate(100.0, 0.0));
     assert_eq!(sample(&moved, 100.0, 0.0), Color::BLACK);
     assert_eq!(sample(&moved, 110.0, 0.0), Color::WHITE);
 }
@@ -79,7 +79,10 @@ fn a_radial_stretched_wide_reaches_its_last_stop_further_across_than_down() {
         10.0,
         &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
     );
-    let stretched = mapped(&Paint::Gradient(g), [2.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+    let stretched = mapped(
+        &Paint::Gradient(g),
+        Transform::scale_around(2.0, 1.0, 0.0, 0.0),
+    );
     assert_ne!(sample(&stretched, 15.0, 0.0), Color::WHITE);
     assert_eq!(sample(&stretched, 0.0, 15.0), Color::WHITE);
     assert_eq!(sample(&stretched, 25.0, 0.0), Color::WHITE);

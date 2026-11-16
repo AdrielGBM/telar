@@ -283,12 +283,12 @@ fn the_tokens_pad_the_lines_and_the_marks_follow_them() {
     let mut wash = None;
     telar::for_each_with_matrix(&mounted.tree.commands(), |command, matrix| match command {
         DrawCommand::Text { rect, .. } if line.is_none() => {
-            line = Some((rect.x + matrix[4], rect.y + matrix[5]));
+            line = Some((rect.x + matrix.e, rect.y + matrix.f));
         }
         DrawCommand::Rect { rect, style, .. }
             if wash.is_none() && style.border.is_none() && style.fill.is_some() =>
         {
-            wash = Some(rect.y + matrix[5]);
+            wash = Some(rect.y + matrix.f);
         }
         _ => {}
     });
@@ -452,7 +452,7 @@ fn the_block_is_padded_and_its_copy_button_sized_at_the_block_s_size() {
             if let DrawCommand::Text { rect, .. } = command
                 && line.is_none()
             {
-                line = Some(rect.x + matrix[4]);
+                line = Some(rect.x + matrix.e);
             }
         });
         let x = line.expect("the code is drawn");

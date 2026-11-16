@@ -93,7 +93,7 @@ fn window(canvas: &Rc<NestedCanvas>, backdrop: Color) -> ComponentList {
 }
 
 fn placed(canvas: &SurfaceCanvas, rect: Rect) -> Rect {
-    transform_clip_rect(canvas.placement().to_array(), rect)
+    transform_clip_rect(canvas.placement(), rect)
 }
 
 #[test]

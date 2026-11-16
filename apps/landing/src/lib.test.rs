@@ -50,7 +50,7 @@ fn content_right_edge(cmds: &[telar::DrawCommand]) -> f32 {
     telar::for_each_with_matrix(cmds, |c, m| {
         if let Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } = c {
             let right = rect.x + rect.width;
-            let x = m[0] * right + m[2] * rect.y + m[4];
+            let x = m.a * right + m.c * rect.y + m.e;
             if x > max_x {
                 max_x = x;
             }
@@ -133,7 +133,7 @@ fn content_bottom_edge(cmds: &[telar::DrawCommand]) -> f32 {
     let mut max_y = 0.0f32;
     telar::for_each_with_matrix(cmds, |c, m| {
         if let Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } = c {
-            let bottom = m[5] + rect.y + rect.height;
+            let bottom = m.f + rect.y + rect.height;
             if bottom > max_y {
                 max_y = bottom;
             }
@@ -186,7 +186,7 @@ fn collect_bands(cmds: &[telar::DrawCommand], min_width: f32) -> Vec<(f32, f32)>
         if let Rect { rect, .. } = c
             && rect.width >= min_width
         {
-            out.push((m[5] + rect.y, m[5] + rect.y + rect.height));
+            out.push((m.f + rect.y, m.f + rect.y + rect.height));
         }
     });
     out
@@ -211,7 +211,7 @@ fn no_content_hidden_behind_a_later_band() {
         telar::for_each_with_matrix(&cmds, |c, m| {
             if let Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } = c {
                 let band = matches!(c, Rect { .. }) && rect.width >= w as f32 - 4.0;
-                items.push((i, m[5] + rect.y, m[5] + rect.y + rect.height, band));
+                items.push((i, m.f + rect.y, m.f + rect.y + rect.height, band));
             }
             i += 1;
         });

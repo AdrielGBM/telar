@@ -87,7 +87,7 @@ fn dense_ui() -> Vec<DrawCommand> {
         radius: BorderRadius::zero(),
     });
     cmds.push(DrawCommand::PushMatrix {
-        transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, 0.0, 56.0]),
+        transform: Transform::translate(0.0, 56.0),
     });
 
     let cols = 5;
@@ -123,7 +123,7 @@ fn dense_ui() -> Vec<DrawCommand> {
                 style: panel_border.clone(),
             });
             cmds.push(DrawCommand::PushMatrix {
-                transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, x + 16.0, y + 16.0]),
+                transform: Transform::translate(x + 16.0, y + 16.0),
             });
             cmds.push(DrawCommand::Path {
                 data: icon.clone(),

@@ -43,7 +43,7 @@ fn clip(x: f32, y: f32, w: f32, h: f32, radius: f32) -> DrawCommand {
 
 fn translate(x: f32, y: f32) -> DrawCommand {
     DrawCommand::PushMatrix {
-        transform: Transform::from_array([1.0, 0.0, 0.0, 1.0, x, y]),
+        transform: Transform::translate(x, y),
     }
 }
 
@@ -56,7 +56,7 @@ fn layer(opacity: f32, backdrop_blur: f32) -> DrawCommand {
     }
 }
 
-fn visual_rect(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Rect> {
+fn visual_rect(cmd: &DrawCommand, matrix: Transform) -> Option<Rect> {
     culling::command_visual_rect(cmd, matrix, &FontMetrics::default())
 }
 
@@ -344,7 +344,7 @@ fn text_changing_inside_an_unchanged_rounded_clip_dirties_only_the_text() {
     let old = frame("hello", 40.0);
     let new = frame("hello there", 90.0);
     let planned = dirty(&new, &old).expect("bounded");
-    let identity = geometry_core::Transform::IDENTITY.to_array();
+    let identity = Transform::IDENTITY;
     let text_rect = visual_rect(&old[3], identity)
         .unwrap()
         .union(visual_rect(&new[3], identity).unwrap());
@@ -586,7 +586,14 @@ fn a_change_under_a_nested_matrix_dirties_both_positions() {
 #[test]
 fn a_matrix_that_keeps_the_bounds_but_flips_the_content_still_dirties() {
     let flip = DrawCommand::PushMatrix {
-        transform: Transform::from_array([-1.0, 0.0, 0.0, 1.0, 20.0, 0.0]),
+        transform: Transform {
+            a: -1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            e: 20.0,
+            f: 0.0,
+        },
     };
     let old = vec![
         translate(0.0, 0.0),

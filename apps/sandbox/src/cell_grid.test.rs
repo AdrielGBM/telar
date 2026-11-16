@@ -19,7 +19,7 @@ fn boxes_of(tree: &telar::ComponentList) -> Vec<(f32, f32)> {
         if let DrawCommand::Rect { rect, .. } = c
             && rect.height > 0.0
         {
-            out.push((m[5] + rect.y, rect.height));
+            out.push((m.f + rect.y, rect.height));
         }
     });
     out

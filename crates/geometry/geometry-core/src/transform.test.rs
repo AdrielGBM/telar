@@ -42,7 +42,7 @@ fn scale_around_keeps_center_fixed() {
 }
 
 #[test]
-fn from_array_round_trips_to_array() {
+fn to_array_lists_the_matrix_column_by_column() {
     let t = Transform {
         a: 1.5,
         b: 0.5,
@@ -51,7 +51,7 @@ fn from_array_round_trips_to_array() {
         e: 3.0,
         f: -4.0,
     };
-    assert_eq!(Transform::from_array(t.to_array()), t);
+    assert_eq!(t.to_array(), [1.5, 0.5, -0.25, 2.0, 3.0, -4.0]);
 }
 
 #[test]
@@ -88,4 +88,22 @@ fn invert_singular_returns_none() {
         singular.invert().is_none(),
         "a singular matrix has no inverse"
     );
+}
+
+/// A translation moves things and does not make them bigger, so text under one is laid out at the size it was written with. Every leaf in the tree sits under one of these.
+#[test]
+fn moving_something_is_not_scaling_it() {
+    assert_eq!(Transform::translate(40.0, 90.0).scale(), 1.0);
+}
+
+/// A rotation is not a scale either, and reading one axis rather than the determinant would say it was.
+#[test]
+fn turning_something_is_not_scaling_it() {
+    let turned = Transform::rotate_around(45.0, 0.0, 0.0).scale();
+    assert!((turned - 1.0).abs() < 1e-5, "{turned}");
+}
+
+#[test]
+fn a_squash_scales_by_the_average_of_its_axes() {
+    assert_eq!(Transform::scale_around(4.0, 1.0, 0.0, 0.0).scale(), 2.0);
 }

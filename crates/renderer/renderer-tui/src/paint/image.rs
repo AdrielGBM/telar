@@ -20,7 +20,7 @@ impl Painter<'_> {
         let Some(source) = Source::of(data) else {
             return;
         };
-        let placed = renderer_core::transform_clip_rect(self.matrix(), rect);
+        let placed = renderer_core::transform_clip_rect(self.grid_matrix(), rect);
         if placed.width <= 0.0 || placed.height <= 0.0 {
             return;
         }

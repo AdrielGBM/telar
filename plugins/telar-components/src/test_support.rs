@@ -242,7 +242,7 @@ pub(crate) fn run_insets(
             && run.is_none()
         {
             let (width, _) = telar::measure_text(text, None, rect.width, style);
-            run = Some((matrix[4] + rect.x, width));
+            run = Some((matrix.e + rect.x, width));
         }
     });
     let (x, width) = run.expect("the label is drawn");

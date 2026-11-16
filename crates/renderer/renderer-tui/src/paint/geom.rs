@@ -110,9 +110,9 @@ fn lerp(a: Color, b: Color, t: f32) -> Color {
 }
 
 /// The same paint with its geometry mapped through `matrix`, so it can be sampled in window space.
-pub fn mapped(paint: &Paint, matrix: [f32; 6]) -> Paint {
+pub fn mapped(paint: &Paint, matrix: Transform) -> Paint {
     match paint {
-        Paint::Gradient(g) => Paint::Gradient(g.transformed(Transform::from_array(matrix))),
+        Paint::Gradient(g) => Paint::Gradient(g.transformed(matrix)),
         solid => *solid,
     }
 }

@@ -732,7 +732,7 @@ fn the_canvas_panels_agree_with_a_reading_of_the_whole_window() {
     state.panel_tab().set(crate::state::PanelTab::Accessibility);
     settle(&tree);
     let inspection = state.inspection();
-    let placement = inspection.placement().to_array();
+    let placement = inspection.placement();
     let place = |rect: Rect| transform_clip_rect(placement, rect);
 
     let canvas = inspection
@@ -792,7 +792,7 @@ fn the_selected_component_is_marked_over_the_canvas_where_the_window_draws_it() 
     inspection.select(Some(chosen.id));
     settle(&tree);
 
-    let expected = transform_clip_rect(inspection.placement().to_array(), chosen.rect);
+    let expected = transform_clip_rect(inspection.placement(), chosen.rect);
     let mut stroked = Vec::new();
     for_each_with_matrix(&tree.commands(), |command, matrix| {
         if let DrawCommand::Rect { rect, style } = command

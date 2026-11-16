@@ -13,8 +13,8 @@ fn lines(tree: &ComponentList) -> Vec<Rect> {
     renderer_core::for_each_with_matrix(&tree.commands(), |command, matrix| {
         if let DrawCommand::Text { rect, .. } = command {
             lines.push(Rect {
-                x: matrix[4] + rect.x,
-                y: matrix[5] + rect.y,
+                x: matrix.e + rect.x,
+                y: matrix.f + rect.y,
                 ..*rect
             });
         }

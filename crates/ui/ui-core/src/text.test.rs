@@ -792,7 +792,7 @@ fn clipped_lowercase_text_is_centred_in_a_control_by_its_cap_band() {
             if let renderer_core::DrawCommand::Text { text, rect, .. } = command
                 && text.as_ref() == NAME
             {
-                line_top = Some(matrix[5] + rect.y);
+                line_top = Some(matrix.f + rect.y);
             }
         });
         let line_top = line_top.expect("the name is drawn");

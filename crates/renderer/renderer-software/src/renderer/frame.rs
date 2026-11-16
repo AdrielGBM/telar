@@ -326,7 +326,7 @@ where
     }
 
     fn canvas(&mut self, damage: Option<&[Rect]>) -> Option<Canvas<'_>> {
-        let [a, b, c, d, e, f] = self.draw_state.cumulative_matrix;
+        let geometry_core::Transform { a, b, c, d, e, f } = self.draw_state.cumulative_matrix;
         let clip = self.draw_state.current_clip();
         // The innermost clip's rect comes from `draw_state`, already intersected with every clip around it; its radius is its own.
         let shape = clip

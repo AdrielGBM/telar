@@ -337,7 +337,7 @@ fn a_baked_radial_gradient_is_spelled_as_the_transform_of_its_unit_circle() {
     let source = super::bake_to_source(RADIAL).unwrap();
     assert!(
         source.contains(
-            "Gradient::elliptical(Transform::from_array([5.0f32, 0.0f32, 0.0f32, 5.0f32, 5.0f32, 5.0f32]),"
+            "Gradient::elliptical(Transform { a: 5.0f32, b: 0.0f32, c: 0.0f32, d: 5.0f32, e: 5.0f32, f: 5.0f32 },"
         ),
         "{source}"
     );

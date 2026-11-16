@@ -361,7 +361,14 @@ fn a_frame_is_drawn_whole_and_centred_in_the_box_it_is_given() {
     };
     assert_eq!(
         *matrix,
-        Transform::from_array([2.0, 0.0, 0.0, 2.0, 0.0, 50.0])
+        Transform {
+            a: 2.0,
+            b: 0.0,
+            c: 0.0,
+            d: 2.0,
+            e: 0.0,
+            f: 50.0
+        }
     );
     assert!(children.is_empty(), "markers are left out");
     assert!(matches!(

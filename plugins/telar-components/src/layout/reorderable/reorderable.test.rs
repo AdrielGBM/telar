@@ -302,7 +302,7 @@ fn drawn_at(tree: &telar::ComponentList) -> Vec<f32> {
         if let telar::DrawCommand::Rect { rect, .. } = command
             && rect.width == ITEM
         {
-            found.push(matrix[0] * rect.x + matrix[2] * rect.y + matrix[4]);
+            found.push(matrix.a * rect.x + matrix.c * rect.y + matrix.e);
         }
     });
     found
@@ -449,7 +449,7 @@ fn a_pill_does_not_leave_the_line_the_strip_is_on() {
         if let telar::DrawCommand::Rect { rect, .. } = command
             && rect.width == ITEM
         {
-            down.push(matrix[1] * rect.x + matrix[3] * rect.y + matrix[5]);
+            down.push(matrix.b * rect.x + matrix.d * rect.y + matrix.f);
         }
     });
     assert!(

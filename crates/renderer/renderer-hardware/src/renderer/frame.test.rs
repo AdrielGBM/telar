@@ -1,11 +1,11 @@
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use renderer_core::dirty::FrameDiff;
 use renderer_core::dirty_scenarios::{self, Plan, Scenario};
 use renderer_core::{Color, DrawCommand, FontMetrics};
 
 use super::{Conditions, FramePlan, Prime, Reuse, plan_frame};
 
-fn visual_rect(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Rect> {
+fn visual_rect(cmd: &DrawCommand, matrix: Transform) -> Option<Rect> {
     renderer_core::culling::command_visual_rect(cmd, matrix, &FontMetrics::default())
 }
 

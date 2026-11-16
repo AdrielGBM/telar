@@ -208,7 +208,7 @@ fn a_dropped_boundary_reports_nothing_and_takes_no_action() {
     let nested = NestedSurface {
         surface: key,
         commands: 0..0,
-        placement: Transform::IDENTITY.to_array(),
+        placement: Transform::IDENTITY,
     };
     assert!(nested.foreign().is_none());
     assert!(

@@ -32,13 +32,11 @@ impl<const N: usize> EncodedFill<N> {
 
 pub(crate) fn encode_fill_style<const N: usize>(
     fill: &renderer_core::Paint,
-    matrix: [f32; 6],
+    matrix: geometry_core::Transform,
 ) -> EncodedFill<N> {
     let resolved = match fill {
         renderer_core::Paint::Solid(c) => return EncodedFill::solid(c.to_array()),
-        renderer_core::Paint::Gradient(g) => g
-            .transformed(geometry_core::Transform::from_array(matrix))
-            .resolve(),
+        renderer_core::Paint::Gradient(g) => g.transformed(matrix).resolve(),
     };
     let (fill_type, grad_origin, grad_map, stops) = match resolved {
         renderer_core::ResolvedGradient::Solid(c) => return EncodedFill::solid(c.to_array()),

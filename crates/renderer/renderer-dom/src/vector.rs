@@ -106,7 +106,7 @@ impl Drawing {
     }
 
     /// [`open_matrix`](Self::open_matrix), for a matrix that moves points on the surface rather than in the innermost box's own coordinates.
-    pub fn open_matrix_on_surface(&mut self, m: [f32; 6]) {
+    pub fn open_matrix_on_surface(&mut self, m: Transform) {
         let (x, y) = self.origin();
         self.open_matrix(crate::paint::rebased(m, x, y));
     }
@@ -316,7 +316,7 @@ impl Drawing {
         self.open(&format!("<g clip-path=\"url(#{id})\">"));
     }
 
-    pub fn open_matrix(&mut self, m: [f32; 6]) {
+    pub fn open_matrix(&mut self, m: Transform) {
         self.open(&format!("<g transform=\"{}\">", crate::paint::spelled(m)));
     }
 

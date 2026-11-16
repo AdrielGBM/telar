@@ -875,7 +875,7 @@ impl Walk {
                         return;
                     };
                     let under = walk.fills.len();
-                    match (fill, Transform::from_array(matrix).invert()) {
+                    match (fill, matrix.invert()) {
                         (Some(Ink::Solid(color)), Some(inverse)) => walk.fills.push(Fill::Path {
                             rect,
                             color,
@@ -907,7 +907,7 @@ impl Walk {
                         text: text.to_string(),
                         rect,
                         color,
-                        size: style.font_size * scale_of(matrix),
+                        size: style.font_size * matrix.scale(),
                         weight: style.font_weight,
                         over: walk.fills.len(),
                     });
@@ -960,11 +960,6 @@ impl Walk {
                 .fold(base, |under, top| top.over(under)),
         )
     }
-}
-
-fn scale_of(matrix: [f32; 6]) -> f32 {
-    let [a, b, c, d, ..] = matrix;
-    (a * d - b * c).abs().sqrt()
 }
 
 fn centre(rect: Rect) -> (f32, f32) {

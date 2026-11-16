@@ -1,6 +1,6 @@
 //! The rect pipeline: rounded, bordered and shadowed boxes drawn by an SDF in one instanced pass.
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use renderer_core::RectStyle;
 use wgpu::Device;
 
@@ -77,7 +77,7 @@ impl RectPipeline {
 }
 
 #[inline]
-pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> RectInstance {
+pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: Transform) -> RectInstance {
     let encoded = style
         .fill
         .as_ref()
@@ -126,7 +126,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         shadow_offset,
         shadow_blur,
         shadow_spread,
-        transform: matrix,
+        transform: matrix.to_array(),
         _pad_t: [0.0; 2],
         stroke_type: stroke.fill_type,
         _pad_st: [0; 3],

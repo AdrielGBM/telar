@@ -2,7 +2,7 @@
 
 use crate::point::Point;
 
-/// A 2D affine transform stored as a 2×3 matrix `[a, b, c, d, e, f]`, mapping a point `(x, y)` to `(a*x + c*y + e, b*x + d*y + f)`. `to_array()` and `from_array()` convert to and from that `[f32; 6]` layout. Compose with [`Transform::then`] instead of multiplying matrices by hand.
+/// A 2D affine transform stored as a 2×3 matrix `[a, b, c, d, e, f]`, mapping a point `(x, y)` to `(a*x + c*y + e, b*x + d*y + f)`. Compose with [`Transform::then`] instead of multiplying matrices by hand.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transform {
     pub a: f32,
@@ -87,20 +87,16 @@ impl Transform {
         )
     }
 
-    pub fn to_array(&self) -> [f32; 6] {
-        [self.a, self.b, self.c, self.d, self.e, self.f]
+    /// How much this transform scales what is drawn under it.
+    ///
+    /// The square root of the determinant, so a rotation counts as no scale at all and a squash counts as the average of its two axes. Text is laid out at a size and not stretched from one, so one number is what it can be given.
+    pub fn scale(&self) -> f32 {
+        (self.a * self.d - self.b * self.c).abs().sqrt()
     }
 
-    /// Rebuilds a `Transform` from the `[a, b, c, d, e, f]` layout produced by [`Transform::to_array`].
-    pub fn from_array(m: [f32; 6]) -> Transform {
-        Transform {
-            a: m[0],
-            b: m[1],
-            c: m[2],
-            d: m[3],
-            e: m[4],
-            f: m[5],
-        }
+    /// The six numbers in `[a, b, c, d, e, f]` order, for whatever reads them as a list: a GPU uniform, a CSS `matrix()`, a hash.
+    pub fn to_array(&self) -> [f32; 6] {
+        [self.a, self.b, self.c, self.d, self.e, self.f]
     }
 
     /// Returns the affine inverse, or `None` when the linear part is singular (determinant ≈ 0).
