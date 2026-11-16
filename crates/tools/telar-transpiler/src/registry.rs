@@ -379,6 +379,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::free("toggled").doc(
         "The on/off state of a control, re-read when what it reads changes: `toggled:$on`, a `bool` or a `Toggle` (`Off`, `On`, `Mixed`). Checked on `role:switch`/`checkbox`/`radio`, pressed on `role:button` (a toggle button), selected on `role:tab`.",
     ),
+    AttrSpec::free("valued").doc(
+        "The value the box carries for a reader, re-read when what it reads changes: an expression yielding an `Option` of a `NumericValue` or a `Value`, `None` while there is nothing to say. `valued:(NumericValue::new(0.0..=100.0, $done).ok())` on a `role:progressbar` says how far the bar has filled. Any box may carry one, a control or not.",
+    ),
     AttrSpec::free("to").doc(
         "Makes the box a link: a typed route, `anchor(\"name\")` on this page, `in_locale(\"en\")` for this place in another language, or `external(\"https://…\")` outside the app. Focusable, followed on a tap or Enter, and a real `<a href>` in a document.",
     ),

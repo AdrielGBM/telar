@@ -294,3 +294,27 @@ fn a_hit_outset_without_a_length_is_a_build_error() {
     assert!(code.contains("compile_error!"), "{code}");
     assert!(code.contains("`hit_outset:` takes"), "{code}");
 }
+
+#[test]
+fn a_value_is_read_from_state_by_the_box_that_carries_it() {
+    let code = transpiled(
+        "row role:progressbar valued:(NumericValue::new(0.0..=100.0, $done).ok())\n    text \"x\"\n",
+    );
+    assert!(
+        code.contains(".valued(")
+            && code.contains("NumericValue::new(0.0..=100.0, done.get()).ok()"),
+        "{code}"
+    );
+    assert!(
+        code.contains("StyledContainer::"),
+        "only a styled box carries a value: {code}"
+    );
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
+fn a_value_written_bare_is_a_build_error() {
+    let code = transpiled("box role:progressbar valued\n    text \"x\"\n");
+    assert!(code.contains("compile_error!"), "{code}");
+    assert!(code.contains("`valued:` needs the value to read"), "{code}");
+}

@@ -183,7 +183,7 @@ desktop and `, current` in the terminal's reading; see [docs/links.md](links.md#
 A control can also say what it shows and how it stands. Its value is a `Value`: `Number` for a slider, a spin
 button or a splitter, with the words a reader says for it where the bare number would not ("Medium" for 2 of 3),
 or `Text` for what a field holds and the choice a select has made. A box the keyboard never stops at carries
-one the same way (`StyledContainer::valued`): the catalogue's `progress` is a progress bar standing at its
+one the same way (`valued:` in a view, `StyledContainer::valued` from Rust): the catalogue's `progress` is a progress bar standing at its
 reading out of 100, and its `spinner` a progress bar with no value, which says the work is under way and not
 how far along it is; each is called what its call's `a11y_label:` names it, and `cargo telar test` reports one left unnamed. A `description` is what a reader says after
 the name, role and state, as help rather than identity: a field's hint, why it is invalid, a tooltip's text.

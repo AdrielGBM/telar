@@ -239,6 +239,7 @@ impl ViewGen<'_> {
             },
         };
         let toggled = self.predicate_call(el, "toggled");
+        let valued = self.value_call(el, &mut errors);
         let hit_outset = self.hit_outset_call(el, &mut errors);
         let holds_stroke = el
             .attributes
@@ -280,7 +281,7 @@ impl ViewGen<'_> {
 
         // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case, and `operated` a role only a StyledContainer can make a control.
         let styling = format!(
-            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{hit_outset}{to}"
+            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{hit_outset}{to}{valued}"
         );
         let pieces = if always_style
             || has_paint(&attrs)
@@ -337,7 +338,7 @@ impl ViewGen<'_> {
             Some((closure, layer_calls)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{layer_calls}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{hit_outset}{holds_stroke}{role_call}{toggled}{to}{current}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{layer_calls}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{hit_outset}{holds_stroke}{role_call}{toggled}{valued}{to}{current}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {
@@ -449,6 +450,27 @@ impl ViewGen<'_> {
         let read = substitute_reads(value, self.theme_access);
         format!(
             ".{key}({})",
+            self.owning(&[value], &format!("move || {read}"))
+        )
+    }
+
+    /// `valued:` as `.valued(move || …)`: a closure, so a reading built from `$state` follows it. Written bare it reads nothing, which is a build error.
+    fn value_call(&self, el: &Element, errors: &mut Vec<String>) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "valued") else {
+            return String::new();
+        };
+        if attr.value.is_flag() {
+            errors.push(
+                "`valued:` needs the value to read: an expression yielding an `Option` of a `NumericValue` or a `Value`"
+                    .to_string(),
+            );
+            return String::new();
+        }
+        let value = attr.value.text().trim();
+        let value = super::redundant_parens(value).unwrap_or(value);
+        let read = substitute_reads(value, self.theme_access);
+        format!(
+            ".valued({})",
             self.owning(&[value], &format!("move || {read}"))
         )
     }
