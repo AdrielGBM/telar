@@ -490,7 +490,7 @@ fn replacing_a_page_keeps_its_effects(nesting: Nesting) {
 }
 #[test]
 fn sync_reconciles_without_an_event() {
-    let (mut host, nav, h) = build(NavTransition::None);
+    let (host, nav, h) = build(NavTransition::None);
     nav.push(1);
     host.sync();
     assert_eq!(*h.built.borrow(), vec![0, 1]);
@@ -608,7 +608,7 @@ fn broken_build() -> BrokenBuild {
 fn a_page_that_fails_to_build_is_reported_as_not_moved_and_the_previous_page_stays() {
     let broken = broken_build();
     let nav = Navigator::new(0u8);
-    let mut host = NavHost::new(nav, failing_factory(&broken)).unwrap();
+    let host = NavHost::new(nav, failing_factory(&broken)).unwrap();
 
     nav.push(1);
     assert!(!host.sync(), "a failed build did not move the user");

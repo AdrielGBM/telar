@@ -99,7 +99,7 @@ fn node_of(h: &Harness, id: PageId) -> NodeId {
 
 #[test]
 fn builds_only_the_tab_you_visit() {
-    let (mut host, stacks, h) = build();
+    let (host, stacks, h) = build();
     assert_eq!(
         *h.built.borrow(),
         vec![(0, 0)],
@@ -357,7 +357,7 @@ fn build_with_a_broken_tab() -> BrokenTabs {
 
 #[test]
 fn a_tab_that_fails_to_build_is_reported_as_not_moved_and_the_previous_tab_stays() {
-    let (mut host, stacks, _attempts) = build_with_a_broken_tab();
+    let (host, stacks, _attempts) = build_with_a_broken_tab();
 
     stacks.select(1);
     assert!(!host.sync());
@@ -383,4 +383,86 @@ fn a_tab_that_fails_to_build_is_not_retried_on_every_event_and_leaks_nothing() {
     stacks.select(1);
     host.sync();
     assert_eq!(*attempts.borrow(), 2, "selecting it again is a new attempt");
+}
+
+/// A rail beside the host, outside its subtree, whose items select a tab and leave the host alone: the shape of a shell whose rail a reader works, where no event reaches the host at all.
+struct RailBesideHost {
+    rail: Vec<telar::StyledContainer>,
+    host: TabHost<u8, u8>,
+}
+
+impl Component for RailBesideHost {
+    fn view(&self) -> RenderNode {
+        let mut nodes: Vec<RenderNode> = self.rail.iter().map(Component::view).collect();
+        nodes.push(self.host.view());
+        RenderNode::group(nodes)
+    }
+}
+
+const TAB_NAMES: [&str; 3] = ["Home", "Search", "Profile"];
+
+fn titled_page(tab: &u8, _route: &u8) -> Result<Box<dyn NavPage>, LayoutError> {
+    let title = format!("{} page", TAB_NAMES[usize::from(*tab)]);
+    let text = telar::Text::declaring(move || title.clone(), LayoutStyle::new(), |t| t)?;
+    Ok(Box::new(crate::SimplePage::new(text)))
+}
+
+fn rail_beside_host() -> telar::ComponentList {
+    use telar::Accessible;
+    reset_layout_runtime();
+    let stacks = TabStacks::new(signal(0u8), &[0, 1, 2], |tab| Navigator::new(*tab));
+    let host = TabHost::new(stacks.clone(), titled_page).unwrap();
+    let rail = (0u8..3)
+        .map(|tab| {
+            let stacks = stacks.clone();
+            telar::StyledContainer::new(
+                LayoutStyle::new().width(80.0).height(40.0),
+                |_| telar::RectStyle::default(),
+                Vec::new(),
+            )
+            .unwrap()
+            .control(telar::Role::Button)
+            .on_press(move || stacks.select(tab))
+            .a11y_label(move || TAB_NAMES[usize::from(tab)])
+        })
+        .collect::<Vec<_>>();
+    let mut nodes: Vec<NodeId> = rail.iter().map(LayoutItem::layout_node).collect();
+    nodes.push(host.layout_node());
+    let root = new_container(LayoutStyle::new().flex_column(), &nodes).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(600.0),
+    )
+    .unwrap();
+    telar::ComponentList::new(RailBesideHost { rail, host })
+}
+
+fn names_read(tree: &telar::ComponentList) -> Vec<String> {
+    telar::inspect::snapshot(&tree.commands())
+        .into_iter()
+        .map(|node| node.name)
+        .collect()
+}
+
+/// A reader activating a rail item sends the window no event, so the host hears of the switch only through what its view reads; the page of the tab it selected is what the next frame shows.
+#[test]
+fn a_tab_a_reader_activates_from_outside_the_host_shows_its_page_without_another_event() {
+    let tree = rail_beside_host();
+    assert!(names_read(&tree).contains(&"Home page".to_string()));
+    let search = telar::inspect::snapshot(&tree.commands())
+        .into_iter()
+        .find(|node| node.role == telar::Role::Button && node.name == "Search")
+        .and_then(|node| node.id)
+        .expect("the rail offers Search");
+
+    assert!(telar::focus::perform(
+        search.id,
+        telar::focus::AccessAction::Activate
+    ));
+    telar::relayout_if_dirty();
+
+    let read = names_read(&tree);
+    assert!(read.contains(&"Search page".to_string()), "{read:?}");
+    assert!(!read.contains(&"Home page".to_string()), "{read:?}");
 }

@@ -308,13 +308,8 @@ impl<R: Clone + Debug + Eq + 'static> NavHost<R> {
     ///
     /// Both halves of [`Component`] call this — [`on_event`](Component::on_event) for a press dispatched through the tree, [`view`](Component::view) for every other way the navigator can move, an overlay's own handler among them (see `Seen`). It stays public for an owner that wants to know *whether* a press it handled itself moved the user — closing a mobile drawer on the ones that did — rather than because the reconcile needs asking for.
     ///
-    /// Reports whether it actually navigated.
-    pub fn sync(&mut self) -> bool {
-        self.settle()
-    }
-
-    /// [`sync`](Self::sync) without the `&mut`, which is what lets the view settle before it renders.
-    fn settle(&self) -> bool {
+    /// Reports whether it actually navigated. Takes `&self` so a view can settle before it renders, this host's own and a [`TabHost`](crate::TabHost)'s around it.
+    pub fn sync(&self) -> bool {
         let top = self.nav.current();
         // Compared by key, not by route: pushing the route already on screen is still a new stack entry, and under [`PagePolicy::Transient`] that entry gets its own page.
         let key = self.key_for(&top);
@@ -336,14 +331,14 @@ impl<R: Clone + Debug + Eq + 'static> NavHost<R> {
     }
 
     /// Re-clamp the active page's scroll viewport(s) after a relayout. Forward this from the container's relayout.
-    pub fn relayout(&mut self) {
+    pub fn relayout(&self) {
         if let Some(page) = self.current_page() {
             page.borrow_mut().on_relayout();
         }
     }
 
     /// Run the active page's enter hook (autofocus). Forward this when the host first becomes visible.
-    pub fn activate(&mut self) {
+    pub fn activate(&self) {
         if let Some(page) = self.current_page() {
             page.borrow_mut().on_enter();
         }
@@ -360,6 +355,17 @@ impl<R: Clone + Debug + Eq + 'static> NavHost<R> {
         std::cell::Ref::map(self.seen.borrow(), |seen| &seen.pages)
     }
 
+    /// Hands `event` to the page on screen, then settles: what [`on_event`](Component::on_event) does, through a shared reference so a [`TabHost`](crate::TabHost) can reach a tab's host without holding it.
+    pub(crate) fn dispatch(&self, event: &Event) -> EventResult {
+        // Nothing of the host is borrowed while the page answers: a handler that navigates comes straight back through `sync`, and on an unbatched runtime it does so before this call has returned.
+        let handled = match self.current_page() {
+            Some(page) => page.borrow_mut().on_event(event),
+            None => EventResult::Ignored,
+        };
+        self.sync();
+        handled
+    }
+
     fn wrap_transition(&self, child: RenderNode, progress: f32, forward: bool) -> RenderNode {
         let width = absolute_rect(self.content_area)
             .map(|r| r.width)
@@ -371,7 +377,7 @@ impl<R: Clone + Debug + Eq + 'static> NavHost<R> {
 impl<R: Clone + Debug + Eq + 'static> Component for NavHost<R> {
     fn view(&self) -> RenderNode {
         // Reconciled here as well as in `on_event`, and this is the half that catches everything else. Subscribing to the navigator makes this run again on every navigation, and settling first is what makes the page it renders the one the navigator names.
-        self.settle();
+        self.sync();
         let Some(page) = self.current_page() else {
             return RenderNode::Empty;
         };
@@ -391,13 +397,7 @@ impl<R: Clone + Debug + Eq + 'static> Component for NavHost<R> {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        // Nothing of the host is borrowed while the page answers: a handler that navigates comes straight back through `settle`, and on an unbatched runtime it does so before this call has returned.
-        let handled = match self.current_page() {
-            Some(page) => page.borrow_mut().on_event(event),
-            None => EventResult::Ignored,
-        };
-        self.settle();
-        handled
+        self.dispatch(event)
     }
 }
 

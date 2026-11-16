@@ -1,5 +1,6 @@
 //! Tabs: one route stack per tab, and the host that shows whichever tab is active.
 
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
@@ -21,7 +22,7 @@ type TabPageFactory<T, R> = dyn Fn(&T, &R) -> Result<Box<dyn NavPage>, LayoutErr
 /// One tab's navigation stack, plus the [`NavHost`] rendering it — minted on the tab's first visit, then kept for the life of the host. That is the whole point of nested stacks: a tab you leave is still standing where you left it, several screens deep, without any per-route keep-alive policy holding it up.
 struct BuiltTab<T, R: Clone + Debug + Eq + 'static> {
     tab: T,
-    host: NavHost<R>,
+    host: Rc<RefCell<NavHost<R>>>,
     node: NodeId,
 }
 
@@ -212,14 +213,21 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
 /// Where [`NavHost`] shows the top of *one* stack, this shows the top of *the active tab's* stack, and holds the other tabs' hosts alongside it — built on first visit, then collapsed out of layout with [`set_display`] while another tab is on screen. Nothing is torn down on a tab switch, so a tab that was three screens deep with a half-filled form is exactly that when you come back to it.
 ///
 /// The [`PagePolicy`] and [`NavTransition`] set here apply to every tab's host, so `Transient` — the real page stack semantics — is the sane default choice here in a way it never was for a single shared stack: each tab's persistence comes from its stack staying alive, not from pinning pages by route.
+///
+/// A switch is reconciled whenever the host is asked for either half of itself, an event or a view, as [`NavHost`] reconciles a navigation: a tab selected from outside this host's subtree — a shell rail, or a screen reader activating a rail item, which sends no event at all — shows on the next frame without anyone calling [`sync`](Self::sync).
 pub struct TabHost<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> {
     stacks: TabStacks<T, R>,
     factory: Rc<TabPageFactory<T, R>>,
     policy: Rc<dyn Fn(&R) -> PagePolicy>,
     transition: NavTransition,
     tab_transition: NavTransition,
-    tabs: Vec<BuiltTab<T, R>>,
     content_area: NodeId,
+    shown: RefCell<Shown<T, R>>,
+}
+
+/// Everything a reconcile moves, behind one cell, so the view can settle before it renders. No borrow of it is held while a tab's host runs, since a page's hooks are the app's code and may select a tab.
+struct Shown<T, R: Clone + Debug + Eq + 'static> {
+    tabs: Vec<BuiltTab<T, R>>,
     /// The tab currently displayed — the shadow reconciled against `stacks.active()`.
     current: T,
     /// A running entrance animation for the tab just switched to, plus whether it sits later in declaration order than the one it replaced (so a slide enters from the side the tab bar suggests).
@@ -242,17 +250,19 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
             &[],
         )?;
         let current = stacks.peek_active();
-        let mut host = Self {
+        let host = Self {
             stacks,
             factory: Rc::new(factory),
             policy: Rc::new(|_| PagePolicy::default()),
             transition: NavTransition::None,
             tab_transition: NavTransition::None,
-            tabs: Vec::new(),
             content_area,
-            current: current.clone(),
-            entrance: None,
-            failed_tab: None,
+            shown: RefCell::new(Shown {
+                tabs: Vec::new(),
+                current: current.clone(),
+                entrance: None,
+                failed_tab: None,
+            }),
         };
         if let Err(error) = host.ensure_built(&current) {
             remove_node(host.content_area);
@@ -265,8 +275,8 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
     /// Sets the animation played on the incoming page when navigation moves *within* a tab.
     pub fn with_transition(mut self, transition: NavTransition) -> Self {
         self.transition = transition;
-        for built in &mut self.tabs {
-            built.host.set_transition(transition);
+        for built in &self.shown.get_mut().tabs {
+            built.host.borrow_mut().set_transition(transition);
         }
         self
     }
@@ -285,9 +295,12 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
     /// Chooses the page policy per destination, as [`NavHost::set_policy_for`](crate::NavHost::set_policy_for) does, applied inside every tab.
     pub fn with_policy_for(mut self, policy: impl Fn(&R) -> PagePolicy + 'static) -> Self {
         self.policy = Rc::new(policy);
-        for built in &mut self.tabs {
+        for built in &self.shown.get_mut().tabs {
             let policy = self.policy.clone();
-            built.host.set_policy_for(move |route| policy(route));
+            built
+                .host
+                .borrow_mut()
+                .set_policy_for(move |route| policy(route));
         }
         self
     }
@@ -297,12 +310,16 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
         self.stacks.clone()
     }
 
-    fn index_of(&self, tab: &T) -> Option<usize> {
-        self.tabs.iter().position(|built| &built.tab == tab)
+    /// `tab`'s host, handed out on its own so nothing of this host is borrowed while it runs.
+    fn host_of(&self, tab: &T) -> Option<Rc<RefCell<NavHost<R>>>> {
+        let shown = self.shown.borrow();
+        let built = shown.tabs.iter().find(|built| &built.tab == tab)?;
+        Some(built.host.clone())
     }
 
-    fn current_index(&self) -> Option<usize> {
-        self.index_of(&self.current)
+    fn current_host(&self) -> Option<Rc<RefCell<NavHost<R>>>> {
+        let current = self.shown.borrow().current.clone();
+        self.host_of(&current)
     }
 
     /// Where a tab sits in declaration order — the tab bar's own left-to-right order, which is the only thing a directional switch animation can key off (tabs have no depth to compare).
@@ -311,9 +328,9 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
     }
 
     /// Builds `tab`'s host if this is its first visit, appending its node to the container. Deferring this is what keeps an app with twenty tabs from constructing twenty screens at boot.
-    fn ensure_built(&mut self, tab: &T) -> Result<usize, LayoutError> {
-        if let Some(i) = self.index_of(tab) {
-            return Ok(i);
+    fn ensure_built(&self, tab: &T) -> Result<(), LayoutError> {
+        if self.host_of(tab).is_some() {
+            return Ok(());
         }
         let Some(nav) = self.stacks.navigator_for(tab) else {
             return Err(LayoutError::Engine(
@@ -327,97 +344,114 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
         let policy = self.policy.clone();
         host.set_policy_for(move |route| policy(route));
         let node = host.layout_node();
-        self.tabs.push(BuiltTab {
-            tab: tab.clone(),
-            host,
-            node,
-        });
-        let nodes: Vec<NodeId> = self.tabs.iter().map(|built| built.node).collect();
+        let nodes: Vec<NodeId> = {
+            let mut shown = self.shown.borrow_mut();
+            shown.tabs.push(BuiltTab {
+                tab: tab.clone(),
+                host: Rc::new(RefCell::new(host)),
+                node,
+            });
+            shown.tabs.iter().map(|built| built.node).collect()
+        };
         set_children(self.content_area, &nodes)?;
-        Ok(self.tabs.len() - 1)
+        Ok(())
     }
 
     fn refresh_display(&self) {
-        for built in &self.tabs {
-            set_display(built.node, built.tab == self.current);
+        let shown = self.shown.borrow();
+        for built in &shown.tabs {
+            set_display(built.node, built.tab == shown.current);
         }
     }
 
     /// Reconciles the displayed tab against the active one, and the displayed page against that tab's stack.
     ///
-    /// [`on_event`](Component::on_event) already calls this. An owner whose tab bar lives *outside* this host's subtree — a shell rail that handles the press itself — must call it after that press, exactly as with [`NavHost::sync`], and gets back whether the press actually moved the user.
-    pub fn sync(&mut self) -> bool {
+    /// [`on_event`](Component::on_event) and [`view`](Component::view) already call this. It stays public for an owner that wants to know *whether* a press it handled itself moved the user — closing a mobile drawer on the ones that did — and for one that wants the press to land on the frame it was made in. Reports whether the displayed tab or page changed.
+    pub fn sync(&self) -> bool {
         let active = self.stacks.peek_active();
-        let switched = active != self.current;
-        if !switched {
-            self.failed_tab = None;
-        }
-        if switched {
-            if self.failed_tab.as_ref() == Some(&active) {
+        let switched = {
+            let mut shown = self.shown.borrow_mut();
+            let switched = active != shown.current;
+            if !switched {
+                shown.failed_tab = None;
+            } else if shown.failed_tab.as_ref() == Some(&active) {
                 return false;
             }
+            switched
+        };
+        if switched {
             if let Err(error) = self.ensure_built(&active) {
                 tracing::error!(tab = ?active, "the tab's host could not be built, so the previous tab stays: {error}");
-                self.failed_tab = Some(active);
+                self.shown.borrow_mut().failed_tab = Some(active);
                 return false;
             }
-            self.failed_tab = None;
-            let forward = self.order_of(&active) >= self.order_of(&self.current);
-            self.current = active;
+            let forward = {
+                let shown = self.shown.borrow();
+                self.order_of(&active) >= self.order_of(&shown.current)
+            };
+            {
+                let mut shown = self.shown.borrow_mut();
+                shown.failed_tab = None;
+                shown.current = active.clone();
+                shown.entrance = self
+                    .tab_transition
+                    .start()
+                    .map(|anim| (active.clone(), forward, anim));
+            }
             self.refresh_display();
             mark_dirty(self.content_area).ok();
-            if let Some(anim) = self.tab_transition.start() {
-                self.entrance = Some((self.current.clone(), forward, anim));
-            }
         }
-        let Some(i) = self.current_index() else {
+        let Some(host) = self.current_host() else {
             return switched;
         };
+        let host = host.borrow();
         // A background tab's stack can move while it is off screen (a deep link, a guard redirect), so the incoming tab reconciles its own stack on the way in.
-        let navigated = self.tabs[i].host.sync();
+        let navigated = host.sync();
         if switched && !navigated {
             // An unchanged stack still needs its page re-laid and re-entered: it was collapsed out of layout until a moment ago, so its scroll viewport has only now been given a size.
-            self.tabs[i].host.relayout();
-            self.tabs[i].host.activate();
+            host.relayout();
+            host.activate();
         }
         switched || navigated
     }
 
     /// Re-clamp the active page's scroll viewport(s) after a relayout. Forward this from the container's relayout.
-    pub fn relayout(&mut self) {
-        if let Some(i) = self.current_index() {
-            self.tabs[i].host.relayout();
+    pub fn relayout(&self) {
+        if let Some(host) = self.current_host() {
+            host.borrow().relayout();
         }
     }
 
     /// Run the active page's enter hook (autofocus). Forward this when the host first becomes visible.
-    pub fn activate(&mut self) {
-        if let Some(i) = self.current_index() {
-            self.tabs[i].host.activate();
+    pub fn activate(&self) {
+        if let Some(host) = self.current_host() {
+            host.borrow().activate();
         }
     }
 
     /// The tab currently on screen.
     pub fn current_tab(&self) -> T {
-        self.current.clone()
+        self.shown.borrow().current.clone()
     }
 
     /// The route on top of the active tab's stack.
     pub fn current_route(&self) -> Option<R> {
-        self.current_index().map(|i| self.tabs[i].host.current())
+        self.current_host().map(|host| host.borrow().current())
     }
 }
 
 impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> Component for TabHost<T, R> {
     fn view(&self) -> RenderNode {
-        // Subscribe to the active tab so this view re-renders on a switch; the per-tab host subscribes to its own stack, which re-subscribes on each switch because only the active one is rendered.
+        // Subscribing to the active tab makes this run again on every switch, however it was made, and settling first is what makes the tab it renders the one that is active.
         let _subscribe = self.stacks.active();
-        let Some(i) = self.current_index() else {
+        self.sync();
+        let Some(host) = self.current_host() else {
             return RenderNode::Empty;
         };
-        let tab_view = self.tabs[i].host.view();
-        if let Some((tab, forward, anim)) = &self.entrance
-            && *tab == self.current
+        let tab_view = host.borrow().view();
+        let shown = self.shown.borrow();
+        if let Some((tab, forward, anim)) = &shown.entrance
+            && *tab == shown.current
             && !anim.is_settled()
         {
             // Reading the animated value subscribes this view to the ticker, so it re-renders each frame until the incoming tab settles at its resting identity transform.
@@ -433,8 +467,8 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> Component
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let handled = match self.current_index() {
-            Some(i) => self.tabs[i].host.on_event(event),
+        let handled = match self.current_host() {
+            Some(host) => host.borrow().dispatch(event),
             None => EventResult::Ignored,
         };
         self.sync();
