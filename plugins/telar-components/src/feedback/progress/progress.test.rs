@@ -1,6 +1,9 @@
-use telar::{Accessible, NodeId, signal};
+use telar::{
+    Accessible, BorderRadius, Color, ControlSize, Direction, NodeId, RectStyle, Role, ShapeStyle,
+    SurfaceAmendment, signal,
+};
 
-use super::*;
+use crate::{ProgressProps, ProgressTokens, progress};
 
 fn lay_out(node: NodeId) {
     telar::testing::lay_out(node, 300.0, 100.0);

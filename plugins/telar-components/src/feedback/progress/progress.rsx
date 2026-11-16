@@ -1,13 +1,6 @@
-//! [`progress`]: a determinate bar filled to a bound value.
-
-use telar::{
-    BorderRadius, Color, Direction, LayoutError, LayoutItem, LayoutStyle, NumericValue, Props,
-    Reactive, Rect, RectStyle, Role, ShapeStyle, StyledContainer, SurfaceAmendment, Transform,
-    amend_surface, box_item, children,
-};
-
+[logic]
 use crate::shared;
-use telar::ControlSize;
+use telar::{ControlSize, NumericValue, SizeDimension};
 
 /// A progress bar's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -46,9 +39,10 @@ impl ProgressTokens {
     }
 }
 
-/// A determinate 0.0..=1.0 progress bar: a rounded track with an accent fill scaled by `value`. Sibling of `slider` minus the drag/thumb — the fill reuses the same "absolute_fill child, scaled from one edge" technique (see `slider`'s fill) since a progress bar is a slider whose value the app drives instead of the pointer, and it fills from the inline start: the left edge on a left-to-right surface, the right edge on a right-to-left one. `value` is a closure so a reading derived from several services can drive it, and so an unbound bar reads a flat zero rather than owning a signal nobody can write.
-#[derive(Props)]
-pub struct ProgressProps {
+/// A determinate bar filled to a bound value, from the inline start: the left edge on a left-to-right surface, the right edge on a right-to-left one.
+///
+/// A reader hears it as a progress bar standing at its reading out of 100, called what the call's `a11y_label` names it.
+pub struct Props {
     /// Progress, normalized to 0.0..=1.0 (out-of-range inputs are clamped on read, not here).
     ///
     /// A closure rather than a signal, like [`color`](Self::color) beside it: a bar *reports* a reading, it never writes one, and a caller whose reading is derived from two services has no signal to hand over. Insisting on one is what makes a shell reimplement this widget next to the catalogue.
@@ -77,76 +71,25 @@ pub struct ProgressProps {
     pub style: Option<SurfaceAmendment>,
 }
 
-/// A determinate bar filled to a bound value.
-///
-/// A reader hears it as a progress bar standing at its reading out of 100, called what the call's `a11y_label` names it.
-pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let ProgressProps {
-        value,
-        size,
-        color,
-        track_color,
-        width,
-        stretch,
-        height,
-        style,
-    } = props;
-
-    let filled = move || value.get().clamp(0.0, 1.0);
-
-    // An `absolute_fill` child, so it exactly overlays the track, scaled horizontally from the edge the reading starts at — cheaper than relaying out a narrower box on every update. `box_transform` only pivots scale on the rect centre, so the raw matrix is needed to pin that edge.
-    let fill = StyledContainer::new(
-        LayoutStyle::new().absolute_fill(),
-        move |r| {
-            RectStyle::default()
-                .with_fill(shared::resolve(&color, shared::accent))
-                .with_radius(ProgressTokens::current().radius(r))
-        },
-        vec![],
-    )?
-    .with_transform({
-        let filled = filled.clone();
-        move |r| {
-            let start = match telar::use_direction() {
-                Direction::Ltr => r.x,
-                Direction::Rtl => r.x + r.width,
-            };
-            Some(Transform::scale_around(
-                filled(),
-                1.0,
-                start,
-                r.y + r.height / 2.0,
-            ))
-        }
-    });
-
-    // A stretched bar takes the parent's width: a px track inside a card is either short of its edge or past it, and the card is what decides how wide a reading should read.
-    let track_box = move || {
-        let tokens = ProgressTokens::current();
-        LayoutStyle::new()
-            .width(if stretch {
-                telar::SizeDimension::Percent(1.0)
-            } else {
-                telar::SizeDimension::Px(width.unwrap_or_else(|| tokens.width(size)))
-            })
-            .height(height.unwrap_or_else(|| tokens.height(size)))
-    };
-    let track = StyledContainer::new(
-        track_box(),
-        move |r| {
-            let track = RectStyle::default()
-                .with_fill(shared::resolve(&track_color, shared::muted))
-                .with_radius(ProgressTokens::current().radius(r));
-            amend_surface(track, &style)
-        },
-        children![fill],
-    )?
-    .styled_by(track_box)
-    .role(Role::ProgressBar)
-    .valued(move || NumericValue::new(0.0..=100.0, f64::from(filled()) * 100.0).ok());
-    Ok(box_item(track))
+fn track_width(stretch: bool, width: Option<f32>, size: ControlSize) -> SizeDimension {
+    match stretch {
+        true => SizeDimension::Percent(1.0),
+        false => SizeDimension::Px(width.unwrap_or_else(|| ProgressTokens::current().width(size))),
+    }
 }
 
-#[cfg(test)]
-#[path = "progress.test.rs"]
-mod tests;
+fn corner() -> f32 {
+    ProgressTokens::current().radius.unwrap_or(BorderRadius::FULL)
+}
+
+let size = props.size;
+let stretch = props.stretch;
+let width = props.width;
+let height = props.height;
+let color = props.color.clone();
+let track_color = props.track_color.clone();
+
+[view]
+box width:(track_width(stretch, width, size)) height:(height.unwrap_or_else(|| ProgressTokens::current().height(size))) fill:(shared::resolve(&track_color, shared::muted)) radius:(corner()) role:progressbar valued:(NumericValue::new(0.0..=100.0, f64::from($props.value.clamp(0.0, 1.0)) * 100.0).ok()) surface:$props.style
+    // Overlays the track and is scaled from the edge the reading starts at, which is cheaper than laying a narrower box out on every update.
+    box absolute:fill fill:(shared::resolve(&color, shared::accent)) radius:(corner()) scale_x:($props.value.clamp(0.0, 1.0)) transform_origin:start

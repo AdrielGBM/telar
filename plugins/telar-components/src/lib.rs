@@ -39,6 +39,9 @@ mod heading_test;
 #[path = "display/kbd/kbd.test.rs"]
 mod kbd_test;
 mod look;
+#[cfg(test)]
+#[path = "feedback/progress/progress.test.rs"]
+mod progress_test;
 mod shared;
 #[cfg(test)]
 #[path = "feedback/spinner/spinner.test.rs"]
