@@ -17,7 +17,6 @@ a11y = ["dep:accesskit_android", "dep:platform-accesskit"]
 
 [dependencies]
 platform-core = { workspace = true }
-services-core = { workspace = true }
 
 raw-window-handle = { workspace = true }
 
@@ -32,6 +31,7 @@ libc = { workspace = true }
 paranoid-android = "0.2.2"
 platform-accesskit = { workspace = true, optional = true }
 platform-winit = { workspace = true }
+services-core = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 winit = { workspace = true, features = ["android-native-activity"] }

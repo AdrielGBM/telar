@@ -1,7 +1,7 @@
 //! Vector artwork generated in code, for the SVG sections to draw.
 
 use std::sync::Arc;
-use telar::SvgData;
+use telar_dynamic::SvgData;
 
 /// A simple stroked icon, for the SVG sections to draw.
 pub fn make_icon() -> Arc<SvgData> {

@@ -18,7 +18,7 @@ async-assets = []
 # Adds runtime SVG parsing (`SvgData::from_str` via usvg); required to compile the widget's from_str-based tests.
 dynamic-svg = ["svg", "renderer-assets/dynamic-svg"]
 # Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.
-svg = []
+svg = ["dep:renderer-assets"]
 
 [dependencies]
 geometry-core = { workspace = true }
@@ -29,7 +29,7 @@ motion-core = { workspace = true }
 platform-core = { workspace = true }
 preferences-core = { workspace = true }
 reactive-core = { workspace = true }
-renderer-assets = { workspace = true }
+renderer-assets = { workspace = true, optional = true }
 renderer-core = { workspace = true }
 services-core = { workspace = true, features = ["di"] }
 theme-core = { workspace = true }

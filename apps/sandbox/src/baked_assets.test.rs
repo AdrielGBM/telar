@@ -9,7 +9,8 @@
 //! This runs against `.telar/assets.rs` for real, so it needs the artifact to exist — which is what
 //! `cargo telar bake` (and every `cargo telar` subcommand that compiles) produces, and what CI runs first.
 
-use telar::{Color, ObjectFit, SvgData};
+use telar::{Color, ObjectFit};
+use telar_dynamic::SvgData;
 
 /// `static_name_for_path("badge.svg")`, which is FNV-1a over the path and so fixed by the algorithm rather
 /// than by a counter — writing it out is what checks the transpiler still emits the name the baker chose.
