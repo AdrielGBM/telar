@@ -109,14 +109,14 @@ col gap:20
                 col gap:8
                     text "this subtree has been built {$panel_builds} time(s) — reopening never adds one" font_size:13 color:$theme.primary
                     box fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:$theme.gutter pad_y:12 width:300
-                        input value:$panel_note font_size:15 color:$theme.ink
+                        input value:$panel_note font_size:15 color:$theme.ink a11y_label:"Note"
         code_line code:"lazy when:$open  >  …   (deferred until first shown, then kept)"
     example title:"input + focus — two editable fields; Tab moves focus, each binds a signal (wrap a box for the look)"
         card gap:10
             box fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:12 pad_y:10 width:300
-                input value:$name font_size:15 color:$theme.ink
+                input value:$name font_size:15 color:$theme.ink a11y_label:"Name"
             box fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:12 pad_y:10 width:300
-                input value:$email font_size:15 color:$theme.ink
+                input value:$email font_size:15 color:$theme.ink a11y_label:"Email"
             text "Hello, {$name}! ({$email})" font_size:14 color:$theme.muted
         code_line code:"input value:$name      (tap or Tab to focus · type · arrows, Home, End, Backspace · Esc blurs)"
     example title:"on_focus — any box can be focusable: it joins the Tab order and observes its own focus"

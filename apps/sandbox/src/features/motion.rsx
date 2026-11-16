@@ -117,6 +117,6 @@ col gap:20
             row gap:14 align:center
                 box width:56 height:56 fill:$scrub_color radius:10
                 col gap:6 grow:1
-                    slider value:$scrub range:(0.0..=100.0) step:1 width:220
+                    slider value:$scrub range:(0.0..=100.0) step:1 width:220 a11y_label:"Timeline progress"
                     text "p = {$scrub / 100.0}" font_size:12 color:$theme.muted
         code_line code:"Timeline::builder(a).then(b, …).then(c, …).build().sample(p)"

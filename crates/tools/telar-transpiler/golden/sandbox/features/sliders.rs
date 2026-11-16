@@ -39,6 +39,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = slider(SliderProps::props().value(volume.clone()).range(0.0..=100.0).step(::telar::Int(1)).width(::telar::Int(260)).build())?;
+                                let __node_3 = __node_3.a11y_label(|| "Volume");
                                 __children.push(box_item(__node_3));
                                 let __text_0 = {
                                     let volume = volume.clone();
@@ -56,7 +57,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(8)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("slider value:$volume range:(0.0..=100.0) step:1 width:260").build())?;
+                    let __node_4 = code_line(CodeLineProps::props().code("slider value:$volume range:(0.0..=100.0) step:1 width:260 a11y_label:'Volume'").build())?;
                     __children.push(box_item(__node_4));
                     Ok(__children)
                 }

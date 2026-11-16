@@ -243,6 +243,7 @@ pub fn motion(props: MotionProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_1 = {
                                         let __node_14 = slider(SliderProps::props().value(scrub.clone()).range(0.0..=100.0).step(::telar::Int(1)).width(::telar::Int(220)).build())?;
+                                        let __node_14 = __node_14.a11y_label(|| "Timeline progress");
                                         let __text_1 = {
                                             let scrub = scrub.clone();
                                             Text::declaring(

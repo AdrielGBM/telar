@@ -1,13 +1,14 @@
 //! The documentation shell: the rail, the top bar, and the per-section navigation stacks behind them.
 
 use crate::core::theme::theme;
+use telar::focus::{ScopeId, register_scope, unregister_scope};
 use telar::{
     Accessible, AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event,
-    EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
+    EventResult, Insets, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
     NodeVec, Reactive, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, SizeDimension,
     StyledContainer, Text, TextStyle, Transform, compute_layout, hot_signal, mark_dirty, new_container,
-    new_leaf, reset_layout_runtime, set_display, set_overlay_host, signal, transform_pointer,
-    use_direction, use_dismiss_depth,
+    new_leaf, reset_layout_runtime, set_display, set_overlay_host, signal, style_follows,
+    transform_pointer, use_direction, use_dismiss_depth, use_safe_area_insets,
 };
 use telar_icons::{IconProps, icon};
 use telar_navigate::{NavPage, NavTransition, Navigator, PagePolicy, TabHost, TabStacks};
@@ -448,6 +449,7 @@ fn build_source_link(
             .with_fill(theme().border)
             .with_radius(BorderRadius::all(8.0))
     })
+    .control(Role::Button)
     .on_press(move || nav.push(SectionRoute::Source));
     Ok(Box::new(Container::new(
         LayoutStyle::new().flex_row(),
@@ -601,6 +603,7 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
     )?;
     let on_hover = stacks.clone();
     let on_press = stacks.clone();
+    let on_disabled = stacks.clone();
     let btn = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -621,6 +624,8 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
             theme().surface_alt
         })
     })
+    .control(Role::Button)
+    .disabled(move || !live(&on_disabled))
     .on_press(move || {
         on_press.back();
     });
@@ -713,8 +718,7 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
             .size(20.0)
             .color(Reactive::of(|| theme().ink))
             .build(),
-    )?
-    .a11y_label(|| "Menu");
+    )?;
     let burger = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -734,10 +738,13 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
             .with_fill(theme().border)
             .with_radius(BorderRadius::all(8.0))
     })
+    .control(Role::Button)
+    .expanded(move || menu_open.get())
     .on_press(move || {
         let open = toggle.peek();
         toggle.set(!open);
-    });
+    })
+    .a11y_label(|| "Menu");
     let logo_mark = icon(
         IconProps::props()
             .name(telar_icons::icon!("lucide:triangle"))
@@ -767,6 +774,28 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
     Ok(Box::new(bar))
 }
 
+/// The shell keeps clear of what the system draws over the window: on a phone, the status bar above and the navigation bar below; nothing on a desktop window.
+fn shell_style(insets: Insets) -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .width(SizeDimension::Percent(1.0))
+        .height(SizeDimension::Percent(1.0))
+        .padding_top(insets.top)
+        .padding_right(insets.right)
+        .padding_bottom(insets.bottom)
+        .padding_left(insets.left)
+}
+
+/// The rail runs the window's full height, its background under the system's bars, and its items between them; across, it is placed by [`ShellPage::rail_x`].
+fn rail_style(insets: Insets) -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .width(SIDEBAR_W)
+        .height(SizeDimension::Percent(1.0))
+        .padding_top(insets.top)
+        .padding_bottom(insets.bottom)
+}
+
 /// Responsive application shell. Desktop (≥ breakpoint): the sidebar is a fixed rail whose width is reserved by an empty `spacer` and painted as an always-on overlay at the window's left edge. Mobile (< breakpoint): the rail collapses — a top bar appears, and the sidebar becomes a drawer that slides over a dimming scrim when `menu_open` is set. The sidebar is laid out on its own so it can overlay content in either mode.
 ///
 /// The content pane is a [`TabHost`]: every rail item is a tab with its own page stack, built the first time it is visited, so opening the app costs one section rather than all 26.
@@ -776,10 +805,13 @@ struct ShellPage {
     topbar_node: NodeId,
     topbar: Box<dyn LayoutItem>,
     sidebar_scroll: LayoutScrollArea,
-    sidebar_scroll_node: NodeId,
+    /// The rail, laid out on its own so it can overlay the content.
+    rail_root: NodeId,
     nav_host: TabHost<usize, SectionRoute>,
     menu_open: RwSignal<bool>,
-    mobile: bool,
+    mobile: RwSignal<bool>,
+    /// Keeps the rail's controls out of reach while the shell does not draw it, as a shut drawer.
+    rail_scope: ScopeId,
     win_w: f32,
     win_h: f32,
 }
@@ -804,8 +836,16 @@ impl ShellPage {
             sidebar,
         )?;
         let sidebar_scroll_node = sidebar_scroll.layout_node();
+        let rail_root = new_container(LayoutStyle::new(), &[sidebar_scroll_node])?;
+        style_follows(rail_root, || rail_style(use_safe_area_insets()));
         let menu_open = signal(false);
+        let mobile = signal(false);
         let topbar = build_topbar(menu_open)?;
+        let rail_scope = register_scope(
+            sidebar_scroll_node,
+            move || !mobile.get() || menu_open.get(),
+            false,
+        );
         let topbar_node = topbar.layout_node();
         let (spacer, _) = new_leaf(
             LayoutStyle::new()
@@ -824,23 +864,19 @@ impl ShellPage {
                 .width(SizeDimension::Percent(1.0)),
             &[spacer, content],
         )?;
-        let root = new_container(
-            LayoutStyle::new()
-                .flex_column()
-                .width(SizeDimension::Percent(1.0))
-                .height(SizeDimension::Percent(1.0)),
-            &[topbar_node, body],
-        )?;
+        let root = new_container(LayoutStyle::new(), &[topbar_node, body])?;
+        style_follows(root, || shell_style(use_safe_area_insets()));
         Ok(Self {
             root,
             spacer,
             topbar_node,
             topbar,
             sidebar_scroll,
-            sidebar_scroll_node,
+            rail_root,
             nav_host,
             menu_open,
-            mobile: false,
+            mobile,
+            rail_scope,
             win_w: 0.0,
             win_h: 0.0,
         })
@@ -848,10 +884,11 @@ impl ShellPage {
 
     /// The rail's left edge. The rail is painted as an overlay at a position this shell picks, not laid out in the body row, so mirroring it under RTL is the app's job — layout cannot move a hand-placed node.
     fn rail_x(&self) -> f32 {
+        let insets = use_safe_area_insets();
         if use_direction().is_rtl() {
-            self.win_w - SIDEBAR_W
+            self.win_w - SIDEBAR_W - insets.right
         } else {
-            0.0
+            insets.left
         }
     }
 
@@ -867,9 +904,9 @@ impl ShellPage {
         }
     }
 
-    /// Reconciles the content pane after the sidebar handled a press. The host only reconciles from events dispatched into it, and the rail sits outside its subtree — so a tab press has to be pushed in here. Only a press that actually moved the user closes the mobile drawer, leaving the theme switcher (also in the rail) free to keep it open.
-    fn after_sidebar_press(&mut self) {
-        if self.nav_host.sync() && self.mobile {
+    /// Reconciles the content pane, closing the mobile drawer when that moved the user: only a section chosen in the rail does, leaving the theme switcher (also in the rail) free to keep it open. Called from the view, which is where a section a reader activates arrives, since that sends no event; and after a press on the rail, so a tapped section lands on the frame it was tapped in.
+    fn settle_content(&self) {
+        if self.nav_host.sync() && self.mobile.peek() {
             self.menu_open.set(false);
         }
     }
@@ -878,7 +915,9 @@ impl ShellPage {
         self.win_w = width;
         self.win_h = height;
         let mobile = width < MOBILE_BREAKPOINT;
-        self.mobile = mobile;
+        if self.mobile.peek() != mobile {
+            self.mobile.set(mobile);
+        }
         if !mobile {
             self.menu_open.set(false);
         }
@@ -895,7 +934,7 @@ impl ShellPage {
         set_overlay_host(self.root);
         self.nav_host.relayout();
         compute_layout(
-            self.sidebar_scroll_node,
+            self.rail_root,
             AvailableSpace::Definite(SIDEBAR_W),
             AvailableSpace::Definite(height),
         )
@@ -904,16 +943,25 @@ impl ShellPage {
     }
 }
 
+impl Drop for ShellPage {
+    fn drop(&mut self) {
+        unregister_scope(self.rail_scope);
+    }
+}
+
 impl Component for ShellPage {
     fn view(&self) -> RenderNode {
+        // Before the host's own view, which settles too and would leave nothing to report.
+        self.settle_content();
         let open = self.menu_open.get();
+        let mobile = self.mobile.get();
         let mut nodes = vec![self.nav_host.view()];
-        if self.mobile {
+        if mobile {
             nodes.push(self.topbar.view());
         }
-        if !self.mobile || open {
+        if !mobile || open {
             let mut overlay = Vec::new();
-            if self.mobile && open {
+            if mobile && open {
                 overlay.push(RenderNode::rect(
                     Rect {
                         x: 0.0,
@@ -969,7 +1017,7 @@ impl Component for ShellPage {
             _ => false,
         };
 
-        if self.mobile {
+        if self.mobile.get() {
             if self.menu_open.get() {
                 if let Event::Scrolled { .. } = event {
                     if over_sidebar {
@@ -978,7 +1026,7 @@ impl Component for ShellPage {
                     return EventResult::Handled;
                 }
                 if self.sidebar_on_event(event) == EventResult::Handled {
-                    self.after_sidebar_press();
+                    self.settle_content();
                     return EventResult::Handled;
                 }
                 if let Event::PointerPressed { x, .. } = event
@@ -1001,7 +1049,7 @@ impl Component for ShellPage {
             };
         }
         if self.sidebar_on_event(event) == EventResult::Handled {
-            self.after_sidebar_press();
+            self.settle_content();
             return EventResult::Handled;
         }
         self.nav_host.on_event(event)

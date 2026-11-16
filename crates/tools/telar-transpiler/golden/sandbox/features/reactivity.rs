@@ -426,6 +426,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                             };
                                             let __sbox_3 = {
                                                 let __input_0 = Input::declaring(panel_note.clone(), LayoutStyle::new().height(15.0 * 1.4), { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) })?;
+                                                let __input_0 = __input_0.a11y_label(|| "Note");
                                                 StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(theme.get().gutter).padding_vertical(12.0).width(300.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_0])?.styled_by({ let theme = theme.clone(); move || LayoutStyle::new().flex_column().padding_horizontal(theme.get().gutter).padding_vertical(12.0).width(300.0).bordered() })
                                             };
                                             Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_10, __sbox_3])?
@@ -470,11 +471,13 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_4 = {
                                     let __input_1 = Input::declaring(name.clone(), LayoutStyle::new().height(15.0 * 1.4), { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) })?;
+                                    let __input_1 = __input_1.a11y_label(|| "Name");
                                     StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(10.0).width(300.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_1])?
                                 };
                                 __children.push(box_item(__sbox_4));
                                 let __sbox_5 = {
                                     let __input_2 = Input::declaring(email.clone(), LayoutStyle::new().height(15.0 * 1.4), { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) })?;
+                                    let __input_2 = __input_2.a11y_label(|| "Email");
                                     StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(10.0).width(300.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_2])?
                                 };
                                 __children.push(box_item(__sbox_5));
