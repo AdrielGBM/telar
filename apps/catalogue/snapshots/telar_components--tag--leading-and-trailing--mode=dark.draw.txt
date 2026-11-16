@@ -6,13 +6,13 @@ element group
       element group
         element group
           element group
-            rect 287,288 59x24 fill=#4dc78cff border=1 border-color=#00000000 radius=6
+            rect 284,288 61x24 fill=#4dc78cff border=1 border-color=#00000000 radius=6
             element group
               element group
-                rect 295,297 6x6 fill=#0d0f1fff radius=3
+                rect 292,297 6x6 fill=#0d0f1fff radius=3
               end
               element group
-                matrix 1,0,0,1,303,288
+                matrix 1,0,0,1,302,288
                   text 0,5 35x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
                 end
               end
@@ -21,14 +21,14 @@ element group
             end
           end
           element group
-            rect 354,288 83x24 fill=#6badfa1a border=1 border-color=#00000000 radius=6
+            rect 353,288 85x24 fill=#6badfa1a border=1 border-color=#00000000 radius=6
             element group
               element progressbar
                 element group
                   matrix 1,0,0,1,0,0
-                    rect 362,294 12x12
+                    rect 361,294 12x12
                     element group
-                      matrix 1,0,0,1,363,295
+                      matrix 1,0,0,1,362,295
                         path M5,0 C7.76,0 10,2.24 10,5 C10,7.76 7.76,10 5,10 C2.24,10 0,7.76 0,5 stroke=1.5 stroke-color=#6badfaff
                       end
                     end
@@ -36,7 +36,7 @@ element group
                 end
               end
               element group
-                matrix 1,0,0,1,376,288
+                matrix 1,0,0,1,377,288
                   text 0,5 53.84x14.28 "Exporting" size=11.9 family=sans-serif weight=400 color=#6badfaff wrap=none lang=en
                 end
               end
@@ -45,15 +45,15 @@ element group
             end
           end
           element group
-            rect 446,288 68x24 fill=#00000000 border=1 border-color=#7394ffff radius=6
+            rect 447,288 70x24 fill=#00000000 border=1 border-color=#7394ffff radius=6
             element group
               element group
-                matrix 1,0,0,1,454,288
+                matrix 1,0,0,1,455,288
                   text 0,5 38x14.28 "Layers" size=11.9 family=sans-serif weight=400 color=#7394ffff wrap=none lang=en
                 end
               end
               element group
-                matrix 1,0,0,1,493,288
+                matrix 1,0,0,1,496,288
                   text 0,5 12.45x14.28 "12" size=11.9 family=sans-serif weight=600 color=#7394ffff wrap=none lang=en
                 end
               end

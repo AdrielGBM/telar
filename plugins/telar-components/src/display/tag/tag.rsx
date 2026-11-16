@@ -112,15 +112,14 @@ let look = Look {
 [view]
 row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill($text.ink)) stroke:(look.frame($text.ink)) stroke_width:(TagTokens::current().border_width()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:$props.style
     if let Some(selected) = filter
-        row role:button toggled:selected.get() on_press:(move || flip(selected, on_toggle.as_deref())) cursor:pointer color:(look.ink($text.ink)) fill:transparent radius:(TagTokens::current().radius()) hover_style(fill:(look.hovered($text.ink)) radius:(TagTokens::current().radius())) active_style(fill:(look.pressed($text.ink)) radius:(TagTokens::current().radius())) align:center gap:(shared::gap_xs(size)) min_height:(body_height(size, true)) min_width:(shared::MIN_TARGET) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
-            // A leading icon carries an inset round its ink and the drawn tick fills its box, so the tick takes that inset as padding to stand as far from the label.
-            row shown:selected.get() pad_end:(shared::gap_xs(size))
+        row role:button toggled:selected.get() on_press:(move || flip(selected, on_toggle.as_deref())) cursor:pointer color:(look.ink($text.ink)) fill:transparent radius:(TagTokens::current().radius()) hover_style(fill:(look.hovered($text.ink)) radius:(TagTokens::current().radius())) active_style(fill:(look.pressed($text.ink)) radius:(TagTokens::current().radius())) align:center gap:(shared::gap_sm(size)) min_height:(body_height(size, true)) min_width:(shared::MIN_TARGET) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
+            row shown:selected.get()
                 glyph shape:Mark::Check size:size
             children $props.leading
             text "{$props.label}"
             children $props.trailing
     else
-        row align:center gap:(shared::gap_xs(size)) min_height:(body_height(size, false)) color:(look.ink($text.ink)) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
+        row align:center gap:(shared::gap_sm(size)) min_height:(body_height(size, false)) color:(look.ink($text.ink)) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
             children $props.leading
             text "{$props.label}"
             children $props.trailing
