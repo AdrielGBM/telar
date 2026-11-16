@@ -1,6 +1,6 @@
-//! The configuration an application starts with: its window, its fonts and its renderer.
+//! The configuration an application starts with: its window, its fonts, its renderer and the URI schemes it goes to.
 
-use platform_core::WindowConfig;
+use platform_core::{UriSchemes, WindowConfig};
 use renderer_core::{FontAsset, FontFamily};
 
 #[derive(Clone, Default)]
@@ -14,6 +14,8 @@ pub struct AppConfig {
     ///
     /// It seeds the root of the surface's text cascade as the surface opens, and [`set_font_family`](crate::set_font_family) moves it while the surface runs. A property of *this* configuration, so a second surface built later renders in its own family rather than in whichever one was configured last. Text declares its own with `font_family:` or [`TextStyle::with_font_family`](crate::TextStyle::with_font_family); a text given a whole style with [`Text::new`](crate::Text::new) opts out of the cascade, and with it out of this.
     pub font_family: Option<FontFamily>,
+    /// The schemes this surface's external links go to and its links open: [`DEFAULT_URI_SCHEMES`](crate::DEFAULT_URI_SCHEMES) unless the app adds its own with [`UriSchemes::allowing`]. Handed to the surface as it opens, a guest's included, so a link is judged by them whichever side of a hot reload built it; see `docs/links.md`.
+    pub uri_schemes: UriSchemes,
 }
 
 impl AppConfig {

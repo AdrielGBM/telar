@@ -308,6 +308,15 @@ pub(super) unsafe extern "C" fn set_surface_conventions(
     })
 }
 
+pub(super) unsafe extern "C" fn set_surface_uri_schemes(
+    schemes: LentBytes<crate::UriSchemes>,
+) -> CallOutcome {
+    guest_entry(|| {
+        let schemes: crate::UriSchemes = unsafe { schemes.read() };
+        crate::set_surface_uri_schemes(schemes);
+    })
+}
+
 pub(super) unsafe extern "C" fn drain_window_commands(
     commands: *mut LentBytes<Vec<WindowCommand>>,
 ) -> CallOutcome {

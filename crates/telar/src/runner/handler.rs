@@ -73,6 +73,7 @@ where
     // What the window was last told about Tab leaving the app, so it hears only a change.
     pub(super) tab_leaves: platform_core::TabLeaves,
     pub(super) conventions: platform_core::SurfaceConventions,
+    pub(super) uri_schemes: platform_core::UriSchemes,
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
@@ -166,6 +167,7 @@ where
         text_input: None,
         tab_leaves: platform_core::TabLeaves::default(),
         conventions: platform_core::SurfaceConventions::default(),
+        uri_schemes: platform_core::UriSchemes::default(),
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -423,6 +425,7 @@ where
         }
         self.app.open_font_family(self.fonts.family.as_ref());
         self.app.set_surface_conventions(self.conventions);
+        self.app.set_surface_uri_schemes(&self.uri_schemes);
         self.tree = Some(self.app.mount());
         self.fit_tree_to(window);
         if let Some(hydration) = hydration {

@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use platform_core::guest::UpperServices;
 use renderer_core::{FontSource, GenericFamilies};
+use semantics_core::UriSchemes;
 
 use super::*;
 use crate::{FileFilter, MemoryStore};
@@ -153,6 +154,36 @@ fn the_guest_opens_links_and_routes_through_the_host_opener() {
         *opened.0.lock().unwrap(),
         ["https://example.com/a?b=c", "/projects/telar#top"]
     );
+}
+
+/// A guest's thread of its own opens what the app's schemes allow and nothing else: the request crosses and is read alike on whichever thread it is made.
+#[test]
+fn a_guest_worker_thread_opens_by_the_app_s_schemes() {
+    test_process::OwnProcess::new(
+        module_path!(),
+        "a_guest_worker_thread_opens_by_the_app_s_schemes",
+    )
+    .run(|| {
+        let opened = Arc::new(Opened::default());
+        let served = served(Backends {
+            uri_opener: Some(opened.clone()),
+            ..nothing_served()
+        });
+        crate::set_uri_opener(Arc::new(HostUriOpener(host(&served))));
+        let app = UriSchemes::default().allowing("telar-guest-app").unwrap();
+        let other_app = UriSchemes::default().allowing("telar-other-app").unwrap();
+        let asked = std::thread::spawn(move || {
+            let uri = Uri::parse("telar-guest-app://settings").unwrap();
+            (
+                crate::open_uri(&uri, &app),
+                crate::open_uri(&uri, &other_app),
+            )
+        })
+        .join()
+        .unwrap();
+        assert_eq!(asked, (true, false));
+        assert_eq!(*opened.0.lock().unwrap(), ["telar-guest-app://settings"]);
+    });
 }
 
 #[test]
@@ -625,9 +656,9 @@ const GUEST_OWN: &[(&str, &str, &str)] = &[
         "the app's own locale, a signal of its reactive runtime",
     ),
     (
-        "crates/semantics/semantics-core/src/uri.rs",
-        "APP_SCHEMES",
-        "the app's own schemes, which each image registers from its setup on the thread its runtime runs on, and the host parses every URI it is handed against its own",
+        "crates/ui/ui-core/src/surface_uri_schemes.rs",
+        "URI_SCHEMES",
+        "the app's own per-surface URI schemes, which a host hands the surface it draws a guest on",
     ),
     (
         "crates/services/services-core/src/guest.rs",

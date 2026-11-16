@@ -17,7 +17,7 @@ fn constructors_build_each_kind() {
 }
 
 #[test]
-fn an_external_destination_is_refused_unless_the_policy_allows_it() {
+fn an_external_destination_is_refused_unless_it_is_a_uri() {
     assert_eq!(
         Destination::external("example.com"),
         Err(UriError::NotAbsolute)

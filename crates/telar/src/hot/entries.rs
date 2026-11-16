@@ -7,7 +7,7 @@ use platform_core::guest::{
 use std::time::Duration;
 
 use platform_core::{
-    AccessAudit, Event, Location, SurfaceConventions, SystemPreferences, WindowCommand,
+    AccessAudit, Event, Location, SurfaceConventions, SystemPreferences, UriSchemes, WindowCommand,
     WindowConfig,
 };
 use renderer_core::wire::{DrawList, Pixels};
@@ -57,6 +57,7 @@ platform_core::entry_table! {
         set_safe_area_insets: fn(f32, f32, f32, f32);
         set_surface_maximized: fn(bool);
         set_surface_conventions: fn(LentBytes<SurfaceConventions>);
+        set_surface_uri_schemes: fn(LentBytes<UriSchemes>);
         drain_window_commands: fn(*mut LentBytes<Vec<WindowCommand>>);
         set_location_history: fn(LentBytes<Vec<Location>>);
         open_title: fn(LentBytes<(String, String)>);

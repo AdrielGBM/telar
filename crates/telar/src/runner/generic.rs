@@ -93,7 +93,7 @@ where
     A: App,
     D: DevOverlay,
 {
-    let (window, fonts) = split_config(config);
+    let (window, fonts, uri_schemes) = split_config(config);
     let choices = match hydration {
         Some(_) => StoredChoices::AfterHydration,
         None => StoredChoices::Now,
@@ -102,6 +102,7 @@ where
         app_name,
         paths,
         fonts,
+        uri_schemes,
         choices,
         super::debug_settings::process_debug_settings(),
     );

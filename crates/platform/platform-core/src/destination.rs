@@ -1,8 +1,7 @@
 //! The app's side of a [`Destination`]: what can name one, and the address a target writes for it.
 
 pub use semantics_core::{
-    DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, Destination, RouteAddress, Uri, UriError,
-    allow_uri_scheme, is_uri_scheme_allowed,
+    DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, Destination, RouteAddress, Uri, UriError, UriSchemes,
 };
 
 use crate::history::in_location_locale;
@@ -70,7 +69,7 @@ fn shown_in(locale: &LocaleTag) -> Location {
     }
 }
 
-/// A link to `uri`, outside the app, refused unless it is a [`Uri`] the app's policy allows; see [`Destination::external`].
+/// A link to `uri`, outside the app, refused unless it is a [`Uri`]; see [`Destination::external`]. The link goes there only on a surface whose [`UriSchemes`] allow its scheme.
 ///
 /// A literal in `.rsx` that no app may open is already a transpiler error, so a refusal here is mostly a runtime string; turning the `Result` into a [`Destination`] with [`IntoDestination`] logs it, since a link that goes nowhere tells its caller nothing.
 pub fn external(uri: &str) -> Result<Destination, UriError> {

@@ -100,9 +100,14 @@ impl EmbeddedApp for Form {
 unsafe extern "C" fn create_form(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<platform_core::SurfaceConventions>,
+    uri_schemes: LentBytes<platform_core::UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> platform_core::guest::CallOutcome {
-    unsafe { crate::guest::create(args, conventions, instance, |_| Box::new(Form::default())) }
+    unsafe {
+        crate::guest::create(args, conventions, uri_schemes, instance, |_| {
+            Box::new(Form::default())
+        })
+    }
 }
 
 /// A host whose tree has a focusable before the box the guest is drawn in at [`AT`] and one after it, laid out and drawn, with the guest's stop in that box.
@@ -570,9 +575,14 @@ fn tell(what: String) {
 unsafe extern "C" fn create_pads(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<platform_core::SurfaceConventions>,
+    uri_schemes: LentBytes<platform_core::UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> platform_core::guest::CallOutcome {
-    unsafe { crate::guest::create(args, conventions, instance, |_| Box::new(Pads::default())) }
+    unsafe {
+        crate::guest::create(args, conventions, uri_schemes, instance, |_| {
+            Box::new(Pads::default())
+        })
+    }
 }
 
 fn pads() -> LoadedEmbed {

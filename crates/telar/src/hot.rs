@@ -363,6 +363,12 @@ impl crate::app_runtime::AppRuntime for HotApp {
             });
     }
 
+    fn set_surface_uri_schemes(&self, schemes: &platform_core::UriSchemes) {
+        self.library().send(schemes, |entries, schemes| unsafe {
+            (entries.set_surface_uri_schemes)(schemes)
+        });
+    }
+
     fn set_location_history(&self, history: &[platform_core::Location]) {
         self.library()
             .send(&history.to_vec(), |entries, history| unsafe {

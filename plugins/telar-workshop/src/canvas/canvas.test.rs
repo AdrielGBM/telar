@@ -14,7 +14,7 @@ use telar_components::{ModalProps, modal};
 use telar_devtools::workbench_scope;
 
 use super::frame::{BORDER, HANDLE, STAGE_MARGIN, VIEWPORT_MIN, clamp_viewport};
-use super::states::{allow_editor_scheme, editor_uri};
+use super::states::editor_uri;
 use super::*;
 use crate::settings::CanvasSize;
 use crate::test_support::{Drawn, drawn};
@@ -181,7 +181,6 @@ impl UriOpener for Recorder {
 
 #[test]
 fn a_build_error_shows_a_card_naming_where_the_preview_is_written() {
-    allow_editor_scheme();
     let opened = Arc::new(Mutex::new(Vec::new()));
     set_uri_opener(Arc::new(Recorder(Arc::clone(&opened))));
     let (_state, mut tree) = mounted(vec![
@@ -208,7 +207,6 @@ fn a_build_error_shows_a_card_naming_where_the_preview_is_written() {
 
 #[test]
 fn an_editor_uri_encodes_the_path_with_forward_slashes() {
-    allow_editor_scheme();
     assert_eq!(
         editor_uri("C:\\work\\my app\\button.rs", 7)
             .unwrap()

@@ -12,7 +12,7 @@ fn a_uri_needs_a_scheme_and_something_after_it() {
 }
 
 #[test]
-fn the_default_schemes_need_no_registration() {
+fn the_default_schemes_need_adding_by_no_app() {
     for uri in [
         "http://example.com",
         "https://example.com",
@@ -20,7 +20,11 @@ fn the_default_schemes_need_no_registration() {
         "tel:+34600000000",
         "sms:+34600000000",
     ] {
-        assert!(Uri::parse(uri).is_ok(), "{uri}");
+        assert_eq!(
+            UriSchemes::default().check(&Uri::parse(uri).unwrap()),
+            Ok(()),
+            "{uri}"
+        );
     }
 }
 
@@ -33,10 +37,10 @@ fn the_scheme_says_whether_it_is_a_web_page() {
 }
 
 #[test]
-fn script_data_and_file_uris_are_refused_even_once_registered() {
+fn script_data_and_file_uris_are_refused_and_no_app_can_allow_them() {
     for scheme in ["javascript", "vbscript", "data", "file", "JavaScript", "c"] {
         assert_eq!(
-            allow_uri_scheme(scheme),
+            UriSchemes::default().allowing(scheme),
             Err(UriError::DeniedScheme(scheme.to_ascii_lowercase().into())),
             "{scheme}"
         );
@@ -71,43 +75,56 @@ fn a_single_letter_scheme_is_a_drive_path() {
 }
 
 #[test]
-fn an_app_scheme_opens_only_once_the_app_allows_it() {
+fn an_app_scheme_is_a_uri_that_only_the_app_allowing_it_goes_to() {
+    let settings = Uri::parse("telar-test-app://settings").unwrap();
+    assert_eq!(settings.as_str(), "telar-test-app://settings");
     assert_eq!(
-        Uri::parse("telar-test-app://settings"),
+        UriSchemes::default().check(&settings),
         Err(UriError::SchemeNotAllowed("telar-test-app".into()))
     );
-    allow_uri_scheme("telar-test-app").unwrap();
-    assert_eq!(
-        Uri::parse("telar-test-app://settings").unwrap().as_str(),
-        "telar-test-app://settings"
-    );
+    let app = UriSchemes::default().allowing("telar-test-app").unwrap();
+    assert_eq!(app.check(&settings), Ok(()));
 }
 
-/// Two apps in one process each open only what they allowed: a scheme one registers is no scheme of the other's.
+/// Two apps in one process each go only where they allowed, and a URI made on one thread is judged alike on another.
 #[test]
-fn a_scheme_one_app_allows_is_not_allowed_for_another() {
-    allow_uri_scheme("telar-first-app").unwrap();
-    let other_app = std::thread::spawn(|| {
-        (
-            Uri::parse("telar-first-app://x").is_ok(),
-            allow_uri_scheme("telar-second-app").is_ok()
-                && is_uri_scheme_allowed("telar-second-app"),
-        )
+fn a_scheme_one_app_allows_is_refused_for_another_on_any_thread() {
+    let first = UriSchemes::default().allowing("telar-first-app").unwrap();
+    let second = UriSchemes::default().allowing("telar-second-app").unwrap();
+    let uri = Uri::parse("telar-first-app://x").unwrap();
+    let judged_elsewhere = std::thread::spawn({
+        let (first, second, uri) = (first.clone(), second.clone(), uri.clone());
+        move || (first.check(&uri).is_ok(), second.check(&uri).is_ok())
     })
     .join()
     .unwrap();
-    assert_eq!(other_app, (false, true));
-    assert!(Uri::parse("telar-first-app://x").is_ok());
-    assert!(!is_uri_scheme_allowed("telar-second-app"));
+    assert_eq!(judged_elsewhere, (true, false));
+    assert_eq!(
+        (first.check(&uri).is_ok(), second.check(&uri).is_ok()),
+        (true, false)
+    );
+    let made_elsewhere = std::thread::spawn(|| Uri::parse("telar-second-app:y"))
+        .join()
+        .unwrap()
+        .unwrap();
+    assert!(second.check(&made_elsewhere).is_ok());
+    assert!(first.check(&made_elsewhere).is_err());
 }
 
 #[test]
-fn schemes_match_ignoring_case() {
-    allow_uri_scheme("Telar-Case-Test").unwrap();
-    assert!(Uri::parse("telar-case-test:x").is_ok());
-    assert!(Uri::parse("TELAR-CASE-TEST:x").is_ok());
-    assert!(is_uri_scheme_allowed("HtTpS"));
-    assert!(!is_uri_scheme_allowed("FILE"));
+fn schemes_match_ignoring_case_and_adding_one_twice_is_harmless() {
+    let app = UriSchemes::default()
+        .allowing("Telar-Case-Test")
+        .unwrap()
+        .allowing("telar-case-test")
+        .unwrap();
+    assert_eq!(
+        app,
+        UriSchemes::default().allowing("telar-case-test").unwrap()
+    );
+    assert!(app.check(&Uri::parse("telar-case-test:x").unwrap()).is_ok());
+    assert!(app.check(&Uri::parse("TELAR-CASE-TEST:x").unwrap()).is_ok());
+    assert!(app.check(&Uri::parse("HtTpS://x").unwrap()).is_ok());
 }
 
 #[test]
@@ -134,7 +151,7 @@ fn whitespace_and_control_characters_are_refused_anywhere() {
 fn only_a_scheme_can_be_allowed() {
     for text in ["", "my app", "1app", "myapp:", "my/app"] {
         assert_eq!(
-            allow_uri_scheme(text),
+            UriSchemes::default().allowing(text),
             Err(UriError::InvalidScheme(text.into())),
             "{text:?}"
         );

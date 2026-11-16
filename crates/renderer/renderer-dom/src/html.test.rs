@@ -417,14 +417,12 @@ fn a_control_that_scrolls_is_one_element_that_scrolls_and_takes_the_tab_stop() {
 }
 
 #[test]
-fn a_document_writes_an_href_only_for_a_uri_the_app_allows() {
-    platform_core::allow_uri_scheme("telar-dom-test").unwrap();
+fn a_document_writes_an_href_only_for_a_uri() {
     let refused = [
         "javascript:alert(document.cookie)",
         "data:text/html,<script>alert(1)</script>",
         "file:///etc/passwd",
         "C:\\x.exe",
-        "telar-dom-unregistered:x",
     ];
     let mut commands = Vec::new();
     for (id, uri) in refused

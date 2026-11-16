@@ -97,13 +97,12 @@ fn external_literal(value: &str) -> Option<&str> {
         .strip_suffix('"')
 }
 
-/// Why a `to:` whose value is an `external("…")` literal can never open, when it cannot: the same policy a runtime string meets, reported at build time. A scheme that is only missing from the defaults is left to run time, where the app may have allowed it.
+/// Why a `to:` whose value is an `external("…")` literal can never open, when it cannot: what a runtime string is refused for, reported at build time. A scheme that is only missing from the defaults is left to the surface the link is shown on, whose app may allow it.
 pub(super) fn refused_external(value: &str) -> Option<String> {
     let literal = external_literal(value)?;
-    match semantics_core::Uri::parse(literal) {
-        Ok(_) | Err(semantics_core::UriError::SchemeNotAllowed(_)) => None,
-        Err(error) => Some(format!("`to:external(\"{literal}\")` is refused: {error}")),
-    }
+    semantics_core::Uri::parse(literal)
+        .err()
+        .map(|error| format!("`to:external(\"{literal}\")` is refused: {error}"))
 }
 
 impl ViewGen<'_> {

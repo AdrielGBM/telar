@@ -12,17 +12,9 @@ pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
     return config;
     #[cfg(feature = "hot-reload")]
     {
-        let AppConfig {
-            mut window,
-            fonts: faces,
-            font_family,
-        } = config;
-        apply_dev_window_overrides(&mut window);
-        AppConfig {
-            window,
-            fonts: faces,
-            font_family,
-        }
+        let mut config = config;
+        apply_dev_window_overrides(&mut config.window);
+        config
     }
 }
 

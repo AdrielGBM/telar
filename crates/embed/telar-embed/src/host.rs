@@ -44,7 +44,7 @@ pub struct LoadedEmbed {
     drag_started: Cell<bool>,
 }
 
-/// Loads a guest cdylib and creates one instance from it, its `create` entry handed `args`, on a surface put on the conventions of the active one, the host's surface it is drawn inside.
+/// Loads a guest cdylib and creates one instance from it, its `create` entry handed `args`, on a surface put on the conventions and URI schemes of the active one, the host's surface it is drawn inside: a link the guest draws goes only where the host's surface lets its own go.
 ///
 /// Each load opens a private copy of the library, so a rebuilt library at the same path never shares statics with one still mapped, a guest that panicked among them. The library is kept mapped for the guest's lifetime. An error names the library and why it could not be driven: one built against another telar, with other features, as a hot-reload library or as no telar guest at all is refused before anything of it runs but its initializers. A guest that stops while it is built, by panicking or by answering in bytes the host cannot read, comes back as the error too, a [`GuestStop`] the caller can downcast to.
 ///
@@ -74,10 +74,12 @@ impl LoadedEmbed {
         );
         let args = encode(&args.to_vec());
         let conventions = encode(&ui_core::surface_conventions());
+        let uri_schemes = encode(&ui_core::surface_uri_schemes());
         let instance = library.answer(Handle::NULL, |entries, instance| unsafe {
             (entries.create)(
                 LentBytes::lend(&args),
                 LentBytes::lend(&conventions),
+                LentBytes::lend(&uri_schemes),
                 instance,
             )
         });

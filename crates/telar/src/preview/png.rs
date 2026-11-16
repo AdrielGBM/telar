@@ -22,6 +22,7 @@ pub fn run_preview_png(
     crate::runner::install_preview_text_metrics(&config);
     ui_core::set_surface_conventions(crate::runner::preview_conventions());
     ui_core::open_surface_font_family(config.font_family.clone());
+    ui_core::set_surface_uri_schemes(config.uri_schemes.clone());
     let viewport = Size::new(
         config.window.width.max(1) as f32,
         config.window.height.max(1) as f32,

@@ -39,10 +39,7 @@ pub use location::Location;
 pub use modal::Modal;
 pub use outline::{HeadingLevel, Positioning, SetPosition};
 pub use reading::{NumericValue, NumericValueError, Orientation, SortDirection, Value};
-pub use uri::{
-    DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, RouteAddress, Uri, UriError, allow_uri_scheme,
-    is_uri_scheme_allowed,
-};
+pub use uri::{DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, RouteAddress, Uri, UriError, UriSchemes};
 
 /// What a box is.
 ///

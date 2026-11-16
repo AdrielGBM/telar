@@ -79,7 +79,7 @@ pub fn prerender_page<A: App>(
 ) -> PrerenderedPage {
     let previous_capture = ui_tree::set_element_capture(true);
     super::boot::install_app(app_name, Arc::new(NoPaths), StoredChoices::Now);
-    let (window, fonts) = split_config(config);
+    let (window, fonts, uri_schemes) = split_config(config);
     let font_family = fonts.family.clone();
     renderer_text::fonts::install(build_font_config(
         fonts,
@@ -93,6 +93,7 @@ pub fn prerender_page<A: App>(
     platform_core::set_location_format(platform_core::LocationFormat::new(&request.base));
     platform_core::set_asset_base(&request.base);
     // The page is served to every browser, and the one that takes it over shows its own convention from then on.
+    app.set_surface_uri_schemes(&uri_schemes);
     app.set_surface_conventions(platform_core::SurfaceConventions {
         keyboard: platform_core::KeyboardConvention::Pc,
         ..platform_core::SurfaceConventions::default()

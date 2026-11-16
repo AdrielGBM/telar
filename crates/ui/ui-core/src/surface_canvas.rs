@@ -10,7 +10,8 @@ use geometry_core::{Insets, Rect, Size, Transform};
 use i18n_core::{Direction, LocaleTag};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId, SizeDimension};
 use platform_core::{
-    AccessNode, ConsumedKeys, Event, FocusBoundary, SurfaceConventions, TextInput, WindowCommand,
+    AccessNode, ConsumedKeys, Event, FocusBoundary, SurfaceConventions, TextInput, UriSchemes,
+    WindowCommand,
 };
 use reactive_core::{RwSignal, in_surface_world, root_scope, signal};
 use renderer_core::{BorderRadius, DrawCommand};
@@ -49,11 +50,14 @@ pub struct SurfaceEnv {
     pub safe_area: Insets,
     /// What the platform the canvas is shown on says about its surface: the grid it lays out on, the keyboard its shortcuts are matched for, its wheel and what Tab past an end of a standalone canvas's focus order does. A [`NestedCanvas`] always releases focus past either end, whatever its conventions say.
     pub conventions: SurfaceConventions,
+    /// The schemes an external link on the canvas goes to: the defaults alone unless named, so a canvas showing the app's own tree is handed [`surface_uri_schemes`](crate::surface_uri_schemes) of the surface it is drawn in.
+    pub uri_schemes: UriSchemes,
 }
 
 impl SurfaceEnv {
     fn apply(&self) {
         crate::set_surface_conventions(self.conventions);
+        crate::set_surface_uri_schemes(self.uri_schemes.clone());
         theme_core::set_surface_mode(self.mode.as_ref());
         i18n_core::set_surface_locale(self.locale.as_ref());
         layout_reactive::set_surface_direction(self.direction);

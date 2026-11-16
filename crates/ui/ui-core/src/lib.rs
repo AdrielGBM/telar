@@ -76,6 +76,7 @@ mod surface_font;
 mod surface_frame;
 mod surface_style;
 mod surface_title;
+mod surface_uri_schemes;
 #[cfg(feature = "svg")]
 mod svg;
 #[cfg(test)]
@@ -194,6 +195,7 @@ pub use surface_title::{
     TitleParts, compose_title, open_surface_title, set_app_title, set_page_title, set_title_format,
     surface_title, use_surface_title,
 };
+pub use surface_uri_schemes::{set_surface_uri_schemes, surface_uri_schemes};
 #[cfg(feature = "svg")]
 pub use svg::Svg;
 pub use text::{Text, TextRun};

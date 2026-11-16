@@ -2,13 +2,13 @@
 
 use std::sync::Arc;
 
-use semantics_core::{RouteAddress, Uri};
+use semantics_core::{RouteAddress, Uri, UriSchemes};
 
 /// Hands a URI to whatever the system opens it with.
 ///
 /// `Send + Sync` for the same reason [`Clipboard`](crate::Clipboard) is: a backend may do the opening on a thread of its own, since asking a desktop portal or a launcher is a round trip the UI should not wait on.
 pub trait UriOpener: Send + Sync + 'static {
-    /// Opens `uri`, which the app's URI policy already allowed. `true` means handed off to the system, not opened: a backend may finish (or fail, and log it) on a thread of its own. `false` when nothing could be asked.
+    /// Opens `uri`, whose scheme the app already allowed. `true` means handed off to the system, not opened: a backend may finish (or fail, and log it) on a thread of its own. `false` when nothing could be asked.
     fn open(&self, uri: &Uri) -> bool;
 
     /// Opens `address`, a route of the app in its own `LocationFormat`, as a second view of the app beside this one. `false` where there is no second view to open, which is every target but a browser.
@@ -32,8 +32,14 @@ pub fn uri_opener() -> Option<Arc<dyn UriOpener>> {
     OPENER.get()
 }
 
-/// Opens `uri` with the system, reporting whether anything was asked to.
-pub fn open_uri(uri: &Uri) -> bool {
+/// Opens `uri` with the system once `schemes` allow its scheme, reporting whether anything was asked to.
+///
+/// `schemes` are the app's, stated by the caller rather than looked up, so a URI is judged alike on whichever thread opens it: a link followed on a surface is judged by the schemes that surface was handed, a thread of the app's own by the ones it was given.
+pub fn open_uri(uri: &Uri, schemes: &UriSchemes) -> bool {
+    if let Err(error) = schemes.check(uri) {
+        tracing::warn!(%uri, "the URI is not opened: {error}");
+        return false;
+    }
     let opened = uri_opener().is_some_and(|opener| opener.open(uri));
     if !opened {
         tracing::warn!(%uri, "nothing opened the URI");

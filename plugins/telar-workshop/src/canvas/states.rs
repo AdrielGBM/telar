@@ -1,7 +1,9 @@
 //! What the canvas shows in place of a preview: that there are none, or the card for one that failed.
 
 use telar::preview::PreviewEntry;
-use telar::{BuildFailure, LayoutError, LayoutItem, UnknownMode, Uri, UriError, open_uri};
+use telar::{
+    BuildFailure, LayoutError, LayoutItem, UnknownMode, Uri, UriError, UriSchemes, open_uri,
+};
 
 use super::failure_card::{FailureCardProps, failure_card};
 use super::no_previews::{NoPreviewsProps, no_previews};
@@ -63,12 +65,14 @@ pub(super) fn location(entry: &PreviewEntry) -> Option<String> {
 
 const EDITOR_SCHEME: &str = "vscode";
 
-/// Lets the workshop open [`editor_uri`]s, which are in the editor's own scheme rather than one every app may open.
-pub(crate) fn allow_editor_scheme() {
-    telar::allow_uri_scheme(EDITOR_SCHEME).expect("the editor's scheme is one an app may allow");
+/// The schemes the workshop opens [`editor_uri`]s under: the editor's own on top of the defaults. Stated where the workshop opens one rather than by the app it shows, since only the workshop builds an editor URI.
+fn editor_schemes() -> UriSchemes {
+    UriSchemes::default()
+        .allowing(EDITOR_SCHEME)
+        .expect("the editor's scheme is one an app may allow")
 }
 
-/// The URI that opens `file` at `line` in the editor the system hands it to, the path percent-encoded and with forward slashes on every platform. Refused until [`allow_editor_scheme`] ran.
+/// The URI that opens `file` at `line` in the editor the system hands it to, the path percent-encoded and with forward slashes on every platform.
 pub(crate) fn editor_uri(file: &str, line: u32) -> Result<Uri, UriError> {
     let path = file.replace('\\', "/");
     let mut encoded = String::with_capacity(path.len());
@@ -88,5 +92,5 @@ pub(crate) fn editor_uri(file: &str, line: u32) -> Result<Uri, UriError> {
 }
 
 pub(crate) fn open_in_editor(file: &str, line: u32) -> bool {
-    editor_uri(file, line).is_ok_and(|uri| open_uri(&uri))
+    editor_uri(file, line).is_ok_and(|uri| open_uri(&uri, &editor_schemes()))
 }

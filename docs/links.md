@@ -14,26 +14,46 @@ StyledContainer::new(style, paint, children)?.to(move || Page::Project(slug.clon
 ```
 
 `to:` takes any expression; one that reads `$state` is re-read when that state changes. `external("…")` only
-accepts a URI the app's [URI policy](#which-uris-open) allows. A runtime string it refuses yields an `Err`: the
-box stays a link but a disabled one that goes nowhere, and a warning names the rejected string and why.
+accepts text that is a `Uri`, and the link goes there only on a surface whose [URI schemes](#which-uris-open)
+allow its scheme. A runtime string it refuses, or a scheme the surface does not allow, leaves the box a link
+but a disabled one that goes nowhere, and a warning names the address and why.
 
 ## Which URIs open
 
-Every external address is a `Uri`, and a `Uri` exists only once it passed one policy. Every sink reads it from
-a `Uri` (`UriOpener::open` and `open_uri` take a `&Uri`; a document's `href`, a terminal's OSC 8 hyperlink and
-an accessibility URL are written from `Destination::External`), so none of them can be handed an address the
-policy did not see.
+Every external address is a `Uri`. A `Uri` names no scheme any app is refused and holds nothing that could
+pass for something else; which of the remaining schemes an app goes to is a `UriSchemes` value the app states,
+never something read from the thread or the process. It is judged where an address leaves the app:
 
-- **Allowed by default:** `http`, `https`, `mailto`, `tel`, `sms` (`DEFAULT_URI_SCHEMES`).
-- **Allowed by the app:** `allow_uri_scheme("myapp")` lets every `Uri` the app builds afterwards use `myapp:`.
-  The registration is the app's, kept with the thread its runtime runs on, so two apps in one process each
-  open only their own and a `Uri` built on another thread sees the defaults alone. Call it once, in the setup
-  block of `telar::app!`, which runs on every target and on both sides of a hot reload.
-  A plugin that owns a scheme registers it itself, where it is built: `WorkshopApp::new` allows `vscode:` for
-  its "open in editor" links, so an app that uses the workshop needs no call of its own. Schemes compare
-  ignoring case; registering one twice is harmless.
+- **A link** is judged on the surface it is built on, against the schemes the surface was handed: a runner
+  hands each surface the `AppConfig::uri_schemes` of the app it shows, a hot-reload host hands the guest's
+  surface its own, an embedding host hands a guest the schemes of the surface it is drawn inside, and a canvas
+  takes `SurfaceEnv::uri_schemes`. A link to a scheme they refuse has no destination, so a document's `href`, a
+  terminal's OSC 8 hyperlink and an accessibility URL never carry it, and a tap follows nothing.
+- **An open** is judged by the schemes its caller hands `open_uri(&uri, &schemes)`: a link followed on a
+  surface hands that surface's (`surface_uri_schemes()`), and a thread of the app's own hands the ones it was
+  given, so a URI opened from any thread is judged alike. A guest's request crosses to its host already judged.
+
+A URI decoded off the wire is parsed again and refused only for what no app may open, so it reads the same on
+whichever thread reads it.
+
+- **Allowed by default:** `http`, `https`, `mailto`, `tel`, `sms` (`DEFAULT_URI_SCHEMES`), the schemes of
+  `UriSchemes::default()`.
+- **Allowed by the app:** `UriSchemes::default().allowing("myapp")` adds `myapp:`. An app states it in its
+  configuration, which `telar::app!` hands to every runner and to both sides of a hot reload:
+
+  ```rust
+  telar::AppConfig {
+      uri_schemes: telar::UriSchemes::default().allowing("myapp").expect("a scheme an app may allow"),
+      ..telar::AppConfig::default()
+  }
+  ```
+
+  A plugin that opens a scheme of its own states it where it opens one: the workshop opens its "open in editor"
+  `vscode:` URIs under schemes that add `vscode`, so an app that uses the workshop needs nothing of its own.
+  Schemes compare ignoring case; adding one twice is harmless.
 - **Never allowed:** `javascript`, `vbscript`, `data`, `file` (`DENIED_URI_SCHEMES`) and any single-letter
-  scheme, which is a drive path (`C:\x.exe`). `allow_uri_scheme` refuses them, so nothing re-enables them.
+  scheme, which is a drive path (`C:\x.exe`). `Uri::parse` refuses them and `UriSchemes::allowing` will not add
+  them, so nothing re-enables them.
 - **Never allowed anywhere in the text:** whitespace and control characters, which a browser drops from a
   scheme (`java\tscript:`) and a launcher or a terminal reads as something else. Leading and trailing
   whitespace is refused, not trimmed.
@@ -41,10 +61,11 @@ policy did not see.
   bidirectional characters (U+202E, U+200B) would otherwise spoof the address in a terminal hyperlink, an
   accessibility URL or a log.
 
-`Uri::parse` and `Destination::external` return a `UriError` saying which rule refused the text. A literal in
-`.rsx` meets the same policy when the transpiler reads it: `to:external("javascript:…")`, a drive path, a
-denied scheme or a stray space is a build error on the attribute. A literal in a scheme that is not a default
-one (`myapp:`) is left to run time, where the app may have allowed it.
+`Uri::parse` and `Destination::external` return a `UriError` saying which rule refused the text, and
+`UriSchemes::check` says when a scheme is not one the schemes allow. A literal in `.rsx` meets the same rules
+when the transpiler reads it: `to:external("javascript:…")`, a drive path, a denied scheme or a stray space is a
+build error on the attribute. A literal in a scheme that is not a default one (`myapp:`) builds, and goes there
+on a surface whose app allows it.
 
 ## What a link is
 
@@ -52,13 +73,14 @@ one (`myapp:`) is left to run time, where the app may have allowed it.
 | --- | --- |
 | `Destination` | `Route(Location)`, `Anchor(name)`, `Locale(tag)` (the place being shown, in another language) or `External(Uri)`. Lives in `semantics-core`, beside `Location`, because a renderer and a platform both read it. |
 | `Role::Link(Link)` | A box that is a link carries where it goes in its role: `Link::destination` (`None` while it has nowhere to go) and `Link::current`. Nothing but a link can carry a destination or be current. |
-| `Uri`, `UriError`, `allow_uri_scheme` | An external address that passed the [URI policy](#which-uris-open), why text did not, and the app's registration of its own schemes. |
-| `RouteAddress` | A route's address, as `UriOpener::open_beside` takes it: parsed from the text `address_of` writes, and refused when it names a scheme or another host, so a custom `LocationFormat` cannot turn the second view into a way around the URI policy. |
+| `Uri`, `UriError` | An external address that names no scheme any app is refused, and why text is not one. |
+| `UriSchemes` | The [schemes an app goes to](#which-uris-open), as a value: `AppConfig::uri_schemes`, `SurfaceEnv::uri_schemes`, `set_surface_uri_schemes` and `surface_uri_schemes` for a surface, and the second argument of `open_uri`. |
+| `RouteAddress` | A route's address, as `UriOpener::open_beside` takes it: parsed from the text `address_of` writes, and refused when it names a scheme or another host, so a custom `LocationFormat` cannot turn the second view into a way around the URI schemes. |
 | `IntoDestination` | What `to` accepts: a `Destination`, a `Location`, or any `Route`, and an `Option` of one or the `Result` of `external`. `Route` lives in `platform-core` and is re-exported by `telar` (and by the `telar-navigate` plugin, as the same item), so this works without a navigator. |
 | `anchor`, `in_locale`, `external` | The constructors `.rsx` names. `in_locale(locale_tag!("en"))` is a language switch that keeps the page and the anchor; see [docs/location.md](location.md#the-locale-in-the-location). |
 | `address_of` | A destination as the text a target writes where an address goes: a route in the app's `location_format()` and in the locale its address carries (`/en/projects`), an anchor as the current location with that fragment, an external URI as itself. |
 | `follow`, `follow_beside`, `follow_pressed` | Going there from app code: push the route, reveal the anchor, open the URI. `follow_pressed` reads Ctrl, Cmd or Shift as a request for a view beside this one. |
-| `open_uri`, `UriOpener`, `set_uri_opener` | The `services-core` service that hands a `&Uri` to the system. Every runner installs its platform's; headless installs none, and a test installs its own. |
+| `open_uri`, `UriOpener`, `set_uri_opener` | The `services-core` service that hands a `&Uri` to the system once the `UriSchemes` it is given allow it. Every runner installs its platform's; headless installs none, and a test installs its own. |
 | `anchor:`, `PageAnchor::page_anchor` | Names a box as a place on the page; see [Anchors](#anchors). |
 | `register_anchor`, `reveal_anchor`, `has_anchor` | The lookup an anchor resolves through, which `anchor:` fills. |
 | `Event::BoxActivated` | A surface that follows links itself reporting a plain activation back to the app. |

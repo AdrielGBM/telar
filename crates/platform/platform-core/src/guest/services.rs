@@ -82,7 +82,7 @@ pub struct HostServices<Upper> {
     pub data: *const c_void,
     pub clipboard_text: Service<(), Option<String>>,
     pub set_clipboard_text: Service<String, ()>,
-    /// Refused by the host's URI policy as no URI.
+    /// Opened as asked, on whichever thread asks: the guest judged it by the [`UriSchemes`](semantics_core::UriSchemes) it states before asking.
     pub open_uri: Service<Uri, bool>,
     pub open_beside: Service<RouteAddress, bool>,
     pub stored_preference: Service<String, Option<String>>,

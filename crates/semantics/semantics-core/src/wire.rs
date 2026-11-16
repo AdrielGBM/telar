@@ -1,6 +1,6 @@
 //! The byte spelling of what a box is, for a guest's frame and its reader's snapshot to cross to the host.
 //!
-//! A link crosses as text and is parsed again on arrival, so the host's own URI policy is the one that decides: a link to a scheme the host refuses arrives as no link at all, and the box that carried it still arrives and still draws. That is [`take_link`]'s whole difference from an ordinary option.
+//! A link crosses as text and is parsed again on arrival, so bytes that are no URI, or that name a scheme no app may open, are refused as malformed. Whether the box's app goes to its scheme was judged where the link was made, against the [`UriSchemes`] its surface was handed, so the reading side judges nothing again, on whichever thread it reads.
 
 use std::num::NonZeroU64;
 
@@ -12,7 +12,7 @@ use wire_core::{
 use crate::{
     ConsumedKeys, CurrentKind, Destination, ElementId, Focusable, ForcedColors, HasPopup,
     HeadingLevel, Link, LocaleTag, Location, Modal, NumericValue, Orientation, Role, RouteAddress,
-    Semantics, SetPosition, SortDirection, SurfaceKey, Toggle, Uri, UriError, Value,
+    Semantics, SetPosition, SortDirection, SurfaceKey, Toggle, Uri, UriSchemes, Value,
 };
 
 wire_enum!(Role {
@@ -179,7 +179,7 @@ impl Wire for Location {
     }
 }
 
-/// Parsed again on arrival, so a URI whose scheme the reading side's policy refuses is refused as bytes that are no URI.
+/// Parsed again on arrival, so bytes that are no URI, or that name a scheme no app may open, are refused rather than carried as one.
 impl Shaped for Uri {
     const SHAPE: u64 = fold_shape(shape_named("Uri"), String::SHAPE);
 }
@@ -189,7 +189,29 @@ impl Wire for Uri {
         w.str(self.as_str());
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        Uri::parse(r.str()?).map_err(|_| WireError::Invalid("a URI this side's policy refuses"))
+        Uri::parse(r.str()?).map_err(|_| WireError::Invalid("a URI"))
+    }
+}
+
+/// The schemes added to the defaults, each allowed again on arrival, so bytes that name no scheme or a denied one are refused rather than carried as allowed.
+impl Shaped for UriSchemes {
+    const SHAPE: u64 = fold_shape(shape_named("UriSchemes"), <Vec<String>>::SHAPE);
+}
+
+impl Wire for UriSchemes {
+    fn put(&self, w: &mut Writer) {
+        w.len(self.added.len());
+        for scheme in self.added.iter() {
+            w.str(scheme);
+        }
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        let len = r.len()?;
+        (0..len).try_fold(UriSchemes::default(), |schemes, _| {
+            schemes
+                .allowing(r.str()?)
+                .map_err(|_| WireError::Invalid("a URI scheme an app may allow"))
+        })
     }
 }
 
@@ -272,12 +294,12 @@ pub fn put_link(w: &mut Writer, link: Option<&Destination>) {
         }
         Destination::External(uri) => {
             w.u8(EXTERNAL);
-            w.str(uri.as_str());
+            uri.put(w);
         }
     }
 }
 
-/// Reads a link [`put_link`] spelled, as no link when it goes outside the app to a scheme this side's policy refuses: a guest may allow a scheme its host never did, and the host's word is the one that holds.
+/// Reads a link [`put_link`] spelled.
 pub fn take_link(r: &mut Reader<'_>) -> Result<Option<Destination>, WireError> {
     if !bool::take(r)? {
         return Ok(None);
@@ -286,11 +308,7 @@ pub fn take_link(r: &mut Reader<'_>) -> Result<Option<Destination>, WireError> {
         ROUTE => Some(Destination::Route(Wire::take(r)?)),
         ANCHOR => Some(Destination::Anchor(Wire::take(r)?)),
         LOCALE => Some(Destination::Locale(Wire::take(r)?)),
-        EXTERNAL => match Uri::parse(r.str()?) {
-            Ok(uri) => Some(Destination::External(uri)),
-            Err(UriError::SchemeNotAllowed(_) | UriError::DeniedScheme(_)) => None,
-            Err(_) => return Err(WireError::Invalid("a link that is no URI")),
-        },
+        EXTERNAL => Some(Destination::External(Wire::take(r)?)),
         tag => {
             return Err(WireError::Tag {
                 of: "Destination",

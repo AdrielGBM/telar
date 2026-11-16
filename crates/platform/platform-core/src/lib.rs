@@ -51,7 +51,7 @@ pub use chord::{
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
 pub use destination::{
     DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, Destination, IntoDestination, RouteAddress, Uri,
-    UriError, address_of, allow_uri_scheme, anchor, external, in_locale, is_uri_scheme_allowed,
+    UriError, UriSchemes, address_of, anchor, external, in_locale,
 };
 pub use dom_code::unmodified_key_of_code;
 pub use drag_drop::{

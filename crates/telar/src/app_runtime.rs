@@ -118,6 +118,11 @@ pub trait AppRuntime: 'static {
         ui_core::set_surface_conventions(conventions);
     }
 
+    /// Puts the surface being mounted on the schemes its configuration states, in the worlds this application's widgets live in. See [`ui_core::set_surface_uri_schemes`].
+    fn set_surface_uri_schemes(&self, schemes: &platform_core::UriSchemes) {
+        ui_core::set_surface_uri_schemes(schemes.clone());
+    }
+
     /// Which of Tab and Shift+Tab would leave the application now, read against the focus registry this application's widgets live in. See [`ui_core::focus::tab_leaves`].
     fn tab_leaves(&self) -> platform_core::TabLeaves {
         ui_core::focus::tab_leaves()

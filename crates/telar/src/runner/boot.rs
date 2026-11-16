@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use platform_core::{Window, WindowConfig};
+use platform_core::{UriSchemes, Window, WindowConfig};
 use renderer_core::DebugSettings;
 use services_core::AppPathsProvider;
 use telar_project::protocol::RendererBackend;
@@ -38,12 +38,13 @@ pub(super) fn install_app(
     }
 }
 
-/// The window an [`AppConfig`] opens, and the faces and family its surface sets text in.
-pub(super) fn split_config(config: AppConfig) -> (WindowConfig, FontSetup) {
+/// The window an [`AppConfig`] opens, the faces and family its surface sets text in, and the URI schemes its links go to.
+pub(super) fn split_config(config: AppConfig) -> (WindowConfig, FontSetup, UriSchemes) {
     let AppConfig {
         window,
         fonts: faces,
         font_family,
+        uri_schemes,
     } = config;
     (
         window,
@@ -51,6 +52,7 @@ pub(super) fn split_config(config: AppConfig) -> (WindowConfig, FontSetup) {
             faces,
             family: font_family,
         },
+        uri_schemes,
     )
 }
 
@@ -61,6 +63,7 @@ pub(super) struct SurfaceBoot {
     backend: RendererBackend,
     debug: DebugSettings,
     fonts: FontSetup,
+    uri_schemes: UriSchemes,
 }
 
 impl SurfaceBoot {
@@ -69,6 +72,7 @@ impl SurfaceBoot {
         app_name: &str,
         paths: Arc<dyn AppPathsProvider>,
         fonts: FontSetup,
+        uri_schemes: UriSchemes,
         choices: StoredChoices,
         debug: DebugSettings,
     ) -> Self {
@@ -81,6 +85,7 @@ impl SurfaceBoot {
             backend,
             debug,
             fonts,
+            uri_schemes,
         }
     }
 
@@ -105,6 +110,7 @@ impl SurfaceBoot {
             renderer,
         );
         handler.title = Some(WindowTitle::opened_as(title));
+        handler.uri_schemes = self.uri_schemes;
         handler
     }
 }

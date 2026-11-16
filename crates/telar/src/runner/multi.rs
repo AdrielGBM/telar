@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use platform_core::{EventHandler, MultiSurfacePlatform, PlatformError, SurfaceId};
+use platform_core::{EventHandler, MultiSurfacePlatform, PlatformError, SurfaceId, UriSchemes};
 use services_core::AppPathsProvider;
 
 use crate::app::App;
@@ -34,11 +34,11 @@ where
     AF: Fn(SurfaceId) -> A + 'static,
 {
     let mut window_configs = Vec::with_capacity(surfaces.len());
-    let mut opened: HashMap<SurfaceId, (FontSetup, String)> = HashMap::new();
+    let mut opened: HashMap<SurfaceId, (FontSetup, UriSchemes, String)> = HashMap::new();
     for (id, config) in surfaces {
-        let (window, fonts) = split_config(config);
+        let (window, fonts, uri_schemes) = split_config(config);
         let window = window.titled_or(app_name);
-        opened.insert(id, (fonts, window.shown_title().to_owned()));
+        opened.insert(id, (fonts, uri_schemes, window.shown_title().to_owned()));
         window_configs.push((id, window));
     }
     let app_name = app_name.to_owned();
@@ -46,14 +46,18 @@ where
     let conventions = platform.surface_conventions();
 
     platform.run_surfaces(window_configs, move |id| {
-        let (fonts, title) = opened
-            .get(&id)
-            .cloned()
-            .unwrap_or_else(|| (FontSetup::default(), app_name.clone()));
+        let (fonts, uri_schemes, title) = opened.get(&id).cloned().unwrap_or_else(|| {
+            (
+                FontSetup::default(),
+                UriSchemes::default(),
+                app_name.clone(),
+            )
+        });
         let boot = SurfaceBoot::new(
             &app_name,
             paths_factory(id),
             fonts,
+            uri_schemes,
             StoredChoices::Now,
             debug,
         );
@@ -85,11 +89,12 @@ where
     W: super::host::SurfaceWindow,
     A: crate::app_runtime::AppRuntime,
 {
-    let (window, fonts) = split_config(config);
+    let (window, fonts, uri_schemes) = split_config(config);
     let boot = SurfaceBoot::new(
         app_name,
         paths,
         fonts,
+        uri_schemes,
         StoredChoices::Now,
         super::debug_settings::process_debug_settings(),
     );

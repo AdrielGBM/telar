@@ -232,6 +232,7 @@ impl Text {
                     .into_iter()
                     .map(|span| Span {
                         over: crate::inherit::scaled(&span.over),
+                        link: crate::link::admitted(span.link),
                         ..span
                     })
                     .collect()

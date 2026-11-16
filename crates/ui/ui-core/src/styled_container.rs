@@ -658,12 +658,12 @@ impl StyledContainer {
     ///
     /// A link is a control: it joins the tab order with the `link` role, follows its destination on a tap and on Enter (not Space, which scrolls the page a link sits on), and is announced with where it goes. Ctrl, Cmd or Shift on the press ask for a view beside this one, which only a browser has. An [`on_press`](Self::on_press) on the same box still runs, before the link is followed.
     ///
-    /// A destination that reads `None` right now still makes the box a link — it just makes it a disabled one: no `href`, not followed by a tap, Enter or assistive activation, and nothing for a screen reader or a terminal to point at. It becomes live again as soon as what it reads becomes `Some`.
+    /// A destination that reads `None` right now still makes the box a link — it just makes it a disabled one: no `href`, not followed by a tap, Enter or assistive activation, and nothing for a screen reader or a terminal to point at. It becomes live again as soon as what it reads becomes `Some`. An external URI whose scheme the surface's [`UriSchemes`](platform_core::UriSchemes) refuse reads as `None` (see [`set_surface_uri_schemes`](crate::set_surface_uri_schemes)).
     ///
     /// A surface that follows links by itself — a document, whose `<a>` answers the click — is left to: it reports the activation back rather than having it followed twice.
     pub fn to<D: IntoDestination>(mut self, destination: impl Fn() -> D + 'static) -> Self {
         let read: Rc<dyn Fn() -> Option<Destination>> =
-            Rc::new(move || destination().into_destination());
+            Rc::new(move || crate::link::admitted(destination().into_destination()));
         self.link_token = Some(crate::link::register_link(self.node, read.clone()));
         self.link = Some(read.clone());
         self.press.set_follow(move || {

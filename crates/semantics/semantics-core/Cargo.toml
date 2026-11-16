@@ -14,7 +14,6 @@ repository = { workspace = true }
 serde = ["dep:serde"]
 
 [dependencies]
-reactive-local = { workspace = true }
 wire-core = { workspace = true }
 
 icu_locale_core = { workspace = true, features = ["alloc"] }

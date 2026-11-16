@@ -41,6 +41,7 @@ pub fn run_previews(
     }
     ui_core::set_surface_conventions(crate::runner::preview_conventions());
     ui_core::open_surface_font_family(config.font_family.clone());
+    ui_core::set_surface_uri_schemes(config.uri_schemes.clone());
     if let Some(duplicates) = duplicate_ids(&entries) {
         run.errors.extend(duplicates.lines().map(str::to_string));
     }

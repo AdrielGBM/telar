@@ -620,7 +620,7 @@ fn an_equal_payload_rebuilt_in_a_new_arc_crosses_once_and_decodes_to_one_arc() {
 }
 
 #[test]
-fn a_link_to_a_scheme_the_host_refuses_is_dropped_and_the_frame_still_draws() {
+fn a_link_to_a_scheme_only_an_app_allows_crosses_the_frame_for_its_surface_to_judge() {
     let link = || Destination::External(Uri::parse("https://example.com").unwrap());
     let element = Element::new(
         ElementId(1),
@@ -648,12 +648,13 @@ fn a_link_to_a_scheme_the_host_refuses_is_dropped_and_the_frame_still_draws() {
         DrawCommand::PopElement,
     ];
     let mut bytes = FrameEncoder::new().encode(&commands).to_vec();
-    let mut refused = 0;
+    let mut renamed = 0;
     while let Some(at) = bytes.windows(5).position(|window| window == b"https") {
-        bytes[at..at + 5].copy_from_slice(b"zzzzz");
-        refused += 1;
+        bytes[at..at + 5].copy_from_slice(b"myapp");
+        renamed += 1;
     }
-    assert_eq!(refused, 2);
+    assert_eq!(renamed, 2);
+    let app_link = Destination::External(Uri::parse("myapp://example.com").unwrap());
     let mut out = Vec::new();
     FrameDecoder::new()
         .decode(&bytes, &mut out, |_| None)
@@ -661,14 +662,17 @@ fn a_link_to_a_scheme_the_host_refuses_is_dropped_and_the_frame_still_draws() {
     assert_eq!(out.len(), 3);
     assert_eq!(
         element_of(&out[0]).semantics.role,
-        Role::Link(Link::default()),
-        "still a link, going nowhere"
+        Role::Link(Link {
+            destination: Some(app_link.clone()),
+            current: false,
+        }),
+        "the surface the frame is drawn on decides whether it goes there"
     );
     let DrawCommand::Text { spans, text, .. } = &out[1] else {
         panic!("expected text, got {:?}", out[1]);
     };
     assert_eq!(&**text, "visit");
-    assert_eq!(spans.as_ref().unwrap()[0].link, None);
+    assert_eq!(spans.as_ref().unwrap()[0].link, Some(app_link));
 }
 
 #[test]

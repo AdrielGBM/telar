@@ -53,7 +53,7 @@ fn each_destination_is_written_as_the_address_a_target_carries() {
 }
 
 #[test]
-fn external_refuses_what_the_policy_does_not_allow_without_a_panic() {
+fn external_refuses_what_is_no_uri_without_a_panic() {
     assert_eq!(external("no-scheme"), Err(UriError::NotAbsolute));
     assert_eq!(
         external("javascript:alert(1)"),

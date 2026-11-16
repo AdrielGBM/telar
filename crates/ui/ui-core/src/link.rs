@@ -25,7 +25,7 @@ reactive_core::dropless_thread_local! {
     static NEXT_TOKEN: Cell<u64> = const { Cell::new(1) };
 }
 
-/// Goes where `destination` points, in place: pushes the route, reveals the anchor, switches the locale or opens the URI. `false` when nothing went anywhere — a route with no page, an anchor no box answers to, a locale the address does not carry, a URI nothing opened.
+/// Goes where `destination` points, in place: pushes the route, reveals the anchor, switches the locale or opens the URI. `false` when nothing went anywhere — a route with no page, an anchor no box answers to, a locale the address does not carry, a URI whose scheme the active surface's [`UriSchemes`](platform_core::UriSchemes) refuse or nothing opened.
 pub fn follow(destination: &Destination) -> bool {
     match destination {
         Destination::Route(location) => platform_core::push_location(location.clone()),
@@ -43,7 +43,21 @@ pub fn follow(destination: &Destination) -> bool {
             let shown = platform_core::location_history().pop().unwrap_or_default();
             platform_core::push_location(shown.with_locale(locale.clone()))
         }
-        Destination::External(uri) => services_core::open_uri(uri),
+        Destination::External(uri) => services_core::open_uri(uri, &crate::surface_uri_schemes()),
+    }
+}
+
+/// `destination` as a link on the active surface goes: nowhere when it is an external URI whose scheme the surface's [`UriSchemes`](platform_core::UriSchemes) refuse, which it says, since a link that goes nowhere tells its caller nothing.
+pub(crate) fn admitted(destination: Option<Destination>) -> Option<Destination> {
+    let Some(Destination::External(uri)) = &destination else {
+        return destination;
+    };
+    match crate::surface_uri_schemes().check(uri) {
+        Ok(()) => destination,
+        Err(error) => {
+            tracing::warn!("a link to {uri} goes nowhere: {error}");
+            None
+        }
     }
 }
 

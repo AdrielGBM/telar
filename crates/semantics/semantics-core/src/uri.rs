@@ -1,4 +1,4 @@
-//! [`Uri`]: an address outside the app, which exists only once the app's URI policy let it through.
+//! [`Uri`]: an address outside the app that names no scheme every app is refused, and [`UriSchemes`]: the schemes an app goes to, stated where a URI is opened or published.
 
 use std::fmt;
 use std::str::FromStr;
@@ -6,49 +6,45 @@ use std::sync::Arc;
 
 pub const DEFAULT_URI_SCHEMES: [&str; 5] = ["http", "https", "mailto", "tel", "sms"];
 
-/// The schemes no app may open, whatever it registers: each runs code or reads local files in whatever opens it. A single-letter scheme is refused too, since it is a drive path (`C:\x.exe`).
+/// The schemes no app may open, whatever it allows: each runs code or reads local files in whatever opens it. A single-letter scheme is refused too, since it is a drive path (`C:\x.exe`).
 pub const DENIED_URI_SCHEMES: [&str; 4] = ["javascript", "vbscript", "data", "file"];
 
-reactive_local::dropless_thread_local! {
-    // Kept with the thread the app's runtime runs on rather than with the process, so two apps in one process each open only what they allowed.
-    static APP_SCHEMES: released Vec<Box<str>> = const { Vec::new() };
-}
-
-/// Lets every [`Uri`] the app builds from now on use `scheme` (`"myapp"`, without the `:`), on top of [`DEFAULT_URI_SCHEMES`]. Refused for a scheme in [`DENIED_URI_SCHEMES`], a single letter, or text that is no scheme.
+/// The schemes an app opens and links to: [`DEFAULT_URI_SCHEMES`] and those it adds with [`allowing`](Self::allowing), compared ignoring case.
 ///
-/// The app is the one whose runtime runs on this thread: the registration is part of its context, as its locale is, and a [`Uri`] built on another thread sees the defaults alone.
-pub fn allow_uri_scheme(scheme: &str) -> Result<(), UriError> {
-    if !is_scheme(scheme) {
-        return Err(UriError::InvalidScheme(scheme.into()));
-    }
-    let scheme = scheme.to_ascii_lowercase();
-    if is_denied(&scheme) {
-        return Err(UriError::DeniedScheme(scheme.into()));
-    }
-    APP_SCHEMES.with(|schemes| {
-        let mut schemes = schemes.borrow_mut();
-        if !schemes.iter().any(|allowed| **allowed == *scheme) {
-            schemes.push(scheme.into());
+/// A value rather than a registry, so a [`Uri`] is judged alike on whichever thread it is: an app states it in its configuration, the runner hands it to each surface it shows, and whatever opens a URI is handed the schemes to judge it by.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct UriSchemes {
+    pub(crate) added: Arc<[Arc<str>]>,
+}
+
+impl UriSchemes {
+    /// These schemes and `scheme` (`"myapp"`, without the `:`). Refused for a scheme in [`DENIED_URI_SCHEMES`], a single letter, or text that is no scheme; adding one twice is harmless.
+    pub fn allowing(&self, scheme: &str) -> Result<Self, UriError> {
+        if !is_scheme(scheme) {
+            return Err(UriError::InvalidScheme(scheme.into()));
         }
-    });
-    Ok(())
-}
-
-/// Whether a [`Uri`] may use `scheme`: one of [`DEFAULT_URI_SCHEMES`] or one the app registered with [`allow_uri_scheme`], compared ignoring case.
-pub fn is_uri_scheme_allowed(scheme: &str) -> bool {
-    allowed_lowercase(&scheme.to_ascii_lowercase()).is_ok()
-}
-
-fn allowed_lowercase(scheme: &str) -> Result<(), UriError> {
-    if is_denied(scheme) {
-        return Err(UriError::DeniedScheme(scheme.into()));
+        let scheme = scheme.to_ascii_lowercase();
+        if is_denied(&scheme) {
+            return Err(UriError::DeniedScheme(scheme.into()));
+        }
+        let mut added = self.added.to_vec();
+        if let Err(at) = added.binary_search_by(|held| (**held).cmp(scheme.as_str())) {
+            added.insert(at, scheme.into());
+        }
+        Ok(Self {
+            added: added.into(),
+        })
     }
-    let registered =
-        APP_SCHEMES.with(|schemes| schemes.borrow().iter().any(|allowed| **allowed == *scheme));
-    if DEFAULT_URI_SCHEMES.contains(&scheme) || registered {
-        Ok(())
-    } else {
-        Err(UriError::SchemeNotAllowed(scheme.into()))
+
+    /// Whether `uri` may be opened or linked to under these schemes: refused with [`UriError::SchemeNotAllowed`] when its scheme is neither a default one nor one added.
+    pub fn check(&self, uri: &Uri) -> Result<(), UriError> {
+        let scheme = uri.scheme().to_ascii_lowercase();
+        let added = self.added.iter().any(|allowed| **allowed == *scheme);
+        if DEFAULT_URI_SCHEMES.contains(&scheme.as_str()) || added {
+            Ok(())
+        } else {
+            Err(UriError::SchemeNotAllowed(scheme.into()))
+        }
     }
 }
 
@@ -72,19 +68,22 @@ fn reject_unsafe_characters(text: &str) -> Result<(), UriError> {
     }
 }
 
-/// An absolute URI whose scheme the app's policy allows. The policy is checked when one is built, so whatever is handed one (an opener, a document's `href`, a terminal hyperlink) never sees an address the app did not allow.
+/// An absolute URI that names no scheme in [`DENIED_URI_SCHEMES`]. What no app may open is refused as one is built, on any thread; whether this app goes to its scheme is for the [`UriSchemes`] stated where it is opened or published to say.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Uri(Arc<str>);
 
 impl Uri {
-    /// `text` as a URI: a scheme (RFC 3986: a letter, then letters, digits, `+`, `-` or `.`), a `:` and something more, all ASCII with no whitespace or control character anywhere (surrounding whitespace is refused, not trimmed), and a scheme [`is_uri_scheme_allowed`].
+    /// `text` as a URI: a scheme (RFC 3986: a letter, then letters, digits, `+`, `-` or `.`) that is not [denied](DENIED_URI_SCHEMES), a `:` and something more, all ASCII with no whitespace or control character anywhere (surrounding whitespace is refused, not trimmed).
     pub fn parse(text: &str) -> Result<Self, UriError> {
         reject_unsafe_characters(text)?;
         let (scheme, _) = text
             .split_once(':')
             .filter(|(scheme, rest)| is_scheme(scheme) && !rest.is_empty())
             .ok_or(UriError::NotAbsolute)?;
-        allowed_lowercase(&scheme.to_ascii_lowercase())?;
+        let scheme = scheme.to_ascii_lowercase();
+        if is_denied(&scheme) {
+            return Err(UriError::DeniedScheme(scheme.into()));
+        }
         Ok(Self(text.into()))
     }
 
@@ -161,9 +160,9 @@ pub enum UriError {
     NotAscii(char),
     /// Its scheme, lowercased, is one no app may open: see [`DENIED_URI_SCHEMES`].
     DeniedScheme(Arc<str>),
-    /// Its scheme, lowercased, is neither a default one nor one the app registered with [`allow_uri_scheme`].
+    /// Its scheme, lowercased, is neither a default one nor one the [`UriSchemes`] it was judged by added.
     SchemeNotAllowed(Arc<str>),
-    /// What [`allow_uri_scheme`] was given is not a scheme.
+    /// What [`UriSchemes::allowing`] was given is not a scheme.
     InvalidScheme(Arc<str>),
     /// What [`RouteAddress::parse`] was given could lead outside the app.
     NotRouteAddress,
@@ -192,7 +191,7 @@ impl fmt::Display for UriError {
             Self::DeniedScheme(scheme) => write!(f, "`{scheme}:` is a scheme no app may open"),
             Self::SchemeNotAllowed(scheme) => write!(
                 f,
-                "`{scheme}:` is not a scheme this app allows: register it with `allow_uri_scheme(\"{scheme}\")`"
+                "`{scheme}:` is not a scheme this app allows: add it with `UriSchemes::allowing(\"{scheme}\")` in its `AppConfig`"
             ),
             Self::InvalidScheme(scheme) => write!(
                 f,

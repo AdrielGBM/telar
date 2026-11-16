@@ -188,6 +188,49 @@ fn a_script_uri_built_at_runtime_is_never_handed_to_the_system() {
     );
 }
 
+/// Two apps' surfaces on one thread: a scheme one allows is a live link there and goes nowhere on the other.
+#[test]
+fn a_link_goes_to_a_scheme_only_on_a_surface_whose_app_allows_it() {
+    let opened = opened();
+    let address = "telar-link-app://settings";
+    let allowing = crate::Surface::new();
+    let refusing = crate::Surface::new();
+    allowing.with_entered(|| {
+        crate::set_surface_uri_schemes(
+            platform_core::UriSchemes::default()
+                .allowing("telar-link-app")
+                .unwrap(),
+        )
+    });
+    refusing.with_entered(|| {
+        crate::set_surface_uri_schemes(
+            platform_core::UriSchemes::default()
+                .allowing("telar-other-app")
+                .unwrap(),
+        )
+    });
+    let destination = external(address).unwrap();
+    refusing.with_entered(|| {
+        let mut link = link_to(destination.clone());
+        tap(&mut link);
+        assert_eq!(
+            element_of(&link, true).semantics.role,
+            Role::Link(Link::default())
+        );
+        assert!(!follow(&destination));
+    });
+    assert!(!opened.uris.lock().unwrap().iter().any(|uri| uri == address));
+    allowing.with_entered(|| {
+        let mut link = link_to(destination.clone());
+        assert_eq!(
+            element_of(&link, true).semantics.role,
+            Role::Link(Link::to(destination.clone()))
+        );
+        tap(&mut link);
+    });
+    assert!(opened.uris.lock().unwrap().iter().any(|uri| uri == address));
+}
+
 #[test]
 fn a_modified_press_opens_a_route_beside_where_the_target_can() {
     let opened = opened();

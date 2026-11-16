@@ -332,8 +332,7 @@ pub use platform_core::{
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     CurrentKind, DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, Destination, IntoDestination, Route,
-    RouteAddress, Uri, UriError, address_of, allow_uri_scheme, anchor, external, in_locale,
-    is_uri_scheme_allowed,
+    RouteAddress, Uri, UriError, UriSchemes, address_of, anchor, external, in_locale,
 };
 #[cfg(feature = "runtime")]
 pub use preferences_core::{
@@ -369,8 +368,9 @@ pub use ui_core::{
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Breakpoints, breakpoint, layout_grid, set_safe_area_insets, set_surface_conventions,
-    set_surface_maximized, set_surface_size, surface_conventions, surface_size,
-    use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
+    set_surface_maximized, set_surface_size, set_surface_uri_schemes, surface_conventions,
+    surface_size, surface_uri_schemes, use_safe_area_insets, use_surface_height, use_surface_size,
+    use_surface_width,
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{NestedCanvas, SurfaceCanvas, SurfaceEnv, SurfaceFrame, composite_surface};

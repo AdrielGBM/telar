@@ -24,7 +24,7 @@ impl Destination {
         Self::Anchor(name.into())
     }
 
-    /// An external destination at `uri`, refused unless it is a [`Uri`] the app's policy allows.
+    /// An external destination at `uri`, refused unless it is a [`Uri`]. Whether the app goes there is the [`UriSchemes`](crate::UriSchemes) of the surface that shows or follows it to say.
     pub fn external(uri: &str) -> Result<Self, UriError> {
         Uri::parse(uri).map(Self::External)
     }

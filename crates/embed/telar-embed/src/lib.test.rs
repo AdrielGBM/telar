@@ -61,11 +61,13 @@ crate::embed!(|_args: &[String]| -> Box<dyn EmbeddedApp> { Box::new(Stub::new())
 fn create_through_table() -> (CallOutcome, Handle<GuestInstance>) {
     let args = wire_core::encode(&Vec::<String>::new());
     let conventions = wire_core::encode(&SurfaceConventions::default());
+    let uri_schemes = wire_core::encode(&UriSchemes::default());
     let mut instance = Handle::NULL;
     let outcome = unsafe {
         (TELAR_EMBED_ENTRIES.create)(
             LentBytes::lend(&args),
             LentBytes::lend(&conventions),
+            LentBytes::lend(&uri_schemes),
             &mut instance,
         )
     };
@@ -103,7 +105,11 @@ fn the_export_macro_builds_a_table_that_answers_in_bytes() {
 // These deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `EmbedInstance::on_event`.
 #[test]
 fn a_guest_records_the_modifiers_it_is_handed() {
-    let mut inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
+    let mut inst = EmbedInstance::new(
+        Box::new(Stub::new()),
+        SurfaceConventions::default(),
+        UriSchemes::default(),
+    );
     inst.canvas
         .with_entered(|| assert_eq!(ui_core::modifiers(), ModifiersState::default()));
 
@@ -119,7 +125,11 @@ fn a_guest_records_the_modifiers_it_is_handed() {
 
 #[test]
 fn an_overlay_event_reaches_the_registry_too() {
-    let inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
+    let inst = EmbedInstance::new(
+        Box::new(Stub::new()),
+        SurfaceConventions::default(),
+        UriSchemes::default(),
+    );
     inst.dispatch_overlays(&Event::ModifiersChanged { modifiers: shift() });
 
     inst.canvas.with_entered(|| {
@@ -132,7 +142,11 @@ fn an_overlay_event_reaches_the_registry_too() {
 
 #[test]
 fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
-    let mut inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
+    let mut inst = EmbedInstance::new(
+        Box::new(Stub::new()),
+        SurfaceConventions::default(),
+        UriSchemes::default(),
+    );
     inst.on_event(&Event::KeyPressed {
         key: Key::Char('c'),
         modifiers: ModifiersState::default(),
@@ -160,7 +174,11 @@ fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
 
 #[test]
 fn a_guest_paints_and_its_generation_is_stable_between_frames() {
-    let mut inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
+    let mut inst = EmbedInstance::new(
+        Box::new(Stub::new()),
+        SurfaceConventions::default(),
+        UriSchemes::default(),
+    );
     inst.relayout(40.0, 20.0);
     assert!(
         !inst.paint().is_empty(),
@@ -171,7 +189,11 @@ fn a_guest_paints_and_its_generation_is_stable_between_frames() {
 
 #[test]
 fn the_driver_forwards_metadata_from_the_embedded_app() {
-    let inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
+    let inst = EmbedInstance::new(
+        Box::new(Stub::new()),
+        SurfaceConventions::default(),
+        UriSchemes::default(),
+    );
     assert_eq!(inst.title(), "stub");
     assert_eq!(inst.id(), "stub");
     assert_eq!(inst.clear_color(), None);
@@ -329,6 +351,7 @@ fn waiting() -> (
     let inst = EmbedInstance::new(
         Box::new(Waiting::new(&fired, &moves)),
         SurfaceConventions::default(),
+        UriSchemes::default(),
     );
     (inst, fired, moves)
 }
@@ -521,11 +544,13 @@ fn create_with(
 ) -> (CallOutcome, Handle<GuestInstance>) {
     let args = wire_core::encode(&Vec::<String>::new());
     let conventions = wire_core::encode(&SurfaceConventions::default());
+    let uri_schemes = wire_core::encode(&UriSchemes::default());
     let mut instance = Handle::NULL;
     let outcome = unsafe {
         guest::create(
             LentBytes::lend(&args),
             LentBytes::lend(&conventions),
+            LentBytes::lend(&uri_schemes),
             &mut instance,
             make,
         )
@@ -561,10 +586,11 @@ fn a_guest_whose_build_panics_hands_back_no_instance() {
 unsafe extern "C" fn create_panicking(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<SurfaceConventions>,
+    uri_schemes: LentBytes<UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe {
-        guest::create(args, conventions, instance, |_| {
+        guest::create(args, conventions, uri_schemes, instance, |_| {
             Box::new(BorrowsTwice::new(true))
         })
     }
@@ -574,10 +600,11 @@ unsafe extern "C" fn create_panicking(
 unsafe extern "C" fn create_fixed(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<SurfaceConventions>,
+    uri_schemes: LentBytes<UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe {
-        guest::create(args, conventions, instance, |_| {
+        guest::create(args, conventions, uri_schemes, instance, |_| {
             Box::new(BorrowsTwice::new(false))
         })
     }
@@ -587,10 +614,11 @@ unsafe extern "C" fn create_fixed(
 unsafe extern "C" fn create_nothing(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<SurfaceConventions>,
+    uri_schemes: LentBytes<UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe {
-        guest::create(args, conventions, instance, |_| {
+        guest::create(args, conventions, uri_schemes, instance, |_| {
             panic!("the guest could not find its assets")
         })
     }
@@ -712,12 +740,13 @@ fn a_host_reads_what_a_guest_answers_into_its_own_values() {
 unsafe extern "C" fn create_waiting(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<SurfaceConventions>,
+    uri_schemes: LentBytes<UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     let fired = Rc::new(std::cell::Cell::new(false));
     let moves = Rc::new(std::cell::Cell::new(0));
     unsafe {
-        guest::create(args, conventions, instance, |_| {
+        guest::create(args, conventions, uri_schemes, instance, |_| {
             Box::new(Waiting::new(&fired, &moves))
         })
     }
@@ -767,10 +796,11 @@ impl EmbeddedApp for WakesTheHost {
 unsafe extern "C" fn create_waking(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<SurfaceConventions>,
+    uri_schemes: LentBytes<UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     unsafe {
-        guest::create(args, conventions, instance, |_| {
+        guest::create(args, conventions, uri_schemes, instance, |_| {
             Box::new(WakesTheHost(Stub::new()))
         })
     }
@@ -807,10 +837,15 @@ unsafe extern "C" fn record_services(services: HostServices<UpperTable>) -> Call
 unsafe extern "C" fn create_after_services(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<SurfaceConventions>,
+    uri_schemes: LentBytes<UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     HANDED_BEFORE_BUILD.set(HOST_SERVED.get());
-    unsafe { guest::create(args, conventions, instance, |_| Box::new(Stub::new())) }
+    unsafe {
+        guest::create(args, conventions, uri_schemes, instance, |_| {
+            Box::new(Stub::new())
+        })
+    }
 }
 
 #[cfg(all(feature = "host", unix))]
@@ -983,7 +1018,11 @@ impl motion_core::Tickable for PanicsWhenTicked {
 
 #[test]
 fn an_animation_that_panics_mid_tick_leaves_later_flushes_working() {
-    let inst = EmbedInstance::new(Box::new(Stub::new()), SurfaceConventions::default());
+    let inst = EmbedInstance::new(
+        Box::new(Stub::new()),
+        SurfaceConventions::default(),
+        UriSchemes::default(),
+    );
     let animation: std::rc::Rc<dyn motion_core::Tickable> = std::rc::Rc::new(PanicsWhenTicked);
     inst.canvas.with_entered(|| {
         motion_core::register(motion_core::next_id(), std::rc::Rc::downgrade(&animation))
@@ -1077,6 +1116,7 @@ fn a_press_on_nothing_in_a_guest_lets_its_keyboard_go() {
     let mut inst = EmbedInstance::new(
         Box::new(TwoFocusables { content: None }),
         SurfaceConventions::default(),
+        UriSchemes::default(),
     );
     inst.relayout(100.0, 100.0);
     let _ = inst.paint();
@@ -1098,6 +1138,7 @@ fn tab_past_a_guests_last_focusable_steps_out_to_the_host() {
     let mut inst = EmbedInstance::new(
         Box::new(TwoFocusables { content: None }),
         SurfaceConventions::default(),
+        UriSchemes::default(),
     );
     inst.relayout(100.0, 100.0);
     let _ = inst.paint();
@@ -1124,16 +1165,23 @@ fn on_cells() -> SurfaceConventions {
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 thread_local! {
     static CONVENTIONS_HANDED: std::cell::Cell<Option<SurfaceConventions>> = const { std::cell::Cell::new(None) };
+    static SCHEMES_HANDED: std::cell::RefCell<Option<UriSchemes>> = const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe extern "C" fn create_recording(
     args: LentBytes<Vec<String>>,
     conventions: LentBytes<SurfaceConventions>,
+    uri_schemes: LentBytes<UriSchemes>,
     instance: *mut Handle<GuestInstance>,
 ) -> CallOutcome {
     CONVENTIONS_HANDED.set(Some(unsafe { conventions.read() }));
-    unsafe { guest::create(args, conventions, instance, |_| Box::new(Stub::new())) }
+    SCHEMES_HANDED.set(Some(unsafe { uri_schemes.read() }));
+    unsafe {
+        guest::create(args, conventions, uri_schemes, instance, |_| {
+            Box::new(Stub::new())
+        })
+    }
 }
 
 /// A guest is drawn inside a surface of the host's, so it is built on that surface's conventions rather than on the defaults its own copy starts with.
@@ -1146,9 +1194,37 @@ fn a_guest_is_handed_the_conventions_of_the_surface_it_is_drawn_inside() {
     drop(embed);
 }
 
+fn embed_test_schemes() -> UriSchemes {
+    UriSchemes::default().allowing("telar-embed-host").unwrap()
+}
+
+/// A guest's links go where the host's surface lets its own go, not where the guest's copy would by itself.
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+#[test]
+fn a_guest_is_handed_the_uri_schemes_of_the_surface_it_is_drawn_inside() {
+    ui_core::set_surface_uri_schemes(embed_test_schemes());
+    let embed = embedded(create_recording).expect("the guest loads");
+    assert_eq!(SCHEMES_HANDED.take(), Some(embed_test_schemes()));
+    drop(embed);
+}
+
+#[test]
+fn an_instance_links_by_the_uri_schemes_it_is_given() {
+    let inst = EmbedInstance::new(
+        Box::new(Stub::new()),
+        SurfaceConventions::default(),
+        embed_test_schemes(),
+    );
+    assert_eq!(
+        inst.canvas.with_entered(ui_core::surface_uri_schemes),
+        embed_test_schemes()
+    );
+    assert_eq!(ui_core::surface_uri_schemes(), UriSchemes::default());
+}
+
 #[test]
 fn an_instance_lays_out_on_the_conventions_it_is_given() {
-    let inst = EmbedInstance::new(Box::new(Stub::new()), on_cells());
+    let inst = EmbedInstance::new(Box::new(Stub::new()), on_cells(), UriSchemes::default());
     assert_eq!(
         inst.canvas.with_entered(ui_core::surface_conventions),
         on_cells()

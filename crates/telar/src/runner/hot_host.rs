@@ -38,7 +38,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         std::process::exit(1);
     };
     let paths: Arc<dyn services_core::AppPathsProvider> = Arc::new(DesktopPathsProvider);
-    let (mut window, fonts) = split_config(config);
+    let (mut window, fonts, uri_schemes) = split_config(config);
     // Installed before the library loads, because the guest is handed the fonts, paths and store installed here.
     #[cfg(feature = "shaper")]
     super::font_config::install_window_fonts(&fonts, paths.as_ref());
@@ -46,6 +46,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         app_name,
         paths,
         fonts,
+        uri_schemes,
         StoredChoices::Now,
         super::debug_settings::process_debug_settings(),
     );

@@ -6546,7 +6546,6 @@ version = "0.2.3"
 dependencies = [
  "icu_locale_core",
  "serde",
- "telar-reactive-local",
  "telar-wire-core",
 ]
 

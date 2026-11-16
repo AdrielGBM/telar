@@ -14,18 +14,59 @@ impl UriOpener for Recorder {
     }
 }
 
-#[test]
-fn opening_goes_through_the_installed_backend_and_beside_is_declined_by_default() {
+fn installed_recorder() -> Arc<Recorder> {
     let recorder = Arc::new(Recorder::default());
     set_uri_opener(recorder.clone());
-    assert!(open_uri(&Uri::parse("mailto:someone@example.com").unwrap()));
-    assert!(!open_beside(
-        &RouteAddress::parse("/projects/telar").unwrap()
-    ));
-    assert_eq!(
-        *recorder.opened.lock().unwrap(),
-        vec!["mailto:someone@example.com".to_string()]
-    );
+    recorder
+}
+
+#[test]
+fn opening_goes_through_the_installed_backend_and_beside_is_declined_by_default() {
+    test_process::OwnProcess::new(
+        module_path!(),
+        "opening_goes_through_the_installed_backend_and_beside_is_declined_by_default",
+    )
+    .run(|| {
+        let recorder = installed_recorder();
+        assert!(open_uri(
+            &Uri::parse("mailto:someone@example.com").unwrap(),
+            &UriSchemes::default()
+        ));
+        assert!(!open_beside(
+            &RouteAddress::parse("/projects/telar").unwrap()
+        ));
+        assert_eq!(
+            *recorder.opened.lock().unwrap(),
+            vec!["mailto:someone@example.com".to_string()]
+        );
+    });
+}
+
+#[test]
+fn a_uri_opens_only_under_schemes_that_allow_it_whichever_thread_asks() {
+    test_process::OwnProcess::new(
+        module_path!(),
+        "a_uri_opens_only_under_schemes_that_allow_it_whichever_thread_asks",
+    )
+    .run(|| {
+        let recorder = installed_recorder();
+        let app = UriSchemes::default().allowing("telar-opener-app").unwrap();
+        let opened_elsewhere = std::thread::spawn({
+            let app = app.clone();
+            move || {
+                let uri = Uri::parse("telar-opener-app://a").unwrap();
+                (open_uri(&uri, &UriSchemes::default()), open_uri(&uri, &app))
+            }
+        })
+        .join()
+        .unwrap();
+        assert_eq!(opened_elsewhere, (false, true));
+        assert!(!open_uri(&Uri::parse("telar-other-app://b").unwrap(), &app));
+        assert_eq!(
+            *recorder.opened.lock().unwrap(),
+            vec!["telar-opener-app://a".to_string()]
+        );
+    });
 }
 
 #[cfg(all(unix, feature = "system-opener"))]

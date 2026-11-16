@@ -136,21 +136,44 @@ fn external_link_bytes(address: &str) -> Vec<u8> {
 }
 
 #[test]
-fn a_link_to_a_scheme_this_side_refuses_arrives_as_no_link() {
-    for address in ["unregistered-scheme:x", "javascript:alert(1)"] {
+fn a_link_to_an_app_scheme_reads_back_alike_on_any_thread() {
+    let bytes = external_link_bytes("telar-wire-app:x");
+    let read_elsewhere = std::thread::spawn({
+        let bytes = bytes.clone();
+        move || take_link(&mut Reader::new(&bytes))
+    })
+    .join()
+    .unwrap();
+    let expected = Ok(Some(Destination::external("telar-wire-app:x").unwrap()));
+    assert_eq!(read_elsewhere, expected);
+    assert_eq!(take_link(&mut Reader::new(&bytes)), expected);
+}
+
+#[test]
+fn a_link_that_is_no_uri_or_names_a_denied_scheme_is_malformed() {
+    for address in ["no scheme here", "javascript:alert(1)"] {
         let bytes = external_link_bytes(address);
-        let mut r = Reader::new(&bytes);
-        assert_eq!(take_link(&mut r), Ok(None));
-        assert!(r.is_empty());
+        assert_eq!(
+            take_link(&mut Reader::new(&bytes)),
+            Err(WireError::Invalid("a URI")),
+            "{address}"
+        );
     }
 }
 
 #[test]
-fn a_link_that_is_no_uri_at_all_is_malformed() {
-    let bytes = external_link_bytes("no scheme here");
+fn the_schemes_an_app_allows_cross_and_a_denied_one_is_refused() {
+    round_trip(UriSchemes::default());
+    round_trip(
+        UriSchemes::default()
+            .allowing("myapp")
+            .unwrap()
+            .allowing("vscode")
+            .unwrap(),
+    );
     assert_eq!(
-        take_link(&mut Reader::new(&bytes)),
-        Err(WireError::Invalid("a link that is no URI"))
+        decode::<UriSchemes>(&encode(&vec!["javascript".to_string()])),
+        Err(WireError::Invalid("a URI scheme an app may allow"))
     );
 }
 
@@ -214,33 +237,6 @@ fn a_link_round_trips_with_where_it_goes_and_whether_it_is_current() {
             ..every_field_set()
         });
     }
-}
-
-#[test]
-fn a_box_whose_link_is_refused_still_arrives_whole() {
-    let semantics = Semantics {
-        role: Role::Link(Link {
-            destination: Some(Destination::external("https://example.com").unwrap()),
-            current: true,
-        }),
-        ..every_field_set()
-    };
-    let mut bytes = encode(&semantics);
-    let at = bytes
-        .windows(5)
-        .position(|window| window == b"https")
-        .unwrap();
-    bytes[at..at + 5].copy_from_slice(b"zzzzz");
-    assert_eq!(
-        decode::<Semantics>(&bytes),
-        Ok(Semantics {
-            role: Role::Link(Link {
-                destination: None,
-                current: true,
-            }),
-            ..semantics
-        })
-    );
 }
 
 #[test]
@@ -377,4 +373,14 @@ fn the_bytes_of_every_kind_of_link_are_pinned_to_the_wire_version() {
         put_link(&mut w, link.as_ref());
     }
     wire_core::assert_golden!("src/wire_golden/links.hex", w.as_slice());
+}
+
+#[test]
+fn the_bytes_of_an_app_s_schemes_are_pinned_to_the_wire_version() {
+    let schemes = UriSchemes::default()
+        .allowing("vscode")
+        .unwrap()
+        .allowing("myapp")
+        .unwrap();
+    wire_core::assert_golden!("src/wire_golden/uri_schemes.hex", &encode(&schemes));
 }
