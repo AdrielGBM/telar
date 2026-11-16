@@ -318,3 +318,12 @@ fn a_value_written_bare_is_a_build_error() {
     assert!(code.contains("compile_error!"), "{code}");
     assert!(code.contains("`valued:` needs the value to read"), "{code}");
 }
+
+#[test]
+fn a_corner_is_kept_by_a_box_that_paints_nothing_at_rest() {
+    let code = transpiled("row radius:6 hover_style(fill:$theme.surface)\n    text \"x\"\n");
+    assert!(
+        code.contains("RectStyle::default().with_radius(BorderRadius::all(6.0))"),
+        "{code}"
+    );
+}

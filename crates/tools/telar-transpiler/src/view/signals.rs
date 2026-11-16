@@ -762,6 +762,10 @@ pub(super) fn build_rect_style(
     } else {
         match solid_fill {
             Some(f) => format!("RectStyle::default().with_fill({f}).with_radius({radius})"),
+            // A corner with nothing painted inside it still shapes what is drawn round the box: its focus ring, and what a caller's surface paints.
+            None if radius != "BorderRadius::zero()" => {
+                format!("RectStyle::default().with_radius({radius})")
+            }
             None => "RectStyle::default()".to_string(),
         }
     }
