@@ -8,6 +8,41 @@ fn own(id: u64) -> AccessId {
     AccessId::own(FocusId(id))
 }
 
+/// The name each node of `update` is read by, as every AccessKit adapter reads it: a label's from its value, anything else's from its label.
+fn names_read(update: &TreeUpdate) -> std::collections::HashMap<NodeId, String> {
+    let tree = accesskit_consumer::Tree::new(update.clone(), true);
+    let state = tree.state();
+    update
+        .nodes
+        .iter()
+        .filter_map(|(id, _)| {
+            let node = state.node_by_tree_local_id(*id, TreeId::ROOT)?;
+            let name = if node.label_comes_from_value() {
+                node.value()
+            } else {
+                node.label()
+            };
+            Some((*id, name?))
+        })
+        .collect()
+}
+
+// A line of text is read by its words, which AccessKit's adapters take from a label's value rather than its label.
+#[test]
+fn a_label_is_read_by_its_words() {
+    let update = tree_update(
+        &[node(None, Role::Label, "Unsaved changes")],
+        window("Editor"),
+        None,
+    );
+    assert_eq!(
+        names_read(&update)
+            .get(&update.nodes[0].0)
+            .map(String::as_str),
+        Some("Unsaved changes")
+    );
+}
+
 fn window(title: &str) -> WindowFrame<'_> {
     WindowFrame {
         title,
@@ -670,21 +705,23 @@ mod from_a_screen {
     }
 
     fn named<'a>(update: &'a TreeUpdate, name: &str) -> &'a Node {
+        let names = names_read(update);
         update
             .nodes
             .iter()
+            .find(|(id, _)| names.get(id).map(String::as_str) == Some(name))
             .map(|(_, node)| node)
-            .find(|node| node.label() == Some(name))
             .unwrap_or_else(|| panic!("{name:?} is in the tree: {:#?}", labels(update)))
     }
 
     /// The control called `name`, where a caption beside it may carry the same words.
     fn control<'a>(update: &'a TreeUpdate, name: &str) -> &'a Node {
+        let names = names_read(update);
         update
             .nodes
             .iter()
+            .find(|(id, node)| names.get(id).map(String::as_str) == Some(name) && focusable(node))
             .map(|(_, node)| node)
-            .find(|node| node.label() == Some(name) && focusable(node))
             .unwrap_or_else(|| {
                 panic!(
                     "a control called {name:?} is in the tree: {:#?}",
@@ -694,10 +731,11 @@ mod from_a_screen {
     }
 
     fn labels(update: &TreeUpdate) -> Vec<(AkRole, String)> {
+        let names = names_read(update);
         update
             .nodes
             .iter()
-            .map(|(_, node)| (node.role(), node.label().unwrap_or_default().to_string()))
+            .map(|(id, node)| (node.role(), names.get(id).cloned().unwrap_or_default()))
             .collect()
     }
 
@@ -786,6 +824,7 @@ mod from_a_screen {
             Ok(box_item(column))
         });
         let update = published(&tree);
+        let names = names_read(&update);
         for (role, text) in [
             (AkRole::ListItem, "First"),
             (AkRole::Section, "Middle"),
@@ -801,7 +840,8 @@ mod from_a_screen {
                 update
                     .nodes
                     .iter()
-                    .any(|(id, node)| held.contains(id) && node.label() == Some(text)),
+                    .any(|(id, _)| held.contains(id)
+                        && names.get(id).map(String::as_str) == Some(text)),
                 "{role:?} holds {text:?}"
             );
         }
@@ -975,12 +1015,11 @@ mod from_a_screen {
         for _ in 0..8 {
             focus::focus_next();
             let update = published(&tree);
-            let (_, node) = update
-                .nodes
-                .iter()
-                .find(|(id, _)| *id == update.focus)
-                .expect("the focus names a node in the tree");
-            walked.push(node.label().unwrap_or_default().to_string());
+            walked.push(
+                names_read(&update)
+                    .remove(&update.focus)
+                    .expect("the focus names a node in the tree"),
+            );
         }
         assert_eq!(
             walked,

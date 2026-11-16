@@ -111,8 +111,14 @@ pub fn tree_update(
 
     for (index, node) in nodes.iter().enumerate() {
         let id = ids[index];
-        let mut ak = Node::new(role_of(&node.role));
-        ak.set_label(node.name.clone());
+        let role = role_of(&node.role);
+        let mut ak = Node::new(role);
+        // A reader takes a label's words from its value, and every other node's name from its label.
+        if role == AkRole::Label {
+            ak.set_value(node.name.clone());
+        } else {
+            ak.set_label(node.name.clone());
+        }
         ak.set_bounds(AkRect {
             x0: node.rect.x as f64,
             y0: node.rect.y as f64,
