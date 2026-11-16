@@ -110,8 +110,7 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
         let handler = &self.handler;
         self.a11y_tree.publish(
             || (handler.accessibility(), handler.root_language()),
-            self.config.shown_title(),
-            window.scale_factor(),
+            platform_accesskit::WindowFrame::of(window, self.config.shown_title()),
             |build| adapter.update_if_active(build),
         );
     }
@@ -455,8 +454,7 @@ impl SurfaceRunner {
         let handler = &self.handler;
         self.a11y_tree.publish(
             || (handler.accessibility(), handler.root_language()),
-            &self.title,
-            self.window.scale_factor(),
+            platform_accesskit::WindowFrame::of(&self.window, &self.title),
             |build| adapter.update_if_active(build),
         );
     }

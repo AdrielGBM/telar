@@ -1,4 +1,4 @@
-use geometry_core::Rect;
+use geometry_core::{Rect, Size};
 use platform_core::{FocusId, HeadingLevel, Link, SurfaceKey};
 use std::num::{NonZeroU32, NonZeroU64};
 
@@ -6,6 +6,14 @@ use super::*;
 
 fn own(id: u64) -> AccessId {
     AccessId::own(FocusId(id))
+}
+
+fn window(title: &str) -> WindowFrame<'_> {
+    WindowFrame {
+        title,
+        size: Size::new(800.0, 600.0),
+        scale_factor: 1.0,
+    }
 }
 
 fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
@@ -47,7 +55,7 @@ fn the_window_is_the_root_and_everything_hangs_from_it() {
         node(Some(7), Role::Button, "Save"),
         node(None, Role::Label, "Unsaved changes"),
     ];
-    let update = tree_update(&nodes, "Editor", None, 1.0);
+    let update = tree_update(&nodes, window("Editor"), None);
 
     assert_eq!(update.nodes.len(), 3, "two nodes plus the window");
     let (root_id, root) = update.nodes.last().unwrap();
@@ -61,15 +69,18 @@ fn the_window_is_the_root_and_everything_hangs_from_it() {
 /// A control keeps its identity across frames, so a reader is not told the button appeared anew every time anything else on screen moved. The label beside it has no identity to keep and does not need one.
 #[test]
 fn a_control_keeps_the_same_node_id_between_updates() {
-    let first = tree_update(&[node(Some(7), Role::Button, "Save")], "Editor", None, 1.0);
+    let first = tree_update(
+        &[node(Some(7), Role::Button, "Save")],
+        window("Editor"),
+        None,
+    );
     let with_extra = tree_update(
         &[
             node(None, Role::Label, "Heading"),
             node(Some(7), Role::Button, "Save"),
         ],
-        "Editor",
+        window("Editor"),
         None,
-        1.0,
     );
     let button = |u: &TreeUpdate| {
         u.nodes
@@ -84,11 +95,11 @@ fn a_control_keeps_the_same_node_id_between_updates() {
 /// The focused control is what the reader is told about first, and the window stands in when nothing is.
 #[test]
 fn focus_points_at_the_focused_control_or_at_the_window() {
-    assert_eq!(tree_update(&[], "Editor", None, 1.0).focus, ROOT);
+    assert_eq!(tree_update(&[], window("Editor"), None).focus, ROOT);
 
     let mut focused = node(Some(7), Role::Button, "Save");
     focused.focused = true;
-    let update = tree_update(&[focused], "Editor", None, 1.0);
+    let update = tree_update(&[focused], window("Editor"), None);
     assert_ne!(update.focus, ROOT);
     assert_eq!(update.focus, update.nodes[0].0);
 }
@@ -97,7 +108,7 @@ fn focus_points_at_the_focused_control_or_at_the_window() {
 #[test]
 fn a_request_maps_back_to_the_control_that_claimed_it() {
     let nodes = vec![node(Some(7), Role::Button, "Save")];
-    let update = tree_update(&nodes, "Editor", None, 1.0);
+    let update = tree_update(&nodes, window("Editor"), None);
     let target = update.nodes[0].0;
 
     let request = ActionRequest {
@@ -149,7 +160,7 @@ fn a_nested_surfaces_control_and_the_windows_own_never_share_a_node() {
             ..node(None, Role::Button, "Nested")
         },
     ];
-    let update = tree_update(&nodes, "Editor", None, 1.0);
+    let update = tree_update(&nodes, window("Editor"), None);
     let ids: Vec<NodeId> = update.nodes.iter().map(|(id, _)| *id).collect();
     let distinct: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
     assert_eq!(
@@ -191,9 +202,8 @@ fn a_node_in_another_language_says_which() {
     quote.lang = Some(platform_core::locale_tag!("fr"));
     let update = tree_update(
         &[quote, node(None, Role::Label, "Hello")],
-        "Editor",
+        window("Editor"),
         None,
-        1.0,
     );
     assert_eq!(update.nodes[0].1.language(), Some("fr"));
     assert_eq!(update.nodes[1].1.language(), None);
@@ -207,9 +217,8 @@ fn the_root_language_is_the_surfaces_own_and_a_node_can_still_override_it() {
     quote.lang = Some(platform_core::locale_tag!("fr"));
     let update = tree_update(
         &[quote, node(None, Role::Label, "Hello")],
-        "Editor",
+        window("Editor"),
         Some(&platform_core::locale_tag!("es")),
-        1.0,
     );
     let (root_id, root) = update.nodes.last().unwrap();
     assert_eq!(*root_id, ROOT);
@@ -223,9 +232,8 @@ fn the_root_language_is_the_surfaces_own_and_a_node_can_still_override_it() {
 fn a_named_drawing_is_an_image() {
     let update = tree_update(
         &[node(None, Role::Drawing, "Company logo")],
-        "Editor",
+        window("Editor"),
         None,
-        1.0,
     );
     assert_eq!(update.nodes[0].1.role(), AkRole::Image);
     assert_eq!(update.nodes[0].1.label(), Some("Company logo"));
@@ -240,7 +248,7 @@ fn a_link_is_announced_with_where_it_goes() {
         )),
         "Example",
     );
-    let update = tree_update(&[link], "Links", None, 1.0);
+    let update = tree_update(&[link], window("Links"), None);
     let ak = &update.nodes[0].1;
     assert_eq!(ak.role(), AkRole::Link);
     assert_eq!(ak.url(), Some("https://example.com"));
@@ -256,9 +264,8 @@ fn a_current_link_says_what_it_is_the_current_one_of() {
         };
         tree_update(
             &[node(Some(3), Role::Link(link), "Web")],
-            "Links",
+            window("Links"),
             None,
-            1.0,
         )
         .nodes[0]
             .1
@@ -287,7 +294,11 @@ fn a_state_lands_where_its_role_is_read_from() {
         toggled: Some(Toggle::from(on)),
         ..node(Some(1), role, "Control")
     };
-    let published = |node: AccessNode| tree_update(&[node], "States", None, 1.0).nodes[0].1.clone();
+    let published = |node: AccessNode| {
+        tree_update(&[node], window("States"), None).nodes[0]
+            .1
+            .clone()
+    };
 
     let switch = published(toggled(Role::Switch, true));
     assert_eq!(switch.role(), AkRole::Switch);
@@ -338,7 +349,7 @@ fn a_tree_row_says_it_is_chosen_open_and_where_it_sits() {
         }),
         ..node(Some(4), Role::TreeItem, "Buttons")
     };
-    let update = tree_update(&[row], "Explorer", None, 1.0);
+    let update = tree_update(&[row], window("Explorer"), None);
     let ak = &update.nodes[0].1;
     assert_eq!(ak.role(), AkRole::TreeItem);
     assert_eq!(ak.is_selected(), Some(true));
@@ -350,7 +361,7 @@ fn a_tree_row_says_it_is_chosen_open_and_where_it_sits() {
         toggled: Some(Toggle::Off),
         ..node(Some(5), Role::TreeItem, "Primary")
     };
-    let update = tree_update(&[leaf], "Explorer", None, 1.0);
+    let update = tree_update(&[leaf], window("Explorer"), None);
     let ak = &update.nodes[0].1;
     assert_eq!(ak.is_expanded(), None, "a leaf is neither open nor shut");
     assert_eq!(ak.is_selected(), Some(false));
@@ -369,7 +380,7 @@ fn a_control_publishes_what_it_opens() {
         opening(2, Role::ComboBox, HasPopup::ListBox),
         node(Some(3), Role::Button, "Save"),
     ];
-    let update = tree_update(&nodes, "Editor", None, 1.0);
+    let update = tree_update(&nodes, window("Editor"), None);
     assert_eq!(update.nodes[0].1.has_popup(), Some(AkHasPopup::Menu));
     assert_eq!(update.nodes[0].1.is_expanded(), Some(false));
     assert_eq!(update.nodes[1].1.has_popup(), Some(AkHasPopup::Listbox));
@@ -385,14 +396,14 @@ fn a_focused_tree_names_the_row_its_cursor_is_on() {
         ..node(Some(3), Role::Tree, "Files")
     };
     let row = node(Some(5), Role::TreeItem, "docs");
-    let update = tree_update(&[tree.clone(), row], "Explorer", None, 1.0);
+    let update = tree_update(&[tree.clone(), row], window("Explorer"), None);
     assert_eq!(
         update.nodes[0].1.active_descendant(),
         Some(control_id(own(5)))
     );
     assert_eq!(update.focus, control_id(own(3)), "focus stays on the tree");
 
-    let update = tree_update(&[tree], "Explorer", None, 1.0);
+    let update = tree_update(&[tree], window("Explorer"), None);
     assert_eq!(update.nodes[0].1.active_descendant(), None);
 }
 
@@ -410,7 +421,7 @@ fn an_open_combobox_names_the_list_it_controls() {
         toggled: Some(Toggle::On),
         ..node(Some(8), Role::Option, "Large")
     };
-    let update = tree_update(&[combobox.clone(), list, row], "Form", None, 1.0);
+    let update = tree_update(&[combobox.clone(), list, row], window("Form"), None);
     assert_eq!(update.nodes[0].1.controls(), [control_id(own(7))]);
     assert_eq!(
         update.nodes[0].1.active_descendant(),
@@ -424,7 +435,7 @@ fn an_open_combobox_names_the_list_it_controls() {
         "the chosen option is selected"
     );
 
-    let update = tree_update(&[combobox], "Form", None, 1.0);
+    let update = tree_update(&[combobox], window("Form"), None);
     assert!(update.nodes[0].1.controls().is_empty());
 }
 
@@ -437,7 +448,7 @@ fn a_chosen_tab_names_the_panel_it_controls() {
         ..node(Some(4), Role::Tab, "Pricing")
     };
     let panel = node(Some(9), Role::TabPanel, "Pricing");
-    let update = tree_update(&[tab, panel], "Settings", None, 1.0);
+    let update = tree_update(&[tab, panel], window("Settings"), None);
     assert_eq!(update.nodes[0].1.controls(), [control_id(own(9))]);
     assert_eq!(update.nodes[1].1.role(), AkRole::TabPanel);
     assert_eq!(update.nodes[1].1.label(), Some("Pricing"));
@@ -451,7 +462,7 @@ fn a_radio_group_is_published_around_its_radios() {
         toggled: Some(Toggle::On),
         ..node(Some(5), Role::Radio, "Large")
     };
-    let update = tree_update(&[group, radio], "Form", None, 1.0);
+    let update = tree_update(&[group, radio], window("Form"), None);
     assert_eq!(update.nodes[0].1.role(), AkRole::RadioGroup);
     assert_eq!(update.nodes[0].1.children(), [control_id(own(5))]);
     assert_eq!(update.nodes[1].1.role(), AkRole::RadioButton);
@@ -653,9 +664,8 @@ mod from_a_screen {
         let nodes = ui_core::accessibility::snapshot(&tree.commands());
         tree_update(
             &nodes,
-            "Settings",
+            window("Settings"),
             Some(&platform_core::locale_tag!("en")),
-            1.0,
         )
     }
 
@@ -1007,9 +1017,8 @@ fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
     ] {
         let update = tree_update(
             &[node(Some(1), role.clone(), "Item")],
-            "Workbench",
+            window("Workbench"),
             None,
-            1.0,
         );
         assert_eq!(update.nodes[0].1.role(), expected, "{role:?}");
     }
@@ -1025,7 +1034,7 @@ fn a_splitter_publishes_its_value_and_its_orientation() {
         orientation: Some(Orientation::Vertical),
         ..node(Some(1), Role::Splitter, "Sidebar")
     };
-    let published = tree_update(&[splitter], "Splitter", None, 1.0).nodes[0]
+    let published = tree_update(&[splitter], window("Splitter"), None).nodes[0]
         .1
         .clone();
     assert_eq!(published.role(), AkRole::Splitter);
@@ -1041,7 +1050,7 @@ fn a_splitter_publishes_its_value_and_its_orientation() {
         orientation: Some(Orientation::Horizontal),
         ..node(Some(2), Role::Splitter, "Panels")
     };
-    let published = tree_update(&[bar], "Splitter", None, 1.0).nodes[0]
+    let published = tree_update(&[bar], window("Splitter"), None).nodes[0]
         .1
         .clone();
     assert_eq!(
@@ -1051,7 +1060,9 @@ fn a_splitter_publishes_its_value_and_its_orientation() {
 }
 
 fn published_alone(node: AccessNode) -> Node {
-    tree_update(&[node], "Window", None, 1.0).nodes[0].1.clone()
+    tree_update(&[node], window("Window"), None).nodes[0]
+        .1
+        .clone()
 }
 
 /// A checkbox standing for a set some of which are ticked, and a toggle button partly pressed, publish `mixed`; a selection is there or not, so a mixed one is published as not selected.
@@ -1131,7 +1142,7 @@ fn a_control_publishes_the_keys_that_run_its_command() {
         },
         node(Some(2), Role::MenuItem, "Close"),
     ];
-    let update = tree_update(&nodes, "Edit", None, 1.0);
+    let update = tree_update(&nodes, window("Edit"), None);
     assert_eq!(update.nodes[0].1.keyboard_shortcut(), Some("Control+Z"));
     assert_eq!(update.nodes[1].1.keyboard_shortcut(), None);
 }
@@ -1155,7 +1166,7 @@ fn a_grid_says_its_rows_its_cells_and_how_it_is_sorted() {
         row,
         node(Some(5), Role::GridCell, "notes.txt"),
     ];
-    let update = tree_update(&nodes, "Explorer", None, 1.0);
+    let update = tree_update(&nodes, window("Explorer"), None);
     let roles: Vec<AkRole> = update.nodes[..5].iter().map(|(_, ak)| ak.role()).collect();
     assert_eq!(
         roles,
@@ -1185,7 +1196,7 @@ fn a_list_of_several_choices_publishes_that_it_is_multiselectable() {
         },
         node(Some(2), Role::ListBox, "Sender"),
     ];
-    let update = tree_update(&nodes, "Mail", None, 1.0);
+    let update = tree_update(&nodes, window("Mail"), None);
     assert!(update.nodes[0].1.is_multiselectable());
     assert!(!update.nodes[1].1.is_multiselectable());
 }
@@ -1202,7 +1213,7 @@ fn an_item_publishes_only_the_numbers_its_role_takes() {
             }),
             ..node(Some(4), role, "Item")
         };
-        let update = tree_update(&[item], "Window", None, 1.0);
+        let update = tree_update(&[item], window("Window"), None);
         let ak = &update.nodes[0].1;
         (ak.level(), ak.position_in_set(), ak.row_index())
     };
@@ -1221,7 +1232,7 @@ fn a_dialog_in_a_modal_layer_is_published_modal() {
             modal,
             ..node(None, Role::Dialog, "Terms")
         };
-        tree_update(&[node], "Window", None, 1.0).nodes[0]
+        tree_update(&[node], window("Window"), None).nodes[0]
             .1
             .is_modal()
     };
@@ -1245,7 +1256,7 @@ fn a_header_row_with_no_name_is_a_row_with_its_index() {
         header_row,
         node(Some(2), Role::ColumnHeader, "Name"),
     ];
-    let update = tree_update(&nodes, "Explorer", None, 1.0);
+    let update = tree_update(&nodes, window("Explorer"), None);
     let row = &update.nodes[1].1;
     assert_eq!(row.role(), AkRole::Row);
     assert_eq!(row.row_index(), Some(0));
@@ -1293,7 +1304,7 @@ fn each_node_is_a_child_of_the_one_it_sits_in() {
         inside(5, node(Some(6), Role::GridCell, "notes.txt")),
         inside(5, node(Some(7), Role::GridCell, "4 KB")),
     ];
-    let update = tree_update(&nodes, "Explorer", None, 1.0);
+    let update = tree_update(&nodes, window("Explorer"), None);
     let window = update_of(&update, ROOT);
     assert_eq!(window.children(), [label_id(0), control_id(own(1))]);
     assert_eq!(
@@ -1323,7 +1334,7 @@ fn a_grid_says_its_counts_and_each_cell_its_place() {
         inside(4, node(Some(6), Role::GridCell, "notes.txt")),
         inside(4, node(Some(7), Role::GridCell, "4 KB")),
     ];
-    let update = tree_update(&nodes, "Explorer", None, 1.0);
+    let update = tree_update(&nodes, window("Explorer"), None);
     let grid = update_of(&update, control_id(own(1)));
     assert_eq!(grid.row_count(), Some(501));
     assert_eq!(grid.column_count(), Some(2));
@@ -1348,7 +1359,7 @@ fn a_grid_of_rows_that_say_no_place_counts_them() {
         inside(0, node(Some(4), Role::Row, "")),
         inside(3, node(Some(5), Role::GridCell, "Alan")),
     ];
-    let update = tree_update(&nodes, "Scores", None, 1.0);
+    let update = tree_update(&nodes, window("Scores"), None);
     assert_eq!(update_of(&update, control_id(own(1))).row_count(), Some(2));
     assert_eq!(update_of(&update, control_id(own(4))).row_index(), Some(1));
     assert_eq!(update_of(&update, control_id(own(5))).row_index(), Some(1));
@@ -1373,7 +1384,7 @@ fn a_set_says_its_size_where_its_items_agree_on_it() {
         inside(3, item(5, Role::TreeItem, 1, 1, 2)),
         inside(3, item(6, Role::TreeItem, 2, 1, 5)),
     ];
-    let update = tree_update(&nodes, "Window", None, 1.0);
+    let update = tree_update(&nodes, window("Window"), None);
     assert_eq!(
         update_of(&update, control_id(own(1))).size_of_set(),
         Some(300)
@@ -1396,7 +1407,7 @@ fn a_nested_node_keeps_its_id_and_its_active_descendant() {
         },
         inside(0, node(Some(3), Role::TreeItem, "src")),
     ];
-    let update = tree_update(&nodes, "Window", None, 1.0);
+    let update = tree_update(&nodes, window("Window"), None);
     assert_eq!(update.focus, control_id(own(1)));
     let tree = update_of(&update, control_id(own(1)));
     assert_eq!(tree.active_descendant(), Some(control_id(own(3))));
@@ -1423,7 +1434,7 @@ fn every_role_said_from_outside_is_published_as_the_role_a_reader_knows() {
         (Role::Alert, AkRole::Alert),
     ] {
         assert!(role.is_annotatable(), "{role:?}");
-        let update = tree_update(&[node(None, role.clone(), "Item")], "Window", None, 1.0);
+        let update = tree_update(&[node(None, role.clone(), "Item")], window("Window"), None);
         let published = &update.nodes[0].1;
         assert_eq!(published.role(), expected, "{role:?}");
         let level = matches!(role, Role::Heading(_)).then_some(3);
@@ -1462,7 +1473,7 @@ fn a_slider_that_steps_claims_and_receives_its_steps() {
     };
     let still = node(Some(10), Role::Slider, "Balance");
     let nodes = [slider, still];
-    let update = tree_update(&nodes, "Mixer", None, 1.0);
+    let update = tree_update(&nodes, window("Mixer"), None);
     let (stepping, fixed) = (&update.nodes[0], &update.nodes[1]);
     assert!(stepping.1.supports_action(Action::Increment));
     assert!(stepping.1.supports_action(Action::Decrement));
@@ -1519,7 +1530,7 @@ fn a_field_publishes_its_text_as_runs_and_its_caret_in_them() {
         },
         ..node(Some(3), Role::MultilineTextInput, "Notes")
     };
-    let update = tree_update(&[field], "Form", None, 1.0);
+    let update = tree_update(&[field], window("Form"), None);
     let ak = &update.nodes[0].1;
     assert_eq!(ak.value(), Some("añil\nazul"));
     assert!(ak.supports_action(Action::SetValue));
@@ -1557,7 +1568,7 @@ fn a_reader_placing_a_fields_caret_names_a_place_in_its_text() {
         ..node(Some(3), Role::MultilineTextInput, "Notes")
     };
     let nodes = [field];
-    let update = tree_update(&nodes, "Form", None, 1.0);
+    let update = tree_update(&nodes, window("Form"), None);
     let (id, ak) = &update.nodes[0];
     let at = |run: usize, character_index: usize| TextPosition {
         node: ak.children()[run],
@@ -1604,7 +1615,7 @@ fn a_soft_wrapped_field_publishes_a_run_per_line_it_is_drawn_in() {
         }),
         ..node(Some(3), Role::MultilineTextInput, "Notes")
     };
-    let update = tree_update(&[field], "Form", None, 1.0);
+    let update = tree_update(&[field], window("Form"), None);
     let ak = &update.nodes[0].1;
     let runs: Vec<Option<&str>> = ak
         .children()
@@ -1632,7 +1643,7 @@ fn an_empty_field_has_one_empty_run() {
         }),
         ..node(Some(3), Role::TextInput, "Search")
     };
-    let update = tree_update(&[field], "Form", None, 1.0);
+    let update = tree_update(&[field], window("Form"), None);
     let ak = &update.nodes[0].1;
     assert_eq!(ak.children().len(), 1);
     assert_eq!(update_of(&update, ak.children()[0]).value(), Some(""));
@@ -1648,7 +1659,7 @@ fn an_empty_field_has_one_empty_run() {
 fn every_heading_is_published_at_the_level_a_reader_says() {
     for level in HeadingLevel::ALL {
         let heading = node(None, Role::Heading(level), "Title");
-        let update = tree_update(std::slice::from_ref(&heading), "Window", None, 1.0);
+        let update = tree_update(std::slice::from_ref(&heading), window("Window"), None);
         let published = update.nodes[0].1.level().map(|level| level + 1);
         assert_eq!(
             platform_core::accessibility::transcript(&[heading]),
@@ -1668,7 +1679,14 @@ fn a_touch_lands_on_the_control_drawn_under_it_at_the_windows_scale() {
     next.rect = Rect::new(100.0, 0.0, 100.0, 40.0);
     let touched = |scale_factor: f64, x: f64, y: f64| {
         let tree = accesskit_consumer::Tree::new(
-            tree_update(&[back.clone(), next.clone()], "Steps", None, scale_factor),
+            tree_update(
+                &[back.clone(), next.clone()],
+                WindowFrame {
+                    scale_factor,
+                    ..window("Steps")
+                },
+                None,
+            ),
             true,
         );
         let window = tree.state().root();
@@ -1685,6 +1703,38 @@ fn a_touch_lands_on_the_control_drawn_under_it_at_the_windows_scale() {
     assert_eq!(touched(1.0, 150.0, 20.0).as_deref(), Some("Next"));
 }
 
+/// A touch between the controls is on the window, which a reader names, and one past the window's edge is on nothing of it.
+#[test]
+fn the_window_spans_the_screen_it_is_shown_on() {
+    let mut save = node(Some(1), Role::Button, "Save");
+    save.rect = Rect::new(0.0, 0.0, 100.0, 40.0);
+    let tree = accesskit_consumer::Tree::new(
+        tree_update(
+            &[save],
+            WindowFrame {
+                title: "Editor",
+                size: Size::new(400.0, 800.0),
+                scale_factor: 2.5,
+            },
+            None,
+        ),
+        true,
+    );
+    let window = tree.state().root();
+    let touched = |x: f64, y: f64| {
+        window
+            .node_at_point(
+                window.transform().inverse() * accesskit::Point::new(x, y),
+                &accesskit_consumer::common_filter,
+            )
+            .and_then(|node| node.label())
+    };
+
+    assert_eq!(touched(50.0, 50.0).as_deref(), Some("Save"));
+    assert_eq!(touched(900.0, 1900.0).as_deref(), Some("Editor"));
+    assert_eq!(touched(1100.0, 1900.0), None);
+}
+
 /// With no reader attached the adapter never asks for the tree, and the window must not have assembled it.
 #[test]
 fn a_window_no_reader_is_attached_to_builds_no_snapshot() {
@@ -1695,8 +1745,7 @@ fn a_window_no_reader_is_attached_to_builds_no_snapshot() {
             built += 1;
             (vec![node(Some(7), Role::Button, "Save")], None)
         },
-        "Editor",
-        1.0,
+        window("Editor"),
         |_build| {},
     );
 
@@ -1711,8 +1760,7 @@ fn a_window_a_reader_is_attached_to_publishes_after_each_frame() {
     for label in ["Save", "Saved"] {
         tree.publish(
             || (vec![node(Some(7), Role::Button, label)], None),
-            "Editor",
-            1.0,
+            window("Editor"),
             |build| published.push(build()),
         );
     }

@@ -2,12 +2,15 @@
 //!
 //! The tree is the one the desktop publishes, mapped by `platform-accesskit`; this is only the Android end of it — finding the view to hang it on, and crossing from Android's UI thread, where a reader's requests arrive, to the activity's main thread, where the UI answers them.
 
+use std::sync::mpsc::{SendError, SyncSender, sync_channel};
+use std::time::Duration;
+
 use accesskit_android::InjectingAdapter;
 use accesskit_android::jni::objects::JObject;
 use accesskit_android::jni::{JNIEnv, JavaVM};
 use android_activity::AndroidApp;
-use platform_accesskit::PublishedTree;
 use platform_accesskit::accesskit::{ActionHandler, ActionRequest, ActivationHandler, TreeUpdate};
+use platform_accesskit::{PublishedTree, WindowFrame};
 use platform_core::{EventHandler, Window};
 use winit::event_loop::EventLoopProxy;
 
@@ -16,8 +19,8 @@ use crate::stepping::{as_step, offer_steps_as_scrolls};
 
 /// What a reader asked for, on its way from Android's UI thread to the one the UI lives on.
 pub(crate) enum AccessRequest {
-    /// Something started reading the window and needs the whole tree.
-    InitialTree,
+    /// Something started reading the window and waits, on Android's UI thread, for the whole tree.
+    InitialTree(SyncSender<TreeUpdate>),
     /// A reader asked a node to do something.
     Action(ActionRequest),
 }
@@ -33,6 +36,9 @@ pub(crate) struct Accessibility {
 
 /// Room for the local references one call into the adapter makes, which a frame of this size frees when the call returns.
 const LOCAL_REFERENCES: i32 = 16;
+
+/// How long a reader asking for the tree waits on Android's UI thread for the loop to build it, before it is given a placeholder the loop fills in when it gets there.
+const INITIAL_TREE_WAIT: Duration = Duration::from_millis(500);
 
 impl Accessibility {
     /// Hangs the adapter on the activity's decor view, routing what a reader asks through `proxy`. `None` on a device too old to load the adapter's view delegate, or where the activity cannot be reached.
@@ -70,36 +76,54 @@ impl Accessibility {
         })
     }
 
-    /// Answers what a reader asked: the tree, or an action taken through the same door the keyboard and a tap use, and then the tree as it now stands.
+    /// Answers what a reader asked: the tree, handed to the reader waiting for it, or an action taken through the same door the keyboard and a tap use, and then the tree as it now stands.
     pub(crate) fn answer<W: Window>(
         &mut self,
         request: AccessRequest,
         handler: &mut impl EventHandler<W>,
-        title: &str,
-        scale_factor: f64,
+        window: WindowFrame,
     ) {
         match request {
-            AccessRequest::InitialTree => self.asked = true,
+            AccessRequest::InitialTree(reader) => {
+                self.asked = true;
+                self.hand_over(handler, window, |adapter, build| {
+                    // The reader stopped waiting and was given a placeholder, which the adapter replaces with the tree it is handed instead.
+                    if let Err(SendError(update)) = reader.send(build()) {
+                        adapter.update_if_active(|| update);
+                    }
+                });
+            }
             AccessRequest::Action(request) => {
                 let Some((id, action)) = self.tree.requested_action(&as_step(request)) else {
                     return;
                 };
                 handler.on_accessibility_action(id, action);
+                self.publish(handler, window);
             }
         }
-        self.publish(handler, title, scale_factor);
     }
 
     /// Hands the window's tree over once a reader has asked for it, so an app nobody reads builds no snapshot at all.
     pub(crate) fn publish<W: Window>(
         &mut self,
         handler: &impl EventHandler<W>,
-        title: &str,
-        scale_factor: f64,
+        window: WindowFrame,
     ) {
         if !self.asked {
             return;
         }
+        self.hand_over(handler, window, |adapter, build| {
+            adapter.update_if_active(build)
+        });
+    }
+
+    /// Builds the window's tree and gives `deliver` the adapter and the means of building it.
+    fn hand_over<W: Window>(
+        &mut self,
+        handler: &impl EventHandler<W>,
+        window: WindowFrame,
+        deliver: impl for<'b> FnOnce(&mut InjectingAdapter, Box<dyn FnOnce() -> TreeUpdate + 'b>),
+    ) {
         let adapter = &mut self.adapter;
         let tree = &mut self.tree;
         // The main thread never returns to Java, so the references the adapter makes on every update are freed only by a frame popped here.
@@ -107,14 +131,16 @@ impl Accessibility {
             env.with_local_frame(LOCAL_REFERENCES, |_| {
                 tree.publish(
                     || (handler.accessibility(), handler.root_language()),
-                    title,
-                    scale_factor,
+                    window,
                     |build| {
-                        adapter.update_if_active(|| {
-                            let mut update = build();
-                            offer_steps_as_scrolls(&mut update);
-                            update
-                        })
+                        deliver(
+                            adapter,
+                            Box::new(move || {
+                                let mut update = build();
+                                offer_steps_as_scrolls(&mut update);
+                                update
+                            }),
+                        )
                     },
                 );
                 Ok::<_, accesskit_android::jni::errors::Error>(())
@@ -149,12 +175,13 @@ fn loads_in_memory_dex() -> bool {
 struct Forward(EventLoopProxy<UserEvent>);
 
 impl ActivationHandler for Forward {
-    // `None` leaves the adapter a placeholder until the loop publishes, which it does as soon as this request reaches it.
+    // Waits rather than answering with a placeholder at once: a reader that reads the window once, as a dump of it does, would otherwise be told the window is empty, and no frame need come to correct it while the app is idle.
     fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
-        let _ = self
-            .0
-            .send_event(UserEvent::Accessibility(AccessRequest::InitialTree));
-        None
+        let (reader, tree) = sync_channel(0);
+        self.0
+            .send_event(UserEvent::Accessibility(AccessRequest::InitialTree(reader)))
+            .ok()?;
+        tree.recv_timeout(INITIAL_TREE_WAIT).ok()
     }
 }
 

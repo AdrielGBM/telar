@@ -1,6 +1,6 @@
-use geometry_core::Rect;
+use geometry_core::{Rect, Size};
 use platform_accesskit::accesskit::{ActionData, NodeId, Role as AkRole, ScrollUnit, TreeId};
-use platform_accesskit::{requested_action, tree_update};
+use platform_accesskit::{WindowFrame, requested_action, tree_update};
 use platform_core::{
     AccessAction, AccessId, AccessNode, ActionSupport, FocusId, NumericValue, Role, Value,
 };
@@ -53,7 +53,15 @@ fn volume() -> AccessNode {
 }
 
 fn published(nodes: &[AccessNode]) -> TreeUpdate {
-    let mut update = tree_update(nodes, "Mixer", None, 1.0);
+    let mut update = tree_update(
+        nodes,
+        WindowFrame {
+            title: "Mixer",
+            size: Size::new(400.0, 300.0),
+            scale_factor: 1.0,
+        },
+        None,
+    );
     offer_steps_as_scrolls(&mut update);
     update
 }

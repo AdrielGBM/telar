@@ -173,6 +173,8 @@ use platform_winit::{SurfaceIntent, TouchDrag, map_window_event};
 #[cfg(feature = "a11y")]
 use crate::accessibility::{AccessRequest, Accessibility};
 use crate::window::AndroidWindow;
+#[cfg(feature = "a11y")]
+use platform_accesskit::WindowFrame;
 
 /// What wakes the loop from another thread.
 pub(crate) enum UserEvent {
@@ -246,8 +248,11 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
 impl<H: EventHandler<AndroidWindow>> AndroidRunner<H> {
     #[cfg(feature = "a11y")]
     fn publish_accessibility(&mut self) {
-        if let Some(a11y) = &mut self.a11y {
-            a11y.publish(&self.handler, self.config.shown_title(), self.scale_factor);
+        if let (Some(a11y), Some(window)) = (&mut self.a11y, &self.window) {
+            a11y.publish(
+                &self.handler,
+                WindowFrame::of(window, self.config.shown_title()),
+            );
         }
     }
 
@@ -336,12 +341,11 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<UserEvent> for AndroidRu
             }
             #[cfg(feature = "a11y")]
             UserEvent::Accessibility(request) => {
-                if let Some(a11y) = &mut self.a11y {
+                if let (Some(a11y), Some(window)) = (&mut self.a11y, &self.window) {
                     a11y.answer(
                         request,
                         &mut self.handler,
-                        self.config.shown_title(),
-                        self.scale_factor,
+                        WindowFrame::of(window, self.config.shown_title()),
                     );
                 }
             }

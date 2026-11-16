@@ -18,10 +18,11 @@ use accesskit::{
     SortDirection as AkSortDirection, TextPosition, TextSelection as AkTextSelection, Toggled,
     TreeId, TreeInfo, TreeUpdate,
 };
+use geometry_core::Size;
 use platform_core::{
     AccessAction, AccessId, AccessNode, ActionSupport, CurrentKind, HasPopup, Live, LocaleTag,
     NumericValue, Orientation, Positioning, Role, SortDirection, TextSelection, Toggle, ToggleKind,
-    Value,
+    Value, Window,
 };
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
@@ -30,20 +31,51 @@ const ROOT: NodeId = NodeId(OWN);
 /// The bit set on every id the platform gives a node of its own, the window and the labels, and clear on every id a control goes by.
 const OWN: u64 = 1 << 63;
 
+/// The window a tree describes, as its platform knows it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowFrame<'a> {
+    /// What the window is called, which a reader says on entering it.
+    pub title: &'a str,
+    /// How large the window is, in logical pixels.
+    pub size: Size,
+    /// The window's physical pixels per logical one.
+    pub scale_factor: f64,
+}
+
+impl<'a> WindowFrame<'a> {
+    /// The frame of `window`, called `title`.
+    pub fn of(window: &impl Window, title: &'a str) -> Self {
+        let scale_factor = window.scale_factor();
+        Self {
+            title,
+            size: Size::new(
+                (f64::from(window.width()) / scale_factor) as f32,
+                (f64::from(window.height()) / scale_factor) as f32,
+            ),
+            scale_factor,
+        }
+    }
+}
+
 /// Turns Telar's description of the window into the tree AccessKit publishes.
 ///
 /// The nesting is the snapshot's own — the nesting of *meaning*, a grid around its rows and a row around its cells, a list box around its options, a dialog around what it asks — not the nesting of every box a layout happened to need, and each node's children are in the reading order the snapshot lists them in. What a reader counts off a container is said on it: a grid's rows and columns, a set's size where every item in it says the same one.
 ///
-/// `scale_factor` is the window's physical pixels per logical one: the snapshot is laid out in logical pixels and every adapter reads bounds in physical ones, so the window scales its whole tree by it and a reader's highlight and a touch to explore land on the control drawn there.
+/// The snapshot is laid out in logical pixels and every adapter reads bounds in physical ones, so the window scales its whole tree by the frame's scale factor and a reader's highlight and a touch to explore land on the control drawn there. The window's own node spans the window, where a reader starts looking for what lies under a finger.
 pub fn tree_update(
     nodes: &[AccessNode],
-    title: &str,
+    window: WindowFrame,
     lang: Option<&LocaleTag>,
-    scale_factor: f64,
 ) -> TreeUpdate {
     let mut root = Node::new(AkRole::Window);
-    root.set_transform(Affine::scale(scale_factor));
-    root.set_label(title.to_string());
+    root.set_transform(Affine::scale(window.scale_factor));
+    root.set_bounds(AkRect {
+        x0: 0.0,
+        y0: 0.0,
+        x1: f64::from(window.size.width),
+        y1: f64::from(window.size.height),
+    });
+    root.set_label(window.title.to_string());
     if let Some(lang) = lang {
         root.set_language(lang.to_string());
     }
@@ -524,14 +556,13 @@ impl PublishedTree {
     pub fn publish<'a>(
         &'a mut self,
         snapshot: impl FnOnce() -> (Vec<AccessNode>, Option<LocaleTag>) + 'a,
-        title: &'a str,
-        scale_factor: f64,
+        window: WindowFrame<'a>,
         deliver: impl FnOnce(Box<dyn FnOnce() -> TreeUpdate + 'a>),
     ) {
         let published = &mut self.nodes;
         deliver(Box::new(move || {
             let (nodes, lang) = snapshot();
-            let update = tree_update(&nodes, title, lang.as_ref(), scale_factor);
+            let update = tree_update(&nodes, window, lang.as_ref());
             *published = nodes;
             update
         }));
