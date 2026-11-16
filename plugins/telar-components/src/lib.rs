@@ -40,6 +40,9 @@ mod heading_test;
 mod kbd_test;
 mod look;
 mod shared;
+#[cfg(test)]
+#[path = "feedback/spinner/spinner.test.rs"]
+mod spinner_test;
 mod strings;
 #[cfg(test)]
 #[path = "style_scan.test.rs"]

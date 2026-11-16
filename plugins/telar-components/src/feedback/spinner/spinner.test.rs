@@ -1,6 +1,6 @@
-use telar::NodeId;
+use telar::{NodeId, RectStyle, Role};
 
-use super::*;
+use crate::{SpinnerProps, SpinnerTokens, spinner};
 
 fn lay_out(node: NodeId) {
     telar::testing::lay_out(node, 100.0, 100.0);
