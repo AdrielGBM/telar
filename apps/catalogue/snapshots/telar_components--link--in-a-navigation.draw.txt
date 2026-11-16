@@ -1,0 +1,53 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element navigation
+          element link
+            rect 301,292 47x16 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,301,292
+                  text 0,0 47.08x16.8 "Design" size=14 family=sans-serif weight=600 color=#3d51c3ff wrap=none underline=font underline-offset=font lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element link
+            rect 360,292 65x16 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,360,292
+                  text 0,0 65x16.8 "Prototype" size=14 family=sans-serif weight=400 color=#3d51c3ff wrap=none underline=font underline-offset=font lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element link
+            rect 437,292 62x16 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,437,292
+                  text 0,0 44.44x16.8 "Assets" size=14 family=sans-serif weight=400 color=#3d51c3ff wrap=none underline=font underline-offset=font lang=en
+                end
+              end
+              element group
+                matrix 1,0,0,1,485,292
+                  text 0,0 14.23x16.8 "12" size=14 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

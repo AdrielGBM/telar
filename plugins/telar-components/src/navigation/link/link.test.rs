@@ -160,3 +160,79 @@ fn a_link_with_nowhere_to_go_points_a_reader_nowhere() {
     );
     assert_eq!(the_link(&tree).role, Role::Link(Link::default()));
 }
+
+#[test]
+fn a_named_tone_colours_the_words_and_ink_leaves_them_as_the_text_around() {
+    let danger = drawn_style(
+        &mounted(
+            LinkProps::props()
+                .label("Delete")
+                .to(Location::root())
+                .tone(telar::Tone::Danger)
+                .build(),
+        ),
+        "Delete",
+    );
+    let danger = danger.color.solid_color();
+    assert!(shared::surface().contrast_ratio(danger) >= 4.5);
+    let accent = drawn_style(
+        &mounted(
+            LinkProps::props()
+                .label("Delete")
+                .to(Location::root())
+                .build(),
+        ),
+        "Delete",
+    );
+    assert_ne!(danger, accent.color.solid_color());
+
+    let plain = drawn_style(
+        &mounted(
+            LinkProps::props()
+                .label("More")
+                .to(Location::root())
+                .tone(telar::Tone::Ink)
+                .build(),
+        ),
+        "More",
+    );
+    assert_eq!(
+        plain.color.solid_color(),
+        telar::Inherited::initial().text.color.solid_color()
+    );
+    assert_eq!(plain.decoration.line, telar::DecorationLine::Underline);
+}
+
+#[test]
+fn a_link_is_the_size_of_the_text_around_it() {
+    let style = drawn_style(
+        &mounted(
+            LinkProps::props()
+                .label("Guide")
+                .to(Location::root())
+                .build(),
+        ),
+        "Guide",
+    );
+    assert_eq!(style.font_size, telar::Inherited::initial().text.font_size);
+}
+
+#[test]
+fn what_leads_and_trails_stands_either_side_of_the_words() {
+    let tree = mounted(
+        LinkProps::props()
+            .label("Assets")
+            .to(Location::root())
+            .leading(crate::test_support::text_body("<"))
+            .trailing(crate::test_support::text_body("12"))
+            .build(),
+    );
+    let at = |needle: &str| {
+        tree.commands()
+            .iter()
+            .position(|command| matches!(command, DrawCommand::Text { text, .. } if text.as_ref() == needle))
+            .unwrap_or_else(|| panic!("{needle} is drawn"))
+    };
+    assert!(at("<") < at("Assets") && at("Assets") < at("12"));
+    assert_eq!(the_link(&tree).name, "Assets", "named by its words alone");
+}

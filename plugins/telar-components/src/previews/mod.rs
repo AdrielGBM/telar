@@ -26,8 +26,6 @@ mod icon_button;
 mod image;
 #[path = "../workbench/line_gutter/line_gutter.preview.rs"]
 mod line_gutter;
-#[path = "../navigation/link/link.preview.rs"]
-mod link;
 #[path = "../layout/list/list.preview.rs"]
 mod list;
 #[path = "../overlays/menu/menu.preview.rs"]
@@ -101,7 +99,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(handle::previews());
     entries.extend(stepper::previews());
     entries.extend(image::previews());
-    entries.extend(link::previews());
     entries.extend(section::previews());
     entries.extend(list::previews());
     entries.extend(virtual_list::previews());

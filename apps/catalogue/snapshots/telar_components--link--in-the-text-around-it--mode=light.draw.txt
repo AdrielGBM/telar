@@ -1,0 +1,50 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              matrix 1,0,0,1,292,277
+                text 0,0 60.48x14.4 "File saved." size=12 family=sans-serif weight=400 color=#616680ff lang=en
+              end
+            end
+            element link
+              rect 354,277 118x14 radius=6
+              element group
+                element group
+                  matrix 1,0,0,1,354,277
+                    text 0,0 118x14.4 "Open version history" size=12 family=sans-serif weight=400 color=#616680ff wrap=none underline=font underline-offset=font lang=en
+                  end
+                end
+              end
+              element group
+              end
+            end
+          end
+          element group
+            element group
+              matrix 1,0,0,1,292,299
+                text 0,0 125x24 "Export failed." size=20 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element link
+              rect 421,299 87x24 radius=6
+              element group
+                element group
+                  matrix 1,0,0,1,421,299
+                    text 0,0 87.88x24 "Try again" size=20 family=sans-serif weight=400 color=#a42e5eff wrap=none underline=font underline-offset=font lang=en
+                  end
+                end
+              end
+              element group
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

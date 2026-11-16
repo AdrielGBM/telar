@@ -1,9 +1,10 @@
 [logic]
 use std::rc::Rc;
 
+use crate::look::Look;
 use crate::shared::{self, GlyphProps, Mark, glyph};
 use crate::strings;
-use telar::{ControlSize, Destination, IntoDestination};
+use telar::{ControlSize, Destination, IntoDestination, Tone, Variant};
 
 /// A link's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -52,7 +53,7 @@ impl<D: IntoDestination + Clone + 'static> From<D> for LinkTarget {
 
 /// Words that go somewhere when pressed, or when Enter is pressed on them: a route is pushed onto the application's history, an anchor is scrolled to, and an address outside the application is handed to the system.
 ///
-/// Drawn in the theme's accent, made readable on the surface, and always underlined, so it is told from the words around it by more than its colour. One that leaves the application says so twice: a drawn arrow after it, and a reader hears it named an external link. Ctrl, Cmd or Shift on the press ask for a view beside this one where there is one, as on a web page.
+/// Drawn in its tone, the theme's accent unless the call names one, made readable on the surface, at the size of the text around it and always underlined, so it is told from the words around it by more than its colour. One that leaves the application says so twice: a drawn arrow after it, and a reader hears it named an external link. Ctrl, Cmd or Shift on the press ask for a view beside this one where there is one, as on a web page.
 ///
 /// It is one box sized to its words: for a link inside a wrapping paragraph, write the paragraph as [`Text::runs`](telar::Text::runs) with a [`TextRun::to`](telar::TextRun::to) run instead.
 pub struct Props {
@@ -65,9 +66,15 @@ pub struct Props {
     /// Marks the link as the current one of its set — the page being shown, in a navigation's links — so it is drawn in the theme's strong weight and announced as current. Off by default.
     #[props(into, default)]
     pub current: Reactive<bool>,
-    /// The colour the link is drawn in. `None` (the default) is the theme's primary; either way it is taken just far enough toward the ink to read on the theme's surface.
-    #[props(some, into, default)]
-    pub color: Option<Reactive<Color>>,
+    /// What the link's colour says: a named tone, or a colour of the caller's, taken just far enough toward the ink to read on the theme's surface. `ink` is the ink of the text around it, for a link told apart by its underline alone.
+    #[props(into, default)]
+    pub tone: Tone,
+    /// What sits before the words, in the link's ink: an `icon`.
+    #[props(default)]
+    pub leading: Children,
+    /// What sits after the words, in the link's ink, before the arrow of a link that leaves the application.
+    #[props(default)]
+    pub trailing: Children,
     /// Runs when the link is pressed, before it is followed.
     #[props(some, default)]
     pub on_press: Option<Rc<dyn Fn()>>,
@@ -76,9 +83,6 @@ pub struct Props {
     pub style: Option<SurfaceAmendment>,
 }
 
-fn ink(color: &Option<Reactive<Color>>) -> Color {
-    shared::readable_on(shared::resolve(color, shared::accent), shared::surface())
-}
 
 fn heard(label: String, leaves: bool) -> String {
     match leaves {
@@ -88,7 +92,12 @@ fn heard(label: String, leaves: bool) -> String {
 }
 
 let to = props.to.clone();
-let color = props.color.clone();
+let look = Look {
+    tone: props.tone.clone(),
+    variant: Variant::Ghost,
+    selected: None,
+    interactive: true,
+};
 let leaves = memo({
     let to = to.clone();
     move || to.leaves()
@@ -96,11 +105,14 @@ let leaves = memo({
 let on_press = props.on_press.clone().map(|run| move || run());
 
 [view]
-row align:center radius:(LinkTokens::current().radius()) color:(ink(&color)) text_wrap:nowrap font_size:(ControlSize::Regular.text_scale())em underline hover_style(fill:(shared::hover_wash()) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:on_press a11y_label:(heard($props.label, $leaves)) surface:$props.style
-    if $props.current
-        text "{$props.label}" font_weight:$theme.font_weight_strong
-    else
-        text "{$props.label}"
+row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.ink)) text_wrap:nowrap hover_style(fill:(look.hovered($text.ink)) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:on_press a11y_label:(heard($props.label, $leaves)) surface:$props.style
+    row align:center gap:(shared::gap_sm(ControlSize::Regular))
+        children $props.leading
+        if $props.current
+            text "{$props.label}" underline font_weight:$theme.font_weight_strong
+        else
+            text "{$props.label}" underline
+        children $props.trailing
     if $leaves
-        row align:center pad_start:(shared::gap_xs(ControlSize::Regular))
+        row align:center pad_start:(shared::gap_sm(ControlSize::Regular))
             glyph shape:Mark::External

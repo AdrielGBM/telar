@@ -1,0 +1,22 @@
+frame 160x48 lang=en
+element group
+  rect 0,0 160x48 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element link
+          rect 30,16 100x16 radius=6
+          element group
+            element group
+              matrix 1,0,0,1,30,16
+                text 0,0 100x16.8 "Version history" size=14 family=sans-serif weight=400 color=#7bb3faff wrap=none underline=font underline-offset=font lang=en
+              end
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end

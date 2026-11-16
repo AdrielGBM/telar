@@ -1,0 +1,27 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element link
+          rect 316,292 168x16 radius=6
+          element group
+            element group
+              matrix 1,0,0,1,316,292
+                text 0,0 154x16.8 "Copy as CSS reference" size=14 family=sans-serif weight=400 color=#96b0feff wrap=none underline=font underline-offset=font lang=en
+              end
+            end
+          end
+          element group
+            element group
+              matrix 1,0,0,1,474,295
+                path M4,0 L10,0 L10,6 M10,0 L0,10 stroke=1.5 stroke-color=#96b0feff
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
