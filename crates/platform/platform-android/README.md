@@ -7,8 +7,10 @@ shows. See [docs/surface-title.md](https://github.com/AdrielGBM/telar/blob/main/
 
 With the `a11y` feature, on by default, a screen reader reads the window: the accessibility tree the desktop
 publishes, hung on the activity's decor view through AccessKit's Android adapter (API 26 and later), and what
-the reader asks of it carried back to the UI as the actions a tap or a key takes. See
-[docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#the-android-tree).
+the reader asks of it carried back to the UI as the actions a tap or a key takes: a slider steps with the reader's
+scroll forward and backward and takes a value set directly. Expanded, description, validity, required, a heading
+and its level, the language, a node's place in its set and a grid's counts are in the tree but do not reach the reader.
+See [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#the-android-tree).
 
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.

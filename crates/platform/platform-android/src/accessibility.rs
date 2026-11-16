@@ -15,7 +15,6 @@ use platform_core::{EventHandler, Window};
 use winit::event_loop::EventLoopProxy;
 
 use crate::platform::UserEvent;
-use crate::stepping::{as_step, offer_steps_as_scrolls};
 
 /// What a reader asked for, on its way from Android's UI thread to the one the UI lives on.
 pub(crate) enum AccessRequest {
@@ -94,7 +93,7 @@ impl Accessibility {
                 });
             }
             AccessRequest::Action(request) => {
-                let Some((id, action)) = self.tree.requested_action(&as_step(request)) else {
+                let Some((id, action)) = self.tree.requested_action(&request) else {
                     return;
                 };
                 handler.on_accessibility_action(id, action);
@@ -132,16 +131,7 @@ impl Accessibility {
                 tree.publish(
                     || (handler.accessibility(), handler.root_language()),
                     window,
-                    |build| {
-                        deliver(
-                            adapter,
-                            Box::new(move || {
-                                let mut update = build();
-                                offer_steps_as_scrolls(&mut update);
-                                update
-                            }),
-                        )
-                    },
+                    |build| deliver(adapter, build),
                 );
                 Ok::<_, accesskit_android::jni::errors::Error>(())
             })

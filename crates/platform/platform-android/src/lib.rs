@@ -20,8 +20,6 @@ pub mod platform;
 mod preference_values;
 #[cfg(target_os = "android")]
 mod preferences;
-#[cfg(any(test, all(target_os = "android", feature = "a11y")))]
-mod stepping;
 #[cfg(target_os = "android")]
 mod sys_prop;
 #[cfg(target_os = "android")]

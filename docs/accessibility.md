@@ -158,7 +158,7 @@ the lint reads.
 | Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button (either one `mixed` when partly on), `aria-selected` on a tab or an option, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
 | Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus`, `Click` and `ScrollIntoView` actions, and `Increment` and `Decrement`, `SetValue` and `SetTextSelection` on a control that answers them. | AccessKit `toggled` for checked and pressed, `Mixed` included (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
 | Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`/`partially checked`, `pressed`/`not pressed`/`partially pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
-| Android | The same AccessKit tree as the desktop, read as the widget class its role maps to (`Button`, `CheckBox`, `RadioButton`, `ToggleButton` for a switch, `SeekBar` for a slider, `EditText` for a field…). A control is clickable and focusable; a control that steps is also scrollable, and the reader's scroll forward and backward reach it as `Increment` and `Decrement`. See [The Android tree](#the-android-tree). | `checked` for checked and pressed, a mixed state read as checked, and `selected` for a tab or an option. Expanded is not carried. |
+| Android | The same AccessKit tree as the desktop, read as the widget class its role maps to (`Button`, `CheckBox`, `RadioButton`, `ToggleButton` for a switch, `SeekBar` for a slider, `EditText` for a field…). A control is clickable and focusable; one that steps is adjustable, the reader's scroll forward and backward reaching it as `Increment` and `Decrement`, and a slider that takes a number whole is also set to one directly. See [The Android tree](#the-android-tree). | `checked` for checked and pressed, a mixed state read as checked, and `selected` for a tab or an option. Expanded is not carried. |
 | Browser, canvas (`web`) | Focus and keyboard activation as on the desktop, and the role as the document says it, on the control's element in the [canvas tree](#the-canvas-tree): `tabindex="-1"`, since the app walks its own Tab order. A reader's activation of the element reaches the control as `Activate`. | As the document says it. |
 | Headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to. | — |
 
@@ -534,7 +534,6 @@ a box under `a11y:hidden`.
 | --- | --- |
 | `plugins/telar-components/src/audit.test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document, and that a dialog whose body scrolls makes the body a named Tab stop that Page Down scrolls. The page holds a list and a table with more rows than they show, which say where each built row sits, and an open menu leaves them and the rest of the page inert until it closes. |
 | `crates/platform/platform-accesskit/src/lib.test.rs` (`from_a_screen`) | The AccessKit tree a desktop or Android window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, that the heading is a heading named by its text at its level, that a role said from outside a widget is published over a plain box and never over a control, and that the tree's focus follows the Tab order. |
-| `crates/platform/platform-android/src/stepping.test.rs` | That on Android a control that steps is offered to the reader as adjustable and one that does not is not, and that the reader's scroll forward and backward on it come back as `Increment` and `Decrement` while every other request is the one it made. Runs on the host. |
 | `crates/renderer/renderer-dom/src/controls.test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics.test.rs` checks that a box whose role changes drops the state attribute of the old one. |
 | `crates/renderer/renderer-dom/src/mirror.test.rs` | The canvas tree: that a snapshot's roles, names, values and states are said on the elements standing for its nodes, nested as the snapshot nests them and none a Tab stop; that a click on a control's element activates the control through the platform; and that focus follows between the elements and the app both ways. |
 | `crates/tools/cargo-telar/src/workshop_audit.test.rs` | The exported `apps/catalogue` workshop in headless Chrome: axe-core over the canvas of every preview and matrix page, with the same rules (`crates/renderer/renderer-dom/axe.json`), and over the workshop's chrome once with `region` on. See [previews.md](previews.md#auditing-the-exported-workshop). |
@@ -567,7 +566,7 @@ role of their own inside it, holding the link runs and controls among them; its 
 again as text of their own. AccessKit gets its level (`level`, counted from zero) and the terminal says it
 (`Settings, heading, level 1`). A surface nested in the frame joins the tree inside the node it is drawn in.
 
-AccessKit gets the same tree: every node is a child of the one it sits in, and the window holds the rest. A grid
+AccessKit gets the same tree: every node is a child of the one it sits in, and the window holds the rest. A node is named by its label, except a line of text (`Label`), whose words are its value, where every AccessKit adapter reads them. A grid
 holds its rows and each row its cells; the grid says its row count — from the `size` its rows say, so a reader
 hears every row of a table that builds a screenful — and its column count, each row its index, and each cell its
 column and its row's index. A set whose items agree on its size, such as the options of a list box, says it on the
@@ -595,15 +594,18 @@ and the app says so in the log.
 
 The adapter is attached each time the activity's window comes back and dropped when it goes, so it always hangs on
 the activity that is showing. Nothing is built until a service first asks for the tree; from then on the tree is
-published after every frame, since Android never says the service stopped listening. A request arrives on
-Android's UI thread and is carried to the thread the UI lives on, where it takes the same path a tap or a key does.
+published after every frame, since Android never says the service stopped listening; while accessibility is off
+the adapter keeps the tree and raises no event. A request arrives on Android's UI thread and is carried to the
+thread the UI lives on, where it takes the same path a tap or a key does.
 
 What the adapter hands a reader is a subset of the tree: each node's role as a widget class, its name, its text or
 range, checked and selected, enabled, focusable and focused, editable, the text selection of a field, its link,
-its live region, and click, focus and text navigation. Expanded, description, validity, required, the language,
-`controls`, the active descendant, a node's place in its set and a grid's counts are in the tree and not carried
-on. A slider is adjusted with scroll forward and backward, the gesture a reader on Android adjusts with, which the
-adapter hands on as scrolls: a control that steps offers them, and they reach it as its steps.
+its live region, whose changes are announced, and click, focus and text navigation. A control that steps is
+adjustable: the reader's scroll forward and backward, the gesture it adjusts with, reach it as `Increment` and
+`Decrement`, and one whose value is a number with no words, and that takes a value whole, is also set to a value
+directly (set progress), as `SetValue`. Expanded, description, validity, required, a heading and its level, the
+language, `controls`, the active descendant, a node's place in its set and a grid's counts are in the tree and not
+carried on.
 
 Touch to explore does not reach the tree yet. The system sends it as hover events through the activity's input
 queue, and the event loop takes them there without passing them on to the view, so they never reach the adapter.
