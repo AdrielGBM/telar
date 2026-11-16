@@ -1,16 +1,9 @@
-//! [`link`]: words that go somewhere — a page of the application, a place on this one, or an address outside it.
-
+[logic]
 use std::rc::Rc;
 
-use telar::{
-    Accessible, AlignItems, BorderRadius, Color, Destination, IntoDestination, LayoutError,
-    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer,
-    SurfaceAmendment, Text, TextWrap, amend_surface, box_item, children,
-};
-
-use crate::shared;
+use crate::shared::{self, GlyphProps, Mark, glyph};
 use crate::strings;
-use telar::ControlSize;
+use telar::{ControlSize, Destination, IntoDestination};
 
 /// A link's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -45,6 +38,10 @@ impl LinkTarget {
     fn read(&self) -> Option<Destination> {
         (self.0)()
     }
+
+    fn leaves(&self) -> bool {
+        matches!(self.read(), Some(Destination::External(_)))
+    }
 }
 
 impl<D: IntoDestination + Clone + 'static> From<D> for LinkTarget {
@@ -58,8 +55,7 @@ impl<D: IntoDestination + Clone + 'static> From<D> for LinkTarget {
 /// Drawn in the theme's accent, made readable on the surface, and always underlined, so it is told from the words around it by more than its colour. One that leaves the application says so twice: a drawn arrow after it, and a reader hears it named an external link. Ctrl, Cmd or Shift on the press ask for a view beside this one where there is one, as on a web page.
 ///
 /// It is one box sized to its words: for a link inside a wrapping paragraph, write the paragraph as [`Text::runs`](telar::Text::runs) with a [`TextRun::to`](telar::TextRun::to) run instead.
-#[derive(Props)]
-pub struct LinkProps {
+pub struct Props {
     /// What the link says.
     #[props(into)]
     pub label: Reactive<String>,
@@ -80,100 +76,31 @@ pub struct LinkProps {
     pub style: Option<SurfaceAmendment>,
 }
 
-/// Words that go somewhere: a route, an anchor or an address outside the application.
-pub fn link(props: LinkProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let LinkProps {
-        label,
-        to,
-        current,
-        color,
-        on_press,
-        style,
-    } = props;
-
-    let ink = {
-        let color = color.clone();
-        Rc::new(move || {
-            shared::readable_on(shared::resolve(&color, shared::accent), shared::surface())
-        })
-    };
-    let words = {
-        let (label, current, ink) = (label.clone(), current.clone(), ink.clone());
-        Text::declaring(
-            move || label.get(),
-            LayoutStyle::new(),
-            move |t| {
-                let text = shared::control_text(ControlSize::Regular, t, 1.0)
-                    .with_text_wrap(TextWrap::NoWrap)
-                    .with_color(ink())
-                    .with_underline(true);
-                if current.get() {
-                    text.with_font_weight(shared::strong_weight())
-                } else {
-                    text
-                }
-            },
-        )?
-    };
-    let leaves = {
-        let to = to.clone();
-        move || matches!(to.read(), Some(Destination::External(_)))
-    };
-    let arrow = {
-        let ink = ink.clone();
-        shared::shown_while(leaves.clone(), LayoutStyle::row(), move || {
-            let ink = ink.clone();
-            let mark = shared::mark(
-                ControlSize::Regular,
-                || shared::Mark::External,
-                move |_| ink().into(),
-            )?;
-            let spaced = telar::Container::new(
-                LayoutStyle::row()
-                    .align_items(AlignItems::CENTER)
-                    .padding_start(shared::gap_xs(ControlSize::Regular)),
-                vec![mark],
-            )?;
-            Ok(box_item(spaced))
-        })?
-    };
-
-    let paint = Rc::new(move |hovered: bool| {
-        let rect =
-            RectStyle::default().with_radius(BorderRadius::all(LinkTokens::current().radius()));
-        let rect = if hovered {
-            rect.with_fill(shared::hover_wash())
-        } else {
-            rect
-        };
-        amend_surface(rect, &style)
-    });
-    let (rest, hover) = (paint.clone(), paint);
-    let name = move || {
-        let label = label.get();
-        if leaves() {
-            strings::text_with(strings::EXTERNAL_LINK, &[("label", &label)])
-        } else {
-            label
-        }
-    };
-    let link = StyledContainer::new(
-        LayoutStyle::row().align_items(AlignItems::CENTER),
-        move |_r| rest(false),
-        children![words, arrow],
-    )?
-    .hover_style(move |_r| hover(true));
-    let link = match on_press {
-        Some(on_press) => link.on_press(move || on_press()),
-        None => link,
-    };
-    let link = link
-        .to(move || to.read())
-        .current(move || current.get())
-        .a11y_label(name);
-    Ok(box_item(link))
+fn ink(color: &Option<Reactive<Color>>) -> Color {
+    shared::readable_on(shared::resolve(color, shared::accent), shared::surface())
 }
 
-#[cfg(test)]
-#[path = "link.test.rs"]
-mod tests;
+fn heard(label: String, leaves: bool) -> String {
+    match leaves {
+        true => strings::text_with(strings::EXTERNAL_LINK, &[("label", &label)]),
+        false => label,
+    }
+}
+
+let to = props.to.clone();
+let color = props.color.clone();
+let leaves = memo({
+    let to = to.clone();
+    move || to.leaves()
+});
+let on_press = props.on_press.clone().map(|run| move || run());
+
+[view]
+row align:center radius:(LinkTokens::current().radius()) color:(ink(&color)) text_wrap:nowrap font_size:(ControlSize::Regular.text_scale())em underline hover_style(fill:(shared::hover_wash()) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:on_press a11y_label:(heard($props.label, $leaves)) surface:$props.style
+    if $props.current
+        text "{$props.label}" font_weight:$theme.font_weight_strong
+    else
+        text "{$props.label}"
+    if $leaves
+        row align:center pad_start:(shared::gap_xs(ControlSize::Regular))
+            glyph shape:Mark::External

@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::rc::Rc;
 
 use telar::testing::{centre, lay_out, named, press, release, route};
 use telar::{
@@ -6,7 +7,8 @@ use telar::{
     relayout_if_dirty, signal,
 };
 
-use super::*;
+use crate::shared;
+use crate::{LinkProps, LinkTarget, link};
 
 fn mounted(props: LinkProps) -> ComponentList {
     crate::test_support::fresh_layout_runtime();

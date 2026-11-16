@@ -38,6 +38,9 @@ mod heading_test;
 #[cfg(test)]
 #[path = "display/kbd/kbd.test.rs"]
 mod kbd_test;
+#[cfg(test)]
+#[path = "navigation/link/link.test.rs"]
+mod link_test;
 mod look;
 #[cfg(test)]
 #[path = "feedback/progress/progress.test.rs"]

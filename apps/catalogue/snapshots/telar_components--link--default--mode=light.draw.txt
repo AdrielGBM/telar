@@ -25,10 +25,8 @@ element group
             end
             element group
               element group
-                element group
-                  matrix 1,0,0,1,437,295
-                    path M4,0 L10,0 L10,6 M10,0 L0,10 stroke=1.5 stroke-color=#4261edff
-                  end
+                matrix 1,0,0,1,437,295
+                  path M4,0 L10,0 L10,6 M10,0 L0,10 stroke=1.5 stroke-color=#4261edff
                 end
               end
             end
