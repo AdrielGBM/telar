@@ -5,10 +5,16 @@ use std::collections::HashMap;
 use platform_core::SystemPreferences;
 use zbus::zvariant::{OwnedValue, Value};
 
-use super::appearance::{
-    APPEARANCE_NAMESPACE, AppearanceSetting, INTERFACE_NAMESPACE, TEXT_SCALING_FACTOR,
-    from_settings,
-};
+use super::appearance::{AppearanceSetting, from_settings};
+
+/// The namespace of the colour scheme, contrast and motion keys.
+const APPEARANCE_NAMESPACE: &str = "org.freedesktop.appearance";
+
+/// The namespace GNOME's portal publishes its interface settings under, the text scale among them; another desktop's portal leaves it out.
+const INTERFACE_NAMESPACE: &str = "org.gnome.desktop.interface";
+
+/// The key of the text scale in [`INTERFACE_NAMESPACE`].
+const TEXT_SCALING_FACTOR: &str = "text-scaling-factor";
 
 const DESTINATION: &str = "org.freedesktop.portal.Desktop";
 const PATH: &str = "/org/freedesktop/portal/desktop";

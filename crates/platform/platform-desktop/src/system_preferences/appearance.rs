@@ -2,15 +2,6 @@
 
 use platform_core::{ColorScheme, SystemPreferences, TextScale};
 
-/// The namespace of the colour scheme, contrast and motion keys.
-pub const APPEARANCE_NAMESPACE: &str = "org.freedesktop.appearance";
-
-/// The namespace GNOME's portal publishes its interface settings under, the text scale among them; another desktop's portal leaves it out.
-pub const INTERFACE_NAMESPACE: &str = "org.gnome.desktop.interface";
-
-/// The key of the text scale in [`INTERFACE_NAMESPACE`].
-pub const TEXT_SCALING_FACTOR: &str = "text-scaling-factor";
-
 /// One appearance key the portal reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppearanceSetting {
@@ -37,7 +28,7 @@ impl AppearanceSetting {
         }
     }
 
-    /// GNOME's `text-scaling-factor`, which its portal publishes under [`INTERFACE_NAMESPACE`]. A factor that is no scale at all leaves text at its designed size.
+    /// GNOME's `text-scaling-factor`, which its portal publishes in the interface namespace. A factor that is no scale at all leaves text at its designed size.
     pub fn text_scaling_factor(factor: f64) -> Self {
         Self::TextScale(TextScale::new(factor as f32).unwrap_or(TextScale::UNSCALED))
     }

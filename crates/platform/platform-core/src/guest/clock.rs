@@ -2,7 +2,9 @@
 //!
 //! Both copies of std read the same monotonic clock of the OS, so an instant lies the same distance from a shared moment on either side whatever each copy's `Instant` looks like inside. The host reads its epoch and hands the guest its own reading of the clock against it; the guest takes its epoch as that far back from its own now. The two epochs differ by the length of that one call, a constant, so the time between two timestamps is exact on both sides and nothing drifts.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use web_time::Instant;
 
 /// An instant as signed nanoseconds since the [`Epoch`] both sides agreed on: earlier than it is negative, and ±292 years either way is representable.
 #[repr(C)]

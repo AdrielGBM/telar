@@ -1503,7 +1503,7 @@ fn scrolling_keys(viewport: Rect, content: Rect) -> ConsumedKeys {
 impl ScrollCore {
     fn bars_up(&self) {
         self.bars.wake();
-        let now = std::time::Instant::now();
+        let now = web_time::Instant::now();
         motion_core::tick(now);
         motion_core::tick(now + BARS_FADE * 2);
     }

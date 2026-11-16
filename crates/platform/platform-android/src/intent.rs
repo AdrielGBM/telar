@@ -7,7 +7,7 @@ use platform_core::{Location, LocationSource};
 
 const ACTION_VIEW: &str = "android.intent.action.VIEW";
 
-/// The location in the `ACTION_VIEW` intent the activity was started with: an `https://` app link or a URI with the app's own scheme, read in the app's [`location_format`](platform_core::location_format), so a locale the app ships is read as one.
+/// The location in the `ACTION_VIEW` intent the activity was started with: an `https://` app link or a URI with the app's own scheme, read in the app's [`location_format`](platform_core::location_format()), so a locale the app ships is read as one.
 ///
 /// Android keeps no history of its own for an activity's pages, so the moves the app makes go nowhere; back reaches the app through `EventHandler::on_back` instead. A link opened while the app is already running is not seen: `NativeActivity` does not forward `onNewIntent`, so it opens only if the system starts the activity afresh.
 pub struct IntentLocation {

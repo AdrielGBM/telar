@@ -224,7 +224,7 @@ fn default_style_follows_the_theme_after_construction() {
 }
 
 fn settle_fade() {
-    let now = std::time::Instant::now();
+    let now = web_time::Instant::now();
     motion_core::tick(now);
     motion_core::tick(now + BARS_FADE * 2);
 }

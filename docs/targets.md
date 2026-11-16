@@ -11,11 +11,11 @@ and no row below that pays for another:
 | Your app runs in | `default = [...]` | Crates compiled |
 | --- | --- | --- |
 | A desktop window (Linux, macOS, Windows) | `["desktop"]` | 433 |
-| The terminal it was launched from | `["tui"]` | 163 |
-| A browser, drawing as a document | `["web-dom"]` | 127 |
-| A browser, document **and** WebGPU canvas | `["web"]` | 256 |
+| The terminal it was launched from | `["tui"]` | 143 |
+| A browser, drawing as a document | `["web-dom"]` | 117 |
+| A browser, document **and** WebGPU canvas | `["web"]` | 246 |
 | Android | `["android"]` | 359 |
-| Nothing — draw commands in, pixels out | `["headless"]` | 214 |
+| Nothing — draw commands in, pixels out | `["headless"]` | 204 |
 
 Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all --prefix none`,
 so every platform's dependencies are in the figure at once. The figure is the number of distinct lines of that

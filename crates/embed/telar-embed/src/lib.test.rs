@@ -6,6 +6,7 @@ use platform_core::guest::Lifecycle;
 use platform_core::guest::{CWaker, HostServices};
 use platform_core::{Key, ModifiersState};
 use renderer_core::RectStyle;
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 use services_core::guest::UpperTable;
 
 struct Stub {
