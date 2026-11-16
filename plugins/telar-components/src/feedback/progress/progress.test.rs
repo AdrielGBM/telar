@@ -1,6 +1,6 @@
 use telar::{
     Accessible, BorderRadius, Color, ControlSize, Direction, NodeId, RectStyle, Role, ShapeStyle,
-    SurfaceAmendment, signal,
+    SurfaceAmendment, Tone, signal,
 };
 
 use crate::{ProgressProps, ProgressTokens, progress};
@@ -23,14 +23,7 @@ fn uncontrolled_progress_builds_with_default_value() {
 fn controlled_progress_builds_and_layouts() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.3f32);
-    let widget = progress(
-        ProgressProps::props()
-            .value(value)
-            .width(200.0)
-            .height(10.0)
-            .build(),
-    )
-    .unwrap();
+    let widget = progress(ProgressProps::props().value(value).build()).unwrap();
     lay_out(widget.layout_node());
     assert_eq!(value.get(), 0.3);
 }
@@ -75,10 +68,10 @@ fn the_bar_is_a_pill_until_the_tokens_name_a_radius() {
         role: 7.0,
         tokens: None,
     });
-    let tree = bar(ProgressProps::props().width(120.0).height(10.0).build());
+    let tree = bar(ProgressProps::props().build());
     assert_eq!(
         crate::test_support::first_painted(&tree).radius,
-        BorderRadius::all(5.0),
+        BorderRadius::all(crate::metrics::gap_md(ControlSize::Regular) / 2.0),
         "fully rounded at whatever thickness it is laid out"
     );
 
@@ -96,7 +89,7 @@ fn the_bar_is_a_pill_until_the_tokens_name_a_radius() {
 }
 
 #[test]
-fn an_unset_size_is_the_tokens_and_a_named_one_wins() {
+fn the_tokens_lengths_are_the_bars_scaled_to_its_size() {
     telar::set_theme(crate::test_support::TokensTheme {
         role: 7.0,
         tokens: Some(ProgressTokens {
@@ -115,11 +108,6 @@ fn an_unset_size_is_the_tokens_and_a_named_one_wins() {
             .expect("the track is drawn")
     };
     assert_eq!(track(&bar(ProgressProps::props().build())), (150.0, 6.0));
-    assert_eq!(
-        track(&bar(ProgressProps::props().width(90.0).height(4.0).build())),
-        (90.0, 4.0),
-        "the bar's own size wins"
-    );
     let (width, height) = track(&bar(ProgressProps::props()
         .size(ControlSize::Small)
         .build()));
@@ -161,7 +149,7 @@ fn the_bar_scales_with_its_size() {
 fn named_bar(value: f32) -> telar::testing::Scoped<telar::ComponentList> {
     crate::test_support::fresh_layout_runtime();
     telar::testing::scoped(|| {
-        let widget = progress(ProgressProps::props().value(value).width(200.0).build())
+        let widget = progress(ProgressProps::props().value(value).build())
             .unwrap()
             .a11y_label(|| "Upload");
         lay_out(widget.layout_node());
@@ -233,4 +221,85 @@ fn a_style_amendment_restyles_the_track() {
         crate::test_support::first_painted(&tree).fill,
         Some(ink.into())
     );
+}
+
+#[test]
+fn a_stretched_bar_is_as_wide_as_what_holds_it() {
+    let tree = bar(ProgressProps::props().stretch(true).build());
+    let width = tree.commands().iter().find_map(|command| match command {
+        telar::DrawCommand::Rect { rect, .. } => Some(rect.width),
+        _ => None,
+    });
+    assert_eq!(width, Some(300.0));
+}
+
+#[test]
+fn a_tone_colours_the_fill_whole_and_the_track_with_a_wash_of_it() {
+    let fills = |tone: Tone| {
+        bar(ProgressProps::props().tone(tone).build())
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                telar::DrawCommand::Rect { style, .. } => style.fill.map(|fill| fill.solid_color()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let theme = telar::use_theme_tokens();
+    for (tone, hue) in [
+        (Tone::Danger, theme.error()),
+        (Tone::default(), theme.primary()),
+    ] {
+        let [track, fill] = fills(tone)[..] else {
+            panic!("the track and its fill are drawn");
+        };
+        assert_eq!(fill, hue);
+        assert_eq!(track.with_alpha(hue.a), hue, "the same colour");
+        assert!(track.a < hue.a, "let through: {track:?}");
+    }
+}
+
+fn rects(tree: &telar::ComponentList) -> Vec<(telar::Rect, RectStyle)> {
+    tree.commands()
+        .iter()
+        .filter_map(|command| match command {
+            telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_fill_is_a_bar_of_its_own_as_wide_as_the_reading_and_as_round_as_the_track() {
+    let tree = bar(ProgressProps::props().value(0.25).stretch(true).build());
+    let [(track, track_style), (fill, fill_style)] = rects(&tree)[..] else {
+        panic!("the track and its fill are drawn");
+    };
+    assert_eq!((track.width, fill.width), (300.0, 75.0));
+    assert_eq!(fill.height, track.height);
+    assert!(
+        (fill_style.radius.top_left - track_style.radius.top_left).abs() < 0.01,
+        "{:?} and {:?}",
+        fill_style.radius,
+        track_style.radius
+    );
+}
+
+#[test]
+fn a_fill_style_restyles_the_fill_alone() {
+    let ink = Color::rgb(0.3, 0.3, 0.9);
+    let untouched = rects(&bar(ProgressProps::props().value(0.5).build()))[0]
+        .1
+        .fill;
+    let tree = bar(ProgressProps::props()
+        .value(0.5)
+        .fill_style(
+            std::rc::Rc::new(move |paint: RectStyle| paint.with_fill(ink)) as SurfaceAmendment,
+        )
+        .build());
+    let [(_, track), (_, fill)] = rects(&tree)[..] else {
+        panic!("the track and its fill are drawn");
+    };
+    assert_eq!(fill.fill, Some(ink.into()));
+    assert_eq!(track.fill, untouched);
 }

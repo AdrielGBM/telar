@@ -41,7 +41,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = progress(ProgressProps::props().value(p.clone()).width(::telar::Int(280)).build())?;
+                                let __node_3 = progress(ProgressProps::props().value(p.clone()).build())?;
                                 let __node_3 = __node_3.a11y_label(|| "Loading");
                                 __children.push(box_item(__node_3));
                                 let __row_0 = {
@@ -65,7 +65,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_6 = code_line(CodeLineProps::props().code("progress value:$p width:280 a11y_label:\"Loading\"").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("progress value:$p a11y_label:\"Loading\"").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }

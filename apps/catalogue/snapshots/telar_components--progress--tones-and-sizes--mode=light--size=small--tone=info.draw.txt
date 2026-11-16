@@ -1,0 +1,16 @@
+frame 280x48 lang=en
+element group
+  rect 0,0 280x48 fill=#ffffffff
+  element group
+    element group
+      element group
+        element progressbar
+          rect 42,21 196x6 fill=#1f6bc714 radius=3
+          element group
+            rect 42,21 118x6 fill=#1f6bc7ff radius=3
+          end
+        end
+      end
+    end
+  end
+end

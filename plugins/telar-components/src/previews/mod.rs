@@ -34,8 +34,6 @@ mod list;
 mod menu;
 #[path = "../overlays/modal/modal.preview.rs"]
 mod modal;
-#[path = "../feedback/progress/progress.preview.rs"]
-mod progress;
 #[path = "../inputs/radio_group/radio_group.preview.rs"]
 mod radio_group;
 #[path = "../layout/reorder_zones/reorder_zones.preview.rs"]
@@ -104,7 +102,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(stepper::previews());
     entries.extend(image::previews());
     entries.extend(link::previews());
-    entries.extend(progress::previews());
     entries.extend(section::previews());
     entries.extend(list::previews());
     entries.extend(virtual_list::previews());

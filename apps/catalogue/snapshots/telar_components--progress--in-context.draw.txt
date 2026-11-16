@@ -1,0 +1,31 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 240,274 320x52 fill=#ffffffff radius=12
+          element group
+            element group
+              matrix 1,0,0,1,252,286
+                text 0,0 130.05x16.8 "Exporting Logo.png" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,517,286
+                text 0,0 31.27x16.8 "60%" size=14 family=sans-serif weight=400 color=#616680ff lang=en
+              end
+            end
+          end
+          element progressbar
+            rect 252,307 296x8 fill=#4261ed14 radius=4
+            element group
+              rect 252,307 178x8 fill=#4261edff radius=4
+            end
+          end
+        end
+      end
+    end
+  end
+end

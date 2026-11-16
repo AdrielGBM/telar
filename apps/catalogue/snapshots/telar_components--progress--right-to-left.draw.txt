@@ -1,0 +1,16 @@
+frame 800x600 dir=rtl lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element progressbar
+          rect 288,296 224x8 fill=#4261ed14 radius=4
+          element group
+            rect 445,296 67x8 fill=#4261edff radius=4
+          end
+        end
+      end
+    end
+  end
+end

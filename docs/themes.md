@@ -229,7 +229,7 @@ component's `ControlSize` and scales it to that. Each field and what `None` fall
 | `MenuTokens` | a `menu`'s and a `context_menu`'s panels alike: `background` → `surface`; `border` → `border`; `label` → the inherited ink; `faint` → `muted`; `highlight` → `highlight_low`; `radius` → `radius_surface`; `row_height` → `ListTokens::row_height`; `padding` → `panel_pad`; `width` (the least; a panel widens to its widest row) → `measure(13)`; `offset` → `popup_offset` |
 | `MenuTriggerTokens` | the button a `menu` drops from: `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)` |
 | `ModalTokens` | `radius` → `radius_dialog`; `pad` → `gap_xl`; `min_width` → `measure(24)`; `max_width` → `measure(32)` |
-| `ProgressTokens` | `radius` → a pill; `width` → `measure(16)`; `height` → `gap_md` |
+| `ProgressTokens` | `radius` → a pill; `width` (of a bar that does not stretch) → `measure(16)`; `height` → `gap_md` |
 | `RadioTokens` | `size` → `icon_size`; `border_width` → `border_width_strong` |
 | `ResizableTokens` | a `resizable`'s and a `resize_handle`'s handles, a `data_table`'s column splitters among them: `thickness` → `spacing`; `grip` (the corner at rest) → `border`; `active` (under the pointer or dragged) → the accent |
 | `ScrubFieldTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
