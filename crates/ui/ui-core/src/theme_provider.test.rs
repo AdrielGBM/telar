@@ -5,7 +5,7 @@ use geometry_core::Color;
 use layout_core::{AvailableSpace, LayoutStyle};
 use platform_core::{Key, ModifiersState};
 use renderer_core::{Declared, DrawCommand, RectStyle, ShapeStyle};
-use theme_core::{ThemeTokens, set_theme, use_theme_tokens};
+use theme_core::{ThemeTokens, follow_theme, set_theme, use_theme_tokens};
 use ui_tree::ComponentList;
 
 use super::*;
@@ -263,6 +263,23 @@ fn a_followed_theme_switches_with_what_it_reads() {
     })
     .unwrap();
     red.set(false);
+    assert_eq!(seen.borrow().first(), Some(&RED));
+    assert_eq!(seen.borrow().last(), Some(&BLUE));
+}
+
+/// A theme worked out as a scope of its own, as a plugin's `workbench_theme()` hands one over, is followed as that scope changes.
+#[test]
+fn a_followed_scope_switches_with_it() {
+    reset_layout_runtime();
+    let source = theme_core::ScopedTheme::new(Accent(RED));
+    let seen: Rc<RefCell<Vec<Color>>> = Rc::default();
+    let sink = seen.clone();
+    let _provider = provide_theme(follow_theme(move || source), move || {
+        reactive_core::effect(move || sink.borrow_mut().push(use_theme_tokens().primary()));
+        Ok(Box::new(Container::new(LayoutStyle::new(), vec![])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    source.set(Accent(BLUE));
     assert_eq!(seen.borrow().first(), Some(&RED));
     assert_eq!(seen.borrow().last(), Some(&BLUE));
 }

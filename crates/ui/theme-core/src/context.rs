@@ -426,6 +426,35 @@ impl<T: ThemeTokens + Clone + 'static> From<T> for ScopedTheme {
     }
 }
 
+/// What a scope can be made to show: a theme, or another scope, whose theme it then shows as that changes.
+pub trait ThemeSource {
+    #[doc(hidden)]
+    fn shown(self) -> Shown;
+}
+
+/// What a [`ThemeSource`] shows, opaque outside this crate.
+#[doc(hidden)]
+pub struct Shown(Option<Installed>);
+
+impl<T: ThemeTokens + Clone + 'static> ThemeSource for T {
+    fn shown(self) -> Shown {
+        Shown(Some(Installed::new(self)))
+    }
+}
+
+impl ThemeSource for ScopedTheme {
+    fn shown(self) -> Shown {
+        Shown(self.0.get())
+    }
+}
+
+/// A scoped theme that shows what `read` yields and follows what it read: the theme `theme:` with a worked-out value provides, re-read when that changes, so switching it re-runs only the readers under it. A scope it yields is followed as that scope changes.
+pub fn follow_theme<S: ThemeSource>(read: impl Fn() -> S + 'static) -> ScopedTheme {
+    let scoped = ScopedTheme(signal(None));
+    reactive_core::effect(move || scoped.0.set(read().shown().0));
+    scoped
+}
+
 /// A newtype so the key in an owner's context is this crate's alone.
 struct Provided(ScopedTheme);
 

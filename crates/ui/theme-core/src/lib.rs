@@ -25,8 +25,8 @@ mod mode;
 
 pub use appearance::{ControlSize, Tone, Variant};
 pub use context::{
-    ScopedTheme, Theme, ThemeExtensions, ThemeTokens, nearest_theme, set_theme, use_theme,
-    use_theme_extension, use_theme_tokens,
+    ScopedTheme, Shown, Theme, ThemeExtensions, ThemeSource, ThemeTokens, follow_theme,
+    nearest_theme, set_theme, use_theme, use_theme_extension, use_theme_tokens,
 };
 pub use contrast::{
     CONTRAST_PAIRS, ColorToken, ContrastLevel, ContrastPair, ContrastShortfall, ContrastUse,
