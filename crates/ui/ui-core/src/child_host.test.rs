@@ -634,3 +634,65 @@ fn a_keyless_fragment_shows_its_items_through_a_reorder_and_an_edit_in_place() {
     items.set(vec!["gamma", "delta", "epsilon"]);
     assert_eq!(shown(), ["gamma", "delta", "epsilon"], "edited in place");
 }
+
+/// A branch of several children lays them out as the host's own: a `for` reading state spaces its rows by the host's gap, as the same loop built once does.
+#[test]
+fn a_branch_of_several_children_lays_them_out_as_the_hosts_own() {
+    reset_layout_runtime();
+    let shown = signal(2usize);
+    let built: std::rc::Rc<std::cell::RefCell<Vec<NodeId>>> = std::rc::Rc::default();
+    let nodes = std::rc::Rc::clone(&built);
+    let container = Container::from_slots(
+        LayoutStyle::new().flex_row().gap(5.0),
+        vec![fragment_branches(
+            move || vec![shown.get()],
+            |count: &usize| *count,
+            move |count| {
+                nodes.borrow_mut().clear();
+                (0..count)
+                    .map(|_| {
+                        let (node, item) = leaf10_node();
+                        nodes.borrow_mut().push(node);
+                        Ok(ChildSlot::stat(item))
+                    })
+                    .collect()
+            },
+            0.0,
+        )],
+    )
+    .unwrap();
+    assert_eq!(
+        group_len(&container.view()),
+        2,
+        "both children are the host's"
+    );
+    compute_layout(
+        container.layout_node(),
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let xs: Vec<f32> = built
+        .borrow()
+        .iter()
+        .map(|&node| track_layout(node).unwrap().get().x)
+        .collect();
+    assert_eq!(xs, vec![0.0, 15.0], "spaced by the host's gap");
+
+    shown.set(3);
+    assert_eq!(
+        group_len(&container.view()),
+        3,
+        "a new branch replaces the old"
+    );
+}
+
+#[test]
+fn a_branch_cell_is_the_widget_itself_when_the_branch_built_one() {
+    reset_layout_runtime();
+    let (node, item) = leaf10_node();
+    let cell = branch_cell(LayoutStyle::new(), vec![item]).unwrap();
+    assert_eq!(cell.layout_node(), node);
+    let pair = branch_cell(LayoutStyle::new(), vec![leaf10(), leaf10()]).unwrap();
+    assert_ne!(pair.layout_node(), node, "and a box around them otherwise");
+}

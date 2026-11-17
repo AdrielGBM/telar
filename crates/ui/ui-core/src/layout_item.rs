@@ -234,6 +234,24 @@ impl BuildPass {
         Ok(child)
     }
 
+    /// [`Self::build_child`] for a build that makes several siblings at once, a branch of a view: all of them under one owner, held by the first, since they are kept and let go together. An empty build owns nothing worth keeping, so its owner goes at once.
+    pub(crate) fn build_group(
+        &mut self,
+        build: impl FnOnce() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError>,
+    ) -> Result<Vec<Child>, LayoutError> {
+        let (children, owner) =
+            build_owned(|| build().map(|items| items.into_iter().map(make_child).collect()))?;
+        let mut children: Vec<Child> = children;
+        match children.first_mut() {
+            Some(first) => {
+                first.owner = Some(owner);
+                self.owners.push(owner);
+            }
+            None => dispose_owner(owner),
+        }
+        Ok(children)
+    }
+
     pub(crate) fn keep(mut self) {
         self.owners.clear();
         if let Some(nodes) = self.nodes.take() {

@@ -9,7 +9,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use layout_core::{LayoutError, NodeId};
+use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{ReadSignal, RwSignal, effect, signal};
 use ui_tree::{EventResult, RenderNode};
@@ -40,6 +40,41 @@ impl ChildSlot {
     }
 }
 
+impl From<Box<dyn LayoutItem>> for ChildSlot {
+    fn from(item: Box<dyn LayoutItem>) -> Self {
+        ChildSlot::Static(item)
+    }
+}
+
+/// What one branch of a view's `if`, `match` or `for` built, as the one item a reconciled region holds for it: the widget itself when the branch built one, so its parent lays it out as it would have laid out the widget; otherwise a box laid out by `style` holding them all.
+pub fn branch_cell(
+    style: LayoutStyle,
+    children: Vec<impl Into<ChildSlot>>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let mut slots: Vec<ChildSlot> = children.into_iter().map(Into::into).collect();
+    if let [ChildSlot::Static(_)] = slots.as_slice()
+        && let Some(ChildSlot::Static(item)) = slots.pop()
+    {
+        return Ok(item);
+    }
+    let fixed: Option<Vec<Box<dyn LayoutItem>>> = slots
+        .iter()
+        .all(|slot| matches!(slot, ChildSlot::Static(_)))
+        .then(|| {
+            slots
+                .drain(..)
+                .filter_map(|slot| match slot {
+                    ChildSlot::Static(item) => Some(item),
+                    ChildSlot::Dynamic(_) => None,
+                })
+                .collect()
+        });
+    Ok(match fixed {
+        Some(items) => crate::layout_item::box_item(crate::Container::new(style, items)?),
+        None => crate::layout_item::box_item(crate::Container::from_slots(style, slots)?),
+    })
+}
+
 /// A generic-erased reactive region. Captures `source`/`key`/`build` behind one closure that, given the shared host state and this slot's index, wires the reconcile effect. Erasing here keeps [`HostState`] non-generic (a container can hold fragments over different item types). `gap` is the per-item spacing (`0.0` = none), applied as a main-axis leading margin so the region stays transparent.
 pub struct FragmentSpec {
     install: Box<dyn FnOnce(Rc<RefCell<HostState>>, usize)>,
@@ -58,7 +93,7 @@ where
     make_fragment(
         source,
         move |item: &Item, _idx: usize| hash_key(&key(item)),
-        move |item, _| build(item),
+        move |item, _, _| Ok(vec![build(item)?]),
         |_, _| {},
         gap,
     )
@@ -91,6 +126,50 @@ where
     make_held_fragment(source, |_item: &Item, idx: usize| idx as u64, build, gap)
 }
 
+/// A region of a view that builds one branch per item, `if`, `match` or `for` alike, each branch's children spliced into the host as siblings of its own children, so they take its direction and gap as the same children written in place would. A branch holding a region of its own is laid out inside one box in the host's direction, since a region can only reconcile into a host's node.
+pub fn fragment_branches<Item, Key, S, K, B>(source: S, key: K, build: B, gap: f32) -> ChildSlot
+where
+    Key: Hash + 'static,
+    Item: 'static,
+    S: Fn() -> Vec<Item> + 'static,
+    K: Fn(&Item) -> Key + 'static,
+    B: Fn(Item) -> Result<Vec<ChildSlot>, LayoutError> + 'static,
+{
+    make_fragment(
+        source,
+        move |item: &Item, _idx: usize| hash_key(&key(item)),
+        move |item, _, host_is_row| siblings(build(item)?, host_is_row),
+        |_, _| {},
+        gap,
+    )
+}
+
+/// `slots` as the widgets a host holds side by side: themselves when every one is fixed, else one box around them laid out the way the host is.
+fn siblings(
+    slots: Vec<ChildSlot>,
+    host_is_row: bool,
+) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+    if slots
+        .iter()
+        .all(|slot| matches!(slot, ChildSlot::Static(_)))
+    {
+        return Ok(slots
+            .into_iter()
+            .filter_map(|slot| match slot {
+                ChildSlot::Static(item) => Some(item),
+                ChildSlot::Dynamic(_) => None,
+            })
+            .collect());
+    }
+    let style = match host_is_row {
+        true => LayoutStyle::new().flex_row(),
+        false => LayoutStyle::new().flex_column(),
+    };
+    Ok(vec![crate::layout_item::box_item(
+        crate::Container::from_slots(style, slots)?,
+    )])
+}
+
 fn make_held_fragment<Item, S, KeyFn, B>(source: S, keyer: KeyFn, build: B, gap: f32) -> ChildSlot
 where
     Item: Clone + 'static,
@@ -103,7 +182,7 @@ where
     make_fragment(
         source,
         keyer,
-        move |item, k| build(held.hold(item, k)),
+        move |item, k, _| Ok(vec![build(held.hold(item, k))?]),
         move |item, k| values.sync(item, k),
         gap,
     )
@@ -119,7 +198,7 @@ fn make_fragment<Item, S, B, KeyFn, Sync>(
 where
     Item: 'static,
     S: Fn() -> Vec<Item> + 'static,
-    B: Fn(Item, u64) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    B: Fn(Item, u64, bool) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> + 'static,
     KeyFn: Fn(&Item, usize) -> u64 + 'static,
     Sync: Fn(&Item, u64) + 'static,
 {
@@ -139,6 +218,8 @@ where
 #[derive(Default)]
 struct DynState {
     items: Vec<Child>,
+    /// How many of `items` each key built, in order: a branch is a group of siblings.
+    spans: Vec<usize>,
     keys: Vec<u64>,
     gap: f32,
     is_row: bool,
@@ -187,33 +268,45 @@ fn reconcile_slot<Item, KeyFn, B, Sync>(
     sync: &Sync,
 ) where
     KeyFn: Fn(&Item, usize) -> u64,
-    B: Fn(Item, u64) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    B: Fn(Item, u64, bool) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError>,
     Sync: Fn(&Item, u64),
 {
-    let (old_items, old_keys) = match &state.borrow().slots[index] {
-        SlotState::Dynamic(dyn_state) => (dyn_state.items.clone(), dyn_state.keys.clone()),
+    let (old_items, old_keys, old_spans, host_is_row) = match &state.borrow().slots[index] {
+        SlotState::Dynamic(dyn_state) => (
+            dyn_state.items.clone(),
+            dyn_state.keys.clone(),
+            dyn_state.spans.clone(),
+            dyn_state.is_row,
+        ),
         SlotState::Static(_) => unreachable!("a fragment slot is never static"),
     };
+    let mut old_items = old_items.into_iter();
+    let old_groups: Vec<Vec<Child>> = old_spans
+        .iter()
+        .map(|&span| old_items.by_ref().take(span).collect())
+        .collect();
 
-    // Indexed by key hash so a persisting key reuses its widget and node.
-    let (mut old, strays) = index_by_key(old_keys, old_items);
+    // Indexed by key hash so a persisting key reuses its widgets and nodes.
+    let (mut old, strays) = index_by_key(old_keys, old_groups);
     let mut occurrences = Occurrences::new();
 
     let mut new_items: Vec<Child> = Vec::with_capacity(items.len());
     let mut keys: Vec<u64> = Vec::with_capacity(items.len());
+    let mut spans: Vec<usize> = Vec::with_capacity(items.len());
     // An item build that panics leaves the committed slot as it was, so the pass frees the items it had already built along with what the failed one left.
     let mut pass = BuildPass::start();
     for (idx, item) in items.into_iter().enumerate() {
         let k = occurrences.identify(keyer(&item, idx));
         // Before the reuse decision, so an item keeping its key sees the value it now carries.
         sync(&item, k);
-        let child = match old.remove(&k) {
+        let group = match old.remove(&k) {
             Some(existing) => existing,
             None => pass
-                .build_child(|| build(item, k))
+                .build_group(|| build(item, k, host_is_row))
                 .expect("fragment item build"),
         };
-        new_items.push(child);
+        spans.push(group.len());
+        new_items.extend(group);
         keys.push(k);
     }
     pass.keep();
@@ -224,6 +317,7 @@ fn reconcile_slot<Item, KeyFn, B, Sync>(
         let item_nodes: Vec<NodeId> = new_items.iter().map(Child::node).collect();
         dyn_state.items = new_items;
         dyn_state.keys = keys;
+        dyn_state.spans = spans;
         (dyn_state.gap, dyn_state.is_row, item_nodes)
     } else {
         (0.0, false, Vec::new())
@@ -242,7 +336,7 @@ fn reconcile_slot<Item, KeyFn, B, Sync>(
             set_leading_margin(item, is_row, if i == 0 { 0.0 } else { gap });
         }
     }
-    for child in old.into_values().chain(strays) {
+    for child in old.into_values().chain(strays).flatten() {
         dispose_child(&child);
     }
     version.update(|v| *v = v.wrapping_add(1));

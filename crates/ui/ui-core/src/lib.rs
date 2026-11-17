@@ -109,7 +109,9 @@ pub use async_asset::{
 pub use border::{logical_border_radius, logical_border_widths};
 pub use breakpoints::{Breakpoints, breakpoint};
 pub use canvas::Canvas;
-pub use child_host::{ChildSlot, fragment, fragment_keyed, fragment_positional};
+pub use child_host::{
+    ChildSlot, branch_cell, fragment, fragment_branches, fragment_keyed, fragment_positional,
+};
 pub use children::{Children, use_context};
 pub use container::Container;
 pub use context::{
