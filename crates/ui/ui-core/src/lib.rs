@@ -184,7 +184,7 @@ pub use scroll_timeline::{
 };
 pub use scroll_viewports::{enclosing_scroll_viewport, scroll_viewports_of, use_primary_scroll};
 pub use step::{COARSE_STEP, FINE_STEP, step_factor};
-pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_follows};
+pub use styled_container::{KeyAnswer, StyledContainer, box_transform, place_item, style_follows};
 pub use surface::{Edge, Scrim, SurfaceScaffold, SurfaceTransition};
 pub use surface_canvas::{
     NestedCanvas, SurfaceCanvas, SurfaceEnv, composite_surface, follow_box_event,

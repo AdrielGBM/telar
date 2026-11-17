@@ -72,6 +72,14 @@ pub fn style_follows(node: NodeId, style: impl Fn() -> LayoutStyle + 'static) {
     });
 }
 
+/// Lays `place` over the style `node` declares, now, whenever the node declares another, and whenever what `place` reads changes: how a caller sizes and positions an item it places (`width:`, `grow:`, `self:` on a component call), over what the item says about itself, the caller's winning.
+pub fn place_item(node: NodeId, place: impl Fn(LayoutStyle) -> LayoutStyle + 'static) {
+    let place: std::rc::Rc<dyn Fn(LayoutStyle) -> LayoutStyle> = std::rc::Rc::new(place);
+    effect(move || {
+        let _ = layout_reactive::place_layout(node, std::rc::Rc::clone(&place));
+    });
+}
+
 /// The states a box paints differently in, **in precedence order**: the first one engaged wins.
 ///
 /// A list rather than a chain of `else if`, so a new state is added by putting it at the right place here instead of at the right place inside `view()` — where the order was a comment and nothing held the code to it.

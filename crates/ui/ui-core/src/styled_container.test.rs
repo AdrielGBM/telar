@@ -2883,3 +2883,51 @@ fn a_control_that_lets_several_items_be_chosen_says_so() {
     assert!(!semantics_of(&one).multiselectable);
     assert!(!focus::exposed()[0].multiselectable);
 }
+
+/// The width a laid-out `node` ends up with in a row of 300.
+fn width_in_a_row(node: layout_core::NodeId) -> f32 {
+    let row = crate::container::Container::new(LayoutStyle::new().flex_row().width(300.0), vec![])
+        .unwrap();
+    crate::context::set_children(row.layout_node(), &[node]).unwrap();
+    crate::context::compute_layout(
+        row.layout_node(),
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    crate::context::track_layout(node).unwrap().get().width
+}
+
+#[test]
+fn a_placement_wins_over_the_style_the_item_declares() {
+    reset_layout_runtime();
+    let item = crate::container::Container::new(LayoutStyle::new().width(50.0), vec![]).unwrap();
+    place_item(item.layout_node(), |style| style.width(80.0));
+    assert_eq!(width_in_a_row(item.layout_node()), 80.0);
+}
+
+/// A component that restyles itself, as one sized off the theme does, keeps where its caller placed it.
+#[test]
+fn a_placement_outlives_the_item_declaring_another_style() {
+    reset_layout_runtime();
+    let wide = reactive_core::signal(50.0f32);
+    let item = crate::container::Container::new(LayoutStyle::new(), vec![]).unwrap();
+    let node = item.layout_node();
+    style_follows(node, move || {
+        LayoutStyle::new().width(wide.get()).height(10.0)
+    });
+    place_item(node, |style| style.width(80.0));
+    wide.set(60.0);
+    assert_eq!(width_in_a_row(node), 80.0);
+}
+
+#[test]
+fn a_placement_follows_what_it_reads() {
+    reset_layout_runtime();
+    let wide = reactive_core::signal(80.0f32);
+    let item = crate::container::Container::new(LayoutStyle::new().width(50.0), vec![]).unwrap();
+    let node = item.layout_node();
+    place_item(node, move |style| style.width(wide.get()));
+    wide.set(120.0);
+    assert_eq!(width_in_a_row(node), 120.0);
+}

@@ -613,6 +613,48 @@ pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {
 ///
 /// What a widget whose style is *derived* from reactive state calls when that state moves — a theme's metric tokens, today. Unlike rebuilding the widget it keeps the node, its children, and everything they hold; the engine re-resolves the new style against the current direction exactly as it would at construction.
 pub fn set_layout_style(node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
+    let place = with_runtime(|rt| {
+        let placement = rt.placements.get_mut(&node)?;
+        placement.declared = style.clone();
+        Some(Rc::clone(&placement.place))
+    });
+    // Laid over outside the runtime's borrow: what a caller places a node with may read text measured against the tree.
+    let style = match place {
+        Some(place) => place(style),
+        None => style,
+    };
+    restyle(node, |rt| {
+        rt.engine.set_style(node, style)?;
+        rt.engine.mark_dirty(node)
+    })
+}
+
+/// How the caller placing a node sizes and positions it, laid over whatever style the node declares for itself.
+type Place = Rc<dyn Fn(LayoutStyle) -> LayoutStyle>;
+
+/// A placed node: the caller's placement, and the style the node itself last declared, which every later placement is laid over.
+struct Placement {
+    place: Place,
+    declared: LayoutStyle,
+}
+
+/// Lays `place` over the style `node` declares, now and every time the node declares another through [`set_layout_style`]: what the caller of a component says about where it sits and how large it is (`width:`, `grow:`, `self:`), over what the component says about itself, the caller's winning. Calling it again replaces the placement, laid over the style the node declared, not over the last placement.
+pub fn place_layout(node: NodeId, place: Place) -> Result<(), LayoutError> {
+    let declared = with_runtime(|rt| match rt.placements.get(&node) {
+        Some(placement) => Some(placement.declared.clone()),
+        None => rt.engine.declared_style(node).cloned(),
+    })
+    .ok_or_else(|| LayoutError::Engine(format!("node {node:?} no longer exists")))?;
+    with_runtime(|rt| {
+        rt.placements.insert(
+            node,
+            Placement {
+                place: Rc::clone(&place),
+                declared: declared.clone(),
+            },
+        )
+    });
+    let style = place(declared);
     restyle(node, |rt| {
         rt.engine.set_style(node, style)?;
         rt.engine.mark_dirty(node)
@@ -832,6 +874,8 @@ impl OverlayHost {
 
 struct LayoutRuntime {
     engine: LayoutEngine,
+    /// What the caller placing each placed node lays over the style it declares, and that declared style, so a node that declares another keeps the caller's placement: see [`place_layout`].
+    placements: FxHashMap<NodeId, Placement>,
     generation: u64,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
     // So `compute_layout` can re-run when only the space changed.
@@ -882,6 +926,7 @@ impl LayoutRuntime {
         Self {
             engine: LayoutEngine::new(),
             generation: NEXT_GENERATION.fetch_add(1, Ordering::Relaxed),
+            placements: FxHashMap::default(),
             registry: FxHashMap::default(),
             last_space: FxHashMap::default(),
             root_auto: FxHashMap::default(),
@@ -1167,6 +1212,7 @@ impl LayoutRuntime {
             pending.extend(self.held_roots.remove(&at).into_iter().flatten());
             self.engine.remove(at);
             self.registry.remove(&at);
+            self.placements.remove(&at);
             self.last_space.remove(&at);
             self.root_auto.remove(&at);
             self.abs_pos.remove(&at);
