@@ -16,7 +16,7 @@ mod transaction;
 mod task;
 mod timer;
 
-pub use effect::effect;
+pub use effect::{effect, reads_state, untrack};
 pub use memo::{Memo, memo};
 pub use reactive::Reactive;
 pub use reactive_local::{

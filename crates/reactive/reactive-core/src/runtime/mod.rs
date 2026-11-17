@@ -17,8 +17,8 @@ mod site_cell;
 mod surface;
 
 pub(crate) use effects::{
-    force_run_effect, pull_pending_memo, register_effect, register_memo_effect, reschedule_memo,
-    run_effect, untracked,
+    force_run_effect, pull_pending_memo, reads_state, register_effect, register_memo_effect,
+    reschedule_memo, run_effect, untracked,
 };
 pub use flush::{OpenBatch, after_settle, batch, reset_runtime, set_flush_notify};
 pub(crate) use owner::OwnerKey;
@@ -77,6 +77,8 @@ pub(crate) struct SignalStorage {
 
 pub(crate) struct Runtime {
     pub(crate) observer_stack: Vec<EffectId>,
+    /// Whether the innermost [`reads_state`](effects::reads_state) has seen a read yet, `None` outside one. A `Cell` because a read only borrows the runtime.
+    pub(crate) probe: Cell<Option<bool>>,
     /// How many effect runs are on the call stack. Not the observer stack's length: `untracked` hides that stack while the run that called it is still executing.
     pub(crate) running_effects: usize,
     pub(crate) owners: SlotMap<OwnerKey, owner::OwnerEntry>,
@@ -116,6 +118,7 @@ impl Runtime {
     fn new() -> Self {
         Runtime {
             observer_stack: Vec::new(),
+            probe: Cell::new(None),
             running_effects: 0,
             owners: SlotMap::with_key(),
             owner_stack: Vec::new(),

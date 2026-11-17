@@ -45,6 +45,8 @@ pub(crate) struct OwnerEntry {
     children: Vec<OwnerKey>,
     signals: Vec<SignalId>,
     effects: Vec<EffectId>,
+    /// The callbacks of effects let go because they read nothing, held until this owner goes since what they captured may be a registration whose drop undoes it.
+    kept: Vec<Rc<dyn Fn()>>,
     /// What this owner has to undo elsewhere. The escape hatch for state an owner's lifetime governs but this crate cannot name — a cascade declaration is keyed by a layout `NodeId`, which lives three crates up.
     cleanups: Vec<Box<dyn FnOnce()>>,
     /// What this owner tells everything below it, keyed by type. Empty for almost every owner: only a scope that provides something ever reaches the allocator for this.
@@ -63,6 +65,7 @@ impl OwnerEntry {
             children: Vec::new(),
             signals: Vec::new(),
             effects: Vec::new(),
+            kept: Vec::new(),
             cleanups: Vec::new(),
             context: FxHashMap::default(),
             catch: None,
@@ -165,6 +168,23 @@ pub(crate) fn attach_signal(rt: &mut Runtime, id: SignalId) {
     if let Some(entry) = owning(rt) {
         entry.signals.push(id);
     }
+}
+
+/// Hands `owner` the callback of `id`, an effect let go before it, in place of the effect: answers `false` when `owner` is gone. Searched from the end, where an effect run as it is created sits.
+pub(crate) fn keep_callback(
+    rt: &mut Runtime,
+    owner: OwnerKey,
+    id: EffectId,
+    callback: Rc<dyn Fn()>,
+) -> bool {
+    let Some(entry) = rt.owners.get_mut(owner) else {
+        return false;
+    };
+    if let Some(at) = entry.effects.iter().rposition(|&effect| effect == id) {
+        entry.effects.remove(at);
+    }
+    entry.kept.push(callback);
+    true
 }
 
 pub(crate) fn attach_effect(rt: &mut Runtime, id: EffectId) {
@@ -433,6 +453,7 @@ fn tear_down(id: OwnerKey, panicked: &mut Option<PanicPayload>) {
 
     for owner in &mut torn {
         enter_surface(owner.surface, || {
+            drop(std::mem::take(&mut owner.kept));
             for effect in std::mem::take(&mut owner.effects) {
                 contain(panicked, || deregister_effect(effect));
             }

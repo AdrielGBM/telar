@@ -46,3 +46,33 @@ fn a_literal_reads_as_an_owned_string() {
     let label: Reactive<String> = "Save".into();
     assert_eq!(label.get(), "Save");
 }
+
+#[test]
+fn a_value_that_read_nothing_is_followed_as_a_constant() {
+    reset_runtime();
+    let reading = Reactive::<i32>::follow(|| 2 + 3);
+    assert!(matches!(reading, Reactive::Const(5)));
+}
+
+#[test]
+fn a_value_that_read_state_is_followed() {
+    reset_runtime();
+    let count = signal(1i32);
+    let reading = Reactive::<i32>::follow(move || count.get() * 10);
+    assert_eq!(reading.get(), 10);
+    count.set(2);
+    assert_eq!(reading.get(), 20);
+}
+
+/// A reading made to be kept reads nothing while it is made, and still follows its signal.
+#[test]
+fn a_reading_built_to_be_kept_arrives_as_it_was_made() {
+    reset_runtime();
+    let count = signal(1i32);
+    let reading = Reactive::<i32>::follow(move || Reactive::of(move || count.get()));
+    count.set(7);
+    assert_eq!(reading.get(), 7);
+    let handed = Reactive::<i32>::follow(move || count);
+    count.set(8);
+    assert_eq!(handed.get(), 8, "a signal handed over is followed");
+}

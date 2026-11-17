@@ -126,6 +126,10 @@ macro_rules! __without_previews {
 #[path = "previews_gate.test.rs"]
 mod previews_gate_tests;
 
+#[cfg(test)]
+#[path = "ambient_reads.test.rs"]
+mod ambient_reads_tests;
+
 #[cfg(all(test, feature = "shaper"))]
 #[path = "test_face.test.rs"]
 mod test_face;
@@ -225,9 +229,9 @@ pub use reactive_core::{
     Emitter, Memo, OwnerGuard, OwnerId, Reactive, ReadSignal, RwSignal, Source, Task, Timer,
     Transaction, TransactionError, advance_timer_clock, after_settle, batch, current_owner, derive,
     derive_pair, detached, dispose_owner, drain_tasks, dropless_thread_local, effect, fire_timers,
-    memo, on_cleanup, owner_scope, released_static, reset_runtime, reset_tasks, reset_timers,
-    run_after, set_task_waker, signal, spawn_stream, spawn_task, threads, timer_now,
-    until_next_timer, with_owner,
+    memo, on_cleanup, owner_scope, reads_state, released_static, reset_runtime, reset_tasks,
+    reset_timers, run_after, set_task_waker, signal, spawn_stream, spawn_task, threads, timer_now,
+    until_next_timer, untrack, with_owner,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};

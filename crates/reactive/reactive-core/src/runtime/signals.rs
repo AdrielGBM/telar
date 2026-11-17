@@ -191,7 +191,15 @@ pub(crate) fn release_transaction(id: SignalId) {
 
 #[inline]
 pub(crate) fn track_signal(id: SignalId) {
-    if let Some(observer_id) = RUNTIME.with(|rt| rt.borrow().observer_stack.last().copied()) {
+    let observer = RUNTIME.with(|rt| {
+        let rt = rt.borrow();
+        let observer = rt.observer_stack.last().copied();
+        if observer.is_none() && rt.probe.get().is_some() {
+            rt.probe.set(Some(true));
+        }
+        observer
+    });
+    if let Some(observer_id) = observer {
         subscribe(observer_id, id);
     }
 }

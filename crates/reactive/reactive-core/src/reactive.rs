@@ -25,6 +25,16 @@ impl<T> Reactive<T> {
     }
 }
 
+impl<T: Clone + 'static> Reactive<T> {
+    /// What `read` yields, followed only when working it out read state: a constant when it read none, so a value that cannot change is held as itself. What `read` returns converts, so a reading built to be kept (`Reactive::of(…)`, a signal) arrives as it was made.
+    pub fn follow<U: Into<Reactive<T>>>(read: impl Fn() -> U + 'static) -> Self {
+        match crate::reads_state(&read) {
+            (first, false) => first.into(),
+            (_, true) => Self::of(move || read().into().get()),
+        }
+    }
+}
+
 impl<T: Clone> Reactive<T> {
     pub fn get(&self) -> T {
         match self {

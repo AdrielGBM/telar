@@ -9,17 +9,49 @@ use super::owner::deliver_panic;
 use super::surface::{current_surface, enter_surface};
 use super::{EffectEntry, EffectId, RUNTIME, Runtime, SignalId};
 
-/// Runs `f` with no observer, so nothing it reads subscribes whichever effect is running.
+/// Runs `f` with no observer, so nothing it reads subscribes whichever effect is running, nor counts for a [`reads_state`] around it.
 pub(crate) fn untracked<R>(f: impl FnOnce() -> R) -> R {
-    struct Restore(Vec<EffectId>);
+    observed_by(None, f).0
+}
+
+/// Runs `f` with no effect observing it, answering what it returned and whether it read any signal: what decides whether a value worked out once has to be worked out again when what it read changes.
+pub(crate) fn reads_state<R>(f: impl FnOnce() -> R) -> (R, bool) {
+    let (value, probe) = observed_by(Some(false), f);
+    (value, probe == Some(true))
+}
+
+/// Runs `f` with the observer stack hidden and `probe` in force, restoring both after, unwinding included, and answering the probe as `f` left it.
+fn observed_by<R>(probe: Option<bool>, f: impl FnOnce() -> R) -> (R, Option<bool>) {
+    struct Restore {
+        hidden: Vec<EffectId>,
+        outer: Option<bool>,
+        probing: bool,
+    }
     impl Drop for Restore {
         fn drop(&mut self) {
-            let hidden = std::mem::take(&mut self.0);
-            RUNTIME.with(|rt| rt.borrow_mut().observer_stack = hidden);
+            let hidden = std::mem::take(&mut self.hidden);
+            RUNTIME.with(|rt| {
+                let mut rt = rt.borrow_mut();
+                rt.observer_stack = hidden;
+                // A value worked out from one that read state read it too, so an inner probe's read reaches the one around it; an untracked read reaches none.
+                let read = self.probing && rt.probe.get() == Some(true);
+                rt.probe
+                    .set(self.outer.map(|outer_read| outer_read || read));
+            });
         }
     }
-    let _restore = Restore(RUNTIME.with(|rt| std::mem::take(&mut rt.borrow_mut().observer_stack)));
-    f()
+    let _restore = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let outer = rt.probe.replace(probe);
+        Restore {
+            hidden: std::mem::take(&mut rt.observer_stack),
+            outer,
+            probing: probe.is_some(),
+        }
+    });
+    let value = f();
+    let probe = RUNTIME.with(|rt| rt.borrow().probe.get());
+    (value, probe)
 }
 
 pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
@@ -298,7 +330,24 @@ fn run(id: EffectId, mode: Run) {
     let outcome = enter_surface(surface, || catch_unwind(AssertUnwindSafe(|| callback())));
     drop(_guard);
     RUNTIME.with(|rt| rt.borrow_mut().record_run(id));
-    if let Err(payload) = outcome {
-        deliver_panic(owner, payload);
+    match outcome {
+        Ok(()) => release_if_unread(id),
+        Err(payload) => deliver_panic(owner, payload),
+    }
+}
+
+/// Lets go of `id` when its run read no signal, since nothing can schedule it again: its slot is freed, and its owner holds its callback until it goes, as it held the effect. A memo is kept, since its value is read through it, and so is an effect no owner frees.
+fn release_if_unread(id: EffectId) {
+    let released = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let entry = rt.effects.get(id)?;
+        if entry.produces.is_some() || !entry.sources.is_empty() {
+            return None;
+        }
+        let (owner, callback) = (entry.owner?, Rc::clone(&entry.callback));
+        super::owner::keep_callback(&mut rt, owner, id, callback).then_some(())
+    });
+    if released.is_some() {
+        deregister_effect(id);
     }
 }

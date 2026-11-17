@@ -7,3 +7,17 @@ pub fn effect(f: impl Fn() + 'static) {
     let id = runtime::register_effect(Box::new(f));
     runtime::run_effect(id);
 }
+
+/// Runs `f` without following what it reads: inside an effect or a view, a value read once on purpose.
+pub fn untrack<R>(f: impl FnOnce() -> R) -> R {
+    runtime::untracked(f)
+}
+
+/// Runs `f` outside any effect, answering what it returned and whether it read any signal on the way: whether the value has to be worked out again when what it read changes, or never can change.
+pub fn reads_state<R>(f: impl FnOnce() -> R) -> (R, bool) {
+    runtime::reads_state(f)
+}
+
+#[cfg(test)]
+#[path = "effect.test.rs"]
+mod tests;
