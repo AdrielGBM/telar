@@ -23,7 +23,7 @@ use telar::ControlSize;
 /// Every field left `None` follows the role named beside it, read when the picker paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ColorPickerTokens {
-    /// Width when the caller names none, at the regular size and scaled with the picker's own. `None` is 16 ems of the document's text, a slider's length.
+    /// The width a picker takes where what holds it leaves the room, at the regular size and scaled with the picker's own: narrower where it does not, and as its call places it (`width:100%`). `None` is 16 ems of the document's text, a slider's length.
     pub width: Option<f32>,
     /// Corner radius of the saturation and brightness area and of the chip showing the colour. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
@@ -39,7 +39,7 @@ impl ColorPickerTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    /// The width of a picker of `size` whose call names none.
+    /// The width a picker of `size` takes where what holds it leaves the room.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, WIDTH_EMS)
     }
@@ -98,10 +98,7 @@ pub struct ColorPickerProps {
     /// What each swatch is called, for a reader; one per colour.
     #[props(default)]
     pub swatch_names: Vec<String>,
-    /// Width in logical px. `None` (the default) is [`ColorPickerTokens::width`].
-    #[props(some, default)]
-    pub width: Option<f32>,
-    /// How large the picker is drawn: its thumbs, tracks, chip, hex field, swatches, caption and gaps and, unless it names one, its width, as [`ControlSize`] works them out.
+    /// How large the picker is drawn: its thumbs, tracks, chip, hex field, swatches, caption and gaps, and the width it takes where what holds it leaves the room, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
     /// A small caption stacked above the picker; omitted when empty.
@@ -229,14 +226,12 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
         alpha,
         swatches: palette,
         swatch_names,
-        width,
         size,
         label,
         on_change,
         style,
     } = props;
     let value = value.unwrap_or_else(|| signal(shared::accent()));
-    let width = width.unwrap_or_else(|| ColorPickerTokens::current().width(size));
     let start = value.peek();
     let picker = Picker {
         size,
@@ -256,14 +251,16 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
         effect(move || picker.follow(value.get()));
     }
 
-    let mut rows: Vec<Box<dyn LayoutItem>> = vec![area(&picker, width, style)?];
-    let slider_width = width - chip_size(size) - gap(size);
-    let mut sliders: Vec<Box<dyn LayoutItem>> = vec![hue_slider(&picker, slider_width)?];
+    let mut rows: Vec<Box<dyn LayoutItem>> = vec![area(&picker, style)?];
+    let mut sliders: Vec<Box<dyn LayoutItem>> = vec![hue_slider(&picker)?];
     if alpha {
-        sliders.push(alpha_slider(&picker, slider_width)?);
+        sliders.push(alpha_slider(&picker)?);
     }
     let slider_column = Container::new(
-        LayoutStyle::column().justify_content(telar::JustifyContent::CENTER),
+        LayoutStyle::column()
+            .flex_grow(1.0)
+            .min_width(0.0)
+            .justify_content(telar::JustifyContent::CENTER),
         sliders,
     )?;
     rows.push(box_item(Container::new(
@@ -272,14 +269,28 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
             .gap(gap(size)),
         vec![chip(size, value)?, box_item(slider_column)],
     )?));
-    rows.push(hex_field(&picker, width, alpha)?);
+    rows.push(hex_field(&picker, alpha)?);
     if !palette.is_empty() {
         rows.push(swatch_row(&picker, palette, swatch_names)?);
     }
 
-    let column = move || LayoutStyle::column().width(width).gap(gap(size));
+    let width = move || ColorPickerTokens::current().width(size);
+    let captioned = shared::is_captioned(&label);
+    let column = move || {
+        let column = LayoutStyle::column().gap(gap(size));
+        match captioned {
+            true => column,
+            false => shared::preferred_width(column, width()),
+        }
+    };
     let picker_box = Container::new(column(), rows)?.styled_by(column);
-    shared::captioned(size, box_item(picker_box), label, width, false)
+    shared::captioned(
+        size,
+        box_item(picker_box),
+        label,
+        Some(Reactive::of(width)),
+        false,
+    )
 }
 
 /// One of the area's two axes, each a slider of its own to a reader: saturation runs across it, brightness up it.
@@ -401,10 +412,8 @@ fn area_key(picker: &Picker, own: Axis, sliders: [Option<FocusId>; 2], key: &Key
 /// The saturation (across) and brightness (up) of the current hue, dragged as one or stepped as two sliders, one per axis, that are one Tab stop between them.
 fn area(
     picker: &Picker,
-    width: f32,
     style: Option<SurfaceAmendment>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let height = (width * AREA_RATIO).round();
     let hsv = picker.hsv;
     let group = RovingGroup::new(RovingAxis::Both, || Some(0), |_| {});
     let whiten = StyledContainer::new(
@@ -420,6 +429,9 @@ fn area(
         },
         vec![],
     )?;
+    // The whitening layer lies over the whole area and exists before it, so its laid rect is what the thumb is placed in and a drag is measured against.
+    let area_rect =
+        telar::track_layout(whiten.layout_node()).expect("the layer's node is registered");
     let whiten = axis_control(whiten, Axis::Saturation, picker, &group);
     let darken = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
@@ -458,20 +470,23 @@ fn area(
     )?
     .with_transform(move |r| {
         let Hsv { s, v, .. } = hsv.get();
+        let area = area_rect.get();
         box_transform(
             r,
             0.0,
             1.0,
             1.0,
-            s * width - size / 2.0,
-            (1.0 - v) * height - size / 2.0,
+            s * area.width - size / 2.0,
+            (1.0 - v) * area.height - size / 2.0,
         )
     })
     .a11y_hidden();
 
     let drag = picker.clone();
     let area = StyledContainer::new(
-        LayoutStyle::new().width(width).height(height),
+        LayoutStyle::new()
+            .width(telar::SizeDimension::Percent(1.0))
+            .aspect_ratio(1.0 / AREA_RATIO),
         move |_r| {
             let hue = from_hsv(
                 Hsv {
@@ -493,10 +508,11 @@ fn area(
     .cursor(Cursor::Crosshair)
     .on_drag(move |x, y| {
         let h = drag.hsv.peek().h;
+        let area = area_rect.peek();
         drag.set_hsv(Hsv {
             h,
-            s: (x / width).clamp(0.0, 1.0),
-            v: (1.0 - y / height).clamp(0.0, 1.0),
+            s: (x / area.width).clamp(0.0, 1.0),
+            v: (1.0 - y / area.height).clamp(0.0, 1.0),
         });
     });
     Ok(box_item(area))
@@ -517,79 +533,73 @@ struct Channel {
     range: f64,
 }
 
-fn hue_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn hue_slider(picker: &Picker) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let (read, write, under) = (picker.clone(), picker.clone(), picker.clone());
-    channel(
-        Channel {
-            read: Rc::new(move || read.hsv.get().h / 360.0),
-            write: Rc::new(move |t| {
-                let hsv = write.hsv.peek();
-                write.set_hsv(Hsv {
-                    h: (t * 360.0).clamp(0.0, 360.0),
-                    ..hsv
-                });
-            }),
-            paint: Rc::new(|r: Rect| {
-                let stops: Vec<(f32, Color)> = (0..=6)
-                    .map(|i| {
-                        let t = i as f32 / 6.0;
-                        let hue = Hsv {
-                            h: t * 360.0,
-                            s: 1.0,
-                            v: 1.0,
-                        };
-                        (t, from_hsv(hue, 1.0))
-                    })
-                    .collect();
-                Paint::Gradient(Gradient::linear(
-                    Point::new(r.x, r.y),
-                    Point::new(r.x + r.width, r.y),
-                    &stops,
-                ))
-            }),
-            under: Rc::new(move || {
-                let h = under.hsv.get().h;
-                from_hsv(Hsv { h, s: 1.0, v: 1.0 }, 1.0)
-            }),
-            size: picker.size,
-            checkered: false,
-            name: strings::HUE,
-            range: 360.0,
-        },
-        width,
-    )
+    channel(Channel {
+        read: Rc::new(move || read.hsv.get().h / 360.0),
+        write: Rc::new(move |t| {
+            let hsv = write.hsv.peek();
+            write.set_hsv(Hsv {
+                h: (t * 360.0).clamp(0.0, 360.0),
+                ..hsv
+            });
+        }),
+        paint: Rc::new(|r: Rect| {
+            let stops: Vec<(f32, Color)> = (0..=6)
+                .map(|i| {
+                    let t = i as f32 / 6.0;
+                    let hue = Hsv {
+                        h: t * 360.0,
+                        s: 1.0,
+                        v: 1.0,
+                    };
+                    (t, from_hsv(hue, 1.0))
+                })
+                .collect();
+            Paint::Gradient(Gradient::linear(
+                Point::new(r.x, r.y),
+                Point::new(r.x + r.width, r.y),
+                &stops,
+            ))
+        }),
+        under: Rc::new(move || {
+            let h = under.hsv.get().h;
+            from_hsv(Hsv { h, s: 1.0, v: 1.0 }, 1.0)
+        }),
+        size: picker.size,
+        checkered: false,
+        name: strings::HUE,
+        range: 360.0,
+    })
 }
 
-fn alpha_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn alpha_slider(picker: &Picker) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let (read, write, paint, under) = (
         picker.clone(),
         picker.clone(),
         picker.clone(),
         picker.clone(),
     );
-    channel(
-        Channel {
-            read: Rc::new(move || read.value.get().a),
-            write: Rc::new(move |t| write.set_alpha(t)),
-            paint: Rc::new(move |r: Rect| {
-                let opaque = paint.value.get().with_alpha(1.0);
-                Paint::Gradient(Gradient::linear(
-                    Point::new(r.x, r.y),
-                    Point::new(r.x + r.width, r.y),
-                    &[(0.0, opaque.with_alpha(0.0)), (1.0, opaque)],
-                ))
-            }),
-            under: Rc::new(move || under.value.get().over(shared::surface())),
-            size: picker.size,
-            checkered: true,
-            name: strings::OPACITY,
-            range: 100.0,
-        },
-        width,
-    )
+    channel(Channel {
+        read: Rc::new(move || read.value.get().a),
+        write: Rc::new(move |t| write.set_alpha(t)),
+        paint: Rc::new(move |r: Rect| {
+            let opaque = paint.value.get().with_alpha(1.0);
+            Paint::Gradient(Gradient::linear(
+                Point::new(r.x, r.y),
+                Point::new(r.x + r.width, r.y),
+                &[(0.0, opaque.with_alpha(0.0)), (1.0, opaque)],
+            ))
+        }),
+        under: Rc::new(move || under.value.get().over(shared::surface())),
+        size: picker.size,
+        checkered: true,
+        name: strings::OPACITY,
+        range: 100.0,
+    })
 }
 
-fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn channel(channel: Channel) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Channel {
         read,
         write,
@@ -607,7 +617,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
             BorderRadius::all(shared::pill_radius(track_height))
         })?);
     }
-    layers.push(box_item(StyledContainer::new(
+    let face = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |r| {
             RectStyle::default()
@@ -616,7 +626,11 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
                 .with_radius(shared::pill(r))
         },
         vec![],
-    )?));
+    )?;
+    // The face lies over the whole track and exists before it, so its laid rect is the length the thumb travels and a drag is measured against.
+    let track_rect =
+        telar::track_layout(face.layout_node()).expect("the face's node is registered");
+    layers.push(box_item(face));
     let size = thumb_size(control_size);
     let at = read.clone();
     layers.push(box_item(
@@ -636,7 +650,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
                 0.0,
                 1.0,
                 1.0,
-                t * (width - size),
+                t * (track_rect.get().width - size),
                 (track_height - size) / 2.0,
             )
         })
@@ -645,11 +659,9 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
 
     let (announced, stepped, keyed) = (read.clone(), read.clone(), read);
     let (drag, set) = (write.clone(), write.clone());
-    let track = Container::new(LayoutStyle::new().width(width).height(track_height), layers)?
-        .colour_content();
+    let track = Container::new(LayoutStyle::new().height(track_height), layers)?.colour_content();
     let track = StyledContainer::new(
         LayoutStyle::column()
-            .width(width)
             .height(shared::MIN_TARGET)
             .justify_content(telar::JustifyContent::CENTER),
         |_r| RectStyle::default(),
@@ -680,7 +692,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
         write(next.clamp(0.0, 1.0));
         true
     })
-    .on_drag(move |x, _| drag((x / width).clamp(0.0, 1.0)));
+    .on_drag(move |x, _| drag((x / track_rect.peek().width).clamp(0.0, 1.0)));
     Ok(box_item(track))
 }
 
@@ -744,7 +756,7 @@ fn chip(
 }
 
 /// The colour as hex: rewritten whenever the colour moves, and applied on Enter or Tab when it parses. Escape, or text that does not parse, puts back the colour's own.
-fn hex_field(picker: &Picker, width: f32, alpha: bool) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn hex_field(picker: &Picker, alpha: bool) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let value = picker.value;
     let text = signal(hex_of(value.peek(), alpha));
     effect(move || {
@@ -780,16 +792,19 @@ fn hex_field(picker: &Picker, width: f32, alpha: bool) -> Result<Box<dyn LayoutI
             false
         })
     };
-    text_field(
+    let field = text_field(
         TextFieldProps::props()
             .value(text)
             .placeholder(Reactive::of(|| strings::text(strings::HEX)))
-            .width(width)
             .size(picker.size)
             .on_submit(apply)
             .on_key(on_key)
             .build(),
-    )
+    )?;
+    telar::place_item(field.layout_node(), |style| {
+        style.width(telar::SizeDimension::Percent(1.0))
+    });
+    Ok(field)
 }
 
 fn swatch_row(

@@ -45,7 +45,7 @@ pub struct MenuTokens {
     pub row_height: Option<f32>,
     /// Space between a panel's edge and its rows, at the regular size and scaled with the menu's own. `None` is [`metrics::panel_pad`](crate::metrics::panel_pad).
     pub padding: Option<f32>,
-    /// The least width of a panel, at the regular size and scaled with the menu's own: a panel widens to its widest row, as far as the room it has. `None` is 13 ems of the document's text. A `context_menu`'s `width` prop wins over it.
+    /// The least width of a panel, at the regular size and scaled with the menu's own: a panel widens to its widest row, as far as the room it has. `None` is 13 ems of the document's text. A `context_menu`'s `panel_width` prop wins over it.
     pub width: Option<f32>,
     /// Space between a `menu`'s panel and its trigger, or a `context_menu`'s and the control it was asked for from the keyboard, at the regular size and scaled with the menu's own. `None` is [`metrics::popup_offset`](crate::metrics::popup_offset).
     pub offset: Option<f32>,
@@ -129,7 +129,7 @@ pub struct MenuTriggerTokens {
     pub pad_x: Option<f32>,
     /// Width of a bordered trigger's frame. `None` is the theme's `border_width`.
     pub border_width: Option<f32>,
-    /// Width of the trigger, unless it is stretched or fitted, at the regular size and scaled with the menu's own. `None` is 13 ems of the document's text.
+    /// Width of the trigger, unless it is fitted or its call places another, at the regular size and scaled with the menu's own. `None` is 13 ems of the document's text.
     pub width: Option<f32>,
 }
 
@@ -184,9 +184,6 @@ pub struct MenuProps {
     /// The colour a bordered trigger is framed in and the rows' washes are tinted with. `None` (the default) frames it in the theme's `control_border` and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
-    /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::stretch`]. The panel opens at least that wide.
-    #[props(default)]
-    pub stretch: bool,
     /// Draw the trigger as a field, with the border a `select` carries. Off by default, because a menu is a *button* that happens to open a list, and a button wears no frame until it is pressed.
     ///
     /// A prop and not a decision settled inside the component, because both readings are legitimate: a menu standing alone in a header wants no frame, and one sitting in a row of fields wants to match them.
@@ -216,7 +213,6 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         size,
         on_select,
         color,
-        stretch,
         bordered,
         caret,
         fit,
@@ -239,7 +235,6 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         color: color.clone(),
         bordered,
         caret,
-        sized_by_root: stretch || fit,
         geometry: MenuTriggerTokens::geometry,
         style,
     };
@@ -300,12 +295,7 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     size,
                     on_select: on_select.clone(),
                     anchoring,
-                    width: dropdown::panel_width(
-                        look.width(size),
-                        stretch,
-                        trigger_node,
-                        &trigger_rect,
-                    ),
+                    width: dropdown::panel_width(look.width(size), trigger_node, &trigger_rect),
                     level: Level::Root,
                     seed: seed.take(),
                 },
@@ -326,10 +316,11 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         }
     });
     dropdown::dismissable(open, trigger_node);
-    dropdown::root(trigger, holder, stretch)
+    dropdown::root(trigger, holder, size, MenuTriggerTokens::geometry, fit)
 }
 
 #[derive(Props)]
+#[props(layer)]
 /// A menu opened where it was asked for, with no trigger: its rows, where it goes, and what is told when it is done with.
 pub struct ContextMenuProps {
     /// Where it was asked for, in surface coordinates: the pointer, for a secondary press.
@@ -346,7 +337,7 @@ pub struct ContextMenuProps {
     pub on_close: Rc<dyn Fn()>,
     /// The least width of each panel in logical px; a panel widens to its widest row. `None` (the default) is [`MenuTokens::width`].
     #[props(some, default)]
-    pub width: Option<f32>,
+    pub panel_width: Option<f32>,
     /// How large its panel is drawn: its padding, width and offset, as [`ControlSize`] works them out. The rows are sized where they are written.
     #[props(default)]
     pub size: ControlSize,
@@ -373,7 +364,7 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
         around,
         on_select,
         on_close,
-        width,
+        panel_width,
         size,
         within,
         tokens,
@@ -382,7 +373,7 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
     } = props;
     let config = Rc::new(Config {
         tokens,
-        width,
+        width: panel_width,
         within,
         style,
         color: None,

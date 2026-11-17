@@ -21,7 +21,7 @@ use telar_components::{
 use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, workbench_muted};
 
 use crate::snapshot::drift_badge;
-use crate::state::{SIDEBAR_MAX_WIDTH, WorkshopState};
+use crate::state::WorkshopState;
 use crate::strings::{self, CLEAR_SEARCH, NO_MATCHES, NO_PREVIEWS, PREVIEWS, SEARCH};
 
 pub(crate) use model::{group_ids, groups_holding, listed};
@@ -148,7 +148,6 @@ fn search_field_item(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutErr
     let field = search_field(
         SearchFieldProps::props()
             .value(search)
-            .width(SIDEBAR_MAX_WIDTH)
             .placeholder(Reactive::of(|| strings::text(SEARCH)))
             .focus_id(focus)
             .on_submit(Rc::new(move |_: &str| submit.select_first_match()))
@@ -165,6 +164,9 @@ fn search_field_item(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutErr
             }))
             .build(),
     )?;
+    telar::place_item(field.layout_node(), |style| {
+        style.width(telar::SizeDimension::Percent(1.0))
+    });
     if let Some(id) = focus.peek() {
         panel.state.set_search_field(id);
     }

@@ -3,7 +3,7 @@
 use telar::{
     Accessible, AlignItems, Border, BuildOutcome, Container, GuestStop, LayoutError, LayoutItem,
     LayoutStyle, Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, children, memo,
-    use_theme_tokens,
+    place_item, use_theme_tokens,
 };
 use telar_components::{CodeSpan, CodeViewProps, TokenKind, code_view};
 
@@ -156,10 +156,12 @@ fn card(kind: Report) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .code(Reactive::of(code))
             .spans(Reactive::of(move || marked.get().0))
             .highlighted(Reactive::of(move || marked.get().1))
-            .max_height(REPORT_MAX_HEIGHT)
             .label(Reactive::of(move || strings::text(kind.label)))
             .build(),
     )?;
+    place_item(report.layout_node(), |style| {
+        style.max_height(REPORT_MAX_HEIGHT)
+    });
     let banner = StyledContainer::new(
         LayoutStyle::column()
             .gap(WORKBENCH_GRID)

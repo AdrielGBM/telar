@@ -1,6 +1,6 @@
 use telar::{
-    Accessible, BorderRadius, Color, ControlSize, Direction, NodeId, RectStyle, Role, ShapeStyle,
-    SurfaceAmendment, Tone, signal,
+    Accessible, BorderRadius, Color, ControlSize, Direction, LayoutItem, NodeId, RectStyle, Role,
+    ShapeStyle, SurfaceAmendment, Tone, signal,
 };
 
 use crate::{ProgressProps, ProgressTokens, progress};
@@ -47,7 +47,7 @@ fn a_derived_reading_can_drive_the_bar() {
     let total = signal(4.0f32);
     let fraction = telar::derive_pair(used, total, |u, t| u / t);
     let _read = fraction;
-    let bar = progress(ProgressProps::props().value(fraction).stretch(true).build());
+    let bar = progress(ProgressProps::props().value(fraction).build());
     assert!(bar.is_ok(), "a derivation drives it");
     used.set(1.0);
     assert_eq!(fraction.get(), 0.25, "and keeps following its sources");
@@ -57,6 +57,19 @@ fn bar(props: ProgressProps) -> telar::testing::Scoped<telar::ComponentList> {
     crate::test_support::fresh_layout_runtime();
     telar::testing::scoped(|| {
         let widget = progress(props).unwrap();
+        lay_out(widget.layout_node());
+        telar::ComponentList::new(widget)
+    })
+}
+
+/// A bar its call places at the full width of what holds it, as `width:100%` on the call does.
+fn full_width_bar(props: ProgressProps) -> telar::testing::Scoped<telar::ComponentList> {
+    crate::test_support::fresh_layout_runtime();
+    telar::testing::scoped(|| {
+        let widget = progress(props).unwrap();
+        telar::place_item(widget.layout_node(), |style| {
+            style.width(telar::SizeDimension::Percent(1.0))
+        });
         lay_out(widget.layout_node());
         telar::ComponentList::new(widget)
     })
@@ -224,8 +237,8 @@ fn a_style_amendment_restyles_the_track() {
 }
 
 #[test]
-fn a_stretched_bar_is_as_wide_as_what_holds_it() {
-    let tree = bar(ProgressProps::props().stretch(true).build());
+fn a_bar_placed_at_the_full_width_is_as_wide_as_what_holds_it() {
+    let tree = full_width_bar(ProgressProps::props().build());
     let width = tree.commands().iter().find_map(|command| match command {
         telar::DrawCommand::Rect { rect, .. } => Some(rect.width),
         _ => None,
@@ -271,7 +284,7 @@ fn rects(tree: &telar::ComponentList) -> Vec<(telar::Rect, RectStyle)> {
 
 #[test]
 fn the_fill_is_a_bar_of_its_own_as_wide_as_the_reading_and_as_round_as_the_track() {
-    let tree = bar(ProgressProps::props().value(0.25).stretch(true).build());
+    let tree = full_width_bar(ProgressProps::props().value(0.25).build());
     let [(track, track_style), (fill, fill_style)] = rects(&tree)[..] else {
         panic!("the track and its fill are drawn");
     };
@@ -302,4 +315,21 @@ fn a_fill_style_restyles_the_fill_alone() {
     };
     assert_eq!(fill.fill, Some(ink.into()));
     assert_eq!(track.fill, untouched);
+}
+
+/// The width the tokens give a bar is the one it takes where there is room: in a column narrower than that, it is the column's width rather than past its edge.
+#[test]
+fn a_bar_in_a_narrower_column_is_no_wider_than_it() {
+    crate::test_support::fresh_layout_runtime();
+    let tree = telar::testing::scoped(|| {
+        let widget = progress(ProgressProps::props().build()).unwrap();
+        let column =
+            telar::Container::new(telar::LayoutStyle::column().width(80.0), vec![widget]).unwrap();
+        lay_out(column.layout_node());
+        telar::ComponentList::new(column)
+    });
+    let [(track, _), _] = rects(&tree)[..] else {
+        panic!("the track and its fill are drawn");
+    };
+    assert_eq!(track.width, 80.0);
 }

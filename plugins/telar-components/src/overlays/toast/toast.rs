@@ -27,7 +27,7 @@ pub struct ToastTokens {
     pub radius: Option<f32>,
     /// Space between a notice's edge and what it says, at the regular size, scaled with the toaster's own. `None` is [`metrics::gap_lg`](crate::metrics::gap_lg).
     pub pad: Option<f32>,
-    /// A notice's width when the toaster names none, at the regular size, scaled with the toaster's text. `None` is 26 ems of the document's text.
+    /// A notice's width when the toaster names no `toast_width`, at the regular size, scaled with the toaster's text. `None` is 26 ems of the document's text.
     pub width: Option<f32>,
     /// Width of the stripe in the colour of the notice's tone, at the regular size, scaled with the toaster's own. `None` is [`metrics::gap_xs`](crate::metrics::gap_xs).
     pub stripe_width: Option<f32>,
@@ -335,6 +335,7 @@ impl ToastPlacement {
 ///
 /// Mount one per surface. A notice on a clock puts itself away when its time is up, and the pointer resting on the stack, the keyboard on one of its buttons or a modal layer up holds every clock until it leaves. Notices past [`max_visible`](Self::max_visible) wait their turn rather than push the oldest out unread.
 #[derive(Props)]
+#[props(layer)]
 pub struct ToasterProps {
     /// The queue to show. `None` (the default) shows the shared one [`show_toast`] posts to.
     #[props(some, default)]
@@ -346,7 +347,7 @@ pub struct ToasterProps {
     pub max_visible: u32,
     /// Each notice's width in logical px. `None` (the default) is [`ToastTokens::width`].
     #[props(some, default)]
-    pub width: Option<f32>,
+    pub toast_width: Option<f32>,
     /// How large the notices are drawn: their padding, text, buttons and the gaps between them, and the width they take when the toaster names none, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
@@ -364,14 +365,17 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         toasts: queue,
         placement,
         max_visible,
-        width,
+        toast_width,
         size,
         label,
         style,
     } = props;
     let queue = queue.unwrap_or_else(toasts);
     let max_visible = max_visible as usize;
-    let width = Width { named: width, size };
+    let width = Width {
+        named: toast_width,
+        size,
+    };
     let held = Rc::new(Hold::default());
     effect({
         let held = held.clone();

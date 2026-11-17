@@ -235,16 +235,25 @@ fn drawn_rects(tree: &ComponentList) -> Vec<telar::Rect> {
         .collect()
 }
 
-/// A stretched select in a fixed-width row is as wide as the row whatever it shows. Sized from its label, it widened past the row as soon as a longer choice was picked from the panel.
+/// `item` as a call placing it with `place` leaves it.
+fn placed(
+    item: Box<dyn LayoutItem>,
+    place: impl Fn(telar::LayoutStyle) -> telar::LayoutStyle + 'static,
+) -> Box<dyn LayoutItem> {
+    telar::place_item(item.layout_node(), place);
+    item
+}
+
+/// A select in a row narrower than its width narrows to the row, and stays the row's width whatever it shows. Sized from its label, it widened past the row as soon as a longer choice was picked from the panel.
 #[test]
-fn a_stretched_select_keeps_the_width_of_its_row_after_a_longer_pick() {
+fn a_select_narrowed_by_its_row_keeps_the_row_s_width_after_a_longer_pick() {
     use telar::LayoutStyle;
     crate::test_support::fresh_layout_runtime();
+    assert!(panel_width() > 136.0);
     let picked = signal(Some(0usize));
     let item = select(
         SelectProps::props()
             .selected(picked)
-            .stretch(true)
             .children(uneven())
             .build(),
     )
@@ -284,27 +293,31 @@ fn a_stretched_select_keeps_the_width_of_its_row_after_a_longer_pick() {
     );
 }
 
-/// What a stretched select shows plays no part in its share of the row, so two of them split it evenly.
+/// What a select placed to grow shows plays no part in its share of the row, so two of them split it evenly.
 #[test]
-fn stretched_selects_share_a_row_evenly_whatever_they_show() {
+fn selects_placed_to_grow_share_a_row_evenly_whatever_they_show() {
     use telar::LayoutStyle;
     crate::test_support::fresh_layout_runtime();
-    let short = select(
-        SelectProps::props()
-            .selected(signal(Some(0usize)))
-            .stretch(true)
-            .children(uneven())
-            .build(),
-    )
-    .unwrap();
-    let long = select(
-        SelectProps::props()
-            .selected(signal(Some(2usize)))
-            .stretch(true)
-            .children(uneven())
-            .build(),
-    )
-    .unwrap();
+    let short = placed(
+        select(
+            SelectProps::props()
+                .selected(signal(Some(0usize)))
+                .children(uneven())
+                .build(),
+        )
+        .unwrap(),
+        |style| style.flex_grow(1.0),
+    );
+    let long = placed(
+        select(
+            SelectProps::props()
+                .selected(signal(Some(2usize)))
+                .children(uneven())
+                .build(),
+        )
+        .unwrap(),
+        |style| style.flex_grow(1.0),
+    );
     let (short_rect, long_rect) = (
         track_layout(short.layout_node()).unwrap(),
         track_layout(long.layout_node()).unwrap(),
@@ -326,21 +339,25 @@ fn stretched_selects_share_a_row_evenly_whatever_they_show() {
     assert_eq!(long_rect.get().width, 200.0);
 }
 
-/// A row taller than the trigger stretches the select's box, not the trigger: growing the trigger to fill the row's width grew it down the column it sits in.
+/// A call placing a select wider than its width widens the trigger with it, and a row taller than the trigger stretches the select's box, not the trigger: growing the trigger to fill the row's width grew it down the column it sits in.
 #[test]
-fn a_stretched_trigger_keeps_its_height_in_a_taller_row() {
+fn a_select_placed_across_a_taller_row_widens_its_trigger_and_keeps_its_height() {
     use telar::LayoutStyle;
     crate::test_support::fresh_layout_runtime();
-    let item = select(SelectProps::props().stretch(true).children(sizes()).build()).unwrap();
+    assert!(panel_width() < 300.0);
+    let item = placed(
+        select(SelectProps::props().children(sizes()).build()).unwrap(),
+        |style| style.width(telar::SizeDimension::Percent(1.0)),
+    );
     let row = telar::new_container(
-        LayoutStyle::new().flex_row().width(160.0).height(120.0),
+        LayoutStyle::new().flex_row().width(300.0).height(120.0),
         &[item.layout_node()],
     )
     .unwrap();
     let tree = ComponentList::new(item);
     compute_layout(
         row,
-        AvailableSpace::Definite(160.0),
+        AvailableSpace::Definite(300.0),
         AvailableSpace::Definite(120.0),
     )
     .unwrap();
@@ -349,21 +366,20 @@ fn a_stretched_trigger_keeps_its_height_in_a_taller_row() {
     assert_eq!(
         (trigger.width, trigger.height),
         (
-            160.0,
+            300.0,
             crate::shared::control_height(telar::ControlSize::Regular)
         )
     );
 }
 
-/// A row that sizes to its content has no width to offer, so there a stretched select is as wide as what it shows rather than collapsing.
+/// A row that sizes to its content has no width to offer, so there a select takes the width its tokens name, whatever it shows.
 #[test]
-fn a_stretched_select_in_a_content_sized_row_is_as_wide_as_what_it_shows() {
+fn a_select_in_a_content_sized_row_takes_its_width_whatever_it_shows() {
     use telar::LayoutStyle;
     crate::test_support::fresh_layout_runtime();
     let item = select(
         SelectProps::props()
             .selected(signal(Some(2usize)))
-            .stretch(true)
             .children(uneven())
             .build(),
     )
@@ -386,11 +402,7 @@ fn a_stretched_select_in_a_content_sized_row_is_as_wide_as_what_it_shows() {
     )
     .unwrap();
 
-    assert!(
-        field_rect.get().width > panel_width(),
-        "the long choice and the caret fit: {:?}",
-        field_rect.get()
-    );
+    assert_eq!(field_rect.get().width, panel_width());
 }
 
 fn many(count: u32) -> Children {

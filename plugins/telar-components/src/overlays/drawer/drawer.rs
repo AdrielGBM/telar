@@ -52,6 +52,7 @@ impl DrawerTokens {
 ///
 /// The panel snaps in (no slide animation): the overlay is built only while open, so there is no off-screen frame to animate from. A slide-in (a `telar::motion::Animated<f32>` x-offset kept mounted across the close transition) is a follow-up.
 #[derive(Props)]
+#[props(layer)]
 pub struct DrawerProps {
     /// What opens and closes the drawer: an [`OverlayName`](telar::OverlayName) anything on the same surface opens with [`open_overlay`](telar::open_overlay), each surface keeping its own, or a signal the caller holds.
     #[props(into)]

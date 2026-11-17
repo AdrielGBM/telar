@@ -6,8 +6,6 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use telar::preview::{by_role, by_text};
-#[allow(unused_imports)] use telar::Role;
 
 // The layers of a design, read through a plain function so no `$` in the view says they change.
 #[derive(::telar::Props)]
@@ -24,6 +22,7 @@ pub fn layer_list(props: LayerListProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
+
     let layers = signal(vec![String::from("Logo")]);
 
     let __col_0 = {
@@ -143,21 +142,21 @@ pub fn layer_list_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<
 pub fn layer_list_play_0(canvas: &mut ::telar::preview::Play) -> ::telar::preview::PlayResult {
     use ::telar::Role;
     use ::telar::preview::*;
-    canvas.expect(by_text("One layer"))?;
-    canvas.click(by_role(Role::Button).named("Add layer"))?;
-    canvas.expect(by_text("Frame 1"))?;
-    canvas.expect(by_text("2 layers"))?;
-    canvas.expect_absent(by_text("One layer"))?;
+    canvas.expect(telar::preview::by_text("One layer"))?;
+    canvas.click(telar::preview::by_role(telar::Role::Button).named("Add layer"))?;
+    canvas.expect(telar::preview::by_text("Frame 1"))?;
+    canvas.expect(telar::preview::by_text("2 layers"))?;
+    canvas.expect_absent(telar::preview::by_text("One layer"))?;
     Ok(())
 }
 
 pub const LAYER_LIST_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--layer_list--layer-list"), "layer_list", "Layer list", layer_list_preview_0)
         .package(env!("CARGO_PKG_NAME"))
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/layer_list.rsx"), 30)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/layer_list.rsx"), 27)
         .title("Sandbox/Layer list")
         .docs("A list and a count that follow the layers they read, with no `$` in the view to say they change.")
-        .source("[preview \"Layer list\"]\nlayer_list\n\n[play]\ncanvas.expect(by_text(\"One layer\"))?;\ncanvas.click(by_role(Role::Button).named(\"Add layer\"))?;\ncanvas.expect(by_text(\"Frame 1\"))?;\ncanvas.expect(by_text(\"2 layers\"))?;\ncanvas.expect_absent(by_text(\"One layer\"))?;", &[::telar::preview::SourceSpan::new(0, 254, 30)])
+        .source("[preview \"Layer list\"]\nlayer_list\n\n[play]\ncanvas.expect(telar::preview::by_text(\"One layer\"))?;\ncanvas.click(telar::preview::by_role(telar::Role::Button).named(\"Add layer\"))?;\ncanvas.expect(telar::preview::by_text(\"Frame 1\"))?;\ncanvas.expect(telar::preview::by_text(\"2 layers\"))?;\ncanvas.expect_absent(telar::preview::by_text(\"One layer\"))?;", &[::telar::preview::SourceSpan::new(0, 341, 27)])
         .play(layer_list_play_0)
         .props(<LayerListProps as ::telar::preview::HasPropsSchema>::schema)
         .layout(::telar::preview::Layout::Padded),

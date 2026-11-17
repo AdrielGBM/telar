@@ -215,10 +215,10 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
         })
     };
     let list = ListContext::menu(pick, highlighted, config.color.clone(), cascade.clone());
+    let built_rows = rows.build_with(list.clone())?;
     if seed {
         list.seed_cursor();
     }
-    let built_rows = rows.build_with(list.clone())?;
     let layers = cascade.layers.take();
     let column = Container::column(built_rows)?;
 

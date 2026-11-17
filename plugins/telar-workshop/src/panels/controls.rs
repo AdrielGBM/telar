@@ -9,7 +9,7 @@ use telar::preview::{ControlKind, PreviewEntry, PropDefault};
 use telar::{
     Accessible, AlignItems, Border, ChildSlot, Children, Container, LayoutError, LayoutItem,
     LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer,
-    TemplateTrack, Text, box_item, children, fragment_keyed,
+    TemplateTrack, Text, box_item, children, fragment_keyed, place_item,
 };
 use telar_components::{ButtonProps, TagProps, TooltipProps, button, tag, tooltip};
 use telar_devtools::{
@@ -261,11 +261,10 @@ fn arg_cell(column: Column, binding: Binding) -> Result<Box<dyn LayoutItem>, Lay
 
 /// The arg's doc, cut to as many lines as the name and type take so a long one does not stretch its row, with the whole of it in a tooltip.
 fn doc(name: &'static str, doc: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    tooltip(
+    let hinted = tooltip(
         TooltipProps::props()
             .text(Reactive::of(move || name.to_string()))
             .description(Reactive::of(move || doc.to_string()))
-            .stretch(true)
             .children(Children::new(move || {
                 let text = Text::declaring(
                     move || doc.to_string(),
@@ -278,7 +277,11 @@ fn doc(name: &'static str, doc: &'static str) -> Result<Box<dyn LayoutItem>, Lay
                 Ok(vec![box_item(text)])
             }))
             .build(),
-    )
+    )?;
+    place_item(hinted.layout_node(), |style| {
+        style.flex_grow(1.0).align_self_stretch()
+    });
+    Ok(hinted)
 }
 
 /// The prop's type as the struct declares it, or else what the control says of the value.

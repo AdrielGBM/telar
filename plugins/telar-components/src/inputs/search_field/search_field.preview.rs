@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use super::sample::at_width;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Key, NamedKey, Role};
 
@@ -15,10 +16,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .on_submit(Rc::new(|_| {}))
                     .on_clear(Rc::new(|| {}))
                     .value(value)
-                    .width(p.arg("width", 280.0f32))
                     .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )
+            .map(|field| at_width(field, p.arg("width", 280.0f32)))
         })
         .title("Inputs/Search field")
         .layout(Layout::Centered)

@@ -265,12 +265,21 @@ pub fn refused_component_role(value: &str) -> Option<String> {
     ))
 }
 
+/// The keys every component call takes: what it says of the item the component returns, and where it places it, as a `box` is placed.
 pub fn component_instance_attrs() -> Vec<AttrSpec> {
-    COMPONENT_INSTANCE_ATTRS.to_vec()
+    let placing = LAYOUT_ATTRS
+        .iter()
+        .filter(|spec| telar_project::call_keys::PLACEMENT_KEYS.contains(&spec.key));
+    COMPONENT_INSTANCE_ATTRS
+        .iter()
+        .chain(placing)
+        .copied()
+        .collect()
 }
 
 pub fn is_component_instance_attr(key: &str) -> bool {
     COMPONENT_INSTANCE_ATTRS.iter().any(|spec| spec.key == key)
+        || telar_project::call_keys::PLACEMENT_KEYS.contains(&key)
 }
 
 /// The keys of the layout table that [`value_kind`], completion and the unknown-attribute check all read, for a test to hold the emitter to that one vocabulary.

@@ -10,11 +10,18 @@ fn lay_out(node: NodeId) -> Rect {
     telar::testing::lay_out(node, 300.0, 100.0)
 }
 
+/// A slider its call places `width` wide.
+fn placed(props: SliderProps, width: f32) -> Box<dyn LayoutItem> {
+    let item = slider(props).unwrap();
+    telar::place_item(item.layout_node(), move |style| style.width(width));
+    item
+}
+
 #[test]
 fn drag_to_midpoint_sets_value_half() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
-    let mut widget = slider(SliderProps::props().value(value).width(200.0).build()).unwrap();
+    let mut widget = placed(SliderProps::props().value(value).build(), 200.0);
     let rect = lay_out(widget.layout_node());
 
     widget.on_event(&press((rect.x + 100.0) as f64, (rect.y + 4.0) as f64));
@@ -49,13 +56,12 @@ fn on_change_fires_with_mapped_value() {
     let seen: Rc<Cell<f32>> = Rc::new(Cell::new(-1.0));
     let sink = seen.clone();
     crate::test_support::fresh_layout_runtime();
-    let mut widget = slider(
+    let mut widget = placed(
         SliderProps::props()
-            .width(100.0)
             .on_change(Rc::new(move |v| sink.set(v)))
             .build(),
-    )
-    .unwrap();
+        100.0,
+    );
     let rect = lay_out(widget.layout_node());
 
     widget.on_event(&press((rect.x + 25.0) as f64, (rect.y + 4.0) as f64));
@@ -70,14 +76,10 @@ fn on_change_fires_with_mapped_value() {
 fn custom_range_maps_midpoint_to_range_midpoint() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
-    let mut widget = slider(
-        SliderProps::props()
-            .value(value)
-            .width(200.0)
-            .range(0.0..=100.0)
-            .build(),
-    )
-    .unwrap();
+    let mut widget = placed(
+        SliderProps::props().value(value).range(0.0..=100.0).build(),
+        200.0,
+    );
     let rect = lay_out(widget.layout_node());
 
     widget.on_event(&press((rect.x + 100.0) as f64, (rect.y + 4.0) as f64));
@@ -92,15 +94,14 @@ fn custom_range_maps_midpoint_to_range_midpoint() {
 fn step_snaps_value_to_nearest_step() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
-    let mut widget = slider(
+    let mut widget = placed(
         SliderProps::props()
             .value(value)
-            .width(100.0)
             .range(0.0..=100.0)
             .step(10.0)
             .build(),
-    )
-    .unwrap();
+        100.0,
+    );
     let rect = lay_out(widget.layout_node());
 
     // px=23 -> raw 23.0 -> 2.3 steps, which rounds down to the 20.0 step.
@@ -110,6 +111,27 @@ fn step_snaps_value_to_nearest_step() {
         "a drag near 0.23 with step 10 should snap to 20.0, got {}",
         value.get()
     );
+}
+
+/// A column narrower than the track's length narrows the track instead of letting it overflow, captioned or not, and a press is measured against the length it was laid out to.
+#[test]
+fn a_column_narrower_than_the_track_narrows_it() {
+    for label in ["", "Volume"] {
+        crate::test_support::fresh_layout_runtime();
+        let value = signal(0.0f32);
+        let mut widget = slider(SliderProps::props().value(value).label(label).build()).unwrap();
+        assert!(SliderTokens::current().width(ControlSize::Regular) > 120.0);
+        let rect = telar::testing::lay_out(widget.layout_node(), 120.0, 100.0);
+        assert_eq!(rect.width, 120.0, "{label:?}");
+
+        let track_y = rect.y + rect.height - 2.0;
+        widget.on_event(&press((rect.x + 60.0) as f64, track_y as f64));
+        assert!(
+            (value.get() - 0.5).abs() < 1e-4,
+            "{label:?}: got {}",
+            value.get()
+        );
+    }
 }
 
 #[test]
@@ -351,7 +373,7 @@ fn a_style_amendment_reshapes_the_track() {
 fn a_press_beside_the_thin_track_still_takes_hold_of_it() {
     crate::test_support::fresh_layout_runtime();
     let value = signal(0.0f32);
-    let mut widget = slider(SliderProps::props().value(value).width(200.0).build()).unwrap();
+    let mut widget = placed(SliderProps::props().value(value).build(), 200.0);
     let rect = lay_out(widget.layout_node());
     let above = rect.y - (crate::metrics::MIN_TARGET - rect.height) / 2.0 + 1.0;
     widget.on_event(&press((rect.x + 100.0) as f64, above as f64));

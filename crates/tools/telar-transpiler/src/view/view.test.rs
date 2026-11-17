@@ -2543,3 +2543,53 @@ fn a_font_tag_with_a_quote_or_a_backslash_is_still_one_rust_literal() {
         "{code}"
     );
 }
+
+/// What a call says about where the item sits and how large it is is laid over the style the item declares, after the call, and never reaches a prop.
+#[test]
+fn a_component_call_places_the_item_it_returns() {
+    let code = crate::transpile_source(
+        "[view]\nrow\n    progress value:0.5 width:100% grow:1\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        !code.contains("ProgressProps::props().width("),
+        "no prop is set: {code}"
+    );
+    assert!(
+        code.contains("const { assert!(ProgressProps::IN_FLOW,")
+            && code.contains(
+                "place_item(__node_0.layout_node(), move |__style: LayoutStyle| __style.width("
+            )
+            && code.contains(".flex_grow("),
+        "the call places the item over what it declares:\n{code}"
+    );
+}
+
+/// A class on a call places the item with the placement its properties name, before what the call writes inline.
+#[test]
+fn a_class_on_a_component_call_places_the_item_too() {
+    let code = crate::transpile_source(
+        "[style]\n@wide\n    width: 240\n[view]\nrow\n    progress value:0.5 @wide grow:2\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    let placed = code
+        .find("place_item(")
+        .unwrap_or_else(|| panic!("the class places the item:\n{code}"));
+    let placement = &code[placed..];
+    let (width, grow) = (
+        placement.find(".width(240.0)"),
+        placement.find(".flex_grow("),
+    );
+    assert!(
+        matches!((width, grow), (Some(width), Some(grow)) if width < grow),
+        "the class first, then the call's own:\n{code}"
+    );
+}

@@ -93,6 +93,7 @@ fn backdrop(size: ControlSize) -> LayoutStyle {
 
 /// A centred dialog over a dimming scrim. While its `control` is open it portals an `Overlay` (a top-layer layer that escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque surface card holding the `title`, its `children` (the dialog body) and a Close affordance; when false it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
 #[derive(Props)]
+#[props(layer)]
 pub struct ModalProps {
     /// What opens and closes the dialog: an [`OverlayName`](telar::OverlayName) anything on the same surface opens with [`open_overlay`](telar::open_overlay), each surface keeping its own, or a signal the caller holds.
     #[props(into)]

@@ -12,9 +12,9 @@ pub(crate) mod selection;
 pub(crate) mod type_ahead;
 
 use telar::{
-    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Color, Container, IntoReading,
-    KeySequence, LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect,
-    RectStyle, StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
+    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Color, Container, KeySequence,
+    LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect, RectStyle,
+    StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
     use_theme_tokens,
 };
 
@@ -269,6 +269,14 @@ pub(crate) fn width_or_measure(size: ControlSize, token: Option<f32>, ems: f32) 
     )
 }
 
+/// `style` for the box of a control that is the item its call places: `width` wide where what holds it leaves the room, never wider than what holds it, and free to shrink below `width` in a row too narrow for it. A box inside it sets no width and takes the width of the box around it, so the call's own `width:` or `grow:` sizes the whole control.
+pub(crate) fn preferred_width(style: LayoutStyle, width: f32) -> LayoutStyle {
+    style
+        .width(width)
+        .max_width(telar::SizeDimension::Percent(1.0))
+        .min_width(0.0)
+}
+
 /// [`control_text`] in a fainter shade of the ink around it: a hint, a group heading, an inactive tab.
 ///
 /// Fades what the tree above declared instead of naming `ink()`, because `ink()` is the very value the cascade seeds itself with — writing it can only repeat the root or overrule a region that said otherwise. Fading also keeps a colour that arrived already soft from being pushed back up to [`QUIET_ALPHA`].
@@ -326,22 +334,32 @@ fn caption_box(text_size: f32) -> LayoutStyle {
     LayoutStyle::new().height(telar::single_line_box(text_size))
 }
 
-fn caption_column(size: ControlSize, width: f32) -> LayoutStyle {
-    LayoutStyle::column().gap(spacing(size) * 0.75).width(width)
+fn caption_column(size: ControlSize, width: Option<f32>) -> LayoutStyle {
+    let column = LayoutStyle::column().gap(spacing(size) * 0.75);
+    match width {
+        Some(width) => preferred_width(column, width),
+        None => column,
+    }
+}
+
+/// Whether [`captioned`] draws `label` above its control, decided once, when the control is built: the caption's column is then the item the control's call places.
+pub(crate) fn is_captioned(label: &Reactive<String>) -> bool {
+    !label.get().is_empty()
 }
 
 /// Stacks an optional small caption, at `size`, above `control`, or hands `control` back untouched when the label is empty. A `required` control has a mark drawn after its caption, which a reader skips: it hears "required" from the control itself. The counterpart of [`labelled_control`], which puts the label *beside* the control instead.
+///
+/// `width` is the [`preferred_width`] of the column where the column is the item the control's call places, and `None` where it stands inside a box that is; `control` takes the column's width either way.
 pub(crate) fn captioned(
     size: ControlSize,
     control: Box<dyn LayoutItem>,
     label: Reactive<String>,
-    width: impl IntoReading<f32>,
+    width: Option<Reactive<f32>>,
     required: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    if label.get().is_empty() {
+    if !is_captioned(&label) {
         return Ok(box_item(control));
     }
-    let width = width.into_reading();
     let caption = Text::declaring(
         move || label.get(),
         LayoutStyle::new(),
@@ -364,11 +382,8 @@ pub(crate) fn captioned(
             box_item(Container::new(row(), children![caption, mark])?.styled_by(row))
         }
     };
-    let col = Container::new(
-        caption_column(size, width.get()),
-        children![heading, control],
-    )?
-    .styled_by(move || caption_column(size, width.get()));
+    let column = move || caption_column(size, width.as_ref().map(Reactive::get));
+    let col = Container::new(column(), children![heading, control])?.styled_by(column);
     style_follows(caption_node, caption_line);
     Ok(box_item(col))
 }

@@ -140,7 +140,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .bordered(p.arg("bordered", false))
                     .caret(p.arg("caret", true))
-                    .stretch(p.arg("stretch", false))
                     .children(actions(size))
                     .build(),
             )

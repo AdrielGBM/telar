@@ -1,9 +1,9 @@
 use super::*;
 use crate::test_support::find_text;
 use telar::testing::moved;
-use telar::{IntoReading, 
-    AvailableSpace, ComponentList, DrawCommand, LineHeight, compute_layout, new_container,
-    relayout_if_dirty,
+use telar::{
+    AvailableSpace, ComponentList, DrawCommand, IntoReading, LineHeight, compute_layout,
+    new_container, relayout_if_dirty,
 };
 
 fn trigger() -> Children {
@@ -916,4 +916,57 @@ fn the_size_pads_and_sizes_the_bubble() {
             "{size:?}: {font_size}"
         );
     }
+}
+
+/// The tooltip wraps its trigger in a node of its own, so the width its call places it at has to reach the trigger: two tooltips growing in a row split it, and what each trigger holds can fill its half.
+#[test]
+fn the_trigger_takes_the_width_the_call_places_the_tooltip_at() {
+    crate::test_support::fresh_layout_runtime();
+    let filled = || {
+        Children::one(|| {
+            let fill = StyledContainer::new(
+                LayoutStyle::new().flex_grow(1.0).height(30.0),
+                |_r| RectStyle::default().with_fill(Color::rgba(0.2, 0.4, 0.8, 1.0)),
+                vec![],
+            )?;
+            Ok(box_item(fill))
+        })
+    };
+    let halves: Vec<Box<dyn LayoutItem>> = ["Left", "Right"]
+        .into_iter()
+        .map(|text| {
+            let hinted =
+                tooltip(TooltipProps::props().text(text).children(filled()).build()).unwrap();
+            telar::place_item(hinted.layout_node(), |style| style.flex_grow(1.0));
+            hinted
+        })
+        .collect();
+    let nodes: Vec<_> = halves.iter().map(|half| half.layout_node()).collect();
+    let row = new_container(
+        LayoutStyle::new().flex_row().width(400.0).height(100.0),
+        &nodes,
+    )
+    .unwrap();
+    compute_layout(
+        row,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+
+    let mut drawn: Vec<(f32, f32, f32)> = halves
+        .into_iter()
+        .flat_map(|half| {
+            ComponentList::new(half)
+                .commands()
+                .iter()
+                .filter_map(|c| match c {
+                    DrawCommand::Rect { rect, .. } => Some((rect.x, rect.width, rect.height)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    drawn.dedup();
+    assert_eq!(drawn, vec![(0.0, 200.0, 30.0), (200.0, 200.0, 30.0)]);
 }

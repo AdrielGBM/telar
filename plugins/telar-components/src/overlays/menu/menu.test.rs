@@ -11,18 +11,20 @@ use super::*;
 
 // Mirrors the runner: the overlay registry first, then the tree only if no overlay consumed the event.
 
-/// A compact trigger does not squeeze the panel. `stretch` means "be at least as wide as the control I sit under", and taking that width outright turned a `File` button into a 40px sheet with one character per line — every item wrapped down its own column.
+/// A compact trigger does not squeeze the panel. The panel is at least as wide as the trigger its call places, and taking that width outright turned a `File` button into a 40px sheet with one character per line — every item wrapped down its own column.
 #[test]
 fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
     crate::test_support::fresh_layout_runtime();
     let item = menu(
         MenuProps::props()
             .label("File")
-            .stretch(true)
             .children(rows(&["New", "Open…", "Save", "Import STEP…"]))
             .build(),
     )
     .unwrap();
+    telar::place_item(item.layout_node(), |style| {
+        style.width(telar::SizeDimension::Percent(1.0))
+    });
     let root_node = item.layout_node();
     let row = telar::new_container(
         LayoutStyle::new().flex_row().width(44.0).height(400.0),
@@ -62,6 +64,61 @@ fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
             .any(|w| *w >= panel_width() - panel_pad(telar::ControlSize::Regular) * 2.0 - 0.5),
         "the open panel should be at least {}px wide, got {widths:?}",
         panel_width()
+    );
+}
+
+#[test]
+fn a_width_the_call_places_is_the_triggers_and_the_panel_opens_as_wide() {
+    crate::test_support::fresh_layout_runtime();
+    let item = menu(
+        MenuProps::props()
+            .label("File")
+            .bordered(true)
+            .children(rows(&["New", "Open…"]))
+            .build(),
+    )
+    .unwrap();
+    telar::place_item(item.layout_node(), |style| style.width(300.0));
+    let root_node = item.layout_node();
+    let window = telar::new_container(
+        LayoutStyle::new().flex_column().width(400.0).height(400.0),
+        &[root_node],
+    )
+    .unwrap();
+    let mut tree = ComponentList::new(item);
+    compute_layout(
+        window,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let widths = |tree: &mut ComponentList| -> Vec<f32> {
+        tree.commands()
+            .iter()
+            .filter_map(|c| match c {
+                telar::DrawCommand::Rect { rect, .. } => Some(rect.width),
+                _ => None,
+            })
+            .collect()
+    };
+    let closed = widths(&mut tree);
+    assert!(
+        closed.contains(&300.0),
+        "the trigger takes the placed width: {closed:?}"
+    );
+
+    route(&mut tree, &press(20.0, 18.0));
+    route(&mut tree, &release(20.0, 18.0));
+    relayout_if_dirty();
+    let _ = tree.commands();
+    let wide = |widths: &[f32]| {
+        let least = 300.0 - panel_pad(telar::ControlSize::Regular) * 2.0 - 0.5;
+        widths.iter().filter(|w| **w >= least).count()
+    };
+    let open = widths(&mut tree);
+    assert!(
+        wide(&open) > wide(&closed),
+        "the panel opens at least as wide as the trigger: {open:?}"
     );
 }
 
@@ -470,15 +527,25 @@ fn mounted_menu() -> ComponentList {
             .build(),
     )
     .unwrap();
+    lay_out_in_window(item.layout_node());
+    let tree = ComponentList::new(item);
+    settle(&tree);
+    tree
+}
+
+/// Lays `menu` out at the top of a 400px window, which is the room its panel opens in.
+fn lay_out_in_window(menu: telar::NodeId) {
+    let window = telar::new_container(
+        LayoutStyle::new().flex_column().width(400.0).height(400.0),
+        &[menu],
+    )
+    .unwrap();
     compute_layout(
-        item.layout_node(),
+        window,
         AvailableSpace::Definite(400.0),
         AvailableSpace::Definite(400.0),
     )
     .unwrap();
-    let tree = ComponentList::new(item);
-    settle(&tree);
-    tree
 }
 
 fn settle(tree: &ComponentList) {
@@ -1152,24 +1219,101 @@ fn a_row_comes_and_goes_with_what_it_acts_on_while_the_menu_is_open() {
     let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
     let sink = seen.clone();
     let structured = Children::new(move || {
-        let mut items = Vec::new();
-        let row = |label: &'static str, shown: Reactive<bool>| {
+        let placed = |piece: Box<dyn LayoutItem>, shown: Option<RwSignal<bool>>| {
+            if let Some(shown) = shown {
+                telar::place_item(piece.layout_node(), move |style| style.shown(shown.get()));
+            }
+            piece
+        };
+        let row = |label: &'static str, shown: Option<RwSignal<bool>>| {
+            Ok::<_, LayoutError>(placed(
+                crate::layout::list::list::item(
+                    crate::layout::list::list::ItemProps::props()
+                        .label(Reactive::of(move || label.to_string()))
+                        .build(),
+                )?,
+                shown,
+            ))
+        };
+        Ok(vec![
+            row("Rename", None)?,
+            placed(
+                crate::layout::list::list::separator(
+                    crate::layout::list::list::SeparatorProps::props().build(),
+                )?,
+                Some(shown),
+            ),
+            row("Restore", Some(shown))?,
+            row("Delete", None)?,
+        ])
+    });
+    let item = menu(
+        MenuProps::props()
+            .label("Actions")
+            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .children(structured)
+            .build(),
+    )
+    .unwrap();
+    lay_out_in_window(item.layout_node());
+    let mut tree = ComponentList::new(item);
+    telar::focus::focus_next();
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    settle(&tree);
+    let delete_top = |tree: &ComponentList| {
+        let mut top = None;
+        telar::for_each_with_matrix(&tree.commands(), |command, matrix| {
+            if let telar::DrawCommand::Text { text, rect, .. } = command
+                && text.as_ref() == "Delete"
+            {
+                top = Some(telar::transform_clip_rect(matrix, *rect).y);
+            }
+        });
+        top.expect("the last row is drawn")
+    };
+    assert_eq!(shown_rows(), 2, "a reader meets only the rows shown");
+    let closed_up = delete_top(&tree);
+
+    shown.set(true);
+    settle(&tree);
+    assert_eq!(shown_rows(), 3, "shown without opening the menu again");
+    assert!(
+        delete_top(&tree) > closed_up,
+        "the row shown takes its room above the last one"
+    );
+    shown.set(false);
+    settle(&tree);
+    assert_eq!(shown_rows(), 2);
+    assert_eq!(delete_top(&tree), closed_up, "hidden, it takes no room");
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Enter));
+    assert_eq!(
+        seen.get(),
+        Some(3),
+        "the hidden rule and row are passed over"
+    );
+}
+
+/// Opened from the keyboard, the cursor lands on the first row shown, passing over a row its call placed out of the menu.
+#[test]
+fn a_menu_opened_from_the_keyboard_starts_on_its_first_shown_row() {
+    use telar::NamedKey;
+
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let seen: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
+    let sink = seen.clone();
+    let structured = Children::new(move || {
+        let row = |label: &'static str| {
             crate::layout::list::list::item(
                 crate::layout::list::list::ItemProps::props()
                     .label(Reactive::of(move || label.to_string()))
-                    .shown(shown)
                     .build(),
             )
         };
-        items.push(row("Rename", Reactive::of(|| true))?);
-        items.push(crate::layout::list::list::separator(
-            crate::layout::list::list::SeparatorProps::props()
-                .shown(Reactive::of(move || shown.get()))
-                .build(),
-        )?);
-        items.push(row("Restore", Reactive::of(move || shown.get()))?);
-        items.push(row("Delete", Reactive::of(|| true))?);
-        Ok(items)
+        let restore = row("Restore")?;
+        telar::place_item(restore.layout_node(), |style| style.shown(false));
+        Ok(vec![restore, row("Rename")?])
     });
     let item = menu(
         MenuProps::props()
@@ -1189,24 +1333,8 @@ fn a_row_comes_and_goes_with_what_it_acts_on_while_the_menu_is_open() {
     telar::focus::focus_next();
     route(&mut tree, &named(NamedKey::ArrowDown));
     settle(&tree);
-    assert!(!telar::testing::texts(&tree).contains(&"Restore".to_string()));
-
-    shown.set(true);
-    settle(&tree);
-    assert!(
-        telar::testing::texts(&tree).contains(&"Restore".to_string()),
-        "shown without opening the menu again"
-    );
-    shown.set(false);
-    settle(&tree);
-    assert!(!telar::testing::texts(&tree).contains(&"Restore".to_string()));
-    route(&mut tree, &named(NamedKey::ArrowDown));
     route(&mut tree, &named(NamedKey::Enter));
-    assert_eq!(
-        seen.get(),
-        Some(3),
-        "the hidden rule and row are passed over"
-    );
+    assert_eq!(seen.get(), Some(1));
 }
 
 type Labels = &'static [&'static str];

@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, PreviewEntry, ViewportPreset};
 use telar::{
-    Accessible, Children, Container, Direction, LayoutError, LayoutItem, LayoutStyle, LocaleTag,
-    Reactive, RwSignal, Size, box_item, effect, signal,
+    Accessible, Children, Direction, LayoutError, LayoutItem, LocaleTag, Reactive, RwSignal, Size,
+    effect, signal,
 };
 use telar_components::{
     GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, SubmenuProps,
@@ -491,18 +491,16 @@ impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
         let field = select(
             SelectProps::props()
                 .selected(selected)
-                .stretch(true)
                 .on_select(on_select)
                 .children(Children::new(move || rows.iter().map(Row::build).collect()))
                 .build(),
         )?
         .a11y_label(move || strings::text(name));
-        // A row, so the stretched select grows along the width it is given: in a column it grew along the height instead, leaving this box no height and the select spilling out below it.
-        let sized = Container::new(
-            LayoutStyle::row().width(self.width).flex_shrink(0.0),
-            vec![field],
-        )?;
-        Ok(box_item(sized))
+        let width = self.width;
+        telar::place_item(field.layout_node(), move |style| {
+            style.width(width).flex_shrink(0.0)
+        });
+        Ok(field)
     }
 
     fn menu_rows(&self, rows: &mut Vec<Box<dyn LayoutItem>>) -> Result<(), LayoutError> {

@@ -316,14 +316,18 @@ fn a_file_that_declares_no_component_offers_no_tag() {
     assert!(!names.contains(&"mod"), "{names:?}");
 }
 
-/// A component call is offered what it may say about the item it returns, beside the props rust-analyzer lists.
+/// A component call is offered what it may say about the item it returns and the keys that place it, beside the props rust-analyzer lists.
 #[test]
-fn component_calls_offer_the_annotations_of_their_item() {
+fn component_calls_offer_the_annotations_and_the_placement_of_their_item() {
     let labels: Vec<String> = component_instance_items()
         .into_iter()
         .map(|item| item.label)
         .collect();
-    assert_eq!(labels, ["a11y_label", "lang", "a11y", "role"]);
+    assert_eq!(labels[..4], ["a11y_label", "lang", "a11y", "role"]);
+    for key in ["width", "grow", "self", "shown"] {
+        assert!(labels.iter().any(|label| label == key), "{key}: {labels:?}");
+    }
+    assert!(!labels.iter().any(|label| label == "pad"), "{labels:?}");
 }
 
 /// The classes a `@` may name include the ones the file's `[style]` imports.

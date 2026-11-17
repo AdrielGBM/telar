@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
@@ -29,7 +28,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .value(value)
                     .alpha(p.arg("alpha", true))
                     .label(p.arg("label", "Accent"))
-                    .given(p.arg("width", None::<f32>), |props, value| props.width(value))
                     .size(p.arg("size", ControlSize::Regular))
                     .swatches(palette())
                     .swatch_names(

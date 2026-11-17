@@ -17,7 +17,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Volume"))
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .given(p.arg("track_color", None::<Color>), |props, color| props.track_color(color))
-                    .given(p.arg("width", None::<f32>), |props, width| props.width(width))
                     .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )

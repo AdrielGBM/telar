@@ -1,4 +1,6 @@
-use telar::{IntoReading, AvailableSpace, Color, ComponentList, DrawCommand, compute_layout, new_container};
+use telar::{
+    AvailableSpace, Color, ComponentList, DrawCommand, IntoReading, compute_layout, new_container,
+};
 
 use super::*;
 

@@ -59,7 +59,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .on_run(Rc::new(|_| {}))
                     .control(open)
                     .commands(commands())
-                    .given(p.arg("width", None::<f32>), |props, value| props.width(value))
+                    .given(p.arg("panel_width", None::<f32>), |props, value| props.panel_width(value))
                     .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )?;

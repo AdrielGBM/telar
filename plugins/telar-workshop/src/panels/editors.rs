@@ -184,13 +184,13 @@ fn number_editor(binding: &Binding, number: NumberControl) -> Result<Editor, Lay
             let mut props = SliderProps::props()
                 .value(bound.shown)
                 .range(min as f32..=max as f32)
-                .width(SLIDER_WIDTH)
                 .build();
             props.step = number
                 .step
                 .map(|step| step as f32)
                 .or(number.integer.then_some(1.0));
             let slider = slider(props)?.a11y_label(move || name);
+            telar::place_item(slider.layout_node(), |style| style.width(SLIDER_WIDTH));
             let shown = binding.clone();
             let value = Text::declaring(
                 move || shown.value_text(),
@@ -254,11 +254,11 @@ fn text_editor(binding: &Binding, multiline: bool) -> Result<Editor, LayoutError
         TextFieldProps::props()
             .value(bound.shown)
             .placeholder(binding.name)
-            .width(FIELD_WIDTH)
             .multiline(multiline)
             .max_rows(MULTILINE_MAX_ROWS)
             .build(),
     )?;
+    telar::place_item(item.layout_node(), |style| style.width(FIELD_WIDTH));
     Ok(Editor {
         item,
         current: bound.current,
@@ -292,9 +292,11 @@ fn color_editor(binding: &Binding) -> Result<Editor, LayoutError> {
         TextFieldProps::props()
             .value(bound.shown)
             .placeholder(name)
-            .width(FIELD_WIDTH - SWATCH_SIZE - WORKBENCH_GRID)
             .build(),
     )?;
+    telar::place_item(field.layout_node(), |style| {
+        style.width(FIELD_WIDTH - SWATCH_SIZE - WORKBENCH_GRID)
+    });
     Ok(Editor {
         item: inline(vec![box_item(swatch), field])?,
         current: bound.current,

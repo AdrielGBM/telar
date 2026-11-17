@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use super::sample::at_width;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Key, NamedKey, Reactive, Role};
 
@@ -16,10 +17,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .on_submit(Rc::new(|| {}))
                     .label(p.arg("label", "Name"))
                     .placeholder(p.arg("placeholder", "Type here"))
-                    .width(p.arg("width", 300.0f32))
                     .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )
+            .map(|field| at_width(field, p.arg("width", 300.0f32)))
         })
         .title("Inputs/Text field")
         .layout(Layout::Centered)
@@ -62,9 +63,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         Some("Only used to send your receipt.".to_string()),
                     ))
                     .required(p.arg("required", true))
-                    .width(p.arg("width", 300.0f32))
                     .build(),
             )
+            .map(|field| at_width(field, p.arg("width", 300.0f32)))
         })
         .title("Inputs/Text field")
         .layout(Layout::Centered)
@@ -86,9 +87,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .hint(Some("Only used to send your receipt.".to_string()))
                     .error(error)
                     .required(true)
-                    .width(p.arg("width", 300.0f32))
                     .build(),
             )
+            .map(|field| at_width(field, p.arg("width", 300.0f32)))
         })
         .title("Inputs/Text field")
         .layout(Layout::Centered)
@@ -107,7 +108,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 TextFieldProps::props()
                     .label(p.arg("label", "Notes"))
                     .placeholder(p.arg("placeholder", "Anything we should know?"))
-                    .width(p.arg("width", 300.0f32))
                     .multiline(true)
                     .rows(3)
                     .max_rows(6)
@@ -115,6 +115,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .max_length(120)
                     .build(),
             )
+            .map(|field| at_width(field, p.arg("width", 300.0f32)))
         })
         .title("Inputs/Text field")
         .layout(Layout::Centered)
@@ -137,12 +138,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 TextFieldProps::props()
                     .label("Delivery notes")
                     .value(value)
-                    .width(p.arg("width", 300.0f32))
                     .multiline(true)
                     .rows(2)
                     .max_rows(6)
                     .build(),
             )
+            .map(|field| at_width(field, p.arg("width", 300.0f32)))
         })
         .title("Inputs/Text field")
         .layout(Layout::Centered)

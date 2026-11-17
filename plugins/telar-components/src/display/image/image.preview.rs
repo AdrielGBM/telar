@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
-use telar::{Container, ImageData, LayoutError, LayoutStyle, ObjectFit, Role};
+use telar::{
+    Container, ImageData, LayoutError, LayoutItem, LayoutStyle, ObjectFit, Role, place_item,
+};
 
 use crate::display::image::image::{ImageProps, ImageSource, image};
 
@@ -29,32 +31,36 @@ fn sunset() -> Arc<ImageData> {
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(image: ImageProps, "States", |p| {
+            let width = p.arg("width", 144.0f32);
             let pictures = vec![
-                image(
-                    ImageProps::props()
-                        .source(ImageSource::Ready(sunset()))
-                        .alt(p.arg("alt", "A sunset over the sea"))
-                        .width(p.arg("width", 144.0f32))
-                        .height(96.0)
-                        .fit(ObjectFit::Cover)
-                        .build(),
-                )?,
-                image(
-                    ImageProps::props()
-                        .source(ImageSource::Loading)
-                        .alt("Loading picture")
-                        .width(96.0)
-                        .height(96.0)
-                        .build(),
-                )?,
-                image(
-                    ImageProps::props()
-                        .source(ImageSource::Failed)
-                        .alt("Chart of sales")
-                        .width(144.0)
-                        .height(96.0)
-                        .build(),
-                )?,
+                placed(
+                    image(
+                        ImageProps::props()
+                            .source(ImageSource::Ready(sunset()))
+                            .alt(p.arg("alt", "A sunset over the sea"))
+                            .fit(ObjectFit::Cover)
+                            .build(),
+                    )?,
+                    move |style| style.width(width).height(96.0),
+                ),
+                placed(
+                    image(
+                        ImageProps::props()
+                            .source(ImageSource::Loading)
+                            .alt("Loading picture")
+                            .build(),
+                    )?,
+                    |style| style.width(96.0).height(96.0),
+                ),
+                placed(
+                    image(
+                        ImageProps::props()
+                            .source(ImageSource::Failed)
+                            .alt("Chart of sales")
+                            .build(),
+                    )?,
+                    |style| style.width(144.0).height(96.0),
+                ),
             ];
             Ok::<_, LayoutError>(Container::new(LayoutStyle::row().gap(16.0), pictures)?)
         })
@@ -67,4 +73,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect(by_text("Chart of sales"))
         }),
     ]
+}
+
+fn placed(
+    item: Box<dyn LayoutItem>,
+    place: impl Fn(LayoutStyle) -> LayoutStyle + 'static,
+) -> Box<dyn LayoutItem> {
+    place_item(item.layout_node(), place);
+    item
 }

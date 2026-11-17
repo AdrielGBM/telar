@@ -110,3 +110,23 @@ fn a_struct_with_no_required_props_still_builds() {
         "and setting it takes"
     );
 }
+
+#[derive(Props)]
+pub struct PlacedProps {
+    #[props(default)]
+    pub label: String,
+}
+
+#[derive(Props)]
+#[props(layer)]
+pub struct LayeredProps {
+    #[props(default)]
+    pub label: String,
+}
+
+/// A call may place the item a component returns only where that item stands in the flow: one drawn on a layer of its own says so.
+#[test]
+fn a_component_drawn_on_a_layer_says_a_call_has_nothing_to_place() {
+    const { assert!(PlacedProps::IN_FLOW) };
+    const { assert!(!LayeredProps::IN_FLOW) };
+}

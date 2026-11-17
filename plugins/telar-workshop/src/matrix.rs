@@ -12,8 +12,8 @@ use telar::preview::{Axis, Matrices, Matrix, MatrixCell, PreviewEntry};
 use telar::{
     Accessible, AlignItems, Children, Clip, ClippedItem, ColorScheme, Container, JustifyContent,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle,
-    Role, RwSignal, ShapeStyle, StyledContainer, Text, TextWrap, batch, box_item, children, signal,
-    use_resolved_scheme, use_theme_tokens,
+    Role, RwSignal, ShapeStyle, StyledContainer, Text, TextWrap, batch, box_item, children,
+    place_item, signal, use_resolved_scheme, use_theme_tokens,
 };
 use telar_components::{IconButtonProps, ItemProps, SeparatorProps, icon_button, item, separator};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
@@ -109,16 +109,20 @@ fn axis_rows(state: &WorkshopState, entry: PreviewEntry) -> Children {
             .collect::<Result<Vec<_>, _>>()?;
         let axes = state.matrix_axes();
         if entry.matrix.is_some() {
-            let changed =
-                move || Reactive::of(move || !axes.with(|axes| axes.is_declared_for(&entry)));
-            rows.push(separator(SeparatorProps::props().shown(changed()).build())?);
-            rows.push(item(
+            let changed = move |style: LayoutStyle| {
+                style.shown(!axes.with(|axes| axes.is_declared_for(&entry)))
+            };
+            let rule = separator(SeparatorProps::props().build())?;
+            place_item(rule.layout_node(), changed);
+            rows.push(rule);
+            let reset = item(
                 ItemProps::props()
                     .label(strings::reactive(RESET_AXES))
-                    .shown(changed())
                     .on_press(Rc::new(move || axes.set(MatrixAxes::Declared)))
                     .build(),
-            )?);
+            )?;
+            place_item(reset.layout_node(), changed);
+            rows.push(reset);
         }
         Ok(rows)
     })

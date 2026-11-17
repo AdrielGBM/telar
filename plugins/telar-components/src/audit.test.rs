@@ -1233,6 +1233,15 @@ fn swatch_picture() -> std::sync::Arc<telar::ImageData> {
     std::sync::Arc::new(telar::ImageData::new(pixels, 16, 8).expect("the pixels fill the image"))
 }
 
+/// `item` as a call placing it with `place` would leave it.
+fn placed(
+    item: Box<dyn LayoutItem>,
+    place: impl Fn(LayoutStyle) -> LayoutStyle + 'static,
+) -> Box<dyn LayoutItem> {
+    telar::place_item(item.layout_node(), place);
+    item
+}
+
 /// A link inside the application and one out of it, a picture and one that only decorates, a text area with its count, and a search field holding a query.
 fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let links = Container::new(
@@ -1256,28 +1265,33 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let pictures = Container::new(
         LayoutStyle::new().flex_row().gap(16.0),
         vec![
-            image(
-                ImageProps::props()
-                    .source(ImageSource::Ready(swatch_picture()))
-                    .alt("A blue gradient")
-                    .width(48.0)
-                    .build(),
-            )?,
-            image(
-                ImageProps::props()
-                    .source(ImageSource::Ready(swatch_picture()))
-                    .alt("")
-                    .width(24.0)
-                    .build(),
-            )?,
-            image(
-                ImageProps::props()
-                    .source(ImageSource::Failed)
-                    .alt("Team photo")
-                    .width(96.0)
-                    .height(32.0)
-                    .build(),
-            )?,
+            placed(
+                image(
+                    ImageProps::props()
+                        .source(ImageSource::Ready(swatch_picture()))
+                        .alt("A blue gradient")
+                        .build(),
+                )?,
+                |style| style.width(48.0),
+            ),
+            placed(
+                image(
+                    ImageProps::props()
+                        .source(ImageSource::Ready(swatch_picture()))
+                        .alt("")
+                        .build(),
+                )?,
+                |style| style.width(24.0),
+            ),
+            placed(
+                image(
+                    ImageProps::props()
+                        .source(ImageSource::Failed)
+                        .alt("Team photo")
+                        .build(),
+                )?,
+                |style| style.width(96.0).height(32.0),
+            ),
         ],
     )?;
     let notes = text_field(
@@ -1627,14 +1641,16 @@ async fn an_empty_data_table_says_so_in_a_status_beside_its_grid() {
 }
 
 fn labelled_code(code: String, label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    telar_components::code_view(
-        telar_components::CodeViewProps::props()
-            .code(code)
-            .max_height(100.0)
-            .copyable(false)
-            .label(Reactive::of(move || label.to_string()))
-            .build(),
-    )
+    Ok(placed(
+        telar_components::code_view(
+            telar_components::CodeViewProps::props()
+                .code(code)
+                .copyable(false)
+                .label(Reactive::of(move || label.to_string()))
+                .build(),
+        )?,
+        |style| style.max_height(100.0),
+    ))
 }
 
 /// A labelled code block is named by its label and still holds its code where a reader finds it, whether it fits or scrolls.

@@ -63,7 +63,12 @@ struct Mounted {
 
 impl Mounted {
     fn new(props: CodeViewProps) -> Self {
-        Self::in_box(props, LayoutStyle::new().flex_column())
+        Self::placed(props, |style| style)
+    }
+
+    /// Mounted the way a call placing it with `max_height:` or `grow:` mounts it.
+    fn placed(props: CodeViewProps, place: impl Fn(LayoutStyle) -> LayoutStyle + 'static) -> Self {
+        Self::in_box(props, LayoutStyle::new().flex_column(), place)
     }
 
     /// Laid out as wide as its code, rather than stretched across the space it is given.
@@ -71,15 +76,21 @@ impl Mounted {
         Self::in_box(
             props,
             LayoutStyle::row().align_items(telar::AlignItems::START),
+            |style| style,
         )
     }
 
-    fn in_box(props: CodeViewProps, frame: LayoutStyle) -> Self {
+    fn in_box(
+        props: CodeViewProps,
+        frame: LayoutStyle,
+        place: impl Fn(LayoutStyle) -> LayoutStyle + 'static,
+    ) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::set_locale(telar::locale_tag!("en"));
         focus::clear();
         let item = code_view(props).unwrap();
         let node = item.layout_node();
+        telar::place_item(node, place);
         let root = new_container(frame.width(600.0).height(400.0), &[node]).unwrap();
         compute_layout(
             root,
@@ -243,7 +254,9 @@ fn a_tall_block_stops_at_its_max_height() {
     let tall: String = (0..40).map(|i| format!("line {i}\n")).collect();
     let free = Mounted::new(CodeViewProps::props().code(tall.clone()).build());
     assert!(free.height() > 300.0, "{}", free.height());
-    let capped = Mounted::new(CodeViewProps::props().code(tall).max_height(120.0).build());
+    let capped = Mounted::placed(CodeViewProps::props().code(tall).build(), |style| {
+        style.max_height(120.0)
+    });
     assert_eq!(capped.height(), 120.0);
 }
 
@@ -351,13 +364,13 @@ fn an_overflowing_block_is_a_named_stop_for_the_code() {
 
 #[test]
 fn the_scroller_stop_takes_the_label_the_block_was_given() {
-    let tall = Mounted::new(
+    let tall = Mounted::placed(
         CodeViewProps::props()
             .code(tall_code())
-            .max_height(100.0)
             .copyable(false)
             .label(Reactive::of(|| "Snippet".to_string()))
             .build(),
+        |style| style.max_height(100.0),
     );
     assert_eq!(stop_names(&tall), ["Snippet"]);
 }
@@ -375,12 +388,12 @@ fn a_block_that_fits_is_no_stop_of_its_own() {
 
 #[test]
 fn a_block_taller_than_its_limit_is_a_named_stop_too() {
-    let tall = Mounted::new(
+    let tall = Mounted::placed(
         CodeViewProps::props()
             .code(tall_code())
-            .max_height(100.0)
             .copyable(false)
             .build(),
+        |style| style.max_height(100.0),
     );
     assert_eq!(stop_names(&tall), ["Code"]);
 }
@@ -437,7 +450,7 @@ fn a_growing_block_takes_the_room_its_parent_leaves() {
         "keeps to its lines: {}",
         kept.height()
     );
-    let grown = Mounted::new(source_props().grow(true).build());
+    let grown = Mounted::placed(source_props().build(), |style| style.flex_grow(1.0));
     assert_eq!(grown.height(), 400.0);
 }
 
@@ -467,13 +480,13 @@ fn the_block_is_padded_and_its_copy_button_sized_at_the_block_s_size() {
 }
 
 fn labelled(code: String) -> Mounted {
-    Mounted::new(
+    Mounted::placed(
         CodeViewProps::props()
             .code(code)
-            .max_height(100.0)
             .copyable(false)
             .label(Reactive::of(|| "Snippet".to_string()))
             .build(),
+        |style| style.max_height(100.0),
     )
 }
 

@@ -269,7 +269,7 @@ fn a_long_value_is_drawn_on_the_field_s_one_line() {
     const LONG: &str =
         "a value far longer than the field it is typed into, which used to wrap onto a second row";
     let value = signal(LONG.to_string());
-    let (field, rect) = laid_out_field(TextFieldProps::props().value(value).width(160.0).build());
+    let (field, rect) = laid_out_field(TextFieldProps::props().value(value).build());
     let tree = ComponentList::new(field);
     let commands = tree.commands();
     let wrap = commands
@@ -365,6 +365,59 @@ fn the_default_width_follows_the_size() {
         let width = shared::measure(size, WIDTH_EMS);
         assert_eq!(TextFieldTokens::current().width(size), width, "{size:?}");
         assert_eq!(rect.get().width, width, "{size:?}");
+    }
+}
+
+/// The fields a call can place, one for each box that can be the outermost: the frame alone, a caption's column around it, and a column holding a hint under it.
+fn every_outermost_box() -> [TextFieldProps; 3] {
+    [
+        TextFieldProps::props().build(),
+        TextFieldProps::props().label("Name").build(),
+        TextFieldProps::props()
+            .label("Name")
+            .hint(Some("As on your passport.".to_string()))
+            .build(),
+    ]
+}
+
+/// The frame a laid-out field draws, found by the border it alone is drawn with.
+fn frame_of(tree: &ComponentList) -> telar::Rect {
+    tree.commands()
+        .iter()
+        .find_map(|command| match command {
+            DrawCommand::Rect { rect, style } if style.border.is_some() => Some(*rect),
+            _ => None,
+        })
+        .expect("the field draws its frame")
+}
+
+/// A column narrower than a field's width narrows the field, frame and all, instead of letting it overflow.
+#[test]
+fn a_field_narrows_to_a_column_narrower_than_its_width() {
+    for props in every_outermost_box() {
+        crate::test_support::fresh_layout_runtime();
+        let field = text_field(props).unwrap();
+        let rect = telar::testing::lay_out(field.layout_node(), 120.0, 200.0);
+        let tree = ComponentList::new(field);
+        assert!(TextFieldTokens::current().width(telar::ControlSize::Regular) > 120.0);
+        assert_eq!(rect.width, 120.0);
+        assert_eq!(frame_of(&tree).width, 120.0);
+    }
+}
+
+/// A call placing a field wider than its width widens the frame with it, whichever of its boxes the call places.
+#[test]
+fn a_call_placing_a_field_wider_widens_its_frame() {
+    for props in every_outermost_box() {
+        crate::test_support::fresh_layout_runtime();
+        let field = text_field(props).unwrap();
+        telar::place_item(field.layout_node(), |style| {
+            style.width(telar::SizeDimension::Percent(1.0))
+        });
+        let rect = telar::testing::lay_out(field.layout_node(), 600.0, 200.0);
+        let tree = ComponentList::new(field);
+        assert_eq!(rect.width, 600.0);
+        assert_eq!(frame_of(&tree).width, 600.0);
     }
 }
 

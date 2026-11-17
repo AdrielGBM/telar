@@ -12,7 +12,7 @@ use telar::{
     TextStyle, TextWrap, amend_surface, box_item, children, focus::FocusId, signal, style_follows,
 };
 
-/// A field's width in ems when neither its call nor the theme names one: room for a sentence-long value.
+/// A field's width in ems when the theme names none: room for a sentence-long value.
 const WIDTH_EMS: f32 = 21.5;
 
 /// How many lines a field of several lines shows when its call names none.
@@ -29,7 +29,7 @@ pub struct TextFieldTokens {
     pub pad_x: Option<f32>,
     /// Width of the frame. `None` is the theme's `border_width`.
     pub border_width: Option<f32>,
-    /// Width of a field whose call names none, at the regular size, scaled with the field's text. `None` is 21.5 ems of the document's text.
+    /// The width a field takes where what holds it leaves the room, at the regular size, scaled with the field's text: narrower where it does not, and as its call places it (`width:100%`). `None` is 21.5 ems of the document's text.
     pub width: Option<f32>,
 }
 
@@ -53,15 +53,10 @@ impl TextFieldTokens {
         self.border_width.unwrap_or_else(shared::border_width)
     }
 
-    /// The width of a field of `size` whose call names none.
+    /// The width a field of `size` takes where what holds it leaves the room.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, WIDTH_EMS)
     }
-}
-
-/// A field's width: `width` where its call names one, else [`TextFieldTokens::width`].
-pub(crate) fn field_width(size: ControlSize, width: Option<f32>) -> f32 {
-    width.unwrap_or_else(|| TextFieldTokens::current().width(size))
 }
 
 /// The input is the whole height of the field, so the press and the audit see the whole field rather than the bare line inside it, and the line is centred in it. Beside an adornment it takes the room the adornments leave.
@@ -73,14 +68,39 @@ fn line_box(size: ControlSize, adorned: bool) -> LayoutStyle {
     }
 }
 
-/// The framed box every catalogue field is drawn in — a text field of one line or of several, a search field — before what it holds is arranged in it: `width` wide, never wider than its parent, and padded from the frame by [`TextFieldTokens::pad_x`].
-pub(crate) fn field_box(size: ControlSize, width: f32) -> LayoutStyle {
-    LayoutStyle::column()
-        .width(width)
-        .max_width(telar::SizeDimension::Percent(1.0))
+/// The framed box every catalogue field is drawn in — a text field of one line or of several, a search field — before what it holds is arranged in it: padded from the frame by [`TextFieldTokens::pad_x`], and as wide as [`Placed`] says.
+fn field_box(size: ControlSize, placed: Placed) -> LayoutStyle {
+    placed
+        .sized(Placed::Frame, size, LayoutStyle::column())
         .padding_horizontal(TextFieldTokens::current().pad_x(size))
         // The border below is unconditional, and on a surface that draws one in whole cells it needs a cell to draw in — without it a field whose padding quantised away had its frame and its own text on the same row.
         .bordered()
+}
+
+/// Which of a field's boxes is the item its call places, and so the one that takes [`TextFieldTokens::width`] as its [`shared::preferred_width`]: the frame alone, the caption's column around it, or the column that also holds what is said and counted under it. Every box inside that one takes the width of the box around it.
+#[derive(Clone, Copy, PartialEq)]
+enum Placed {
+    Frame,
+    Captioned,
+    Noted,
+}
+
+impl Placed {
+    fn of(captioned: bool, noted: bool) -> Self {
+        match (captioned, noted) {
+            (_, true) => Self::Noted,
+            (true, false) => Self::Captioned,
+            (false, false) => Self::Frame,
+        }
+    }
+
+    /// `style` at the field's preferred width where `part` is the box placed, and as it is where it stands inside that box.
+    fn sized(self, part: Self, size: ControlSize, style: LayoutStyle) -> LayoutStyle {
+        match self == part {
+            true => shared::preferred_width(style, TextFieldTokens::current().width(size)),
+            false => style,
+        }
+    }
 }
 
 /// A labelled, bordered field for text, with an optional caption stacked above it, outside the box, and an optional count of what was typed under it. High-level sugar; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
@@ -97,10 +117,7 @@ pub struct TextFieldProps {
     /// A small caption stacked above the box, and what a reader calls the field; omitted entirely (no extra row) when empty.
     #[props(into, default)]
     pub label: Reactive<String>,
-    /// Box width in logical px. `None` (the default) is [`TextFieldTokens::width`].
-    #[props(some, default)]
-    pub width: Option<f32>,
-    /// How large the field is drawn: its height, padding, text, caption and counter, and the width it takes when its call names none, as [`ControlSize`] works them out.
+    /// How large the field is drawn: its height, padding, text, caption and counter, and the width it takes where what holds it leaves the room, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
     /// Several lines rather than one: Enter breaks the line instead of submitting, and the box is `rows` lines tall. Off by default.
@@ -187,7 +204,6 @@ pub(crate) fn adorned_field(
         value,
         placeholder,
         label,
-        width,
         size,
         multiline,
         rows,
@@ -212,7 +228,6 @@ pub(crate) fn adorned_field(
         )));
     }
     let value = value.unwrap_or_else(|| signal(String::new()));
-    let width = move || field_width(size, width);
     let text = move |t: TextStyle| {
         let t = shared::control_text(size, t, 1.0);
         match &color {
@@ -286,10 +301,14 @@ pub(crate) fn adorned_field(
         content.push(icon_square(size, trailing)?);
     }
 
+    let placed = Placed::of(
+        shared::is_captioned(&label),
+        message.says_anything() || counter,
+    );
     let arranged = move || {
         let framed = match multiline {
-            true => field_box(size, width()).padding_vertical(pad_y(size, line_node)),
-            false => field_box(size, width()),
+            true => field_box(size, placed).padding_vertical(pad_y(size, line_node)),
+            false => field_box(size, placed),
         };
         match (adorned, multiline) {
             (false, _) => framed,
@@ -320,7 +339,9 @@ pub(crate) fn adorned_field(
         .styled_by(arranged);
     style_follows(line_node, layout);
 
-    let field = shared::captioned(size, box_item(box_), label, Reactive::of(width), required)?;
+    let caption_width = (placed == Placed::Captioned)
+        .then(|| Reactive::of(move || TextFieldTokens::current().width(size)));
+    let field = shared::captioned(size, box_item(box_), label, caption_width, required)?;
     let note = message
         .says_anything()
         .then(|| noted(size, message))
@@ -328,21 +349,24 @@ pub(crate) fn adorned_field(
     let count = counter
         .then(|| counted(size, value, max_length))
         .transpose()?;
-    if note.is_none() && count.is_none() {
+    if placed != Placed::Noted {
         return Ok((field, line_focus));
     }
     let row = move || {
         LayoutStyle::row()
-            .width(width())
             .justify_content(JustifyContent::END)
             .align_items(AlignItems::START)
             .gap(shared::gap_md(size))
     };
     let under = Container::new(row(), note.into_iter().chain(count).collect())?.styled_by(row);
-    let column = Container::new(
-        LayoutStyle::column().gap(shared::gap_xs(size)),
-        children![field, under],
-    )?;
+    let column = move || {
+        placed.sized(
+            Placed::Noted,
+            size,
+            LayoutStyle::column().gap(shared::gap_xs(size)),
+        )
+    };
+    let column = Container::new(column(), children![field, under])?.styled_by(column);
     Ok((box_item(column), line_focus))
 }
 

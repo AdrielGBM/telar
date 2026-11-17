@@ -150,6 +150,7 @@ fn is_number(ty: &Type) -> bool {
 /// Expands the `Props` derive into the builder, its markers and the `build` that needs them all set.
 pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     let props = collect(&input)?;
+    let in_flow = !draws_on_a_layer(&input.attrs)?;
     let (name, vis) = (&input.ident, &input.vis);
     let builder = format_ident!("{name}Builder");
     let required: Vec<&Prop> = props.iter().filter(|p| p.is_required()).collect();
@@ -285,6 +286,10 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         }
 
         impl #name {
+            /// Whether the item the component returns stands where its call does, so a call may place it (`width:`, `grow:`, `self:`): false for one drawn on a layer of its own.
+            #[doc(hidden)]
+            pub const IN_FLOW: bool = #in_flow;
+
             /// Starts a props builder. Every optional prop already holds its default; a required one holds the `Missing` marker, and `build` does not exist until none are left.
             pub fn props() -> #builder #all_missing {
                 #builder { #(#seeded),* }
@@ -475,4 +480,20 @@ fn option_inner(ty: &Type) -> Option<Type> {
         syn::GenericArgument::Type(inner) => Some(inner.clone()),
         _ => None,
     })
+}
+
+/// Whether the struct says `#[props(layer)]`: its component draws on a layer of its own, a dialog or a notice, not where its call stands, so a call has nothing to place.
+fn draws_on_a_layer(attrs: &[syn::Attribute]) -> Result<bool, syn::Error> {
+    let mut layer = false;
+    for attr in attrs.iter().filter(|a| a.path().is_ident("props")) {
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("layer") {
+                layer = true;
+                Ok(())
+            } else {
+                Err(meta.error("the props struct's own attribute is `layer`"))
+            }
+        })?;
+    }
+    Ok(layer)
 }

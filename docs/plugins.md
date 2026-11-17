@@ -188,6 +188,16 @@ Named content is a prop of type `Children` as well, `pub header: Children`; a ca
 `slot:"header"`, and the rest of its children go to `children`. In `.rsx` the component places each with
 `children props.header` and `children props.children`.
 
+Whoever places a component sizes it. A call takes the keys that place a box (`width`, `height` and their `min_`
+and `max_`, `grow`, `shrink`, `basis`, `self`, `aspect`, the `margin_` and `inset_` sides, `absolute`, `sticky`,
+`shown`), written inline or in a class, and lays them over the style the item the component returns declares, the
+call's winning; how the component lays out what it holds, its `pad`, `gap` and `align`, stays its own. So no prop is
+named after one of those keys, which `#[derive(Props)]` refuses, and a component is fluid: the width its tokens give
+it is the one it takes where there is room, narrower where what holds it is, and `width:100%` or `grow:1` on the call
+where it should fill. A component drawn on a layer of its own, a dialog or a notice, says `#[props(layer)]` on its
+props struct, and a call that places it is a compile error. From Rust, `telar::place_item(item.layout_node(), |s| …)`
+places an item the same way.
+
 ### Theme tokens
 
 A plugin cannot name the application's theme type, so it reads the shared vocabulary instead:

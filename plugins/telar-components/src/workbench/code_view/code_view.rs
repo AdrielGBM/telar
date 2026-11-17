@@ -94,7 +94,7 @@ pub type CopyHandler = Rc<dyn Fn(&str)>;
 
 /// Source shown as it is written, in a monospace face, with the runs its caller marked in their token colours: the source of a preview, a docs snippet, the excerpt a build error points into.
 ///
-/// It reads nothing itself: [`spans`](Self::spans) carries whatever a lexer, a compiler's diagnostics or a hand-written table said about the text. Lines never wrap; a long one scrolls sideways.
+/// It reads nothing itself: [`spans`](Self::spans) carries whatever a lexer, a compiler's diagnostics or a hand-written table said about the text. Lines never wrap; a long one scrolls sideways. The block grows to fit every line, and scrolls the rest when a caller places a `max_height:` on it.
 #[derive(Props)]
 pub struct CodeViewProps {
     #[props(into, default)]
@@ -123,12 +123,6 @@ pub struct CodeViewProps {
     /// What a reader calls the block, beyond its text.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
-    /// The tallest the block grows, in logical px, before it scrolls. `None` (the default) grows to fit every line.
-    #[props(some, default)]
-    pub max_height: Option<f32>,
-    /// Grows along its parent's main axis into the room the parent leaves, rather than keeping to its lines: blocks in a row of columns stand as tall as each other. Off by default.
-    #[props(default)]
-    pub grow: bool,
     /// Restyles each kind of token over the theme's own choice, for a palette of the caller's.
     #[props(some, default)]
     pub token_style: Option<TokenStyler>,
@@ -234,8 +228,6 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
         copyable,
         on_copy,
         label,
-        max_height,
-        grow,
         token_style,
         color,
         style,
@@ -316,12 +308,12 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
         }
     };
     let content = Container::new(content_box(), row)?.styled_by(content_box);
-    let viewport_box = match max_height {
-        Some(max_height) => LayoutStyle::new().max_height(max_height),
-        None => LayoutStyle::new(),
-    };
     let stop_name = label.clone();
-    let scroll = LayoutScrollArea::new(viewport_box, box_item(content))?.stop_label(move || {
+    let scroll = LayoutScrollArea::new(
+        LayoutStyle::new().flex_shrink(1.0).min_height(0.0),
+        box_item(content),
+    )?
+    .stop_label(move || {
         stop_name
             .as_ref()
             .map_or_else(|| strings::text(strings::CODE), |label| label.get())
@@ -331,12 +323,8 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
     if copyable {
         layers.push(copy_button(size, code, on_copy)?);
     }
-    let frame_box = match grow {
-        true => LayoutStyle::column().flex_grow(1.0),
-        false => LayoutStyle::column(),
-    };
     let frame = StyledContainer::new(
-        frame_box,
+        LayoutStyle::column(),
         move |_r| amend_surface(frame_paint(), &style),
         layers,
     )?;

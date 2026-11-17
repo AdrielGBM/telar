@@ -99,11 +99,6 @@ pub struct TooltipProps {
     /// Amends the paint of the bubble — this component's **principal surface**, the thing a caller means when they point at a tooltip. See [`telar::SurfaceStyle`] for when a theme token or [`TooltipTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
-    /// Let the trigger take the space its parent offers instead of hugging its content.
-    ///
-    /// The wrapper the tooltip puts around the trigger is a real node in the parent's flow, so without this a tooltipped child cannot be a `flex-1` cell: wrapping it collapses the row it was sharing. Set on a tab, a toolbar segment, or anything else whose whole point is to divide the space evenly.
-    #[props(default = false)]
-    pub stretch: bool,
     /// The trigger the bubble describes.
     #[props(default)]
     pub children: Children,
@@ -120,7 +115,6 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         size,
         color,
         style,
-        stretch,
         children,
     } = props;
     let said = Rc::new(described_as(
@@ -131,11 +125,11 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let shortcut = shortcut.map(|shortcut| Reactive::of(move || shown_chord(&shortcut)));
     let trigger_content = children.build()?;
 
-    let mut trigger_style = LayoutStyle::row();
-    if stretch {
-        trigger_style = trigger_style.flex_grow(1.0).align_self_stretch();
-    }
-    let trigger = StyledContainer::new(trigger_style, |_r| RectStyle::default(), trigger_content)?;
+    let trigger = StyledContainer::new(
+        LayoutStyle::row(),
+        |_r| RectStyle::default(),
+        trigger_content,
+    )?;
     let trigger_node = trigger.layout_node();
     let pointer = Pointer::new(trigger_node);
     let trigger = trigger.on_hover({
@@ -207,13 +201,9 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         0.0,
     )?;
 
-    // The bubble node is a 0-size portal placeholder, so it never shifts the trigger. `stretch` has to reach this root as well: the root is what the parent lays out, so growing only the inner node would leave the pair hugging its content.
-    let mut root_style = LayoutStyle::column();
-    if stretch {
-        root_style = root_style.flex_grow(1.0).align_self_stretch();
-    }
+    // The bubble node is a 0-size portal placeholder, so it never shifts the trigger.
     Ok(box_item(Container::new(
-        root_style,
+        LayoutStyle::column(),
         children![trigger, bubble],
     )?))
 }

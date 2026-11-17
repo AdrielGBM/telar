@@ -353,7 +353,10 @@ fn an_unset_width_is_the_tokens_and_a_named_one_wins() {
 
     let queue = Toasts::new();
     let tree = one_notice(
-        ToasterProps::props().toasts(queue).width(240.0).build(),
+        ToasterProps::props()
+            .toasts(queue)
+            .toast_width(240.0)
+            .build(),
         queue,
     );
     assert_eq!(card(&tree).0.width, 240.0, "the toaster's own width wins");

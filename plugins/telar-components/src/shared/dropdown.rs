@@ -49,8 +49,6 @@ pub(crate) struct Face {
     pub color: Option<Reactive<Color>>,
     pub bordered: bool,
     pub caret: bool,
-    /// Whether the column the trigger stands in decides its width — a stretched or fitted trigger — rather than [`Geometry::width`].
-    pub sized_by_root: bool,
     /// Read at the trigger's size wherever it is laid out or painted, so a theme that changes moves it.
     pub geometry: fn(ControlSize) -> Geometry,
     pub style: SurfaceStyle,
@@ -68,7 +66,6 @@ pub(crate) fn trigger(
         color,
         bordered,
         caret,
-        sized_by_root,
         geometry,
         style: surface,
     } = face;
@@ -89,7 +86,7 @@ pub(crate) fn trigger(
         amend_surface(trigger_rect_style(&color, face, geometry(size)), &surface)
     });
     let (rest, hover) = (paint.clone(), paint);
-    let trigger_box = move || trigger_layout(size, geometry(size), caret, sized_by_root);
+    let trigger_box = move || trigger_layout(size, geometry(size), caret);
     let mut children: Vec<Box<dyn LayoutItem>> = children![label_text];
     if caret {
         children.push(shared::mark(
@@ -159,34 +156,31 @@ pub(crate) fn below(
     })
 }
 
-/// The width a panel opens at: its own, widened to a stretched trigger's — a narrower list would read as a different control — but only ever widened: taking the trigger's width outright turned a compact `File` button into a 40px sheet with one character per line.
-pub(crate) fn panel_width(own: f32, stretch: bool, trigger: NodeId, laid: &RwSignal<Rect>) -> f32 {
-    match stretch {
-        true => telar::anchor_rect(trigger, laid).width.max(own),
-        false => own,
-    }
+/// The width a panel opens at: its own, widened to its trigger's — a narrower list would read as a different control — but only ever widened, so a trigger narrowed by the room it has still opens a list its rows fit.
+pub(crate) fn panel_width(own: f32, trigger: NodeId, laid: &RwSignal<Rect>) -> f32 {
+    telar::anchor_rect(trigger, laid).width.max(own)
 }
 
-/// The trigger and the overlay holder under one column. The holder's placeholder takes no space in it, so only the trigger participates in flow layout. A stretched root takes the width its row offers and none from what it shows: sized from its label, it widened past a fixed row as soon as a longer choice was picked.
+/// The trigger and the overlay holder under one column, which is the item the call places: [`Geometry::width`] as its [`shared::preferred_width`], or the label's own width when `fit`, and the trigger as wide as the column whatever it shows — sized from its label, it widened past a fixed row as soon as a longer choice was picked. The holder's placeholder takes no space in it, so only the trigger participates in flow layout.
 pub(crate) fn root(
     trigger: StyledContainer,
     holder: ReactiveList,
-    stretch: bool,
+    size: ControlSize,
+    geometry: fn(ControlSize) -> Geometry,
+    fit: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let root_box = LayoutStyle::column();
-    let root_box = match stretch {
-        true => root_box.flex_grow(1.0).flex_basis(0.0).min_width(0.0),
-        false => root_box,
+    let root_box = move || match fit {
+        true => LayoutStyle::column(),
+        false => shared::preferred_width(LayoutStyle::column(), geometry(size).width),
     };
-    Ok(box_item(Container::new(
-        root_box,
-        children![trigger, holder],
-    )?))
+    Ok(box_item(
+        Container::new(root_box(), children![trigger, holder])?.styled_by(root_box),
+    ))
 }
 
 /// The list box a `select` opens under its field: picking a row writes its index into `selected`, fires `on_pick`, and closes.
 ///
-/// `stretch` gives the trigger the width its row offers instead of the fixed [`Geometry::width`], and the panel then opens at whatever width the trigger was laid out to. That is what a form row wants — a control of fixed width beside fields that span the row reads as a mistake — and it is the caller's choice because a select standing on its own has no row to take a width from.
+/// The field takes [`Geometry::width`] where its row leaves the room and narrows where it does not; a form row that wants it to span the row places it so (`width:100%`, `grow:1`), and the panel then opens at the width the trigger was laid out to.
 pub(crate) struct Dropdown {
     /// Shown when `selected` names no row.
     pub placeholder: fn() -> String,
@@ -197,7 +191,6 @@ pub(crate) struct Dropdown {
     pub color: Option<Reactive<Color>>,
     pub on_pick: Option<Rc<dyn Fn(usize)>>,
     pub selected: RwSignal<Option<usize>>,
-    pub stretch: bool,
     pub geometry: fn(ControlSize) -> Geometry,
     pub offset: fn(ControlSize) -> f32,
     pub style: SurfaceStyle,
@@ -211,7 +204,6 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         color,
         on_pick,
         selected,
-        stretch,
         geometry,
         offset,
         style,
@@ -263,7 +255,6 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         color: color.clone(),
         bordered: true,
         caret: true,
-        sized_by_root: stretch,
         geometry,
         style,
     };
@@ -350,7 +341,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         // The registry is cleared first: this builder runs again on every open, and rows left over from the last would leave the keyboard walking positions that no longer exist.
         list.begin();
         let row_items = rows.build_with(list.clone())?;
-        let width = panel_width(geometry(size).width, stretch, trigger_node, &trigger_rect);
+        let width = panel_width(geometry(size).width, trigger_node, &trigger_rect);
         let row_column = Container::column(row_items)?;
         let cursor = {
             let list = list.clone();
@@ -389,36 +380,26 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         }
     });
     dismissable(open, trigger_node);
-    root(trigger, holder, stretch)
+    root(trigger, holder, size, geometry, false)
 }
 
-/// The trigger's box: as tall as every control of its `size`, padded by its tokens, and as wide as they say unless the root column decides its width.
+/// The trigger's box: as tall as every control of its `size`, padded by its tokens, and as wide as the root column it stands in.
 ///
-/// A stretched or fitted trigger is as wide as the root column by cross-axis stretch, which a fitted root takes from the label. Growing it would grow it along that column's main axis, which is its height.
+/// A trigger sized by its root is as wide as the root column by cross-axis stretch, which a fitted root takes from the label. Growing it would grow it along that column's main axis, which is its height.
 ///
 /// With a caret, `SPACE_BETWEEN` rather than a growing spacer: a spacer takes the free space before the label has claimed its own, and `File` came out wrapped to two letters a line. Without one the label is the whole face and stands centred, as a button's does: alone in a `SPACE_BETWEEN` row it sat at the start, and every pixel the trigger had beyond it showed as a gap after the label and none before.
-fn trigger_layout(
-    size: ControlSize,
-    geometry: Geometry,
-    with_caret: bool,
-    sized_by_root: bool,
-) -> LayoutStyle {
+fn trigger_layout(size: ControlSize, geometry: Geometry, with_caret: bool) -> LayoutStyle {
     let justify = if with_caret {
         JustifyContent::SPACE_BETWEEN
     } else {
         JustifyContent::CENTER
     };
-    let row = LayoutStyle::row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(justify)
         .min_height(shared::control_height(size))
         .padding_horizontal(geometry.pad_x)
-        .gap(shared::gap_sm(size));
-    if sized_by_root {
-        row
-    } else {
-        row.width(geometry.width)
-    }
+        .gap(shared::gap_sm(size))
 }
 
 /// What the trigger's face is showing.

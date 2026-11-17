@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use telar::{
     AlignItems, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle,
-    Reactive, Role, SizeDimension, Text, TextAlign, box_item, children,
+    Reactive, Role, SizeDimension, Text, TextAlign, box_item, children, place_item,
 };
 use telar_components::{ButtonProps, CodeViewProps, button, code_view};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
@@ -146,10 +146,10 @@ fn snippet(example: Example) -> Result<Box<dyn LayoutItem>, LayoutError> {
         CodeViewProps::props()
             .code(example.code.to_string())
             .line_numbers(false)
-            .grow(true)
             .label(example.language.to_string())
             .build(),
     )?;
+    place_item(code.layout_node(), |style| style.flex_grow(1.0));
     let column = Container::new(
         LayoutStyle::column()
             .flex_grow(1.0)

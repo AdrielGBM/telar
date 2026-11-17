@@ -16,3 +16,24 @@ fn a_part_style_and_an_ordinary_prop_reach_the_component() {
         assert!(kept_by_the_call(key).is_none(), "`{key}`");
     }
 }
+
+/// A call places the item a component returns with these, so no prop could take one.
+#[test]
+fn a_call_keeps_the_keys_that_place_the_item() {
+    for key in [
+        "width",
+        "grow",
+        "self",
+        "margin_top",
+        "inset_start",
+        "shown",
+    ] {
+        assert!(kept_by_the_call(key).is_some(), "{key}");
+    }
+    for key in ["pad", "gap", "align", "wrap"] {
+        assert!(
+            kept_by_the_call(key).is_none(),
+            "`{key}` is how the component lays out what it holds, its own"
+        );
+    }
+}

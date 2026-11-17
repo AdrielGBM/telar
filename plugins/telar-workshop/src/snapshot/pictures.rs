@@ -190,10 +190,10 @@ fn with_slider(
     let slider = slider(
         SliderProps::props()
             .value(value)
-            .width(SLIDER_WIDTH)
             .label(strings::reactive(label))
             .build(),
     )?;
+    telar::place_item(slider.layout_node(), |style| style.width(SLIDER_WIDTH));
     let column = Container::new(fill().gap(WORKBENCH_GRID), vec![pictures, slider])?;
     Ok(box_item(column))
 }

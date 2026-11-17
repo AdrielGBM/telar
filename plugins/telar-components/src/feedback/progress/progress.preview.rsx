@@ -20,7 +20,7 @@ col gap:(shared::gap_sm(ControlSize::Regular)) width:320 pad:(shared::gap_lg(Con
     row justify:between
         text "Exporting Logo.png"
         text "60%" color:$theme.muted
-    progress value:0.6 stretch a11y_label:"Exporting Logo.png"
+    progress value:0.6 width:100% a11y_label:"Exporting Logo.png"
 
 [preview "Right to left" dir:rtl]
 progress value:0.3 a11y_label:"Exporting"

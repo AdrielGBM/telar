@@ -37,9 +37,6 @@ pub struct SearchFieldProps {
     /// A small caption stacked above the box, and what a reader calls the field. Empty (the default) leaves the field called by its placeholder.
     #[props(into, default)]
     pub label: Reactive<String>,
-    /// Box width in logical px. `None` (the default) is [`TextFieldTokens::width`](crate::TextFieldTokens::width).
-    #[props(some, default)]
-    pub width: Option<f32>,
     /// How large the field is drawn: its frame as a text field of this size, and the glass and the clear button in it, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
@@ -72,7 +69,6 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
         value,
         placeholder,
         label,
-        width,
         size,
         on_submit,
         on_clear,
@@ -128,9 +124,6 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
         .label(label)
         .size(size)
         .on_key(keys);
-    if let Some(width) = width {
-        field = field.width(width);
-    }
     if let Some(on_submit) = on_submit {
         field = field.on_submit(Rc::new(move || on_submit(&value.get())));
     }

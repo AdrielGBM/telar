@@ -1,8 +1,7 @@
 use std::rc::Rc;
 
-use super::sample::Given;
-use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Role, place_item};
 
 use crate::workbench::code_view::code_view::{CodeSpan, CodeViewProps, TokenKind, code_view};
 use telar::ControlSize;
@@ -31,7 +30,7 @@ fn spans() -> Vec<CodeSpan> {
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(code_view: CodeViewProps, "Rust", |p| {
-            code_view(
+            let block = code_view(
                 CodeViewProps::props()
                     .on_copy(Rc::new(|_| {}))
                     .code(SOURCE)
@@ -41,9 +40,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .line_numbers(p.arg("line_numbers", true))
                     .copyable(p.arg("copyable", true))
                     .highlighted(vec![p.arg("highlighted", 3u32)])
-                    .given(p.arg("max_height", None::<f32>), |props, value| props.max_height(value))
                     .build(),
-            )
+            )?;
+            if let Some(max_height) = p.arg("max_height", None::<f32>) {
+                place_item(block.layout_node(), move |style| style.max_height(max_height));
+            }
+            Ok(block)
         })
         .title("Workbench/Code view")
         .layout(Layout::Padded)

@@ -4,7 +4,9 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element, Value, ViewNode};
 
-use crate::style::{format_f32, hex_to_color_expr};
+use crate::style::{
+    PropCall, format_f32, hex_to_color_expr, in_application_order, layout_prop_call,
+};
 use telar_project::naming::to_pascal_case;
 use telar_project::{AssetContext, IdBaking};
 
@@ -29,6 +31,7 @@ impl ViewGen<'_> {
         if routed.recipes.is_empty() && routed.errors.is_empty() {
             let props_arg = self.component_props_arg(el, tag, &props_attrs, "");
             let code = format!("{pad}let {var} = {tag}({props_arg})?;");
+            let code = format!("{code}{}", self.placement(el, tag, &var, &pad));
             return ChildEmit::Simple { name: var, code };
         }
 
@@ -54,8 +57,44 @@ impl ViewGen<'_> {
         let props_arg = self.component_props_arg(el, tag, &props_attrs, &setters);
         let _ = writeln!(code, "{inner_pad}{tag}({props_arg})?");
         self.indent -= 1;
-        let _ = write!(code, "{pad}}};");
+        let _ = write!(code, "{pad}}};{}", self.placement(el, tag, &var, &pad));
         ChildEmit::Simple { name: var, code }
+    }
+
+    /// The statements placing the item a call returns, bound to `var`, after it: the placement keys its classes say, then its own, laid over the style the item declares and followed as they read. Empty for a call that places nothing. A component drawn on a layer of its own has nothing to place, which is the compile error the `IN_FLOW` assertion makes of it.
+    fn placement(&self, el: &Element, tag: &str, var: &str, pad: &str) -> String {
+        let placing = |key: &str| telar_project::call_keys::PLACEMENT_KEYS.contains(&key);
+        let mut calls = String::new();
+        let mut raw: Vec<&str> = Vec::new();
+        let class_props = el
+            .classes
+            .iter()
+            .filter_map(|name| self.classes.iter().find(|class| &class.name == name))
+            .flat_map(|class| in_application_order(&class.props, |prop| &prop.key));
+        let written = class_props
+            .map(|prop| (prop.key.as_str(), prop.value.as_str()))
+            .chain(
+                in_application_order(&el.attributes, |attr| &attr.key)
+                    .into_iter()
+                    .map(|attr| (attr.key.as_str(), attr.value.text())),
+            );
+        for (key, value) in written.filter(|(key, _)| placing(key)) {
+            if let PropCall::Call(call) = layout_prop_call(key, value, self.theme_access) {
+                calls.push_str(&call);
+                raw.push(value);
+            }
+        }
+        if calls.is_empty() {
+            return String::new();
+        }
+        let refused = format!(
+            "`{tag}` draws on a layer of its own, not where its call stands, so a call has nothing to place: size it through its props"
+        );
+        let place = self.owning(&raw, &format!("move |__style: LayoutStyle| __style{calls}"));
+        format!(
+            "\n{pad}const {{ assert!({}::IN_FLOW, {refused:?}) }};\n{pad}place_item({var}.layout_node(), {place});",
+            props_type(tag)
+        )
     }
 
     /// The closure is `Fn` rather than `FnOnce` — a dropdown remakes its rows on every open — so its body is a rebuilding region, which copies what it reads rather than moving it, exactly as a reactive `if`/`for` branch does.

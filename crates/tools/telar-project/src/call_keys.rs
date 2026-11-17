@@ -26,6 +26,34 @@ pub const STATE_STYLE_KEYS: &[&str] = &[
     "focus_style",
 ];
 
+/// The keys a call places the item a component returns with: its size, how it grows, shrinks and aligns in what holds it, its margins and where it is positioned. They are laid over the style the item declares, the call's winning; how the component lays out what it holds stays its own.
+pub const PLACEMENT_KEYS: &[&str] = &[
+    "width",
+    "height",
+    "min_width",
+    "min_height",
+    "max_width",
+    "max_height",
+    "basis",
+    "flex_basis",
+    "aspect",
+    "aspect_ratio",
+    "grow",
+    "shrink",
+    "self",
+    "margin_top",
+    "margin_bottom",
+    "margin_start",
+    "margin_end",
+    "inset_top",
+    "inset_bottom",
+    "inset_start",
+    "inset_end",
+    "absolute",
+    "sticky",
+    "shown",
+];
+
 /// What `key:` on a component call does in place of setting a prop, where the call keeps `key` for itself.
 pub fn kept_by_the_call(key: &str) -> Option<&'static str> {
     match key {
@@ -35,6 +63,9 @@ pub fn kept_by_the_call(key: &str) -> Option<&'static str> {
         ROLE => Some("says what the item the component returns is"),
         SLOT => Some("hands a child of the call through the `Children` prop it names"),
         FORMER_LANG => Some("is refused, as the former spelling of `lang:`"),
+        key if PLACEMENT_KEYS.contains(&key) => {
+            Some("places the item the component returns, laid over the style it declares")
+        }
         key if STATE_STYLE_KEYS.contains(&key) => Some(
             "is refused, since it paints a state of a `box` and a component's states are its own",
         ),

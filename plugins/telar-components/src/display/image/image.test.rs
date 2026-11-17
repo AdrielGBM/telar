@@ -11,8 +11,17 @@ fn pixels(width: u32, height: u32) -> Arc<ImageData> {
 }
 
 fn mounted(props: ImageProps) -> ComponentList {
+    placed(props, |style| style)
+}
+
+/// Mounted the way a call placing it with `width:` and `height:` mounts it.
+fn placed(
+    props: ImageProps,
+    place: impl Fn(LayoutStyle) -> LayoutStyle + 'static,
+) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
     let item = image(props).unwrap();
+    telar::place_item(item.layout_node(), place);
     lay_out(item.layout_node(), 400.0, 400.0);
     let tree = ComponentList::new(item);
     let _ = tree.commands();
@@ -97,29 +106,38 @@ fn a_picture_whose_words_arrive_later_is_met_by_a_reader_under_them() {
 }
 
 #[test]
-fn one_side_given_takes_the_other_from_the_picture() {
-    let tree = mounted(
+fn a_placed_width_takes_the_height_from_the_picture() {
+    let tree = placed(
         ImageProps::props()
             .source(ImageSource::from(pixels(40, 20)))
             .alt("Wide")
-            .width(120.0)
-            .fit(ObjectFit::Cover)
+            .fit(ObjectFit::Fill)
             .build(),
+        |style| style.width(120.0),
     );
     let drawn = drawn_image(&tree).expect("drawn");
     assert_eq!((drawn.width, drawn.height), (120.0, 60.0));
 }
 
 #[test]
+fn a_picture_placed_at_another_shape_is_fitted_into_it() {
+    let tree = placed(
+        ImageProps::props()
+            .source(ImageSource::from(pixels(40, 20)))
+            .alt("Wide")
+            .build(),
+        |style| style.width(100.0).height(100.0),
+    );
+    let drawn = drawn_image(&tree).expect("drawn");
+    assert_eq!((drawn.width, drawn.height), (100.0, 50.0));
+}
+
+#[test]
 fn a_loading_picture_stands_in_as_a_quiet_box_of_its_size_until_it_arrives() {
     let source = signal(ImageSource::Loading);
-    let tree = mounted(
-        ImageProps::props()
-            .source(source)
-            .alt("Avatar")
-            .width(48.0)
-            .height(48.0)
-            .build(),
+    let tree = placed(
+        ImageProps::props().source(source).alt("Avatar").build(),
+        |style| style.width(48.0).height(48.0),
     );
     assert!(drawn_image(&tree).is_none());
     let stand_in = crate::test_support::first_painted(&tree);
@@ -136,14 +154,25 @@ fn a_loading_picture_stands_in_as_a_quiet_box_of_its_size_until_it_arrives() {
 }
 
 #[test]
+fn an_image_nothing_places_takes_the_size_of_the_picture_that_arrives() {
+    let source = signal(ImageSource::Loading);
+    let tree = mounted(ImageProps::props().source(source).alt("Avatar").build());
+    assert!(drawn_image(&tree).is_none());
+
+    source.set(ImageSource::Ready(pixels(40, 20)));
+    settle(&tree);
+    let drawn = drawn_image(&tree).expect("the picture replaces its stand-in");
+    assert_eq!((drawn.width, drawn.height), (40.0, 20.0));
+}
+
+#[test]
 fn a_picture_that_could_not_be_had_shows_its_words_instead() {
-    let tree = mounted(
+    let tree = placed(
         ImageProps::props()
             .source(ImageSource::Failed)
             .alt("Chart of sales")
-            .width(160.0)
-            .height(90.0)
             .build(),
+        |style| style.width(160.0).height(90.0),
     );
     assert!(drawn_image(&tree).is_none());
     assert!(texts(&tree).contains(&"Chart of sales".to_string()));
@@ -162,13 +191,12 @@ fn a_picture_that_could_not_be_had_shows_its_words_instead() {
 fn the_corner_follows_the_role_until_the_tokens_name_one() {
     crate::test_support::assert_corner_follows_the_role_until_the_tokens_name_one(
         || {
-            mounted(
+            placed(
                 ImageProps::props()
                     .source(ImageSource::Loading)
                     .alt("Cover")
-                    .width(32.0)
-                    .height(32.0)
                     .build(),
+                |style| style.width(32.0).height(32.0),
             )
         },
         |tree| {

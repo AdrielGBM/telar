@@ -6,8 +6,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, BorderRadius, Children, Color, Container, KeySequence, LayoutError,
-    LayoutItem, LayoutStyle, Lazy, Margin, NodeId, Props, Reactive, RectStyle, RwSignal,
-    ShapeStyle, StyledContainer, Text, TextWrap, box_item,
+    LayoutItem, LayoutStyle, Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, Text, TextWrap, box_item,
     focus::{FocusId, Role},
     signal, use_context,
 };
@@ -128,8 +128,6 @@ struct ListState {
     selected: Option<RwSignal<Option<usize>>>,
     color: Option<Reactive<Color>>,
     rows: RefCell<Vec<Row>>,
-    /// A cursor asked for before there was anything to put it on. Opening with the down arrow happens in a key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
-    seed: Cell<bool>,
     search: RefCell<TypeAhead>,
     /// Set while the list is being walked for what its rows *say* rather than for the rows. See [`ListContext::declare`].
     declaring: Cell<bool>,
@@ -150,6 +148,13 @@ struct Row {
     act: RefCell<Option<Act>>,
 }
 
+impl Row {
+    /// Whether the keyboard cursor may stop here now: a row its caller placed out of the list with `shown:` is passed over as a disabled one is.
+    fn is_destination(&self) -> bool {
+        self.reachable.get() && !self.node.get().is_some_and(telar::is_hidden)
+    }
+}
+
 impl ListContext {
     pub(crate) fn new(
         pick: Rc<dyn Fn(usize)>,
@@ -163,7 +168,6 @@ impl ListContext {
             selected,
             color,
             rows: RefCell::new(Vec::new()),
-            seed: Cell::new(false),
             search: RefCell::new(TypeAhead::default()),
             declaring: Cell::new(false),
             ticked: signal(false),
@@ -185,7 +189,6 @@ impl ListContext {
             selected: None,
             color,
             rows: RefCell::new(Vec::new()),
-            seed: Cell::new(false),
             search: RefCell::new(TypeAhead::default()),
             declaring: Cell::new(false),
             ticked: signal(false),
@@ -232,9 +235,11 @@ impl ListContext {
         Some(label.get())
     }
 
-    /// Puts the cursor on the first row that can take it, as soon as such a row exists. See [`ListState::seed`].
+    /// Puts the cursor on the first row that can take it. Called once the rows are built and their callers have placed them, so a row placed out of the list is passed over here as the keyboard passes over it.
     pub(crate) fn seed_cursor(&self) {
-        self.0.seed.set(true);
+        if let Some(first) = self.edge(1) {
+            self.0.highlighted.set(Some(first));
+        }
     }
 
     /// Drops the row registry ahead of a rebuild. The panel is remade on every open, and rows that accumulated across opens would leave the keyboard walking through positions that no longer exist.
@@ -247,23 +252,15 @@ impl ListContext {
 
     /// Registers a row and hands it the index it will commit. Called by each piece as it builds itself, so the order is the order they are written in.
     pub(crate) fn claim(&self, reachable: Reactive<bool>, label: Reactive<String>) -> usize {
-        let index = {
-            let mut rows = self.0.rows.borrow_mut();
-            rows.push(Row {
-                reachable: reachable.clone(),
-                label,
-                node: Cell::new(None),
-                focus: Cell::new(None),
-                act: RefCell::new(None),
-            });
-            rows.len() - 1
-        };
-        // Outside the borrow: `set` flushes, and an effect that reads the cursor would re-enter the registry.
-        if self.0.seed.get() && reachable.get() {
-            self.0.seed.set(false);
-            self.0.highlighted.set(Some(index));
-        }
-        index
+        let mut rows = self.0.rows.borrow_mut();
+        rows.push(Row {
+            reachable,
+            label,
+            node: Cell::new(None),
+            focus: Cell::new(None),
+            act: RefCell::new(None),
+        });
+        rows.len() - 1
     }
 
     /// Registers a piece that holds a position without being one — a rule, a heading. It takes an index so the rows around it keep the ones they commit with, and the keyboard passes straight over it.
@@ -352,7 +349,7 @@ impl ListContext {
         // At most one lap: a list whose every row is unreachable must not spin.
         (1..=n).find_map(|k| {
             let i = (start + delta.signum() * k).rem_euclid(n);
-            rows[i as usize].reachable.get().then_some(i as usize)
+            rows[i as usize].is_destination().then_some(i as usize)
         })
     }
 
@@ -376,7 +373,7 @@ impl ListContext {
         let rows = self.0.rows.borrow();
         needle.find(from, rows.len(), |i| {
             let row = &rows[i];
-            row.reachable.get().then(|| row.label.get())
+            row.is_destination().then(|| row.label.get())
         })
     }
 
@@ -392,6 +389,8 @@ impl ListContext {
 /// One row of a list — an action in a menu, a choice in a select.
 ///
 /// Outside any list it still builds, as a plain row that fires its own `on_press`. That is deliberate: the mistake of writing an item somewhere it has no parent is made in markup, and a component that panicked on it would report a markup error as a crash in Rust nobody wrote.
+///
+/// A call placing `shown:` on a row takes it out of the list while keeping its position, as it does a separator: hidden, it takes no room and the keyboard passes over it, so a row can come and go with what it acts on while its menu stays open.
 #[derive(Props)]
 pub struct ItemProps {
     #[props(into, default)]
@@ -424,9 +423,6 @@ pub struct ItemProps {
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
     #[props(some, default)]
     pub on_press: Option<Rc<dyn Fn()>>,
-    /// Whether the row is in the list. A hidden row takes no room and the keyboard passes over it, yet keeps its position, so a row can come and go with what it acts on while its menu stays open.
-    #[props(some, into, default)]
-    pub shown: Option<Reactive<bool>>,
     /// The row's content in place of [`label`](Self::label), when it needs more than a line of text.
     #[props(default)]
     pub children: Children,
@@ -452,17 +448,13 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         hint,
         shortcut,
         on_press,
-        shown,
         children,
     } = props;
     let supplied = children.build()?;
     let list = use_context::<ListContext>();
     let index = list.as_ref().map(|ctx| {
-        let (disabled, shown) = (disabled.clone(), shown.clone());
-        ctx.claim(
-            Reactive::of(move || shown.as_ref().is_none_or(Reactive::get) && !disabled.get()),
-            label.clone(),
-        )
+        let disabled = disabled.clone();
+        ctx.claim(Reactive::of(move || !disabled.get()), label.clone())
     });
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
@@ -559,7 +551,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         Some(ticked) => row.toggled(move || ticked.get()),
         None => row,
     };
-    shown_while(box_item(row), shown)
+    Ok(box_item(row))
 }
 
 /// A row's box at `size` and its paint in the list it is in — the wash under the cursor, the selection's, the pointer moving the cursor in a menu, the keyboard's ring on the cursor — around `content`, laid start to end.
@@ -688,9 +680,6 @@ pub struct SeparatorProps {
     /// How far the rule stands from the rows either side of it, as [`ControlSize`] works it out, written to match theirs.
     #[props(default)]
     pub size: ControlSize,
-    /// Whether the rule is in the list, as an [`item`]'s `shown` says for a row.
-    #[props(some, into, default)]
-    pub shown: Option<Reactive<bool>>,
 }
 
 /// A rule between groups of rows. Never takes the keyboard cursor.
@@ -714,22 +703,7 @@ pub fn separator(props: SeparatorProps) -> Result<Box<dyn LayoutItem>, LayoutErr
         vec![],
     )?
     .styled_by(rule_box);
-    shown_while(box_item(rule), props.shown)
-}
-
-/// `piece` as it is, or, given `shown`, drawn and laid out only while that holds. Built already, so it has claimed its position in the list by the time it is first hidden.
-fn shown_while(
-    piece: Box<dyn LayoutItem>,
-    shown: Option<Reactive<bool>>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let Some(shown) = shown else {
-        return Ok(piece);
-    };
-    Ok(box_item(Lazy::new(
-        LayoutStyle::column(),
-        move || shown.get(),
-        move || Ok(vec![piece]),
-    )?))
+    Ok(box_item(rule))
 }
 
 /// A heading over the rows beneath it. Also unreachable: it names a group, it is not one of its members.

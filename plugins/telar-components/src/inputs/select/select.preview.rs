@@ -45,7 +45,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .on_select(Rc::new(|_| {}))
                     .size(size)
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))
-                    .stretch(p.arg("stretch", false))
                     .children(sizes(size))
                     .build(),
             )

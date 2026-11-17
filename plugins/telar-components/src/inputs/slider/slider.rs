@@ -16,7 +16,7 @@ use telar::ControlSize;
 /// Every length is at the regular size and scaled with the slider's own, and every field left `None` follows the role named beside it, read when the slider paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SliderTokens {
-    /// Length of the track when the caller names no `width`. `None` is 16 ems of the document's text, a progress bar's length.
+    /// Length of the track where what holds it leaves the room: shorter where it does not, and as its call places it (`width:100%`). `None` is 16 ems of the document's text, a progress bar's length.
     pub width: Option<f32>,
     /// Thickness of the track. `None` is [`metrics::spacing`](crate::metrics::spacing).
     pub track: Option<f32>,
@@ -34,7 +34,7 @@ impl SliderTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    /// The track's length in a slider of `size` whose call names none.
+    /// The track's length in a slider of `size` where what holds it leaves the room.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, WIDTH_EMS)
     }
@@ -68,8 +68,13 @@ fn thumb_box(size: ControlSize) -> LayoutStyle {
         .width(thumb_size(size))
         .height(thumb_size(size))
 }
-fn track_box(size: ControlSize, width: f32) -> LayoutStyle {
-    LayoutStyle::new().width(width).height(track_height(size))
+/// The track is the item the slider's call places unless a caption's column stands around it, and then takes that column's width.
+fn track_box(size: ControlSize, captioned: bool) -> LayoutStyle {
+    let track = LayoutStyle::new().height(track_height(size));
+    match captioned {
+        true => track,
+        false => shared::preferred_width(track, SliderTokens::current().width(size)),
+    }
 }
 
 /// How far the track's grab area reaches past its long sides, so the thin track and the thumb overhanging it are one target at least [`shared::MIN_TARGET`] tall.
@@ -90,10 +95,7 @@ pub struct SliderProps {
     /// Track (rail) colour; `None` (the default) is the theme's muted token.
     #[props(some, into, default)]
     pub track_color: Option<Reactive<Color>>,
-    /// Track width in px. `None` (the default) is the [`SliderTokens`] width at its size.
-    #[props(some, default)]
-    pub width: Option<f32>,
-    /// How large the slider is drawn: its track, thumb and caption, and the length it takes when its call names none, as [`ControlSize`] works them out.
+    /// How large the slider is drawn: its track, thumb and caption, and the length it takes where what holds it leaves the room, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
     /// The values the slider reports, from its start at the left end of the track to its end at the right; `0.0..=1.0` by default. A range whose start is not below its end is an error when the slider is built.
@@ -119,7 +121,6 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         value,
         color,
         track_color,
-        width,
         size,
         range,
         step,
@@ -137,7 +138,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         .map(|step| shared::positive_step("slider", step))
         .transpose()?;
     let value = value.unwrap_or_else(|| signal(min));
-    let width = width.unwrap_or_else(|| SliderTokens::current().width(size));
+    let captioned = shared::is_captioned(&label);
     let announced_value = value;
     let snap = move |v: f32| match step {
         Some(step) => {
@@ -191,6 +192,8 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         // `box_transform` only pivots scale on the rect centre; a progress bar needs the left edge pinned, which needs the raw matrix.
         Some(Transform::scale_around(t, 1.0, r.x, r.y + r.height / 2.0))
     });
+    // The fill lies over the whole track and exists before it, so its laid rect is the length the thumb travels and a drag is measured against.
+    let track_rect = telar::track_layout(fill.layout_node()).expect("the fill node is registered");
 
     // A normal in-flow child, so it lands at the track's top-left; a translate then carries it to the value's position and re-centres it against the thinner track.
     let thumb_value = value;
@@ -212,13 +215,13 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     .styled_by(move || thumb_box(size))
     .with_transform(move |r| {
         let t = ((thumb_value.get() - min) / (max - min)).clamp(0.0, 1.0);
-        let tx = t * (width - thumb_size(size));
+        let tx = t * (track_rect.get().width - thumb_size(size));
         let ty = (track_height(size) - thumb_size(size)) / 2.0;
         box_transform(r, 0.0, 1.0, 1.0, tx, ty)
     });
 
     let track = StyledContainer::new(
-        track_box(size, width),
+        track_box(size, captioned),
         move |r| {
             let fill = shared::resolve(&track_color, shared::muted);
             let rest = RectStyle::default()
@@ -228,7 +231,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         },
         children![fill, thumb],
     )?
-    .styled_by(move || track_box(size, width))
+    .styled_by(move || track_box(size, captioned))
     .hit_outset(Reactive::of(move || grab_outset(size)))
     .control(Role::Slider)
     .a11y_label({
@@ -288,11 +291,12 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         }
     })
     .on_drag(move |px, _py| {
-        let t = (px / width).clamp(0.0, 1.0);
+        let t = (px / track_rect.peek().width).clamp(0.0, 1.0);
         commit(snap(min + t * (max - min)));
     });
 
-    shared::captioned(size, box_item(track), label, width, false)
+    let width = Reactive::of(move || SliderTokens::current().width(size));
+    shared::captioned(size, box_item(track), label, Some(width), false)
 }
 
 #[cfg(test)]

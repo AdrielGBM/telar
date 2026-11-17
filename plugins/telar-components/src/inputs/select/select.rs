@@ -31,7 +31,7 @@ pub struct SelectTokens {
     pub pad_x: Option<f32>,
     /// Width of the trigger's frame. `None` is the theme's `border_width`.
     pub border_width: Option<f32>,
-    /// Width of the trigger, unless it is stretched, and of the list it opens, at the regular size and scaled with the select's own. `None` is 13 ems of the document's text.
+    /// The width the trigger takes where what holds it leaves the room, and the least the list it opens takes, at the regular size and scaled with the select's own: the trigger is narrower where the room is less, and as its call places it (`width:100%`). `None` is 13 ems of the document's text.
     pub width: Option<f32>,
     /// Space between the list and the trigger it drops from, at the regular size and scaled with the select's own. `None` is [`metrics::popup_offset`](crate::metrics::popup_offset).
     pub offset: Option<f32>,
@@ -57,7 +57,7 @@ impl SelectTokens {
         self.border_width.unwrap_or_else(shared::border_width)
     }
 
-    /// The width of the trigger of a select of `size`, and of the list it opens.
+    /// The width the trigger of a select of `size` takes where it has the room, and the least the list it opens takes.
     pub fn width(&self, size: ControlSize) -> f32 {
         dropdown::width(size, self.width)
     }
@@ -99,9 +99,6 @@ pub struct SelectProps {
     /// Fired with the picked index whenever a selection is made.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(usize)>>,
-    /// Take the width the row offers instead of the fixed trigger width — what a form field wants, where a fixed-width control beside full-width ones reads as a mistake. The panel opens at that width too.
-    #[props(default = false)]
-    pub stretch: bool,
     /// Amends the paint of the trigger — this component's **principal surface** — at rest, hovered and held open. See [`telar::SurfaceStyle`] for when a theme token or [`SelectTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -117,7 +114,6 @@ pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         size,
         color,
         on_select,
-        stretch,
         style,
         children,
     } = props;
@@ -130,7 +126,6 @@ pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         color,
         on_pick: on_select,
         selected,
-        stretch,
         geometry: SelectTokens::geometry,
         offset: SelectTokens::current_offset,
         style,

@@ -9,10 +9,10 @@ use telar::{
     Accessible, AlignItems, Border, BorderRadius, Chord, Clip, ClippedItem, Color, Container,
     Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
     ModifiersState, NamedKey, NodeId, OverlayControl, Props, Reactive, ReactiveList, RectStyle,
-    RwSignal, ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap,
-    amend_surface, box_item, children, effect,
+    RwSignal, ShapeStyle, SizeDimension, Span, StyledContainer, SurfaceAmendment, SurfaceStyle,
+    Text, TextWrap, amend_surface, box_item, children, effect,
     focus::{FocusId, Role},
-    memo, signal,
+    memo, place_item, signal,
 };
 
 use crate::inputs::text_field::text_field::{TextFieldProps, text_field};
@@ -40,7 +40,7 @@ const INSET_IN_GAPS: f32 = 6.0;
 /// Every field left `None` follows the role named beside it, read when the palette opens. Its rows follow [`ListTokens`].
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CommandPaletteTokens {
-    /// Width of the dialog at the regular size, scaled with the palette's own. `None` is 40 ems of the document's text. A palette's own `width` prop wins over it.
+    /// Width of the dialog at the regular size, scaled with the palette's own. `None` is 40 ems of the document's text. A palette's own `panel_width` prop wins over it.
     pub width: Option<f32>,
     /// Corner of the dialog. `None` is the theme's `radius_dialog`.
     pub radius: Option<f32>,
@@ -134,6 +134,7 @@ pub type RunHandler = Rc<dyn Fn(&Command)>;
 ///
 /// The keyboard stays in the field: the arrows walk the list, Enter runs the command the cursor is on, Escape closes. A reader hears the row the cursor is on as it moves, because the field points at it.
 #[derive(Props)]
+#[props(layer)]
 pub struct CommandPaletteProps {
     /// What opens and closes the palette: an [`OverlayName`](telar::OverlayName) anything on the same surface opens with [`open_overlay`](telar::open_overlay), each surface keeping its own, or a signal the caller holds.
     #[props(into)]
@@ -160,7 +161,7 @@ pub struct CommandPaletteProps {
     pub on_close: Option<Rc<dyn Fn()>>,
     /// The dialog's width in logical px. `None` (the default) is [`CommandPaletteTokens::width`].
     #[props(some, default)]
-    pub width: Option<f32>,
+    pub panel_width: Option<f32>,
     /// How large the dialog is drawn: its search field, rows, headings, key caps, padding and, unless it names one, its width, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
@@ -183,7 +184,7 @@ pub fn command_palette(props: CommandPaletteProps) -> Result<Box<dyn LayoutItem>
         empty_label,
         on_run,
         on_close,
-        width,
+        panel_width,
         size,
         color,
         style,
@@ -197,7 +198,7 @@ pub fn command_palette(props: CommandPaletteProps) -> Result<Box<dyn LayoutItem>
         label,
         empty_label,
         on_run,
-        width,
+        panel_width,
         size,
         color,
         style,
@@ -216,7 +217,7 @@ struct Parts {
     empty_label: Option<Reactive<String>>,
     on_run: Option<RunHandler>,
     /// `None` for the tokens' width.
-    width: Option<f32>,
+    panel_width: Option<f32>,
     size: ControlSize,
     color: Option<Reactive<Color>>,
     style: SurfaceStyle,
@@ -461,13 +462,13 @@ fn build_open_palette(
         label,
         empty_label,
         on_run,
-        width,
+        panel_width,
         size,
         color,
         style,
     } = parts;
     let tokens = CommandPaletteTokens::current();
-    let width = width.unwrap_or_else(|| tokens.width(size));
+    let width = panel_width.unwrap_or_else(|| tokens.width(size));
     let row_height = ListTokens::current().row_height(size);
     let results = memo(move || {
         let commands = commands.get();
@@ -552,7 +553,6 @@ fn build_open_palette(
         }
     });
 
-    let field_width = width - card_pad(size) * 2.0;
     let keys = {
         let palette = palette.clone();
         let dismiss = dismiss.clone();
@@ -571,13 +571,15 @@ fn build_open_palette(
                 Some(placeholder) => placeholder.get(),
                 None => strings::text(strings::SEARCH_COMMANDS),
             }))
-            .width(field_width)
             .size(size)
             .on_key(keys)
             .active_descendant(pointed)
             .controls(Rc::new(move || list))
             .build(),
     )?;
+    place_item(field.layout_node(), |style| {
+        style.width(SizeDimension::Percent(1.0))
+    });
 
     let empty = ReactiveList::new(
         move || vec![results.with(|results| results.0.is_empty())],

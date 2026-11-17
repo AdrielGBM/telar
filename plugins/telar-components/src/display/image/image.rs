@@ -5,8 +5,8 @@ use std::sync::Arc;
 use telar::{
     Accessible, AlignItems, BorderRadius, Clip, ClippedItem, ImageData, JustifyContent,
     LayoutError, LayoutItem, LayoutStyle, ObjectFit, Props, Raster, Reactive, RectStyle,
-    ShapeStyle, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap, amend_surface,
-    box_item, children,
+    ShapeStyle, SizeDimension, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap,
+    amend_surface, box_item, children,
 };
 
 use crate::shared;
@@ -79,7 +79,7 @@ impl ImageSource {
 
 /// A picture, named for a reader by `alt`: what it shows, in words, or nothing at all for a picture that only decorates, which a reader then steps over.
 ///
-/// While the picture loads it is a quiet box of the size it will take; where it cannot be had, that box shows `alt` instead. Give it a `width`, a `height` or both, so the page does not move when the picture arrives: a side left unset follows the picture's own proportions once it is here.
+/// While the picture loads it is a quiet box of the size it will take; where it cannot be had, that box shows `alt` instead. Its own size is the picture's, or a control's height square while there is no picture yet. A caller placing `width:` alone leaves the height to the picture's proportions; `height:` alone keeps the image's own width, so place `width:` with it. Place its size before the picture arrives and the page does not move when it does.
 #[derive(Props)]
 pub struct ImageProps {
     /// The picture: a decoded [`ImageData`], or where a load of one stands.
@@ -91,12 +91,6 @@ pub struct ImageProps {
     /// How the picture fills its box when the box is not its shape. Contained whole by default.
     #[props(default)]
     pub fit: ObjectFit,
-    /// Width in logical px. `None` (the default) is the picture's own, or what its proportions make of the height.
-    #[props(some, default)]
-    pub width: Option<f32>,
-    /// Height in logical px. `None` (the default) is the picture's own, or what its proportions make of the width.
-    #[props(some, default)]
-    pub height: Option<f32>,
     /// Corner of the picture. `None` (the default) is [`ImageTokens::radius`].
     #[props(some, default)]
     pub radius: Option<f32>,
@@ -114,16 +108,14 @@ pub fn image(props: ImageProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         source,
         alt,
         fit,
-        width,
-        height,
         radius,
         pixelated,
         style,
     } = props;
     let corner = move || radius.unwrap_or_else(|| ImageTokens::current().radius());
-    let size = Size { width, height };
+    let shape = source.clone();
     let picture = telar::ReactiveList::with_style(
-        LayoutStyle::row().flex_shrink(0.0),
+        own_box(&shape.get()),
         move || vec![(source.get(), corner().to_bits())],
         |(source, corner): &(ImageSource, u32)| (source.key(), *corner),
         move |(source, corner)| {
@@ -134,44 +126,38 @@ pub fn image(props: ImageProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 Raster::Smooth
             };
             match source {
-                ImageSource::Ready(data) => picture(data, &alt, size, fit, raster, corner),
-                ImageSource::Loading => placeholder(&alt, size, corner, &style, false),
-                ImageSource::Failed => placeholder(&alt, size, corner, &style, true),
+                ImageSource::Ready(data) => picture(data, &alt, fit, raster, corner),
+                ImageSource::Loading => placeholder(&alt, corner, &style, false),
+                ImageSource::Failed => placeholder(&alt, corner, &style, true),
             }
         },
     )?;
+    telar::style_follows(picture.layout_node(), move || own_box(&shape.get()));
     Ok(box_item(picture))
 }
 
-#[derive(Clone, Copy)]
-struct Size {
-    width: Option<f32>,
-    height: Option<f32>,
+/// The box an image is when nothing places it: the picture's own width, or a control's height while there is none, with the proportions that make the height of a width a caller places.
+fn own_box(source: &ImageSource) -> LayoutStyle {
+    let (width, height) = match source {
+        ImageSource::Ready(data) if data.width() > 0 && data.height() > 0 => {
+            (data.width() as f32, data.height() as f32)
+        }
+        _ => {
+            let side = shared::control_height(ControlSize::Regular);
+            (side, side)
+        }
+    };
+    LayoutStyle::row()
+        .flex_shrink(0.0)
+        .width(width)
+        .aspect_ratio(width / height)
 }
 
-impl Size {
-    fn sized(self, style: LayoutStyle) -> LayoutStyle {
-        let style = match self.width {
-            Some(width) => style.width(width),
-            None => style,
-        };
-        match self.height {
-            Some(height) => style.height(height),
-            None => style,
-        }
-    }
-
-    /// The box a picture not yet here stands in: the sides it was given, the one it was given on both sides, or a control's height square.
-    fn standing_in(self) -> (f32, f32) {
-        match (self.width, self.height) {
-            (Some(width), Some(height)) => (width, height),
-            (Some(side), None) | (None, Some(side)) => (side, side),
-            (None, None) => (
-                shared::control_height(ControlSize::Regular),
-                shared::control_height(ControlSize::Regular),
-            ),
-        }
-    }
+/// What fills the image's box, whatever size it is placed at.
+fn filling() -> LayoutStyle {
+    LayoutStyle::new()
+        .width(SizeDimension::Percent(1.0))
+        .height(SizeDimension::Percent(1.0))
 }
 
 fn named(item: impl Accessible + 'static, alt: &Reactive<String>) -> Box<dyn LayoutItem> {
@@ -182,30 +168,22 @@ fn named(item: impl Accessible + 'static, alt: &Reactive<String>) -> Box<dyn Lay
 fn picture(
     data: Arc<ImageData>,
     alt: &Reactive<String>,
-    size: Size,
     fit: ObjectFit,
     raster: Raster,
     corner: f32,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let picture = telar::Image::new(
-        size.sized(LayoutStyle::new().flex_shrink(0.0)),
-        move || data.clone(),
-        move || raster,
-        move || fit,
-    )?
-    .with_radius(corner);
+    let picture = telar::Image::new(filling(), move || data.clone(), move || raster, move || fit)?
+        .with_radius(corner);
     Ok(named(picture, alt))
 }
 
-/// The box a picture stands in while it loads, quiet and of the size it will take; where it `failed`, with its words in it, as a page shows an image it could not fetch.
+/// The box a picture stands in while it loads, quiet and filling the image; where it `failed`, with its words in it, as a page shows an image it could not fetch.
 fn placeholder(
     alt: &Reactive<String>,
-    size: Size,
     corner: f32,
     style: &SurfaceStyle,
     failed: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let (width, height) = size.standing_in();
     let content: Vec<Box<dyn LayoutItem>> = if failed && !alt.get().is_empty() {
         let words = {
             let alt = alt.clone();
@@ -225,10 +203,8 @@ fn placeholder(
     };
     let style = style.clone();
     let stand_in = StyledContainer::new(
-        LayoutStyle::row()
-            .width(width)
-            .height(height)
-            .flex_shrink(0.0)
+        filling()
+            .flex_row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
             .padding_horizontal(shared::gap_sm(ControlSize::Regular)),
