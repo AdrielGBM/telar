@@ -92,13 +92,13 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                             let theme = theme.clone();
                                         move || {
                                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                            let __node_5 = ReactiveList::new(
-                                                { let tab = tab.clone(); move || vec![tab.get() == 0] },
-                                                |__cond: &bool| *__cond,
+                                            let __node_5_build =
                                                 {
+                                                    let tab = tab.clone();
                                                     let theme = theme.clone();
-                                                move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                                    if __cond {
+                                                move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> { let tab = ::core::clone::Clone::clone(&tab); let theme = ::core::clone::Clone::clone(&theme); 
+                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                    if tab.get() == 0 {
                                                         let __text_0 = {
                                                             Text::declaring(
                                                                 || "Overview — what the product does.".to_string(),
@@ -106,22 +106,34 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                             )?
                                                         };
-                                                        Ok(box_item(__text_0))
-                                                    } else {
-                                                        Ok(box_item(Container::column(children![])?))
+                                                        __children.push(box_item(__text_0));
                                                     }
+                                                    Ok(__children)
                                                 }
-                                                },
-                                                0.0,
-                                            )?;
-                                            __children.push(box_item(__node_5));
-                                            let __node_6 = ReactiveList::new(
-                                                { let tab = tab.clone(); move || vec![tab.get() == 1] },
-                                                |__cond: &bool| *__cond,
+                                                };
+                                            let __node_5_source =
                                                 {
+                                                    let tab = tab.clone();
+move || vec![tab.get() == 0]
+                                                };
+                                            if reads_state(&__node_5_source).1 {
+                                                let __node_5 = ReactiveList::new(
+                                                    __node_5_source,
+                                                    |__truth: &bool| *__truth,
+                                                    move |_| branch_cell(LayoutStyle::new().flex_column(), __node_5_build()?),
+                                                    0.0,
+                                                )?;
+                                                __children.push(box_item(__node_5));
+                                            } else {
+                                                __children.extend(__node_5_build()?);
+                                            }
+                                            let __node_6_build =
+                                                {
+                                                    let tab = tab.clone();
                                                     let theme = theme.clone();
-                                                move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                                    if __cond {
+                                                move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> { let tab = ::core::clone::Clone::clone(&tab); let theme = ::core::clone::Clone::clone(&theme); 
+                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                    if tab.get() == 1 {
                                                         let __text_1 = {
                                                             Text::declaring(
                                                                 || "Pricing — plans and limits.".to_string(),
@@ -129,22 +141,34 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                             )?
                                                         };
-                                                        Ok(box_item(__text_1))
-                                                    } else {
-                                                        Ok(box_item(Container::column(children![])?))
+                                                        __children.push(box_item(__text_1));
                                                     }
+                                                    Ok(__children)
                                                 }
-                                                },
-                                                0.0,
-                                            )?;
-                                            __children.push(box_item(__node_6));
-                                            let __node_7 = ReactiveList::new(
-                                                { let tab = tab.clone(); move || vec![tab.get() == 2] },
-                                                |__cond: &bool| *__cond,
+                                                };
+                                            let __node_6_source =
                                                 {
+                                                    let tab = tab.clone();
+move || vec![tab.get() == 1]
+                                                };
+                                            if reads_state(&__node_6_source).1 {
+                                                let __node_6 = ReactiveList::new(
+                                                    __node_6_source,
+                                                    |__truth: &bool| *__truth,
+                                                    move |_| branch_cell(LayoutStyle::new().flex_column(), __node_6_build()?),
+                                                    0.0,
+                                                )?;
+                                                __children.push(box_item(__node_6));
+                                            } else {
+                                                __children.extend(__node_6_build()?);
+                                            }
+                                            let __node_7_build =
+                                                {
+                                                    let tab = tab.clone();
                                                     let theme = theme.clone();
-                                                move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                                    if __cond {
+                                                move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> { let tab = ::core::clone::Clone::clone(&tab); let theme = ::core::clone::Clone::clone(&theme); 
+                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                    if tab.get() == 2 {
                                                         let __text_2 = {
                                                             Text::declaring(
                                                                 || "Team — who is behind it.".to_string(),
@@ -152,15 +176,27 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                             )?
                                                         };
-                                                        Ok(box_item(__text_2))
-                                                    } else {
-                                                        Ok(box_item(Container::column(children![])?))
+                                                        __children.push(box_item(__text_2));
                                                     }
+                                                    Ok(__children)
                                                 }
-                                                },
-                                                0.0,
-                                            )?;
-                                            __children.push(box_item(__node_7));
+                                                };
+                                            let __node_7_source =
+                                                {
+                                                    let tab = tab.clone();
+move || vec![tab.get() == 2]
+                                                };
+                                            if reads_state(&__node_7_source).1 {
+                                                let __node_7 = ReactiveList::new(
+                                                    __node_7_source,
+                                                    |__truth: &bool| *__truth,
+                                                    move |_| branch_cell(LayoutStyle::new().flex_column(), __node_7_build()?),
+                                                    0.0,
+                                                )?;
+                                                __children.push(box_item(__node_7));
+                                            } else {
+                                                __children.extend(__node_7_build()?);
+                                            }
                                             Ok(__children)
                                         }
                                         }

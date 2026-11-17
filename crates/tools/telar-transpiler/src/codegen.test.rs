@@ -124,7 +124,7 @@ fn a_component_taking_children_reads_scheme_in_its_own_view_and_in_the_children_
     assert_eq!(code.matches(binding).count(), 1, "{code}");
     let bound = code.find(binding).expect("the handle is bound");
     let placed = code
-        .find("props.children.build()?")
+        .find("children.build()?")
         .unwrap_or_else(|| panic!("the placeholder builds its children:\n{code}"));
     let nested = code
         .find("Children::new(")

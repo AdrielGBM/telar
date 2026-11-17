@@ -1533,7 +1533,7 @@ fn a_reactive_if_clones_the_signals_its_branches_read() {
         "the branch closure must clone the signal it reads, not move it:\n{code}"
     );
     assert!(
-        code.contains("{ let show = show.clone(); move || vec![show.get()] }"),
+        code.contains("let show = show.clone();\nmove || vec![show.get()]"),
         "the condition still clones separately:\n{code}"
     );
 }
@@ -1597,17 +1597,15 @@ fn a_loop_pattern_binding_read_as_a_signal_is_not_cloned_above_it() {
 }
 
 #[test]
-fn a_signal_free_reactive_branch_gets_no_clone_prelude() {
+fn a_signal_free_reactive_branch_takes_only_what_its_condition_reads() {
     let src =
         "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"static\"\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
-    assert!(
-        code.contains("move |__cond: bool|"),
-        "missing branch closure:\n{code}"
-    );
-    assert!(
-        !code.contains("let show = show.clone();\n        move |__cond"),
-        "a branch that reads nothing must not be wrapped:\n{code}"
+    assert!(code.contains("fragment_branches("), "{code}");
+    assert_eq!(
+        code.matches(".clone();").count(),
+        2,
+        "the condition is cloned into its source and its build, and nothing else:\n{code}"
     );
 }
 
@@ -3152,7 +3150,9 @@ fn placed_children_inside_a_reactive_branch_are_rebuilt_with_it() {
         "the branch takes the one field it reads, not all of `props`:\n{code}"
     );
     assert!(
-        code.contains("__children.extend(props.children.build()?);"),
+        code.contains(
+            "__slots.extend(__props_children.build()?.into_iter().map(ChildSlot::stat));"
+        ),
         "and builds the children where the placeholder stands:\n{code}"
     );
 }

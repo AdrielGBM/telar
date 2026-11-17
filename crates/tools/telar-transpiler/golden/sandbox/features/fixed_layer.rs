@@ -66,14 +66,14 @@ pub fn fixed_layer(props: FixedLayerProps) -> Result<Box<dyn LayoutItem>, Layout
                                     )?
                                 };
                                 __children.push(box_item(__text_1));
-                                let __node_4 = ReactiveList::new(
-                                    { let shown = shown.clone(); move || vec![shown.get()] },
-                                    |__cond: &bool| *__cond,
+                                let __node_4_build =
                                     {
+                                        let shown = shown.clone();
                                         let theme = theme.clone();
                                         let taps = taps.clone();
-                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                        if __cond {
+                                    move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> { let shown = ::core::clone::Clone::clone(&shown); let theme = ::core::clone::Clone::clone(&theme); let taps = ::core::clone::Clone::clone(&taps); 
+                                        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                        if shown.get() {
                                             let __layer_0 = {
                                                 let __row_0 = {
                                                     let __text_2 = {
@@ -89,15 +89,27 @@ pub fn fixed_layer(props: FixedLayerProps) -> Result<Box<dyn LayoutItem>, Layout
                                                 let __row_0 = __row_0.a11y_label(|| "Fixed bar");
                                                 FixedLayer::new(LayoutStyle::new().flex_column().justify_content(JustifyContent::END).align_items(AlignItems::CENTER).padding_all(24.0), children![__row_0])?
                                             };
-                                            Ok(box_item(__layer_0))
-                                        } else {
-                                            Ok(box_item(Container::column(children![])?))
+                                            __children.push(box_item(__layer_0));
                                         }
+                                        Ok(__children)
                                     }
-                                    },
-                                    0.0,
-                                )?;
-                                __children.push(box_item(__node_4));
+                                    };
+                                let __node_4_source =
+                                    {
+                                        let shown = shown.clone();
+move || vec![shown.get()]
+                                    };
+                                if reads_state(&__node_4_source).1 {
+                                    let __node_4 = ReactiveList::new(
+                                        __node_4_source,
+                                        |__truth: &bool| *__truth,
+                                        move |_| branch_cell(LayoutStyle::new().flex_column(), __node_4_build()?),
+                                        0.0,
+                                    )?;
+                                    __children.push(box_item(__node_4));
+                                } else {
+                                    __children.extend(__node_4_build()?);
+                                }
                                 Ok(__children)
                             }
                             }

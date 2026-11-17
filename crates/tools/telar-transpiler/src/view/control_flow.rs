@@ -162,10 +162,14 @@ impl ViewGen<'_> {
         let (raw, closure, key) = match source {
             RegionSource::Truth(condition) => (
                 condition,
-                format!("move || vec![{condition}]"),
+                format!(
+                    "move || vec![{}]",
+                    substitute_reads(condition, self.theme_access)
+                ),
                 "|__truth: &bool| *__truth",
             ),
             RegionSource::Runs { raw, read } => {
+                let read = substitute_reads(&read, self.theme_access);
                 // A borrow moves nothing, so only an `if let` reading its bindings by value needs its own copies.
                 let reclone = if read.starts_with("&(") { "" } else { RECLONE };
                 (
@@ -196,7 +200,11 @@ impl ViewGen<'_> {
         let pad = self.indent_str();
         let cond = block.condition.trim();
         let marker = expr_marker(block.condition_start, cond.len());
-        let _ = writeln!(code, "{pad}if {marker}{cond} {{");
+        let read = match cond.contains('$') {
+            true => substitute_reads(cond, self.theme_access),
+            false => format!("{marker}{cond}"),
+        };
+        let _ = writeln!(code, "{pad}if {read} {{");
         self.indent += 1;
         let bound = crate::rust::condition_bindings(cond).unwrap_or_default();
         self.with_bindings(bound, |g| {
@@ -328,95 +336,11 @@ impl ViewGen<'_> {
     }
 
     pub(super) fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {
-        if block.condition.contains('$') {
-            return self.emit_reactive_if(block);
-        }
         self.emit_followed_region(
             ViewNode::IfBlock(block.clone()),
             RegionSource::of_if(block),
             |g, code| g.emit_plain_if(block, code),
         )
-    }
-
-    /// A reactive `if $cond`, keyed on the condition boolean: the old branch's nodes are disposed and the new branch built when it flips. Inside a slot host it is a transparent fragment (the shown branch's nodes are real siblings inheriting the parent's flex direction); where a fragment cannot attach — a component's children recipe, a bare root, overlay/scroll — it is a single-item `ReactiveList` owning a node of its own.
-    fn emit_reactive_if(&mut self, block: &IfBlock) -> ChildEmit {
-        let boxed = !self.in_slot_host();
-        let var = self.next_variable_name("node");
-        let pad = self.indent_str();
-        let cond = block.condition.trim();
-        // A one-element `vec![<bool>]`: the element is both reconciliation key and branch selector.
-        let source = self.owning(
-            &[cond],
-            &format!(
-                "move || vec![{}]",
-                substitute_reads(cond, self.theme_access)
-            ),
-        );
-
-        let mut body = String::new();
-        let _ = writeln!(
-            body,
-            "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
-        );
-        self.indent += 2;
-        self.in_reactive(|g| g.emit_branch_returns(block, &mut body));
-        self.indent -= 2;
-        let _ = write!(body, "{pad}    }}");
-        let branches =
-            self.owning_subtree(&Self::branch_snippets(block), body, &format!("{pad}    "));
-
-        let opener = if boxed {
-            "ReactiveList::new("
-        } else {
-            "fragment("
-        };
-        let closer = self.boxed_list_closer(boxed);
-
-        let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = {opener}");
-        let _ = writeln!(code, "{pad}    {source},");
-        let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
-        let _ = writeln!(code, "{branches},");
-        let _ = writeln!(code, "{pad}    0.0,");
-        let _ = write!(code, "{pad}{closer}");
-        match boxed {
-            true => ChildEmit::Simple { name: var, code },
-            false => ChildEmit::Fragment { name: var, code },
-        }
-    }
-
-    /// Both branches of an `if` as the snippets the branch closure will read, and so what its clone prelude has to be computed from — each branch walked on its own, since the two are separate blocks. The condition is deliberately excluded: it lives in the source closure, which clones it separately.
-    fn branch_snippets(block: &IfBlock) -> Vec<ScopedSnippet> {
-        let mut snippets = scoped_snippets(&block.then_branch, &[]);
-        if let Some(else_branch) = &block.else_branch {
-            snippets.extend(scoped_snippets(else_branch, &[]));
-        }
-        snippets
-    }
-
-    /// Emits a reactive `if`'s branches as per-branch returns, each collapsed by [`Self::emit_content_cell`]. A missing `else` yields an empty column.
-    fn emit_branch_returns(&mut self, block: &IfBlock, code: &mut String) {
-        let pad = self.indent_str();
-        let _ = writeln!(code, "{pad}if __cond {{");
-        self.indent += 1;
-        let then_cell = self.emit_content_cell(&block.then_branch, code);
-        let ipad = self.indent_str();
-        let _ = writeln!(code, "{ipad}Ok(box_item({then_cell}))");
-        self.indent -= 1;
-        let _ = writeln!(code, "{pad}}} else {{");
-        self.indent += 1;
-        let ipad = self.indent_str();
-        match &block.else_branch {
-            Some(else_branch) => {
-                let else_cell = self.emit_content_cell(else_branch, code);
-                let _ = writeln!(code, "{ipad}Ok(box_item({else_cell}))");
-            }
-            None => {
-                let _ = writeln!(code, "{ipad}Ok(box_item(Container::column(children![])?))");
-            }
-        }
-        self.indent -= 1;
-        let _ = writeln!(code, "{pad}}}");
     }
 
     pub(super) fn emit_for(&mut self, block: &ForBlock) -> ChildEmit {

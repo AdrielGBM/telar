@@ -323,14 +323,14 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_23 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let show = show.clone(); move || show.toggle() })).build())?;
                                 __children.push(box_item(__node_23));
-                                let __node_24 = ReactiveList::new(
-                                    { let show = show.clone(); move || vec![show.get()] },
-                                    |__cond: &bool| *__cond,
+                                let __node_24_build =
                                     {
+                                        let show = show.clone();
                                         let theme = theme.clone();
                                         let count = count.clone();
-                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                        if __cond {
+                                    move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> { let show = ::core::clone::Clone::clone(&show); let theme = ::core::clone::Clone::clone(&theme); let count = ::core::clone::Clone::clone(&count); 
+                                        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                        if show.get() {
                                             let __row_3 = {
                                                 let __sbox_2 = {
                                                     StyledContainer::new(LayoutStyle::new().flex_column().width(8.0).height(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(4.0)) }, children![])?
@@ -345,7 +345,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                                 };
                                                 Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER).padding_vertical(4.0), children![__sbox_2, __text_7])?
                                             };
-                                            Ok(box_item(__row_3))
+                                            __children.push(box_item(__row_3));
                                         } else {
                                             let __text_8 = {
                                                 Text::declaring(
@@ -354,13 +354,27 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            Ok(box_item(__text_8))
+                                            __children.push(box_item(__text_8));
                                         }
+                                        Ok(__children)
                                     }
-                                    },
-                                    0.0,
-                                )?;
-                                __children.push(box_item(__node_24));
+                                    };
+                                let __node_24_source =
+                                    {
+                                        let show = show.clone();
+move || vec![show.get()]
+                                    };
+                                if reads_state(&__node_24_source).1 {
+                                    let __node_24 = ReactiveList::new(
+                                        __node_24_source,
+                                        |__truth: &bool| *__truth,
+                                        move |_| branch_cell(LayoutStyle::new().flex_column(), __node_24_build()?),
+                                        0.0,
+                                    )?;
+                                    __children.push(box_item(__node_24));
+                                } else {
+                                    __children.extend(__node_24_build()?);
+                                }
                                 Ok(__children)
                             }
                             }
@@ -619,14 +633,13 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_40));
-                    let __node_42 = ReactiveList::new(
-                        { let show_modal = show_modal.clone(); move || vec![show_modal.get()] },
-                        |__cond: &bool| *__cond,
+                    let __node_42_build =
                         {
                             let show_modal = show_modal.clone();
                             let theme = theme.clone();
-                        move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                            if __cond {
+                        move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> { let show_modal = ::core::clone::Clone::clone(&show_modal); let theme = ::core::clone::Clone::clone(&theme); 
+                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                            if show_modal.get() {
                                 let __overlay_0 = {
                                     let __sbox_9 = {
                                         let __sbox_10 = {
@@ -651,15 +664,27 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     };
                                     Overlay::new(LayoutStyle::new().flex_column(), children![__sbox_9])?
                                 };
-                                Ok(box_item(__overlay_0))
-                            } else {
-                                Ok(box_item(Container::column(children![])?))
+                                __children.push(box_item(__overlay_0));
                             }
+                            Ok(__children)
                         }
-                        },
-                        0.0,
-                    )?;
-                    __children.push(box_item(__node_42));
+                        };
+                    let __node_42_source =
+                        {
+                            let show_modal = show_modal.clone();
+move || vec![show_modal.get()]
+                        };
+                    if reads_state(&__node_42_source).1 {
+                        let __node_42 = ReactiveList::new(
+                            __node_42_source,
+                            |__truth: &bool| *__truth,
+                            move |_| branch_cell(LayoutStyle::new().flex_column(), __node_42_build()?),
+                            0.0,
+                        )?;
+                        __children.push(box_item(__node_42));
+                    } else {
+                        __children.extend(__node_42_build()?);
+                    }
                     let __node_44 = code_line(CodeLineProps::props().code("if $open  >  overlay  >  box (scrim, on_press dismiss)  >  box (dialog)").build())?;
                     __children.push(box_item(__node_44));
                     Ok(__children)

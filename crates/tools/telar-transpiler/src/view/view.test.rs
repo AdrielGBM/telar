@@ -806,24 +806,27 @@ fn static_for_stays_construction_loop() {
 }
 
 #[test]
-fn reactive_if_emits_reactive_list() {
+fn reactive_if_is_a_region_of_branches() {
     let src = "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"yes\"\n    else\n        text \"no\"\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
     assert!(
-        code.contains("fragment(") && !code.contains("ReactiveList"),
-        "a reactive if in a container should be a transparent fragment:\n{code}"
+        code.contains("fragment_branches(") && !code.contains("ReactiveList"),
+        "a reactive if in a container is a transparent fragment of its branches:\n{code}"
     );
     assert!(
         code.contains("move || vec![show.get()]"),
         "condition read as source:\n{code}"
     );
     assert!(
-        code.contains("|__cond: &bool| *__cond"),
+        code.contains("|__truth: &bool| *__truth"),
         "bool key:\n{code}"
     );
-    assert!(code.contains("if __cond"), "branch selector:\n{code}");
+    assert!(
+        code.contains("if show.get() {"),
+        "the branch as written:\n{code}"
+    );
 }
 
 #[test]

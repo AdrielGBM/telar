@@ -507,10 +507,8 @@ impl<'a> ViewGen<'a> {
     /// Generates the full view body and returns the final `Ok(Box::new(...))` expression.
     pub fn generate_root(&mut self, nodes: &[ViewNode]) -> String {
         self.reads = ViewReads::of(nodes, &self.locals, self.theme_access);
-        // Returned directly so the branch is the component root: an injected column would trap a `row align:stretch` at content height. A reactive condition keeps the fragment-swap path below.
-        if let [ViewNode::IfBlock(block)] = nodes
-            && !block.condition.contains('$')
-        {
+        // Returned directly so the branch is the component root: an injected column would trap a `row align:stretch` at content height.
+        if let [ViewNode::IfBlock(block)] = nodes {
             let src0 = block.line.saturating_sub(1);
             let root = self.emit_followed_root(block);
             return format!("{SRC_PUSH}{src0}\n{root}\n{SRC_POP}");

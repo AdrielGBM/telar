@@ -123,21 +123,35 @@ pub fn background(props: BackgroundProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                         )?
                                     };
                                     __slots.push(ChildSlot::stat(box_item(__text_0)));
-                                    let __node_3 = fragment(
-                                        { let busy = busy.clone(); move || vec![busy.get()] },
-                                        |__cond: &bool| *__cond,
-                                        move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                            if __cond {
+                                    let __node_3_build =
+                                        {
+                                            let busy = busy.clone();
+                                        move || -> Result<Vec<ChildSlot>, LayoutError> { let busy = ::core::clone::Clone::clone(&busy); 
+                                            let mut __slots: Vec<ChildSlot> = Vec::new();
+                                            if busy.get() {
                                                 let __node_4 = spinner(SpinnerProps::props().build())?;
                                                 let __node_4 = __node_4.a11y_label(|| "Computing");
-                                                Ok(box_item(__node_4))
-                                            } else {
-                                                Ok(box_item(Container::column(children![])?))
+                                                __slots.push(ChildSlot::stat(box_item(__node_4)));
                                             }
-                                        },
-                                        0.0,
-                                    );
-                                    __slots.push(__node_3);
+                                            Ok(__slots)
+                                        }
+                                        };
+                                    let __node_3_source =
+                                        {
+                                            let busy = busy.clone();
+move || vec![busy.get()]
+                                        };
+                                    if reads_state(&__node_3_source).1 {
+                                        let __node_3 = fragment_branches(
+                                            __node_3_source,
+                                            |__truth: &bool| *__truth,
+                                            move |_| __node_3_build(),
+                                            0.0,
+                                        );
+                                        __slots.push(__node_3);
+                                    } else {
+                                        __slots.extend(__node_3_build()?);
+                                    }
                                     Container::from_slots(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), __slots)?
                                 };
                                 __children.push(box_item(__row_0));
@@ -200,21 +214,35 @@ pub fn background(props: BackgroundProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     __slots.push(ChildSlot::stat(box_item(__node_10)));
                                     let __node_11 = button(ButtonProps::props().label("Cancel").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().danger }).on_press(std::rc::Rc::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build())?;
                                     __slots.push(ChildSlot::stat(box_item(__node_11)));
-                                    let __node_12 = fragment(
-                                        { let scanning = scanning.clone(); move || vec![scanning.get()] },
-                                        |__cond: &bool| *__cond,
-                                        move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                            if __cond {
+                                    let __node_12_build =
+                                        {
+                                            let scanning = scanning.clone();
+                                        move || -> Result<Vec<ChildSlot>, LayoutError> { let scanning = ::core::clone::Clone::clone(&scanning); 
+                                            let mut __slots: Vec<ChildSlot> = Vec::new();
+                                            if scanning.get() {
                                                 let __node_13 = spinner(SpinnerProps::props().build())?;
                                                 let __node_13 = __node_13.a11y_label(|| "Scanning");
-                                                Ok(box_item(__node_13))
-                                            } else {
-                                                Ok(box_item(Container::column(children![])?))
+                                                __slots.push(ChildSlot::stat(box_item(__node_13)));
                                             }
-                                        },
-                                        0.0,
-                                    );
-                                    __slots.push(__node_12);
+                                            Ok(__slots)
+                                        }
+                                        };
+                                    let __node_12_source =
+                                        {
+                                            let scanning = scanning.clone();
+move || vec![scanning.get()]
+                                        };
+                                    if reads_state(&__node_12_source).1 {
+                                        let __node_12 = fragment_branches(
+                                            __node_12_source,
+                                            |__truth: &bool| *__truth,
+                                            move |_| __node_12_build(),
+                                            0.0,
+                                        );
+                                        __slots.push(__node_12);
+                                    } else {
+                                        __slots.extend(__node_12_build()?);
+                                    }
                                     Container::from_slots(LayoutStyle::new().flex_row().gap(10.0), __slots)?
                                 };
                                 __children.push(box_item(__row_3));
