@@ -92,14 +92,14 @@ pub fn component_at_range(source: &str, line: u32, character: u32) -> Option<Ran
     Some(name_range(line, line_text, lead, token.len()))
 }
 
-/// A signal a `$name` can read: file-scoped when declared in `[logic]`, local to one preview when declared by that preview's `args(…)`.
+/// A signal a `$name` can read or a bare `name` can hand over: file-scoped when declared in `[logic]`, local to one preview when declared by that preview's `args(…)`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signal {
     pub name: String,
     preview: Option<usize>,
 }
 
-/// The signal under the cursor: a `$name` in `[view]` or a preview body, a `name` in `[logic]` declared as a signal/memo, or an `args(…)` name in a preview header. An arg shadows a `[logic]` signal of the same name inside its own preview.
+/// The signal under the cursor: a `$name` read or a bare `name` handle in `[view]` or a preview body, a `name` in `[logic]` declared as a signal/memo, or an `args(…)` name in a preview header. An arg shadows a `[logic]` signal of the same name inside its own preview.
 ///
 /// NOTE: the `[logic]` side is a whole-word scan, not a rust-analyzer-precise resolve — robust for the usual distinct signal names, but it would also touch a same-named local in `[logic]`.
 pub fn signal_at(source: &str, line: u32, character: u32) -> Option<Signal> {
@@ -109,10 +109,10 @@ pub fn signal_at(source: &str, line: u32, character: u32) -> Option<Signal> {
     match find_section_at(source, line) {
         Section::View => {
             let cursor = utf16_to_byte(line_text, character);
-            let name = dollar_idents(line_text)
+            let name = signal_mentions(line_text)
                 .into_iter()
-                .find(|(pos, n)| cursor >= *pos && cursor <= *pos + 1 + n.len())
-                .map(|(_, n)| n)?;
+                .find(|mention| mention.covers(cursor))
+                .map(|mention| mention.name)?;
             resolve_read(source, scope, name)
         }
         Section::Logic => {
@@ -133,7 +133,7 @@ pub fn signal_at(source: &str, line: u32, character: u32) -> Option<Signal> {
     }
 }
 
-/// Every occurrence of `signal`. A `[logic]` signal: whole-word in `[logic]` (declaration + uses) and `$name` in `[view]` and the preview bodies that do not declare an arg of that name. An arg: its name in the header and `$name` in that preview's body. Ranges cover the name, past the `$`.
+/// Every occurrence of `signal`. A `[logic]` signal: whole-word in `[logic]` (declaration + uses) and `$name` or bare `name` in `[view]` and the preview bodies that do not declare an arg of that name. An arg: its name in the header and `$name` or bare `name` in that preview's body. Ranges cover the name, past the `$`.
 pub fn signal_occurrences(source: &str, signal: &Signal) -> Vec<Range> {
     let scopes = preview_scopes(source);
     let name = signal.name.as_str();
@@ -148,9 +148,9 @@ pub fn signal_occurrences(source: &str, signal: &Signal) -> Vec<Range> {
                 }
             }
             Section::View if reads_signal(source, scope, signal) => {
-                for (pos, n) in dollar_idents(line) {
-                    if n == name {
-                        out.push(name_range(li, line, pos + 1, name.len()));
+                for mention in signal_mentions(line) {
+                    if mention.name == name {
+                        out.push(name_range(li, line, mention.name_start, name.len()));
                     }
                 }
             }
@@ -173,10 +173,10 @@ pub fn signal_occurrence_at(source: &str, line: u32, character: u32) -> Option<R
     match find_section_at(source, line) {
         Section::View => {
             let cursor = utf16_to_byte(line_text, character);
-            dollar_idents(line_text)
+            signal_mentions(line_text)
                 .into_iter()
-                .find(|(pos, n)| cursor >= *pos && cursor <= *pos + 1 + n.len())
-                .map(|(pos, n)| name_range(line, line_text, pos + 1, n.len()))
+                .find(|mention| mention.covers(cursor))
+                .map(|mention| name_range(line, line_text, mention.name_start, mention.name.len()))
         }
         Section::Logic => {
             let (start, word) = ident_at(line_text, character)?;
@@ -246,7 +246,7 @@ fn resolve_read(source: &str, scope: Option<usize>, name: String) -> Option<Sign
     })
 }
 
-/// Whether a `$name` on a line of `scope` reads `signal`: the preview's own arg, or a `[logic]` signal no arg of that preview shadows.
+/// Whether a `$name` or bare `name` on a line of `scope` names `signal`: the preview's own arg, or a `[logic]` signal no arg of that preview shadows.
 fn reads_signal(source: &str, scope: Option<usize>, signal: &Signal) -> bool {
     match signal.preview {
         Some(header) => scope == Some(header),
@@ -276,27 +276,80 @@ fn is_declared_signal(source: &str, name: &str) -> bool {
     false
 }
 
-/// `(byte offset of `$`, ident)` for each `$ident` in `line`.
-fn dollar_idents(line: &str) -> Vec<(usize, String)> {
+/// A place in a view line that names a signal: a `$name` read or a bare `name` handle.
+struct Mention {
+    sigil_start: usize,
+    name_start: usize,
+    name: String,
+}
+
+impl Mention {
+    fn covers(&self, cursor: usize) -> bool {
+        cursor >= self.sigil_start && cursor <= self.name_start + self.name.len()
+    }
+}
+
+/// Every `$ident` and every bare identifier in `line` that can name a signal: not a path or field segment, an attribute key, the element or keyword opening the line, or text in a string.
+fn signal_mentions(line: &str) -> Vec<Mention> {
     let bytes = line.as_bytes();
+    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let first_token_end = line
+        .trim_start()
+        .find(char::is_whitespace)
+        .map_or(line.len(), |end| line.len() - line.trim_start().len() + end);
     let mut out = Vec::new();
+    let (mut in_str, mut depth, mut escaped) = (false, 0u32, false);
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'$' {
-            let start = i + 1;
-            let mut j = start;
-            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
-                j += 1;
+        let b = bytes[i];
+        if escaped {
+            escaped = false;
+        } else if in_str && b == b'\\' {
+            escaped = true;
+        } else if b == b'"' {
+            in_str = !in_str;
+            depth = 0;
+        } else if in_str && b == b'{' {
+            depth += 1;
+        } else if in_str && b == b'}' {
+            depth = depth.saturating_sub(1);
+        } else if (!in_str || depth > 0) && (b == b'$' || is_ident(b)) {
+            let sigil = b == b'$';
+            let start = if sigil { i + 1 } else { i };
+            let mut end = start;
+            while end < bytes.len() && is_ident(bytes[end]) {
+                end += 1;
             }
-            if j > start {
-                out.push((i, line[start..j].to_string()));
+            let word_ok = end > start
+                && (sigil || !bytes[start].is_ascii_digit())
+                && (sigil || bare_position_ok(bytes, start, end, first_token_end));
+            if word_ok {
+                out.push(Mention {
+                    sigil_start: i,
+                    name_start: start,
+                    name: line[start..end].to_string(),
+                });
             }
-            i = j.max(start);
-        } else {
-            i += 1;
+            i = end.max(i + 1);
+            continue;
         }
+        i += 1;
     }
     out
+}
+
+fn bare_position_ok(bytes: &[u8], start: usize, end: usize, first_token_end: usize) -> bool {
+    if end <= first_token_end {
+        return false;
+    }
+    let before = start.checked_sub(1).map(|at| bytes[at]);
+    if matches!(before, Some(b'.' | b'@' | b'#'))
+        || (before == Some(b':') && start >= 2 && bytes[start - 2] == b':')
+    {
+        return false;
+    }
+    let is_key = bytes.get(end) == Some(&b':') && bytes.get(end + 1) != Some(&b':');
+    !is_key
 }
 
 /// Byte spans of `name` as a whole word in `line` (boundaries are non-identifier characters).

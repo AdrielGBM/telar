@@ -82,7 +82,7 @@ fn describe(option: PreviewOption) -> (&'static str, &'static str) {
 }
 
 /// What `args(…)` does, shown where it is completed and hovered.
-pub const ARGS_DECL_DOC: &str = "Declares live, preview-scoped signals, read in the body as `$name`: `args(agree:false)`. Each gets a control in the workshop.";
+pub const ARGS_DECL_DOC: &str = "Declares live, preview-scoped signals, read in the body as `$name` or handed over as `name`: `args(agree:false)`. Each gets a control in the workshop.";
 
 /// What `values(…)` does, shown where it is completed and hovered.
 pub const VALUES_DECL_DOC: &str = "Declares preview-scoped values, read in the body bare, as `name`: `values(tone:Tone::Ink)`. Each gets a control in the workshop, and a change builds the preview again, so a prop that takes a plain value can take one.";

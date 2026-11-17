@@ -407,3 +407,14 @@ fn a_matrix_axis_named_after_an_axis_is_offered_its_words() {
         ["small", "regular", "large"]
     );
 }
+
+#[test]
+fn an_inline_matrix_skips_a_prop_handed_an_arg() {
+    let src = "[view]\ncol\n\n[preview \"A\" args(agree:false) matrix:()]\ncheckbox checked:agree label:\"Ok\"\n";
+    let doc = telar_parser::parse(src).unwrap();
+    let header = src.lines().nth(3).unwrap();
+    let items = matrix_axis_items(&doc, 3, header);
+    let mut expected: Vec<&str> = telar_project::MATRIX_GLOBAL_AXES.to_vec();
+    expected.extend(["agree", "label"]);
+    assert_eq!(labels(&items), expected);
+}

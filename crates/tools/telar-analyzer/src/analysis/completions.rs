@@ -516,6 +516,13 @@ pub fn matrix_axis_items(doc: &RsxDocument, line: u32, line_text: &str) -> Vec<C
         .into_iter()
         .filter(|token| token.kind == TokenKind::ArgName)
         .map(|token| line_text[token.start..token.start + token.len].to_string());
+    let arg_names: Vec<&str> = doc
+        .previews
+        .iter()
+        .find(|preview| preview.line == line as usize + 1)
+        .into_iter()
+        .flat_map(|preview| preview.args.iter().map(|arg| arg.name.as_str()))
+        .collect();
     let rendered = doc
         .previews
         .iter()
@@ -526,6 +533,7 @@ pub fn matrix_axis_items(doc: &RsxDocument, line: u32, line_text: &str) -> Vec<C
         .filter(|attr| {
             attr.key != telar_transpiler::SLOT_ATTR
                 && !attr.value.text().contains('$')
+                && !arg_names.contains(&attr.value.text().trim())
                 && !attr.value.is_closure()
         })
         .map(|attr| attr.key.clone());

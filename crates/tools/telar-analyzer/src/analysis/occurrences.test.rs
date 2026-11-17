@@ -97,3 +97,14 @@ fn a_read_of_an_undeclared_name_is_not_a_signal() {
     let src = "[preview \"A\" args(on:true)]\ncol\n    text \"{$nope}\"\n";
     assert_eq!(signal_at(src, 2, 14), None);
 }
+
+#[test]
+fn a_signal_counts_its_reads_and_its_bare_handles() {
+    let src = "[logic]\nlet agree = signal(false);\n[view]\ncol\n    checkbox checked:agree on_toggle:(|| agree.set(true))\n    text \"{$agree} agree\"\n    box agree:1 label.agree\n";
+    let signal = signal_at(src, 1, 5).unwrap();
+    let ranges = signal_occurrences(src, &signal);
+    assert_eq!(lines(&ranges), vec![1, 4, 4, 5]);
+    assert_eq!(ranges[1].start.character, 21);
+    assert_eq!(signal_at(src, 4, 22), Some(signal.clone()));
+    assert_eq!(signal_at(src, 6, 9), None);
+}
