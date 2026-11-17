@@ -46,7 +46,7 @@ pub struct Props {
     pub caps: KbdCaps,
     /// What the caps' colour says. `ink`, the default, is the ink of the place the chord sits in, so a cap reads in a menu row, on the page and in a dark tooltip alike; a named tone or a colour of the caller's marks a chord as more than a hint.
     #[props(into)]
-    pub tone: Tone = Tone::Ink,
+    pub tone: Reactive<Tone> = Reactive::Const(Tone::Ink),
     /// How the caps carry their colour.
     pub variant: Variant = Variant::Soft,
     /// Amends the paint of every cap — the chord's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`KbdTokens`] is the right instrument instead.

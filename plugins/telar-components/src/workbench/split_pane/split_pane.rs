@@ -4,6 +4,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
+    IntoReading,
     Accessible, BorderRadius, Children, Clip, ClippedItem, Container, Cursor, Direction, DragAxis,
     Insets, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NumericValue,
     Orientation, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension,
@@ -136,10 +137,10 @@ pub struct SplitRegion {
 }
 
 impl SplitRegion {
-    pub fn new(role: Role, label: impl Into<Reactive<String>>) -> Self {
+    pub fn new(role: Role, label: impl IntoReading<String>) -> Self {
         Self {
             role,
-            label: label.into(),
+            label: label.into_reading(),
         }
     }
 }

@@ -83,7 +83,7 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let pages = pages.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).panel(pages.clone()).build())?;
+                                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).__follow_items(move || vec!["Overview","Pricing","Team"]).__follow_panel({ let pages = pages.clone(); move || pages.clone() }).build())?;
                                 __children.push(box_item(__node_3));
                                 let __node_4 = {
                                     let __recipe_children = Children::new(
@@ -165,7 +165,7 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                         }
                                         }
                                     );
-                                    tab_panel(TabPanelProps::props().link(pages.clone()).children(__recipe_children).build())?
+                                    tab_panel(TabPanelProps::props().__follow_link({ let pages = pages.clone(); move || pages.clone() }).children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_4));
                                 Ok(__children)

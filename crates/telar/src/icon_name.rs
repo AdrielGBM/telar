@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use reactive_core::{Memo, Reactive, ReadSignal, RwSignal};
+use reactive_core::{IntoReading, Memo, Reactive, ReadSignal, RwSignal};
 use renderer_assets::SvgData;
 
 /// An icon, as a prop that names one is given it: an id baked ahead of time, or one left to resolve as the application runs.
@@ -65,19 +65,19 @@ impl From<Reactive<String>> for IconName {
 
 impl From<RwSignal<String>> for IconName {
     fn from(id: RwSignal<String>) -> Self {
-        Self::Named(id.into())
+        Self::Named(id.into_reading())
     }
 }
 
 impl From<ReadSignal<String>> for IconName {
     fn from(id: ReadSignal<String>) -> Self {
-        Self::Named(id.into())
+        Self::Named(id.into_reading())
     }
 }
 
 impl From<Memo<String>> for IconName {
     fn from(id: Memo<String>) -> Self {
-        Self::Named(id.into())
+        Self::Named(id.into_reading())
     }
 }
 

@@ -4,7 +4,6 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element, Value, ViewNode};
 
-use crate::registry::{Callee, ClosureFate};
 use crate::style::{format_f32, hex_to_color_expr};
 use telar_project::naming::to_pascal_case;
 use telar_project::{AssetContext, IdBaking};
@@ -122,17 +121,12 @@ impl ViewGen<'_> {
             .iter()
             .filter(|attr| class_list(&attr.value).is_none())
             .map(|attr| {
-                let value = self
-                    .baked_id_expr(tag, attr)
-                    .unwrap_or_else(|| self.component_attr_expr(attr));
-                let value = match args.iter().any(|arg| std::ptr::eq(*arg, *attr)) {
-                    true => format!(
-                        "::telar::__preview_arg!(__preview, {:?}, {value})",
-                        attr.key
-                    ),
-                    false => value,
+                let value = match self.baked_id_expr(tag, attr) {
+                    Some(baked) => PropValue::Given(baked),
+                    None => self.component_attr_value(attr),
                 };
-                format!(".{}({value})", attr.key)
+                let arg = args.iter().any(|arg| std::ptr::eq(*arg, *attr));
+                value.setter(&attr.key, arg)
             })
             .collect();
         setters.push_str(&self.surface_setters(el, props_attrs));
@@ -336,22 +330,23 @@ impl ViewGen<'_> {
         self.by_value(expr, written.clone()).unwrap_or(written)
     }
 
-    /// Converts a component attribute to a Rust expression:
-    /// - a quoted attr (`label:"text"`) becomes a string literal, and a `t"…"` key a catalog lookup;
+    /// Converts a component attribute to what its setter is handed:
+    /// - a quoted attr (`label:"text"`) becomes a string literal, a `t"…"` key a catalog lookup, and a string with `{…}` holes the closure formatting it;
     /// - a bare flag (`elevated`) or `true`/`false` becomes a `bool`;
     /// - a closure (`on_tap(|| $x += 1)`) becomes a boxed `move` closure with `$signal`s cloned in;
     /// - a lone `$signal` becomes the cloned handle (`count.clone()`);
     /// - numbers become `Int`/`Float`, a hex colour a `Color`;
     /// - a bare lowercase word no binding of the file is named (`size:small`) becomes that name in `telar::kw`, which is the value itself (`ControlSize::Small`);
-    /// - anything else (a path like `Variant::Ghost`, a Rust expression) is forwarded verbatim.
-    fn component_attr_expr(&self, attr: &Attr) -> String {
+    /// - a name (a binding, a `props` place, a path like `Variant::Ghost`) is handed over as it is;
+    /// - anything else is worked out by a closure handed to the prop's `__follow_` setter, so the prop's type decides whether it follows what the closure reads.
+    fn component_attr_value(&self, attr: &Attr) -> PropValue {
         let v = match &attr.value {
             Value::Quoted(text) => return self.quoted_prop(text, attr.value_start),
-            Value::Flag => return "true".to_string(),
+            Value::Flag => return PropValue::Given("true".to_string()),
             value => value.text().trim(),
         };
         if v == "true" || v == "false" {
-            return v.to_string();
+            return PropValue::Given(v.to_string());
         }
         // Boxed like `on_press`, so a `$`-free closure keeps its source span for LSP completion. The delimiting parens come off first: they are the value's delimiters, not part of the closure.
         let (v, delimiters) = match super::redundant_parens(v) {
@@ -359,123 +354,81 @@ impl ViewGen<'_> {
             None => (v, 0),
         };
         if v.starts_with('|') || v.starts_with("move |") {
-            return format!("std::rc::Rc::new({})", self.emit_closure_value(attr));
+            return PropValue::Given(format!(
+                "std::rc::Rc::new({})",
+                self.emit_closure_value(attr)
+            ));
         }
         // Pass the cloned handle so the caller's binding stays usable elsewhere.
         if let Some(rest) = v.strip_prefix('$')
             && !rest.is_empty()
             && rest.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
         {
-            return format!("{rest}.clone()");
+            return PropValue::Given(format!("{rest}.clone()"));
         }
         if v.starts_with('#') {
-            return hex_to_color_expr(v);
+            return PropValue::Colour(hex_to_color_expr(v));
         }
         // Handed over untyped, since only the prop knows whether `3` is a `u8` or an `f32`: see `telar::PropNumber`.
         if let Ok(n) = v.parse::<i64>() {
-            return format!("::telar::Int({n})");
+            return PropValue::Given(format!("::telar::Int({n})"));
         }
         if let Ok(n) = v.parse::<f32>() {
-            return format!("::telar::Float({})", format_f32(n));
+            return PropValue::Given(format!("::telar::Float({})", format_f32(n)));
         }
         // Includes the delimiting paren stripped above: `value_start` still points at it, so a span built from `v` would start one byte early and end one short.
         let lead = attr.value.text().len() - attr.value.text().trim_start().len() + delimiters;
         // Cloned only where the clone is load-bearing, since cloning would demand `Clone` of every forwarded binding — which a `Box<dyn Fn()>` prop can never satisfy.
         let written = format!("{}{v}", expr_marker(attr.value_start + lead, v.len()));
-        if let Some(taken) = self.by_value(v, written) {
-            return taken;
+        if let Some(taken) = self.by_value(v, written.clone()) {
+            return PropValue::Given(taken);
         }
         if self.is_vocabulary_word(v) {
-            return vocabulary_word(v, attr.value_start + lead);
+            return PropValue::Given(vocabulary_word(v, attr.value_start + lead));
         }
-        // A read has to be re-evaluated or it freezes at construction. A lone `$sig` took the arm above and stays a handle, which is what a two-way binding needs.
-        let evaluated_now = match self.evaluated_now(v) {
-            Ok(evaluated_now) => evaluated_now,
-            Err(message) => return format!("compile_error!({message:?})"),
+        if v.split("::").all(telar_project::is_plain_identifier) || crate::rust::is_const_expr(v) {
+            return PropValue::Given(written);
+        }
+        let read = match v.contains('$') {
+            true => substitute_reads(v, self.theme_access),
+            false => written,
         };
-        if evaluated_now.contains('$') {
-            return reads_state(&self.owning(
-                &[v],
-                &format!("move || {}", substitute_reads(v, self.theme_access)),
-            ));
-        }
-        // The same read written without the sigil: a hook read through, or a signal's `.get()`. A plain value stays one, evaluated once.
-        if self.reads_reactive_context(&evaluated_now) {
-            let marker = expr_marker(attr.value_start + lead, v.len());
-            return reads_state(&self.owning(&[v], &format!("move || {marker}{v}")));
-        }
-        // A closure the callee keeps (`Reactive::of(move || …)`) reads when it is called, not here: wrapping it again would nest a `Reactive` in a `Reactive`. It still needs its captures cloned in.
-        if v.contains('$') {
-            return self.owning(&[v], &substitute_reads(v, self.theme_access));
-        }
-        if self.reads_reactive_context(v) {
-            let marker = expr_marker(attr.value_start + lead, v.len());
-            return self.owning(&[v], &format!("{marker}{v}"));
-        }
-        // The delimiting parens are dropped here rather than at the call, so the span covers the expression and nothing wider.
-        match super::redundant_parens(v) {
-            Some(inner) => format!(
-                "{}{inner}",
-                expr_marker(attr.value_start + lead + 1, inner.len())
-            ),
-            None => format!("{}{v}", expr_marker(attr.value_start + lead, v.len())),
-        }
+        PropValue::Followed(self.owning(&[v], &format!("move || {read}")))
     }
-}
 
-impl ViewGen<'_> {
-    /// `value` with every closure its callee keeps blanked out, so what is left is what runs when the prop's value is had, the length unchanged so offsets still line up. A closure reading state that is handed to a callee whose behaviour is not fixed is the `Err` asking the markup to say which with `later(…)` or `now(…)`: guessed either way, it freezes silently or is rebuilt on every read.
-    fn evaluated_now(&self, value: &str) -> Result<String, String> {
-        let handed = crate::lexer::handed_closures(value);
-        let mut blanked = value.as_bytes().to_vec();
-        let mut kept: Vec<std::ops::Range<usize>> = Vec::new();
-        let mut unknown = Vec::new();
-        for closure in &handed {
-            if kept.iter().any(|k| k.contains(&closure.span.start)) {
-                continue;
-            }
-            match crate::registry::closure_fate(&closure.callee) {
-                ClosureFate::Kept => {
-                    blanked[closure.span.clone()].fill(b' ');
-                    kept.push(closure.span.clone());
-                }
-                ClosureFate::Now => {}
-                ClosureFate::Unknown => unknown.push(closure),
-            }
-        }
-        let blanked = String::from_utf8(blanked).unwrap_or_else(|_| value.to_string());
-        let ambiguous = unknown.into_iter().find(|closure| {
-            let body = &blanked[closure.span.clone()];
-            body.contains('$') || self.reads_reactive_context(body)
-        });
-        match ambiguous {
-            None => Ok(blanked),
-            Some(closure) => Err(unknown_closure_fate(value, closure)),
-        }
-    }
-}
-
-/// Why a closure reading state cannot be placed, written as the two spellings that would place it.
-fn unknown_closure_fate(value: &str, closure: &crate::lexer::HandedClosure) -> String {
-    let call = match &closure.callee {
-        Callee::Path(path) => path.clone(),
-        Callee::Method(name) => format!(".{name}"),
-    };
-    let head = value[closure.span.start..closure.body_start].trim_end();
-    format!(
-        "`{call}(…)` is handed a closure that reads state, and a `.rsx` cannot see whether it keeps the closure or calls it now: write `{call}(later({head} …))` if it keeps it to call later, so the prop is handed over as it is, or `{call}(now({head} …))` if it calls it on the spot, so the prop follows what it reads"
-    )
-}
-
-impl ViewGen<'_> {
-    /// A quoted prop, read as text: a string literal while it has no `{…}` hole, the string formatted once while its holes read nothing that moves, and re-formatted as it moves while one does.
-    fn quoted_prop(&self, text: &str, start: usize) -> String {
+    /// A quoted prop, read as text: a string literal while it has no `{…}` hole, and otherwise the closure formatting it, which the prop follows or takes once as its type says.
+    fn quoted_prop(&self, text: &str, start: usize) -> PropValue {
         match self.interpolation(text, start, false) {
-            super::interp::Interpolated::Literal(text) => format!("{text:?}"),
-            super::interp::Interpolated::Formatted { reactive: true, .. } => {
-                reads_state(&self.text_closure(text, start))
+            super::interp::Interpolated::Literal(text) => PropValue::Given(format!("{text:?}")),
+            super::interp::Interpolated::Formatted { .. } => {
+                PropValue::Followed(self.text_closure(text, start))
             }
-            super::interp::Interpolated::Formatted { format, .. } => format,
+        }
+    }
+}
+
+/// What a component call hands one of its props.
+enum PropValue {
+    /// A value that reads nothing as it is written, handed to the prop's setter.
+    Given(String),
+    /// A closure working the value out, handed to the prop's `__follow_` setter.
+    Followed(String),
+    /// A colour written as `#hex`: handed through the `__follow_` setter, since only that one converts it into what the prop holds (a colour into a `Tone`), except as a preview's arg, which its control sets as the colour it is.
+    Colour(String),
+}
+
+impl PropValue {
+    /// The setter call handing this value to the prop `key`, read through the preview's args when it is one.
+    fn setter(self, key: &str, arg: bool) -> String {
+        let read_arg =
+            |value: String| format!("::telar::__preview_arg!(__preview, {key:?}, {value})");
+        match (self, arg) {
+            (Self::Given(value) | Self::Colour(value), true) => {
+                format!(".{key}({})", read_arg(value))
+            }
+            (Self::Given(value), false) => format!(".{key}({value})"),
+            (Self::Followed(read), _) => format!(".__follow_{key}({read})"),
+            (Self::Colour(colour), false) => format!(".__follow_{key}(move || {colour})"),
         }
     }
 }
@@ -483,13 +436,6 @@ impl ViewGen<'_> {
 /// `word`, written at `start`, as the value of that name in `telar::kw`, its own text mapped back so a word no axis has is rustc's error on it.
 pub(crate) fn vocabulary_word(word: &str, start: usize) -> String {
     format!("::telar::kw::{}{word}", expr_marker(start, word.len()))
-}
-
-/// Wraps a closure that reads state, so the prop follows it instead of freezing at the value it happened to have when the tree was built.
-///
-/// **The regression this exists to prevent.** A theme read is an `RwSignal` read (`theme-core/src/context.rs`), so `fill:$theme.primary` handed over as a `Color` is the colour the theme had at construction and never moves again — `Reactive::Const` of a snapshot. The old emitter got this right by boxing every prop its `ComponentSig` table called reactive; without the table the rule comes from the value, which is the honest place for it: a `$` is a read wherever it is written.
-fn reads_state(closure: &str) -> String {
-    format!("Reactive::of({closure})")
 }
 
 impl ViewGen<'_> {

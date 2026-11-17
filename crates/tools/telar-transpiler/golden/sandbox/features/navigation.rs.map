@@ -309,15 +309,15 @@
 308	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1945..1978	3641	`vec!["Overview","Pricing","Team"]`
-1986..1999	3682	`pages.clone()`
-2029..2042	9884	`pages.clone()`
-2824..2828	13258	`open`
-3125..3158	15513	`|| { panes.push(Pane::Overview) }`
-3209..3241	15719	`|| { panes.push(Pane::Pricing) }`
-3289..3318	15921	`|| { panes.push(Pane::Team) }`
-3364..3369	16081	`ghost`
-3380..3403	16119	`|| { navigate_back(); }`
-3425..3432	16723	`address`
-3439..3444	16738	`depth`
-3532..3539	17439	`address`
+1945..1978	3658	`vec!["Overview","Pricing","Team"]`
+1986..1999	3745	`pages.clone()`
+2029..2042	9995	`pages.clone()`
+2824..2828	13371	`open`
+3125..3158	15626	`|| { panes.push(Pane::Overview) }`
+3209..3241	15832	`|| { panes.push(Pane::Pricing) }`
+3289..3318	16034	`|| { panes.push(Pane::Team) }`
+3364..3369	16194	`ghost`
+3380..3403	16232	`|| { navigate_back(); }`
+3425..3432	16836	`address`
+3439..3444	16851	`depth`
+3532..3539	17552	`address`

@@ -371,7 +371,8 @@ fn a_lookup_in_a_value_is_the_macro_spliced_verbatim() {
     )
     .unwrap();
     assert!(
-        out.rust_code.contains(".label(t!(\"btn.save\"))"),
+        out.rust_code
+            .contains(".__follow_label(move || t!(\"btn.save\"))"),
         "{}",
         out.rust_code
     );
@@ -504,9 +505,7 @@ fn generates_counter() {
     assert!(code.contains("button(ButtonProps::props()"), "{code}");
     assert!(code.contains(".label(\"Increment\")"), "{code}");
     assert!(
-        code.contains(
-            ".fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary }))"
-        ),
+        code.contains(".__follow_fill({ let theme = theme.clone(); move || theme.get().primary })"),
         "{code}"
     );
     assert!(code.contains("count.update(|n| *n += 1)"), "{code}");
@@ -3503,7 +3502,10 @@ fn a_literal_icon_id_given_to_a_component_that_carries_icons_is_baked() {
     let pair = format!(".icon((\"mdi:home\", crate::__rsx_assets::{name}.get(), false))");
     assert_eq!(code.matches(&pair).count(), 2, "{code}");
     assert!(code.contains(".icon(which.clone())"), "{code}");
-    assert!(code.contains(".icon(icon!(\"mdi:home\"))"), "{code}");
+    assert!(
+        code.contains(".__follow_icon(move || icon!(\"mdi:home\"))"),
+        "{code}"
+    );
     assert!(!code.contains("compile_error!"), "{code}");
     assert!(
         code.contains(".label(::telar::__preview_arg!(__preview, \"label\", \"Home\"))"),
@@ -3617,9 +3619,9 @@ fn a_bare_icon_name_resolved_at_run_time_still_needs_a_default_set() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A colour literal handed to a component prop arrives as a colour, so a prop whose type converts from one, as `tag`'s `tone` does, takes `tone:#ff8800`.
+/// A colour literal handed to a component prop goes through its `__follow_` setter, the one that converts it into what the prop holds, so `tag`'s `tone`, a `Reactive<Tone>`, takes `tone:#ff8800`.
 #[test]
-fn a_hex_colour_on_a_component_prop_arrives_as_a_colour() {
+fn a_hex_colour_on_a_component_prop_goes_through_its_follow_setter() {
     let code = crate::transpile_source(
         "[view]\ntag label:\"Brand\" tone:#ff8800\n",
         "demo",
@@ -3630,7 +3632,7 @@ fn a_hex_colour_on_a_component_prop_arrives_as_a_colour() {
     .rust_code;
     let call = code
         .lines()
-        .find(|line| line.contains(".tone("))
+        .find(|line| line.contains(".__follow_tone("))
         .unwrap_or_else(|| panic!("{code}"));
-    assert!(call.contains(".tone(Color::"), "{call}");
+    assert!(call.contains(".__follow_tone(move || Color::"), "{call}");
 }

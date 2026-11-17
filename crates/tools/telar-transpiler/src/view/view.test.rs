@@ -17,9 +17,8 @@ fn literal_content() {
 #[test]
 fn signal_interpolation() {
     let g = make_gen();
-    let super::interp::Interpolated::Formatted {
-        format, reactive, ..
-    } = g.interpolation("Count: {$count}", 0, false)
+    let super::interp::Interpolated::Formatted { format, .. } =
+        g.interpolation("Count: {$count}", 0, false)
     else {
         panic!("a hole formats");
     };
@@ -27,7 +26,6 @@ fn signal_interpolation() {
         format,
         r#"format!("Count: {}", /*@RSX@EXPR:9:5@*/count.get())"#
     );
-    assert!(reactive);
 }
 
 #[test]
@@ -705,7 +703,7 @@ fn a_keyless_reactive_for_row_reading_its_signal_by_get_still_follows_it() {
         .unwrap()
         .rust_code;
     assert!(
-        code.contains("Reactive::of({ let n = n.clone(); move || n.get().to_string() })"),
+        code.contains(".__follow_label({ let n = n.clone(); move || n.get().to_string() })"),
         "a `.get()` on the row's signal is a reactive read, as on any signal:\n{code}"
     );
 }
@@ -2029,17 +2027,20 @@ fn an_if_let_binding_is_copied_into_a_text() {
     );
 }
 
-/// A quoted prop reads as text does: a literal while it has no hole, formatted once while its holes read nothing that moves, and followed while one does.
+/// A quoted prop reads as text does: a literal while it has no hole, and otherwise the closure formatting it, which the prop follows or takes once as its type says.
 #[test]
 fn a_quoted_prop_interpolates() {
     let code = transpile_view(
         "[logic]\nlet name = String::from(\"Ada\");\nlet count = signal(1);\n[view]\ncol\n    button label:\"Plain {{braces}}\"\n    button label:\"Hi {name}\"\n    button label:\"Count {$count}\"\n",
     );
     assert!(code.contains(".label(\"Plain {braces}\")"), "{code}");
-    assert!(code.contains(".label(format!(\"Hi {}\", "), "{code}");
+    assert!(
+        code.contains(".__follow_label(move || format!(\"Hi {}\", name))"),
+        "{code}"
+    );
     assert!(
         code.contains(
-            ".label(Reactive::of({ let count = count.clone(); move || format!(\"Count {}\""
+            ".__follow_label({ let count = count.clone(); move || format!(\"Count {}\", count.get()) })"
         ),
         "{code}"
     );
@@ -2058,16 +2059,16 @@ fn a_constant_layout_value_is_static() {
     );
 }
 
-/// A prop read from a hook or a signal follows it as a `$` read does; a hook's handle passed on, and a plain value, are left as written.
+/// A prop read from a hook or a signal is handed over as the closure working it out, as anything worked out is, and the prop's type decides whether it follows it; a constant expression reads nothing and is handed over as it is.
 #[test]
 fn a_prop_reading_reactive_context_follows_it() {
     let code = transpile_view(
         "[logic]\nlet open = signal(false);\n[view]\ncol\n    button label:\"a\" color:(use_tokens().primary)\n    button label:\"b\" scroll:(use_primary_scroll())\n    button label:\"c\" disabled:(open.get())\n    button label:\"d\" width:(WIDTH * 2.0)\n",
     );
     for expected in [
-        ".color(Reactive::of(move || use_tokens().primary))",
-        ".scroll(use_primary_scroll())",
-        ".disabled(Reactive::of(move || open.get()))",
+        ".__follow_color(move || use_tokens().primary)",
+        ".__follow_scroll(move || use_primary_scroll())",
+        ".__follow_disabled(move || open.get())",
         ".width(WIDTH * 2.0)",
     ] {
         assert!(code.contains(expected), "`{expected}`:\n{code}");
@@ -2213,165 +2214,40 @@ fn prop_code(logic: &str, value: &str) -> String {
     code
 }
 
+/// A value worked out at the call is handed to the prop's `__follow_` setter as a closure, so the prop's own type decides: a `Reactive` prop follows what it read, any other takes it once.
 #[test]
-fn a_reactive_of_closure_reading_a_signal_is_not_wrapped_again() {
-    let code = prop_code(
-        "let sig = signal(0.0f32);",
-        "(Reactive::of(move || sig.get()))",
-    );
+fn a_worked_out_prop_is_handed_over_as_the_closure_working_it_out() {
+    let code = prop_code("let level = 2.0f32;", "(level * 2.0)");
     assert!(
-        code.contains("Reactive::of(move || sig.get())") && !code.contains("move || Reactive::of"),
-        "a closure the callee keeps reads later, so it must not be wrapped:\n{code}"
-    );
-    assert!(
-        !code.contains("let sig = sig.clone();"),
-        "the one reader of the binding takes it:\n{code}"
-    );
-}
-
-#[test]
-fn a_reactive_of_closure_reading_a_dollar_signal_is_not_wrapped_again() {
-    let code = prop_code("let s = signal(0.0f32);", "(Reactive::of(move || $s))");
-    assert!(
-        code.contains("Reactive::of(move || s.get())") && !code.contains("move || Reactive::of"),
+        code.contains(".__follow_value(move || level * 2.0)"),
         "{code}"
     );
-    assert!(code.contains("let s = s.clone();"), "{code}");
 }
 
+/// A reading built to be kept, `Reactive::of` or a helper keeping its closure, reads nothing while it is made, so the `__follow_` setter hands it over as it was made: nothing has to say who keeps what.
 #[test]
-fn an_unknown_helper_handed_a_closure_that_reads_asks_whether_it_keeps_it() {
-    for value in [
-        "(tweened(move || sig.get() * 2.0))",
-        "(tweened(move || $sig * 2.0))",
-    ] {
-        let code = prop_code("let sig = signal(0.0f32);", value);
+fn a_reading_built_to_be_kept_goes_through_the_same_setter() {
+    let code = prop_code(
+        "let sig = signal(0.0f32);",
+        "(Reactive::of(move || $sig * 2.0))",
+    );
+    assert!(
+        code.contains(".__follow_value(") && code.contains("Reactive::of(move || sig.get() * 2.0)"),
+        "{code}"
+    );
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+/// A name reads nothing as it is written, so it is handed to the prop's own setter: a binding, a `props` place, a path.
+#[test]
+fn a_name_is_handed_to_the_props_own_setter() {
+    for value in ["level", "Variant::Ghost"] {
+        let code = prop_code("let level = 2.0f32;", value);
         assert!(
-            code.contains(
-                "compile_error!(\"`tweened(…)` is handed a closure that reads state, and a `.rsx` cannot see whether it keeps the closure or calls it now: write `tweened(later(move || …))` if it keeps it to call later, so the prop is handed over as it is, or `tweened(now(move || …))` if it calls it on the spot, so the prop follows what it reads\")"
-            ),
+            code.contains(".value(") && !code.contains("__follow_value"),
             "{value}:\n{code}"
         );
     }
-}
-
-#[test]
-fn an_unknown_method_handed_a_closure_that_reads_asks_too() {
-    let code = prop_code(
-        "let sig = signal(0.0f32);",
-        "(motion.animate(|t| t * $sig))",
-    );
-    assert!(
-        code.contains("`.animate(…)` is handed a closure")
-            && code.contains("`.animate(later(|t| …))`"),
-        "{code}"
-    );
-}
-
-#[test]
-fn later_says_the_callee_keeps_the_closure_and_the_prop_is_not_wrapped() {
-    let code = prop_code(
-        "let sig = signal(0.0f32);",
-        "(tweened(later(move || $sig * 2.0)))",
-    );
-    assert!(
-        code.contains("tweened(later(move || sig.get() * 2.0))")
-            && !code.contains("Reactive::of(")
-            && !code.contains("compile_error!"),
-        "{code}"
-    );
-}
-
-#[test]
-fn now_says_the_callee_calls_the_closure_and_the_prop_is_wrapped() {
-    let code = prop_code(
-        "let sig = signal(0.0f32);",
-        "(tweened(now(move || $sig * 2.0)))",
-    );
-    assert!(
-        code.contains(
-            "Reactive::of({ let sig = sig.clone(); move || tweened(now(move || sig.get() * 2.0)) })"
-        ) && !code.contains("compile_error!"),
-        "{code}"
-    );
-}
-
-#[test]
-fn a_closure_reading_nothing_needs_no_answer() {
-    let code = prop_code("", "(tweened(|t| t * 2.0))");
-    assert!(
-        code.contains(".value(tweened(|t| t * 2.0))") && !code.contains("compile_error!"),
-        "{code}"
-    );
-}
-
-#[test]
-fn an_unknown_callee_inside_a_kept_closure_runs_later_and_needs_no_answer() {
-    let code = prop_code(
-        "let sig = signal(0.0f32);",
-        "(Reactive::of(move || tweened(move || $sig)))",
-    );
-    assert!(
-        !code.contains("compile_error!") && !code.contains("Reactive::of(move || Reactive::of"),
-        "{code}"
-    );
-}
-
-#[test]
-fn the_markers_are_written_as_is_in_a_preview_too() {
-    let src = "[logic]\nlet sig = signal(0.0f32);\n\n[view]\ncard value:(tweened(later(move || $sig)))\n\n[preview \"A\"]\ncard value:(tweened(now(move || 1.0)))\n";
-    let code = crate::transpile_source(src, "demo", None, None)
-        .unwrap()
-        .rust_code;
-    assert!(
-        code.contains("tweened(later(move || sig.get()))")
-            && code.contains("tweened(now(move || 1.0))")
-            && !code.contains("compile_error!"),
-        "{code}"
-    );
-}
-
-#[test]
-fn a_closure_run_by_std_on_the_spot_keeps_the_prop_reactive() {
-    let code = prop_code(
-        "let values = signal(0.0f32);",
-        "(std::array::from_fn(|i| $values[i]))",
-    );
-    assert!(code.contains("Reactive::of("), "{code}");
-}
-
-#[test]
-fn a_closure_boxed_or_shared_is_kept_for_later_and_not_wrapped() {
-    for callee in ["Rc::new", "Arc::new", "Box::new"] {
-        let code = prop_code(
-            "let x = signal(0.0f32);",
-            &format!("({callee}(move || $x))"),
-        );
-        assert!(
-            code.contains(&format!("{callee}(move || x.get())"))
-                && !code.contains("move || Rc")
-                && !code.contains("move || Arc")
-                && !code.contains("move || Box"),
-            "{code}"
-        );
-    }
-}
-
-#[test]
-fn a_closure_handed_to_a_method_is_a_read_at_the_call_site() {
-    let code = prop_code(
-        "let sig = signal(0.0f32);",
-        "(items.iter().map(|i| i + sig.get()).sum::<f32>())",
-    );
-    assert!(code.contains("Reactive::of("), "{code}");
-}
-
-#[test]
-fn a_direct_signal_read_in_a_prop_still_follows_the_signal() {
-    let code = prop_code("let sig = signal(0.0f32);", "(sig.get())");
-    assert!(code.contains("Reactive::of(move || sig.get())"), "{code}");
-    let code = prop_code("let sig = signal(0.0f32);", "$sig");
-    assert!(code.contains(".value(sig.clone())"), "{code}");
 }
 
 #[test]
@@ -2389,27 +2265,6 @@ fn a_turbofished_closure_keeping_callee_is_not_wrapped_again() {
         assert!(!code.contains("Reactive::of({"), "{callee}:\n{code}");
         assert!(code.contains("move || x.get()"), "{callee}:\n{code}");
     }
-}
-
-#[test]
-fn a_reactive_constructor_that_stores_its_closure_is_not_wrapped_again() {
-    for call in [
-        "memo(move || $x + 1.0)",
-        "derive(x, |v| v + 1.0)",
-        "derive_pair(x, x, |a, b| a + b)",
-    ] {
-        let code = prop_code("let x = signal(0.0f32);", &format!("({call})"));
-        assert!(
-            !code.contains("move || memo") && !code.contains("move || derive"),
-            "{call}:\n{code}"
-        );
-    }
-}
-
-#[test]
-fn a_method_named_like_a_keeper_is_not_one_and_asks() {
-    let code = prop_code("let x = signal(0.0f32);", "(table.memo(move || $x))");
-    assert!(code.contains("`.memo(…)` is handed a closure"), "{code}");
 }
 
 const SURFACE_PROPS: &str = "[logic]\npub struct Props {\n    #[props(some, default)]\n    pub style: Option<SurfaceAmendment>,\n}\n";

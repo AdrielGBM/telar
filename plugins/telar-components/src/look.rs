@@ -1,6 +1,6 @@
 //! [`Look`]: what a component's `tone` and `variant` paint, in every state, worked out once for every component that has both.
 
-use telar::{Color, RwSignal, Tone, Variant};
+use telar::{Color, Reactive, RwSignal, Tone, Variant};
 
 use crate::shared;
 
@@ -9,7 +9,7 @@ use crate::shared;
 /// Every colour is worked out from `around`, the ink of the place the component sits in, which [`Tone::Ink`] is.
 #[derive(Clone)]
 pub(crate) struct Look {
-    pub tone: Tone,
+    pub tone: Reactive<Tone>,
     pub variant: Variant,
     /// A toggle's state: off draws a neutral frame instead of the tone. `None` is always on.
     pub selected: Option<RwSignal<bool>>,
@@ -19,7 +19,7 @@ pub(crate) struct Look {
 
 impl Look {
     /// A component that only shows its tone: no toggle, nothing the pointer operates.
-    pub fn shown(tone: Tone, variant: Variant) -> Self {
+    pub fn shown(tone: Reactive<Tone>, variant: Variant) -> Self {
         Self {
             tone,
             variant,
@@ -29,7 +29,7 @@ impl Look {
     }
 
     fn hue(&self, around: Color) -> Color {
-        self.tone.color(around)
+        self.tone.get().color(around)
     }
 
     fn lit(&self) -> bool {
@@ -88,7 +88,7 @@ impl Look {
     pub fn ink(&self, around: Color) -> Color {
         let surface = shared::surface();
         let rest = self.fill(around).over(surface);
-        let wanted = match (self.lit(), self.variant, &self.tone) {
+        let wanted = match (self.lit(), self.variant, self.tone.get()) {
             (true, Variant::Solid, _) => {
                 return shared::readable_on(shared::ink_on(rest), rest);
             }

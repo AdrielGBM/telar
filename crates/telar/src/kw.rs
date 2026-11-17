@@ -66,7 +66,7 @@ mod args {
 
         fn to_arg_value(&self) -> ArgValue {
             match self {
-                Tone::Color(color) => ArgValue::Color(color.get()),
+                Tone::Color(color) => ArgValue::Color(*color),
                 named => ArgValue::Choice(named.word().unwrap_or_default().to_string()),
             }
         }

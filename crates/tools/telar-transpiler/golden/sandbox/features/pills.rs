@@ -46,7 +46,7 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __node_3 = tag(TagProps::props().label("12").build())?;
                                     let __node_4 = tag(TagProps::props().label("NEW").tone(::telar::kw::success).variant(::telar::kw::soft).build())?;
-                                    let __node_5 = tag(TagProps::props().label("BETA").tone(Reactive::of({ let theme = theme.clone(); move || theme.get().purple })).variant(::telar::kw::outline).build())?;
+                                    let __node_5 = tag(TagProps::props().label("BETA").__follow_tone({ let theme = theme.clone(); move || theme.get().purple }).variant(::telar::kw::outline).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__text_0, __node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));

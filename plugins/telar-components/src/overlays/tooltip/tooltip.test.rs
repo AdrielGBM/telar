@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::find_text;
 use telar::testing::moved;
-use telar::{
+use telar::{IntoReading, 
     AvailableSpace, ComponentList, DrawCommand, LineHeight, compute_layout, new_container,
     relayout_if_dirty,
 };
@@ -681,7 +681,7 @@ fn hovered(
         .text("Move")
         .children(trigger())
         .build();
-    props.color = color.map(Into::into);
+    props.color = color.map(IntoReading::into_reading);
     props.style = style;
     let mut tree = telar::testing::scoped(|| {
         let tooltip = tooltip(props).unwrap();

@@ -657,7 +657,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_39 = button(ButtonProps::props().label(t!("nav.overview")).variant(::telar::kw::ghost).build())?;
+                                    let __node_39 = button(ButtonProps::props().__follow_label(move || t!("nav.overview")).variant(::telar::kw::ghost).build())?;
                                     let __text_37 = {
                                         Text::declaring(
                                             move || format!("{}", t!("greeting", name = "Ada")),

@@ -18,7 +18,7 @@ mod timer;
 
 pub use effect::{effect, reads_state, untrack};
 pub use memo::{Memo, memo};
-pub use reactive::Reactive;
+pub use reactive::{IntoReading, Reactive};
 pub use reactive_local::{
     SurfaceSlot, detached, dropless_thread_local, released_static, surface_local,
 };

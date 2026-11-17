@@ -3,6 +3,7 @@
 use std::rc::Rc;
 
 use telar::{
+    IntoReading,
     Accessible, AlignItems, BorderRadius, Children, Color, Container, IconName, JustifyContent,
     KeySequence, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Props, Reactive,
     Rect, RectStyle, RovingAxis, RovingGroup, RwSignal, ShapeStyle, StyledContainer,
@@ -101,10 +102,10 @@ pub struct Tab<T> {
 
 impl<T> Tab<T> {
     /// A tab selecting `value`, named `label`; a reactive label follows the language or whatever else it reads.
-    pub fn new(value: T, label: impl Into<Reactive<String>>) -> Self {
+    pub fn new(value: T, label: impl IntoReading<String>) -> Self {
         Self {
             value,
-            label: label.into(),
+            label: label.into_reading(),
             trailing: Children::default(),
             icon: None,
             shortcut: None,

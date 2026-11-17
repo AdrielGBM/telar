@@ -59,7 +59,7 @@ pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
                 let theme = theme.clone();
             move || {
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_1 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                let __node_1 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(28)).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).build())?;
                 __children.push(box_item(__node_1));
                 Ok(__children)
             }

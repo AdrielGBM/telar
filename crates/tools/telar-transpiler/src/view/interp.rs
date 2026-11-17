@@ -15,8 +15,6 @@ pub(super) enum Interpolated {
         format: String,
         /// One `let` per capture a closure around `format` must copy in rather than consume.
         clones: Vec<String>,
-        /// Whether a hole reads state, so a value built from it has to be re-read to follow it.
-        reactive: bool,
     },
 }
 
@@ -73,9 +71,6 @@ impl ViewGen<'_> {
         if holes.is_empty() {
             return Interpolated::Literal(literal);
         }
-        let reactive = holes
-            .iter()
-            .any(|hole| hole.contains('$') || self.reads_reactive_context(hole));
         if capturing {
             let scoped = super::signals::unscoped(&holes);
             clones.extend(
@@ -87,7 +82,6 @@ impl ViewGen<'_> {
         Interpolated::Formatted {
             format: format!("format!({fmt:?}, {})", args.join(", ")),
             clones,
-            reactive,
         }
     }
 
@@ -121,36 +115,6 @@ impl ViewGen<'_> {
             false => rewritten,
         };
         format_arg(body)
-    }
-
-    /// Whether `expr` reads reactive state without a `$` saying so: a `use_…()` hook read through (`use_workbench_tokens().border`), or a `[logic]` signal read with `.get()` or `.with(…)`. Passing a hook's or a signal's handle on is not a read; the handle is what the callee follows.
-    pub(super) fn reads_reactive_context(&self, expr: &str) -> bool {
-        let bytes = expr.as_bytes();
-        let follows = |at: usize, len: usize, rest: &[&str]| {
-            let after = expr[at + len..].trim_start();
-            rest.iter().any(|r| after.starts_with(r))
-        };
-        let hook_read = (0..bytes.len()).any(|at| {
-            expr[at..].starts_with("use_")
-                && (at == 0 || !telar_project::naming::is_ident_byte(bytes[at - 1]))
-                && {
-                    let name_len = expr[at..]
-                        .bytes()
-                        .take_while(|b| telar_project::naming::is_ident_byte(*b))
-                        .count();
-                    let after = expr[at + name_len..].trim_start();
-                    let after = match after.strip_prefix("::<") {
-                        Some(generic) => generic.find('>').map_or("", |end| &generic[end + 1..]),
-                        None => after,
-                    };
-                    after.starts_with('(') && closes_into_read(after)
-                }
-        });
-        hook_read
-            || self.signals.iter().any(|signal| {
-                crate::lexer::ident_positions(expr, signal)
-                    .any(|at| follows(at, signal.len(), &[".get(", ".with("]))
-            })
     }
 
     /// The runtime catalog-lookup expression for an i18n key written in markup (`t"key"`). Reads the active locale reactively, so wrapping it in a `move ||` content/label closure makes the widget live-switch on a language change. Markup keys take no arguments (parameterized strings use the Rust `t!` macro).
@@ -232,24 +196,6 @@ impl ViewGen<'_> {
         }
         v.to_string()
     }
-}
-
-fn closes_into_read(call: &str) -> bool {
-    let mut depth = 0i32;
-    for (i, c) in call.char_indices() {
-        match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => {
-                depth -= 1;
-                if depth == 0 {
-                    let rest = call[i + 1..].trim_start();
-                    return rest.starts_with('.') && !rest.starts_with("..");
-                }
-            }
-            _ => {}
-        }
-    }
-    false
 }
 
 impl ViewGen<'_> {

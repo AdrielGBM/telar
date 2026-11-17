@@ -12,9 +12,9 @@ pub(crate) mod selection;
 pub(crate) mod type_ahead;
 
 use telar::{
-    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Color, Container, KeySequence,
-    LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect, RectStyle,
-    StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
+    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Color, Container, IntoReading,
+    KeySequence, LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect,
+    RectStyle, StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
     use_theme_tokens,
 };
 
@@ -335,13 +335,13 @@ pub(crate) fn captioned(
     size: ControlSize,
     control: Box<dyn LayoutItem>,
     label: Reactive<String>,
-    width: impl Into<Reactive<f32>>,
+    width: impl IntoReading<f32>,
     required: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     if label.get().is_empty() {
         return Ok(box_item(control));
     }
-    let width = width.into();
+    let width = width.into_reading();
     let caption = Text::declaring(
         move || label.get(),
         LayoutStyle::new(),

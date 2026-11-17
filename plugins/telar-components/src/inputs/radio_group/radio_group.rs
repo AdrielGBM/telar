@@ -128,7 +128,7 @@ pub fn radio_group(props: RadioGroupProps) -> Result<Box<dyn LayoutItem>, Layout
             let radio = shared::labelled_control(
                 size,
                 ring.build()?,
-                Reactive::from(name),
+                Reactive::Const(name.to_string()),
                 Role::Radio,
                 move || selected.get() == Some(at),
                 move || choose(at),

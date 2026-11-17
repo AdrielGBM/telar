@@ -155,5 +155,5 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1024..1029	2812	`agree`
 1329..1335	5082	`notify`
-1594..1624	7013	`vec!["Small","Medium","Large"]`
-1668..1674	7379	`choice`
+1594..1624	7030	`vec!["Small","Medium","Large"]`
+1668..1674	7396	`choice`

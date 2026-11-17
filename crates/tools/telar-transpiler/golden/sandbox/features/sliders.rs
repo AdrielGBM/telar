@@ -38,7 +38,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = slider(SliderProps::props().value(volume.clone()).range(0.0..=100.0).step(::telar::Int(1)).width(::telar::Int(260)).build())?;
+                                let __node_3 = slider(SliderProps::props().value(volume.clone()).__follow_range(move || 0.0..=100.0).step(::telar::Int(1)).width(::telar::Int(260)).build())?;
                                 let __node_3 = __node_3.a11y_label(|| "Volume");
                                 __children.push(box_item(__node_3));
                                 let __text_0 = {
@@ -79,7 +79,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_7 = slider(SliderProps::props().value(temp.clone()).range(60.0..=80.0).step(::telar::Int(5)).label("Temperature").width(::telar::Int(260)).build())?;
+                                let __node_7 = slider(SliderProps::props().value(temp.clone()).__follow_range(move || 60.0..=80.0).step(::telar::Int(5)).label("Temperature").width(::telar::Int(260)).build())?;
                                 __children.push(box_item(__node_7));
                                 let __text_1 = {
                                     let temp = temp.clone();

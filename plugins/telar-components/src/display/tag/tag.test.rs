@@ -554,12 +554,30 @@ fn a_colour_is_a_tone_of_its_own() {
     let (tree, _) = mounted(
         TagProps::props()
             .label("Beta")
-            .tone(violet)
+            .tone(Tone::from(violet))
             .variant(Variant::Solid)
             .build(),
     );
     assert_eq!(solid(first_painted(&tree).fill), violet);
     assert!(contrast(&tree) >= 4.5);
+}
+
+/// A colour worked out from state, as `tone:$theme.brand` is, re-colours the tag when that state changes.
+#[test]
+fn a_colour_read_from_state_is_followed() {
+    let violet = Color::rgba(0.4, 0.2, 0.7, 1.0);
+    let teal = Color::rgba(0.1, 0.5, 0.5, 1.0);
+    let brand = telar::signal(violet);
+    let (tree, _) = mounted(
+        TagProps::props()
+            .label("Beta")
+            .__follow_tone(move || brand.get())
+            .variant(Variant::Solid)
+            .build(),
+    );
+    assert_eq!(solid(first_painted(&tree).fill), violet);
+    brand.set(teal);
+    assert_eq!(solid(first_painted(&tree).fill), teal);
 }
 
 /// A caller's colour is worked out as a named tone is, in every variant and every state of a filter.
@@ -582,7 +600,7 @@ fn a_colour_tone_derives_every_state_and_a_legible_ink() {
             let [rest, hovered, pressed] = part_paint(
                 TagProps::props()
                     .label("Tag")
-                    .tone(pale)
+                    .tone(Tone::from(pale))
                     .variant(variant)
                     .selected(telar::signal(true))
                     .build(),
@@ -603,7 +621,7 @@ fn a_transparent_tone_paints_nothing_and_keeps_its_label_legible() {
             TagProps::props()
                 .label("Beta")
                 .variant(variant)
-                .tone(Color::TRANSPARENT)
+                .tone(Tone::from(Color::TRANSPARENT))
                 .build(),
         );
         let painted = first_painted(&tree);
@@ -620,7 +638,7 @@ fn every_tone_and_variant_reads_at_4_5_to_1_in_light_and_dark_in_every_state() {
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
         for tone in TONES {
             for variant in VARIANTS {
-                for (does, props) in behaviours(tone.clone(), variant) {
+                for (does, props) in behaviours(tone, variant) {
                     in_scheme(scheme);
                     let (ink, grounds) = ink_and_grounds(props);
                     for (state, ground) in ["rest", "hovered", "pressed"].iter().zip(grounds) {
@@ -640,12 +658,7 @@ fn every_tone_and_variant_reads_at_4_5_to_1_in_light_and_dark_in_every_state() {
 
 /// A tag of `tone` and `variant` as each behaviour makes it: static, a filter on and off, one with an action.
 fn behaviours(tone: Tone, variant: Variant) -> Vec<(&'static str, TagProps)> {
-    let tag = || {
-        TagProps::props()
-            .label("Tag")
-            .tone(tone.clone())
-            .variant(variant)
-    };
+    let tag = || TagProps::props().label("Tag").tone(tone).variant(variant);
     vec![
         ("static", tag().build()),
         ("filter on", tag().selected(telar::signal(true)).build()),
@@ -823,7 +836,10 @@ fn a_spinner_leading_a_tag_turns() {
 #[test]
 fn solid_is_the_default_variant_and_accent_the_default_tone() {
     let props = TagProps::props().build();
-    assert_eq!((props.variant, props.tone), (Variant::Solid, Tone::Accent));
+    assert_eq!(
+        (props.variant, props.tone.get()),
+        (Variant::Solid, Tone::Accent)
+    );
 }
 
 /// The tag places the caller's control whole: as large a pointer target as it brings, beside a toggle as well.

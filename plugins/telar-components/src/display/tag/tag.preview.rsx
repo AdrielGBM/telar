@@ -18,7 +18,7 @@ row gap:(metrics::gap_md(ControlSize::Regular))
     tag label:"Export failed" tone:danger variant:variant
     tag label:"Beta" tone:info variant:variant
 
-[preview "Custom colour" values(brand:Color::rgb(0.49, 0.23, 0.93)) matrix:themes]
+[preview "Custom colour" values(brand:Tone::Color(Color::rgb(0.49, 0.23, 0.93))) matrix:themes]
 row gap:(metrics::gap_md(ControlSize::Regular))
     tag label:"Brand" tone:brand variant:solid
     tag label:"Brand" tone:brand variant:soft

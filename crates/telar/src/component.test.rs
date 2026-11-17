@@ -64,3 +64,41 @@ fn children_are_a_prop() {
         "and a call site that nested nothing hands over nothing"
     );
 }
+
+/// Props as a `.rsx` call hands them a worked-out value: through the `__follow_` setter, which the prop's own type answers.
+#[derive(telar::Props)]
+pub struct ReadingProps {
+    #[props(into, default)]
+    pub level: telar::Reactive<f32>,
+    #[props(default)]
+    pub size: f32,
+}
+
+#[test]
+fn a_reactive_prop_follows_what_its_value_read() {
+    telar::reset_runtime();
+    let level = telar::signal(1.0f32);
+    let props = ReadingProps::props()
+        .__follow_level(move || level.get() * 2.0)
+        .build();
+    level.set(3.0);
+    assert_eq!(props.level.get(), 6.0);
+}
+
+#[test]
+fn a_plain_prop_takes_a_value_that_read_nothing() {
+    telar::reset_runtime();
+    let props = ReadingProps::props().__follow_size(|| 4.0f32).build();
+    assert_eq!(props.size, 4.0);
+}
+
+/// The one case only the run can see: a value a plain prop would take once, worked out from state it would never hear change.
+#[test]
+#[should_panic(expected = "`size` of `ReadingProps` takes a value worked out once")]
+fn a_plain_prop_handed_a_value_that_read_state_says_so() {
+    telar::reset_runtime();
+    let size = telar::signal(1.0f32);
+    let _ = ReadingProps::props()
+        .__follow_size(move || size.get())
+        .build();
+}

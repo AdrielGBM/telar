@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::{
+    IntoReading,
     AlignItems, BorderRadius, Children, Color, Container, Insets, JustifyContent, LayoutError,
     LayoutItem, LayoutStyle, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, Size,
     SizeDimension, StyledContainer, SurfaceAmendment, Text, TextStyle, amend_surface, box_item,
@@ -281,43 +282,43 @@ pub fn window_frame(props: WindowFrameProps) -> Result<Box<dyn LayoutItem>, Layo
 }
 
 impl SurfaceFrameStyle {
-    pub fn background(mut self, color: impl Into<Reactive<Color>>) -> Self {
-        self.background = Some(color.into());
+    pub fn background(mut self, color: impl IntoReading<Color>) -> Self {
+        self.background = Some(color.into_reading());
         self
     }
 
-    pub fn title_bar(mut self, color: impl Into<Reactive<Color>>) -> Self {
-        self.title_bar = Some(color.into());
+    pub fn title_bar(mut self, color: impl IntoReading<Color>) -> Self {
+        self.title_bar = Some(color.into_reading());
         self
     }
 
-    pub fn title_text(mut self, color: impl Into<Reactive<Color>>) -> Self {
-        self.title_text = Some(color.into());
+    pub fn title_text(mut self, color: impl IntoReading<Color>) -> Self {
+        self.title_text = Some(color.into_reading());
         self
     }
 
-    pub fn close(mut self, color: impl Into<Reactive<Color>>) -> Self {
-        self.close = Some(color.into());
+    pub fn close(mut self, color: impl IntoReading<Color>) -> Self {
+        self.close = Some(color.into_reading());
         self
     }
 
-    pub fn control_hover(mut self, color: impl Into<Reactive<Color>>) -> Self {
-        self.control_hover = Some(color.into());
+    pub fn control_hover(mut self, color: impl IntoReading<Color>) -> Self {
+        self.control_hover = Some(color.into_reading());
         self
     }
 
-    pub fn close_hover(mut self, color: impl Into<Reactive<Color>>) -> Self {
-        self.close_hover = Some(color.into());
+    pub fn close_hover(mut self, color: impl IntoReading<Color>) -> Self {
+        self.close_hover = Some(color.into_reading());
         self
     }
 
-    pub fn control_hover_glyph(mut self, color: impl Into<Reactive<Color>>) -> Self {
-        self.control_hover_glyph = Some(color.into());
+    pub fn control_hover_glyph(mut self, color: impl IntoReading<Color>) -> Self {
+        self.control_hover_glyph = Some(color.into_reading());
         self
     }
 
-    pub fn close_hover_glyph(mut self, color: impl Into<Reactive<Color>>) -> Self {
-        self.close_hover_glyph = Some(color.into());
+    pub fn close_hover_glyph(mut self, color: impl IntoReading<Color>) -> Self {
+        self.close_hover_glyph = Some(color.into_reading());
         self
     }
 

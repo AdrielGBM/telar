@@ -16,7 +16,7 @@ const ROTATION: Duration = Duration::from_millis(900);
 pub struct Props {
     /// What the spinner's colour says. `ink`, the default, is the ink of the text around it, as an icon's is; a named tone or a colour of the caller's marks the work it stands for.
     #[props(into)]
-    pub tone: Tone = Tone::Ink,
+    pub tone: Reactive<Tone> = Reactive::Const(Tone::Ink),
     /// How large the spinner is drawn: the theme's icon size, as [`ControlSize`] scales it.
     #[props(default)]
     pub size: ControlSize,
@@ -42,5 +42,5 @@ let angle = Keyframes::<f32>::new(0.0)
 [view]
 row role:progressbar
     // Sized by what it holds and never stretched, so it turns as a square whatever room the spinner is given.
-    row self:center shrink:0 align:center justify:center min_width:(shared::icon_size(size)) min_height:(shared::icon_size(size)) color:(tone.color($text.ink)) rotate:(angle.get())
+    row self:center shrink:0 align:center justify:center min_width:(shared::icon_size(size)) min_height:(shared::icon_size(size)) color:(tone.get().color($text.ink)) rotate:(angle.get())
         children turning

@@ -40,6 +40,17 @@ impl Prop {
             Some(inner) => (inner, quote! { ::core::option::Option::Some(value) }),
             None => (ty, quote! { value }),
         };
+        if let Some(read) = reactive_inner(param_ty) {
+            return (
+                quote! { impl ::telar::IntoReading<#read> },
+                match inner.is_some() {
+                    true => quote! {
+                        ::core::option::Option::Some(::telar::IntoReading::into_reading(value))
+                    },
+                    false => quote! { ::telar::IntoReading::into_reading(value) },
+                },
+            );
+        }
         match self.into {
             true => (
                 quote! { impl ::core::convert::Into<#param_ty> },
@@ -60,6 +71,63 @@ impl Prop {
             false => (quote! { #param_ty }, value),
         }
     }
+
+    /// `__follow_<name>`: what a `.rsx` call hands a worked-out value to, as a closure, so the prop's type decides what becomes of it. A `Reactive<T>` prop follows what the value read ([`Reactive::follow`](telar::Reactive::follow)), the value being anything that reads as a `T` ([`IntoReading`](telar::IntoReading)), as a colour does as a `Tone`; any other takes the value worked out once, and panics if working it out read state, since it would never hear that state change: the one case only the run can see. `returns` is what the prop's own setter returns.
+    fn follow_setter(&self, props: &Ident, returns: &TokenStream2) -> TokenStream2 {
+        let name = &self.name;
+        let follow = format_ident!("__follow_{}", name.unraw());
+        let target = match self.some {
+            true => option_inner(&self.ty).unwrap_or_else(|| self.ty.clone()),
+            false => self.ty.clone(),
+        };
+        if let Some(inner) = reactive_inner(&target) {
+            return quote! {
+                #[doc(hidden)]
+                pub fn #follow<V: ::telar::IntoReading<#inner>>(
+                    self,
+                    read: impl Fn() -> V + 'static,
+                ) -> #returns {
+                    self.#name(::telar::Reactive::<#inner>::follow(read))
+                }
+            };
+        }
+        let (generics, value) = match (self.into, is_number(&target)) {
+            (true, _) => (quote! { <V: ::core::convert::Into<#target>> }, quote! { V }),
+            (false, true) => (quote! { <V: ::telar::PropNumber<#target>> }, quote! { V }),
+            (false, false) => (quote! {}, quote! { #target }),
+        };
+        let message = format!(
+            "`{}` of `{props}` takes a value worked out once, and the one it was handed read state, which it would never hear change: declare it `Reactive<…>` to follow what it reads, or read it with `untrack(…)` to take it once",
+            name.unraw()
+        );
+        quote! {
+            #[doc(hidden)]
+            #[track_caller]
+            pub fn #follow #generics(self, read: impl FnOnce() -> #value) -> #returns {
+                let (value, read_state) = ::telar::reads_state(read);
+                if read_state {
+                    ::core::panic!(#message);
+                }
+                self.#name(value)
+            }
+        }
+    }
+}
+
+/// `T` when `ty` is a `Reactive<T>`, written by any path that ends in it.
+fn reactive_inner(ty: &Type) -> Option<Type> {
+    let Type::Path(path) = ty else { return None };
+    let last = path.path.segments.last()?;
+    if last.ident != "Reactive" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    args.args.iter().find_map(|arg| match arg {
+        syn::GenericArgument::Type(inner) => Some(inner.clone()),
+        _ => None,
+    })
 }
 
 /// Whether `ty` is a primitive number, whose setter also takes the [`Int`](telar::Int) or [`Float`](telar::Float) a `.rsx` literal is handed over as. Only these: a Rust literal reaching the setter still has the one integer or float type to be.
@@ -141,11 +209,13 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     let optional_setters = props.iter().filter(|p| !p.is_required()).map(|p| {
         let name = &p.name;
         let (param, stored) = p.setter_param();
+        let follow = p.follow_setter(&input.ident, &quote! { Self });
         quote! {
             pub fn #name(mut self, value: #param) -> Self {
                 self.#name = #stored;
                 self
             }
+            #follow
         }
     });
 
@@ -170,6 +240,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         };
         let (before, after) = (render(false), render(true));
         let (param, stored) = target.setter_param();
+        let follow = target.follow_setter(&input.ident, &quote! { #builder #after });
         let carried = props.iter().map(|p| {
             let field = &p.name;
             match p.name == target.name {
@@ -183,6 +254,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
                 pub fn #name(self, value: #param) -> #builder #after {
                     #builder { #(#carried),* }
                 }
+                #follow
             }
         }
     });

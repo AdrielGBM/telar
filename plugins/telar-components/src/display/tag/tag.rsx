@@ -54,7 +54,7 @@ pub struct Props {
     pub label: Reactive<String>,
     /// What the tag's colour says: a named tone, or a colour of the caller's (`tone:$theme.brand`, `tone:#ff8800`), from which every state and the ink are worked out alike. `transparent` is transparent.
     #[props(into, default)]
-    pub tone: Tone,
+    pub tone: Reactive<Tone>,
     /// How large the tag is drawn: its height, text, padding and gaps, as [`ControlSize`] works them out. A control in `action` is sized where it is written: a small icon button is as tall as a regular tag, and as a small tag round an action.
     #[props(default)]
     pub size: ControlSize,

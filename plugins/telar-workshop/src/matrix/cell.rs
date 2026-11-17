@@ -317,7 +317,7 @@ fn badges(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErro
             let tone = status.tone();
             tag(TagProps::props()
                 .label(Reactive::of(move || status.text()))
-                .tone(Reactive::of(move || tone_color(tone)))
+                .tone(Reactive::of(move || telar::Tone::from(tone_color(tone))))
                 .build())
         },
     )?;

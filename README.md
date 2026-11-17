@@ -158,17 +158,14 @@ Four sugars survive, because each is a token shape rather than a second language
 all: `transition(fill 250ms ease-out)` is a clause list, `hover_style(fill:$theme.accent)` a nested
 attribute list. The spelling says which world you are in.
 
-**Reactivity is reading, not marking.** A layout value that can change is re-resolved whenever what it
-reads changes — `pad:$theme.gutter` follows a theme switch, and so does `pad:gutter()`. One that cannot — a literal,
-or arithmetic on constants spelled as constants are, `gap:(GRID * 2.0)` — costs nothing to keep. A component's prop
-follows what it reads the same way: a `$` read, a `use_…()` hook read through (`color:(use_workbench_tokens().accent)`)
-or a signal's `.get()` hands the prop a `Reactive` that re-reads it, and a plain value, or a hook's handle passed on,
-is handed over as it is. The `$` is `.get()` sugar; it does not decide anything. A closure in the
-value reads where it runs: one handed to a keeper (`Reactive::of`, `Rc::new`, `memo`, a constructor such as `Some`)
-reads when it is called and leaves the prop as it is, one std runs on the spot (`.map`, `std::array::from_fn`) reads
-here, and one that reads state handed to any other callee is a compile error asking which, since a `.rsx` cannot see
-into the callee: `tweened(later(move || $x))` when it keeps the closure to call later, `sampled(now(move || $x))` when it
-calls it there. `later` and `now` compile to nothing.
+**Reactivity is reading, not marking.** What a view follows is what it read when it ran, not where a `$` was
+written. A layout value that can change is re-resolved whenever what it reads changes — `pad:$theme.gutter` follows
+a theme switch, and so does `pad:gutter()`. One that cannot — a literal, or arithmetic on constants spelled as
+constants are, `gap:(GRID * 2.0)` — costs nothing to keep. An `if`, `match` or `for` whose condition read nothing is
+built once, and one whose condition read state is rebuilt as that state changes: `if link.leaves()` as much as
+`if $leaves`. A component's prop is handed a worked-out value as the closure working it out, and the prop's type
+decides: a `Reactive<T>` prop follows what the value read, any other takes it once, and a plain prop handed a value
+that read state is refused as the component is built rather than frozen in silence. The `$` is `.get()` sugar.
 
 ### Components are Rust paths
 

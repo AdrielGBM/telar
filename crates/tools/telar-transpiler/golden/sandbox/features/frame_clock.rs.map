@@ -133,6 +133,6 @@
 132	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1360..1365	3574	`ghost`
-1424..1431	3929	`seconds`
-1621..1626	5618	`state`
+1360..1365	3569	`ghost`
+1424..1431	3924	`seconds`
+1621..1626	5613	`state`

@@ -32,7 +32,7 @@ fn a_whole_number_out_of_the_prop_s_range_says_so() {
 
 #[test]
 fn a_reactive_prop_takes_a_markup_number_too() {
-    assert_eq!(Reactive::<usize>::from(Int(4)).get(), 4);
-    assert_eq!(Reactive::<f32>::from(Float(0.5)).get(), 0.5);
-    assert_eq!(Reactive::<f32>::from(Int(2)).get(), 2.0);
+    assert_eq!(IntoReading::<usize>::into_reading(Int(4)).get(), 4);
+    assert_eq!(IntoReading::<f32>::into_reading(Float(0.5)).get(), 0.5);
+    assert_eq!(IntoReading::<f32>::into_reading(Int(2)).get(), 2.0);
 }

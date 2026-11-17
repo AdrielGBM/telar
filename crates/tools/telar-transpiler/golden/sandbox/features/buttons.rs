@@ -50,8 +50,8 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                     let __node_4 = button(ButtonProps::props().label("Outline").variant(::telar::kw::outline).build())?;
                                     let __node_5 = button(ButtonProps::props().label("Soft").variant(::telar::kw::soft).build())?;
                                     let __node_6 = button(ButtonProps::props().label("Ghost").variant(::telar::kw::ghost).build())?;
-                                    let __node_7 = button(ButtonProps::props().label("Danger").color(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).build())?;
-                                    let __node_8 = button(ButtonProps::props().label("Success").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build())?;
+                                    let __node_7 = button(ButtonProps::props().label("Danger").__follow_color({ let theme = theme.clone(); move || theme.get().danger }).build())?;
+                                    let __node_8 = button(ButtonProps::props().label("Success").__follow_color({ let theme = theme.clone(); move || theme.get().success }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __node_4, __node_5, __node_6, __node_7, __node_8])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -94,8 +94,8 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 };
                                 __children.push(box_item(__text_0));
                                 let __row_1 = {
-                                    let __node_12 = button(ButtonProps::props().label("+1").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build())?;
-                                    let __node_13 = button(ButtonProps::props().label("+10").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build())?;
+                                    let __node_12 = button(ButtonProps::props().label("+1").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build())?;
+                                    let __node_13 = button(ButtonProps::props().label("+10").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build())?;
                                     let __node_14 = button(ButtonProps::props().label("Reset").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_12, __node_13, __node_14])?
                                 };

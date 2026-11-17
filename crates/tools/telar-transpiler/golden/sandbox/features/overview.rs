@@ -21,7 +21,7 @@ pub fn overview(props: OverviewProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let __col_0 = {
         let __col_1 = {
             let __row_0 = {
-                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(30)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build())?;
+                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(30)).__follow_color({ let theme = theme.clone(); move || theme.get().ink }).build())?;
                 let __text_0 = {
                     Text::declaring(
                         || "rsx — native UI for Rust".to_string(),
@@ -54,7 +54,7 @@ pub fn overview(props: OverviewProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         let theme = theme.clone();
                     move || {
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                        let __node_8 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                        let __node_8 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(::telar::Int(28)).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).build())?;
                         __children.push(box_item(__node_8));
                         Ok(__children)
                     }
@@ -68,7 +68,7 @@ pub fn overview(props: OverviewProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         let theme = theme.clone();
                     move || {
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                        let __node_10 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                        let __node_10 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(::telar::Int(28)).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).build())?;
                         __children.push(box_item(__node_10));
                         Ok(__children)
                     }
@@ -82,7 +82,7 @@ pub fn overview(props: OverviewProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         let theme = theme.clone();
                     move || {
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                        let __node_12 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                        let __node_12 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(28)).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).build())?;
                         __children.push(box_item(__node_12));
                         Ok(__children)
                     }
@@ -96,7 +96,7 @@ pub fn overview(props: OverviewProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         let theme = theme.clone();
                     move || {
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                        let __node_14 = icon(IconProps::props().name(("lucide:layout-grid", crate::__rsx_assets::ASSET_624744E2.get(), true)).size(::telar::Int(28)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build())?;
+                        let __node_14 = icon(IconProps::props().name(("lucide:layout-grid", crate::__rsx_assets::ASSET_624744E2.get(), true)).size(::telar::Int(28)).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).build())?;
                         __children.push(box_item(__node_14));
                         Ok(__children)
                     }

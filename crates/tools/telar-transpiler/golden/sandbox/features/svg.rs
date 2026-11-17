@@ -216,7 +216,7 @@ pub fn svg(props: SvgProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            let __node_9 = icon(IconProps::props().name(("lucide:arrow-right", crate::__rsx_assets::ASSET_6866DA5D.get(), true)).size(::telar::Int(12)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().muted })).build())?;
+                                            let __node_9 = icon(IconProps::props().name(("lucide:arrow-right", crate::__rsx_assets::ASSET_6866DA5D.get(), true)).size(::telar::Int(12)).__follow_color({ let theme = theme.clone(); move || theme.get().muted }).build())?;
                                             let __text_2 = {
                                                 Text::declaring(
                                                     || "raster".to_string(),

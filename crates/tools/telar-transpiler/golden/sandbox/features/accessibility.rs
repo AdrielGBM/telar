@@ -228,7 +228,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_2 = {
                                     let __sbox_0 = {
-                                        let __node_13 = icon(IconProps::props().name(("lucide:smile", crate::__rsx_assets::ASSET_4AF7F703.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build())?;
+                                        let __node_13 = icon(IconProps::props().name(("lucide:smile", crate::__rsx_assets::ASSET_4AF7F703.get(), true)).size(::telar::Int(20)).__follow_color({ let theme = theme.clone(); move || theme.get().ink }).build())?;
                                         StyledContainer::new(LayoutStyle::new().flex_column().padding_all(12.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__node_13])?.on_press({ let mood = mood.clone(); move || mood.set(if mood.get() == "calm" { "busy".into() } else { "calm".into() }) })
                                     };
                                     let __sbox_0 = __sbox_0.a11y_label({ let mood = mood.clone(); move || ::std::string::ToString::to_string(&(format!("Mood: {}", mood.get()))) });

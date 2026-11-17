@@ -279,8 +279,8 @@
 278	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-4064..4073	8355	`equalizer`
-4366..4378	10143	`progress_bar`
-4423..4431	10410	`progress`
-4939..4950	13463	`0.0..=100.0`
-5032..5037	13899	`scrub`
+4064..4073	8350	`equalizer`
+4366..4378	10138	`progress_bar`
+4423..4431	10405	`progress`
+4939..4950	13470	`0.0..=100.0`
+5032..5037	13906	`scrub`

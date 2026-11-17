@@ -2,11 +2,7 @@
 //!
 //! Split from the naming conventions in [`telar_project::naming`]: those say what a generated name looks like and are read by the macro that places the output, while these read the `[logic]` Rust an author wrote and only codegen does that.
 
-use std::ops::Range;
-
 use telar_project::naming::is_ident_byte;
-
-use crate::registry::Callee;
 
 /// If `bytes[i]` opens a string, raw string, char literal or comment, returns the index just past it, so an identifier scan skips its contents — a name embedded in `"text"` or `// note` is not a real reference to it. A `'a` lifetime tick (no closing quote) is left alone; escaped char literals (`'\n'`) are handled. Shared by every identifier scan here, so they agree on what is code.
 ///
@@ -95,100 +91,6 @@ pub(crate) fn ident_positions<'a>(
     })
 }
 
-/// A closure written as a direct argument of a call: what it is handed to, and where it sits in the expression.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct HandedClosure {
-    pub callee: Callee,
-    /// From its first byte (`move` or the opening `|`) to the end of its body.
-    pub span: Range<usize>,
-    /// Where its body starts, just past the parameter list.
-    pub body_start: usize,
-}
-
-/// Every closure in `expr` handed straight to a call, nested ones included, in source order. A closure in brackets, braces, a macro's arguments or grouping parens is handed to no callee and is not listed.
-pub(crate) fn handed_closures(expr: &str) -> Vec<HandedClosure> {
-    let bytes = expr.as_bytes();
-    let mut handed = Vec::new();
-    let mut open: Vec<Option<Callee>> = Vec::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        if let Some(end) = literal_or_comment_end(bytes, i) {
-            i = end;
-            continue;
-        }
-        match bytes[i] {
-            b'(' => open.push(callee(expr[..i].trim_end())),
-            b'[' | b'{' => open.push(None),
-            b')' | b']' | b'}' => {
-                open.pop();
-            }
-            _ => {}
-        }
-        let Some(params_end) = closure_params_end(expr, i) else {
-            i += 1;
-            continue;
-        };
-        if let Some(Some(callee)) = open.last() {
-            handed.push(HandedClosure {
-                callee: callee.clone(),
-                span: i..closure_body_end(expr, params_end),
-                body_start: params_end,
-            });
-        }
-        i = params_end;
-    }
-    handed
-}
-
-/// The index just past the parameter list of a closure starting at `at` (`|a, b|`, `||`, `move |a|`), or `None` when `at` starts no closure; a `|` after an operand is a binary or.
-fn closure_params_end(expr: &str, at: usize) -> Option<usize> {
-    let bytes = expr.as_bytes();
-    let mut bar = at;
-    if expr[at..].starts_with("move")
-        && (at == 0 || !is_ident_byte(bytes[at - 1]))
-        && !bytes.get(at + 4).is_some_and(|&b| is_ident_byte(b))
-    {
-        let rest = &expr[at + 4..];
-        bar = at + 4 + (rest.len() - rest.trim_start().len());
-    } else if let Some(prev) = expr[..at].trim_end().chars().next_back()
-        && (prev.is_alphanumeric() || matches!(prev, '_' | ')' | ']' | '}' | '"' | '\''))
-    {
-        return None;
-    }
-    if bytes.get(bar) != Some(&b'|') {
-        return None;
-    }
-    if bytes.get(bar + 1) == Some(&b'|') {
-        return Some(bar + 2);
-    }
-    let close = expr[bar + 1..].find('|')?;
-    Some(bar + close + 2)
-}
-
-/// The index where the closure body that starts at `from` ends: at the first `,` or `;` outside brackets, or at the bracket that closes the list it sits in.
-fn closure_body_end(expr: &str, from: usize) -> usize {
-    let bytes = expr.as_bytes();
-    let mut depth = 0usize;
-    let mut i = from;
-    while i < bytes.len() {
-        if let Some(end) = literal_or_comment_end(bytes, i) {
-            i = end;
-            continue;
-        }
-        match bytes[i] {
-            b'(' | b'[' | b'{' => depth += 1,
-            b')' | b']' | b'}' => match depth {
-                0 => return i,
-                _ => depth -= 1,
-            },
-            b',' | b';' if depth == 0 => return i,
-            _ => {}
-        }
-        i += 1;
-    }
-    bytes.len()
-}
-
 /// Byte offset of every `ident` inside a string literal of `code` that stands where a format string names an argument — `{ident}`, `{ident:…}`, or a `ident$` width or precision. Whether the string is a format string at all is for the caller to decide; this only finds the candidates.
 pub(crate) fn format_arg_positions(code: &str, ident: &str) -> Vec<usize> {
     let bytes = code.as_bytes();
@@ -219,51 +121,3 @@ pub(crate) fn format_arg_positions(code: &str, ident: &str) -> Vec<usize> {
 #[cfg(all(test, feature = "transpile"))]
 #[path = "lexer.test.rs"]
 mod tests;
-
-/// What a call's `(` at the end of `before` calls: a path, with its generic arguments (`::<f32>`, `::<dyn Fn()>`) dropped so `Reactive::<f32>::of` reads as `Reactive::of`, or a method by name. `None` when what precedes is no callee: an operator, a macro's `!`, a keyword opening grouping parens.
-fn callee(before: &str) -> Option<Callee> {
-    let bytes = before.as_bytes();
-    let mut end = bytes.len();
-    let mut path: Vec<u8> = Vec::new();
-    while end > 0 {
-        let b = bytes[end - 1];
-        if b == b'>' {
-            let mut depth = 0usize;
-            let mut at = end;
-            while at > 0 {
-                at -= 1;
-                match bytes[at] {
-                    b'>' if at > 0 && bytes[at - 1] == b'-' => at -= 1,
-                    b'>' => depth += 1,
-                    b'<' => {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            if depth != 0 || !before[..at].ends_with("::") {
-                return None;
-            }
-            end = at - 2;
-        } else if is_ident_byte(b) || b == b':' {
-            path.push(b);
-            end -= 1;
-        } else {
-            break;
-        }
-    }
-    path.reverse();
-    let path = String::from_utf8(path).ok()?;
-    let single = !path.contains("::");
-    if path.is_empty() || single && syn::parse_str::<syn::Ident>(&path).is_err() {
-        return None;
-    }
-    match before[..end].trim_end().ends_with('.') {
-        true if single => Some(Callee::Method(path)),
-        true => None,
-        false => Some(Callee::Path(path)),
-    }
-}

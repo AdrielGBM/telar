@@ -4,7 +4,7 @@ use crate::{memo, reset_runtime, signal};
 #[test]
 fn a_constant_reads_as_itself() {
     reset_runtime();
-    let tint: Reactive<u32> = 7.into();
+    let tint: Reactive<u32> = 7u32.into_reading();
     assert_eq!(tint.get(), 7);
 }
 
@@ -12,7 +12,7 @@ fn a_constant_reads_as_itself() {
 fn a_signal_is_re_read_rather_than_frozen() {
     reset_runtime();
     let count = signal(1i32);
-    let reading: Reactive<i32> = count.into();
+    let reading: Reactive<i32> = count.into_reading();
     assert_eq!(reading.get(), 1);
     count.set(9);
     assert_eq!(reading.get(), 9, "the prop froze at construction");
@@ -24,7 +24,7 @@ fn a_derivation_over_two_signals_is_a_reading_too() {
     reset_runtime();
     let (width, height) = (signal(3i32), signal(4i32));
     let area = memo(move || width.get() * height.get());
-    let reading: Reactive<i32> = area.into();
+    let reading: Reactive<i32> = area.into_reading();
     assert_eq!(reading.get(), 12);
     width.set(5);
     assert_eq!(reading.get(), 20);
@@ -43,7 +43,7 @@ fn a_closure_needs_the_named_constructor() {
 #[test]
 fn a_literal_reads_as_an_owned_string() {
     reset_runtime();
-    let label: Reactive<String> = "Save".into();
+    let label: Reactive<String> = "Save".into_reading();
     assert_eq!(label.get(), "Save");
 }
 

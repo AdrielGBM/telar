@@ -1,3 +1,3 @@
 # The generated code changed if this digest did. When it does, decide whether an older `telar` can still compile the new shape: if it cannot, bump BUILD_ARTIFACT_FORMAT before updating this.
 BUILD_ARTIFACT_FORMAT = 10
-corpus digest = fe07ba0b536e2854
+corpus digest = 1bd440a9428d4374

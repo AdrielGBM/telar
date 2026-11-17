@@ -9,7 +9,7 @@ use platform_core::{
     ConsumedKeys, Cursor, Destination, DragOutcome, DroppedData, Event, IntoDestination, Key,
     NamedKey, Orientation, OutgoingDrag, PointerButton, PointerSource, Toggle, Value,
 };
-use reactive_core::{Reactive, RwSignal, effect, signal};
+use reactive_core::{IntoReading, Reactive, RwSignal, effect, signal};
 use renderer_core::{BlendMode, Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
@@ -934,8 +934,8 @@ impl StyledContainer {
     }
 
     /// Requests `cursor` from the platform while the pointer is over this box, or while a drag that started on it runs; nested boxes resolve innermost first, a dragged box winning over any hovered one, and leaving a box hands the shape back to the one it sits in.
-    pub fn cursor(mut self, cursor: impl Into<Reactive<Cursor>>) -> Self {
-        let cursor = cursor.into();
+    pub fn cursor(mut self, cursor: impl IntoReading<Cursor>) -> Self {
+        let cursor = cursor.into_reading();
         let claim = CursorClaim::new(Cursor::Default);
         let id = claim.id();
         match cursor {
@@ -964,8 +964,8 @@ impl StyledContainer {
     /// **The grown area overlaps the box's siblings, and wins over them.** Its parent tests it before any sibling, however they are stacked, so a press, a drag, the hover and the cursor in the outset are this box's even where a neighbouring pane is drawn. The wheel is the exception: it hit-tests the laid-out box alone, so the pane the outset lies over still scrolls under it. The outset is the opposite of [`input_transparent`](Self::input_transparent) — that gives up the box's own rect, this claims past it — and it wins only among the box's own siblings: its parent still stacks under the parent's siblings as it always has, and a viewport around the box clips the outset as it clips the box.
     ///
     /// The grown area is also what a reader and a target-size check are told the control's rect is, and it joins the input region of a surface that carves one, so all three agree on where the control can be pointed at. Re-read on every event and query, so a theme that changes the size of the bar changes the outset with it.
-    pub fn hit_outset(mut self, outset: impl Into<Reactive<Insets>>) -> Self {
-        let outset: Rc<dyn Fn() -> Insets> = match outset.into() {
+    pub fn hit_outset(mut self, outset: impl IntoReading<Insets>) -> Self {
+        let outset: Rc<dyn Fn() -> Insets> = match outset.into_reading() {
             Reactive::Const(by) => Rc::new(move || by),
             Reactive::Read(read) => read,
         };

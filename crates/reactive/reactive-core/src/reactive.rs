@@ -10,7 +10,7 @@ use crate::{Memo, ReadSignal, RwSignal};
 ///
 /// **Reading, never writing.** A prop the widget writes back — a checkbox's `checked`, a field's `value` — stays `RwSignal<T>`, because there is nothing for a reading closure to write to. That distinction is the component's own declaration, which is the point: the caller writes the handle either way and the compiler decides what it meant.
 ///
-/// **Why the conversions are a list and not `impl Source`.** [`crate::Source`] is the same idea as a trait, and `impl<S: Source<Value = T>> From<S> for Reactive<T>` would be the tidy spelling — but it overlaps `From<T>` the moment a plain value implements `Source`, which `f32` and `bool` already do, and Rust has no way to prove two impls disjoint. So the conversions are enumerated. A closure is the one case the list cannot hold, for the same coherence reason, and it gets [`Reactive::of`].
+/// **What converts into one is [`IntoReading`].** A value, a signal, a memo, another `Reactive`, and whatever a type says stands for one; a closure is the one case it cannot hold, since a closure type could be any of those too, and it gets [`Reactive::of`].
 ///
 /// **A constant is held as itself, not as a closure returning it.** Most props are given a literal, and boxing one would put an allocation and a virtual call on every `gap:8` in the corpus for a value that cannot change. The enum is what lets a prop be uniformly readable without charging for it.
 pub enum Reactive<T> {
@@ -26,11 +26,11 @@ impl<T> Reactive<T> {
 }
 
 impl<T: Clone + 'static> Reactive<T> {
-    /// What `read` yields, followed only when working it out read state: a constant when it read none, so a value that cannot change is held as itself. What `read` returns converts, so a reading built to be kept (`Reactive::of(…)`, a signal) arrives as it was made.
-    pub fn follow<U: Into<Reactive<T>>>(read: impl Fn() -> U + 'static) -> Self {
+    /// What `read` yields, followed only when working it out read state: a constant when it read none, so a value that cannot change is held as itself. What `read` returns is anything that reads as a `T` ([`IntoReading`]), so a reading built to be kept (`Reactive::of(…)`, a signal) arrives as it was made.
+    pub fn follow<U: IntoReading<T>>(read: impl Fn() -> U + 'static) -> Self {
         match crate::reads_state(&read) {
-            (first, false) => first.into(),
-            (_, true) => Self::of(move || read().into().get()),
+            (first, false) => first.into_reading(),
+            (_, true) => Self::of(move || read().into_reading().get()),
         }
     }
 }
@@ -59,34 +59,47 @@ impl<T: Default> Default for Reactive<T> {
     }
 }
 
-impl<T> From<T> for Reactive<T> {
-    fn from(value: T) -> Self {
-        Self::Const(value)
+/// What reads as a `T`: the value itself, a reading of one ([`Reactive`], a signal, a memo), or a value its type says stands for one, as a colour stands for a tone. What a `Reactive<T>` prop takes, so a caller hands it whichever it has.
+///
+/// A trait of its own rather than `Into<Reactive<T>>`, because a type that stands for a `T` (a colour for a tone) cannot say so through `From`: neither `From` nor `Reactive` is its crate's to implement.
+pub trait IntoReading<T> {
+    fn into_reading(self) -> Reactive<T>;
+}
+
+impl<T> IntoReading<T> for T {
+    fn into_reading(self) -> Reactive<T> {
+        Reactive::Const(self)
     }
 }
 
-impl<T: Clone + 'static> From<RwSignal<T>> for Reactive<T> {
-    fn from(signal: RwSignal<T>) -> Self {
-        Self::of(move || signal.get())
+impl<T> IntoReading<T> for Reactive<T> {
+    fn into_reading(self) -> Reactive<T> {
+        self
     }
 }
 
-impl<T: Clone + 'static> From<ReadSignal<T>> for Reactive<T> {
-    fn from(signal: ReadSignal<T>) -> Self {
-        Self::of(move || signal.get())
+impl<T: Clone + 'static> IntoReading<T> for RwSignal<T> {
+    fn into_reading(self) -> Reactive<T> {
+        Reactive::of(move || self.get())
     }
 }
 
-impl<T: Clone + 'static> From<Memo<T>> for Reactive<T> {
-    fn from(memo: Memo<T>) -> Self {
-        Self::of(move || memo.get())
+impl<T: Clone + 'static> IntoReading<T> for ReadSignal<T> {
+    fn into_reading(self) -> Reactive<T> {
+        Reactive::of(move || self.get())
+    }
+}
+
+impl<T: Clone + 'static> IntoReading<T> for Memo<T> {
+    fn into_reading(self) -> Reactive<T> {
+        Reactive::of(move || self.get())
     }
 }
 
 /// The literal a call site actually writes. Without it every `label:"Save"` would need a `.to_string()`.
-impl From<&'static str> for Reactive<String> {
-    fn from(text: &'static str) -> Self {
-        Self::of(move || text.to_string())
+impl IntoReading<String> for &'static str {
+    fn into_reading(self) -> Reactive<String> {
+        Reactive::Const(self.to_string())
     }
 }
 

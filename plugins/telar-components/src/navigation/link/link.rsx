@@ -68,7 +68,7 @@ pub struct Props {
     pub current: Reactive<bool>,
     /// What the link's colour says: a named tone, or a colour of the caller's, taken just far enough toward the ink to read on the theme's surface. `ink` is the ink of the text around it, for a link told apart by its underline alone.
     #[props(into, default)]
-    pub tone: Tone,
+    pub tone: Reactive<Tone>,
     /// What sits before the words, in the link's ink: an `icon`.
     #[props(default)]
     pub leading: Children,

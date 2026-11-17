@@ -225,7 +225,7 @@ pub struct ResizeHandleProps {
     #[props(default)]
     pub growth: ResizeGrowth,
     /// Pointer px per unit of size: content drawn zoomed passes its zoom, so the edge dragged stays under the pointer. Default 1.
-    #[props(into, default = Reactive::from(1.0_f32))]
+    #[props(into, default = Reactive::Const(1.0_f32))]
     pub scale: Reactive<f32>,
     /// One unscaled arrow-key step, in units of size, 16 by default; Shift makes it larger. A step that is not above zero is an error when the handle is built.
     #[props(default = DEFAULT_STEP)]
@@ -394,7 +394,7 @@ pub fn resizable(props: ResizableProps) -> Result<Box<dyn LayoutItem>, LayoutErr
                 }
             }),
             growth,
-            scale: Reactive::from(1.0_f32),
+            scale: Reactive::Const(1.0_f32),
             step,
         };
         let look = Look {

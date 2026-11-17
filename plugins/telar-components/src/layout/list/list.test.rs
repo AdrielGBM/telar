@@ -1,4 +1,4 @@
-use telar::{AvailableSpace, Color, ComponentList, DrawCommand, compute_layout, new_container};
+use telar::{IntoReading, AvailableSpace, Color, ComponentList, DrawCommand, compute_layout, new_container};
 
 use super::*;
 
@@ -9,7 +9,7 @@ fn a_hint_fades_the_ink_of_the_row_it_trails() {
     let row = item(
         ItemProps::props()
             .label("Move")
-            .hint(Reactive::from("⌘G"))
+            .hint("⌘G".into_reading())
             .build(),
     )
     .unwrap();

@@ -80,9 +80,6 @@ pub mod inspect;
 #[cfg(feature = "previews")]
 pub mod preview;
 
-mod closure;
-pub use closure::{later, now};
-
 #[cfg(feature = "runtime")]
 pub mod kw;
 mod markup_number;
@@ -226,12 +223,12 @@ pub use platform_core::{
 pub use platform_desktop::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
-    Emitter, Memo, OwnerGuard, OwnerId, Reactive, ReadSignal, RwSignal, Source, Task, Timer,
-    Transaction, TransactionError, advance_timer_clock, after_settle, batch, current_owner, derive,
-    derive_pair, detached, dispose_owner, drain_tasks, dropless_thread_local, effect, fire_timers,
-    memo, on_cleanup, owner_scope, reads_state, released_static, reset_runtime, reset_tasks,
-    reset_timers, run_after, set_task_waker, signal, spawn_stream, spawn_task, threads, timer_now,
-    until_next_timer, untrack, with_owner,
+    Emitter, IntoReading, Memo, OwnerGuard, OwnerId, Reactive, ReadSignal, RwSignal, Source, Task,
+    Timer, Transaction, TransactionError, advance_timer_clock, after_settle, batch, current_owner,
+    derive, derive_pair, detached, dispose_owner, drain_tasks, dropless_thread_local, effect,
+    fire_timers, memo, on_cleanup, owner_scope, reads_state, released_static, reset_runtime,
+    reset_tasks, reset_timers, run_after, set_task_waker, signal, spawn_stream, spawn_task,
+    threads, timer_now, until_next_timer, untrack, with_owner,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};

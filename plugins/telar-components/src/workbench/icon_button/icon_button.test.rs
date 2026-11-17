@@ -1,7 +1,7 @@
 use std::cell::Cell;
 
 use super::*;
-use telar::{
+use telar::{IntoReading, 
     AvailableSpace, ComponentList, Container, Event, Key, NamedKey, compute_layout, focus, signal,
 };
 
@@ -296,7 +296,7 @@ fn the_square_under_the_tooltip_builds_again_as_a_working_button() {
     let sink = fired.clone();
     let square = Square {
         icon: "lucide:search".into(),
-        label: "Search".into(),
+        label: "Search".into_reading(),
         size: telar::ControlSize::Regular,
         shortcut: None,
         pressed: None,

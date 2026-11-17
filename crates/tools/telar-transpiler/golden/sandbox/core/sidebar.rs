@@ -22,7 +22,7 @@ pub fn sidebar(props: SidebarProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let __col_0 = {
         let __col_1 = {
             let __row_0 = {
-                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build())?;
+                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(20)).__follow_color({ let theme = theme.clone(); move || theme.get().ink }).build())?;
                 let __text_0 = {
                     Text::declaring(
                         || "rsx".to_string(),
@@ -60,7 +60,7 @@ pub fn sidebar(props: SidebarProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                             let mut __slots: Vec<ChildSlot> = Vec::new();
                             for mode in modes.clone() {
                                 let mode = mode.to_owned();
-                                let __node_2 = button(ButtonProps::props().label(crate::core::theme::SandboxTheme::by_mode(mode.name()).name).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let mode = mode.clone(); move || set_mode(&mode) })).build())?;
+                                let __node_2 = button(ButtonProps::props().__follow_label({ let mode = mode.clone(); move || crate::core::theme::SandboxTheme::by_mode(mode.name()).name }).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let mode = mode.clone(); move || set_mode(&mode) })).build())?;
                                 __slots.push(ChildSlot::stat(box_item(__node_2)));
                             }
                             Ok(__slots)

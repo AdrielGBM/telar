@@ -48,7 +48,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
-                                let __node_3 = button(ButtonProps::props().label("Open modal").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay(CONFIRM))).build())?;
+                                let __node_3 = button(ButtonProps::props().label("Open modal").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new(move || open_overlay(CONFIRM))).build())?;
                                 __children.push(box_item(__node_3));
                                 let __node_4 = {
                                     let __recipe_children = Children::new(
@@ -98,7 +98,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_8 = button(ButtonProps::props().label("Open drawer").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay(NAV))).build())?;
+                                let __node_8 = button(ButtonProps::props().label("Open drawer").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new(move || open_overlay(NAV))).build())?;
                                 __children.push(box_item(__node_8));
                                 let __node_9 = {
                                     let __recipe_children = Children::new(

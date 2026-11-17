@@ -120,7 +120,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_11 = radio_group(RadioGroupProps::props().selected(choice.clone()).items(vec!["Small","Medium","Large"]).label("Size").build())?;
+                                let __node_11 = radio_group(RadioGroupProps::props().selected(choice.clone()).__follow_items(move || vec!["Small","Medium","Large"]).label("Size").build())?;
                                 __children.push(box_item(__node_11));
                                 let __text_2 = {
                                     let choice = choice.clone();

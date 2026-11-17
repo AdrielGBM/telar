@@ -158,7 +158,9 @@ pub(crate) fn tab_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, La
         |(count, verdict)| {
             tag(TagProps::props()
                 .label(Reactive::of(move || count.to_string()))
-                .tone(Reactive::of(move || verdict_color(verdict)))
+                .tone(Reactive::of(move || {
+                    telar::Tone::from(verdict_color(verdict))
+                }))
                 .build())
         },
     )?;

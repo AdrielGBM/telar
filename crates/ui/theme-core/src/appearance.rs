@@ -2,10 +2,8 @@
 //!
 //! They belong to the theme's vocabulary because a tone is the theme's token of its intent and a size is read off the theme's spacing unit and icon size. Each value has one word, which a `.rsx` writes bare (`size:small`, `variant:ghost`, `tone:danger`) and which is its text form as a preview arg; the facade's `kw` module names them.
 
-use std::fmt;
-
 use geometry_core::Color;
-use reactive_core::{Memo, Reactive, ReadSignal, RwSignal};
+use reactive_core::{IntoReading, Reactive};
 
 use crate::use_theme_tokens;
 
@@ -66,7 +64,7 @@ impl ControlSize {
 /// What a component's colour says: the theme's token of that intent, so a theme restyles every tone it defines, or a colour no tone names. Every variant and every state is worked out from it, with an ink that reads on its own fill in light and dark.
 ///
 /// A colour converts into one, so `tone:` takes `$theme.brand` or `#ff8800` as well as a name.
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Tone {
     /// The theme's primary: the application's own colour.
     #[default]
@@ -83,8 +81,8 @@ pub enum Tone {
     Danger,
     /// The ink of the place the component sits in, whatever colour that is: a key cap in a menu row, a tag on a dark banner. The one tone a component resolves against where it paints rather than against the theme.
     Ink,
-    /// A colour of the caller's, re-read wherever the component paints, so a theme token or a signal re-colours it live. `transparent` is transparent.
-    Color(Reactive<Color>),
+    /// A colour of the caller's. A component follows one worked out from the theme or a signal through its `tone` prop, which is a `Reactive<Tone>`. `transparent` is transparent.
+    Color(Color),
 }
 
 impl Tone {
@@ -99,64 +97,21 @@ impl Tone {
             Tone::Warning => theme.warning(),
             Tone::Danger => theme.error(),
             Tone::Ink => ink,
-            Tone::Color(color) => color.get(),
+            Tone::Color(color) => *color,
         }
-    }
-}
-
-/// A caller's colour compares by what it reads now.
-impl PartialEq for Tone {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Tone::Color(a), Tone::Color(b)) => a.get() == b.get(),
-            (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
-        }
-    }
-}
-
-impl fmt::Debug for Tone {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = match self {
-            Tone::Accent => "Accent",
-            Tone::Neutral => "Neutral",
-            Tone::Info => "Info",
-            Tone::Success => "Success",
-            Tone::Warning => "Warning",
-            Tone::Danger => "Danger",
-            Tone::Ink => "Ink",
-            Tone::Color(color) => return f.debug_tuple("Color").field(&color.get()).finish(),
-        };
-        f.write_str(name)
     }
 }
 
 impl From<Color> for Tone {
     fn from(color: Color) -> Self {
-        Tone::Color(Reactive::from(color))
-    }
-}
-
-impl From<Reactive<Color>> for Tone {
-    fn from(color: Reactive<Color>) -> Self {
         Tone::Color(color)
     }
 }
 
-impl From<RwSignal<Color>> for Tone {
-    fn from(color: RwSignal<Color>) -> Self {
-        Tone::Color(Reactive::from(color))
-    }
-}
-
-impl From<ReadSignal<Color>> for Tone {
-    fn from(color: ReadSignal<Color>) -> Self {
-        Tone::Color(Reactive::from(color))
-    }
-}
-
-impl From<Memo<Color>> for Tone {
-    fn from(color: Memo<Color>) -> Self {
-        Tone::Color(Reactive::from(color))
+/// A colour handed to a `tone` prop is the tone of that colour, and one worked out from the theme or a signal is followed as it changes.
+impl IntoReading<Tone> for Color {
+    fn into_reading(self) -> Reactive<Tone> {
+        Reactive::Const(Tone::Color(self))
     }
 }
 

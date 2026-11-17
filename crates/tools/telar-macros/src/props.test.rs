@@ -27,6 +27,11 @@ macro_rules! numbers {
 
 numbers!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64);
 
+/// Stands in for the runtime's: nothing here is state, so nothing is ever read.
+pub fn reads_state<R>(read: impl FnOnce() -> R) -> (R, bool) {
+    (read(), false)
+}
+
 #[derive(Props)]
 struct LabelProps {
     #[props(into)]

@@ -53,7 +53,7 @@ pub struct Props {
     pub size: ControlSize,
     /// What the bar's colour says: a named tone, or a colour of the caller's (`tone:$theme.brand`). The fill carries it whole and the track a wash of it, as a soft surface does.
     #[props(into, default)]
-    pub tone: Tone,
+    pub tone: Reactive<Tone>,
     /// Fill the parent's width instead of taking a fixed one — what a bar inside a card wants, where a px track is either short of the card or past its edge.
     #[props(default)]
     pub stretch: bool,

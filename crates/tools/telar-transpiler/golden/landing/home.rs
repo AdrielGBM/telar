@@ -101,7 +101,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let __sbox_0 = {
             let __row_0 = {
                 let __row_1 = {
-                    let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().dark })).build())?;
+                    let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(20)).__follow_color({ let theme = theme.clone(); move || theme.get().dark }).build())?;
                     let __text_0 = {
                         Text::declaring(
                             || "rsx".to_string(),
@@ -302,7 +302,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_5 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                                let __node_5 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(32)).__follow_color({ let theme = theme.clone(); move || theme.get().accent }).build())?;
                                 __children.push(box_item(__node_5));
                                 Ok(__children)
                             }
@@ -316,7 +316,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_7 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                                let __node_7 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(::telar::Int(32)).__follow_color({ let theme = theme.clone(); move || theme.get().accent }).build())?;
                                 __children.push(box_item(__node_7));
                                 Ok(__children)
                             }
@@ -330,7 +330,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_9 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                                let __node_9 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(::telar::Int(32)).__follow_color({ let theme = theme.clone(); move || theme.get().accent }).build())?;
                                 __children.push(box_item(__node_9));
                                 Ok(__children)
                             }
@@ -344,7 +344,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_11 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build())?;
+                                let __node_11 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(::telar::Int(32)).__follow_color({ let theme = theme.clone(); move || theme.get().accent }).build())?;
                                 __children.push(box_item(__node_11));
                                 Ok(__children)
                             }
@@ -512,7 +512,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     )?
                 };
                 let __row_10 = {
-                    let __node_13 = button(ButtonProps::props().label("Reserve a seat").color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
+                    let __node_13 = button(ButtonProps::props().label("Reserve a seat").__follow_color({ let theme = theme.clone(); move || theme.get().accent }).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
                     let __text_28 = {
                         let signups = signups.clone();
                         Text::declaring(
@@ -531,7 +531,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __row_11 = {
                 let __col_16 = {
                     let __row_12 = {
-                        let __node_14 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(18)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().on_primary })).build())?;
+                        let __node_14 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(::telar::Int(18)).__follow_color({ let theme = theme.clone(); move || theme.get().on_primary }).build())?;
                         let __text_29 = {
                             Text::declaring(
                                 || "rsx".to_string(),
