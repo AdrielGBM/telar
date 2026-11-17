@@ -98,14 +98,10 @@ let look = Look {
     selected: None,
     interactive: true,
 };
-let leaves = memo({
-    let to = to.clone();
-    move || to.leaves()
-});
 let on_press = props.on_press.clone().map(|run| move || run());
 
 [view]
-row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.ink)) text_wrap:nowrap hover_style(fill:(look.hovered($text.ink)) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:on_press a11y_label:(heard($props.label, $leaves)) surface:$props.style
+row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.ink)) text_wrap:nowrap hover_style(fill:(look.hovered($text.ink)) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:on_press a11y_label:(heard($props.label, to.leaves())) surface:$props.style
     row align:center gap:(shared::gap_sm(ControlSize::Regular))
         children $props.leading
         if $props.current
@@ -113,6 +109,6 @@ row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.i
         else
             text "{$props.label}" underline
         children $props.trailing
-    if $leaves
+    if to.leaves()
         row align:center pad_start:(shared::gap_sm(ControlSize::Regular))
             glyph shape:Mark::External

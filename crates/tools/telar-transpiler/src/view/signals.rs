@@ -489,6 +489,32 @@ impl ViewGen<'_> {
         capture_block_multiline(&idents, &copies, closure, pad)
     }
 
+    /// [`Self::owning_subtree`] for a closure that runs again and may move what it reads, as the code of a region rebuilt when what it read changes: each name and copy it takes is cloned again where `closure` writes [`RECLONE`], the top of its body, so a move takes that run's own.
+    pub(super) fn owning_rerun(
+        &self,
+        snippets: &[ScopedSnippet],
+        closure: String,
+        pad: &str,
+    ) -> String {
+        let scoped: Vec<(&str, &[String])> = snippets
+            .iter()
+            .map(|s| (s.text.as_str(), s.shadowed.as_slice()))
+            .collect();
+        let (idents, copies, closure) = self.captures(&scoped, &closure);
+        let taken = idents
+            .iter()
+            .cloned()
+            .chain(copies.iter().filter_map(|copy| {
+                let (binding, _) = copy.strip_prefix("let ")?.split_once(" = ")?;
+                Some(binding.to_string())
+            }));
+        let reclone: String = taken
+            .map(|name| format!("let {name} = ::core::clone::Clone::clone(&{name}); "))
+            .collect();
+        let closure = closure.replacen(RECLONE, &reclone, 1);
+        capture_block_multiline(&idents, &copies, closure, pad)
+    }
+
     /// What a `move` closure reading `snippets` takes in: the names it clones, the `props` places it copies, and the closure reading those copies.
     fn captures(
         &self,
@@ -506,7 +532,13 @@ impl ViewGen<'_> {
             .collect();
         let mut copies = Vec::new();
         let closure = copy_places(closure, &places, |_, _| String::new(), &mut copies);
-        (self.captured_names(snippets), copies, closure)
+        let mut names = self.captured_names(snippets);
+        // The previewed component's calls log into the preview's action log, which no snippet of the markup names.
+        let logged = format!(".__preview_actions(&{})", crate::preview::ACTIONS);
+        if closure.contains(&logged) && !names.iter().any(|name| name == crate::preview::ACTIONS) {
+            names.push(crate::preview::ACTIONS.to_string());
+        }
+        (names, copies, closure)
     }
 
     /// `written`, the emitted form of `expr`, taken by value when `expr` names a `[logic]` binding, a binding the view makes (a loop variable, an `if let` or arm binding, which [`ViewReads`](super::ViewReads) does not count, so each is one reader of its own), or a `props` place: a [`copy_of`] it where [`Self::must_copy_capture`] says moving it would take it from another reader or from the next run of a rebuilding region, itself where it can be moved. `None` for an expression that names no binding to take.
@@ -551,6 +583,11 @@ impl ScopedSnippet {
             text,
             shadowed: scope.to_vec(),
         }
+    }
+
+    /// `text` read with nothing bound between it and the closure reading it.
+    pub(super) fn unscoped(text: &str) -> Self {
+        Self::new(text.to_string(), &[])
     }
 }
 
@@ -802,3 +839,6 @@ pub(crate) fn view_let_names(nodes: &[ViewNode]) -> Vec<String> {
 pub(crate) fn reads_box_text(s: &str) -> bool {
     dollar_spans(s).any(|(marker, end)| &s[marker + 1..end] == BOX_TEXT)
 }
+
+/// Where [`ViewGen::owning_rerun`] puts the clones a run of its closure takes.
+pub(super) const RECLONE: &str = "/*rerun-clones*/";

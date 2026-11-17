@@ -18,7 +18,7 @@ mod text;
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use telar_parser::{Element, IfBlock, StyleClass, ViewNode};
+use telar_parser::{Element, StyleClass, ViewNode};
 
 use crate::lexer::contains_ident;
 use crate::registry::ValueKind;
@@ -170,13 +170,12 @@ pub(crate) struct ChildSink {
     slots: bool,
 }
 
-/// Whether a node forces its parent into slot mode: a *reactive* `for`/`if` (a `$`-driven source) becomes a transparent fragment, which only the `ChildSlot`/`from_slots` path can host. A static `for`/`if` does not — it pushes its widgets directly, so a `Vec` accumulator suffices.
+/// Whether a node forces its parent into slot mode: an `if`, `for` or `match` may turn out, when it is built, to read state, and then it is a transparent fragment, which only the `ChildSlot`/`from_slots` path can host.
 pub(crate) fn forces_fragment(node: &ViewNode) -> bool {
-    match node {
-        ViewNode::ForBlock(block) => block.iterable.trim_start().starts_with('$'),
-        ViewNode::IfBlock(block) => block.condition.contains('$'),
-        _ => false,
-    }
+    matches!(
+        node,
+        ViewNode::ForBlock(_) | ViewNode::IfBlock(_) | ViewNode::MatchBlock(_)
+    )
 }
 
 /// A piece of generated child code together with how it contributes to a parent's child collection.
@@ -478,16 +477,6 @@ impl<'a> ViewGen<'a> {
             && !self.bindings.iter().any(|bound| bound == value)
     }
 
-    /// The first signal `code` mentions by name, skipping strings and comments.
-    ///
-    /// Names, not types: `[logic]` is spliced through verbatim and never type-checked here, so the only thing this can honestly say is *this text refers to something the author declared reactive*. Enough for the one question it is asked — whether an expression that looks static is reading state that moves.
-    pub(super) fn signal_named_in(&self, code: &str) -> Option<&str> {
-        self.signals
-            .iter()
-            .find(|name| contains_ident(code, name))
-            .map(String::as_str)
-    }
-
     fn next_variable_name(&mut self, tag: &str) -> String {
         let prefix = match AssetKind::for_tag(tag) {
             Some(kind) => kind.var_prefix(),
@@ -522,7 +511,9 @@ impl<'a> ViewGen<'a> {
         if let [ViewNode::IfBlock(block)] = nodes
             && !block.condition.contains('$')
         {
-            return self.generate_root_if(block);
+            let src0 = block.line.saturating_sub(1);
+            let root = self.emit_followed_root(block);
+            return format!("{SRC_PUSH}{src0}\n{root}\n{SRC_POP}");
         }
 
         let mut out = String::new();
@@ -562,46 +553,6 @@ impl<'a> ViewGen<'a> {
         let content = wrap_as_single_content(&roots);
         let _ = write!(out, "{pad}Ok(Box::new({content}))");
 
-        out
-    }
-
-    /// Generates the body for a view that is a single static `if`/`if-else`: each branch returns its content directly (via [`Self::emit_content_cell`]), so the chosen branch is the component root with no wrapping column. A missing `else` returns an empty column. Source markers/spans are preserved for cursor mapping.
-    fn generate_root_if(&mut self, block: &IfBlock) -> String {
-        let mut out = String::new();
-        let pad = self.indent_str();
-        let cond = block.condition.trim();
-        let marker = expr_marker(block.condition_start, cond.len());
-        let src0 = block.line.saturating_sub(1);
-        let _ = writeln!(out, "{SRC_PUSH}{src0}");
-        let _ = writeln!(out, "{pad}if {marker}{cond} {{");
-        self.indent += 1;
-        let then_cell = self.emit_content_cell(&block.then_branch, &mut out);
-        let ipad = self.indent_str();
-        let _ = writeln!(out, "{ipad}Ok(Box::new({then_cell}))");
-        self.indent -= 1;
-        let _ = writeln!(out, "{pad}}} else {{");
-        self.indent += 1;
-        let ipad = self.indent_str();
-        match &block.else_branch {
-            // An `else if` is the root too, so each branch of the chain returns its own element rather than the later ones a column.
-            Some(else_branch)
-                if let [ViewNode::IfBlock(chained)] = else_branch.as_slice()
-                    && !chained.condition.contains('$') =>
-            {
-                let chained = self.generate_root_if(chained);
-                let _ = writeln!(out, "{chained}");
-            }
-            Some(else_branch) => {
-                let else_cell = self.emit_content_cell(else_branch, &mut out);
-                let _ = writeln!(out, "{ipad}Ok(Box::new({else_cell}))");
-            }
-            None => {
-                let _ = writeln!(out, "{ipad}Ok(Box::new(Container::column(children![])?))");
-            }
-        }
-        self.indent -= 1;
-        let _ = writeln!(out, "{pad}}}");
-        let _ = write!(out, "{SRC_POP}");
         out
     }
 

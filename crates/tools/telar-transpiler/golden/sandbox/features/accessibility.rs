@@ -41,21 +41,46 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    for letter in letters.clone() {
-                                        let letter = letter.to_owned();
-                                        let __text_0 = {
-                                            let letter = letter.clone();
-                                            Text::declaring(
-                                                move || format!("{}", letter),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(32.0).with_color(theme.get().primary).with_font_weight(700) },
-                                            )?
+                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                    let __node_3_build =
+                                        {
+                                            let theme = theme.clone();
+                                            let letters = letters.clone();
+                                        move || -> Result<Vec<ChildSlot>, LayoutError> { let theme = ::core::clone::Clone::clone(&theme); let letters = ::core::clone::Clone::clone(&letters); 
+                                            let mut __slots: Vec<ChildSlot> = Vec::new();
+                                            for letter in letters.clone() {
+                                                let letter = letter.to_owned();
+                                                let __text_0 = {
+                                                    let letter = letter.clone();
+                                                    Text::declaring(
+                                                        move || format!("{}", letter),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(32.0).with_color(theme.get().primary).with_font_weight(700) },
+                                                    )?
+                                                };
+                                                let __text_0 = __text_0.a11y_hidden();
+                                                __slots.push(ChildSlot::stat(box_item(__text_0)));
+                                            }
+                                            Ok(__slots)
+                                        }
                                         };
-                                        let __text_0 = __text_0.a11y_hidden();
-                                        __children.push(box_item(__text_0));
+                                    let __node_3_source =
+                                        {
+                                            let letters = letters.clone();
+{ let __runs = ::std::cell::Cell::new(0u64); move || { let _ = &(letters.clone()); __runs.set(__runs.get() + 1); vec![__runs.get()] } }
+                                        };
+                                    if reads_state(&__node_3_source).1 {
+                                        let __node_3 = fragment_branches(
+                                            __node_3_source,
+                                            |__run: &u64| *__run,
+                                            move |_| __node_3_build(),
+                                            0.0,
+                                        );
+                                        __slots.push(__node_3);
+                                    } else {
+                                        __slots.extend(__node_3_build()?);
                                     }
-                                    Container::new(LayoutStyle::new().flex_row().gap(4.0), __children)?.role(::telar::Role::Heading(::telar::HeadingLevel::Two))
+                                    Container::from_slots(LayoutStyle::new().flex_row().gap(4.0), __slots)?.role(::telar::Role::Heading(::telar::HeadingLevel::Two))
                                 };
                                 let __row_0 = __row_0.a11y_label(|| "Telar");
                                 __children.push(box_item(__row_0));
@@ -66,22 +91,22 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("row a11y_label:'Telar'  ·  text '{letter}' a11y:hidden").build())?;
-                    __children.push(box_item(__node_3));
+                    let __node_4 = code_line(CodeLineProps::props().code("row a11y_label:'Telar'  ·  text '{letter}' a11y:hidden").build())?;
+                    __children.push(box_item(__node_4));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("Split letters — read as one word, not five").children(__recipe_children).build())?
         };
-        let __node_4 = {
+        let __node_5 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                     let demo_icon = demo_icon.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_5 = {
+                    let __node_6 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -124,22 +149,22 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                         );
                         card(CardProps::props().children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("svg src:demo_icon a11y_label:'Telar logo'").build())?;
                     __children.push(box_item(__node_6));
+                    let __node_7 = code_line(CodeLineProps::props().code("svg src:demo_icon a11y_label:'Telar logo'").build())?;
+                    __children.push(box_item(__node_7));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("A picture is decoration until it is named").children(__recipe_children).build())?
         };
-        let __node_7 = {
+        let __node_8 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_8 = {
+                    let __node_9 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -178,23 +203,23 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                         );
                         card(CardProps::props().children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("text '…' lang:'es'").build())?;
                     __children.push(box_item(__node_9));
+                    let __node_10 = code_line(CodeLineProps::props().code("text '…' lang:'es'").build())?;
+                    __children.push(box_item(__node_10));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("Language of a subtree").children(__recipe_children).build())?
         };
-        let __node_10 = {
+        let __node_11 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                     let mood = mood.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_11 = {
+                    let __node_12 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -203,8 +228,8 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_2 = {
                                     let __sbox_0 = {
-                                        let __node_12 = icon(IconProps::props().name(("lucide:smile", crate::__rsx_assets::ASSET_4AF7F703.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build())?;
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(12.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__node_12])?.on_press({ let mood = mood.clone(); move || mood.set(if mood.get() == "calm" { "busy".into() } else { "calm".into() }) })
+                                        let __node_13 = icon(IconProps::props().name(("lucide:smile", crate::__rsx_assets::ASSET_4AF7F703.get(), true)).size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build())?;
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(12.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__node_13])?.on_press({ let mood = mood.clone(); move || mood.set(if mood.get() == "calm" { "busy".into() } else { "calm".into() }) })
                                     };
                                     let __sbox_0 = __sbox_0.a11y_label({ let mood = mood.clone(); move || ::std::string::ToString::to_string(&(format!("Mood: {}", mood.get()))) });
                                     let __text_5 = {
@@ -223,20 +248,20 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                         );
                         card(CardProps::props().children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_11));
-                    let __node_13 = code_line(CodeLineProps::props().code("box a11y_label:(format!('Mood: {}', $mood))").build())?;
-                    __children.push(box_item(__node_13));
+                    __children.push(box_item(__node_12));
+                    let __node_14 = code_line(CodeLineProps::props().code("box a11y_label:(format!('Mood: {}', $mood))").build())?;
+                    __children.push(box_item(__node_14));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("A name that follows state").children(__recipe_children).build())?
         };
-        let __node_14 = {
+        let __node_15 = {
             let __recipe_children = Children::new(
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_15 = {
+                    let __node_16 = {
                         let __recipe_children = Children::new(
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -253,25 +278,25 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                         );
                         card(CardProps::props().children(__recipe_children).build())?
                     };
-                    let __node_15 = __node_15.a11y_label(|| "Release notes").a11y_role(::telar::Role::Article);
-                    __children.push(box_item(__node_15));
-                    let __node_16 = code_line(CodeLineProps::props().code("card role:article a11y_label:'Release notes'").build())?;
+                    let __node_16 = __node_16.a11y_label(|| "Release notes").a11y_role(::telar::Role::Article);
                     __children.push(box_item(__node_16));
+                    let __node_17 = code_line(CodeLineProps::props().code("card role:article a11y_label:'Release notes'").build())?;
+                    __children.push(box_item(__node_17));
                     Ok(__children)
                 }
             );
             example(ExampleProps::props().title("What a component's item is, said where it is used").children(__recipe_children).build())?
         };
-        let __node_17 = {
+        let __node_18 = {
             let __recipe_children = Children::new(
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __col_2 = {
-                        let __node_18 = prop_row(PropRowProps::props().name("a11y_label").values("text · t!(…) · $state expr").about("The name assistive technology reads. On img and svg it is what makes a picture more than decoration.").build())?;
-                        let __node_19 = prop_row(PropRowProps::props().name("lang").values("BCP 47 tag").about("The language of the box and everything under it; the nearest one wins.").build())?;
-                        let __node_20 = prop_row(PropRowProps::props().name("a11y").values("hidden").about("Skipped by assistive technology, with its whole subtree. Still drawn and still pressable.").build())?;
-                        let __node_21 = prop_row(PropRowProps::props().name("role").values("landmark · article · h1–h6 · status · log · listitem · group").about("On a component call: what the item it returns is, where the component left it a plain box or a region. A control keeps its own role.").build())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_18, __node_19, __node_20, __node_21])?
+                        let __node_19 = prop_row(PropRowProps::props().name("a11y_label").values("text · t!(…) · $state expr").about("The name assistive technology reads. On img and svg it is what makes a picture more than decoration.").build())?;
+                        let __node_20 = prop_row(PropRowProps::props().name("lang").values("BCP 47 tag").about("The language of the box and everything under it; the nearest one wins.").build())?;
+                        let __node_21 = prop_row(PropRowProps::props().name("a11y").values("hidden").about("Skipped by assistive technology, with its whole subtree. Still drawn and still pressable.").build())?;
+                        let __node_22 = prop_row(PropRowProps::props().name("role").values("landmark · article · h1–h6 · status · log · listitem · group").about("On a component call: what the item it returns is, where the component left it a plain box or a region. A control keeps its own role.").build())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_19, __node_20, __node_21, __node_22])?
                     };
                     __children.push(box_item(__col_2));
                     Ok(__children)
@@ -279,7 +304,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
             );
             example(ExampleProps::props().title("Attributes").children(__recipe_children).build())?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_14, __node_17])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8, __node_11, __node_15, __node_18])?
     };
     Ok(Box::new(__col_0))
 }

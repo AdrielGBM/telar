@@ -138,7 +138,7 @@ impl ViewGen<'_> {
         setters.push_str(&self.surface_setters(el, props_attrs));
         setters.push_str(recipes);
         if self.previewed == tag.rsplit("::").next() {
-            setters.push_str(".__preview_actions(&__preview.actions())");
+            setters.push_str(&format!(".__preview_actions(&{})", crate::preview::ACTIONS));
         }
         format!("{}::props(){setters}.build()", props_type(tag))
     }

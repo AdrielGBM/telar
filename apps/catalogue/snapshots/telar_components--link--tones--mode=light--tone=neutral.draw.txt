@@ -13,8 +13,6 @@ element group
               end
             end
           end
-          element group
-          end
         end
       end
     end

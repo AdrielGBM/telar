@@ -78,7 +78,7 @@ fn the_roots_literals_are_read_through_the_args() {
     assert!(code.contains(".on_change(std::rc::Rc::new("), "{code}");
     assert!(code.contains(".width(1 + 2)"), "{code}");
     assert!(
-        code.contains(".__preview_actions(&__preview.actions()).build()"),
+        code.contains(".__preview_actions(&actions).build()"),
         "the root logs its callbacks:\n{code}"
     );
     assert!(
@@ -96,7 +96,7 @@ fn args_none_keeps_the_roots_literals_fixed() {
     assert!(!code.contains("__preview_arg!"), "{code}");
     assert!(!code.contains(".args(&["), "{code}");
     assert!(
-        code.contains(".__preview_actions(&__preview.actions())"),
+        code.contains(".__preview_actions(&actions)"),
         "it still logs its callbacks:\n{code}"
     );
 }
@@ -109,8 +109,7 @@ fn a_root_that_is_no_component_call_reads_no_literals() {
     );
     assert!(!code.contains("__preview_arg!"), "{code}");
     assert_eq!(
-        code.matches(".__preview_actions(&__preview.actions())")
-            .count(),
+        code.matches(".__preview_actions(&actions)").count(),
         2,
         "{code}"
     );

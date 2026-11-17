@@ -74,7 +74,7 @@ pub fn themed_panel_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
             }
             }
         );
-        themed_panel(ThemedPanelProps::props().mode(::telar::__preview_arg!(__preview, "mode", "pastel")).children(__recipe_children).__preview_actions(&__preview.actions()).build())?
+        themed_panel(ThemedPanelProps::props().mode(::telar::__preview_arg!(__preview, "mode", "pastel")).children(__recipe_children).__preview_actions(&actions).build())?
     };
     Ok(Box::new(__node_0))
 }

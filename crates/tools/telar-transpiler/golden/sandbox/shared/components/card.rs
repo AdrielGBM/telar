@@ -84,7 +84,7 @@ pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
             }
             }
         );
-        card(CardProps::props().gap(::telar::__preview_arg!(__preview, "gap", ::telar::Int(8))).header(__recipe_header).children(__recipe_children).__preview_actions(&__preview.actions()).build())?
+        card(CardProps::props().gap(::telar::__preview_arg!(__preview, "gap", ::telar::Int(8))).header(__recipe_header).children(__recipe_children).__preview_actions(&actions).build())?
     };
     Ok(Box::new(__node_0))
 }

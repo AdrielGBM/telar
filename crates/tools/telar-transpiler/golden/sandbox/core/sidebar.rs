@@ -51,13 +51,38 @@ pub fn sidebar(props: SidebarProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             };
             let __col_3 = {
                 let __row_1 = {
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    for mode in modes.clone() {
-                        let mode = mode.to_owned();
-                        let __node_1 = button(ButtonProps::props().label(crate::core::theme::SandboxTheme::by_mode(mode.name()).name).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let mode = mode.clone(); move || set_mode(&mode) })).build())?;
-                        __children.push(box_item(__node_1));
+                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                    let __node_1_build =
+                        {
+                            let theme = theme.clone();
+                            let modes = modes.clone();
+                        move || -> Result<Vec<ChildSlot>, LayoutError> { let theme = ::core::clone::Clone::clone(&theme); let modes = ::core::clone::Clone::clone(&modes); 
+                            let mut __slots: Vec<ChildSlot> = Vec::new();
+                            for mode in modes.clone() {
+                                let mode = mode.to_owned();
+                                let __node_2 = button(ButtonProps::props().label(crate::core::theme::SandboxTheme::by_mode(mode.name()).name).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let mode = mode.clone(); move || set_mode(&mode) })).build())?;
+                                __slots.push(ChildSlot::stat(box_item(__node_2)));
+                            }
+                            Ok(__slots)
+                        }
+                        };
+                    let __node_1_source =
+                        {
+                            let modes = modes.clone();
+{ let __runs = ::std::cell::Cell::new(0u64); move || { let _ = &(modes.clone()); __runs.set(__runs.get() + 1); vec![__runs.get()] } }
+                        };
+                    if reads_state(&__node_1_source).1 {
+                        let __node_1 = fragment_branches(
+                            __node_1_source,
+                            |__run: &u64| *__run,
+                            move |_| __node_1_build(),
+                            0.0,
+                        );
+                        __slots.push(__node_1);
+                    } else {
+                        __slots.extend(__node_1_build()?);
                     }
-                    Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), __children)?
+                    Container::from_slots(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), __slots)?
                 };
                 let __text_3 = {
                     let theme_name = theme_name.clone();

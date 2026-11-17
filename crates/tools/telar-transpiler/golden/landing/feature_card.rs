@@ -68,7 +68,7 @@ pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
             }
             }
         );
-        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Fast")).body(::telar::__preview_arg!(__preview, "body", "Software and wgpu renderers with dirty-tracking and scroll-blit detection.")).icon(__recipe_icon).__preview_actions(&__preview.actions()).build())?
+        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Fast")).body(::telar::__preview_arg!(__preview, "body", "Software and wgpu renderers with dirty-tracking and scroll-blit detection.")).icon(__recipe_icon).__preview_actions(&actions).build())?
     };
     Ok(Box::new(__node_0))
 }
@@ -90,7 +90,7 @@ pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Resul
             }
             }
         );
-        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Cross-platform")).body(::telar::__preview_arg!(__preview, "body", "One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.")).icon(__recipe_icon).__preview_actions(&__preview.actions()).build())?
+        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Cross-platform")).body(::telar::__preview_arg!(__preview, "body", "One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.")).icon(__recipe_icon).__preview_actions(&actions).build())?
     };
     Ok(Box::new(__node_0))
 }

@@ -79,7 +79,7 @@ pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box
             }
             }
         );
-        example(ExampleProps::props().title(::telar::__preview_arg!(__preview, "title", "justify — distribute along the main axis")).children(__recipe_children).__preview_actions(&__preview.actions()).build())?
+        example(ExampleProps::props().title(::telar::__preview_arg!(__preview, "title", "justify — distribute along the main axis")).children(__recipe_children).__preview_actions(&actions).build())?
     };
     Ok(Box::new(__node_0))
 }

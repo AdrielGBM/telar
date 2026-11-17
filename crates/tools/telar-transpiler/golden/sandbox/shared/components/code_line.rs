@@ -39,7 +39,7 @@ pub fn code_line_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<B
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let actions = __preview.actions();
-    let __node_0 = code_line(CodeLineProps::props().code(::telar::__preview_arg!(__preview, "code", "box fill:primary radius:8 width:120 height:80")).__preview_actions(&__preview.actions()).build())?;
+    let __node_0 = code_line(CodeLineProps::props().code(::telar::__preview_arg!(__preview, "code", "box fill:primary radius:8 width:120 height:80")).__preview_actions(&actions).build())?;
     Ok(Box::new(__node_0))
 }
 

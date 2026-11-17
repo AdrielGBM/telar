@@ -20,8 +20,6 @@ element group
                   end
                 end
               end
-              element group
-              end
             end
           end
           element group
@@ -38,8 +36,6 @@ element group
                     text 0,0 87.88x24 "Try again" size=20 family=sans-serif weight=400 color=#ea94c1ff wrap=none underline=font underline-offset=font lang=en
                   end
                 end
-              end
-              element group
               end
             end
           end

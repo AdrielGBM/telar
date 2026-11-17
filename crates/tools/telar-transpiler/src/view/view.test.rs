@@ -857,8 +857,11 @@ fn root_static_if_returns_branch_directly_without_wrapper() {
         "a single-if root must not wrap its branch in an injected column:\n{code}"
     );
     assert!(
-        code.contains("Ok(Box::new(__col_0))") && code.contains("Ok(Box::new(__row_0))"),
-        "each branch's element is returned directly as the component root:\n{code}"
+        code.contains("__slots.push(ChildSlot::stat(box_item(__col_0)))")
+            && code.contains("__slots.push(ChildSlot::stat(box_item(__row_0)))")
+            && code
+                .contains("    branch_cell(LayoutStyle::new().flex_column(), __node_0_build()?)"),
+        "a condition that read nothing makes the branch's one element the root itself, as `branch_cell` hands back a lone widget:\n{code}"
     );
     assert!(
         code.contains("if vertical {") && code.contains("} else {"),
@@ -2182,15 +2185,20 @@ fn a_class_with_no_text_property_authors_no_text() {
     assert!(!code.contains(".authored_text("), "{code}");
 }
 
-/// An `else if` at the root is the root too: every branch of the chain returns its own element, where the later ones used to come back inside a column.
+/// An `else if` at the root is the root too: every branch of the chain builds only its own element, which the root hands back as itself.
 #[test]
 fn every_branch_of_a_root_else_if_chain_is_the_root() {
     let src = "[logic]\nlet level = 2u8;\n[view]\nif level == 1\n    text \"a\"\nelse if level == 2\n    text \"b\"\nelse\n    text \"c\"\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
-    assert!(!code.contains("Container"), "{code}");
-    assert_eq!(code.matches("Ok(Box::new(__text_").count(), 3, "{code}");
+    assert!(!code.contains("Container::column(children!["), "{code}");
+    assert_eq!(
+        code.matches("__slots.push(ChildSlot::stat(box_item(__text_")
+            .count(),
+        3,
+        "{code}"
+    );
     if let Err(e) = syn::parse_file(&code) {
         panic!("generated code does not parse: {e}\n{code}");
     }
@@ -2570,8 +2578,8 @@ fn a_reference_binding_is_owned_by_each_closure_and_handed_on_as_the_reference()
         .rust_code;
     assert_eq!(
         code.matches("let location = location.clone();").count(),
-        2,
-        "each text closure owns a `String`, not the `&String` the pattern binds:\n{code}"
+        4,
+        "each text closure, and each closure of the region around them, owns a `String`, not the `&String` the pattern binds:\n{code}"
     );
     for call in ["props_table(PropsTableProps", "props_list(PropsListProps"] {
         assert!(

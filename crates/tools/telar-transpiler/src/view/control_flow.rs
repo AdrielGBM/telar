@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::{ForBlock, IfBlock, MatchBlock, ViewNode, VirtualClause};
 
-use super::signals::{ScopedSnippet, pattern_idents, scoped_snippets, substitute_reads};
+use super::signals::{RECLONE, ScopedSnippet, pattern_idents, scoped_snippets, substitute_reads};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
@@ -39,15 +39,200 @@ impl ViewGen<'_> {
         result
     }
 
-    /// `match <expr> [as <name>] [key <expr>]`. A `$` in the scrutinee makes it reactive; without one the arm is chosen once at construction and this is an ordinary Rust `match`.
+    /// A region of the view written with no `$`, whose shape the run picks: `source` is worked out once through `reads_state`, and if that read no state the region is built in place, its children spliced into the parent as a plain `if`, `match` or `for` builds them; if it read state the same build becomes what a fragment (or, outside a slot host, a boxed list) rebuilds whenever `source` changes. `body` emits the plain form into the parent's sink, once, inside the closure both shapes run.
+    fn emit_followed_region(
+        &mut self,
+        node: ViewNode,
+        source: RegionSource<'_>,
+        body: impl FnOnce(&mut Self, &mut String),
+    ) -> ChildEmit {
+        self.in_reactive(|g| {
+            let pad = g.indent_str();
+            let (sink, slots) = match g.child_sinks.last() {
+                Some(sink) => (sink.var, sink.slots),
+                None => ("__slots", true),
+            };
+            let mut code = String::new();
+            let parts = g.region_parts(&node, source, sink, slots, body, &mut code);
+            let RegionParts { build, source, key } = parts;
+            let id = build.trim_end_matches("_build");
+            let boxed = !slots;
+            let axis = if g.host_is_row() {
+                "flex_row"
+            } else {
+                "flex_column"
+            };
+            let opener = if boxed {
+                "ReactiveList::new("
+            } else {
+                "fragment_branches("
+            };
+            let branch = match boxed {
+                true => format!("move |_| branch_cell(LayoutStyle::new().{axis}(), {build}()?)"),
+                false => format!("move |_| {build}()"),
+            };
+            let closer = g.boxed_list_closer(boxed);
+            let push = match slots {
+                true => format!("{sink}.push({id});"),
+                false => format!("{sink}.push(box_item({id}));"),
+            };
+            let _ = writeln!(code, "{pad}if reads_state(&{source}).1 {{");
+            let _ = writeln!(code, "{pad}    let {id} = {opener}");
+            let _ = writeln!(code, "{pad}        {source},");
+            let _ = writeln!(code, "{pad}        {key},");
+            let _ = writeln!(code, "{pad}        {branch},");
+            let _ = writeln!(code, "{pad}        0.0,");
+            let _ = writeln!(code, "{pad}    {closer}");
+            let _ = writeln!(code, "{pad}    {push}");
+            let _ = writeln!(code, "{pad}}} else {{");
+            let _ = writeln!(code, "{pad}    {sink}.extend({build}()?);");
+            let _ = write!(code, "{pad}}}");
+            ChildEmit::Dynamic { code }
+        })
+    }
+
+    /// A root `if` written with no `$`: the root is the chosen branch's element when the condition read no state, as a plain root `if` returns it, and a column rebuilding it when it did.
+    pub(super) fn emit_followed_root(&mut self, block: &IfBlock) -> String {
+        self.with_child_sink(ChildMode::Slots, |g| {
+            g.in_reactive(|g| {
+                let pad = g.indent_str();
+                let mut code = String::new();
+                let node = ViewNode::IfBlock(block.clone());
+                let parts = g.region_parts(
+                    &node,
+                    RegionSource::of_if(block),
+                    "__slots",
+                    true,
+                    |g, out| g.emit_plain_if(block, out),
+                    &mut code,
+                );
+                let RegionParts { build, source, key } = parts;
+                let _ = writeln!(code, "{pad}if reads_state(&{source}).1 {{");
+                let _ = writeln!(
+                    code,
+                    "{pad}    let __root = fragment_branches({source}, {key}, move |_| {build}(), 0.0);"
+                );
+                let _ = writeln!(
+                    code,
+                    "{pad}    Ok(Box::new(Container::from_slots(LayoutStyle::new().flex_column(), vec![__root])?))"
+                );
+                let _ = writeln!(code, "{pad}}} else {{");
+                let _ = writeln!(
+                    code,
+                    "{pad}    branch_cell(LayoutStyle::new().flex_column(), {build}()?)"
+                );
+                let _ = write!(code, "{pad}}}");
+                code
+            })
+        })
+    }
+
+    /// Writes a region's build and source closures into `code`, bound to names of their own, and answers those names and the key its rebuilds go by.
+    fn region_parts(
+        &mut self,
+        node: &ViewNode,
+        source: RegionSource<'_>,
+        sink: &str,
+        slots: bool,
+        body: impl FnOnce(&mut Self, &mut String),
+        code: &mut String,
+    ) -> RegionParts {
+        let pad = self.indent_str();
+        let id = self.next_variable_name("node");
+        let item = if slots {
+            "ChildSlot"
+        } else {
+            "Box<dyn LayoutItem>"
+        };
+        let mut built = String::new();
+        let _ = writeln!(
+            built,
+            "{pad}    move || -> Result<Vec<{item}>, LayoutError> {{ {RECLONE}"
+        );
+        self.indent += 2;
+        let ipad = self.indent_str();
+        let _ = writeln!(built, "{ipad}let mut {sink}: Vec<{item}> = Vec::new();");
+        body(self, &mut built);
+        let _ = writeln!(built);
+        let _ = writeln!(built, "{ipad}Ok({sink})");
+        self.indent -= 2;
+        let _ = write!(built, "{pad}    }}");
+        let snippets = scoped_snippets(std::slice::from_ref(node), &[]);
+        let build = self.owning_rerun(&snippets, built, &format!("{pad}    "));
+        let (raw, closure, key) = match source {
+            RegionSource::Truth(condition) => (
+                condition,
+                format!("move || vec![{condition}]"),
+                "|__truth: &bool| *__truth",
+            ),
+            RegionSource::Runs { raw, read } => {
+                // A borrow moves nothing, so only an `if let` reading its bindings by value needs its own copies.
+                let reclone = if read.starts_with("&(") { "" } else { RECLONE };
+                (
+                    raw,
+                    format!(
+                        "{{ let __runs = ::std::cell::Cell::new(0u64); move || {{ {reclone}let _ = {read}; __runs.set(__runs.get() + 1); vec![__runs.get()] }} }}"
+                    ),
+                    "|__run: &u64| *__run",
+                )
+            }
+        };
+        let source = self.owning_rerun(
+            &[ScopedSnippet::unscoped(raw)],
+            closure,
+            &format!("{pad}    "),
+        );
+        let _ = writeln!(code, "{pad}let {id}_build =\n{build};");
+        let _ = writeln!(code, "{pad}let {id}_source =\n{source};");
+        RegionParts {
+            build: format!("{id}_build"),
+            source: format!("{id}_source"),
+            key,
+        }
+    }
+
+    /// `if`/`else` as a plain branch, built once where it stands into the sink in scope.
+    fn emit_plain_if(&mut self, block: &IfBlock, code: &mut String) {
+        let pad = self.indent_str();
+        let cond = block.condition.trim();
+        let marker = expr_marker(block.condition_start, cond.len());
+        let _ = writeln!(code, "{pad}if {marker}{cond} {{");
+        self.indent += 1;
+        let bound = crate::rust::condition_bindings(cond).unwrap_or_default();
+        self.with_bindings(bound, |g| {
+            g.emit_branch_into_children(&block.then_branch, code)
+        });
+        self.indent -= 1;
+        if let Some(else_branch) = &block.else_branch {
+            let _ = writeln!(code, "{pad}}} else {{");
+            self.indent += 1;
+            self.emit_branch_into_children(else_branch, code);
+            self.indent -= 1;
+        }
+        let _ = write!(code, "{pad}}}");
+    }
+
+    /// `match <expr> [as <name>] [key <expr>]`. A `$` in the scrutinee makes it a reactive match keyed as it says; without one it is a region rebuilt whenever what the scrutinee read changes.
     pub(super) fn emit_match(&mut self, block: &MatchBlock) -> ChildEmit {
         if block.scrutinee.contains('$') {
             return self.emit_reactive_match(block);
         }
+        let scrutinee = block.scrutinee.trim();
+        self.emit_followed_region(
+            ViewNode::MatchBlock(block.clone()),
+            RegionSource::Runs {
+                raw: scrutinee,
+                read: format!("&({scrutinee})"),
+            },
+            |g, code| g.emit_plain_match(block, code),
+        )
+    }
+
+    /// `match` as a plain choice of arm, built once where it stands into the sink in scope.
+    fn emit_plain_match(&mut self, block: &MatchBlock, code: &mut String) {
         let pad = self.indent_str();
         let scrutinee = block.scrutinee.trim();
         let marker = expr_marker(block.scrutinee_start, scrutinee.len());
-        let mut code = String::new();
         let _ = writeln!(code, "{pad}match {marker}{scrutinee} {{");
         for arm in &block.arms {
             self.indent += 1;
@@ -56,13 +241,12 @@ impl ViewGen<'_> {
             let _ = writeln!(code, "{apad}{amarker}{} => {{", arm.pattern);
             self.indent += 1;
             let bound = crate::rust::arm_bindings(&arm.pattern).unwrap_or_default();
-            self.with_bindings(bound, |g| g.emit_branch_into_children(&arm.body, &mut code));
+            self.with_bindings(bound, |g| g.emit_branch_into_children(&arm.body, code));
             self.indent -= 1;
             let _ = writeln!(code, "{apad}}}");
             self.indent -= 1;
         }
         let _ = write!(code, "{pad}}}");
-        ChildEmit::Dynamic { code }
     }
 
     /// A reactive `match $expr`: a one-item reconciled list whose key decides when an arm rebuilds. Unlike a reactive `if`, the key is not the selector — a variant carries a payload, and keying on that payload's own identity is what lets an arm keep its widget while its contents change. Without a `key` clause it reconciles on the variant alone, which rebuilds when the shape changes and not when the payload does.
@@ -144,30 +328,14 @@ impl ViewGen<'_> {
     }
 
     pub(super) fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {
-        // A `$` in the condition makes this reactive; a plain condition stays a one-shot construction `if`.
         if block.condition.contains('$') {
             return self.emit_reactive_if(block);
         }
-        let pad = self.indent_str();
-        let mut code = String::new();
-        let cond = block.condition.trim();
-        let marker = expr_marker(block.condition_start, cond.len());
-        let _ = writeln!(code, "{pad}if {marker}{cond} {{");
-        self.indent += 1;
-        let bound = crate::rust::condition_bindings(cond).unwrap_or_default();
-        self.with_bindings(bound, |g| {
-            g.emit_branch_into_children(&block.then_branch, &mut code)
-        });
-        self.indent -= 1;
-
-        if let Some(else_branch) = &block.else_branch {
-            let _ = writeln!(code, "{pad}}} else {{");
-            self.indent += 1;
-            self.emit_branch_into_children(else_branch, &mut code);
-            self.indent -= 1;
-        }
-        let _ = write!(code, "{pad}}}");
-        ChildEmit::Dynamic { code }
+        self.emit_followed_region(
+            ViewNode::IfBlock(block.clone()),
+            RegionSource::of_if(block),
+            |g, code| g.emit_plain_if(block, code),
+        )
     }
 
     /// A reactive `if $cond`, keyed on the condition boolean: the old branch's nodes are disposed and the new branch built when it flips. Inside a slot host it is a transparent fragment (the shown branch's nodes are real siblings inheriting the parent's flex direction); where a fragment cannot attach — a component's children recipe, a bare root, overlay/scroll — it is a single-item `ReactiveList` owning a node of its own.
@@ -260,35 +428,48 @@ impl ViewGen<'_> {
             return self.emit_reactive_for(block);
         }
         let pad = self.indent_str();
-        let mut code = String::new();
-        let iterable = block.iterable.trim();
-        // A plain `for` reading a signal builds its rows once and never hears the next value, and carries none of the clauses below that would catch it.
-        if let Some(signal) = self.signal_named_in(iterable) {
-            let message = format!(
-                "`for … in {iterable}` reads `{signal}`, which is reactive, but the loop is not: without a `$` on the iterable it builds its items once and never rebuilds them. Write `$` before the iterable to reconcile the list as it changes — or, if reading it once is what you meant, bind the value in `[logic]` and iterate that."
-            );
-            let _ = writeln!(code, "{pad}compile_error!({message:?});");
-        }
-        // Both clauses parse on any `for` and neither means anything to a construction loop. Dropping them in silence read as "my key is being honoured" right up until a row went wrong.
+        let mut refused = String::new();
+        // Each clause names something only a reconciled list has. Dropping them in silence read as "my key is being honoured" right up until a row went wrong.
         for (clause, why) in [
             (
                 block.key_expr.as_ref().map(|_| "key"),
-                "a `key` names an identity for reconciliation, and a `for` over a plain iterable builds its items once — add a `$` to the iterable to make the list reactive, or drop the key",
+                "a `key` names an identity for reconciling rows one by one, which a loop over a reading (`$items`) does — a loop over anything else is built as a whole",
             ),
             (
                 block.gap_expr.as_ref().map(|_| "gap"),
-                "a `gap:` on a `for` spaces *reconciled* items, so it needs a `$`-prefixed iterable — put the gap on the enclosing container instead",
+                "a `gap:` on a `for` spaces *reconciled* rows, which a loop over a reading (`$items`) has — put the gap on the enclosing container instead",
             ),
             (
                 block.virtual_clause.as_ref().map(|_| "virtual"),
-                "`virtual` builds only the rows a viewport shows as it scrolls, which a loop that runs once has nothing to do with — add a `$` to the iterable",
+                "`virtual` builds only the rows a viewport shows as it scrolls, out of a reading (`$items`) it can ask for any row of",
             ),
         ] {
             if let Some(name) = clause {
                 let message = format!("`for … {name}` has no effect here: {why}");
-                let _ = writeln!(code, "{pad}compile_error!({message:?});");
+                let _ = writeln!(refused, "{pad}compile_error!({message:?});");
             }
         }
+        let iterable = block.iterable.trim();
+        let region = self.emit_followed_region(
+            ViewNode::ForBlock(block.clone()),
+            RegionSource::Runs {
+                raw: iterable,
+                read: format!("&({iterable})"),
+            },
+            |g, code| g.emit_plain_for(block, code),
+        );
+        match region {
+            ChildEmit::Dynamic { code } => ChildEmit::Dynamic {
+                code: format!("{refused}{code}"),
+            },
+            other => other,
+        }
+    }
+
+    /// `for` as a construction loop, built once where it stands into the sink in scope.
+    fn emit_plain_for(&mut self, block: &ForBlock, code: &mut String) {
+        let pad = self.indent_str();
+        let iterable = block.iterable.trim();
         let iterated = self
             .by_value(iterable, iterable.to_string())
             .unwrap_or_else(|| iterable.to_string());
@@ -300,12 +481,9 @@ impl ViewGen<'_> {
         for ident in &idents {
             let _ = writeln!(code, "{body_pad}let {ident} = {ident}.to_owned();");
         }
-        self.with_loop_bindings(idents, |g| {
-            g.emit_branch_into_children(&block.body, &mut code)
-        });
+        self.with_loop_bindings(idents, |g| g.emit_branch_into_children(&block.body, code));
         self.indent -= 1;
         let _ = write!(code, "{pad}}}");
-        ChildEmit::Dynamic { code }
     }
 
     /// A reactive `for x in $items [key <expr>] [gap:N]`. Inside a slot host it is a transparent fragment: its items reconcile into the host's node as real siblings, flowing in its flex direction (a `for` in a `row` is horizontal), with `gap:` as a per-item margin. Elsewhere it is a boxed `ReactiveList` owning its own container node.
@@ -567,4 +745,32 @@ fn row_key<'a>(block: &'a ForBlock, pad: &str) -> Result<Option<&'a str>, ChildE
             format!("{pad}compile_error!({message:?});")
         },
     })
+}
+
+/// What a region whose shape the run picks reads, and so when it is rebuilt.
+pub(super) enum RegionSource<'a> {
+    /// A plain condition, rebuilt when it flips.
+    Truth(&'a str),
+    /// What a form that binds reads, rebuilt whenever that changes, since what it bound may have: `raw` is the expression as written, `read` what evaluates it.
+    Runs { raw: &'a str, read: String },
+}
+
+impl<'a> RegionSource<'a> {
+    pub(super) fn of_if(block: &'a IfBlock) -> Self {
+        let condition = block.condition.trim();
+        match crate::rust::condition_bindings(condition) {
+            None => Self::Truth(condition),
+            Some(_) => Self::Runs {
+                raw: condition,
+                read: format!("if {condition} {{ true }} else {{ false }}"),
+            },
+        }
+    }
+}
+
+/// The names [`ViewGen::region_parts`] bound a region's closures to, and the key its rebuilds go by.
+struct RegionParts {
+    build: String,
+    source: String,
+    key: &'static str,
 }

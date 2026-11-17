@@ -14,8 +14,6 @@ element group
                 end
               end
             end
-            element group
-            end
           end
           element link
             rect 360,292 65x16 radius=6
@@ -25,8 +23,6 @@ element group
                   text 0,0 65x16.8 "Prototype" size=14 family=sans-serif weight=400 color=#3d51c3ff wrap=none underline=font underline-offset=font lang=en
                 end
               end
-            end
-            element group
             end
           end
           element link
@@ -42,8 +38,6 @@ element group
                   text 0,0 14.23x16.8 "12" size=14 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
                 end
               end
-            end
-            element group
             end
           end
         end

@@ -200,7 +200,7 @@ pub fn fixed_layer(props: FixedLayerProps) -> Result<Box<dyn LayoutItem>, Layout
                                         };
                                         let __row_1 = __row_1.a11y_label(|| "Bar over the sections");
                                         let __col_2 = {
-                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let mut __slots: Vec<ChildSlot> = Vec::new();
                                             let __text_7 = {
                                                 Text::declaring(
                                                     || "Section one".to_string(),
@@ -208,24 +208,45 @@ pub fn fixed_layer(props: FixedLayerProps) -> Result<Box<dyn LayoutItem>, Layout
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_font_weight(600) },
                                                 )?
                                             };
-                                            __children.push(box_item(__text_7));
-                                            for i in 0..6 {
-                                                let i = i.to_owned();
-                                                let __text_8 = {
-                                                    let i = i.clone();
-                                                    Text::declaring(
-                                                        move || format!("Row {} of section one", i),
-                                                        LayoutStyle::new(),
-                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                                    )?
+                                            __slots.push(ChildSlot::stat(box_item(__text_7)));
+                                            let __node_13_build =
+                                                {
+                                                    let theme = theme.clone();
+                                                move || -> Result<Vec<ChildSlot>, LayoutError> { let theme = ::core::clone::Clone::clone(&theme); 
+                                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                                    for i in 0..6 {
+                                                        let i = i.to_owned();
+                                                        let __text_8 = {
+                                                            let i = i.clone();
+                                                            Text::declaring(
+                                                                move || format!("Row {} of section one", i),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                            )?
+                                                        };
+                                                        __slots.push(ChildSlot::stat(box_item(__text_8)));
+                                                    }
+                                                    Ok(__slots)
+                                                }
                                                 };
-                                                __children.push(box_item(__text_8));
+                                            let __node_13_source =
+{ let __runs = ::std::cell::Cell::new(0u64); move || { let _ = &(0..6); __runs.set(__runs.get() + 1); vec![__runs.get()] } };
+                                            if reads_state(&__node_13_source).1 {
+                                                let __node_13 = fragment_branches(
+                                                    __node_13_source,
+                                                    |__run: &u64| *__run,
+                                                    move |_| __node_13_build(),
+                                                    0.0,
+                                                );
+                                                __slots.push(__node_13);
+                                            } else {
+                                                __slots.extend(__node_13_build()?);
                                             }
-                                            Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __children)?
+                                            Container::from_slots(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __slots)?
                                         };
                                         let __col_2 = __col_2.page_anchor(|| "arrival-one");
                                         let __col_3 = {
-                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let mut __slots: Vec<ChildSlot> = Vec::new();
                                             let __text_9 = {
                                                 Text::declaring(
                                                     || "Section two".to_string(),
@@ -233,24 +254,45 @@ pub fn fixed_layer(props: FixedLayerProps) -> Result<Box<dyn LayoutItem>, Layout
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_font_weight(600) },
                                                 )?
                                             };
-                                            __children.push(box_item(__text_9));
-                                            for i in 0..6 {
-                                                let i = i.to_owned();
-                                                let __text_10 = {
-                                                    let i = i.clone();
-                                                    Text::declaring(
-                                                        move || format!("Row {} of section two", i),
-                                                        LayoutStyle::new(),
-                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                                    )?
+                                            __slots.push(ChildSlot::stat(box_item(__text_9)));
+                                            let __node_14_build =
+                                                {
+                                                    let theme = theme.clone();
+                                                move || -> Result<Vec<ChildSlot>, LayoutError> { let theme = ::core::clone::Clone::clone(&theme); 
+                                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                                    for i in 0..6 {
+                                                        let i = i.to_owned();
+                                                        let __text_10 = {
+                                                            let i = i.clone();
+                                                            Text::declaring(
+                                                                move || format!("Row {} of section two", i),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                            )?
+                                                        };
+                                                        __slots.push(ChildSlot::stat(box_item(__text_10)));
+                                                    }
+                                                    Ok(__slots)
+                                                }
                                                 };
-                                                __children.push(box_item(__text_10));
+                                            let __node_14_source =
+{ let __runs = ::std::cell::Cell::new(0u64); move || { let _ = &(0..6); __runs.set(__runs.get() + 1); vec![__runs.get()] } };
+                                            if reads_state(&__node_14_source).1 {
+                                                let __node_14 = fragment_branches(
+                                                    __node_14_source,
+                                                    |__run: &u64| *__run,
+                                                    move |_| __node_14_build(),
+                                                    0.0,
+                                                );
+                                                __slots.push(__node_14);
+                                            } else {
+                                                __slots.extend(__node_14_build()?);
                                             }
-                                            Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __children)?
+                                            Container::from_slots(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __slots)?
                                         };
                                         let __col_3 = __col_3.page_anchor(|| "arrival-two");
                                         let __col_4 = {
-                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let mut __slots: Vec<ChildSlot> = Vec::new();
                                             let __text_11 = {
                                                 Text::declaring(
                                                     || "Section three".to_string(),
@@ -258,20 +300,41 @@ pub fn fixed_layer(props: FixedLayerProps) -> Result<Box<dyn LayoutItem>, Layout
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_font_weight(600) },
                                                 )?
                                             };
-                                            __children.push(box_item(__text_11));
-                                            for i in 0..6 {
-                                                let i = i.to_owned();
-                                                let __text_12 = {
-                                                    let i = i.clone();
-                                                    Text::declaring(
-                                                        move || format!("Row {} of section three", i),
-                                                        LayoutStyle::new(),
-                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                                    )?
+                                            __slots.push(ChildSlot::stat(box_item(__text_11)));
+                                            let __node_15_build =
+                                                {
+                                                    let theme = theme.clone();
+                                                move || -> Result<Vec<ChildSlot>, LayoutError> { let theme = ::core::clone::Clone::clone(&theme); 
+                                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                                    for i in 0..6 {
+                                                        let i = i.to_owned();
+                                                        let __text_12 = {
+                                                            let i = i.clone();
+                                                            Text::declaring(
+                                                                move || format!("Row {} of section three", i),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                            )?
+                                                        };
+                                                        __slots.push(ChildSlot::stat(box_item(__text_12)));
+                                                    }
+                                                    Ok(__slots)
+                                                }
                                                 };
-                                                __children.push(box_item(__text_12));
+                                            let __node_15_source =
+{ let __runs = ::std::cell::Cell::new(0u64); move || { let _ = &(0..6); __runs.set(__runs.get() + 1); vec![__runs.get()] } };
+                                            if reads_state(&__node_15_source).1 {
+                                                let __node_15 = fragment_branches(
+                                                    __node_15_source,
+                                                    |__run: &u64| *__run,
+                                                    move |_| __node_15_build(),
+                                                    0.0,
+                                                );
+                                                __slots.push(__node_15);
+                                            } else {
+                                                __slots.extend(__node_15_build()?);
                                             }
-                                            Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __children)?
+                                            Container::from_slots(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __slots)?
                                         };
                                         let __col_4 = __col_4.page_anchor(|| "arrival-three");
                                         Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)), children![__row_1, __col_2, __col_3, __col_4])?
@@ -294,8 +357,8 @@ pub fn fixed_layer(props: FixedLayerProps) -> Result<Box<dyn LayoutItem>, Layout
                         card(CardProps::props().gap(::telar::Int(12)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_11));
-                    let __node_13 = code_line(CodeLineProps::props().code("scroll arrival_margin_top:40   ·   ScrollPage::arrival_margin(|| Insets::new(56.0, 0.0, 0.0, 0.0))").build())?;
-                    __children.push(box_item(__node_13));
+                    let __node_16 = code_line(CodeLineProps::props().code("scroll arrival_margin_top:40   ·   ScrollPage::arrival_margin(|| Insets::new(56.0, 0.0, 0.0, 0.0))").build())?;
+                    __children.push(box_item(__node_16));
                     Ok(__children)
                 }
                 }

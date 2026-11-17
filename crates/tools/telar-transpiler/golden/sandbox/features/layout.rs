@@ -218,14 +218,35 @@ pub fn layout(props: LayoutProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_5 = {
-                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                    for _ in 0..5 {
-                                        let __sbox_16 = {
-                                            StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(32.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(6.0)) }, children![])?
+                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                    let __node_16_build =
+                                        {
+                                            let theme = theme.clone();
+                                        move || -> Result<Vec<ChildSlot>, LayoutError> { let theme = ::core::clone::Clone::clone(&theme); 
+                                            let mut __slots: Vec<ChildSlot> = Vec::new();
+                                            for _ in 0..5 {
+                                                let __sbox_16 = {
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(32.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(6.0)) }, children![])?
+                                                };
+                                                __slots.push(ChildSlot::stat(box_item(__sbox_16)));
+                                            }
+                                            Ok(__slots)
+                                        }
                                         };
-                                        __children.push(box_item(__sbox_16));
+                                    let __node_16_source =
+{ let __runs = ::std::cell::Cell::new(0u64); move || { let _ = &(0..5); __runs.set(__runs.get() + 1); vec![__runs.get()] } };
+                                    if reads_state(&__node_16_source).1 {
+                                        let __node_16 = fragment_branches(
+                                            __node_16_source,
+                                            |__run: &u64| *__run,
+                                            move |_| __node_16_build(),
+                                            0.0,
+                                        );
+                                        __slots.push(__node_16);
+                                    } else {
+                                        __slots.extend(__node_16_build()?);
                                     }
-                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), __children)?
+                                    Container::from_slots(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), __slots)?
                                 };
                                 __children.push(box_item(__row_5));
                                 Ok(__children)
@@ -235,21 +256,21 @@ pub fn layout(props: LayoutProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_15));
-                    let __node_16 = code_line(CodeLineProps::props().code("row gap:10 wrap   >   for _ in 0..5   >   box …").build())?;
-                    __children.push(box_item(__node_16));
+                    let __node_17 = code_line(CodeLineProps::props().code("row gap:10 wrap   >   for _ in 0..5   >   box …").build())?;
+                    __children.push(box_item(__node_17));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("wrap — children flow onto new lines when they run out of room").children(__recipe_children).build())?
         };
-        let __node_17 = {
+        let __node_18 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_18 = {
+                    let __node_19 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
@@ -292,78 +313,99 @@ pub fn layout(props: LayoutProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         );
                         card(CardProps::props().children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_18));
-                    let __node_19 = code_line(CodeLineProps::props().code("box pad:14 gap:8   >   row justify:between   >   text …").build())?;
                     __children.push(box_item(__node_19));
+                    let __node_20 = code_line(CodeLineProps::props().code("box pad:14 gap:8   >   row justify:between   >   text …").build())?;
+                    __children.push(box_item(__node_20));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("Nesting — a small card is just rows inside a column").children(__recipe_children).build())?
         };
-        let __node_20 = {
+        let __node_21 = {
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_21 = {
+                    let __node_22 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_22 = {
+                                let __node_23 = {
                                     let __col_2 = {
-                                        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                        for i in 0..12 {
-                                            let i = i.to_owned();
-                                            let __sbox_19 = {
-                                                let __text_3 = {
-                                                    let i = i.clone();
-                                                    Text::declaring(
-                                                        move || format!("Scrollable item {}", i),
-                                                        LayoutStyle::new(),
-                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
-                                                    )?
-                                                };
-                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?
+                                        let mut __slots: Vec<ChildSlot> = Vec::new();
+                                        let __node_24_build =
+                                            {
+                                                let theme = theme.clone();
+                                            move || -> Result<Vec<ChildSlot>, LayoutError> { let theme = ::core::clone::Clone::clone(&theme); 
+                                                let mut __slots: Vec<ChildSlot> = Vec::new();
+                                                for i in 0..12 {
+                                                    let i = i.to_owned();
+                                                    let __sbox_19 = {
+                                                        let __text_3 = {
+                                                            let i = i.clone();
+                                                            Text::declaring(
+                                                                move || format!("Scrollable item {}", i),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
+                                                            )?
+                                                        };
+                                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?
+                                                    };
+                                                    __slots.push(ChildSlot::stat(box_item(__sbox_19)));
+                                                }
+                                                Ok(__slots)
+                                            }
                                             };
-                                            __children.push(box_item(__sbox_19));
+                                        let __node_24_source =
+{ let __runs = ::std::cell::Cell::new(0u64); move || { let _ = &(0..12); __runs.set(__runs.get() + 1); vec![__runs.get()] } };
+                                        if reads_state(&__node_24_source).1 {
+                                            let __node_24 = fragment_branches(
+                                                __node_24_source,
+                                                |__run: &u64| *__run,
+                                                move |_| __node_24_build(),
+                                                0.0,
+                                            );
+                                            __slots.push(__node_24);
+                                        } else {
+                                            __slots.extend(__node_24_build()?);
                                         }
-                                        Container::new(LayoutStyle::new().flex_column().gap(8.0).padding_horizontal(2.0).width(SizeDimension::Percent(1.0)), __children)?
+                                        Container::from_slots(LayoutStyle::new().flex_column().gap(8.0).padding_horizontal(2.0).width(SizeDimension::Percent(1.0)), __slots)?
                                     };
                                     LayoutScrollArea::new(LayoutStyle::new().height(160.0), Box::new(__col_2))?
                                 };
-                                __children.push(box_item(__node_22));
+                                __children.push(box_item(__node_23));
                                 Ok(__children)
                             }
                             }
                         );
                         card(CardProps::props().children(__recipe_children).build())?
                     };
-                    __children.push(box_item(__node_21));
-                    let __node_23 = code_line(CodeLineProps::props().code("scroll height:160   >   col …   >   for i in 0..12   >   box …").build())?;
-                    __children.push(box_item(__node_23));
+                    __children.push(box_item(__node_22));
+                    let __node_25 = code_line(CodeLineProps::props().code("scroll height:160   >   col …   >   for i in 0..12   >   box …").build())?;
+                    __children.push(box_item(__node_25));
                     Ok(__children)
                 }
                 }
             );
             example(ExampleProps::props().title("scroll — a bounded viewport that scrolls its overflowing content").children(__recipe_children).build())?
         };
-        let __node_24 = {
+        let __node_26 = {
             let __recipe_children = Children::new(
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __col_3 = {
-                        let __node_25 = prop_row(PropRowProps::props().name("direction").values("row · col").about("Main axis. row/col/box set a sensible default.").build())?;
-                        let __node_26 = prop_row(PropRowProps::props().name("gap").values("number").about("Space between children (also gap_x / gap_y).").build())?;
-                        let __node_27 = prop_row(PropRowProps::props().name("pad").values("number").about("Padding on all sides (also pad_x / pad_y).").build())?;
-                        let __node_28 = prop_row(PropRowProps::props().name("align").values("start·center·end·stretch").about("Cross-axis alignment of children.").build())?;
-                        let __node_29 = prop_row(PropRowProps::props().name("justify").values("start·center·between·around·evenly").about("Main-axis distribution.").build())?;
-                        let __node_30 = prop_row(PropRowProps::props().name("grow / shrink").values("number").about("How a child expands or contracts to fit.").build())?;
-                        let __node_31 = prop_row(PropRowProps::props().name("wrap").values("flag").about("Let children flow onto multiple lines.").build())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_25, __node_26, __node_27, __node_28, __node_29, __node_30, __node_31])?
+                        let __node_27 = prop_row(PropRowProps::props().name("direction").values("row · col").about("Main axis. row/col/box set a sensible default.").build())?;
+                        let __node_28 = prop_row(PropRowProps::props().name("gap").values("number").about("Space between children (also gap_x / gap_y).").build())?;
+                        let __node_29 = prop_row(PropRowProps::props().name("pad").values("number").about("Padding on all sides (also pad_x / pad_y).").build())?;
+                        let __node_30 = prop_row(PropRowProps::props().name("align").values("start·center·end·stretch").about("Cross-axis alignment of children.").build())?;
+                        let __node_31 = prop_row(PropRowProps::props().name("justify").values("start·center·between·around·evenly").about("Main-axis distribution.").build())?;
+                        let __node_32 = prop_row(PropRowProps::props().name("grow / shrink").values("number").about("How a child expands or contracts to fit.").build())?;
+                        let __node_33 = prop_row(PropRowProps::props().name("wrap").values("flag").about("Let children flow onto multiple lines.").build())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_27, __node_28, __node_29, __node_30, __node_31, __node_32, __node_33])?
                     };
                     __children.push(box_item(__col_3));
                     Ok(__children)
@@ -371,7 +413,7 @@ pub fn layout(props: LayoutProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             );
             example(ExampleProps::props().title("Attributes").children(__recipe_children).build())?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8, __node_11, __node_14, __node_17, __node_20, __node_24])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8, __node_11, __node_14, __node_18, __node_21, __node_26])?
     };
     Ok(Box::new(__col_0))
 }

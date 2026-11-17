@@ -52,7 +52,7 @@ pub(crate) struct Previews<'a> {
 }
 
 /// The local a build fn binds the canvas's action log to, which the body reads as `actions` to log a call no root prop holds.
-const ACTIONS: &str = "actions";
+pub(crate) const ACTIONS: &str = "actions";
 
 /// The opening of the block every preview item is emitted in; [`CLOSE`] ends it.
 pub(crate) const OPEN: &str = "::telar::__previews! {\n";

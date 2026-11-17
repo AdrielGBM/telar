@@ -1434,16 +1434,19 @@ fn a_keyless_reactive_match_reconciles_on_the_variant() {
     );
 }
 
-/// A scrutinee with no `$` chooses its arm once, so it stays an ordinary Rust `match` — the same split `if` and `for` already make between a construction-time branch and a reconciled one.
+/// A scrutinee with no `$` is chosen once when what it read cannot change, and rebuilt whenever it can: the run tells which, so a scrutinee reading state through a method nothing in the source shows is still followed.
 #[test]
-fn a_match_without_a_signal_stays_a_construction_time_branch() {
+fn a_match_without_a_signal_follows_what_its_scrutinee_read() {
     let src = "[view]\ncol\n    match props.kind\n        Kind::One\n            text \"one\"\n        _\n            text \"other\"\n";
     let out = transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
-    assert!(code.contains("match props.kind {"), "plain match:\n{code}");
     assert!(
-        !code.contains("discriminant") && !code.contains("ReactiveList::new"),
-        "and nothing reactive is built for it:\n{code}"
+        code.contains("if reads_state(&"),
+        "the run decides:\n{code}"
+    );
+    assert!(
+        code.contains("Kind::One => {") && code.contains("__slots.extend("),
+        "a scrutinee that read nothing builds its arm in place:\n{code}"
     );
 }
 
@@ -2688,16 +2691,18 @@ fn path_tag_invalid_d_is_compile_error() {
     );
 }
 
-/// The `for` that reads reactive state without the sigil that makes the loop follow it. It compiles to a one-shot Rust loop, so the rows are built from whatever the memo held at construction and never hear about the next value — a list that silently stops updating, with nothing in the source to point at.
-///
-/// The clause diagnostics next to this one did not catch it: they need a `key`/`gap`/`virtual` to fire, and this shape carries none.
+/// A `for` reading state with no sigil, which a construction loop would build once from whatever the memo held and never again: the run sees the read, and the loop follows it.
 #[test]
-fn a_for_that_reads_a_signal_without_the_sigil_is_a_compile_error() {
+fn a_for_that_reads_a_signal_without_the_sigil_follows_it() {
     let src = "[logic]\nlet rows = memo(move || vec![1, 2]);\n\n[view]\ncolumn\n    for r in rows.get().to_vec()\n        text \"{r}\"\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains("compile_error!") && code.contains("reads `rows`"),
-        "the error names the signal the loop reads:\n{code}"
+        !code.contains("compile_error!"),
+        "nothing to refuse:\n{code}"
+    );
+    assert!(
+        code.contains("if reads_state(&") && code.contains("let _ = &(rows.get().to_vec())"),
+        "the run tells whether the loop read state, and rebuilds it from what it read:\n{code}"
     );
 }
 
@@ -2946,10 +2951,6 @@ fn a_recipe_takes_a_copy_of_what_its_body_uses_by_value() {
     assert!(
         code.contains(".names(::core::clone::Clone::clone(&__props_names))"),
         "the nested recipe copies the field in per run of the outer one, and hands a copy on per run of its own:\n{code}"
-    );
-    assert!(
-        !code.contains("let items = items.clone();"),
-        "the outer recipe moves `items` in once, since nothing outside it reads it:\n{code}"
     );
     assert_logic_parses(&code);
 }
