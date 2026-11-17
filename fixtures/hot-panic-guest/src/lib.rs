@@ -78,7 +78,7 @@ impl Component for PanicsOnPress {
             }
             Event::PointerPressed { button, .. } => {
                 if *button == PointerButton::Auxiliary {
-                    spawn_task(|| std::thread::sleep(TASK_RUNS_FOR), |()| {});
+                    leave_a_task_running();
                 }
                 panic!("RUNTIME is already borrowed by the press handler");
             }
@@ -93,7 +93,7 @@ impl Component for PanicsOnPress {
                 button: PointerButton::Secondary,
                 ..
             } => {
-                spawn_task(|| std::thread::sleep(TASK_RUNS_FOR), |()| {});
+                leave_a_task_running();
                 EventResult::Handled
             }
             Event::PointerReleased {
@@ -138,3 +138,19 @@ impl App for Fixture {
 }
 
 telar::__hot_guest!(|| -> Box<dyn App> { Box::new(Fixture) });
+
+/// Starts a task that runs for [`TASK_RUNS_FOR`] and returns once it is running: a job still queued when the guest unloads is dropped unrun, so only a started one is a task the host has to join.
+fn leave_a_task_running() {
+    let started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let running = std::sync::Arc::clone(&started);
+    spawn_task(
+        move || {
+            running.store(true, std::sync::atomic::Ordering::Release);
+            std::thread::sleep(TASK_RUNS_FOR);
+        },
+        |()| {},
+    );
+    while !started.load(std::sync::atomic::Ordering::Acquire) {
+        std::thread::yield_now();
+    }
+}
