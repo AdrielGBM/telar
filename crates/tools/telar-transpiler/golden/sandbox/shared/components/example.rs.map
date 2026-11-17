@@ -100,4 +100,4 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 282..293	1163	`props.title`
-340..354	1449	`props.children`
+339..353	1449	`props.children`

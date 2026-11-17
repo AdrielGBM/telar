@@ -108,7 +108,7 @@ exactly as far as the reader scrolls, and stops when they do.
 | `ViewRange` | `Cover` (start edge entering to end edge leaving), `Contain` (wholly in view, or filling it when taller), `Entry`, `Exit`: CSS's view-timeline ranges. `range_progress` is the arithmetic, for code that has the numbers already. |
 | `ScrollViewport::progress(axis)` | The scroll timeline: how far through its whole range a scroll is. |
 | `use_scroll_viewport()` | The scroll whose content is being built, by context. A node that already exists finds its scroll with `enclosing_scroll_viewport(node)`, whatever order the tree was built in. |
-| `view_progress:$p view_range:contain` | The `.rsx` spelling on any built-in tag: the box's progress written into a signal of `f32` the author owns, like `track_rect:`. `ScrollLinked::view_progress` in Rust. |
+| `view_progress:p view_range:contain` | The `.rsx` spelling on any built-in tag: the box's progress written into a signal of `f32` the author owns, like `track_rect:`. `ScrollLinked::view_progress` in Rust. |
 
 The progress is computed from Telar's own layout and the scroll's offset, which every target keeps, so it is the
 same number everywhere: the document's scroll on web-dom, a scroll area drawn at its offset on a canvas, the
@@ -122,7 +122,7 @@ let p = signal(0.0f32);
 let tint = memo(move || palette.sample(p.get()));
 
 [view]
-col height:800 view_progress:$p view_range:contain
+col height:800 view_progress:p view_range:contain
     box sticky inset_top:0 fill:$tint
 ```
 
@@ -216,7 +216,7 @@ let at = active.read_only();
 
 [view]
 row
-    box track_rect:$active width:40 height:4
+    box track_rect:active width:40 height:4
     box width:40 height:4 translate_x:at.get().x transition(translate_x 200ms)
 ```
 

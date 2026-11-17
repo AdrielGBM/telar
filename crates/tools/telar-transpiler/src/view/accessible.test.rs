@@ -119,7 +119,7 @@ fn an_anchor_names_a_place_a_link_reaches() {
 /// A box's passage through the view lands in a signal the author owns, over the range they name.
 #[test]
 fn view_progress_writes_a_boxs_passage_into_a_signal() {
-    let src = "[logic]\nlet p = signal(0.0f32);\nlet q = signal(0.0f32);\n[view]\ncol view_progress:$p view_range:contain\n    box view_progress:$q\n";
+    let src = "[logic]\nlet p = signal(0.0f32);\nlet q = signal(0.0f32);\n[view]\ncol view_progress:p view_range:contain\n    box view_progress:q\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;

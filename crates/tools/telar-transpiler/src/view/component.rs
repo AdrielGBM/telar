@@ -271,13 +271,13 @@ impl ViewGen<'_> {
         Some(format!("std::rc::Rc::new({closure})"))
     }
 
-    /// Emits a `children` placeholder, `children $props.header [in:ctx]`: builds the `Children` its expression names where it stands and splices them into the enclosing container's child accumulator, with `ctx` readable to them when `in:` provides one. Dynamic, so the container builds a child vec (see `forces_child_vec`).
+    /// Emits a `children` placeholder, `children props.header [in:ctx]`: builds the `Children` its expression names where it stands and splices them into the enclosing container's child accumulator, with `ctx` readable to them when `in:` provides one. Dynamic, so the container builds a child vec (see `forces_child_vec`).
     ///
     /// Built here rather than once up front, so the children are made under the owner of the node they are placed in and see that node's `theme:` and every context provided around it, exactly as a child written inline there would. Each placement builds its own.
     pub(super) fn emit_children_placeholder(&mut self, el: &Element) -> ChildEmit {
         let pad = self.indent_str();
         let recipe = match placeholder_recipe(el) {
-            Ok(recipe) => self.marked_handles(&recipe.key, recipe.value_start),
+            Ok(recipe) => self.named_value(&recipe.key, recipe.value_start),
             Err(message) => {
                 return ChildEmit::Dynamic {
                     code: format!("{pad}compile_error!({message:?});"),
@@ -302,18 +302,16 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// `expr`, written at `start`, as the value it names rather than a reading of it: `$props.header` reaches through `props` to the field, as it does anywhere in the view, and is marked so a cursor on it maps to the generated code.
-    pub(super) fn marked_handles(&self, expr: &str, start: usize) -> String {
-        let substituted = super::signals::substitute_handles(expr, self.theme_access);
-        let marked = match expr.strip_prefix('$') {
-            Some(rest) if substituted == rest => Some(start + 1),
-            Some(_) => None,
-            None => Some(start),
-        };
-        match marked {
-            Some(start) => format!("{}{substituted}", expr_marker(start, substituted.len())),
-            None => substituted,
+    /// `expr`, written at `start`, as the value it names, marked so a cursor on it maps to the generated code: the recipe a placeholder builds, the amendment a surface takes. A `$` would read it, which neither takes, so one is refused where it is written.
+    pub(super) fn named_value(&self, expr: &str, start: usize) -> String {
+        if expr.contains('$') {
+            let message = format!(
+                "`{expr}` reads a value, and what goes here is the value itself: write it without the `$`, as `{}`",
+                expr.replace('$', "")
+            );
+            return format!("compile_error!({message:?})");
         }
+        format!("{}{expr}", expr_marker(start, expr.len()))
     }
 
     /// The `in:` value a placeholder builds its children inside. A lone `[logic]` binding is cloned wherever the placement may run again or another placement still needs it, as a component prop is.
@@ -358,13 +356,6 @@ impl ViewGen<'_> {
                 "std::rc::Rc::new({})",
                 self.emit_closure_value(attr)
             ));
-        }
-        // Pass the cloned handle so the caller's binding stays usable elsewhere.
-        if let Some(rest) = v.strip_prefix('$')
-            && !rest.is_empty()
-            && rest.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
-        {
-            return PropValue::Given(format!("{rest}.clone()"));
         }
         if v.starts_with('#') {
             return PropValue::Colour(hex_to_color_expr(v));
@@ -578,14 +569,14 @@ fn placeholder_recipe(el: &Element) -> Result<&Attr, String> {
     if let Some(name) = el.attributes.iter().find(|a| a.key == "name") {
         let field = name.value.text().trim();
         return Err(format!(
-            "`children` places a `Children` prop: write `children $props.{field}`, with `#[props(default)] pub {field}: Children` in `Props`"
+            "`children` places a `Children` prop: write `children props.{field}`, with `#[props(default)] pub {field}: Children` in `Props`"
         ));
     }
     let mut operands = el.attributes.iter().filter(|a| a.value.is_flag());
     match (operands.next(), operands.next()) {
         (Some(recipe), None) => Ok(recipe),
         (None, _) => Err(
-            "`children` places a `Children` prop: write `children $props.children`, with `#[props(default)] pub children: Children` in `Props`"
+            "`children` places a `Children` prop: write `children props.children`, with `#[props(default)] pub children: Children` in `Props`"
                 .to_string(),
         ),
         (Some(_), Some(extra)) => Err(format!(

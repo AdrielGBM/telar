@@ -114,17 +114,17 @@ pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, La
         let __node_7 = {
             let __recipe_children = Children::new(
                 {
-                    let rows = rows.clone();
                     let notes = notes.clone();
                     let theme = theme.clone();
+                    let rows = rows.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
                         let __recipe_children = Children::new(
                             {
-                                let rows = rows.clone();
                                 let notes = notes.clone();
                                 let theme = theme.clone();
+                                let rows = rows.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
@@ -184,7 +184,7 @@ pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, La
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_15 = code_line(CodeLineProps::props().code("let rows = signal(None::<VirtualRows>);   for … virtual estimated_height:64 overscan:96 rows:$rows   ·   rows.reveal(index, margin)").build())?;
+                    let __node_15 = code_line(CodeLineProps::props().code("let rows = signal(None::<VirtualRows>);   for … virtual estimated_height:64 overscan:96 rows:rows   ·   rows.reveal(index, margin)").build())?;
                     __children.push(box_item(__node_15));
                     Ok(__children)
                 }

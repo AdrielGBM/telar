@@ -2,7 +2,7 @@
 //!
 //! These tables are the single source of truth shared between the transpiler's codegen (`view.rs`, `style.rs`) and downstream tooling such as `telar-analyzer` (completions, hover, go-to-definition). Keep them in sync with the `match` arms in [`crate::view`] (`emit_element`) and [`crate::style`] (`layout_prop_call`).
 
-/// Sentinel constructor for the `children` placeholder, which builds no widget of its own: `children $props.header` builds the `Children` prop it names where it stands and splices them into the enclosing container.
+/// Sentinel constructor for the `children` placeholder, which builds no widget of its own: `children props.header` builds the `Children` prop it names where it stands and splices them into the enclosing container.
 pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
 
 /// Built-in RSX tags paired with the Rust type they build, spelled as that type's canonical constructor.
@@ -43,7 +43,7 @@ pub fn builtin_tag_doc(tag: &str) -> Option<&'static str> {
             "A layer fixed to the surface over the page, out of its flow and its scroll: a bar that stays at the top while the page scrolls under it. Laid out against the whole surface like an `overlay`, so `align`/`justify`/`pad` and its children's sizes place its boxes. Not modal: it takes the pointer only over its own boxes, and its focusables keep their place in the Tab order. Drawn over every box of the page, sticky ones included, and under every overlay."
         }
         "children" => {
-            "Places a `Children` prop where it stands: `children $props.children` the call site's bare children, `children $props.header` the ones it wrote with `slot:\"header\"`, each declared in `Props` as `#[props(default)] pub header: Children`. Each placement builds them there, so they see the `theme:` and contexts in force around it, and `in:ctx` provides one more."
+            "Places a `Children` prop where it stands: `children props.children` the call site's bare children, `children props.header` the ones it wrote with `slot:\"header\"`, each declared in `Props` as `#[props(default)] pub header: Children`. Each placement builds them there, so they see the `theme:` and contexts in force around it, and `in:ctx` provides one more."
         }
         _ => return None,
     })
@@ -131,7 +131,7 @@ const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
         "Provides a theme to the box and everything under it, any number of children: a theme value, or a `ScopedTheme` to switch it later. A value worked out rather than named is followed as it reads, re-running only the readers under it.",
     ),
     AttrSpec::free("view_progress").doc(
-        "Writes how far the box is through its passage through the view of the scroll it sits in into a signal of `f32`, `0.0..=1.0`: `view_progress:$p`. The range is `view_range:`, `cover` by default.",
+        "Writes how far the box is through its passage through the view of the scroll it sits in into a signal of `f32`, `0.0..=1.0`, named bare: `view_progress:p`. The range is `view_range:`, `cover` by default.",
     ),
     AttrSpec::keywords("view_range", VIEW_RANGE_VALUES).doc(
         "Which stretch of the passage `view_progress:` runs over: `cover` (entering to leaving), `contain` (wholly in view, or filling it), `entry` or `exit`.",
@@ -186,7 +186,7 @@ pub(crate) fn is_part_style_key(key: &str) -> bool {
 
 /// `slot:` on any child of a component call, whatever its own tag: the call routes it, so neither the child nor the callee lists it.
 const SLOT: AttrSpec = AttrSpec::free(SLOT_ATTR).doc(
-    "Hands this child to the component through the `Children` prop it names, `slot:\"header\"` through `header`, where a child without one goes through `children`. The callee places it with `children $props.header`.",
+    "Hands this child to the component through the `Children` prop it names, `slot:\"header\"` through `header`, where a child without one goes through `children`. The callee places it with `children props.header`.",
 );
 
 /// What a component call may say about the item the component returns, beside its props, spelled as on a built-in tag.
@@ -351,7 +351,7 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
         "Blurs what the surface drew beneath the box, a radius in pixels as `shadow_blur` is (CSS `backdrop-filter: blur(10px)` is `backdrop_blur:20`), so a translucent `fill` reads as frosted glass. A `$`-reading value is followed, and `transition(backdrop_blur 300ms)` animates it. A document blurs the page behind the box; TUI ignores it and shows the fill alone.",
     ),
     AttrSpec::free("surface").doc(
-        "Hands this box's paint to a caller: a `SurfaceStyle` such as `$props.style`, or `$props.header_style` for a part, run over the finished style of the base paint and of every `hover_style`/`active_style`/`disabled_style` after the box's own, so a caller's `@class` restyles it in every state. The focus ring is drawn over the amended state, not amended itself.",
+        "Hands this box's paint to a caller: a `SurfaceStyle` such as `props.style`, or `props.header_style` for a part, run over the finished style of the base paint and of every `hover_style`/`active_style`/`disabled_style` after the box's own, so a caller's `@class` restyles it in every state. The focus ring is drawn over the amended state, not amended itself.",
     ),
     AttrSpec::free("on_press"),
     AttrSpec::free("on_alt_press").doc(

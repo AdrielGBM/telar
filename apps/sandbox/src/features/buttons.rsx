@@ -31,7 +31,7 @@ col gap:20
             row gap:10
                 button label:"+1" color:$theme.primary on_press:(|| $clicks += 1)
                 button label:"+10" color:$theme.primary on_press:(|| $clicks += 10)
-                button label:"Reset" variant:ghost on_press:(|| $clicks.set(0))
+                button label:"Reset" variant:ghost on_press:(|| clicks.set(0))
         code_line code:"button label:'+1' on_press:|| $clicks += 1      ($x += n desugars to .update)"
     example title:"A whole box is clickable — on_press works on any container, not just buttons"
         card gap:10
@@ -50,9 +50,9 @@ col gap:20
         code_line code:"box fill:$theme.surface_alt hover_style(fill:$theme.primary)      (swap style while hovered)"
     example title:"Event callbacks — on_hover (a bool) and on_key (global shortcut)"
         card gap:10
-            box fill:$theme.surface_alt radius:10 pad:16 on_hover:(|h| $hovering.set(h))
+            box fill:$theme.surface_alt radius:10 pad:16 on_hover:(|h| hovering.set(h))
                 text "hover me — hovering: {$hovering}" font_size:14 color:$theme.ink
             col on_key:(|_k| $keys += 1)
                 text "keys pressed anywhere: {$keys}" font_size:14 color:$theme.muted
             text "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key." font_size:12 color:$theme.muted
-        code_line code:"box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)"
+        code_line code:"box on_hover(|h| hovering.set(h))   ·   col on_key(|k| …)"

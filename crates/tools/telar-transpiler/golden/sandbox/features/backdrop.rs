@@ -38,7 +38,6 @@ pub fn backdrop(props: BackdropProps) -> Result<Box<dyn LayoutItem>, LayoutError
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let frosted = frosted.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {

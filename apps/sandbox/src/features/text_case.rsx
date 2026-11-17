@@ -22,7 +22,7 @@ col gap:20
             text "From the font's own metrics" font_size:16 color:$theme.ink underline
             text "Offset 4 · 2 thick · accent" font_size:16 color:$theme.ink underline underline_offset:4 underline_thickness:2 underline_color:$theme.primary
             text "Offset in em: 0.18em" font_size:24 color:$theme.ink underline underline_offset:0.18em underline_thickness:2
-            box on_hover:(|h| $hovered.set(h)) cursor:pointer
+            box on_hover:(|h| hovered.set(h)) cursor:pointer
                 text "Hover me to underline" font_size:16 color:$theme.primary underline:$hovered underline_offset:4
             text "A paragraph with " font_size:14 color:$theme.ink
                 span "one underlined run" underline underline_color:$theme.danger

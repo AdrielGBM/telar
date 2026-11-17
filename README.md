@@ -165,7 +165,9 @@ constants are, `gap:(GRID * 2.0)` — costs nothing to keep. An `if`, `match` or
 built once, and one whose condition read state is rebuilt as that state changes: `if link.leaves()` as much as
 `if $leaves`. A component's prop is handed a worked-out value as the closure working it out, and the prop's type
 decides: a `Reactive<T>` prop follows what the value read, any other takes it once, and a plain prop handed a value
-that read state is refused as the component is built rather than frozen in silence. The `$` is `.get()` sugar.
+that read state is refused as the component is built rather than frozen in silence. The `$` reads and does nothing else:
+`$count` is `count.get()`, and a signal handed on or written to is named bare, `checked:agree`, `on_press:(|| count.set(0))`;
+a handler's `$count += 1` writes the signal it reads.
 
 ### Components are Rust paths
 

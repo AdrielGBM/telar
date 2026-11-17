@@ -314,3 +314,4 @@
 1124..1130	3592	`letter`
 1414..1423	7351	`demo_icon`
 1467..1476	7950	`demo_icon`
+2366..2443	14672	`|| mood.set(if mood.get() == "calm" { "busy".into() } else { "calm".into() })`

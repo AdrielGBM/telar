@@ -136,8 +136,8 @@ impl ViewGen<'_> {
         let text = attr.value.text();
         let lead = text.len() - text.trim_start().len();
         match super::redundant_parens(text.trim()) {
-            Some(inner) => self.marked_handles(inner, attr.value_start + lead + 1),
-            None => self.marked_handles(text.trim(), attr.value_start + lead),
+            Some(inner) => self.named_value(inner, attr.value_start + lead + 1),
+            None => self.named_value(text.trim(), attr.value_start + lead),
         }
     }
 

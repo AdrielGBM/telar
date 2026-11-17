@@ -12,8 +12,8 @@ pub struct Props {
 
 [view]
 box fill:$theme.surface stroke:$theme.border radius:12 pad:props.pad gap:props.gap
-    children $props.header
-    children $props.children
+    children props.header
+    children props.children
 
 [previews "Sandbox/Card" layout:centered]
 The standard surface panel: a rounded, bordered container with an optional header slot above its stacked body.

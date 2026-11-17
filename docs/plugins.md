@@ -151,8 +151,8 @@ without the key: each row is keyed on its index and `build` gets a `ReadSignal` 
 body reads as `$item`. Either way the items must be `Clone`: the list keeps what the source last returned and builds each row
 from a clone of its item, so the source runs again only when what it reads changes, not on every scroll; a type that
 is not is refused with a message naming `Clone`. `overscan:<px>` is how far beyond each edge to build (two estimated
-rows by default), and `rows:$handle` stores the handle in a `signal(None::<VirtualRows>)` so the view can call
-`rows.reveal(index, margin)`, the way `view_progress:$p` writes into a signal. Unbuilt rows stand at the estimate
+rows by default), and `rows:handle` stores the handle in a `signal(None::<VirtualRows>)` so the view can call
+`rows.reveal(index, margin)`, the way `view_progress:p` writes into a signal. Unbuilt rows stand at the estimate
 until some are measured and at the mean of those from then on (to the pixel), built ones are measured after layout, and
 the first row on screen holds still while estimates are corrected. When the source changes by a few inserted, removed
 or moved rows, only those rows are looked up and the height index is spliced; a change to most rows rebuilds it. Give the
@@ -181,12 +181,12 @@ entire application should agree on belongs in a theme token, not here.
 A component with other pieces a caller restyles, a card's header or a dialog's footer, declares one more prop of the
 same type per piece, named `<part>_style` (`header_style`), and a call site hands it a class with
 `header_style:@flat`, or several with `header_style:(@a @b)`. Parts are per instance only: a theme speaks through
-tokens, and "every sidebar" is a wrapper component. In `.rsx`, `surface:$props.style` and
-`surface:$props.header_style` on a `box`, `row`, `col` or `grid` amend its paint in every state, after its own.
+tokens, and "every sidebar" is a wrapper component. In `.rsx`, `surface:props.style` and
+`surface:props.header_style` on a `box`, `row`, `col` or `grid` amend its paint in every state, after its own.
 
 Named content is a prop of type `Children` as well, `pub header: Children`; a call site fills it with a child marked
 `slot:"header"`, and the rest of its children go to `children`. In `.rsx` the component places each with
-`children $props.header` and `children $props.children`.
+`children props.header` and `children props.children`.
 
 ### Theme tokens
 

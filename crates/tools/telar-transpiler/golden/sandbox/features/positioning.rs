@@ -322,22 +322,22 @@ pub fn positioning(props: PositioningProps) -> Result<Box<dyn LayoutItem>, Layou
         let __node_17 = {
             let __recipe_children = Children::new(
                 {
+                    let theme = theme.clone();
                     let pinned = pinned.clone();
                     let cut = cut.clone();
-                    let theme = theme.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_18 = {
                         let __recipe_children = Children::new(
                             {
+                                let theme = theme.clone();
                                 let pinned = pinned.clone();
                                 let cut = cut.clone();
-                                let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_19 = toggle(ToggleProps::props().checked(pinned.clone()).label("stage sticks").build())?;
-                                    let __node_20 = toggle(ToggleProps::props().checked(cut.clone()).label("strip clips").build())?;
+                                    let __node_19 = toggle(ToggleProps::props().checked(::core::clone::Clone::clone(&pinned)).label("stage sticks").build())?;
+                                    let __node_20 = toggle(ToggleProps::props().checked(::core::clone::Clone::clone(&cut)).label("strip clips").build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(16.0), children![__node_19, __node_20])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -437,7 +437,6 @@ pub fn positioning(props: PositioningProps) -> Result<Box<dyn LayoutItem>, Layou
                     let theme = theme.clone();
                     let badge_top = badge_top.clone();
                     let badge_start = badge_start.clone();
-                    let corner = corner.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_26 = {

@@ -41,7 +41,7 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_3 = stepper(StepperProps::props().value(qty.clone()).__follow_range(move || 0.0..=10.0).step(::telar::Int(1)).build())?;
+                                    let __node_3 = stepper(StepperProps::props().value(::core::clone::Clone::clone(&qty)).__follow_range(move || 0.0..=10.0).step(::telar::Int(1)).build())?;
                                     let __node_3 = __node_3.a11y_label(|| "Quantity");
                                     let __text_0 = {
                                         let qty = qty.clone();
@@ -61,7 +61,7 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("stepper value:$qty range:(0.0..=10.0) step:1 a11y_label:\"Quantity\"").build())?;
+                    let __node_4 = code_line(CodeLineProps::props().code("stepper value:qty range:(0.0..=10.0) step:1 a11y_label:\"Quantity\"").build())?;
                     __children.push(box_item(__node_4));
                     Ok(__children)
                 }
@@ -72,7 +72,6 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
         let __node_5 = {
             let __recipe_children = Children::new(
                 {
-                    let seats = seats.clone();
                     let last_change = last_change.clone();
                     let theme = theme.clone();
                 move || {
@@ -80,13 +79,13 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                     let __node_6 = {
                         let __recipe_children = Children::new(
                             {
-                                let seats = seats.clone();
                                 let last_change = last_change.clone();
                                 let theme = theme.clone();
+                                let seats = seats.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_7 = stepper(StepperProps::props().value(seats.clone()).__follow_range(move || 1.0..=8.0).step(::telar::Int(1)).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build())?;
+                                    let __node_7 = stepper(StepperProps::props().value(::core::clone::Clone::clone(&seats)).__follow_range(move || 1.0..=8.0).step(::telar::Int(1)).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build())?;
                                     let __node_7 = __node_7.a11y_label(|| "Seats");
                                     let __text_1 = {
                                         let last_change = last_change.clone();
@@ -106,7 +105,7 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_6));
-                    let __node_8 = code_line(CodeLineProps::props().code("stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)").build())?;
+                    let __node_8 = code_line(CodeLineProps::props().code("stepper value:seats on_change:|v| last_change.set(…)   (the binding still updates on its own)").build())?;
                     __children.push(box_item(__node_8));
                     Ok(__children)
                 }

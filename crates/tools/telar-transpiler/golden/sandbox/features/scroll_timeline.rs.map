@@ -183,4 +183,4 @@
 182	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1761..1766	4287	`scene`
+1760..1765	4287	`scene`

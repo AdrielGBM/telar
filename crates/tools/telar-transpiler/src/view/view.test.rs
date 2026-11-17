@@ -126,7 +126,7 @@ fn classed_box_is_a_flex_container() {
 
 #[test]
 fn container_on_press_emits_click_handler() {
-    let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press:(|| $n.update(|v| *v += 1))\n    col on_press:(|| $n.set(0))\n        text \"x\"\n";
+    let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press:(|| n.update(|v| *v += 1))\n    col on_press:(|| n.set(0))\n        text \"x\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
@@ -191,7 +191,7 @@ fn compound_assign_sugar_rewrites_to_update() {
 
 #[test]
 fn toggle_and_update_closures_pass_through() {
-    let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:(|| $flag.toggle())\n    button on_press:(|| $count.update(|n| *n += 1))\n";
+    let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:(|| flag.toggle())\n    button on_press:(|| count.update(|n| *n += 1))\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
@@ -217,7 +217,7 @@ fn quoted_escape_decodes_then_reemits() {
 
 #[test]
 fn paren_attr_form_captures_nested_and_coexists() {
-    let src = "[logic]\nlet count = signal(0i32);\n[view]\nbox fill:primary transition(fill 200ms ease-out) on_press:(|| $count.update(|n| *n += 1))\n    text \"x\"\n";
+    let src = "[logic]\nlet count = signal(0i32);\n[view]\nbox fill:primary transition(fill 200ms ease-out) on_press:(|| count.update(|n| *n += 1))\n    text \"x\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
@@ -280,7 +280,7 @@ fn box_hover_emits_hover_style() {
 
 #[test]
 fn on_drag_wires_and_upgrades_container() {
-    let src = "[logic]\nlet x = signal(0.0f32);\n[view]\ncol on_drag:(|px, _py| $x.set(px))\n    text \"t\"\n";
+    let src = "[logic]\nlet x = signal(0.0f32);\n[view]\ncol on_drag:(|px, _py| x.set(px))\n    text \"t\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
@@ -335,7 +335,7 @@ const SLOTTED_PROPS: &str = "[logic]\npub struct Props {\n    #[props(default)]\
 #[test]
 fn a_component_takes_only_its_props() {
     let src =
-        format!("{SLOTTED_PROPS}[view]\nbox fill:#101010 pad:16\n    children $props.children\n");
+        format!("{SLOTTED_PROPS}[view]\nbox fill:#101010 pad:16\n    children props.children\n");
     let code = crate::transpile_source(&src, "card", None, None)
         .unwrap()
         .rust_code;
@@ -349,7 +349,7 @@ fn a_component_takes_only_its_props() {
 #[test]
 fn a_placeholder_builds_the_children_prop_it_names_in_place() {
     let src = format!(
-        "{SLOTTED_PROPS}[view]\nbox pad:16\n    children $props.header\n    text \"between\"\n    children $props.children\n"
+        "{SLOTTED_PROPS}[view]\nbox pad:16\n    children props.header\n    text \"between\"\n    children props.children\n"
     );
     let code = crate::transpile_source(&src, "panel", None, None)
         .unwrap()
@@ -378,7 +378,7 @@ fn a_bare_or_named_placeholder_is_an_error_naming_the_prop_it_places() {
         .unwrap()
         .rust_code;
     assert!(
-        code.contains("compile_error!(\"`children` places a `Children` prop: write `children $props.children`, with `#[props(default)] pub children: Children` in `Props`\")"),
+        code.contains("compile_error!(\"`children` places a `Children` prop: write `children props.children`, with `#[props(default)] pub children: Children` in `Props`\")"),
         "{code}"
     );
     assert!(!code.contains(".build()?"), "{code}");
@@ -392,7 +392,7 @@ fn a_bare_or_named_placeholder_is_an_error_naming_the_prop_it_places() {
     .unwrap()
     .rust_code;
     assert!(
-        code.contains("compile_error!(\"`children` places a `Children` prop: write `children $props.header`, with `#[props(default)] pub header: Children` in `Props`\")"),
+        code.contains("compile_error!(\"`children` places a `Children` prop: write `children props.header`, with `#[props(default)] pub header: Children` in `Props`\")"),
         "{code}"
     );
     assert_eq!(
@@ -509,13 +509,13 @@ fn component_bool_flag_prop() {
 }
 
 #[test]
-fn component_signal_prop_clones_handle() {
-    let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard count:$count\n    text \"x\"\n";
+fn a_signal_handed_to_a_component_is_written_bare() {
+    let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard count:count\n    text \"x\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
-        code.contains(".count(count.clone())"),
-        "a $signal prop should pass the cloned handle:\n{code}"
+        code.contains(".count(count)"),
+        "the handle written bare is what the prop is handed:\n{code}"
     );
 }
 
@@ -628,7 +628,7 @@ fn a_clamp_to_no_line_is_refused_rather_than_read_as_no_clamp() {
 
 #[test]
 fn input_binds_value_style_and_submit() {
-    let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:$theme.primary width:200 on_submit:(|| $name.set(String::new()))\n";
+    let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:name font_size:16 color:$theme.primary width:200 on_submit:(|| name.set(String::new()))\n";
     let code = crate::transpile_source(src, "demo", Some("SandboxTheme"), None)
         .unwrap()
         .rust_code;
@@ -940,7 +940,7 @@ fn no_transform_no_call() {
 
 #[test]
 fn event_callbacks_emit_on_hover_and_on_key() {
-    let src = "[logic]\nlet hot = signal(false);\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_hover:(|h| $hot.set(h)) on_key:(|_k| $n += 1)\n        text \"x\"\n";
+    let src = "[logic]\nlet hot = signal(false);\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_hover:(|h| hot.set(h)) on_key:(|_k| $n += 1)\n        text \"x\"\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
@@ -950,7 +950,7 @@ fn event_callbacks_emit_on_hover_and_on_key() {
 
 #[test]
 fn on_pointer_move_emits_the_container_method() {
-    let src = "[logic]\nlet at = signal((0.0f32, 0.0f32));\n[view]\ncol\n    box on_pointer_move:(|x, y| $at.set((x, y)))\n        text \"x\"\n";
+    let src = "[logic]\nlet at = signal((0.0f32, 0.0f32));\n[view]\ncol\n    box on_pointer_move:(|x, y| at.set((x, y)))\n        text \"x\"\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
@@ -1018,18 +1018,30 @@ fn heading_resolves_as_widget_component() {
 
 #[test]
 /// A `$signal` on a reactive prop hands over the *handle*, and the prop's own type turns it into a reading. The emitter used to build that closure itself, which is why it needed a table saying which props were reactive; `From<RwSignal<T>> for Reactive<T>` is where the `.get()` lives now.
-fn btn_signal_color_reaches_the_prop_as_a_handle() {
-    let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbutton label:\"x\" fill:$c\n";
-    let code = crate::transpile_source(src, "demo", None, None)
-        .unwrap()
-        .rust_code;
+fn a_signal_named_bare_reaches_the_prop_as_itself_and_one_read_as_its_reading() {
+    let named = crate::transpile_source(
+        "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbutton label:\"x\" fill:c\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
     assert!(
-        code.contains(".fill(c.clone())"),
-        "the signal reaches the prop as a handle, not as a sampled colour:\n{code}"
+        named.contains(".fill(c)") && !named.contains("c.get()"),
+        "a handle written bare is handed over as it is:\n{named}"
     );
+    let read = crate::transpile_source(
+        "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbutton label:\"x\" fill:$c\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
     assert!(
-        !code.contains("Box::new(move || c.get())"),
-        "and the emitter no longer hand-builds the reading:\n{code}"
+        read.contains(".__follow_fill({ let c = c.clone(); move || c.get() })"),
+        "and a `$` reads it, for the prop's type to follow or take:\n{read}"
     );
 }
 
@@ -1787,7 +1799,7 @@ fn a_fit_is_refused_off_a_text_and_when_it_names_nothing() {
             "is not a percentage",
         ),
         (
-            "[logic]\nlet v = signal(String::new());\n[view]\ninput value:$v font_size:fit(50%)\n",
+            "[logic]\nlet v = signal(String::new());\n[view]\ninput value:v font_size:fit(50%)\n",
             "an `input` takes a size",
         ),
     ] {
@@ -2276,7 +2288,7 @@ const SURFACE_PROPS: &str = "[logic]\npub struct Props {\n    #[props(some, defa
 #[test]
 fn a_surface_amends_the_base_paint_and_every_state_after_its_own() {
     let src = format!(
-        "{SURFACE_PROPS}[view]\nbox fill:#ffffff hover_style(fill:#eeeeee) active_style(fill:#dddddd) focus_style(stroke:#0000ff) on_press:(|| {{}}) surface:$props.style\n    text \"x\"\n"
+        "{SURFACE_PROPS}[view]\nbox fill:#ffffff hover_style(fill:#eeeeee) active_style(fill:#dddddd) focus_style(stroke:#0000ff) on_press:(|| {{}}) surface:props.style\n    text \"x\"\n"
     );
     let out = crate::transpile_source(&src, "demo", None, None).unwrap();
     let code = &out.rust_code;
@@ -2335,7 +2347,7 @@ fn a_surface_amends_the_base_paint_and_every_state_after_its_own() {
 /// A `col` carries no paint of its own, but one handed its caller's surface has something to paint.
 #[test]
 fn a_surface_makes_a_plain_container_a_styled_one() {
-    let src = format!("{SURFACE_PROPS}[view]\ncol surface:$props.style\n    text \"x\"\n");
+    let src = format!("{SURFACE_PROPS}[view]\ncol surface:props.style\n    text \"x\"\n");
     let code = crate::transpile_source(&src, "demo", None, None)
         .unwrap()
         .rust_code;
@@ -2348,7 +2360,7 @@ fn a_surface_makes_a_plain_container_a_styled_one() {
 
 #[test]
 fn a_surface_on_a_tag_that_paints_no_box_is_an_error_naming_those_that_do() {
-    let src = format!("{SURFACE_PROPS}[view]\ntext \"x\" surface:$props.style\n");
+    let src = format!("{SURFACE_PROPS}[view]\ntext \"x\" surface:props.style\n");
     let code = crate::transpile_source(&src, "demo", None, None)
         .unwrap()
         .rust_code;

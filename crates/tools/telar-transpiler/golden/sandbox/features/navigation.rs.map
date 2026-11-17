@@ -345,15 +345,17 @@
 344	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1945..1978	3658	`vec!["Overview","Pricing","Team"]`
-1986..1999	3745	`pages.clone()`
-2029..2042	12740	`pages.clone()`
-2824..2828	16116	`open`
-3125..3158	18371	`|| { panes.push(Pane::Overview) }`
-3209..3241	18577	`|| { panes.push(Pane::Pricing) }`
-3289..3318	18779	`|| { panes.push(Pane::Team) }`
-3364..3369	18939	`ghost`
-3380..3403	18977	`|| { navigate_back(); }`
-3425..3432	19581	`address`
-3439..3444	19596	`depth`
-3532..3539	20297	`address`
+1934..1937	3651	`tab`
+1944..1977	3680	`vec!["Overview","Pricing","Team"]`
+1985..1998	3767	`pages.clone()`
+2028..2041	12762	`pages.clone()`
+2688..2692	15776	`open`
+2821..2825	16159	`open`
+3121..3154	18413	`|| { panes.push(Pane::Overview) }`
+3205..3237	18619	`|| { panes.push(Pane::Pricing) }`
+3285..3314	18821	`|| { panes.push(Pane::Team) }`
+3360..3365	18981	`ghost`
+3376..3399	19019	`|| { navigate_back(); }`
+3421..3428	19623	`address`
+3435..3440	19638	`depth`
+3528..3535	20339	`address`

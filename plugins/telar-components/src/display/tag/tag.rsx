@@ -110,19 +110,19 @@ let look = Look {
 };
 
 [view]
-row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill($text.ink)) stroke:(look.frame($text.ink)) stroke_width:(TagTokens::current().border_width()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:$props.style
+row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill($text.ink)) stroke:(look.frame($text.ink)) stroke_width:(TagTokens::current().border_width()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:props.style
     if let Some(selected) = filter
         row role:button toggled:selected.get() on_press:(move || flip(selected, on_toggle.as_deref())) cursor:pointer color:(look.ink($text.ink)) fill:transparent radius:(TagTokens::current().radius()) hover_style(fill:(look.hovered($text.ink)) radius:(TagTokens::current().radius())) active_style(fill:(look.pressed($text.ink)) radius:(TagTokens::current().radius())) align:center gap:(shared::gap_sm(size)) min_height:(body_height(size, true)) min_width:(shared::MIN_TARGET) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
             row shown:selected.get()
                 glyph shape:Mark::Check size:size
-            children $props.leading
+            children props.leading
             text "{$props.label}"
-            children $props.trailing
+            children props.trailing
     else
         row align:center gap:(shared::gap_sm(size)) min_height:(body_height(size, false)) color:(look.ink($text.ink)) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
-            children $props.leading
+            children props.leading
             text "{$props.label}"
-            children $props.trailing
+            children props.trailing
     // The ink is declared on each part rather than on the tag, so every part reads the ink of the place the tag sits in rather than the one it works out from it.
     row align:center color:(look.ink($text.ink))
-        children $props.action
+        children props.action

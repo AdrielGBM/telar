@@ -4,7 +4,7 @@ use telar_parser::{Element, Value};
 
 use crate::style::{PropCall, layout_prop_call};
 
-use super::signals::{normalize_closure, substitute_handles};
+use super::signals::{normalize_closure, substitute_reads};
 use super::{ChildEmit, ViewGen};
 
 impl ViewGen<'_> {
@@ -12,11 +12,11 @@ impl ViewGen<'_> {
         let var = self.next_variable_name("input");
         let pad = self.indent_str();
 
-        // Pass a clone so the caller's binding stays usable; a non-`$` value is forwarded verbatim.
+        // A clone, so the caller's binding stays usable.
         let value_expr = match el.attributes.iter().find(|a| a.key == "value") {
-            Some(a) => match a.value.text().trim().strip_prefix('$') {
-                Some(id) => format!("{id}.clone()"),
-                None => a.value.text().trim().to_string(),
+            Some(a) => match super::signals::written_handle("value", a.value.text()) {
+                Ok(handle) => format!("{handle}.clone()"),
+                Err(message) => format!("compile_error!({message:?})"),
             },
             None => "Default::default()".to_string(),
         };
@@ -85,7 +85,7 @@ impl ViewGen<'_> {
             .find(|a| a.key == "on_submit")
             .map(|a| {
                 let closure =
-                    substitute_handles(&normalize_closure(a.value.text()), self.theme_access);
+                    substitute_reads(&normalize_closure(a.value.text()), self.theme_access);
                 self.owning(&[a.value.text()], &format!("move {closure}"))
             });
 
@@ -105,7 +105,7 @@ impl ViewGen<'_> {
             .find(|a| a.key == "on_cancel")
             .map(|a| {
                 let closure =
-                    substitute_handles(&normalize_closure(a.value.text()), self.theme_access);
+                    substitute_reads(&normalize_closure(a.value.text()), self.theme_access);
                 self.owning(&[a.value.text()], &format!("move {closure}"))
             });
 
@@ -130,15 +130,16 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "focus_id")
-            .map(|a| a.value.text().trim().trim_start_matches('$').to_string())
-            .filter(|target| !target.is_empty());
+            .map(|a| super::signals::written_handle("focus_id", a.value.text()))
+            .filter(|target| !matches!(target, Ok(target) if target.is_empty()));
         let code = match held {
+            Some(Err(message)) => format!("{pad}let {var} = compile_error!({message:?});"),
             None => {
                 format!(
                     "{pad}let {var} = Input::declaring({value_expr}, {layout_style}, {style})?{tail};"
                 )
             }
-            Some(target) => format!(
+            Some(Ok(target)) => format!(
                 "{pad}let {var} = {{\n\
                  {pad}    let __field = Input::declaring({value_expr}, {layout_style}, {style})?{tail};\n\
                  {pad}    let {target} = {target}.clone();\n\

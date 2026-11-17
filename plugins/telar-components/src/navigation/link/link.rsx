@@ -101,14 +101,14 @@ let look = Look {
 let on_press = props.on_press.clone().map(|run| move || run());
 
 [view]
-row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.ink)) text_wrap:nowrap hover_style(fill:(look.hovered($text.ink)) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:on_press a11y_label:(heard($props.label, to.leaves())) surface:$props.style
+row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.ink)) text_wrap:nowrap hover_style(fill:(look.hovered($text.ink)) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:on_press a11y_label:(heard($props.label, to.leaves())) surface:props.style
     row align:center gap:(shared::gap_sm(ControlSize::Regular))
-        children $props.leading
+        children props.leading
         if $props.current
             text "{$props.label}" underline font_weight:$theme.font_weight_strong
         else
             text "{$props.label}" underline
-        children $props.trailing
+        children props.trailing
     if to.leaves()
         row align:center pad_start:(shared::gap_sm(ControlSize::Regular))
             glyph shape:Mark::External

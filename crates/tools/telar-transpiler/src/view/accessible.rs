@@ -38,7 +38,11 @@ impl ViewGen<'_> {
             calls.push_str(&format!(".page_anchor({})", self.annotation_text(anchor)));
         }
         if let Some(progress) = find("view_progress") {
-            let target = progress.value.text().trim().trim_start_matches('$');
+            let target =
+                match super::signals::written_handle("view_progress", progress.value.text()) {
+                    Ok(target) => target,
+                    Err(message) => format!("compile_error!({message:?})"),
+                };
             let range = find("view_range")
                 .and_then(|a| {
                     crate::registry::keyword(

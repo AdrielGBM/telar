@@ -34,7 +34,6 @@ pub fn transitions(props: TransitionsProps) -> Result<Box<dyn LayoutItem>, Layou
                 {
                     let accent = accent.clone();
                     let theme = theme.clone();
-                    let alt = alt.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
@@ -74,7 +73,7 @@ pub fn transitions(props: TransitionsProps) -> Result<Box<dyn LayoutItem>, Layou
                                         };
                                         Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_1, __text_1])?
                                     };
-                                    let __node_3 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let alt = alt.clone(); let accent = accent.clone(); let theme = theme.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } })).build())?;
+                                    let __node_3 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let theme = theme.clone(); let accent = accent.clone(); let alt = alt.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__col_1, __col_2, __node_3])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -143,7 +142,6 @@ pub fn transitions(props: TransitionsProps) -> Result<Box<dyn LayoutItem>, Layou
                 {
                     let theme = theme.clone();
                     let stepped_x = stepped_x.clone();
-                    let stepped = stepped.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_10 = {

@@ -45,18 +45,18 @@ pub fn scroll_timeline(props: ScrollTimelineProps) -> Result<Box<dyn LayoutItem>
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let scene = scene.clone();
                     let stage_color = stage_color.clone();
                     let stage_scale = stage_scale.clone();
+                    let scene = scene.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
-                                let scene = scene.clone();
                                 let stage_color = stage_color.clone();
                                 let stage_scale = stage_scale.clone();
+                                let scene = scene.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = {
@@ -108,7 +108,7 @@ pub fn scroll_timeline(props: ScrollTimelineProps) -> Result<Box<dyn LayoutItem>
                         card(CardProps::props().gap(::telar::Int(12)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("col height:800 view_progress:$p view_range:contain  >  box sticky inset_top:40 fill:$tl.sample(p)").build())?;
+                    let __node_4 = code_line(CodeLineProps::props().code("col height:800 view_progress:p view_range:contain  >  box sticky inset_top:40 fill:$tl.sample(p)").build())?;
                     __children.push(box_item(__node_4));
                     Ok(__children)
                 }
@@ -168,7 +168,7 @@ pub fn scroll_timeline(props: ScrollTimelineProps) -> Result<Box<dyn LayoutItem>
                         card(CardProps::props().gap(::telar::Int(12)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_6));
-                    let __node_8 = code_line(CodeLineProps::props().code("box view_progress:$p view_range:entry opacity:$p     ·   cover · contain · entry · exit").build())?;
+                    let __node_8 = code_line(CodeLineProps::props().code("box view_progress:p view_range:entry opacity:$p     ·   cover · contain · entry · exit").build())?;
                     __children.push(box_item(__node_8));
                     Ok(__children)
                 }

@@ -252,3 +252,4 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1051..1055	2626	`page`
+1204..1231	4609	`|| page.set(page.get() + 1)`

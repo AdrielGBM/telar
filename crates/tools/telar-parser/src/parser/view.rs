@@ -280,7 +280,7 @@ impl Parser {
     }
 }
 
-const FOR_USAGE: &str = "expected `for <pattern> in <expr> [key <expr>] [gap:<expr>] [virtual row_height:<expr> | virtual estimated_height:<expr> [overscan:<px>] [rows:$handle]]`";
+const FOR_USAGE: &str = "expected `for <pattern> in <expr> [key <expr>] [gap:<expr>] [virtual row_height:<expr> | virtual estimated_height:<expr> [overscan:<px>] [rows:<handle>]]`";
 
 /// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr, virtual clause)`: on the first ` in ` keyword, then an optional trailing `virtual …` clause, then an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional ` key <expr>` clause (identity for reconciliation; without it a reactive list keys each row on its index). `gap` is the last token once `virtual` is gone, so it's peeled off before the `key` search.
 fn split_for_in(rest: &str) -> Result<ForHeader, String> {
@@ -360,7 +360,7 @@ fn parse_virtual_clause(tokens: &[&str]) -> Result<VirtualClause, String> {
         (Some(_), Some(_)) => Err("`row_height:` and `estimated_height:` are alternatives: rows are either all one height or measured".into()),
         (Some(_), None) if clause.overscan.is_some() || clause.rows.is_some() => Err("`overscan:` and `rows:` belong to `estimated_height:`; a `row_height:` list keeps two spare rows on each side and has no handle".into()),
         _ => match clause.rows.as_deref() {
-            Some(rows) if !rows.starts_with('$') => Err(format!("`rows:{rows}` must name a signal of `Option<VirtualRows>`, written `rows:$name`")),
+            Some(rows) if rows.starts_with('$') => Err(format!("`rows:{rows}` names the signal of `Option<VirtualRows>` the list writes to, written bare: `rows:{}`", rows.trim_start_matches('$'))),
             _ => Ok(clause),
         },
     }

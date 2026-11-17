@@ -448,7 +448,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(8)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_20));
-                    let __node_22 = code_line(CodeLineProps::props().code("col theme:(…)  ›  children $props.children in:ctx   — children are built where they are placed").build())?;
+                    let __node_22 = code_line(CodeLineProps::props().code("col theme:(…)  ›  children props.children in:ctx   — children are built where they are placed").build())?;
                     __children.push(box_item(__node_22));
                     Ok(__children)
                 }

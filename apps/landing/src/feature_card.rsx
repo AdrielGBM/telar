@@ -13,7 +13,7 @@ pub struct Props {
 
 [view]
 box fill:$theme.surface stroke:$theme.border radius:16 width:300 min_width:260 grow:1 pad:24 gap:10 axis:col
-    children $props.icon
+    children props.icon
     text "{props.title}" font_size:18 color:$theme.dark
     text "{props.body}" font_size:14 color:$theme.muted
 

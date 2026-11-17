@@ -410,10 +410,10 @@ fn parses_a_fixed_height_virtual_clause() {
 
 #[test]
 fn parses_a_measured_virtual_clause_with_its_options() {
-    let clause = virtual_clause("virtual estimated_height:48 overscan:200 rows:$handle").unwrap();
+    let clause = virtual_clause("virtual estimated_height:48 overscan:200 rows:handle").unwrap();
     assert_eq!(clause.estimated_height.as_deref(), Some("48"));
     assert_eq!(clause.overscan.as_deref(), Some("200"));
-    assert_eq!(clause.rows.as_deref(), Some("$handle"));
+    assert_eq!(clause.rows.as_deref(), Some("handle"));
     assert_eq!(clause.row_height, None);
 }
 
@@ -432,9 +432,9 @@ fn measured_only_options_are_refused_on_a_fixed_virtual_clause() {
 }
 
 #[test]
-fn a_virtual_rows_handle_must_be_a_signal() {
-    let err = virtual_clause("virtual estimated_height:48 rows:handle").unwrap_err();
-    assert!(err.contains("rows:$name"), "{err}");
+fn a_virtual_rows_handle_is_named_bare() {
+    let err = virtual_clause("virtual estimated_height:48 rows:$handle").unwrap_err();
+    assert!(err.contains("written bare: `rows:handle`"), "{err}");
 }
 
 #[test]

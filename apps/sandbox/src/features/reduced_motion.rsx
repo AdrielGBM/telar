@@ -38,7 +38,7 @@ col gap:20
     example title:"Every animation follows the value in effect"
         card gap:12
             row gap:12 align:center
-                button label:"Slide" color:$theme.primary on_press:(|| $pulse.set(if $pulse.get() < 0.5 { 1.0 } else { 0.0 }))
+                button label:"Slide" color:$theme.primary on_press:(|| pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }))
                 spinner a11y_label:"Working"
             box fill:$theme.surface_alt radius:6 height:12 width:260
                 box fill:$theme.primary radius:6 height:12 width:40 translate_x:($pulse * 220.0) transition(translate_x 1200ms ease-in-out)

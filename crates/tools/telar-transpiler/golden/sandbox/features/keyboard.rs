@@ -31,8 +31,8 @@ pub fn keyboard(props: KeyboardProps) -> Result<Box<dyn LayoutItem>, LayoutError
                 {
                     let theme = theme.clone();
                     let pressed = pressed.clone();
-                    let focused = focused.clone();
                     let level = level.clone();
+                    let focused = focused.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
@@ -40,8 +40,8 @@ pub fn keyboard(props: KeyboardProps) -> Result<Box<dyn LayoutItem>, LayoutError
                             {
                                 let theme = theme.clone();
                                 let pressed = pressed.clone();
-                                let focused = focused.clone();
                                 let level = level.clone();
+                                let focused = focused.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
@@ -55,7 +55,7 @@ pub fn keyboard(props: KeyboardProps) -> Result<Box<dyn LayoutItem>, LayoutError
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_0])?.focus_style({ let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border::new(Paint::Solid(theme.get().primary), [1.0; 4])), shadow: None, radius: BorderRadius::zero() } }).on_press(move || ()).on_key({ let focused = focused.clone(); let level = level.clone(); move |key: &Key| -> bool { if !focused.get() { return false; } match key { Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => { level.set((level.get() + 1).min(10)); true } Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => { level.set((level.get() - 1).max(0)); true } _ => false } } }).on_focus({ let focused = focused.clone(); move |now| focused.set(now) }).consumes_keys(|| ::telar::ConsumedKeys::ARROWS).control(::telar::Role::Slider)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_0])?.focus_style({ let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border::new(Paint::Solid(theme.get().primary), [1.0; 4])), shadow: None, radius: BorderRadius::zero() } }).on_press(move || ()).on_key({ let level = level.clone(); let focused = focused.clone(); move |key: &Key| -> bool { if !focused.get() { return false; } match key { Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => { level.set((level.get() + 1).min(10)); true } Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => { level.set((level.get() - 1).max(0)); true } _ => false } } }).on_focus({ let focused = focused.clone(); move |now| focused.set(now) }).consumes_keys(|| ::telar::ConsumedKeys::ARROWS).control(::telar::Role::Slider)
                                     };
                                     let __node_4 = button(ButtonProps::props().label("After").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __sbox_0, __node_4])?

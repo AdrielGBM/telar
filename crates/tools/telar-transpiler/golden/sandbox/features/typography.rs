@@ -395,7 +395,6 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let heavy = heavy.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_20 = {

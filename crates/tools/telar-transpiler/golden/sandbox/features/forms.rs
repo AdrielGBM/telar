@@ -40,7 +40,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = checkbox(CheckboxProps::props().checked(agree.clone()).label("I agree to the terms").build())?;
+                                let __node_3 = checkbox(CheckboxProps::props().checked(::core::clone::Clone::clone(&agree)).label("I agree to the terms").build())?;
                                 __children.push(box_item(__node_3));
                                 let __text_0 = {
                                     let agree = agree.clone();
@@ -58,7 +58,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("checkbox checked:$agree label:'I agree to the terms'").build())?;
+                    let __node_4 = code_line(CodeLineProps::props().code("checkbox checked:agree label:'I agree to the terms'").build())?;
                     __children.push(box_item(__node_4));
                     Ok(__children)
                 }
@@ -80,7 +80,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_7 = toggle(ToggleProps::props().checked(notify.clone()).label("Email notifications").build())?;
+                                let __node_7 = toggle(ToggleProps::props().checked(::core::clone::Clone::clone(&notify)).label("Email notifications").build())?;
                                 __children.push(box_item(__node_7));
                                 let __text_1 = {
                                     let notify = notify.clone();
@@ -98,7 +98,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_6));
-                    let __node_8 = code_line(CodeLineProps::props().code("toggle checked:$notify label:'Email notifications'").build())?;
+                    let __node_8 = code_line(CodeLineProps::props().code("toggle checked:notify label:'Email notifications'").build())?;
                     __children.push(box_item(__node_8));
                     Ok(__children)
                 }
@@ -120,7 +120,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_11 = radio_group(RadioGroupProps::props().selected(choice.clone()).__follow_items(move || vec!["Small","Medium","Large"]).label("Size").build())?;
+                                let __node_11 = radio_group(RadioGroupProps::props().selected(::core::clone::Clone::clone(&choice)).__follow_items(move || vec!["Small","Medium","Large"]).label("Size").build())?;
                                 __children.push(box_item(__node_11));
                                 let __text_2 = {
                                     let choice = choice.clone();
@@ -138,7 +138,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_10));
-                    let __node_12 = code_line(CodeLineProps::props().code("radio_group selected:$choice items:vec!['Small','Medium','Large'] label:'Size'").build())?;
+                    let __node_12 = code_line(CodeLineProps::props().code("radio_group selected:choice items:vec!['Small','Medium','Large'] label:'Size'").build())?;
                     __children.push(box_item(__node_12));
                     Ok(__children)
                 }

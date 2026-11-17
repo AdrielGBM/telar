@@ -30,7 +30,7 @@ col gap:20
                     box @stripe fill:$theme.danger
                     box @stripe fill:$theme.purple
                     box @stripe fill:$theme.success
-                box absolute inset_top:30 inset_start:40 width:220 height:100 radius:14 fill:#ffffff59 backdrop_blur:blur() transition(backdrop_blur 250ms) on_press:(|| $frosted.set(!$frosted.get())) cursor:pointer align:center justify:center
+                box absolute inset_top:30 inset_start:40 width:220 height:100 radius:14 fill:#ffffff59 backdrop_blur:blur() transition(backdrop_blur 250ms) on_press:(|| frosted.set(!frosted.get())) cursor:pointer align:center justify:center
                     text "Tap to toggle the blur" font_size:14 color:#111111
         code_line code:"box fill:#ffffff59 backdrop_blur:20   (CSS backdrop-filter: blur(10px))"
     example title:"On each target"

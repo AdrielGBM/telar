@@ -105,5 +105,5 @@ row role:(Role::KeyboardInput) a11y_label:(shown_chord(&chord))
                     if let Some(separator) = separator
                         text "{separator}" font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap
                     // Never narrower than it is tall, so a one-letter key is a square.
-                    row align:center justify:center min_width:(1lh + shared::gap_xs(size) * 2.0) pad_x:(shared::gap_sm(size)) pad_y:(shared::gap_xs(size)) fill:(look.fill($text.ink)) stroke:(look.frame($text.ink)) color:(look.ink($text.ink)) stroke_width:(KbdTokens::current().border_width()) radius:(KbdTokens::current().radius()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em surface:$props.style
+                    row align:center justify:center min_width:(1lh + shared::gap_xs(size) * 2.0) pad_x:(shared::gap_sm(size)) pad_y:(shared::gap_xs(size)) fill:(look.fill($text.ink)) stroke:(look.frame($text.ink)) color:(look.ink($text.ink)) stroke_width:(KbdTokens::current().border_width()) radius:(KbdTokens::current().radius()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em surface:props.style
                         text "{key}" text_wrap:nowrap

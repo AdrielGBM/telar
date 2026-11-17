@@ -28,7 +28,6 @@ pub fn text_fields(props: TextFieldsProps) -> Result<Box<dyn LayoutItem>, Layout
             let __recipe_children = Children::new(
                 {
                     let name = name.clone();
-                    let query = query.clone();
                     let theme = theme.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -36,13 +35,13 @@ pub fn text_fields(props: TextFieldsProps) -> Result<Box<dyn LayoutItem>, Layout
                         let __recipe_children = Children::new(
                             {
                                 let name = name.clone();
-                                let query = query.clone();
                                 let theme = theme.clone();
+                                let query = query.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = text_field(TextFieldProps::props().value(name.clone()).label("Name").placeholder("Type your name").build())?;
+                                let __node_3 = text_field(TextFieldProps::props().value(::core::clone::Clone::clone(&name)).label("Name").placeholder("Type your name").build())?;
                                 __children.push(box_item(__node_3));
-                                let __node_4 = text_field(TextFieldProps::props().value(query.clone()).placeholder("Search…").build())?;
+                                let __node_4 = text_field(TextFieldProps::props().value(::core::clone::Clone::clone(&query)).placeholder("Search…").build())?;
                                 __children.push(box_item(__node_4));
                                 let __text_0 = {
                                     let name = name.clone();
@@ -60,7 +59,7 @@ pub fn text_fields(props: TextFieldsProps) -> Result<Box<dyn LayoutItem>, Layout
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_5 = code_line(CodeLineProps::props().code("text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)").build())?;
+                    let __node_5 = code_line(CodeLineProps::props().code("text_field value:name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)").build())?;
                     __children.push(box_item(__node_5));
                     Ok(__children)
                 }

@@ -40,20 +40,20 @@ pub fn frame_clock(props: FrameClockProps) -> Result<Box<dyn LayoutItem>, Layout
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let running = running.clone();
                     let seconds = seconds.clone();
                     let swing = swing.clone();
                     let state = state.clone();
+                    let running = running.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
-                                let running = running.clone();
                                 let seconds = seconds.clone();
                                 let swing = swing.clone();
                                 let state = state.clone();
+                                let running = running.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {

@@ -8,8 +8,7 @@ use crate::theme_access::ThemeAccess;
 use telar_project::naming::to_pascal_case;
 
 use super::signals::{
-    closure_marker, emit_transition_prelude, has_paint, normalize_closure, substitute_handles,
-    substitute_reads,
+    closure_marker, emit_transition_prelude, has_paint, normalize_closure, substitute_reads,
 };
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker, forces_child_vec};
 
@@ -318,7 +317,7 @@ impl ViewGen<'_> {
             "new"
         };
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
-        // `track_rect:$sig` needs the node, which exists only once the widget is built, so its effect is emitted after the constructor.
+        // `track_rect:sig` needs the node, which exists only once the widget is built, so its effect is emitted after the constructor.
         let track = self.track_rect_tail(el, &inner_pad);
         let bind = if track.is_empty() {
             ""
@@ -505,9 +504,9 @@ impl ViewGen<'_> {
         format!(".{method}({})", self.emit_closure_value(attr))
     }
 
-    /// Desugars a closure-valued attribute into a `move` closure: `$name` signals are cloned in, `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span (so LSP completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
+    /// Desugars a closure-valued attribute into a `move` closure: what it reads with `$` is read where it runs and cloned in, a handle it writes is named bare, and a `$`-free closure keeps its source span (so LSP completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
     pub(super) fn emit_closure_value(&self, attr: &Attr) -> String {
-        let closure = substitute_handles(&normalize_closure(attr.value.text()), self.theme_access);
+        let closure = substitute_reads(&normalize_closure(attr.value.text()), self.theme_access);
         // A `$` substitution breaks the byte-for-byte span, so only a `$`-free closure carries a marker.
         let marker = if attr.value.text().contains('$') {
             String::new()
@@ -521,7 +520,7 @@ impl ViewGen<'_> {
         self.closure_attr_call(el, "on_press", "on_press")
     }
 
-    /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate` in degrees, `scale`/`scale_x`/`scale_y`, `translate_x`/`translate_y`), or an empty string when there are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal` reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure; every value is cast to `f32` so integer and float literals both type-check. `track_rect:$sig` — mirror this element's laid-out rect into `sig`, so a sibling can be positioned or painted from where this one ended up.
+    /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate` in degrees, `scale`/`scale_x`/`scale_y`, `translate_x`/`translate_y`), or an empty string when there are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal` reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure; every value is cast to `f32` so integer and float literals both type-check. `track_rect:sig` — mirror this element's laid-out rect into `sig`, so a sibling can be positioned or painted from where this one ended up.
     ///
     /// `track_layout` hands back the node's own rect signal; this copies it into the author's signal, which is what makes the value reachable from the rest of their `[view]` and `[logic]`. The mirroring effect belongs to the owner the view is built in, so it stops when that view is disposed rather than firing at a node that is gone.
     ///
@@ -530,10 +529,11 @@ impl ViewGen<'_> {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "track_rect") else {
             return String::new();
         };
-        let target = attr.value.text().trim().trim_start_matches('$');
-        if target.is_empty() {
-            return String::new();
-        }
+        let target = match super::signals::written_handle("track_rect", attr.value.text()) {
+            Ok(target) if target.is_empty() => return String::new(),
+            Ok(target) => target,
+            Err(message) => return format!("{pad}compile_error!({message:?});\n"),
+        };
         format!(
             "{pad}let __rect = track_layout(__tracked.layout_node()).expect(\"a container registers its rect\");\n\
              {pad}let {target} = {target}.clone();\n\

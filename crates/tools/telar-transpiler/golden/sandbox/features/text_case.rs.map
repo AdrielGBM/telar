@@ -209,3 +209,4 @@
 208	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+1833..1851	8974	`|h| hovered.set(h)`

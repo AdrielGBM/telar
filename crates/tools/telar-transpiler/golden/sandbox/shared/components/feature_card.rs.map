@@ -86,6 +86,6 @@
 85	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-262..272	980	`props.icon`
-284..295	1094	`props.title`
-339..349	1446	`props.body`
+261..271	980	`props.icon`
+283..294	1094	`props.title`
+338..348	1446	`props.body`

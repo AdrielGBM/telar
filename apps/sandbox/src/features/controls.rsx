@@ -33,19 +33,19 @@ col gap:20
     example title:"role:switch toggled: — on or off, read as checked"
         card
             row gap:12 align:center
-                box role:switch toggled:$calm a11y_label:"Reduce motion" fill:(if $calm { $theme.primary } else { $theme.surface_alt }) stroke:$theme.border radius:14 pad_x:14 pad_y:6 cursor:pointer on_press:(|| $calm.set(!$calm.get()))
+                box role:switch toggled:$calm a11y_label:"Reduce motion" fill:(if $calm { $theme.primary } else { $theme.surface_alt }) stroke:$theme.border radius:14 pad_x:14 pad_y:6 cursor:pointer on_press:(|| calm.set(!calm.get()))
                     text "≈ {$calm_reading}" font_size:13 color:(if $calm { $theme.on_primary } else { $theme.ink })
                 text "a reader hears “Reduce motion, switch, {$calm_reading}”" font_size:12 color:$theme.muted
-        code_line code:"box role:switch toggled:$calm a11y_label:'Reduce motion' on_press:(|| $calm.set(!$calm.get()))"
+        code_line code:"box role:switch toggled:$calm a11y_label:'Reduce motion' on_press:(|| calm.set(!calm.get()))"
     example title:"role:button toggled: — a toggle button, read as pressed"
         card
             row gap:8 align:center
-                box role:button toggled:$bold a11y_label:"Bold" fill:(if $bold { $theme.primary } else { $theme.surface_alt }) stroke:$theme.border radius:6 width:32 height:32 align:center justify:center cursor:pointer on_press:(|| $bold.set(!$bold.get()))
+                box role:button toggled:$bold a11y_label:"Bold" fill:(if $bold { $theme.primary } else { $theme.surface_alt }) stroke:$theme.border radius:6 width:32 height:32 align:center justify:center cursor:pointer on_press:(|| bold.set(!bold.get()))
                     text "B" font_size:14 font_weight:bold color:(if $bold { $theme.on_primary } else { $theme.ink })
-                box role:button toggled:$italic a11y_label:"Italic" fill:(if $italic { $theme.primary } else { $theme.surface_alt }) stroke:$theme.border radius:6 width:32 height:32 align:center justify:center cursor:pointer on_press:(|| $italic.set(!$italic.get()))
+                box role:button toggled:$italic a11y_label:"Italic" fill:(if $italic { $theme.primary } else { $theme.surface_alt }) stroke:$theme.border radius:6 width:32 height:32 align:center justify:center cursor:pointer on_press:(|| italic.set(!italic.get()))
                     text "I" font_size:14 color:(if $italic { $theme.on_primary } else { $theme.ink })
                 text "the selection is {$styles}" font_size:12 color:$theme.muted
-        code_line code:"box role:button toggled:$bold a11y_label:'Bold' on_press:(|| $bold.set(!$bold.get()))"
+        code_line code:"box role:button toggled:$bold a11y_label:'Bold' on_press:(|| bold.set(!bold.get()))"
     example title:"Attributes"
         col gap:6
             prop_row name:"role" values:"button · switch · checkbox · radio · tab · slider · link · …" about:"A role a person operates makes the box a control: a Tab stop with the theme's focus ring, pressed by Enter and Space (Enter alone for a link). Regions and other roles only describe the box."

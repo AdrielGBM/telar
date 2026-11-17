@@ -68,7 +68,6 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let __node_7 = {
             let __recipe_children = Children::new(
                 {
-                    let rust = rust.clone();
                     let tags = tags.clone();
                     let theme = theme.clone();
                 move || {
@@ -76,14 +75,14 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     let __node_8 = {
                         let __recipe_children = Children::new(
                             {
-                                let rust = rust.clone();
                                 let tags = tags.clone();
                                 let theme = theme.clone();
+                                let rust = rust.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
                                     let __node_9 = tag(TagProps::props().label("design").build())?;
-                                    let __node_10 = tag(TagProps::props().label("rust").selected(rust.clone()).build())?;
+                                    let __node_10 = tag(TagProps::props().label("rust").selected(::core::clone::Clone::clone(&rust)).build())?;
                                     let __node_11 = {
                                         let __recipe_action = Children::new(
                                             {

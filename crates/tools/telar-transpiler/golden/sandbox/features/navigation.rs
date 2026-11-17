@@ -83,7 +83,7 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let pages = pages.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).__follow_items(move || vec!["Overview","Pricing","Team"]).__follow_panel({ let pages = pages.clone(); move || pages.clone() }).build())?;
+                                let __node_3 = tabs(TabsProps::props().selected(::core::clone::Clone::clone(&tab)).__follow_items(move || vec!["Overview","Pricing","Team"]).__follow_panel({ let pages = pages.clone(); move || pages.clone() }).build())?;
                                 __children.push(box_item(__node_3));
                                 let __node_4 = {
                                     let __recipe_children = Children::new(
@@ -211,7 +211,7 @@ move || vec![tab.get() == 2]
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_8 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team'] panel:(pages.clone())   >   tab_panel link:(pages.clone())").build())?;
+                    let __node_8 = code_line(CodeLineProps::props().code("tabs selected:tab items:vec!['Overview','Pricing','Team'] panel:(pages.clone())   >   tab_panel link:(pages.clone())").build())?;
                     __children.push(box_item(__node_8));
                     Ok(__children)
                 }
@@ -222,15 +222,15 @@ move || vec![tab.get() == 2]
         let __node_9 = {
             let __recipe_children = Children::new(
                 {
-                    let open = open.clone();
                     let theme = theme.clone();
+                    let open = open.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_10 = {
                         let __recipe_children = Children::new(
                             {
-                                let open = open.clone();
                                 let theme = theme.clone();
+                                let open = open.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_11 = {
@@ -251,7 +251,7 @@ move || vec![tab.get() == 2]
                                         }
                                         }
                                     );
-                                    accordion(AccordionProps::props().title("Shipping details").open(open.clone()).children(__recipe_children).build())?
+                                    accordion(AccordionProps::props().title("Shipping details").open(::core::clone::Clone::clone(&open)).children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_11));
                                 let __text_4 = {
@@ -270,7 +270,7 @@ move || vec![tab.get() == 2]
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_10));
-                    let __node_12 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build())?;
+                    let __node_12 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:open  >  …body…").build())?;
                     __children.push(box_item(__node_12));
                     Ok(__children)
                 }

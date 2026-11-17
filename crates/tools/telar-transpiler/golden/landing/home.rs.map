@@ -634,21 +634,24 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1534..1541	5516	`PRIMARY`
-2111..2118	7389	`PRIMARY`
-2223..2230	7623	`outline`
-2237..2244	7638	`PRIMARY`
-2273..2283	8049	`spots_left`
-2419..2431	8709	`gradient_img`
-2839..2846	10591	`PRIMARY`
-3098..3105	11882	`PRIMARY`
-3355..3362	13174	`PRIMARY`
-3613..3620	14467	`PRIMARY`
-5235..5247	22659	`gradient_img`
-5450..5461	23905	`checker_img`
-5665..5675	25110	`radial_img`
-5983..5994	26914	`checker_img`
-6483..6490	28754	`PRIMARY`
-6562..6569	29110	`PRIMARY`
-6733..6743	30629	`spots_left`
-6980..6987	31397	`signups`
-6589..6596	32075	`PRIMARY`
+1552..1582	5589	`|| signups.update(|n| *n += 1)`
+2110..2117	7389	`PRIMARY`
+2128..2158	7462	`|| signups.update(|n| *n += 1)`
+2221..2228	7623	`outline`
+2235..2242	7638	`PRIMARY`
+2271..2281	8049	`spots_left`
+2417..2429	8709	`gradient_img`
+2837..2844	10591	`PRIMARY`
+3096..3103	11882	`PRIMARY`
+3353..3360	13174	`PRIMARY`
+3611..3618	14467	`PRIMARY`
+5233..5245	22659	`gradient_img`
+5448..5459	23905	`checker_img`
+5663..5673	25110	`radial_img`
+5981..5992	26914	`checker_img`
+6481..6488	28754	`PRIMARY`
+6560..6567	29110	`PRIMARY`
+6731..6741	30629	`spots_left`
+6921..6951	31147	`|| signups.update(|n| *n += 1)`
+6977..6984	31397	`signups`
+6587..6594	32075	`PRIMARY`

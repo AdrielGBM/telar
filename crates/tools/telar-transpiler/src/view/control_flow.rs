@@ -499,7 +499,7 @@ impl ViewGen<'_> {
 
     /// A `virtual` loop: only the rows the enclosing scroll shows get built, instead of every row up front.
     ///
-    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent fragment. `row_height:` is the fixed-height `VirtualList::new`; `estimated_height:` is `VirtualList::measured` over a `VirtualRows` made here, which `rows:$handle` also stores in a signal for the view to `reveal` with. Without a `key` they are `VirtualList::positional` and `VirtualList::measured_positional`, whose rows bind a signal of their item as a keyless reactive `for`'s do.
+    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent fragment. `row_height:` is the fixed-height `VirtualList::new`; `estimated_height:` is `VirtualList::measured` over a `VirtualRows` made here, which `rows:handle` also stores in a signal for the view to `reveal` with. Without a `key` they are `VirtualList::positional` and `VirtualList::measured_positional`, whose rows bind a signal of their item as a keyless reactive `for`'s do.
     fn emit_virtual_for(&mut self, block: &ForBlock, clause: &VirtualClause) -> ChildEmit {
         let pad = self.indent_str();
         let Some(viewport) = self.scroll_viewport.clone() else {
@@ -554,7 +554,6 @@ impl ViewGen<'_> {
                     "{pad}let {rows} = VirtualRows::new({viewport}.clone(), ({estimate}) as f32);"
                 );
                 if let Some(handle) = &clause.rows {
-                    let handle = handle.trim_start_matches('$');
                     let _ = writeln!(code, "{pad}{handle}.set(Some({rows}.clone()));");
                 }
                 let overscan = clause.overscan.as_ref().map_or_else(

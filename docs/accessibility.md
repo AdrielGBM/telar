@@ -133,9 +133,9 @@ that reads `Mixed` is said as not selected.
 ```text
 box role:button a11y_label:"Add one" on_press:(|| $count += 1)
     text "+1"
-box role:switch toggled:$calm a11y_label:"Reduce motion" on_press:(|| $calm.set(!$calm.get()))
+box role:switch toggled:$calm a11y_label:"Reduce motion" on_press:(|| calm.set(!calm.get()))
     text "≈"
-box role:button toggled:$bold a11y_label:"Bold" on_press:(|| $bold.set(!$bold.get()))
+box role:button toggled:$bold a11y_label:"Bold" on_press:(|| bold.set(!bold.get()))
     text "B"
 ```
 

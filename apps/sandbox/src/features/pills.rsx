@@ -21,8 +21,8 @@ col gap:20
         card gap:10
             row gap:8 align:center
                 tag label:"design"
-                tag label:"rust" selected:$rust
+                tag label:"rust" selected:rust
                 tag label:"removable"
-                    icon_button icon:"lucide:x" label:"Remove removable" size:small on_press:(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) }) slot:"action"
+                    icon_button icon:"lucide:x" label:"Remove removable" size:small on_press:(|| { tags.update(|n| if *n > 0 { *n -= 1 }) }) slot:"action"
             text "tags · {$tags}" font_size:13 color:$theme.muted
         code_line code:"tag label:'removable' / icon_button icon:'lucide:x' size:small slot:'action'"

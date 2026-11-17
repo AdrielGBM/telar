@@ -57,7 +57,7 @@ fn document() -> web_sys::Document {
         .expect("a document")
 }
 
-/// What `box role:<role> toggled:$on label:"…" on_press:(|| $on.set(!$on.get()))` builds.
+/// What `box role:<role> toggled:$on label:"…" on_press:(|| on.set(!on.get()))` builds.
 fn stateful(
     role: Role,
     name: &'static str,

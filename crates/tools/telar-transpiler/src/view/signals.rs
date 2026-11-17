@@ -120,7 +120,7 @@ pub(super) fn normalize_closure(value: &str) -> String {
     rewrite_compound_assign(&closure)
 }
 
-/// Sugar: a closure whose body is a single compound assignment on a signal (`|| $count += 1`, and the single-statement block form `|| { $count += 1 }`) is rewritten to `|| $count.update(|__v| *__v += (1))`. The `$` is kept so signal-cloning and [`substitute_handles`] still see the handle. Anything more complex (multiple statements, no compound operator, not a signal target) is returned unchanged.
+/// Sugar: a closure whose body is a single compound assignment on a signal read (`|| $count += 1`, and the single-statement block form `|| { $count += 1 }`) writes it: `|| count.update(|__v| *__v += 1)`, the handle bare, so what reads it is not a read of it. The raw value keeps the `$`, so the closure still clones the handle in. Anything more complex (multiple statements, no compound operator, not a signal target) is returned unchanged.
 fn rewrite_compound_assign(closure: &str) -> String {
     // `closure` starts with `|` (guaranteed by `normalize_closure`); split off its `||` / `|args|` head.
     let Some(bar) = closure[1..].find('|') else {
@@ -159,33 +159,18 @@ fn rewrite_compound_assign(closure: &str) -> String {
         return closure.to_string();
     }
     // Compound assignment is Rust's lowest precedence, so `*__v *= a + b` already binds correctly and parens would only trip `unused_parens`.
-    format!("{params} ${ident}.update(|__v| *__v {op} {rhs})")
+    format!("{params} {ident}.update(|__v| *__v {op} {rhs})")
 }
 
-/// Replaces every `$ident` in `s` with `ident.get()` — a reactive read, for `[view]` interpolation where a signal reference is a value read.
+/// Replaces every `$ident` in `s` with `ident.get()`, a reading of it, each `$props.field` with that field's reading, and each library `$theme` read with its token; everything else is copied through unchanged. A `$` is a read wherever it is written.
 pub(crate) fn substitute_reads(s: &str, theme: ThemeAccess) -> String {
-    substitute_dollar(s, true, theme)
-}
-
-/// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies where `$count.update(…)` means the handle and `$` only marks it for cloning.
-///
-/// `$theme` is the exception, because a theme handle has no second use: reading it is the only thing anyone can do with one, so `$theme.primary` means the same read wherever it is written.
-pub(super) fn substitute_handles(s: &str, theme: ThemeAccess) -> String {
-    substitute_dollar(s, false, theme)
-}
-
-/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`), each `$props.field` to that field's binding, and each library `$theme` read to its token; everything else is copied through unchanged.
-fn substitute_dollar(s: &str, read: bool, theme: ThemeAccess) -> String {
     let mut out = String::with_capacity(s.len());
     let mut copied = 0;
     for (marker, end) in dollar_spans(s) {
         let ident = &s[marker + 1..end];
         out.push_str(&s[copied..marker]);
         if let Some(field) = prop_read(ident, &s[end..]) {
-            let _ = write!(out, "props.{field}");
-            if read {
-                out.push_str(".get()");
-            }
+            let _ = write!(out, "props.{field}.get()");
             copied = end + 1 + field.len();
             continue;
         }
@@ -195,9 +180,7 @@ fn substitute_dollar(s: &str, read: bool, theme: ThemeAccess) -> String {
             continue;
         }
         out.push_str(box_text_binding(ident));
-        if read || ident == "theme" {
-            out.push_str(".get()");
-        }
+        out.push_str(".get()");
         copied = end;
     }
     out.push_str(&s[copied..]);
@@ -842,3 +825,14 @@ pub(crate) fn reads_box_text(s: &str) -> bool {
 
 /// Where [`ViewGen::owning_rerun`] puts the clones a run of its closure takes.
 pub(super) const RECLONE: &str = "/*rerun-clones*/";
+
+/// The signal an attribute that writes one (`value:`, `track_rect:`, `focus_id:`, `rows:`, `view_progress:`) is handed, written bare, or the `compile_error!` refusing a `$`: a `$` reads a signal, and what is written to is the signal itself.
+pub(super) fn written_handle(key: &str, value: &str) -> Result<String, String> {
+    let value = value.trim();
+    match value.strip_prefix('$') {
+        Some(name) => Err(format!(
+            "`{key}:{value}` reads `{name}`, and `{key}` writes to the signal itself: write it bare, as `{key}:{name}`"
+        )),
+        None => Ok(value.to_string()),
+    }
+}

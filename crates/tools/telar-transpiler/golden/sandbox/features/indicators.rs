@@ -28,20 +28,20 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
         let __node_1 = {
             let __recipe_children = Children::new(
                 {
-                    let p = p.clone();
                     let pct = pct.clone();
                     let theme = theme.clone();
+                    let p = p.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __recipe_children = Children::new(
                             {
-                                let p = p.clone();
                                 let pct = pct.clone();
                                 let theme = theme.clone();
+                                let p = p.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = progress(ProgressProps::props().value(p.clone()).build())?;
+                                let __node_3 = progress(ProgressProps::props().value(::core::clone::Clone::clone(&p)).build())?;
                                 let __node_3 = __node_3.a11y_label(|| "Loading");
                                 __children.push(box_item(__node_3));
                                 let __row_0 = {
@@ -65,7 +65,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_6 = code_line(CodeLineProps::props().code("progress value:$p a11y_label:\"Loading\"").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("progress value:p a11y_label:\"Loading\"").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }

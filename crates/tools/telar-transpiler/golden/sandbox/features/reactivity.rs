@@ -396,7 +396,6 @@ move || vec![show.get()]
                     let theme = theme.clone();
                     let show_panel = show_panel.clone();
                     let panel_builds = panel_builds.clone();
-                    let panel_note = panel_note.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_27 = {
@@ -512,7 +511,7 @@ move || vec![show.get()]
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_31));
-                    let __node_32 = code_line(CodeLineProps::props().code("input value:$name      (tap or Tab to focus · type · arrows, Home, End, Backspace · Esc blurs)").build())?;
+                    let __node_32 = code_line(CodeLineProps::props().code("input value:name      (tap or Tab to focus · type · arrows, Home, End, Backspace · Esc blurs)").build())?;
                     __children.push(box_item(__node_32));
                     Ok(__children)
                 }
@@ -553,7 +552,7 @@ move || vec![show.get()]
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_34));
-                    let __node_35 = code_line(CodeLineProps::props().code("box on_focus(|f| $box_focused.set(f))      (Tab-focusable; drive a focus ring)").build())?;
+                    let __node_35 = code_line(CodeLineProps::props().code("box on_focus(|f| box_focused.set(f))      (Tab-focusable; drive a focus ring)").build())?;
                     __children.push(box_item(__node_35));
                     Ok(__children)
                 }
@@ -565,7 +564,6 @@ move || vec![show.get()]
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let slider = slider.clone();
                     let thumb_x = thumb_x.clone();
                     let pct = pct.clone();
                 move || {
@@ -574,9 +572,9 @@ move || vec![show.get()]
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
-                                let slider = slider.clone();
                                 let thumb_x = thumb_x.clone();
                                 let pct = pct.clone();
+                                let slider = slider.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_7 = {
@@ -602,7 +600,7 @@ move || vec![show.get()]
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_37));
-                    let __node_38 = code_line(CodeLineProps::props().code("box on_drag(|px, _| $slider.set(px / 280))      (keeps tracking even off the track)").build())?;
+                    let __node_38 = code_line(CodeLineProps::props().code("box on_drag(|px, _| slider.set(px / 280))      (keeps tracking even off the track)").build())?;
                     __children.push(box_item(__node_38));
                     Ok(__children)
                 }

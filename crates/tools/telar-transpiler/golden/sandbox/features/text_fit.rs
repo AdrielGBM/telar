@@ -111,7 +111,6 @@ pub fn text_fit(props: TextFitProps) -> Result<Box<dyn LayoutItem>, LayoutError>
                 {
                     let share = share.clone();
                     let theme = theme.clone();
-                    let narrow = narrow.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {

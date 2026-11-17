@@ -51,7 +51,7 @@ col gap:20
     doc_header kicker:"NAVIGATION" title:"Tabs, accordion & address" desc:"tabs is a bound selected-index bar, one Tab stop walked with the arrows; a TabPanelLink joins it to the tab_panel whose content reactive ifs swap. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components."
     example title:"tabs — a bound index, and the panel it shows"
         card gap:10
-            tabs selected:$tab items:vec!["Overview","Pricing","Team"] panel:(pages.clone())
+            tabs selected:tab items:vec!["Overview","Pricing","Team"] panel:(pages.clone())
             tab_panel link:(pages.clone())
                 if $tab == 0
                     text "Overview — what the product does." font_size:14 color:$theme.ink
@@ -59,13 +59,13 @@ col gap:20
                     text "Pricing — plans and limits." font_size:14 color:$theme.ink
                 if $tab == 2
                     text "Team — who is behind it." font_size:14 color:$theme.ink
-        code_line code:"tabs selected:$tab items:vec!['Overview','Pricing','Team'] panel:(pages.clone())   >   tab_panel link:(pages.clone())"
+        code_line code:"tabs selected:tab items:vec!['Overview','Pricing','Team'] panel:(pages.clone())   >   tab_panel link:(pages.clone())"
     example title:"accordion — a collapsible section, open bound to a signal"
         card gap:10
-            accordion title:"Shipping details" open:$open
+            accordion title:"Shipping details" open:open
                 text "Ships in 2–3 business days. Free over $50." font_size:14 color:$theme.muted
             text "open · {$open}" font_size:13 color:$theme.muted
-        code_line code:"accordion title:'Shipping details' open:$open  >  …body…"
+        code_line code:"accordion title:'Shipping details' open:open  >  …body…"
     example title:"follow_location — a page stack that is the app's address"
         card gap:10
             row gap:8 wrap

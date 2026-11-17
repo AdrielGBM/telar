@@ -278,7 +278,7 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_23));
-                    let __node_24 = code_line(CodeLineProps::props().code("box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)").build())?;
+                    let __node_24 = code_line(CodeLineProps::props().code("box on_hover(|h| hovering.set(h))   ·   col on_key(|k| …)").build())?;
                     __children.push(box_item(__node_24));
                     Ok(__children)
                 }

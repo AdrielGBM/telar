@@ -284,11 +284,11 @@ fn style_imports_and_pub_classes_round_trip() {
 /// A measured list's options all change what is built, so the formatter keeps each of them, in the order the parser reads them.
 #[test]
 fn a_measured_virtual_for_keeps_its_options() {
-    let src = "[view]\nscroll\n    for row in $rows key row.id gap:0 virtual estimated_height:48 overscan:200 rows:$handle\n        text \"a\"\n";
+    let src = "[view]\nscroll\n    for row in $rows key row.id gap:0 virtual estimated_height:48 overscan:200 rows:handle\n        text \"a\"\n";
     let out = format_document(src).unwrap();
     assert!(
         out.contains(
-            "for row in $rows key row.id gap:0 virtual estimated_height:48 overscan:200 rows:$handle\n"
+            "for row in $rows key row.id gap:0 virtual estimated_height:48 overscan:200 rows:handle\n"
         ),
         "every option comes back:\n{out}"
     );

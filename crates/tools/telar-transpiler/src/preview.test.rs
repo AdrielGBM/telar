@@ -57,7 +57,7 @@ fn previews_compile_only_where_previews_are_on() {
 #[test]
 fn the_roots_literals_are_read_through_the_args() {
     let code = code(
-        "[preview \"Default\"]\ncheckbox label:\"I agree\" size:12 count:3u32 ghost on:true tone:Tone::Calm fill:#ff8800 checked:$agree on_change:(|v| log(v)) width:(1 + 2)\n",
+        "[preview \"Default\"]\ncheckbox label:\"I agree\" size:12 count:3u32 ghost on:true tone:Tone::Calm fill:#ff8800 on_change:(|v| log(v)) width:(1 + 2)\n",
     );
     for (key, value) in [
         ("label", "\"I agree\""),
@@ -74,7 +74,6 @@ fn the_roots_literals_are_read_through_the_args() {
         let read = format!(".{key}(::telar::__preview_arg!(__preview, \"{key}\", {value}))");
         assert!(code.contains(&read), "`{key}` is an arg: {read}\n{code}");
     }
-    assert!(code.contains(".checked(agree.clone())"), "{code}");
     assert!(code.contains(".on_change(std::rc::Rc::new("), "{code}");
     assert!(code.contains(".width(1 + 2)"), "{code}");
     assert!(
@@ -118,7 +117,7 @@ fn a_root_that_is_no_component_call_reads_no_literals() {
 
 #[test]
 fn declared_args_are_live_signals_the_body_reads() {
-    let previews = "[preview \"Bound\" args(agree:false label:\"I agree\" tint:#102030 count:3u32 items:Vec::<u8>::new())]\ncol gap:8\n    checkbox checked:$agree label:$label\n    text \"agree · {$agree}\"\n";
+    let previews = "[preview \"Bound\" args(agree:false label:\"I agree\" tint:#102030 count:3u32 items:Vec::<u8>::new())]\ncol gap:8\n    checkbox checked:agree label:label\n    text \"agree · {$agree}\"\n";
     let out = transpiled(previews);
     let code = &out.rust_code;
     for (name, default) in [
@@ -135,7 +134,10 @@ fn declared_args_are_live_signals_the_body_reads() {
             format!("let {name} = ::telar::__preview_signal!(__preview, \"{name}\", {default});");
         assert!(code.contains(&signal), "{signal}\n{code}");
     }
-    assert!(code.contains(".checked(agree.clone())"), "{code}");
+    assert!(
+        code.contains(".checked(::core::clone::Clone::clone(&agree)).label(label)"),
+        "the args are the handles the body names bare:\n{code}"
+    );
     assert!(code.contains("agree.get()"), "{code}");
     let header = line_in(previews, "[preview \"Bound\"");
     assert_eq!(rsx_line_of(&out, "let agree ="), Some(header));

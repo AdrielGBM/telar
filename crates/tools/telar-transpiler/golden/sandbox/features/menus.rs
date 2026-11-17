@@ -64,7 +64,7 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             Ok(__children)
                                         }
                                     );
-                                    select(SelectProps::props().selected(picked.clone()).children(__recipe_children).build())?
+                                    select(SelectProps::props().selected(::core::clone::Clone::clone(&picked)).children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_3));
                                 let __text_0 = {
@@ -83,7 +83,7 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_7 = code_line(CodeLineProps::props().code("select selected:$picked / item label:'Small' / item label:'Medium'").build())?;
+                    let __node_7 = code_line(CodeLineProps::props().code("select selected:picked / item label:'Small' / item label:'Medium'").build())?;
                     __children.push(box_item(__node_7));
                     Ok(__children)
                 }
@@ -166,7 +166,7 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                             let __node_17 = item(ItemProps::props().label("Undo").shortcut("Mod+Z").build())?;
                                             __children.push(box_item(__node_17));
-                                            let __node_18 = item(ItemProps::props().label("Redo").shortcut("Mod+Shift+Z").disabled(cant_redo.clone()).build())?;
+                                            let __node_18 = item(ItemProps::props().label("Redo").shortcut("Mod+Shift+Z").disabled(::core::clone::Clone::clone(&cant_redo)).build())?;
                                             __children.push(box_item(__node_18));
                                             let __node_19 = separator(SeparatorProps::props().build())?;
                                             __children.push(box_item(__node_19));
@@ -174,7 +174,7 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             __children.push(box_item(__node_20));
                                             let __node_21 = item(ItemProps::props().label("Cut").shortcut("Mod+X").build())?;
                                             __children.push(box_item(__node_21));
-                                            let __node_22 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build())?;
+                                            let __node_22 = item(ItemProps::props().label("Show ruler").checked(::core::clone::Clone::clone(&ruler)).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build())?;
                                             __children.push(box_item(__node_22));
                                             Ok(__children)
                                         }
@@ -184,8 +184,8 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 };
                                 __children.push(box_item(__node_16));
                                 let __row_0 = {
-                                    let __node_23 = toggle(ToggleProps::props().checked(cant_redo.clone()).label("Disable Redo").build())?;
-                                    let __node_24 = toggle(ToggleProps::props().checked(ruler.clone()).label("Ruler").build())?;
+                                    let __node_23 = toggle(ToggleProps::props().checked(::core::clone::Clone::clone(&cant_redo)).label("Disable Redo").build())?;
+                                    let __node_24 = toggle(ToggleProps::props().checked(::core::clone::Clone::clone(&ruler)).label("Ruler").build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__node_23, __node_24])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -196,7 +196,7 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_15));
-                    let __node_25 = code_line(CodeLineProps::props().code("item label:'Redo' shortcut:'Mod+Shift+Z' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on").build())?;
+                    let __node_25 = code_line(CodeLineProps::props().code("item label:'Redo' shortcut:'Mod+Shift+Z' disabled:x   ·   separator   ·   group label:'…'   ·   item checked:on").build())?;
                     __children.push(box_item(__node_25));
                     Ok(__children)
                 }
@@ -208,60 +208,57 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __recipe_children = Children::new(
                 {
                     let shade_name = shade_name.clone();
-                    let on_system = on_system.clone();
-                    let shade = shade.clone();
-                    let on_light = on_light.clone();
-                    let on_dark = on_dark.clone();
-                    let ruler = ruler.clone();
                     let theme = theme.clone();
+                    let ruler = ruler.clone();
+                    let shade = shade.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_27 = {
                         let __recipe_children = Children::new(
                             {
                                 let shade_name = shade_name.clone();
-                                let on_system = on_system.clone();
+                                let theme = theme.clone();
+                                let ruler = ruler.clone();
                                 let shade = shade.clone();
+                                let on_system = on_system.clone();
                                 let on_light = on_light.clone();
                                 let on_dark = on_dark.clone();
-                                let ruler = ruler.clone();
-                                let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_28 = {
                                     let __recipe_children = Children::new(
                                         {
+                                            let ruler = ruler.clone();
+                                            let shade = shade.clone();
                                             let shade_name = shade_name.clone();
                                             let on_system = on_system.clone();
-                                            let shade = shade.clone();
                                             let on_light = on_light.clone();
                                             let on_dark = on_dark.clone();
-                                            let ruler = ruler.clone();
                                         move || {
                                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                             let __node_29 = {
                                                 let __recipe_children = Children::new(
                                                     {
-                                                        let on_system = on_system.clone();
                                                         let shade = shade.clone();
+                                                        let on_system = on_system.clone();
                                                         let on_light = on_light.clone();
                                                         let on_dark = on_dark.clone();
                                                     move || {
                                                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                        let __node_30 = item(ItemProps::props().label("System").checked(on_system.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(0) })).build())?;
+                                                        let __node_30 = item(ItemProps::props().label("System").checked(::core::clone::Clone::clone(&on_system)).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(0) })).build())?;
                                                         __children.push(box_item(__node_30));
-                                                        let __node_31 = item(ItemProps::props().label("Light").checked(on_light.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(1) })).build())?;
+                                                        let __node_31 = item(ItemProps::props().label("Light").checked(::core::clone::Clone::clone(&on_light)).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(1) })).build())?;
                                                         __children.push(box_item(__node_31));
-                                                        let __node_32 = item(ItemProps::props().label("Dark").checked(on_dark.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(2) })).build())?;
+                                                        let __node_32 = item(ItemProps::props().label("Dark").checked(::core::clone::Clone::clone(&on_dark)).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(2) })).build())?;
                                                         __children.push(box_item(__node_32));
                                                         Ok(__children)
                                                     }
                                                     }
                                                 );
-                                                submenu(SubmenuProps::props().label("Theme").hint(shade_name.clone()).children(__recipe_children).build())?
+                                                submenu(SubmenuProps::props().label("Theme").hint(::core::clone::Clone::clone(&shade_name)).children(__recipe_children).build())?
                                             };
                                             __children.push(box_item(__node_29));
-                                            let __node_33 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build())?;
+                                            let __node_33 = item(ItemProps::props().label("Show ruler").checked(::core::clone::Clone::clone(&ruler)).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build())?;
                                             __children.push(box_item(__node_33));
                                             Ok(__children)
                                         }
@@ -286,7 +283,7 @@ pub fn menus(props: MenusProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_27));
-                    let __node_34 = code_line(CodeLineProps::props().code("submenu label:'Theme' hint:$name   >   item label:'Dark' checked:$on radio").build())?;
+                    let __node_34 = code_line(CodeLineProps::props().code("submenu label:'Theme' hint:name   >   item label:'Dark' checked:on radio").build())?;
                     __children.push(box_item(__node_34));
                     Ok(__children)
                 }

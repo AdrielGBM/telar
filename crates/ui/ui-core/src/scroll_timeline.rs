@@ -99,7 +99,7 @@ pub fn use_scroll_viewport() -> Option<ScrollViewport> {
     reactive_core::with_context::<ScrollViewport, _>(Clone::clone)
 }
 
-/// Writes a box's scroll progress into a signal the author owns: what `view_progress:$p view_range:contain` does in `.rsx`. Every widget with a layout node takes it.
+/// Writes a box's scroll progress into a signal the author owns: what `view_progress:p view_range:contain` does in `.rsx`. Every widget with a layout node takes it.
 pub trait ScrollLinked: LayoutItem + Sized {
     /// Keeps `into` at how far this box is through `range` of its passage through the view; see [`scroll_progress`].
     fn view_progress(self, range: ViewRange, into: RwSignal<f32>) -> Self {

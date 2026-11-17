@@ -30,7 +30,7 @@ checkbox label:"I agree to the terms"
 
 [preview "Bound" args(agree:false)]
 col gap:8
-    checkbox checked:$agree label:"I agree"
+    checkbox checked:agree label:"I agree"
     text "agree · {$agree}"
 
 [play]
@@ -151,12 +151,12 @@ An arg is a value of a preview the workshop can change while the preview is on s
   nested in a column for instance, is declared in `values(tone:Tone::Ink)` and read bare, as `tone`: the value itself,
   so a prop that takes a plain value takes it. `$` reads a signal, and a `values(…)` name is none.
 - **Signals** are shared with the tree: `p.signal("pressed", 0u32)` in Rust and `args(agree:false)` in `.rsx`,
-  read as `$agree`. They are two-way, so the tree can write what the control shows, and changing one does not
+  read as `$agree` and handed on bare, as `agree`. They are two-way, so the tree can write what the control shows, and changing one does not
   rebuild the preview.
 
 `p.arg` returns the default's own type, so a setter's `into` coerces it as a literal would. A name is declared once,
 in `args(…)` or in `values(…)`; setting it there and as a literal on the root is a build error: bind the root to it
-with `agree:$agree`.
+with `agree:agree`.
 
 In `.rsx`, as in Rust, every callback the body hands to the component under preview is logged in the Actions panel: the
 file's own component, or the one a `x.preview.rsx` is named after, wherever the body calls it. A call to another

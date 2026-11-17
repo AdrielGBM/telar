@@ -114,7 +114,6 @@ pub fn motion(props: MotionProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 {
                     let theme = theme.clone();
                     let scale = scale.clone();
-                    let big = big.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
@@ -242,7 +241,7 @@ pub fn motion(props: MotionProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let scrub_color = scrub_color.clone(); move |_| RectStyle::default().with_fill(scrub_color.get()).with_radius(BorderRadius::all(10.0)) }, children![])?
                                     };
                                     let __col_1 = {
-                                        let __node_14 = slider(SliderProps::props().value(scrub.clone()).__follow_range(move || 0.0..=100.0).step(::telar::Int(1)).width(::telar::Int(220)).build())?;
+                                        let __node_14 = slider(SliderProps::props().value(::core::clone::Clone::clone(&scrub)).__follow_range(move || 0.0..=100.0).step(::telar::Int(1)).width(::telar::Int(220)).build())?;
                                         let __node_14 = __node_14.a11y_label(|| "Timeline progress");
                                         let __text_1 = {
                                             let scrub = scrub.clone();

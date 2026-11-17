@@ -14,12 +14,12 @@ col gap:20
     example title:"stepper — bound value, clamped to its range, stepped by step"
         card gap:10
             row gap:16 align:center
-                stepper value:$qty range:(0.0..=10.0) step:1 a11y_label:"Quantity"
+                stepper value:qty range:(0.0..=10.0) step:1 a11y_label:"Quantity"
                 text "qty · {$qty}" font_size:14 color:$theme.muted
-        code_line code:"stepper value:$qty range:(0.0..=10.0) step:1 a11y_label:\"Quantity\""
+        code_line code:"stepper value:qty range:(0.0..=10.0) step:1 a11y_label:\"Quantity\""
     example title:"on_change — a callback beside the binding, for the work a tap has to trigger"
         card gap:10
             row gap:16 align:center
-                stepper value:$seats range:(1.0..=8.0) step:1 a11y_label:"Seats" on_change:(|v| $last_change.set(format!("stepped to {v:.0}")))
+                stepper value:seats range:(1.0..=8.0) step:1 a11y_label:"Seats" on_change:(|v| last_change.set(format!("stepped to {v:.0}")))
                 text "{$last_change}" font_size:14 color:$theme.muted
-        code_line code:"stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)"
+        code_line code:"stepper value:seats on_change:|v| last_change.set(…)   (the binding still updates on its own)"

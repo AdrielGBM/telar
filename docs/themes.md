@@ -39,7 +39,7 @@ default when that theme supplies none, never the value of a theme further out.
 
 ## Components and their children
 
-A component's `theme:` reaches what a call site nests inside it. The `children $props.children` placeholder builds that prop where
+A component's `theme:` reaches what a call site nests inside it. The `children props.children` placeholder builds that prop where
 it stands, under the node it is placed in, so those children draw in the theme in force there, exactly as a child
 written inline would:
 
@@ -51,7 +51,7 @@ let ctx = Context { progress, calm };
 [view]
 col theme:(palette) fill:$theme.background
     col sticky
-        children $props.children in:ctx
+        children props.children in:ctx
 ```
 
 The same holds for every scope around the placeholder: a context an owner above provides, a locale, and the value

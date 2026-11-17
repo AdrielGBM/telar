@@ -457,7 +457,7 @@ let count = signal(0i32);
 [view]
 col @card
     text "Count: {$count}" font_size:14 color:$theme.dark
-    button label:"Increment" fill:$theme.primary on_press:(|| $count.update(|n| *n += 1))
+    button label:"Increment" fill:$theme.primary on_press:(|| count.update(|n| *n += 1))
 "#;
 
 #[test]
@@ -897,7 +897,7 @@ fn a_preview_name_with_no_letter_or_digit_is_refused() {
 
 #[test]
 fn dollar_marks_reactive_reads_and_clones_closure_captures() {
-    let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    button on_press:(|| $count.update(|n| *n += 1))\n";
+    let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    button on_press:(|| count.update(|n| *n += 1))\n";
     let out = transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
@@ -1027,7 +1027,7 @@ fn a_virtual_loop_outside_a_scroll_is_refused() {
 /// Rows that differ in height cannot be placed by division, so the loop makes the handle that knows where unbuilt rows stand and builds the list over it.
 #[test]
 fn a_measured_virtual_loop_builds_over_a_rows_handle() {
-    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\nlet handle = signal(None::<VirtualRows>);\n[view]\nscroll height:400\n    for row in $rows key row.id virtual estimated_height:48 overscan:120 rows:$handle\n        text \"{row.name}\"\n";
+    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\nlet handle = signal(None::<VirtualRows>);\n[view]\nscroll height:400\n    for row in $rows key row.id virtual estimated_height:48 overscan:120 rows:handle\n        text \"{row.name}\"\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
         code.contains("VirtualRows::new(__viewport.clone(), (48) as f32)"),
@@ -1184,7 +1184,7 @@ fn an_attribute_a_tag_does_not_take_is_named() {
 /// **The copy is guarded**, and that is the difference between a rect somebody can build on and one nothing can afford to read: the layout runs on every frame something moves and a signal notifies on every write, so an unguarded mirror wakes each of its readers whether or not the rectangle moved.
 #[test]
 fn track_rect_mirrors_a_node_into_a_signal_and_keeps_the_effect() {
-    let src = "[logic]\nlet active = signal(Rect::ZERO);\n[view]\ncol\n    box track_rect:$active width:20\n";
+    let src = "[logic]\nlet active = signal(Rect::ZERO);\n[view]\ncol\n    box track_rect:active width:20\n";
     let out = transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
@@ -1351,7 +1351,7 @@ fn sticky_follows_what_it_reads() {
 #[test]
 fn a_field_can_open_focused_say_so_and_be_given_up() {
     let out = transpile_source(
-        "[logic]\nlet typed = signal(String::new());\nlet holds = signal(None);\n[view]\ninput value:$typed autofocus focus_id:$holds on_cancel:(|| typed.set(String::new()))\n",
+        "[logic]\nlet typed = signal(String::new());\nlet holds = signal(None);\n[view]\ninput value:typed autofocus focus_id:holds on_cancel:(|| typed.set(String::new()))\n",
         "demo",
         None,
         None,
@@ -1566,10 +1566,10 @@ fn a_reactive_for_never_clones_its_own_loop_variable() {
     );
 }
 
-/// A `$name` is a capture only where `name` comes from outside the closure. A view `let` at the top of a loop body declares *inside* it, so `track_rect:$rect` under `let rect = …` names that binding — and the prelude that cloned it emitted `let rect = rect.clone();` above the closure, against a name nothing had bound yet.
+/// A `$name` is a capture only where `name` comes from outside the closure. A view `let` at the top of a loop body declares *inside* it, so `track_rect:rect` under `let rect = …` names that binding — and the prelude that cloned it emitted `let rect = rect.clone();` above the closure, against a name nothing had bound yet.
 #[test]
 fn a_view_let_inside_a_loop_is_not_cloned_above_it() {
-    let src = "[logic]\nlet chips = signal(vec![1i32, 2]);\nlet rects = 3i32;\n[view]\ncol\n    text \"{rects}\"\n    for m in $chips key m\n        let rect = chip_rect(&rects, m)\n        row track_rect:$rect\n";
+    let src = "[logic]\nlet chips = signal(vec![1i32, 2]);\nlet rects = 3i32;\n[view]\ncol\n    text \"{rects}\"\n    for m in $chips key m\n        let rect = chip_rect(&rects, m)\n        row track_rect:rect\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     let builder = code.find("move |m| ->").expect("item builder closure");
     assert!(
@@ -1585,7 +1585,7 @@ fn a_view_let_inside_a_loop_is_not_cloned_above_it() {
 /// The same for a name the loop's own pattern binds: `for (m, rect) in $chips` makes `rect` a closure parameter, and a prelude above the closure reaches nothing.
 #[test]
 fn a_loop_pattern_binding_read_as_a_signal_is_not_cloned_above_it() {
-    let src = "[logic]\nlet chips = signal(vec![(1i32, 2i32)]);\n[view]\ncol\n    for (m, rect) in $chips key m\n        row track_rect:$rect\n";
+    let src = "[logic]\nlet chips = signal(vec![(1i32, 2i32)]);\n[view]\ncol\n    for (m, rect) in $chips key m\n        row track_rect:rect\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     let builder = code
         .find("move |(m, rect)| ->")
@@ -2178,7 +2178,7 @@ fn a_compound_component_receives_its_children_as_a_recipe() {
 /// A `.rsx` can be compound too, and the markup names its context type by declaring one: a `Context` struct in `[logic]` is the context its `children` recipe is built inside, lifted to module scope so children in other files can name it.
 #[test]
 fn a_context_struct_makes_an_rsx_component_compound() {
-    let src = "[logic]\n#[derive(Clone)]\npub struct Context {\n    pub pick: u32,\n}\n\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet ctx = Context { pick: 1 };\n\n[view]\ncol\n    children $props.children in:ctx\n";
+    let src = "[logic]\n#[derive(Clone)]\npub struct Context {\n    pub pick: u32,\n}\n\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet ctx = Context { pick: 1 };\n\n[view]\ncol\n    children props.children in:ctx\n";
     let code = transpile_source(src, "picker", None, None)
         .unwrap()
         .rust_code;
@@ -2207,19 +2207,15 @@ fn a_context_struct_makes_an_rsx_component_compound() {
 #[test]
 fn a_recipe_clones_the_signals_it_reads_instead_of_moving_them() {
     let code = transpile_source(
-        "[logic]\nlet busy = signal(false);\n[view]\nmenu label:\"Edit\"\n    item label:\"Undo\" disabled:$busy\n",
+        "[logic]\nlet busy = signal(false);\n[view]\nmenu label:\"Edit\"\n    item label:\"Undo\" disabled:busy\n",
         "demo",
         None,
         None)
     .unwrap()
     .rust_code;
     assert!(
-        code.contains("let busy = busy.clone();"),
-        "the recipe owns its own handle:\n{code}"
-    );
-    assert!(
-        code.contains(".disabled(busy.clone())"),
-        "and a reactive predicate reaches the row as a closure, not a resolved bool:\n{code}"
+        code.contains(".disabled(::core::clone::Clone::clone(&busy))"),
+        "each run of the recipe hands the row its own copy of the handle:\n{code}"
     );
 }
 
@@ -3117,7 +3113,7 @@ fn an_unknown_blend_mode_is_a_compile_error_not_a_silent_drop() {
 /// The scroll-scene shape: a root that provides its own theme and a `children` placeholder one box below it. The children are built inside the theme's scope, where the placeholder stands, rather than in `[logic]` before that scope exists.
 #[test]
 fn placed_children_are_built_inside_the_theme_of_the_node_they_are_placed_in() {
-    let src = "[logic]\n#[derive(Clone, Copy)]\npub struct Context {\n    pub pick: u32,\n}\n\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet palette = follow_theme(|| Palette::night());\nlet ctx = Context { pick: 1 };\n\n[view]\ncol theme:(palette)\n    col sticky\n        children $props.children in:ctx\n";
+    let src = "[logic]\n#[derive(Clone, Copy)]\npub struct Context {\n    pub pick: u32,\n}\n\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet palette = follow_theme(|| Palette::night());\nlet ctx = Context { pick: 1 };\n\n[view]\ncol theme:(palette)\n    col sticky\n        children props.children in:ctx\n";
     let code = transpile_source(src, "scene", None, None)
         .unwrap()
         .rust_code;
@@ -3141,7 +3137,7 @@ fn placed_children_are_built_inside_the_theme_of_the_node_they_are_placed_in() {
 /// A placeholder inside a reactive branch builds its children again each time the branch is rebuilt, so the branch clones `props` in rather than moving it.
 #[test]
 fn placed_children_inside_a_reactive_branch_are_rebuilt_with_it() {
-    let src = "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet open = signal(true);\n\n[view]\ncol\n    if $open\n        children $props.children\n";
+    let src = "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\nlet open = signal(true);\n\n[view]\ncol\n    if $open\n        children props.children\n";
     let code = transpile_source(src, "reveal", None, None)
         .unwrap()
         .rust_code;
@@ -3172,7 +3168,7 @@ fn each_routed_prop_gets_a_recipe_of_its_own() {
 /// A component forwarding its own children into a slot of another hands them to that prop's recipe, which builds them from the forwarding component's `props`.
 #[test]
 fn forwarded_children_reach_the_prop_they_are_routed_to() {
-    let src = "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\n[view]\ncard\n    children $props.children slot:\"header\"\n    text \"Body\"\n";
+    let src = "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n\n[view]\ncard\n    children props.children slot:\"header\"\n    text \"Body\"\n";
     let code = transpile_source(src, "titled", None, None)
         .unwrap()
         .rust_code;
@@ -3496,12 +3492,12 @@ fn a_literal_icon_id_given_to_a_component_that_carries_icons_is_baked() {
     let root = icon_package("carried", "baked");
     let code = transpile_in(
         &root,
-        "[logic]\nlet which = signal(String::new());\n\n[view]\ncol\n    icon_button icon:\"mdi:home\" label:\"Home\"\n    icon_button icon:$which label:\"Which\"\n    icon_button icon:icon!(\"mdi:home\") label:\"Macro\"\n\n[preview \"Home\"]\nicon_button icon:\"mdi:home\" label:\"Home\"\n",
+        "[logic]\nlet which = signal(String::new());\n\n[view]\ncol\n    icon_button icon:\"mdi:home\" label:\"Home\"\n    icon_button icon:which label:\"Which\"\n    icon_button icon:icon!(\"mdi:home\") label:\"Macro\"\n\n[preview \"Home\"]\nicon_button icon:\"mdi:home\" label:\"Home\"\n",
     );
     let name = static_name_for_path("mdi:home");
     let pair = format!(".icon((\"mdi:home\", crate::__rsx_assets::{name}.get(), false))");
     assert_eq!(code.matches(&pair).count(), 2, "{code}");
-    assert!(code.contains(".icon(which.clone())"), "{code}");
+    assert!(code.contains(".icon(which)"), "{code}");
     assert!(
         code.contains(".__follow_icon(move || icon!(\"mdi:home\"))"),
         "{code}"
@@ -3559,9 +3555,9 @@ fn a_computed_icon_id_reaches_the_component_when_only_literals_are_baked() {
     let root = icon_package("both", "both");
     let code = transpile_in(
         &root,
-        "[logic]\nlet which = signal(String::new());\n\n[view]\nicon name:$which\nicon name:\"mdi:home\"\n",
+        "[logic]\nlet which = signal(String::new());\n\n[view]\nicon name:which\nicon name:\"mdi:home\"\n",
     );
-    assert!(code.contains(".name(which.clone())"), "{code}");
+    assert!(code.contains(".name(which)"), "{code}");
     assert!(code.contains(&static_name_for_path("mdi:home")), "{code}");
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -79,7 +79,7 @@ fn a_view_reading_scheme_binds_the_resolved_scheme_handle() {
 
 #[test]
 fn a_closure_reading_scheme_takes_the_handle() {
-    let code = transpiled("[view]\nbox on_press:(|| log($scheme.get()))\n");
+    let code = transpiled("[view]\nbox on_press:(|| log(scheme.get()))\n");
     assert!(
         code.contains("let scheme = telar::ResolvedScheme;"),
         "{code}"
@@ -117,7 +117,7 @@ fn a_preview_reading_scheme_binds_the_handle_in_its_own_fn() {
 #[test]
 fn a_component_taking_children_reads_scheme_in_its_own_view_and_in_the_children_it_places() {
     let code = transpiled(
-        "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\nlet open = signal(true);\n\n[view]\ncol fill:(if $scheme == telar::ColorScheme::Dark { Color::BLACK } else { Color::WHITE })\n    if $open\n        children $props.children\n    panel\n        text \"{scheme_name($scheme)}\"\n",
+        "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\nlet open = signal(true);\n\n[view]\ncol fill:(if $scheme == telar::ColorScheme::Dark { Color::BLACK } else { Color::WHITE })\n    if $open\n        children props.children\n    panel\n        text \"{scheme_name($scheme)}\"\n",
     );
     syn::parse_file(&code).unwrap_or_else(|error| panic!("{error}:\n{code}"));
     let binding = "let scheme = telar::ResolvedScheme;";

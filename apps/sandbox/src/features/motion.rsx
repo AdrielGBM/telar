@@ -99,7 +99,7 @@ col gap:20
             row gap:20 align:center
                 box width:100 height:100 align:center justify:center
                     box fill:$theme.primary radius:12 width:60 height:60 scale:$scale
-                button label:"Bounce" color:$theme.primary on_press:(|| { $big.toggle(); $scale.retarget(if $big.get() { 1.3 } else { 0.6 }) })
+                button label:"Bounce" color:$theme.primary on_press:(|| { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) })
         code_line code:"box fill:$theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)"
     example title:"Staggered keyframes — six PingPong loops offset by hold()"
         card
@@ -110,13 +110,13 @@ col gap:20
             row gap:12 align:center
                 canvas paint:progress_bar width:240 height:14
                 text "{$progress.round()}%" font_size:12 color:$theme.muted
-                button label:"Replay" color:$theme.primary on_press:(|| { $progress.restart() })
+                button label:"Replay" color:$theme.primary on_press:(|| { progress.restart() })
         code_line code:"Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)"
     example title:"Timeline — sampled by progress, not by a clock"
         card gap:8
             row gap:14 align:center
                 box width:56 height:56 fill:$scrub_color radius:10
                 col gap:6 grow:1
-                    slider value:$scrub range:(0.0..=100.0) step:1 width:220 a11y_label:"Timeline progress"
+                    slider value:scrub range:(0.0..=100.0) step:1 width:220 a11y_label:"Timeline progress"
                     text "p = {$scrub / 100.0}" font_size:12 color:$theme.muted
         code_line code:"Timeline::builder(a).then(b, …).then(c, …).build().sample(p)"

@@ -199,3 +199,4 @@
 1676..1725	5343	`|| telar::set_reduced_motion_override(Some(true))`
 1778..1783	5527	`ghost`
 1794..1844	5565	`|| telar::set_reduced_motion_override(Some(false))`
+2332..2387	8248	`|| pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 })`

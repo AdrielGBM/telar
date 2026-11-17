@@ -18,7 +18,7 @@ pub fn tally_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<d
 pub fn tally_preview_1(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let actions = __preview.actions();
     let count = ::telar::__preview_signal!(__preview, "count", 3u32);
-    let __node_0 = tally(TallyProps::props().label(::telar::__preview_arg!(__preview, "label", "Plums")).count(count.clone()).__preview_actions(&actions).build())?;
+    let __node_0 = tally(TallyProps::props().label(::telar::__preview_arg!(__preview, "label", "Plums")).count(count).__preview_actions(&actions).build())?;
     Ok(Box::new(__node_0))
 }
 
@@ -47,7 +47,7 @@ pub const TALLY_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.preview.rsx"), 7)
         .title("Fixture/Tally")
         .docs("The tally written in Rust, previewed from `.rsx`.")
-        .source("[preview \"Rsx bound\" args(count:3u32) layout:padded]\ntally label:\"Plums\" count:$count\n\n[play]\ncanvas.expect_text(\"Plums · 3\")?;", &[::telar::preview::SourceSpan::new(0, 128, 7)])
+        .source("[preview \"Rsx bound\" args(count:3u32) layout:padded]\ntally label:\"Plums\" count:count\n\n[play]\ncanvas.expect_text(\"Plums · 3\")?;", &[::telar::preview::SourceSpan::new(0, 127, 7)])
         .play(tally_play_1)
         .props(<TallyProps as ::telar::preview::HasPropsSchema>::schema)
         .args(&[::telar::preview::ArgSpec::new("count").binding(::telar::preview::ArgBinding::Live).default("3"), ::telar::preview::ArgSpec::new("label").default("\"Plums\"")])

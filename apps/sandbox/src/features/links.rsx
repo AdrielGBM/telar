@@ -14,7 +14,7 @@ col gap:20 anchor:"top"
             row gap:10 align:center
                 box to:Location::root().segment("links").segment($page.to_string()) fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
                     text "Open /links/{$page}" font_size:14 color:$theme.primary
-                box fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border) on_press:(|| $page.set($page.get() + 1))
+                box fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border) on_press:(|| page.set(page.get() + 1))
                     text "Next page" font_size:14 color:$theme.ink
             text "A plain press pushes the route onto the app's history. Ctrl, Cmd or Shift open it beside this one where there is a beside: a browser tab." font_size:12 color:$theme.muted
         code_line code:"box to:Page::Project(slug)   ·   any typed Route, or a Location"

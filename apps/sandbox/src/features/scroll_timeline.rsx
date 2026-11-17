@@ -30,20 +30,20 @@ col gap:20
             scroll height:240 width:100%
                 col width:100% gap:12
                     text "Scroll: the stage holds still and plays as its track passes under it." font_size:12 color:$theme.muted
-                    col height:800 width:100% view_progress:$scene view_range:contain
+                    col height:800 width:100% view_progress:scene view_range:contain
                         box fill:$stage_color radius:10 height:160 width:100% sticky inset_top:40 align:center justify:center
                             box scale:$stage_scale
                                 text "p = {($scene * 100.0).round() / 100.0}" font_size:16 color:$theme.on_primary
                     text "The track ended; so did the scene." font_size:12 color:$theme.muted
                     box height:160 width:100%
-        code_line code:"col height:800 view_progress:$p view_range:contain  >  box sticky inset_top:40 fill:$tl.sample(p)"
+        code_line code:"col height:800 view_progress:p view_range:contain  >  box sticky inset_top:40 fill:$tl.sample(p)"
     example title:"Entry — a box fading in as it arrives"
         card gap:12
             scroll height:200 width:100%
                 col width:100% gap:12
                     box height:260 width:100%
                         text "Scroll down." font_size:12 color:$theme.muted
-                    box fill:$theme.primary radius:10 height:80 width:100% opacity:$arrival view_progress:$arrival view_range:entry align:center justify:center
+                    box fill:$theme.primary radius:10 height:80 width:100% opacity:$arrival view_progress:arrival view_range:entry align:center justify:center
                         text "arrived" font_size:14 color:$theme.on_primary
                     box height:120 width:100%
-        code_line code:"box view_progress:$p view_range:entry opacity:$p     ·   cover · contain · entry · exit"
+        code_line code:"box view_progress:p view_range:entry opacity:$p     ·   cover · contain · entry · exit"

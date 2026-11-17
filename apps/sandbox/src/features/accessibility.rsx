@@ -36,7 +36,7 @@ col gap:20
     example title:"A name that follows state"
         card
             row gap:12 align:center
-                box fill:$theme.surface_alt radius:8 pad:12 a11y_label:(format!("Mood: {}", $mood)) on_press:(|| $mood.set(if $mood.get() == "calm" { "busy".into() } else { "calm".into() }))
+                box fill:$theme.surface_alt radius:8 pad:12 a11y_label:(format!("Mood: {}", $mood)) on_press:(|| mood.set(if mood.get() == "calm" { "busy".into() } else { "calm".into() }))
                     icon name:"lucide:smile" size:20 color:$theme.ink
                 text "press to change the name a reader hears" font_size:12 color:$theme.muted
         code_line code:"box a11y_label:(format!('Mood: {{}}', $mood))"

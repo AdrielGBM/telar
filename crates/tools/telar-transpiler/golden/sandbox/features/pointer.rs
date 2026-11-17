@@ -122,20 +122,19 @@ pub fn pointer(props: PointerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let handle = handle.clone();
-                    let tab = tab.clone();
                     let marker_x = marker_x.clone();
                     let marker_w = marker_w.clone();
+                    let tab = tab.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
-                                let handle = handle.clone();
-                                let tab = tab.clone();
                                 let marker_x = marker_x.clone();
                                 let marker_w = marker_w.clone();
+                                let handle = handle.clone();
+                                let tab = tab.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __col_1 = {
@@ -198,7 +197,7 @@ pub fn pointer(props: PointerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(12)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("box track_rect:$handle …      then      box absolute inset_start:$x width:$w").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("box track_rect:handle …      then      box absolute inset_start:$x width:$w").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }
@@ -243,7 +242,7 @@ pub fn pointer(props: PointerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("box on_pointer_move:|x, y| { $at_x.set(x); $at_y.set(y) }").build())?;
+                    let __node_9 = code_line(CodeLineProps::props().code("box on_pointer_move:|x, y| { at_x.set(x); at_y.set(y) }").build())?;
                     __children.push(box_item(__node_9));
                     Ok(__children)
                 }
@@ -255,16 +254,16 @@ pub fn pointer(props: PointerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let at_x = at_x.clone();
                     let settled = settled.clone();
+                    let at_x = at_x.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_11 = {
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
-                                let at_x = at_x.clone();
                                 let settled = settled.clone();
+                                let at_x = at_x.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_10 = {

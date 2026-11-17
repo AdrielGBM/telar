@@ -194,8 +194,8 @@ move || vec![busy.get()]
             let __recipe_children = Children::new(
                 {
                     let theme = theme.clone();
-                    let found = found.clone();
                     let scanning = scanning.clone();
+                    let found = found.clone();
                     let scan = scan.clone();
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -203,16 +203,16 @@ move || vec![busy.get()]
                         let __recipe_children = Children::new(
                             {
                                 let theme = theme.clone();
-                                let found = found.clone();
                                 let scanning = scanning.clone();
+                                let found = found.clone();
                                 let scan = scan.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_3 = {
                                     let mut __slots: Vec<ChildSlot> = Vec::new();
-                                    let __node_10 = button(ButtonProps::props().label("Scan").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let found = found.clone(); let scanning = scanning.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } })).build())?;
+                                    let __node_10 = button(ButtonProps::props().label("Scan").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let scanning = scanning.clone(); let found = found.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } })).build())?;
                                     __slots.push(ChildSlot::stat(box_item(__node_10)));
-                                    let __node_11 = button(ButtonProps::props().label("Cancel").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().danger }).on_press(std::rc::Rc::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build())?;
+                                    let __node_11 = button(ButtonProps::props().label("Cancel").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().danger }).on_press(std::rc::Rc::new({ let scanning = scanning.clone(); let scan = scan.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build())?;
                                     __slots.push(ChildSlot::stat(box_item(__node_11)));
                                     let __node_12_build =
                                         {
