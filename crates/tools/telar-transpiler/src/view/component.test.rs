@@ -91,3 +91,42 @@ fn a_word_on_a_preview_root_is_an_arg_whose_text_is_the_word() {
         out.rust_code
     );
 }
+
+const CALLBACKS: &str = "[logic]\npub struct Props {\n    #[props(some, default)]\n    pub on_toggle: Option<Handler<fn(bool)>>,\n    #[props(default = Handler::from(|| {}))]\n    pub on_press: Handler,\n}\n\nlet count = signal(0u32);\nlet toggled = move |on: bool| count.set(u32::from(on));\nlet save = Handler::from(|| {});\n\n[view]\ncol\n    checkbox label:\"A\" on_toggle:(|on| count.set(u32::from(on)))\n    checkbox label:\"B\" on_toggle:toggled\n    checkbox label:\"C\" on_toggle:props.on_toggle\n    button label:\"D\" on_press:save\n    button label:\"E\" on_press:props.on_press\n    button label:\"F\" on_press:(save.clone())\n";
+
+/// The setter of a callback prop takes a closure and nothing else, so its arguments are inferred from the `Handler` the prop holds.
+#[test]
+fn a_closure_reaches_a_callback_prop_through_its_own_setter() {
+    let out = transpiled(CALLBACKS);
+    assert!(
+        out.rust_code
+            .contains(".on_toggle(move |on| count.set(u32::from(on)))"),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// A name may hold a closure, a `Handler` or an `Option` of one, which the markup cannot tell apart, so each goes through `__forward_`: a `[logic]` binding, an optional callback prop and a plain one handed on.
+#[test]
+fn a_named_callback_reaches_the_prop_through_its_forward_setter() {
+    let out = transpiled(CALLBACKS);
+    for call in [
+        ".label(\"B\").__forward_on_toggle(toggled)",
+        ".label(\"C\").__forward_on_toggle(props.on_toggle)",
+        ".label(\"D\").__forward_on_press(::core::clone::Clone::clone(&save))",
+        ".label(\"E\").__forward_on_press(props.on_press)",
+    ] {
+        assert!(out.rust_code.contains(call), "{call}:\n{}", out.rust_code);
+    }
+}
+
+#[test]
+fn a_worked_out_callback_reaches_the_prop_through_its_follow_setter() {
+    let out = transpiled(CALLBACKS);
+    assert!(
+        out.rust_code
+            .contains(".__follow_on_press({ let save = save.clone(); move || save.clone() })"),
+        "{}",
+        out.rust_code
+    );
+}

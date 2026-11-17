@@ -55,7 +55,7 @@ pub struct StepperProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fires with the new (already clamped) value whenever a press, an arrow key or a reader moves it.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_change: Option<Handler<fn(f32)>>,
     /// Amends the paint of the − and + buttons — the stepper's **principal surface** — at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`StepperTokens`] is the right instrument instead.
     #[props(some, default)]

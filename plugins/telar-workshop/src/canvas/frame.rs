@@ -348,7 +348,7 @@ fn handle(edge: ResizeEdge, resize: &Resize) -> Result<Box<dyn LayoutItem>, Layo
             let before = Rc::clone(&before);
             move || *before.borrow_mut() = Some(settings.peek())
         })
-        .on_end(move |kept: bool| {
+        .on_end(move |kept| {
             if let Some(before) = before.take()
                 && !kept
             {

@@ -65,7 +65,7 @@ pub struct RadioGroupProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fires with the index a press or a key chose.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_select: Option<Handler<fn(usize)>>,
     /// Amends the paint of every ring — the group's **principal surface** — chosen and not. See [`telar::SurfaceStyle`] for when a theme token or [`RadioTokens`] is the right instrument instead.
     #[props(some, default)]

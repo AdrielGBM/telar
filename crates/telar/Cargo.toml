@@ -363,6 +363,10 @@ wasm-bindgen-test = { workspace = true }
 web-sys = { workspace = true, features = ["History", "Location", "Window"] }
 
 [[test]]
+name = "callback_props"
+path = "src/callback_props.test.rs"
+
+[[test]]
 name = "component"
 path = "src/component.test.rs"
 

@@ -228,7 +228,7 @@ pub struct DataTableProps {
     #[props(some, into, default)]
     pub sort: Option<RwSignal<Option<TableSort>>>,
     /// Fired with the sort a header asked for.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_sort: Option<Handler<fn(TableSort)>>,
     /// Whether the table orders its rows by the sort itself. On by default; off for rows the application orders as it hears [`on_sort`](Self::on_sort) — rows fetched sorted — which the table then shows as given.
     #[props(default = true)]
@@ -246,10 +246,10 @@ pub struct DataTableProps {
     #[props(some, into, default)]
     pub selected_rows: Option<RwSignal<BTreeSet<Arc<str>>>>,
     /// Fired with the row a press or Enter chose on its own, and in [`SelectionMode::Single`] the row Space chose.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_select: Option<Handler<fn(TableRow)>>,
     /// Fired with every row chosen each time a press or a key changes them, in [`SelectionMode::Multiple`].
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_selection_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
     /// What a reader calls the table.
     #[props(some, into, default)]

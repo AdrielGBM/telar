@@ -75,7 +75,7 @@ fn named_strip(
                     vec![box_item(label)],
                 )?))
             }))
-            .on_move(move |from: usize, to: usize| {
+            .on_move(move |from, to| {
                 actions.log("on_move", vec![from.to_string(), to.to_string()]);
                 items.update(|items| {
                     telar::apply_move(items, from, to);

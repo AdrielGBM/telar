@@ -70,7 +70,7 @@ pub struct SwatchesProps {
     #[props(some, default)]
     pub diameter: Option<f32>,
     /// Fires with the index a press or a key selected.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_select: Option<Handler<fn(u32)>>,
     /// Amends the paint of every swatch — the row's **principal surface** — chosen or not. See [`telar::SurfaceStyle`] for when a theme token or [`SwatchesTokens`] is the right instrument instead.
     #[props(some, default)]

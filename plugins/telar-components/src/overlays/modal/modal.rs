@@ -92,7 +92,7 @@ pub struct ModalProps {
     #[props(default)]
     pub size: ControlSize,
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_close: Option<Handler>,
     /// The Close affordance's text. `None` (the default) uses the localized `telar_components.close` message, which an application can override in its catalog; `Some` wins over both.
     #[props(some, into, default)]

@@ -408,7 +408,7 @@ pub struct ItemProps {
     #[props(some, into, default)]
     pub shortcut: Option<KeySequence>,
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_press: Option<Handler>,
     /// The row's content in place of [`label`](Self::label), when it needs more than a line of text.
     #[props(default)]

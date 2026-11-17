@@ -83,7 +83,7 @@ pub fn navigation(props: NavigationProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let pages = pages.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = tabs(TabsProps::props().selected(::core::clone::Clone::clone(&tab)).__follow_items(move || vec!["Overview","Pricing","Team"]).__follow_panel({ let pages = pages.clone(); move || pages.clone() }).build())?;
+                                let __node_3 = tabs(TabsProps::props().__forward_selected(::core::clone::Clone::clone(&tab)).__follow_items(move || vec!["Overview","Pricing","Team"]).__follow_panel({ let pages = pages.clone(); move || pages.clone() }).build())?;
                                 __children.push(box_item(__node_3));
                                 let __node_4 = {
                                     let __recipe_children = Children::new(
@@ -251,7 +251,7 @@ move || vec![tab.get() == 2]
                                         }
                                         }
                                     );
-                                    accordion(AccordionProps::props().title("Shipping details").open(::core::clone::Clone::clone(&open)).children(__recipe_children).build())?
+                                    accordion(AccordionProps::props().title("Shipping details").__forward_open(::core::clone::Clone::clone(&open)).children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_11));
                                 let __text_4 = {

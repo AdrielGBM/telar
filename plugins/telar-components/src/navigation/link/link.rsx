@@ -66,7 +66,7 @@ pub struct Props {
     #[props(default)]
     pub trailing: Children,
     /// Runs when the link is pressed, before it is followed.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_press: Option<Handler>,
     /// Amends the paint of the link's box — its **principal surface** — at rest and hovered. See [`telar::SurfaceStyle`] for when a theme token or [`LinkTokens`] is the right instrument instead.
     #[props(some, default)]

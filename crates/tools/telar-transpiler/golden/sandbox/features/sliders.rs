@@ -38,7 +38,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = slider(SliderProps::props().value(::core::clone::Clone::clone(&volume)).__follow_range(move || 0.0..=100.0).step(::telar::Int(1)).build())?;
+                                let __node_3 = slider(SliderProps::props().__forward_value(::core::clone::Clone::clone(&volume)).__follow_range(move || 0.0..=100.0).step(::telar::Int(1)).build())?;
                                 const { assert!(SliderProps::IN_FLOW, "`slider` draws on a layer of its own, not where its call stands, so a call has nothing to place: size it through its props") };
                                 place_item(__node_3.layout_node(), move |__style: LayoutStyle| __style.width(260.0));
                                 let __node_3 = __node_3.a11y_label(|| "Volume");
@@ -81,7 +81,7 @@ pub fn sliders(props: SlidersProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_7 = slider(SliderProps::props().value(::core::clone::Clone::clone(&temp)).__follow_range(move || 60.0..=80.0).step(::telar::Int(5)).label("Temperature").build())?;
+                                let __node_7 = slider(SliderProps::props().__forward_value(::core::clone::Clone::clone(&temp)).__follow_range(move || 60.0..=80.0).step(::telar::Int(5)).label("Temperature").build())?;
                                 const { assert!(SliderProps::IN_FLOW, "`slider` draws on a layer of its own, not where its call stands, so a call has nothing to place: size it through its props") };
                                 place_item(__node_7.layout_node(), move |__style: LayoutStyle| __style.width(260.0));
                                 __children.push(box_item(__node_7));

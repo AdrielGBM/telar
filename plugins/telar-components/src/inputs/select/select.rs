@@ -80,7 +80,7 @@ pub struct SelectProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fired with the picked index whenever a selection is made.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_select: Option<Handler<fn(usize)>>,
     /// Amends the paint of the trigger — this component's **principal surface** — at rest, hovered and held open. See [`telar::SurfaceStyle`] for when a theme token or [`SelectTokens`] is the right instrument instead.
     #[props(some, default)]

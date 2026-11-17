@@ -90,7 +90,7 @@ pub struct SliderProps {
     #[props(into, default)]
     pub label: Reactive<String>,
     /// Fires with the new value, inside the range, on every drag report (the press and each subsequent move).
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_change: Option<Handler<fn(f32)>>,
     /// Amends the paint of the track — the slider's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`SliderTokens`] is the right instrument instead.
     #[props(some, default)]

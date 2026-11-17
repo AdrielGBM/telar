@@ -68,7 +68,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                         }
                                         }
                                     );
-                                    modal(ModalProps::props().control(CONFIRM).title("Confirm").children(__recipe_children).build())?
+                                    modal(ModalProps::props().__forward_control(CONFIRM).title("Confirm").children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_4));
                                 Ok(__children)
@@ -118,7 +118,7 @@ pub fn dialogs(props: DialogsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                         }
                                         }
                                     );
-                                    drawer(DrawerProps::props().control(NAV).side(::telar::kw::end).children(__recipe_children).build())?
+                                    drawer(DrawerProps::props().__forward_control(NAV).side(::telar::kw::end).children(__recipe_children).build())?
                                 };
                                 __children.push(box_item(__node_9));
                                 Ok(__children)

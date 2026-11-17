@@ -357,7 +357,7 @@ fn sized(size: ControlSize, run: telar::Handler) -> ComponentList {
                 .icon("lucide:x")
                 .label("Remove")
                 .size(size)
-                .on_press(run)
+                .maybe_on_press(Some(run))
                 .build(),
         )
         .unwrap(),

@@ -59,7 +59,7 @@ pub struct CheckboxProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fires with the new state on every toggle.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_toggle: Option<Handler<fn(bool)>>,
     /// Amends the paint of the box — the checkbox's **principal surface** — checked and unchecked. See [`telar::SurfaceStyle`] for when a theme token or [`CheckboxTokens`] is the right instrument instead.
     #[props(some, default)]

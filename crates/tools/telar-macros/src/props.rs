@@ -21,6 +21,25 @@ pub struct Prop {
     /// `#[props(doc = …)]`, or else the field's doc comment.
     pub doc: TokenStream2,
     pub control: Option<Control>,
+    /// What a field holding a `Handler<fn(…)>`, or with `some` an `Option` of one, is called with: its setter takes a closure of those arguments.
+    pub callback: Option<Callback>,
+}
+
+/// A callback prop's handler, and the arguments of the closure its setter takes.
+pub struct Callback {
+    /// The `Handler<…>` type as the field writes it.
+    handler: Type,
+    arguments: Vec<Type>,
+    /// Whether the field holds an `Option` of the handler.
+    optional: bool,
+}
+
+impl Callback {
+    /// The function type the handler is named by, `fn(A, B)`, which [`IntoHandler`](telar::IntoHandler) is keyed on.
+    fn signature(&self) -> TokenStream2 {
+        let arguments = &self.arguments;
+        quote! { fn(#(#arguments),*) }
+    }
 }
 
 impl Prop {
@@ -33,8 +52,21 @@ impl Prop {
     /// **`impl Into<T>` is opt-in, and that is not timidity.** A generic parameter leaves a literal's type unconstrained, so it falls back — `.size(20.0)` infers `f64` and needs `f32: From<f64>`, which does not exist (a warning today, a hard error soon), and `.span(5)` infers `i32` and needs `u32: From<i32>`, which is an error already. Coercion is right for a prop whose type exists to accept several shapes, `Reactive<T>` above all; it is wrong for a plain number. Declaring it means forgetting it fails loudly on the author's line instead of quietly bending a literal.
     ///
     /// **`some` and `into` are separate knobs because they answer separate questions.** `Option<Reactive< String>>` wants both — the caller writes `hint:"⌘Z"` and means `Some(Reactive::from(…))`. But `Option<Rc<dyn Fn() -> bool>>` wants only `some`: a shared closure reaches its `dyn` type by unsizing, which is a coercion at a known parameter type and not an `Into` a generic can find. Folding them into one attribute makes one of those two cases impossible to express.
+    ///
+    /// **A callback's setter is bounded by `Fn` itself**, since that bound is the only one rustc reads a closure's argument types from: through an `Into<Handler<fn(bool)>>`, `.on_toggle(|on| …)` would need `|on: bool|`.
     fn setter_param(&self) -> (TokenStream2, TokenStream2) {
         let ty = &self.ty;
+        if let Some(callback) = &self.callback {
+            let (handler, arguments) = (&callback.handler, &callback.arguments);
+            let held = quote! { <#handler as ::core::convert::From<_>>::from(value) };
+            return (
+                quote! { impl ::core::ops::Fn(#(#arguments),*) + 'static },
+                match callback.optional {
+                    true => quote! { ::core::option::Option::Some(#held) },
+                    false => held,
+                },
+            );
+        }
         let inner = self.some.then(|| option_inner(ty)).flatten();
         let (param_ty, value) = match &inner {
             Some(inner) => (inner, quote! { ::core::option::Option::Some(value) }),
@@ -72,7 +104,55 @@ impl Prop {
         }
     }
 
-    /// `__follow_<name>`: what a `.rsx` call hands a worked-out value to, as a closure, so the prop's type decides what becomes of it. A `Reactive<T>` prop follows what the value read ([`Reactive::follow`](telar::Reactive::follow)), the value being anything that reads as a `T` ([`IntoReading`](telar::IntoReading)), as a colour does as a `Tone`; any other takes the value worked out once, and panics if working it out read state, since it would never hear that state change: the one case only the run can see. `returns` is what the prop's own setter returns.
+    /// `maybe_<name>`, on a callback prop only: what a handler held already is handed on with, as an `Option`, the way a component hands its own callback prop to one it calls. `None` leaves the prop as it was, which is why a callback prop always has a default.
+    fn maybe_setter(&self) -> TokenStream2 {
+        let Some(callback) = &self.callback else {
+            return quote! {};
+        };
+        let (name, handler) = (&self.name, &callback.handler);
+        let maybe = format_ident!("maybe_{}", name.unraw());
+        let held = match callback.optional {
+            true => quote! { ::core::option::Option::Some(value) },
+            false => quote! { value },
+        };
+        let doc = format!(
+            "[`{name}`](Self::{name}) for a handler held already, such as a component's own callback prop handed on: `None` leaves the prop as it was."
+        );
+        quote! {
+            #[doc = #doc]
+            pub fn #maybe(mut self, value: ::core::option::Option<#handler>) -> Self {
+                if let ::core::option::Option::Some(value) = value {
+                    self.#name = #held;
+                }
+                self
+            }
+        }
+    }
+
+    /// `__forward_<name>`: what a `.rsx` call hands a value it names to — a binding, a `props` place, a path — since the markup cannot say what the name holds. The prop's own setter takes it, except on a callback prop, whose setter takes only a closure: there it may also be a [`Handler`](telar::Handler) or an `Option` of one ([`IntoHandler`](telar::IntoHandler)), handed to `maybe_<name>`. `returns` is what the prop's own setter returns.
+    fn forward_setter(&self, returns: &TokenStream2) -> TokenStream2 {
+        let name = &self.name;
+        let forward = format_ident!("__forward_{}", name.unraw());
+        let Some(callback) = &self.callback else {
+            let (param, _) = self.setter_param();
+            return quote! {
+                #[doc(hidden)]
+                pub fn #forward(self, value: #param) -> #returns {
+                    self.#name(value)
+                }
+            };
+        };
+        let signature = callback.signature();
+        let maybe = format_ident!("maybe_{}", name.unraw());
+        quote! {
+            #[doc(hidden)]
+            pub fn #forward(self, value: impl ::telar::IntoHandler<#signature>) -> #returns {
+                self.#maybe(::telar::IntoHandler::into_handler(value))
+            }
+        }
+    }
+
+    /// `__follow_<name>`: what a `.rsx` call hands a worked-out value to, as a closure, so the prop's type decides what becomes of it. A `Reactive<T>` prop follows what the value read ([`Reactive::follow`](telar::Reactive::follow)), the value being anything that reads as a `T` ([`IntoReading`](telar::IntoReading)), as a colour does as a `Tone`; any other takes the value worked out once, a callback prop anything `__forward_<name>` takes, and panics if working it out read state, since it would never hear that state change: the one case only the run can see. `returns` is what the prop's own setter returns.
     fn follow_setter(&self, props: &Ident, returns: &TokenStream2) -> TokenStream2 {
         let name = &self.name;
         let follow = format_ident!("__follow_{}", name.unraw());
@@ -91,13 +171,32 @@ impl Prop {
                 }
             };
         }
-        let (generics, value) = match (self.into, is_number(&target)) {
-            (true, _) => (quote! { <V: ::core::convert::Into<#target>> }, quote! { V }),
-            (false, true) => (quote! { <V: ::telar::PropNumber<#target>> }, quote! { V }),
-            (false, false) => (quote! {}, quote! { #target }),
+        let setter = match self.callback {
+            Some(_) => format_ident!("__forward_{}", name.unraw()),
+            None => name.clone(),
+        };
+        let (generics, value) = match (&self.callback, self.into, is_number(&target)) {
+            (Some(callback), _, _) => {
+                let signature = callback.signature();
+                (
+                    quote! { <V: ::telar::IntoHandler<#signature>> },
+                    quote! { V },
+                )
+            }
+            (None, true, _) => (quote! { <V: ::core::convert::Into<#target>> }, quote! { V }),
+            (None, false, true) => (quote! { <V: ::telar::PropNumber<#target>> }, quote! { V }),
+            (None, false, false) => (quote! {}, quote! { #target }),
+        };
+        let remedy = match self.callback {
+            Some(_) => {
+                "read it with `untrack(…)` to take it once, or hand a closure that reads it when it runs"
+            }
+            None => {
+                "declare it `Reactive<…>` to follow what it reads, or read it with `untrack(…)` to take it once"
+            }
         };
         let message = format!(
-            "`{}` of `{props}` takes a value worked out once, and the one it was handed read state, which it would never hear change: declare it `Reactive<…>` to follow what it reads, or read it with `untrack(…)` to take it once",
+            "`{}` of `{props}` takes a value worked out once, and the one it was handed read state, which it would never hear change: {remedy}",
             name.unraw()
         );
         quote! {
@@ -108,10 +207,95 @@ impl Prop {
                 if read_state {
                     ::core::panic!(#message);
                 }
-                self.#name(value)
+                self.#setter(value)
             }
         }
     }
+}
+
+/// What a `Handler<fn(A, B)>` is called with, `[A, B]`, and nothing for a bare `Handler`, written by any path that ends in it; `None` for any other type. A handler named by anything but its `fn(…)` is refused, since the closure its setter takes is spelled from those arguments.
+fn handler_arguments(ty: &Type) -> Result<Option<Vec<Type>>, syn::Error> {
+    let Type::Path(path) = ty else {
+        return Ok(None);
+    };
+    let Some(last) = path.path.segments.last() else {
+        return Ok(None);
+    };
+    if path.qself.is_some() || last.ident != "Handler" {
+        return Ok(None);
+    }
+    let signature = match &last.arguments {
+        syn::PathArguments::None => return Ok(Some(Vec::new())),
+        syn::PathArguments::AngleBracketed(args) => {
+            match args.args.iter().collect::<Vec<_>>()[..] {
+                [syn::GenericArgument::Type(Type::FnPtr(signature))]
+                    if matches!(signature.output, syn::ReturnType::Default) =>
+                {
+                    Some(signature)
+                }
+                _ => None,
+            }
+        }
+        syn::PathArguments::Parenthesized(_) => None,
+    };
+    match signature {
+        Some(signature) => Ok(Some(
+            signature.inputs.iter().map(|arg| arg.ty.clone()).collect(),
+        )),
+        None => Err(syn::Error::new(
+            last.arguments.span(),
+            "a callback prop names what its handler is called with as `Handler<fn(…)>`, since its setter takes a closure of those arguments",
+        )),
+    }
+}
+
+/// The callback a field holds: a `Handler<fn(…)>`, or with `some` an `Option` of one. Refuses the declarations its setters cannot serve: `into`, which the closure setter leaves nothing to convert; an `Option` without `some`, whose setter would take the `Option` rather than the closure; and no default, since a `None` handed to `maybe_<name>` leaves the prop as it was and a required prop has nothing to be.
+fn callback_of(
+    name: &Ident,
+    ty: &Type,
+    some: bool,
+    into: bool,
+    defaulted: bool,
+) -> Result<Option<Callback>, syn::Error> {
+    let key = name.unraw();
+    if !some
+        && let Some(inner) = option_inner(ty)
+        && handler_arguments(&inner)?.is_some()
+    {
+        return Err(syn::Error::new(
+            ty.span(),
+            format!(
+                "`{key}` holds an optional callback, which is `#[props(some, default)]`: its setter takes the closure, and `maybe_{key}` the `Option` of a handler held already"
+            ),
+        ));
+    }
+    let held = some.then(|| option_inner(ty)).flatten();
+    let optional = held.is_some();
+    let handler = held.unwrap_or_else(|| ty.clone());
+    let Some(arguments) = handler_arguments(&handler)? else {
+        return Ok(None);
+    };
+    if into {
+        return Err(syn::Error::new(
+            name.span(),
+            format!(
+                "`{key}` is a callback, whose setter takes a closure and whose `maybe_{key}` takes a handler held already: drop `into`, which leaves nothing to convert"
+            ),
+        ));
+    }
+    if !defaulted {
+        return Err(syn::Error::new(
+            name.span(),
+            format!(
+                "`{key}` is a callback, which needs a default — `#[props(some, default)]` on an `Option<Handler<…>>`, or `#[props(default = Handler::from(…))]` — since a `None` handed on through `maybe_{key}` leaves the prop as it was"
+            ),
+        ));
+    }
+    Ok(Some(Callback {
+        handler,
+        arguments,
+        optional,
+    }))
 }
 
 /// `T` when `ty` is a `Reactive<T>`, written by any path that ends in it.
@@ -210,12 +394,16 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     let optional_setters = props.iter().filter(|p| !p.is_required()).map(|p| {
         let name = &p.name;
         let (param, stored) = p.setter_param();
+        let maybe = p.maybe_setter();
+        let forward = p.forward_setter(&quote! { Self });
         let follow = p.follow_setter(&input.ident, &quote! { Self });
         quote! {
             pub fn #name(mut self, value: #param) -> Self {
                 self.#name = #stored;
                 self
             }
+            #maybe
+            #forward
             #follow
         }
     });
@@ -241,6 +429,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         };
         let (before, after) = (render(false), render(true));
         let (param, stored) = target.setter_param();
+        let forward = target.forward_setter(&quote! { #builder #after });
         let follow = target.follow_setter(&input.ident, &quote! { #builder #after });
         let carried = props.iter().map(|p| {
             let field = &p.name;
@@ -255,6 +444,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
                 pub fn #name(self, value: #param) -> #builder #after {
                     #builder { #(#carried),* }
                 }
+                #forward
                 #follow
             }
         }
@@ -444,6 +634,7 @@ fn read_prop(field: &syn::Field) -> Result<Prop, syn::Error> {
             Ok(())
         })?;
     }
+    let callback = callback_of(&name, &field.ty, some, into, default.is_some())?;
     Ok(Prop {
         name,
         ty: field.ty.clone(),
@@ -452,6 +643,7 @@ fn read_prop(field: &syn::Field) -> Result<Prop, syn::Error> {
         some,
         doc: doc.unwrap_or_else(|| props_schema::doc_of(&field.attrs)),
         control,
+        callback,
     })
 }
 

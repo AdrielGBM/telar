@@ -229,7 +229,8 @@ fn a_caller_can_restyle_a_kind_of_token() {
 
 #[test]
 fn copying_hands_over_the_code_as_written_and_says_so_for_a_while() {
-    let mut mounted = Mounted::with_copy_sink(|sink| source_props().on_copy(sink).build());
+    let mut mounted =
+        Mounted::with_copy_sink(|sink| source_props().maybe_on_copy(Some(sink)).build());
     let copy = mounted.button("Copy").expect("a copy button");
     let (x, y) = centre(copy.rect);
     route(&mut mounted.tree, &press(x, y));

@@ -247,7 +247,7 @@ fn logs(expansion: &str, prop: &str) -> bool {
 #[test]
 fn the_builder_logs_its_optional_props_and_the_props_log_every_one() {
     let (builder, props) = actions_of(
-        "struct PadProps { on_close: Handler, #[props(default)] on_press: Option<Handler>, #[props(default)] r#type: u8 }",
+        "struct PadProps { label: String, #[props(some, default)] on_press: Option<Handler>, #[props(default)] r#type: u8 }",
     );
     assert!(
         builder.contains("impl < S0 > PadPropsBuilder < S0 >"),
@@ -263,9 +263,9 @@ fn the_builder_logs_its_optional_props_and_the_props_log_every_one() {
         logs(&builder, "on_press") && logs(&builder, "type"),
         "{builder}"
     );
-    assert!(!logs(&builder, "on_close"), "{builder}");
+    assert!(!logs(&builder, "label"), "{builder}");
     assert!(
-        ["on_close", "on_press", "type"]
+        ["label", "on_press", "type"]
             .iter()
             .all(|prop| logs(&props, prop)),
         "{props}"
@@ -274,9 +274,50 @@ fn the_builder_logs_its_optional_props_and_the_props_log_every_one() {
 
 #[test]
 fn a_builder_with_no_optional_prop_leaves_the_log_unused() {
-    let (builder, _) = actions_of("struct PadProps { on_close: Handler }");
+    let (builder, _) = actions_of("struct PadProps { label: String }");
     assert!(
         builder.contains("pub fn __preview_actions (self , _log : & :: telar :: preview :: ActionLog) -> Self { self }"),
         "{builder}"
     );
+}
+
+#[test]
+fn a_callback_prop_is_refused_what_its_setters_cannot_serve() {
+    for (source, says) in [
+        (
+            "struct P { #[props(some, into, default)] on_toggle: Option<Handler<fn(bool)>> }",
+            "drop `into`",
+        ),
+        (
+            "struct P { on_close: Handler }",
+            "`on_close` is a callback, which needs a default",
+        ),
+        (
+            "struct P { #[props(some)] on_close: Option<Handler> }",
+            "`on_close` is a callback, which needs a default",
+        ),
+        (
+            "struct P { #[props(default)] on_toggle: Option<Handler<fn(bool)>> }",
+            "`on_toggle` holds an optional callback, which is `#[props(some, default)]`",
+        ),
+        (
+            "struct P { #[props(some, default)] on_pick: Option<Handler<Picked>> }",
+            "as `Handler<fn(…)>`",
+        ),
+    ] {
+        let error = expand_str(source)
+            .expect_err("a callback its setters cannot serve")
+            .to_string();
+        assert!(error.contains(says), "{source}: {error}");
+    }
+}
+
+#[test]
+fn a_callback_prop_with_a_default_derives() {
+    for source in [
+        "struct P { #[props(some, default)] on_toggle: Option<telar::Handler<fn(bool)>> }",
+        "struct P { #[props(default = Handler::from(|| {}))] on_press: Handler }",
+    ] {
+        expand_str(source).unwrap_or_else(|error| panic!("{source}: {error}"));
+    }
 }

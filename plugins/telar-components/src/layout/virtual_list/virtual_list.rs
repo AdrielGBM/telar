@@ -83,10 +83,10 @@ pub struct VirtualListProps {
     #[props(some, into, default)]
     pub selected_rows: Option<RwSignal<BTreeSet<Arc<str>>>>,
     /// Fired with the row a press or Enter chose on its own, and in [`SelectionMode::Single`] the row Space chose.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_select: Option<Handler<fn(ListRow)>>,
     /// Fired with every row chosen each time a press or a key changes them, in [`SelectionMode::Multiple`].
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_selection_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
     /// Builds what a row shows, in place of its label and detail. The row itself — its height, its wash and what a reader hears it as — stays the list's.
     #[props(some, default)]

@@ -65,7 +65,6 @@ fn the_roots_literals_are_read_through_the_args() {
         ("count", "3u32"),
         ("ghost", "true"),
         ("on", "true"),
-        ("tone", "Tone::Calm"),
         (
             "fill",
             "Color::rgba(255.0 / 255.0, 136.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0)",
@@ -74,6 +73,10 @@ fn the_roots_literals_are_read_through_the_args() {
         let read = format!(".{key}(::telar::__preview_arg!(__preview, \"{key}\", {value}))");
         assert!(code.contains(&read), "`{key}` is an arg: {read}\n{code}");
     }
+    assert!(
+        code.contains(".__forward_tone(::telar::__preview_arg!(__preview, \"tone\", Tone::Calm))"),
+        "a path is an arg too, handed to the setter a named value goes to:\n{code}"
+    );
     assert!(code.contains(".on_change(move "), "{code}");
     assert!(code.contains(".width(1 + 2)"), "{code}");
     assert!(
@@ -135,7 +138,9 @@ fn declared_args_are_live_signals_the_body_reads() {
         assert!(code.contains(&signal), "{signal}\n{code}");
     }
     assert!(
-        code.contains(".checked(::core::clone::Clone::clone(&agree)).label(label)"),
+        code.contains(
+            ".__forward_checked(::core::clone::Clone::clone(&agree)).__forward_label(label)"
+        ),
         "the args are the handles the body names bare:\n{code}"
     );
     assert!(code.contains("agree.get()"), "{code}");

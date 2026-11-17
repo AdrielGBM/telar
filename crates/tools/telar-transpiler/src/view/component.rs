@@ -369,11 +369,11 @@ impl ViewGen<'_> {
     /// Converts a component attribute to what its setter is handed:
     /// - a quoted attr (`label:"text"`) becomes a string literal, a `t"…"` key a catalog lookup, and a string with `{…}` holes the closure formatting it;
     /// - a bare flag (`elevated`) or `true`/`false` becomes a `bool`;
-    /// - a closure (`on_tap(|| $x += 1)`) becomes a `move` closure with `$signal`s cloned in, which the prop converts into what it holds, a [`Handler`](telar::Handler) for a callback;
+    /// - a closure (`on_tap(|| $x += 1)`) becomes a `move` closure with `$signal`s cloned in, which the prop converts into what it holds; a callback prop's setter takes the closure itself, so its arguments are inferred from the [`Handler`](telar::Handler) it fills;
     /// - a lone `$signal` becomes the cloned handle (`count.clone()`);
     /// - numbers become `Int`/`Float`, a hex colour a `Color`;
     /// - a bare lowercase word no binding of the file is named (`size:small`) becomes that name in `telar::kw`, which is the value itself (`ControlSize::Small`);
-    /// - a name (a binding, a `props` place, a path like `Variant::Ghost`) is handed over as it is;
+    /// - a name (a binding, a `props` place, a path like `Variant::Ghost`) is handed over as it is, to the prop's `__forward_` setter, since the markup cannot say what it holds: a callback prop takes there a closure, a `Handler` or an `Option` of one;
     /// - anything else is worked out by a closure handed to the prop's `__follow_` setter, so the prop's type decides whether it follows what the closure reads.
     fn component_attr_value(&self, attr: &Attr) -> PropValue {
         let v = match &attr.value {
@@ -407,12 +407,15 @@ impl ViewGen<'_> {
         // Cloned only where the clone is load-bearing, since cloning would demand `Clone` of every forwarded binding — which a `Box<dyn Fn() -> T>` prop can never satisfy.
         let written = format!("{}{v}", expr_marker(attr.value_start + lead, v.len()));
         if let Some(taken) = self.by_value(v, written.clone()) {
-            return PropValue::Given(taken);
+            return PropValue::Named(taken);
         }
         if self.is_vocabulary_word(v) {
             return PropValue::Given(vocabulary_word(v, attr.value_start + lead));
         }
-        if v.split("::").all(telar_project::is_plain_identifier) || crate::rust::is_const_expr(v) {
+        if v.split("::").all(telar_project::is_plain_identifier) {
+            return PropValue::Named(written);
+        }
+        if crate::rust::is_const_expr(v) {
             return PropValue::Given(written);
         }
         let read = match v.contains('$') {
@@ -437,6 +440,8 @@ impl ViewGen<'_> {
 enum PropValue {
     /// A value that reads nothing as it is written, handed to the prop's setter.
     Given(String),
+    /// A value the markup names, handed to the prop's `__forward_` setter.
+    Named(String),
     /// A closure working the value out, handed to the prop's `__follow_` setter.
     Followed(String),
     /// A colour written as `#hex`: handed through the `__follow_` setter, since only that one converts it into what the prop holds (a colour into a `Tone`), except as a preview's arg, which its control sets as the colour it is.
@@ -453,6 +458,8 @@ impl PropValue {
                 format!(".{key}({})", read_arg(value))
             }
             (Self::Given(value), false) => format!(".{key}({value})"),
+            (Self::Named(value), true) => format!(".__forward_{key}({})", read_arg(value)),
+            (Self::Named(value), false) => format!(".__forward_{key}({value})"),
             (Self::Followed(read), _) => format!(".__follow_{key}({read})"),
             (Self::Colour(colour), false) => format!(".__follow_{key}(move || {colour})"),
         }

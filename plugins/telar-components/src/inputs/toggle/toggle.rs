@@ -156,7 +156,7 @@ pub struct ToggleProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fires with the new state on every toggle.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_toggle: Option<Handler<fn(bool)>>,
     /// Amends the paint of the track — the switch's **principal surface** — on and off. See [`telar::SurfaceStyle`] for when a theme token or [`ToggleTokens`] is the right instrument instead.
     #[props(some, default)]

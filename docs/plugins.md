@@ -102,6 +102,13 @@ The tag is the function name, and its props type is that name in PascalCase plus
 `pill(PillProps::props()….build())`, so the two have to be spelled that way. Properties are `#[props(…)]` attributes on the fields: `default`, `into` (accepts anything
 convertible, which is how a plain string reaches a `Reactive<String>`) and `some` (stores an `Option`).
 
+A callback prop holds a `Handler` named by what it is called with, `Handler<fn(bool)>`, and has a default: `#[props(some, default)]`
+on an `Option` of one, unset until a caller sets it, or `#[props(default = Handler::from(…))]`. Its setter takes a closure,
+whose argument types Rust reads from the handler, so `TagProps::props().on_toggle(|on| …)` needs no `on: bool`. A
+handler held already, such as a component's own callback prop handed on to one it calls, goes to the prop's `maybe_`
+setter, which takes the `Option` and leaves the prop as it was for `None`: `.maybe_on_toggle(props.on_toggle)`, or
+`.maybe_on_press(Some(handler))` for a `Handler`. In a `[view]`, `on_toggle:props.on_toggle` does the same.
+
 A widget that a `[view]` cannot build, because it owns a canvas or a document, can skip the struct: `#[telar::component]` on a
 function of named arguments derives the props from the arguments, and an argument named `children` becomes the
 `children: Children` prop that receives the nested children.

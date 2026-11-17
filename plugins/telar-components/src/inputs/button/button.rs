@@ -52,7 +52,7 @@ pub struct ButtonProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Runs when the button is pressed.
-    #[props(into, default = Handler::from(|| {}))]
+    #[props(default = Handler::from(|| {}))]
     pub on_press: Handler,
     /// Amends the paint of the button's box — its **principal surface** — at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`ButtonTokens`] is the right instrument instead.
     #[props(some, default)]

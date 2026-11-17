@@ -41,7 +41,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let p = p.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = progress(ProgressProps::props().value(::core::clone::Clone::clone(&p)).build())?;
+                                let __node_3 = progress(ProgressProps::props().__forward_value(::core::clone::Clone::clone(&p)).build())?;
                                 let __node_3 = __node_3.a11y_label(|| "Loading");
                                 __children.push(box_item(__node_3));
                                 let __row_0 = {

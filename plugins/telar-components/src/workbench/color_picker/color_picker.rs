@@ -94,7 +94,7 @@ pub struct ColorPickerProps {
     #[props(into, default)]
     pub label: Reactive<String>,
     /// Fires with the colour every drag, key, typed hex or swatch picks.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_change: Option<Handler<fn(Color)>>,
     /// Amends the paint of the saturation and brightness area — the picker's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ColorPickerTokens`] is the right instrument instead.
     #[props(some, default)]
@@ -786,7 +786,7 @@ fn hex_field(picker: &Picker, alpha: bool) -> Result<Box<dyn LayoutItem>, Layout
             .value(text)
             .placeholder(Reactive::of(|| strings::text(strings::HEX)))
             .size(picker.size)
-            .on_submit(apply)
+            .maybe_on_submit(Some(apply))
             .on_key(on_key)
             .build(),
     )?;

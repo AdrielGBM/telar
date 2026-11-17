@@ -425,7 +425,7 @@ pub struct SubmenuProps {
     #[props(into, default)]
     pub disabled: Reactive<bool>,
     /// Fired with the index of the row picked in the submenu, among its own rows.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_select: Option<Handler<fn(usize)>>,
     /// The rows of the menu it opens.
     #[props(default)]

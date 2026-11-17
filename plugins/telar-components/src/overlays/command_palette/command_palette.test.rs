@@ -127,7 +127,7 @@ impl Mounted {
                 .control(open)
                 .query(query)
                 .commands(commands)
-                .on_run(move |command: Command| sink.borrow_mut().push(command.id.to_string()))
+                .on_run(move |command| sink.borrow_mut().push(command.id.to_string()))
                 .build(),
         )
         .unwrap();

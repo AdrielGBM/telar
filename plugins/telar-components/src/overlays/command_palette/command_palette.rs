@@ -136,10 +136,10 @@ pub struct CommandPaletteProps {
     #[props(some, into, default)]
     pub empty_label: Option<Reactive<String>>,
     /// Fired with the command a press or Enter ran, after the palette has closed.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_run: Option<Handler<fn(Command)>>,
     /// Runs whenever the palette closes, whether a command ran or not.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_close: Option<Handler>,
     /// The dialog's width in logical px. `None` (the default) is [`CommandPaletteTokens::width`].
     #[props(some, default)]

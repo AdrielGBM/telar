@@ -54,7 +54,7 @@ pub struct DrawerProps {
     #[props(default)]
     pub size: ControlSize,
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_close: Option<Handler>,
     /// Names the panel for a reader. `None` (the default) uses the localized `telar_components.drawer` message, which an application can override in its catalog.
     #[props(some, into, default)]

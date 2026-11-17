@@ -289,7 +289,7 @@ fn a_bare_name_is_the_binding_not_a_theme_token() {
         out.rust_code
     );
     assert!(
-        out.rust_code.contains(".size(size)"),
+        out.rust_code.contains(".__forward_size(size)"),
         "a bound number reaches a prop that is not a colour at all:\n{}",
         out.rust_code
     );
@@ -2218,7 +2218,7 @@ fn a_recipe_clones_the_signals_it_reads_instead_of_moving_them() {
     .unwrap()
     .rust_code;
     assert!(
-        code.contains(".disabled(::core::clone::Clone::clone(&busy))"),
+        code.contains(".__forward_disabled(::core::clone::Clone::clone(&busy))"),
         "each run of the recipe hands the row its own copy of the handle:\n{code}"
     );
 }
@@ -2912,7 +2912,7 @@ fn a_logic_binding_passed_to_a_component_is_cloned_for_the_author() {
     let src = "[logic]\nlet items = vec![\"a\"];\n\n[view]\ncolumn\n    menu label:\"File\" items:items\n    menu label:\"Edit\" items:items\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert_eq!(
-        code.matches(".items(::core::clone::Clone::clone(&items))")
+        code.matches(".__forward_items(::core::clone::Clone::clone(&items))")
             .count(),
         2,
         "both call sites get their own copy:\n{code}"
@@ -2928,7 +2928,7 @@ fn a_logic_binding_forwarded_from_a_recipe_is_copied_on_each_run() {
         "[logic]\nlet save = Handler::from(|| {});\n\n[view]\ncolumn\n    save_row on_press:save\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains(".on_press(::core::clone::Clone::clone(&save))"),
+        code.contains(".__forward_on_press(::core::clone::Clone::clone(&save))"),
         "each run of the recipe hands over its own copy:\n{code}"
     );
     assert!(
@@ -2948,11 +2948,11 @@ fn a_recipe_takes_a_copy_of_what_its_body_uses_by_value() {
         "{code}"
     );
     assert!(
-        code.contains(".values(::core::clone::Clone::clone(&tags))"),
+        code.contains(".__forward_values(::core::clone::Clone::clone(&tags))"),
         "{code}"
     );
     assert!(
-        code.contains(".names(::core::clone::Clone::clone(&__props_names))"),
+        code.contains(".__forward_names(::core::clone::Clone::clone(&__props_names))"),
         "the nested recipe copies the field in per run of the outer one, and hands a copy on per run of its own:\n{code}"
     );
     assert_logic_parses(&code);
@@ -3510,7 +3510,7 @@ fn a_literal_icon_id_given_to_a_component_that_carries_icons_is_baked() {
     let name = static_name_for_path("mdi:home");
     let pair = format!(".icon((\"mdi:home\", crate::__rsx_assets::{name}.get(), false))");
     assert_eq!(code.matches(&pair).count(), 2, "{code}");
-    assert!(code.contains(".icon(which)"), "{code}");
+    assert!(code.contains(".__forward_icon(which)"), "{code}");
     assert!(
         code.contains(".__follow_icon(move || icon!(\"mdi:home\"))"),
         "{code}"
@@ -3570,7 +3570,7 @@ fn a_computed_icon_id_reaches_the_component_when_only_literals_are_baked() {
         &root,
         "[logic]\nlet which = signal(String::new());\n\n[view]\nicon name:which\nicon name:\"mdi:home\"\n",
     );
-    assert!(code.contains(".name(which)"), "{code}");
+    assert!(code.contains(".__forward_name(which)"), "{code}");
     assert!(code.contains(&static_name_for_path("mdi:home")), "{code}");
     let _ = std::fs::remove_dir_all(&root);
 }

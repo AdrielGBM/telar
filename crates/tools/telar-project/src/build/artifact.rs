@@ -13,7 +13,7 @@ use super::BuildFlavour;
 use crate::PreludeEntry;
 
 /// Bumped whenever the generated Rust changes shape in a way an older `telar-macros` cannot wire — an output path convention, a preview const's name or module, how a baked asset is read, how a component takes its props and children, how a loop hands each row its item. Any mismatch is refused with the command that rewrites it, as an artifact that no longer answers for its sources is.
-pub const BUILD_ARTIFACT_FORMAT: u32 = 11;
+pub const BUILD_ARTIFACT_FORMAT: u32 = 12;
 
 /// One `.rsx` the artifact was written from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

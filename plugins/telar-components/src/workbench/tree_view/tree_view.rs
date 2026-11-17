@@ -121,10 +121,10 @@ pub struct TreeViewProps {
     #[props(some, into, default)]
     pub expanded: Option<RwSignal<HashSet<Arc<str>>>>,
     /// Fired with the node a click, Enter or Space chose.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_select: Option<Handler<fn(TreeNode)>>,
     /// Fired when a row's context menu is asked for — a secondary press on the row, or the context-menu key or Shift+F10 on the row the keyboard is on — with the row and where the menu opens. The row takes the keyboard cursor first, so it reads as the one the menu is about. `None` (the default) leaves a secondary press to what is behind the tree.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_context: Option<Handler<fn(TreeContext)>>,
     /// Whether a branch can be selected. Off, a click, Enter or Space on a branch opens or shuts it instead, for a tree whose selection only ever names a leaf. On by default.
     #[props(default = true)]

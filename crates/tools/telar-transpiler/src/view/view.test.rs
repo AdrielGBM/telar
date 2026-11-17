@@ -519,7 +519,7 @@ fn a_signal_handed_to_a_component_is_written_bare() {
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
-        code.contains(".count(count)"),
+        code.contains(".__forward_count(count)"),
         "the handle written bare is what the prop is handed:\n{code}"
     );
 }
@@ -1033,7 +1033,7 @@ fn a_signal_named_bare_reaches_the_prop_as_itself_and_one_read_as_its_reading() 
     .unwrap()
     .rust_code;
     assert!(
-        named.contains(".fill(c)") && !named.contains("c.get()"),
+        named.contains(".__forward_fill(c)") && !named.contains("c.get()"),
         "a handle written bare is handed over as it is:\n{named}"
     );
     let read = crate::transpile_source(
@@ -2264,13 +2264,13 @@ fn a_reading_built_to_be_kept_goes_through_the_same_setter() {
     assert!(!code.contains("compile_error!"), "{code}");
 }
 
-/// A name reads nothing as it is written, so it is handed to the prop's own setter: a binding, a `props` place, a path.
+/// A name reads nothing as it is written, and the markup cannot say what it holds, so it is handed to the prop's `__forward_` setter, which takes what the prop's own setter does: a binding, a `props` place, a path.
 #[test]
-fn a_name_is_handed_to_the_props_own_setter() {
+fn a_name_is_handed_to_the_props_forward_setter() {
     for value in ["level", "Variant::Ghost"] {
         let code = prop_code("let level = 2.0f32;", value);
         assert!(
-            code.contains(".value(") && !code.contains("__follow_value"),
+            code.contains(".__forward_value(") && !code.contains("__follow_value"),
             "{value}:\n{code}"
         );
     }
@@ -2465,7 +2465,7 @@ fn a_reference_binding_is_owned_by_each_closure_and_handed_on_as_the_reference()
     for call in ["props_table(PropsTableProps", "props_list(PropsListProps"] {
         assert!(
             code.contains(&format!(
-                "{call}::props().schema(::core::clone::Clone::clone(&schema)).build())"
+                "{call}::props().__forward_schema(::core::clone::Clone::clone(&schema)).build())"
             )),
             "each call is handed the `&PropsSchema` itself:\n{code}"
         );

@@ -345,17 +345,17 @@
 344	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1934..1937	3651	`tab`
-1944..1977	3680	`vec!["Overview","Pricing","Team"]`
-1985..1998	3767	`pages.clone()`
-2028..2041	12762	`pages.clone()`
-2688..2692	15776	`open`
-2821..2825	16159	`open`
-3121..3154	18396	`|| { panes.push(Pane::Overview) }`
-3205..3237	18584	`|| { panes.push(Pane::Pricing) }`
-3285..3314	18768	`|| { panes.push(Pane::Team) }`
-3360..3365	18927	`ghost`
-3376..3399	18948	`|| { navigate_back(); }`
-3421..3428	19551	`address`
-3435..3440	19566	`depth`
-3528..3535	20267	`address`
+1934..1937	3661	`tab`
+1944..1977	3690	`vec!["Overview","Pricing","Team"]`
+1985..1998	3777	`pages.clone()`
+2028..2041	12772	`pages.clone()`
+2688..2692	15796	`open`
+2821..2825	16179	`open`
+3121..3154	18416	`|| { panes.push(Pane::Overview) }`
+3205..3237	18604	`|| { panes.push(Pane::Pricing) }`
+3285..3314	18788	`|| { panes.push(Pane::Team) }`
+3360..3365	18947	`ghost`
+3376..3399	18968	`|| { navigate_back(); }`
+3421..3428	19571	`address`
+3435..3440	19586	`depth`
+3528..3535	20287	`address`

@@ -15,21 +15,20 @@ struct Opaque;
 
 #[derive(Props)]
 struct PadProps {
-    #[props(into, default = Handler::from(|| {}))]
+    #[props(default = Handler::from(|| {}))]
     on_press: Handler,
-    #[props(some, into, default)]
+    #[props(some, default)]
     on_toggle: Option<Handler<fn(bool)>>,
     #[props(some, into, default)]
     on_pick: Option<OnPick>,
-    #[props(some, into, default)]
+    #[props(some, default)]
     on_drop: Option<Handler<fn(Opaque)>>,
     #[props(some, default)]
     style: Option<Rc<dyn Fn(u32) -> u32>>,
-    #[props(into)]
-    on_close: Handler,
+    title: &'static str,
 }
 
-fn props() -> PadPropsBuilder<PadPropsMissingOnClose> {
+fn props() -> PadPropsBuilder<PadPropsMissingTitle> {
     PadProps::props()
 }
 
@@ -51,25 +50,24 @@ fn run(props: &PadProps) {
     if let Some(on_drop) = &props.on_drop {
         on_drop.run(Opaque);
     }
-    props.on_close.run();
 }
 
 #[test]
-fn the_builder_logs_every_optional_callback_it_holds_in_any_state() {
+fn the_builder_logs_every_callback_it_holds_in_any_state() {
     let log = ActionLog::new();
     let props = props()
         .on_toggle(|_| {})
         .on_pick(|_| {})
         .on_drop(|_| {})
         .__preview_actions(&log)
-        .on_close(|| {})
+        .title("Pad")
         .build();
     run(&props);
     let names: Vec<&str> = calls(&log).iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names,
         ["on_press", "on_toggle", "on_pick", "on_drop"],
-        "the required `on_close` is the struct's to log, not the builder's"
+        "the callbacks are logged while the required title is still unset"
     );
     assert_eq!(calls(&log)[1].1, ["true"]);
     assert_eq!(
@@ -93,7 +91,7 @@ fn a_callback_set_before_the_builder_logs_still_runs() {
             let toggled = Rc::clone(&toggled);
             move |on| toggled.set(Some(on))
         })
-        .on_close(|| {})
+        .title("Pad")
         .__preview_actions(&log)
         .build();
     run(&props);
@@ -102,29 +100,30 @@ fn a_callback_set_before_the_builder_logs_still_runs() {
 }
 
 #[test]
-fn the_props_log_their_required_callbacks_too() {
+fn the_built_props_log_the_callbacks_they_hold() {
     let log = ActionLog::new();
-    let closed = Rc::new(Cell::new(false));
+    let pressed = Rc::new(Cell::new(false));
     let props = props()
-        .on_close({
-            let closed = Rc::clone(&closed);
-            move || closed.set(true)
+        .on_press({
+            let pressed = Rc::clone(&pressed);
+            move || pressed.set(true)
         })
+        .title("Pad")
         .build()
         .preview_actions(&log);
     run(&props);
-    assert!(closed.get());
-    assert_eq!(log.count_of("on_close"), 1);
+    assert!(pressed.get());
+    assert_eq!(log.count_of("on_press"), 1);
     assert_eq!(
         log.count(),
-        2,
+        1,
         "the optional callbacks left unset stay unset and are never called"
     );
 }
 
 #[derive(Props)]
 struct ClickerProps {
-    #[props(into, default = Handler::from(|| {}))]
+    #[props(default = Handler::from(|| {}))]
     on_press: Handler,
     #[props(default)]
     children: Children,
@@ -186,7 +185,7 @@ fn a_preview_without_props_logs_nothing() {
 
 #[derive(Props)]
 struct ChipProps {
-    #[props(some, into, default)]
+    #[props(some, default)]
     on_remove: Option<Handler>,
 }
 

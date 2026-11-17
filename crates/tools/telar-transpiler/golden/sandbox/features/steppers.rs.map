@@ -120,10 +120,10 @@
 119	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-942..945	2474	`qty`
-953..963	2503	`0.0..=10.0`
-1025..1028	2881	`qty`
-1341..1346	5167	`seats`
-1354..1363	5198	`1.0..=8.0`
-1402..1451	5287	`|v| last_change.set(format!("stepped to {v:.0}"))`
-1477..1488	5690	`last_change`
+942..945	2484	`qty`
+953..963	2513	`0.0..=10.0`
+1025..1028	2891	`qty`
+1341..1346	5187	`seats`
+1354..1363	5218	`1.0..=8.0`
+1402..1451	5307	`|v| last_change.set(format!("stepped to {v:.0}"))`
+1477..1488	5710	`last_change`

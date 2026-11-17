@@ -21,9 +21,7 @@ impl Mounted {
         let item = search_field(
             props
                 .value(value)
-                .on_submit(move |query: String| {
-                    submitted.borrow_mut().push(format!("submit {query}"))
-                })
+                .on_submit(move |query| submitted.borrow_mut().push(format!("submit {query}")))
                 .on_clear(move || cleared.borrow_mut().push("clear".into()))
                 .build(),
         )

@@ -142,14 +142,14 @@ pub struct WindowFrameProps {
     /// How large the chrome is drawn: the title strip's padding and text, the window controls, the inset round the body and the grip, as [`ControlSize`] works them out. The body and `leading` are the caller's, sized where they are written.
     #[props(default)]
     pub size: ControlSize,
-    /// What the close button does.
-    #[props(into)]
+    /// What the close button does. The default closes the window, and with it a single-window app.
+    #[props(default = Handler::from(telar::window::close))]
     pub close: Handler,
     /// What the frame holds, under the title strip.
     #[props(default)]
     pub body: Children,
     /// Opts the frame into a corner grip, handed the size the surface should take, in logical pixels, on every move of that grip. A backend that can renegotiate a surface's size wires it up; one that cannot leaves it `None` (the default) and the grip is not drawn, rather than drawn and inert.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub resize: Option<Handler<fn(f32, f32)>>,
 }
 

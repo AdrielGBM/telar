@@ -64,7 +64,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                         )?
                     };
-                    let __node_1 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }).build())?;
+                    let __node_1 = button(ButtonProps::props().label("Get started").__forward_color(PRIMARY).on_press({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER).flex_wrap(), children![__text_1, __text_2, __text_3, __node_1])?
                 };
                 Container::new(LayoutStyle::new().flex_row().flex_row().width(SizeDimension::Percent(1.0)).max_width(1120.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::SPACE_BETWEEN).flex_wrap().gap(12.0), children![__row_1, __row_2])?
@@ -90,8 +90,8 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                             )?
                         };
                         let __row_4 = {
-                            let __node_2 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }).build())?;
-                            let __node_3 = button(ButtonProps::props().label("Read the docs").variant(::telar::kw::outline).color(PRIMARY).build())?;
+                            let __node_2 = button(ButtonProps::props().label("Get started").__forward_color(PRIMARY).on_press({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }).build())?;
+                            let __node_3 = button(ButtonProps::props().label("Read the docs").variant(::telar::kw::outline).__forward_color(PRIMARY).build())?;
                             Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_2, __node_3])?
                         };
                         let __text_6 = {
@@ -407,7 +407,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                             )?
                         };
                         let __row_9 = {
-                            let __node_12 = icon(IconProps::props().name(("lucide:arrow-right", crate::__rsx_assets::ASSET_6866DA5D.get(), true)).size(::telar::Int(16)).color(PRIMARY).build())?;
+                            let __node_12 = icon(IconProps::props().name(("lucide:arrow-right", crate::__rsx_assets::ASSET_6866DA5D.get(), true)).size(::telar::Int(16)).__forward_color(PRIMARY).build())?;
                             let __text_25 = {
                                 Text::declaring(
                                     || "signal, memo, effect".to_string(),

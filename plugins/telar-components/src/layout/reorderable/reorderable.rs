@@ -20,7 +20,7 @@ pub struct ReorderableProps {
     #[props(default = Rc::new(|_| Err(LayoutError::Engine("reorderable: no item builder".into()))))]
     pub item: ItemBuilder,
     /// The drop landed: move the item stored at `from` into slot `to`, counting slots in the list *before* the move. [`telar::apply_move`] is that rule over a `Vec`, if the caller's storage is one.
-    #[props(into, default = Handler::from(|_: usize, _: usize| {}))]
+    #[props(default = Handler::from(|_: usize, _: usize| {}))]
     pub on_move: Handler<fn(usize, usize)>,
     /// Lay the items out along the horizontal axis. A column otherwise.
     #[props(default)]

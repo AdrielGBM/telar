@@ -171,7 +171,7 @@ fn uncontrolled(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let actions = ctx.actions();
     tag(TagProps::props()
         .label("Images")
-        .on_toggle(move |on: bool| actions.log("on_toggle", vec![on.to_string()]))
+        .on_toggle(move |on| actions.log("on_toggle", vec![on.to_string()]))
         .build())
 }
 
@@ -180,7 +180,7 @@ fn bound_and_told(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> 
     tag(TagProps::props()
         .label("Images")
         .selected(ctx.signal("on", false))
-        .on_toggle(move |on: bool| actions.log("on_toggle", vec![on.to_string()]))
+        .on_toggle(move |on| actions.log("on_toggle", vec![on.to_string()]))
         .build())
 }
 
@@ -305,7 +305,7 @@ fn small_remove(name: &'static str, run: telar::Handler) -> telar::Children {
                 .icon("lucide:x")
                 .label(name)
                 .size(ControlSize::Small)
-                .on_press(run.clone())
+                .maybe_on_press(Some(run.clone()))
                 .build(),
         )
     })

@@ -30,7 +30,7 @@ pub struct WindowControlsProps {
     #[props(default)]
     pub size: ControlSize,
     /// What the close button does. The default closes the window, and with it a single-window app.
-    #[props(into, default = Handler::from(telar::window::close))]
+    #[props(default = Handler::from(telar::window::close))]
     pub on_close: Handler,
     /// The marks' colour. `None` (the default) keeps the ink the controls inherit.
     #[props(some, into, default)]

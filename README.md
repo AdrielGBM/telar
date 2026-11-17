@@ -182,6 +182,9 @@ decides: a `Reactive<T>` prop follows what the value read, any other takes it on
 that read state is refused as the component is built rather than frozen in silence. The `$` reads and does nothing else:
 `$count` is `count.get()`, and a signal handed on or written to is named bare, `checked:agree`, `on_press:(|| count.set(0))`;
 a handler's `$count += 1` writes the signal it reads.
+A component's callback prop is a `Handler`, and a closure written on it takes its argument types from it,
+`on_toggle:(|on| count.set(u32::from(on)))`; a name hands on whatever it holds, a closure, a `Handler` or the
+component's own optional callback, `on_toggle:props.on_toggle`, which leaves the callee's unset while it is unset.
 An attribute handed an `Option` declares its value for `Some` and nothing for `None`, so what the tree around declared
 stands: `font_weight:(if $current { Some($theme.font_weight_strong) } else { None })` is strong only while current.
 

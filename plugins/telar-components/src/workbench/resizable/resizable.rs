@@ -174,10 +174,10 @@ pub struct ResizableProps {
     #[props(some, into, default)]
     pub height_label: Option<Reactive<String>>,
     /// Runs as a drag takes hold of a handle, before its first size is asked for. Key steps are not drags and do not run it.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_start: Option<Handler>,
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept: `true` when it was let go, `false` when it was cancelled (Escape, another pointer button, the window losing focus) or the handle went away mid-drag. A cancelled drag has put the size back by the time this runs.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_end: Option<Handler<fn(bool)>>,
     /// Amends the paint of every handle, the resizable's **principal surface**, at rest, under the pointer and while dragged. See [`telar::SurfaceStyle`] for when a theme token or [`ResizableTokens`] is the right instrument instead.
     #[props(some, default)]
@@ -196,7 +196,7 @@ pub struct ResizeHandleProps {
     #[props(into, default)]
     pub size: Reactive<Size>,
     /// Takes every size a drag or a key step asks for, kept within [`min`](Self::min) and [`max`](Self::max). A cancelled drag asks once more for the size it started from, before [`on_end`](Self::on_end) runs.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_resize: Option<Handler<fn(Size)>>,
     /// Smallest size.
     #[props(default)]
@@ -220,10 +220,10 @@ pub struct ResizeHandleProps {
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
     /// Runs as a drag takes hold of the handle, before its first size is asked for.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_start: Option<Handler>,
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_end: Option<Handler<fn(bool)>>,
     /// Amends the paint of the handle at rest, under the pointer and while dragged.
     #[props(some, default)]

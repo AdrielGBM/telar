@@ -47,7 +47,7 @@ pub fn fixed_layer(props: FixedLayerProps) -> Result<Box<dyn LayoutItem>, Layout
                                 let shown = shown.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = toggle(ToggleProps::props().checked(::core::clone::Clone::clone(&shown)).label("show the bar").build())?;
+                                let __node_3 = toggle(ToggleProps::props().__forward_checked(::core::clone::Clone::clone(&shown)).label("show the bar").build())?;
                                 __children.push(box_item(__node_3));
                                 let __text_0 = {
                                     let taps = taps.clone();

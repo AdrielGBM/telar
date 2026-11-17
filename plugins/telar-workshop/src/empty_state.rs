@@ -95,7 +95,7 @@ impl EmptyState {
             items.push(button(
                 ButtonProps::props()
                     .label(Reactive::of(move || strings::text(label)))
-                    .on_press(on_press)
+                    .maybe_on_press(Some(on_press))
                     .build(),
             )?);
         }

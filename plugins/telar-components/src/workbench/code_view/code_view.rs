@@ -100,7 +100,7 @@ pub struct CodeViewProps {
     #[props(default = true)]
     pub copyable: bool,
     /// Fired with the code the copy button put on the clipboard.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_copy: Option<Handler<fn(String)>>,
     /// What a reader calls the block, beyond its text.
     #[props(some, into, default)]

@@ -52,7 +52,7 @@ pub struct Props {
     #[props(some, into, default)]
     pub selected: Option<RwSignal<bool>>,
     /// Makes the tag a filter too, and fires with the new state on every press.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_toggle: Option<Handler<fn(bool)>>,
     /// Amends the paint of the tag — its **principal surface** — whatever it does. See [`telar::SurfaceStyle`] for when a theme token or [`TagTokens`] is the right instrument instead.
     #[props(some, default)]

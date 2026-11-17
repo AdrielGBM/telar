@@ -38,10 +38,10 @@ pub struct SearchFieldProps {
     #[props(default)]
     pub size: ControlSize,
     /// Runs with the query, as it stands, when Enter is pressed in the field.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_submit: Option<Handler<fn(String)>>,
     /// Runs when the query is cleared, by the button or by Escape.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_clear: Option<Handler>,
     /// Hears every key pressed while the field holds the keyboard, before the field or its Escape do; answering `true` takes the key. Where a list of results under the field gets its arrows.
     #[props(some, default)]

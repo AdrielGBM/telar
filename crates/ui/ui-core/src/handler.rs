@@ -7,6 +7,8 @@ use std::rc::Rc;
 /// What every callback in the framework is: a box's [`on_press`](crate::StyledContainer::on_press), a component's `on_toggle` or `on_select` prop, an overlay's dismiss. Cheap to clone, so a component can keep its prop and still hand it to the box that answers the event, and a view rebuilt from the same props hands the same callback again.
 ///
 /// Any closure called as `S` converts into one: `|| …` into a `Handler`, `|on| …` into a `Handler<fn(bool)>`. An argument is owned, never borrowed: `Handler<fn(&str)>` has no [`HandlerSignature`], so a callback about a borrowed value takes it owned, a `String` for a `&str`.
+///
+/// A component's callback prop holds one: its setter takes the closure itself, whose argument types are read from `S`, and its `maybe_` setter a handler held already, as an `Option`.
 pub struct Handler<S: HandlerSignature = fn()>(Rc<S::Callback>);
 
 /// The function types a [`Handler`] is named by: `fn()`, and `fn(A)` to `fn(A, B, C)` for owned arguments.
@@ -58,7 +60,7 @@ impl<S: HandlerSignature> Clone for Handler<S> {
     }
 }
 
-/// What markup may forward to a box's event, `on_press:` or `on_hover:`: a closure, a [`Handler`], or an `Option<Handler>` a caller may have left unset — all handed to the event's `maybe_` form, such as [`maybe_on_press`](crate::StyledContainer::maybe_on_press).
+/// What markup may forward to a box's event, `on_press:` or `on_hover:`, or to a component's callback prop: a closure, a [`Handler`], or an `Option<Handler>` a caller may have left unset — all handed to the event's or the prop's `maybe_` form, such as [`maybe_on_press`](crate::StyledContainer::maybe_on_press).
 ///
 /// Decided by the value's type, so a view forwards a binding without saying which of the three it holds.
 pub trait IntoHandler<S: HandlerSignature> {

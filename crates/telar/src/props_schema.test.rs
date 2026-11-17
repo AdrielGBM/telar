@@ -24,7 +24,7 @@ struct SliderProps {
     track: Track,
     #[props(default, control = read_only)]
     locked: bool,
-    #[props(into, default = Handler::from(|_: f32| {}))]
+    #[props(default = Handler::from(|_: f32| {}))]
     on_change: Handler<fn(f32)>,
     /// Drawn along the track.
     #[props(default)]

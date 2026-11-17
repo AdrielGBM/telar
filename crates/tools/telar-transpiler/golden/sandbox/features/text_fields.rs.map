@@ -74,6 +74,6 @@
 73	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-778..782	2347	`name`
-854..859	2595	`query`
-911..915	2940	`name`
+778..782	2357	`name`
+854..859	2615	`query`
+911..915	2960	`name`

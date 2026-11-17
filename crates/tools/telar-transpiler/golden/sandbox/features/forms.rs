@@ -40,7 +40,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = checkbox(CheckboxProps::props().checked(::core::clone::Clone::clone(&agree)).label("I agree to the terms").build())?;
+                                let __node_3 = checkbox(CheckboxProps::props().__forward_checked(::core::clone::Clone::clone(&agree)).label("I agree to the terms").build())?;
                                 __children.push(box_item(__node_3));
                                 let __text_0 = {
                                     let agree = agree.clone();
@@ -80,7 +80,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_7 = toggle(ToggleProps::props().checked(::core::clone::Clone::clone(&notify)).label("Email notifications").build())?;
+                                let __node_7 = toggle(ToggleProps::props().__forward_checked(::core::clone::Clone::clone(&notify)).label("Email notifications").build())?;
                                 __children.push(box_item(__node_7));
                                 let __text_1 = {
                                     let notify = notify.clone();
@@ -120,7 +120,7 @@ pub fn forms(props: FormsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_11 = radio_group(RadioGroupProps::props().selected(::core::clone::Clone::clone(&choice)).__follow_items(move || vec!["Small","Medium","Large"]).label("Size").build())?;
+                                let __node_11 = radio_group(RadioGroupProps::props().__forward_selected(::core::clone::Clone::clone(&choice)).__follow_items(move || vec!["Small","Medium","Large"]).label("Size").build())?;
                                 __children.push(box_item(__node_11));
                                 let __text_2 = {
                                     let choice = choice.clone();

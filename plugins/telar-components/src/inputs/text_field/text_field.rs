@@ -135,7 +135,7 @@ pub struct TextFieldProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Runs when Enter is pressed while a field of one line is focused. A [`multiline`](Self::multiline) field breaks the line instead.
-    #[props(some, into, default)]
+    #[props(some, default)]
     pub on_submit: Option<Handler>,
     /// Hears every key pressed while the field holds the keyboard, before the field acts on it; answering `true` takes the key from the field. What a field that walks a list of suggestions under it needs: the arrows and Enter are keys a focused field keeps for itself.
     #[props(some, default)]

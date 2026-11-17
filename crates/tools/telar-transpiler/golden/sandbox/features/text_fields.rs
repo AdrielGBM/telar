@@ -39,9 +39,9 @@ pub fn text_fields(props: TextFieldsProps) -> Result<Box<dyn LayoutItem>, Layout
                                 let query = query.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = text_field(TextFieldProps::props().value(::core::clone::Clone::clone(&name)).label("Name").placeholder("Type your name").build())?;
+                                let __node_3 = text_field(TextFieldProps::props().__forward_value(::core::clone::Clone::clone(&name)).label("Name").placeholder("Type your name").build())?;
                                 __children.push(box_item(__node_3));
-                                let __node_4 = text_field(TextFieldProps::props().value(::core::clone::Clone::clone(&query)).placeholder("Search…").build())?;
+                                let __node_4 = text_field(TextFieldProps::props().__forward_value(::core::clone::Clone::clone(&query)).placeholder("Search…").build())?;
                                 __children.push(box_item(__node_4));
                                 let __text_0 = {
                                     let name = name.clone();

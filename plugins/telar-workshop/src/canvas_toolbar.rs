@@ -329,7 +329,7 @@ impl Setting for Switch {
                 .label(self.label())
                 .pressed(self.is_on())
                 .disabled(self.is_disabled())
-                .on_press(self.flip.clone())
+                .maybe_on_press(Some(self.flip.clone()))
                 .build(),
         )
     }
@@ -340,7 +340,7 @@ impl Setting for Switch {
                 .label(self.label())
                 .switch(self.is_on())
                 .disabled(self.is_disabled())
-                .on_press(self.flip.clone())
+                .maybe_on_press(Some(self.flip.clone()))
                 .build(),
         )?;
         rows.push(row);
@@ -376,7 +376,7 @@ impl Setting for Action {
             IconButtonProps::props()
                 .icon(self.icon.clone())
                 .label(Reactive::of(move || strings::text(name)))
-                .on_press(self.act.clone())
+                .maybe_on_press(Some(self.act.clone()))
                 .build(),
         )
     }
@@ -386,7 +386,7 @@ impl Setting for Action {
         let row = item(
             ItemProps::props()
                 .label(Reactive::of(move || strings::text(name)))
-                .on_press(self.act.clone())
+                .maybe_on_press(Some(self.act.clone()))
                 .build(),
         )?;
         rows.push(row);

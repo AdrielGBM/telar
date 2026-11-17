@@ -49,7 +49,7 @@ fn written(lines: Vec<Line>, said: &Said) -> Children {
 fn built(line: &Line, said: &Said) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let picked = |name: &'static str| {
         let said = said.clone();
-        telar::Handler::from(move || said.borrow_mut().push(name.to_string()))
+        move || said.borrow_mut().push(name.to_string())
     };
     match line.clone() {
         Line::Row(name) => item(

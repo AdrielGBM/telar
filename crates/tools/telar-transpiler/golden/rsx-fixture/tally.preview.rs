@@ -18,7 +18,7 @@ pub fn tally_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<d
 pub fn tally_preview_1(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let actions = __preview.actions();
     let count = ::telar::__preview_signal!(__preview, "count", 3u32);
-    let __node_0 = tally(TallyProps::props().label(::telar::__preview_arg!(__preview, "label", "Plums")).count(count).__preview_actions(&actions).build())?;
+    let __node_0 = tally(TallyProps::props().label(::telar::__preview_arg!(__preview, "label", "Plums")).__forward_count(count).__preview_actions(&actions).build())?;
     Ok(Box::new(__node_0))
 }
 

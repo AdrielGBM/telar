@@ -4,8 +4,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use telar::{
-    Children, Container, Handler, LayoutError, LayoutItem, Memo, PointerButton, Reactive,
-    RectStyle, RwSignal, StyledContainer, box_item, pointer_position, signal,
+    Children, Container, LayoutError, LayoutItem, Memo, PointerButton, Reactive, RectStyle,
+    RwSignal, StyledContainer, box_item, pointer_position, signal,
 };
 use telar_components::{
     ItemProps, MenuPlace, SeparatorProps, TreeContext, TreeNode, item, menu_layer, separator,
@@ -70,13 +70,13 @@ impl TreeMenu {
     }
 
     /// What the tree calls when a row asks for its menu.
-    pub(super) fn on_context(self) -> Handler<fn(TreeContext)> {
-        Handler::from(move |context: TreeContext| {
+    pub(super) fn on_context(self) -> impl Fn(TreeContext) + 'static {
+        move |context| {
             self.asked.set(Some(Asked {
                 place: context.place(),
                 node: Some(context.node),
             }))
-        })
+        }
     }
 
     pub(crate) fn run(self, command: Command, node: Option<&TreeNode>) {

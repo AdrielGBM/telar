@@ -16,7 +16,7 @@ pub(super) fn palette(keymap: &Keymap) -> Result<Box<dyn LayoutItem>, LayoutErro
             .control(keymap.palette)
             .commands(Reactive::of(move || commands(&listing)))
             .placeholder(Reactive::of(|| strings::text(FIND)))
-            .on_run(move |command: Command| running.run_command(&command.id))
+            .on_run(move |command| running.run_command(&command.id))
             .build(),
     )
 }

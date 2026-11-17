@@ -55,6 +55,8 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `#[props(into)]` — the setter takes `impl Into<T>` instead of `T`, which is what lets a prop declared `Reactive<T>` accept a literal, a signal or a memo. Opt-in, because a generic parameter leaves a literal's type unconstrained: `.size(20.0)` would infer `f64` and ask for `f32: From<f64>`.
 /// - `#[props(some)]` — the field is an `Option` and the setter takes what it holds.
 ///
+/// A **callback prop** holds a `Handler<fn(…)>`, or with `some` an `Option` of one, written that way since its arguments are read from the `fn(…)`. Its setter takes a closure of those arguments, `impl Fn(…) + 'static`, so `.on_toggle(|on| …)` needs no type on `on`; `maybe_<name>` takes a handler held already, as an `Option<Handler<…>>`, and leaves the prop as it was for `None`, which is how a component hands its own callback prop on: `.maybe_on_toggle(props.on_toggle)`. It needs a default (`#[props(some, default)]`, or `default = Handler::from(…)`) and takes no `into`.
+///
 /// In a build with previews it also implements `telar::preview::HasPropsSchema`, inside `telar::__previews!`: the struct's and each field's doc comment, type, default and setter flags, and the control a preview arg feeding the prop gets — its type's, unless the field says otherwise:
 ///
 /// - `#[props(doc = "…")]` — the prop's doc in the workshop, in place of its doc comment.

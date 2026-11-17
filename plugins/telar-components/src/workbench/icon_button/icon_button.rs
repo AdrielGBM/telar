@@ -32,7 +32,7 @@ pub struct IconButtonProps {
     pub pressed: Option<Reactive<bool>>,
     #[props(into, default)]
     pub disabled: Reactive<bool>,
-    #[props(into, default = Handler::from(|| {}))]
+    #[props(default = Handler::from(|| {}))]
     pub on_press: Handler,
     /// Amends the paint of the button's square — its **principal surface** — at rest, hovered, pressed and disabled. See [`telar::SurfaceStyle`] for when a theme token or [`IconButtonTokens`] is the right instrument instead.
     #[props(some, default)]

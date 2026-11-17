@@ -41,7 +41,7 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_3 = stepper(StepperProps::props().value(::core::clone::Clone::clone(&qty)).__follow_range(move || 0.0..=10.0).step(::telar::Int(1)).build())?;
+                                    let __node_3 = stepper(StepperProps::props().__forward_value(::core::clone::Clone::clone(&qty)).__follow_range(move || 0.0..=10.0).step(::telar::Int(1)).build())?;
                                     let __node_3 = __node_3.a11y_label(|| "Quantity");
                                     let __text_0 = {
                                         let qty = qty.clone();
@@ -85,7 +85,7 @@ pub fn steppers(props: SteppersProps) -> Result<Box<dyn LayoutItem>, LayoutError
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_7 = stepper(StepperProps::props().value(::core::clone::Clone::clone(&seats)).__follow_range(move || 1.0..=8.0).step(::telar::Int(1)).on_change({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) }).build())?;
+                                    let __node_7 = stepper(StepperProps::props().__forward_value(::core::clone::Clone::clone(&seats)).__follow_range(move || 1.0..=8.0).step(::telar::Int(1)).on_change({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) }).build())?;
                                     let __node_7 = __node_7.a11y_label(|| "Seats");
                                     let __text_1 = {
                                         let last_change = last_change.clone();
