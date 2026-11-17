@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, AuthoredText, BorderRadius, Chord, Color, Declared, IconName,
+    Accessible, AlignItems, AuthoredText, BorderRadius, Chord, Color, Declared, Handler, IconName,
     JustifyContent, KeySequence, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle,
     ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, focus::Role,
 };
@@ -32,8 +32,8 @@ pub struct IconButtonProps {
     pub pressed: Option<Reactive<bool>>,
     #[props(into, default)]
     pub disabled: Reactive<bool>,
-    #[props(default = Rc::new(|| {}))]
-    pub on_press: Rc<dyn Fn()>,
+    #[props(into, default = Handler::from(|| {}))]
+    pub on_press: Handler,
     /// Amends the paint of the button's square — its **principal surface** — at rest, hovered, pressed and disabled. See [`telar::SurfaceStyle`] for when a theme token or [`IconButtonTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -108,10 +108,9 @@ pub fn icon_button(props: IconButtonProps) -> Result<Box<dyn LayoutItem>, Layout
     } = props;
     let toolbar = telar::use_context::<ToolbarContext>();
 
-    let activate: Rc<dyn Fn()> = Rc::new(move || on_press());
     let index = toolbar.as_ref().map(|toolbar| {
         let disabled = disabled.clone();
-        toolbar.claim(move || !disabled.get(), activate.clone())
+        toolbar.claim(move || !disabled.get(), on_press.clone())
     });
     let square = Square {
         icon,
@@ -120,7 +119,7 @@ pub fn icon_button(props: IconButtonProps) -> Result<Box<dyn LayoutItem>, Layout
         shortcut: shortcut.as_ref().and_then(KeySequence::chord).cloned(),
         pressed,
         disabled,
-        activate,
+        activate: on_press,
         style,
         toolbar,
         index,
@@ -138,7 +137,7 @@ struct Square {
     shortcut: Option<Chord>,
     pressed: Option<Reactive<bool>>,
     disabled: Reactive<bool>,
-    activate: Rc<dyn Fn()>,
+    activate: Handler,
     style: Option<SurfaceAmendment>,
     toolbar: Option<ToolbarContext>,
     index: Option<usize>,
@@ -190,7 +189,7 @@ impl Square {
                 if let (Some(toolbar), Some(index)) = (&toolbar, index) {
                     toolbar.select(index);
                 }
-                activate();
+                activate.run();
             }
         };
         let button = StyledContainer::new(shell(size), move |_| rest(State::Rest), vec![picture])?

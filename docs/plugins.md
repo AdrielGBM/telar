@@ -186,7 +186,9 @@ tokens, and "every sidebar" is a wrapper component. In `.rsx`, `surface:props.st
 
 Named content is a prop of type `Children` as well, `pub header: Children`; a call site fills it with a child marked
 `slot:"header"`, and the rest of its children go to `children`. In `.rsx` the component places each with
-`children props.header` and `children props.children`.
+`children props.header` and `children props.children`. A placeholder with an indented body places the body where the
+call handed nothing for that prop: `children props.children` over `glyph shape:Mark::Arc` is a spinner's arc unless its
+call nests something to turn.
 
 Whoever places a component sizes it. A call takes the keys that place a box (`width`, `height` and their `min_`
 and `max_`, `grow`, `shrink`, `basis`, `self`, `aspect`, the `margin_` and `inset_` sides, `absolute`, `sticky`,

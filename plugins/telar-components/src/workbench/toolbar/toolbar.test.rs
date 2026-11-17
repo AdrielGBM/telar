@@ -24,7 +24,7 @@ fn bar(disabled: [bool; 3]) -> Bar {
                     .icon("lucide:search")
                     .label(format!("Item {index}"))
                     .disabled(off)
-                    .on_press(Rc::new(move || sink[index].set(sink[index].get() + 1)))
+                    .on_press(move || sink[index].set(sink[index].get() + 1))
                     .build(),
             )
             .unwrap();
@@ -243,7 +243,7 @@ fn a_vertical_toolbar_keeps_up_and_down_whatever_the_direction() {
                 IconButtonProps::props()
                     .icon("lucide:search")
                     .label(format!("Item {index}"))
-                    .on_press(Rc::new(move || sink[index].set(sink[index].get() + 1)))
+                    .on_press(move || sink[index].set(sink[index].get() + 1))
                     .build(),
             )
             .unwrap();

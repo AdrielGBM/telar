@@ -319,6 +319,11 @@ pub trait LayoutItem: Component {
     fn occludes(&self) -> bool {
         true
     }
+
+    /// The corner radius the item paints its own rect at this frame, which is what a [`Clip`] following [`ClipRadius::Painted`] cuts along: square for an item that paints no box of its own.
+    fn painted_radius(&self) -> BorderRadius {
+        BorderRadius::zero()
+    }
 }
 
 /// Wraps a child so its rendered output is clipped to the child's own layout rect. When the child collapses to a zero rect (e.g. a section hidden via `display:none`), the clip is empty, so nothing inside draws — even a widget left with a stale rect or one that paints at fixed coordinates. Layout is unchanged: `layout_node` passes through to the wrapped child.
@@ -358,11 +363,11 @@ impl IntoClip for bool {
 
 /// The shape a [`ClippedItem`] cuts to: which edges do the cutting, how round the corners are, and how far in from the edge the cut sits.
 ///
-/// One value rather than three arguments, and a *shape* rather than an axis, because the renderer's clip node has always taken a radius and the markup had no way to ask for one — so a rounded box with a clipped child cut its corners square, and the only remedy was to not clip.
+/// One value rather than three arguments, and a *shape* rather than an axis, because the renderer's clip node takes a radius: a clip on a rounded box cuts along its corners rather than square.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub struct Clip {
     pub axis: ClipAxis,
-    pub radius: BorderRadius,
+    pub radius: ClipRadius,
     /// Pulled in from every cutting edge. What a stroked box wants: cut inside the border rather than under it, so the border stays whole and the content stops at its inner edge.
     pub inset: f32,
     pub pointer: ClipPointer,
@@ -378,8 +383,19 @@ pub enum ClipPointer {
     Through,
 }
 
+/// How round a [`Clip`]'s corners are.
+///
+/// [`Painted`](ClipRadius::Painted) is the default because a clip on a rounded box is nearly always meant to keep what it holds inside the box's corners: a track cutting its fill, a card cutting a picture. Read on every render, so a theme, the box's own `radius:` or a caller's amendment of its paint reshapes the cut with the corner.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub enum ClipRadius {
+    /// The corner the clipped item paints, pulled in by the clip's inset so the cut stays concentric with it; square where the item paints no box.
+    #[default]
+    Painted,
+    Fixed(BorderRadius),
+}
+
 impl Clip {
-    /// The node's rect, both ways, square-cornered — a viewport.
+    /// The node's rect, both ways, cut along the corner the node paints.
     pub fn both() -> Self {
         Self::default()
     }
@@ -400,9 +416,10 @@ impl Clip {
         }
     }
 
+    /// Cuts at `radius` whatever corner the node paints; `rounded(0.0)` cuts square.
     pub fn rounded(self, radius: impl Into<BorderRadius>) -> Self {
         Self {
-            radius: radius.into(),
+            radius: ClipRadius::Fixed(radius.into()),
             ..self
         }
     }
@@ -481,6 +498,22 @@ impl ClippedItem {
         clip.filter(|clip| clip.pointer == ClipPointer::Stop)
     }
 
+    fn corner(&self, clip: Clip) -> BorderRadius {
+        match clip.radius {
+            ClipRadius::Fixed(radius) => radius,
+            ClipRadius::Painted => {
+                let painted = self.inner.painted_radius();
+                let inner = |corner: f32| (corner - clip.inset).max(0.0);
+                BorderRadius {
+                    top_left: inner(painted.top_left),
+                    top_right: inner(painted.top_right),
+                    bottom_right: inner(painted.bottom_right),
+                    bottom_left: inner(painted.bottom_left),
+                }
+            }
+        }
+    }
+
     fn cut(rect: Rect, clip: Clip) -> Rect {
         let inset = clip.inset;
         match clip.axis {
@@ -514,6 +547,10 @@ impl LayoutItem for ClippedItem {
     fn occludes(&self) -> bool {
         self.inner.occludes()
     }
+
+    fn painted_radius(&self) -> BorderRadius {
+        self.inner.painted_radius()
+    }
 }
 
 impl Component for ClippedItem {
@@ -522,7 +559,7 @@ impl Component for ClippedItem {
             Some(clip) => cut_inside(
                 self.inner.view(),
                 Self::cut(self.rect.get(), clip),
-                clip.radius,
+                self.corner(clip),
             ),
             None => self.inner.view(),
         }
@@ -579,6 +616,10 @@ impl LayoutItem for Box<dyn LayoutItem> {
 
     fn occludes(&self) -> bool {
         (**self).occludes()
+    }
+
+    fn painted_radius(&self) -> BorderRadius {
+        (**self).painted_radius()
     }
 }
 

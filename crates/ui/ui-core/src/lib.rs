@@ -34,6 +34,7 @@ mod focus_ring;
 mod foreign_surface;
 mod frame_focus;
 mod guest_surface;
+mod handler;
 mod height_index;
 mod image;
 mod inherit;
@@ -137,6 +138,7 @@ pub use focus_ring::{FocusRing, focus_ring};
 pub use foreign_surface::{ForeignBoundary, ForeignSurface};
 pub use frame_focus::{FrameFocus, KeyRoute};
 pub use guest_surface::{GuestAudit, GuestSurface};
+pub use handler::{Handler, IntoPress};
 pub use height_index::HeightIndex;
 pub use image::Image;
 pub use inherit::{
@@ -150,7 +152,9 @@ pub use keyboard::{
     observe as observe_keyboard, reset as reset_keyboard, shortcut_key,
 };
 pub use keynav::{KeyNav, KeyNavMove, key_nav_apply, key_nav_apply_grid};
-pub use layout_item::{Clip, ClipAxis, ClipPointer, ClippedItem, IntoClip, LayoutItem, box_item};
+pub use layout_item::{
+    Clip, ClipAxis, ClipPointer, ClipRadius, ClippedItem, IntoClip, LayoutItem, box_item,
+};
 pub use layout_leaf::LayoutLeaf;
 pub use layout_transition::{LayoutTransition, animate_layout};
 pub use lazy::Lazy;

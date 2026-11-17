@@ -139,7 +139,7 @@ impl TreeMenu {
                         item(
                             ItemProps::props()
                                 .label(Reactive::of(move || strings::text(command.label())))
-                                .on_press(Rc::new(move || self.run(command, node.as_ref())))
+                                .on_press(move || self.run(command, node.as_ref()))
                                 .build(),
                         )?
                     }

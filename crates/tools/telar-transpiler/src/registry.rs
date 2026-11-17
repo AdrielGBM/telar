@@ -43,7 +43,7 @@ pub fn builtin_tag_doc(tag: &str) -> Option<&'static str> {
             "A layer fixed to the surface over the page, out of its flow and its scroll: a bar that stays at the top while the page scrolls under it. Laid out against the whole surface like an `overlay`, so `align`/`justify`/`pad` and its children's sizes place its boxes. Not modal: it takes the pointer only over its own boxes, and its focusables keep their place in the Tab order. Drawn over every box of the page, sticky ones included, and under every overlay."
         }
         "children" => {
-            "Places a `Children` prop where it stands: `children props.children` the call site's bare children, `children props.header` the ones it wrote with `slot:\"header\"`, each declared in `Props` as `#[props(default)] pub header: Children`. Each placement builds them there, so they see the `theme:` and contexts in force around it, and `in:ctx` provides one more."
+            "Places a `Children` prop where it stands: `children props.children` the call site's bare children, `children props.header` the ones it wrote with `slot:\"header\"`, each declared in `Props` as `#[props(default)] pub header: Children`. Each placement builds them there, so they see the `theme:` and contexts in force around it, and `in:ctx` provides one more. An indented body under it is placed instead where the call handed nothing for that prop."
         }
         _ => return None,
     })
@@ -55,7 +55,7 @@ pub fn builtin_tag_doc(tag: &str) -> Option<&'static str> {
 const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("track_rect"),
     AttrSpec::free("clip").doc(
-        "Cuts a node's output to its laid-out rect: bare, or a `Clip` shape naming axis, radius and inset. A written shape is followed as it reads, and may yield a `Clip`, an `Option<Clip>` or a `bool`, so `clip:$cut` stops and starts cutting without a rebuild.",
+        "Cuts a node's output to its laid-out rect: bare, along the corner the box paints, followed as a theme, its `radius:` or a caller's amendment of its paint change it, and square on a node that paints nothing; or a `Clip` shape naming axis, radius and inset, one that names no radius cutting along the painted corner too. A written shape is followed as it reads, and may yield a `Clip`, an `Option<Clip>` or a `bool`, so `clip:$cut` stops and starts cutting without a rebuild.",
     ),
     AttrSpec::num("width"),
     AttrSpec::num("height"),
@@ -514,6 +514,13 @@ pub const FILL_RULE_VALUES: &[(&str, &str)] = &[
     ("evenodd", "FillRule::EvenOdd"),
 ];
 
+/// `stroke_cap:` on a `path`: how each open end of the stroke is drawn, one spelling per `LineCap` variant.
+pub const STROKE_CAP_VALUES: &[(&str, &str)] = &[
+    ("butt", "LineCap::Butt"),
+    ("round", "LineCap::Round"),
+    ("square", "LineCap::Square"),
+];
+
 /// `cursor:` — the pointer's shape over a box, one spelling per `Cursor` variant.
 ///
 /// A closed set **or** an expression, which is why it is not a [`ValueKind::Keywords`]: that would refuse every expression, and a cursor is as often picked as it is written — `cursor:col_resize` on one strip and `cursor:along(axis)` on the strip that could run either way. A name in this table is the variant it names, and anything else is the Rust expression the author wrote, which is the ladder a colour keyword already takes.
@@ -957,10 +964,22 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
         "mask" => with(&[]),
         // A `path`'s stroke is one plain width, not the four `crate::edges` collects for a box, and `fill_rule` is a keyword rather than paint.
         "path" => with(&[
-            AttrSpec::free("d"),
+            AttrSpec::free("d").doc(
+                "The shape, as SVG path data: `M`, `L`, `H`, `V`, `C`, `Q`, `A` and `Z`, absolute in capitals and relative in lower case. Read when the view is built, so a command it does not know is a build error on this line.",
+            ),
+            AttrSpec::free("view_box").doc(
+                "The rectangle of `d`'s coordinates that is drawn, as `\"min_x min_y width height\"`: it is scaled, keeping its proportions, to the largest size that fits the path's box and centred in it, so `view_box:\"0 0 24 24\"` draws an icon at whatever size the box is. The box is the view box's size unless `width` or `height` says otherwise. Without it, `d` is drawn in the box's own pixels and the box takes the size the shape reaches.",
+            ),
             AttrSpec::color("fill"),
-            AttrSpec::free("stroke"),
-            AttrSpec::num("stroke_width"),
+            AttrSpec::free("stroke").doc(
+                "The colour the outline is drawn in. `$text.ink` is the ink of the text around the path, so a drawn mark follows a region that declares its own.",
+            ),
+            AttrSpec::num("stroke_width").doc(
+                "How wide the `stroke` is, in pixels whatever the `view_box` scale. Without it, the theme's strong border width, the width a checkbox's frame takes.",
+            ),
+            AttrSpec::keywords("stroke_cap", STROKE_CAP_VALUES).doc(
+                "How each open end of the `stroke` is drawn: `butt`, the default, stops at the end; `round` and `square` reach half the stroke's width past it.",
+            ),
             AttrSpec::free("stroke_dash").doc(
                 "Draws the `stroke` in dashes: lengths that alternate drawn and skipped, drawn first, separated by spaces or commas. `stroke_dash:\"1 4\"` is a dotted line; an odd list repeats, as in SVG. Every target dashes it except the terminal, which draws a dashed or dotted line character.",
             ),

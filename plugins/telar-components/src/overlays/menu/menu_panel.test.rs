@@ -49,7 +49,7 @@ fn written(lines: Vec<Line>, said: &Said) -> Children {
 fn built(line: &Line, said: &Said) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let picked = |name: &'static str| {
         let said = said.clone();
-        Rc::new(move || said.borrow_mut().push(name.to_string())) as Rc<dyn Fn()>
+        telar::Handler::from(move || said.borrow_mut().push(name.to_string()))
     };
     match line.clone() {
         Line::Row(name) => item(
@@ -1164,7 +1164,7 @@ fn switching_at(size: ControlSize, ticked: bool) -> (Scoped<ComponentList>, RwSi
                     .label("Reducir")
                     .size(size)
                     .switch(Reactive::of(move || on.get()))
-                    .on_press(Rc::new(move || on.update(|on| *on = !*on)) as Rc<dyn Fn()>)
+                    .on_press(move || on.update(|on| *on = !*on))
                     .build(),
             )?);
             if ticked {

@@ -4,8 +4,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Accessible, AlignItems, Color, Container, Handler, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Paint, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
     amend_surface, box_item, focus::Role, on_cleanup, signal,
 };
 use web_time::Instant;
@@ -30,8 +30,8 @@ pub struct WindowControlsProps {
     #[props(default)]
     pub size: ControlSize,
     /// What the close button does. The default closes the window, and with it a single-window app.
-    #[props(default = Rc::new(telar::window::close))]
-    pub on_close: Rc<dyn Fn()>,
+    #[props(into, default = Handler::from(telar::window::close))]
+    pub on_close: Handler,
     /// The marks' colour. `None` (the default) keeps the ink the controls inherit.
     #[props(some, into, default)]
     pub glyph: Option<Reactive<Color>>,
@@ -97,7 +97,7 @@ fn control_button(
     name: impl Fn() -> String + 'static,
     paint: ControlPaint,
     look: ControlLook,
-    press: Rc<dyn Fn()>,
+    press: Handler,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = Reactive::of(name);
     let size = look.size;
@@ -118,7 +118,7 @@ struct ControlButton {
     name: Reactive<String>,
     paint: ControlPaint,
     look: ControlLook,
-    press: Rc<dyn Fn()>,
+    press: Handler,
 }
 
 impl ControlButton {
@@ -166,7 +166,7 @@ impl ControlButton {
         .on_hover(move |over| hovered.set(over))
         .control(Role::Button)
         .a11y_label(move || name.get())
-        .on_press(move || press())
+        .on_press(press)
         .holds_stroke();
         Ok(box_item(button))
     }
@@ -207,7 +207,7 @@ pub fn window_controls(props: WindowControlsProps) -> Result<Box<dyn LayoutItem>
             || strings::text(strings::MINIMIZE),
             quiet(),
             look.clone(),
-            Rc::new(telar::window::minimize),
+            Handler::from(telar::window::minimize),
         )?);
     }
     if maximize {
@@ -224,7 +224,7 @@ pub fn window_controls(props: WindowControlsProps) -> Result<Box<dyn LayoutItem>
             },
             quiet(),
             look.clone(),
-            Rc::new(telar::window::toggle_maximize),
+            Handler::from(telar::window::toggle_maximize),
         )?);
     }
     buttons.push(control_button(

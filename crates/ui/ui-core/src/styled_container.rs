@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use crate::transform_origin::{TransformOrigin, box_transform_about};
-use geometry_core::{Insets, Rect, Transform};
+use geometry_core::{BorderRadius, Insets, Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
     ConsumedKeys, Cursor, Destination, DragOutcome, DroppedData, Event, IntoDestination, Key,
@@ -14,6 +14,7 @@ use renderer_core::{BlendMode, Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::Handler;
 use crate::child_host::{ChildSlot, DynHost};
 use crate::context::{new_container, track_layout};
 use crate::cursor::{self, CursorClaim};
@@ -375,6 +376,14 @@ impl StyledContainer {
         self.input == InputMode::Opaque
             && rect.contains(x as f32, y as f32)
             && !input_region::pierced(self.node, x as f32, y as f32)
+    }
+
+    /// The paint of the state that wins now, or the box's own at rest; a focus ring is worn over it and keeps its corner.
+    fn paint(&self) -> &dyn Fn(Rect) -> RectStyle {
+        PAINT_STATES
+            .iter()
+            .find_map(|&state| self.state_style(state))
+            .unwrap_or(&*self.style)
     }
 
     /// The paint `state` swaps in, or `None` when the box has no style for it or is not in it.
@@ -1051,16 +1060,18 @@ impl StyledContainer {
     }
 
     /// Make the box itself pressable. The callback fires on a tap (release, not press) inside the box; a child widget that handles the press wins, and a scroll gesture started on the box does not fire it.
-    pub fn on_press(self, f: impl Fn() + 'static) -> Self {
-        self.maybe_on_press(Some(f))
+    pub fn on_press(self, on_press: impl Into<Handler>) -> Self {
+        self.maybe_on_press(Some(on_press.into()))
     }
 
     /// [`on_press`](Self::on_press) for a handler the caller may not have supplied.
     ///
     /// What a wrapper component needs to forward an optional callback. A box whose press handler is a no-op still reports the tap `Handled`, so "no handler" would become "swallows the click" — a display-only chip eating a press instead of letting it through. `None` leaves the box exactly as it was; the `maybe_*` pairs below say the same for every other event whose absence the box can observe.
-    pub fn maybe_on_press(mut self, f: Option<impl Fn() + 'static>) -> Self {
-        let Some(f) = f else { return self };
-        self.press.set(f);
+    pub fn maybe_on_press(mut self, on_press: Option<Handler>) -> Self {
+        let Some(on_press) = on_press else {
+            return self;
+        };
+        self.press.set(on_press);
         self.mark_interactive();
         self
     }
@@ -1305,15 +1316,16 @@ impl LayoutItem for StyledContainer {
     fn occludes(&self) -> bool {
         self.input != InputMode::Transparent && self.receives_input()
     }
+
+    fn painted_radius(&self) -> BorderRadius {
+        self.paint()(self.rect.get()).radius
+    }
 }
 
 impl Component for StyledContainer {
     fn view(&self) -> RenderNode {
         let r = self.rect.get();
-        let style = PAINT_STATES
-            .iter()
-            .find_map(|&state| self.state_style(state))
-            .unwrap_or(&*self.style);
+        let style = self.paint();
         let shows_focus = [self.focusable.id, self.frames_focus_of]
             .into_iter()
             .flatten()

@@ -304,7 +304,7 @@ fn a_named_padding_scales_with_the_size() {
     assert_eq!(tokens.pad_x(ControlSize::Large), 12.5);
 }
 
-fn small_remove(name: &'static str, run: Rc<dyn Fn()>) -> telar::Children {
+fn small_remove(name: &'static str, run: telar::Handler) -> telar::Children {
     telar::Children::one(move || {
         crate::icon_button(
             crate::IconButtonProps::props()
@@ -329,7 +329,7 @@ fn a_small_icon_button_in_the_action_keeps_the_tag_at_its_own_height() {
             TagProps::props()
                 .label("Logo")
                 .size(size)
-                .action(small_remove("Remove Logo", Rc::new(|| {})))
+                .action(small_remove("Remove Logo", telar::Handler::from(|| {})))
                 .build(),
         );
         assert_eq!(
@@ -349,7 +349,7 @@ fn a_filter_and_its_small_action_are_each_a_full_target_side_by_side_at_every_si
             .label("3")
             .size(size)
             .selected(telar::signal(true))
-            .action(small_remove("Remove 3", Rc::new(|| {})))
+            .action(small_remove("Remove 3", telar::Handler::from(|| {})))
             .build())
         .unwrap();
         in_a_row_node(tag.layout_node());

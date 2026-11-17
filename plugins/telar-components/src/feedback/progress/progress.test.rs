@@ -282,20 +282,76 @@ fn rects(tree: &telar::ComponentList) -> Vec<(telar::Rect, RectStyle)> {
         .collect()
 }
 
+/// The rect a clip cuts to, and its corner.
+type Cut = (telar::Rect, BorderRadius);
+
+/// Every box `tree` draws, with the cut it is drawn under, innermost, if any.
+fn rects_and_cuts(tree: &telar::ComponentList) -> Vec<(telar::Rect, RectStyle, Option<Cut>)> {
+    let mut cuts = Vec::new();
+    let mut drawn = Vec::new();
+    for command in tree.commands().iter() {
+        match command {
+            telar::DrawCommand::PushClip { rect, radius } => cuts.push((*rect, *radius)),
+            telar::DrawCommand::PopClip => {
+                cuts.pop();
+            }
+            telar::DrawCommand::Rect { rect, style } => {
+                drawn.push((*rect, **style, cuts.last().copied()));
+            }
+            _ => {}
+        }
+    }
+    drawn
+}
+
 #[test]
-fn the_fill_is_a_bar_of_its_own_as_wide_as_the_reading_and_as_round_as_the_track() {
+fn the_fill_is_a_rounded_bar_of_its_own_as_wide_as_the_reading_and_cut_by_the_track_s_corner() {
     let tree = full_width_bar(ProgressProps::props().value(0.25).build());
-    let [(track, track_style), (fill, fill_style)] = rects(&tree)[..] else {
-        panic!("the track and its fill are drawn");
+    let [
+        (track, track_style, _),
+        (fill, fill_style, Some((cut, corner))),
+    ] = rects_and_cuts(&tree)[..]
+    else {
+        panic!("the track and its fill are drawn, the fill under a cut");
     };
     assert_eq!((track.width, fill.width), (300.0, 75.0));
     assert_eq!(fill.height, track.height);
+    assert_eq!(cut, track, "the track cuts what it holds");
+    assert_eq!(corner, track_style.radius, "along the corner it paints");
     assert!(
-        (fill_style.radius.top_left - track_style.radius.top_left).abs() < 0.01,
-        "{:?} and {:?}",
-        fill_style.radius,
-        track_style.radius
+        (fill_style.radius.top_right - track_style.radius.top_right).abs() < 0.01,
+        "its leading end is round as the track's ends are: {:?}",
+        fill_style.radius
     );
+}
+
+/// The track cuts its fill, so whatever reshapes the track — the theme's tokens, a caller's amendment — reshapes the fill's outer ends with it, and a caller restyling the corner says so once.
+#[test]
+fn reshaping_the_track_reshapes_the_cut_of_its_fill() {
+    let fill_cut = |tree: &telar::ComponentList| match rects_and_cuts(tree)[..] {
+        [_, (_, _, Some((_, corner)))] => corner,
+        _ => panic!("the fill is drawn under the track's cut"),
+    };
+    telar::set_theme(crate::test_support::TokensTheme {
+        role: 7.0,
+        tokens: Some(ProgressTokens {
+            radius: Some(2.0),
+            ..ProgressTokens::default()
+        }),
+    });
+    assert_eq!(
+        fill_cut(&bar(ProgressProps::props().value(0.5).build())),
+        BorderRadius::all(2.0)
+    );
+
+    let tree = bar(ProgressProps::props()
+        .value(0.5)
+        .style(
+            std::rc::Rc::new(|paint: RectStyle| paint.with_radius(BorderRadius::all(1.0)))
+                as SurfaceAmendment,
+        )
+        .build());
+    assert_eq!(fill_cut(&tree), BorderRadius::all(1.0));
 }
 
 #[test]

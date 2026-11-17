@@ -130,17 +130,12 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
         vec![box_item(words("Settings")?)],
     )?
     .role(Role::Heading(HeadingLevel::One));
-    let save = button(
-        ButtonProps::props()
-            .label("Save")
-            .on_press(std::rc::Rc::new(|| {}))
-            .build(),
-    )?;
+    let save = button(ButtonProps::props().label("Save").on_press(|| {}).build())?;
     let cancel = button(
         ButtonProps::props()
             .label("Cancel")
             .variant(Variant::Outline)
-            .on_press(std::rc::Rc::new(|| {}))
+            .on_press(|| {})
             .build(),
     )?;
     let source = link("Source code", || external("https://example.com/telar"))?;

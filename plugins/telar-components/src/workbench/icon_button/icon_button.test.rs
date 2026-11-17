@@ -47,7 +47,7 @@ fn a_standalone_icon_button_is_a_tab_stop_that_enter_presses() {
         IconButtonProps::props()
             .icon("lucide:search")
             .label("Search")
-            .on_press(Rc::new(move || sink.set(sink.get() + 1)))
+            .on_press(move || sink.set(sink.get() + 1))
             .build(),
     )
     .unwrap();
@@ -106,7 +106,7 @@ fn a_disabled_button_is_announced_as_unavailable_and_does_not_fire() {
             .icon("lucide:search")
             .label("Search")
             .disabled(true)
-            .on_press(Rc::new(move || sink.set(true)))
+            .on_press(move || sink.set(true))
             .build(),
     )
     .unwrap();
@@ -301,7 +301,7 @@ fn the_square_under_the_tooltip_builds_again_as_a_working_button() {
         shortcut: None,
         pressed: None,
         disabled: Reactive::default(),
-        activate: Rc::new(move || sink.set(sink.get() + 1)),
+        activate: telar::Handler::from(move || sink.set(sink.get() + 1)),
         style: None,
         toolbar: None,
         index: None,
@@ -347,7 +347,7 @@ fn centred(item: Box<dyn LayoutItem>) -> ComponentList {
     tree
 }
 
-fn sized(size: ControlSize, run: Rc<dyn Fn()>) -> ComponentList {
+fn sized(size: ControlSize, run: telar::Handler) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
     focus::clear();
     centred(
@@ -371,7 +371,7 @@ fn the_square_and_its_icon_follow_the_size() {
         (ControlSize::Regular, 32.0),
         (ControlSize::Large, 40.0),
     ] {
-        let tree = sized(size, Rc::new(|| {}));
+        let tree = sized(size, telar::Handler::from(|| {}));
         let face = crate::test_support::drawn(Role::Button)[0];
         assert_eq!((face.width, face.height), (side, side), "{size:?}");
         assert!(

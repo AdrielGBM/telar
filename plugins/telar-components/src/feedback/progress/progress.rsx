@@ -67,5 +67,5 @@ let reached = Look::shown(props.tone.clone(), Variant::Solid);
 let rail = Look::shown(props.tone.clone(), Variant::Soft);
 
 [view]
-row width:(ProgressTokens::current().width(size)) max_width:100% min_width:0 height:(ProgressTokens::current().height(size)) fill:(rail.fill($text.ink)) radius:(ProgressTokens::current().radius()) role:progressbar valued:(NumericValue::new(0.0..=100.0, f64::from($props.value.clamp(0.0, 1.0)) * 100.0).ok()) surface:props.style
+row width:(ProgressTokens::current().width(size)) max_width:100% min_width:0 height:(ProgressTokens::current().height(size)) fill:(rail.fill($text.ink)) radius:(ProgressTokens::current().radius()) role:progressbar valued:(NumericValue::new(0.0..=100.0, f64::from($props.value.clamp(0.0, 1.0)) * 100.0).ok()) surface:props.style clip
     box width:(SizeDimension::Percent($props.value.clamp(0.0, 1.0))) shrink:0 fill:(reached.fill($text.ink)) radius:(ProgressTokens::current().radius()) surface:props.fill_style

@@ -19,9 +19,11 @@ element group
             end
           end
           element progressbar
-            rect 252,307 296x8 fill=#7394ff1a radius=4
-            element group
-              rect 252,307 178x8 fill=#7394ffff radius=4
+            clip 252,307 296x8 radius=4
+              rect 252,307 296x8 fill=#7394ff1a radius=4
+              element group
+                rect 252,307 178x8 fill=#7394ffff radius=4
+              end
             end
           end
         end

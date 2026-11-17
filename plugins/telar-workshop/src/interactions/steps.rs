@@ -88,7 +88,7 @@ pub(crate) fn panel(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
             Shown::NeedsCanvas => {
                 let state = building.clone();
                 EmptyState::new(PLAY_NEEDS_CANVAS)
-                    .action(SHOW_CANVAS, Rc::new(move || replay(&state)))
+                    .action(SHOW_CANVAS, move || replay(&state))
                     .build()
             }
             Shown::NotRun => EmptyState::new(PLAY_NOT_RUN).build(),
@@ -112,7 +112,7 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
                 ButtonProps::props()
                     .label(Reactive::of(|| strings::text(BACK_TO_LIVE)))
                     .variant(Variant::Ghost)
-                    .on_press(Rc::new(move || interactions.back_to_live()))
+                    .on_press(move || interactions.back_to_live())
                     .build(),
             )
         },
@@ -127,7 +127,7 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
     let replay = button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(REPLAY)))
-            .on_press(Rc::new(move || replay(&replaying)))
+            .on_press(move || replay(&replaying))
             .build(),
     )?;
     let tools = Container::new(

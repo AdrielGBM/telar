@@ -1,7 +1,5 @@
 //! A frame a step left, drawn again: over the canvas in place of the live preview while the step is picked, and small beside a step that failed.
 
-use std::rc::Rc;
-
 use telar::preview::Frame;
 use telar::{
     Accessible, AlignItems, Canvas, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
@@ -84,7 +82,7 @@ fn bar(interactions: &Interactions, shown: &Shown) -> Result<Box<dyn LayoutItem>
     let live = button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(BACK_TO_LIVE)))
-            .on_press(Rc::new(move || interactions.back_to_live()))
+            .on_press(move || interactions.back_to_live())
             .build(),
     )?;
     let bar = StyledContainer::new(

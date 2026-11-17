@@ -4,8 +4,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Children, ConsumedKeys, Direction, Key, LayoutError, LayoutItem,
-    LayoutStyle, NamedKey, NodeId, Orientation, Props, Reactive, RectStyle, RwSignal,
+    Accessible, AlignItems, Children, ConsumedKeys, Direction, Handler, Key, LayoutError,
+    LayoutItem, LayoutStyle, NamedKey, NodeId, Orientation, Props, Reactive, RectStyle, RwSignal,
     StyledContainer, box_item, current_direction,
     focus::{self, FocusId, Role},
     signal,
@@ -30,7 +30,7 @@ struct State {
 
 struct Item {
     enabled: Rc<dyn Fn() -> bool>,
-    activate: Rc<dyn Fn()>,
+    activate: Handler,
     focus_id: Option<FocusId>,
 }
 
@@ -45,11 +45,7 @@ impl ToolbarContext {
         }))
     }
 
-    pub(crate) fn claim(
-        &self,
-        enabled: impl Fn() -> bool + 'static,
-        activate: Rc<dyn Fn()>,
-    ) -> usize {
+    pub(crate) fn claim(&self, enabled: impl Fn() -> bool + 'static, activate: Handler) -> usize {
         let mut items = self.0.items.borrow_mut();
         items.push(Item {
             enabled: Rc::new(enabled),
@@ -152,7 +148,7 @@ impl ToolbarContext {
             .get(at)
             .map(|item| item.activate.clone());
         activate.is_some_and(|activate| {
-            activate();
+            activate.run();
             true
         })
     }

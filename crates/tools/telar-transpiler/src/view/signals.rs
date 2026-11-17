@@ -187,10 +187,10 @@ pub(crate) fn substitute_reads(s: &str, theme: ThemeAccess) -> String {
     out
 }
 
-/// The marker a box reads its own text through: what it holds and the ink it sits in, as a `BoxText`.
+/// The marker a box reads its own text through, and a path the text it is drawn in: what it holds and the ink it sits in, as a `BoxText`.
 pub(crate) const BOX_TEXT: &str = "text";
 
-/// The binding `$ident` names: a box's `$text` is the `BoxText` signal the box keeps under [`crate::style::BOX_TEXT_BINDING`], every other identifier itself.
+/// The binding `$ident` names: `$text` is the `BoxText` a box keeps, or a path is handed each paint, under [`crate::style::BOX_TEXT_BINDING`], every other identifier itself.
 fn box_text_binding(ident: &str) -> &str {
     match ident {
         BOX_TEXT => crate::style::BOX_TEXT_BINDING,

@@ -2639,7 +2639,7 @@ fn path_tag_stroke_dash_dashes_the_stroke() {
     let src = "[view]\npath d:\"M0,0 L10,0\" stroke:#000000 stroke_dash:\"1 4\" stroke_dash_offset:2 width:10 height:10\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains("1.0).with_dash(&[1.0, 4.0], 2.0))"),
+        code.contains("border_width_strong()).with_dash(&[1.0, 4.0], 2.0))"),
         "the pattern and offset chain onto the stroke:\n{code}"
     );
     assert!(!code.contains("compile_error!"), "{code}");

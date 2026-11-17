@@ -418,3 +418,77 @@ pub fn paths(props: PathsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     };
     Ok(Box::new(__col_0))
 }
+
+::telar::__previews! {
+
+#[allow(dead_code, unused_variables, unused_mut)]
+pub fn paths_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
+    let actions = __preview.actions();
+    let __row_0 = {
+        let __path_0 = {
+            let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(4.0, 12.0)).cubic_to(Point::new(4.0, 7.581722), Point::new(7.581722, 4.0), Point::new(12.0, 4.0)).cubic_to(Point::new(16.418278, 4.0), Point::new(20.0, 7.581722), Point::new(20.0, 12.0)).line_to(Point::new(20.0, 20.0)));
+            Canvas::declaring(LayoutStyle::new().width(24.0).height(24.0).bordered(), move |__rect: Rect, __text_style: TextStyle| { let __text = Reactive::Const(BoxText::drawn_in(&__text_style)); RenderNode::path(std::sync::Arc::new(__path_data.fitted(Rect::new(0.0, 0.0, 24.0, 24.0), __rect)), PathStyle { fill: None, stroke: Some(Stroke::new(__text.get().ink, 2.0).with_cap(LineCap::Round)), shadow: None, fill_rule: FillRule::Winding }) })?
+        };
+        let __path_0 = __path_0.a11y_hidden();
+        let __path_1 = {
+            let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(4.0, 12.0)).cubic_to(Point::new(4.0, 7.581722), Point::new(7.581722, 4.0), Point::new(12.0, 4.0)).cubic_to(Point::new(16.418278, 4.0), Point::new(20.0, 7.581722), Point::new(20.0, 12.0)).line_to(Point::new(20.0, 20.0)));
+            Canvas::declaring(LayoutStyle::new().width(48.0).height(48.0).bordered(), move |__rect: Rect, __text_style: TextStyle| { let __text = Reactive::Const(BoxText::drawn_in(&__text_style)); RenderNode::path(std::sync::Arc::new(__path_data.fitted(Rect::new(0.0, 0.0, 24.0, 24.0), __rect)), PathStyle { fill: None, stroke: Some(Stroke::new(__text.get().ink, 2.0).with_cap(LineCap::Round)), shadow: None, fill_rule: FillRule::Winding }) })?
+        };
+        let __path_1 = __path_1.a11y_hidden();
+        Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__path_0, __path_1])?.declaring(move || Declared::default().with_color(Color::rgba(255.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0)))
+    };
+    Ok(Box::new(__row_0))
+}
+
+#[allow(dead_code, unused_imports, unused_variables)]
+pub fn paths_play_0(canvas: &mut ::telar::preview::Play) -> ::telar::preview::PlayResult {
+    use ::telar::Role;
+    use ::telar::preview::*;
+    let drawn: Vec<(Vec<telar::Point>, Option<telar::Paint>)> = canvas
+        .frame()
+        .commands
+        .iter()
+        .filter_map(|command| match command {
+            telar::DrawCommand::Path { data, style } => Some((
+                data.verbs()
+                    .iter()
+                    .flat_map(|verb| match *verb {
+                        telar::PathVerb::MoveTo(p) | telar::PathVerb::LineTo(p) => vec![p],
+                        telar::PathVerb::QuadTo { ctrl, to } => vec![ctrl, to],
+                        telar::PathVerb::CubicTo { ctrl1, ctrl2, to } => vec![ctrl1, ctrl2, to],
+                        telar::PathVerb::Close => Vec::new(),
+                    })
+                    .collect(),
+                style.stroke.map(|stroke| stroke.paint),
+            )),
+            _ => None,
+        })
+        .collect();
+    let [(small, small_ink), (large, large_ink)] = drawn.as_slice() else {
+        return Err(PlayError::new(format!("two paths are drawn, got {}", drawn.len())));
+    };
+    let doubled: Vec<telar::Point> = small.iter().map(|p| telar::Point::new(p.x * 2.0, p.y * 2.0)).collect();
+    if *large != doubled {
+        return Err(PlayError::new(format!("the 48px box draws the 24px one at twice the scale: {small:?} then {large:?}")));
+    }
+    let red = Some(telar::Paint::Solid(telar::Color::rgba(1.0, 0.0, 0.0, 1.0)));
+    if *small_ink != red || *large_ink != red {
+        return Err(PlayError::new(format!("both strokes take the ink of the row they sit in: {small_ink:?}, {large_ink:?}")));
+    }
+    Ok(())
+}
+
+pub const PATHS_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--paths--view-box"), "paths", "View box", paths_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/features/paths.rsx"), 298)
+        .title("Media/Paths")
+        .docs("A `path` with a `view_box` draws its data scaled into whatever box it is laid out in, in the ink of the text around it.")
+        .source("[preview \"View box\"]\nrow gap:8 align:center color:#ff0000\n    path d:\"M4,12 A8,8 0 0 1 20,12 L20,20\" view_box:\"0 0 24 24\" stroke:$text.ink stroke_width:2 stroke_cap:round width:24 height:24 a11y:hidden\n    path d:\"M4,12 A8,8 0 0 1 20,12 L20,20\" view_box:\"0 0 24 24\" stroke:$text.ink stroke_width:2 stroke_cap:round width:48 height:48 a11y:hidden\n\n[play]\nlet drawn: Vec<(Vec<telar::Point>, Option<telar::Paint>)> = canvas\n    .frame()\n    .commands\n    .iter()\n    .filter_map(|command| match command {\n        telar::DrawCommand::Path { data, style } => Some((\n            data.verbs()\n                .iter()\n                .flat_map(|verb| match *verb {\n                    telar::PathVerb::MoveTo(p) | telar::PathVerb::LineTo(p) => vec![p],\n                    telar::PathVerb::QuadTo { ctrl, to } => vec![ctrl, to],\n                    telar::PathVerb::CubicTo { ctrl1, ctrl2, to } => vec![ctrl1, ctrl2, to],\n                    telar::PathVerb::Close => Vec::new(),\n                })\n                .collect(),\n            style.stroke.map(|stroke| stroke.paint),\n        )),\n        _ => None,\n    })\n    .collect();\nlet [(small, small_ink), (large, large_ink)] = drawn.as_slice() else {\n    return Err(PlayError::new(format!(\"two paths are drawn, got {}\", drawn.len())));\n};\nlet doubled: Vec<telar::Point> = small.iter().map(|p| telar::Point::new(p.x * 2.0, p.y * 2.0)).collect();\nif *large != doubled {\n    return Err(PlayError::new(format!(\"the 48px box draws the 24px one at twice the scale: {small:?} then {large:?}\")));\n}\nlet red = Some(telar::Paint::Solid(telar::Color::rgba(1.0, 0.0, 0.0, 1.0)));\nif *small_ink != red || *large_ink != red {\n    return Err(PlayError::new(format!(\"both strokes take the ink of the row they sit in: {small_ink:?}, {large_ink:?}\")));\n}", &[::telar::preview::SourceSpan::new(0, 1782, 298)])
+        .play(paths_play_0)
+        .props(<PathsProps as ::telar::preview::HasPropsSchema>::schema)
+        .layout(::telar::preview::Layout::Padded),
+];
+}

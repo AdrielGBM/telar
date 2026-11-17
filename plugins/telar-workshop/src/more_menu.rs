@@ -1,7 +1,5 @@
 //! A menu of tools behind a ⋯ button, or asked for at the pointer: what a header with no room for its tools folds them into.
 
-use std::rc::Rc;
-
 use telar::{
     Children, Container, LayoutError, LayoutItem, LayoutStyle, NodeId, Reactive, absolute_rect,
     box_item, signal,
@@ -22,9 +20,9 @@ pub(crate) fn more_button(
         IconButtonProps::props()
             .icon(icon!("lucide:ellipsis"))
             .label(Reactive::of(move || strings::text(label)))
-            .on_press(Rc::new(move || {
+            .on_press(move || {
                 open.set(anchor.peek().and_then(absolute_rect).map(MenuPlace::Under));
-            }))
+            })
             .build(),
     )?;
     anchor.set(Some(button.layout_node()));

@@ -85,6 +85,19 @@ fn an_anchor_and_an_external_uri_are_written_as_they_read() {
 }
 
 #[test]
+fn a_parenthesised_destination_is_read_without_its_parentheses() {
+    let code = transpiled("box to:(Page::Section($open))\n    text \"x\"\n");
+    assert!(code.contains("move || Page::Section(open.get())"), "{code}");
+    assert!(!code.contains("move || (Page::Section"), "{code}");
+}
+
+#[test]
+fn a_parenthesised_external_uri_is_checked_as_one_written_bare() {
+    let code = transpiled("box to:(external(\"example.com\"))\n    text \"x\"\n");
+    assert!(code.contains("names no scheme"), "{code}");
+}
+
+#[test]
 fn a_destination_reading_state_follows_it() {
     let code = transpiled("box to:Page::Section($open)\n    text \"x\"\n");
     assert!(code.contains(".to("), "{code}");
@@ -326,4 +339,25 @@ fn a_corner_is_kept_by_a_box_that_paints_nothing_at_rest() {
         code.contains("RectStyle::default().with_radius(BorderRadius::all(6.0))"),
         "{code}"
     );
+}
+
+#[test]
+fn a_closure_written_in_place_is_the_press() {
+    let code = transpiled("row on_press:(|| open.set(true))\n    text \"x\"\n");
+    assert!(code.contains(".on_press(move "), "{code}");
+    assert!(!code.contains("maybe_on_press"), "{code}");
+}
+
+/// What the box is handed is decided by the forwarded value's type, so a closure binding, a `Handler` and an `Option<Handler>` are all written the same.
+#[test]
+fn a_forwarded_press_is_handed_over_whatever_it_holds() {
+    let src = "[logic]\nlet add = move || {};\n[view]\nrow on_press:add\n    text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    let call = code
+        .split_once(".maybe_on_press(::telar::IntoPress::into_press(")
+        .expect("a forwarded press goes through IntoPress")
+        .1;
+    assert!(call.split_once(')').unwrap().0.ends_with("add"), "{code}");
 }

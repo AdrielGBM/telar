@@ -144,14 +144,18 @@ fn container_on_press_emits_click_handler() {
 }
 
 #[test]
-fn a_forwarded_on_press_on_a_plain_row_upgrades_to_styled_container() {
-    let src = "[logic]\npub struct Props {\n    pub on_press: Box<dyn Fn()>,\n}\n\n[view]\nrow on_press:(props.on_press)\n    text \"x\"\n";
+fn a_forwarded_on_press_is_handed_through_into_press_on_a_plain_row() {
+    let src = "[logic]\npub struct Props {\n    pub on_press: Option<Handler>,\n}\n\n[view]\nrow on_press:(props.on_press)\n    text \"x\"\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
     assert!(
-        code.contains("StyledContainer::new(") && code.contains(".maybe_on_press("),
-        "a forwarded on_press must upgrade a plain row to StyledContainer:\n{code}"
+        !code.contains("StyledContainer::"),
+        "a plain Container answers a forwarded on_press as it answers a closure:\n{code}"
+    );
+    assert!(
+        code.contains(".maybe_on_press(::telar::IntoPress::into_press("),
+        "{code}"
     );
 }
 
@@ -2591,5 +2595,50 @@ fn a_class_on_a_component_call_places_the_item_too() {
     assert!(
         matches!((width, grow), (Some(width), Some(grow)) if width < grow),
         "the class first, then the call's own:\n{code}"
+    );
+}
+
+/// An arm of a reactive `match` lays its children out as its container's own, as an `if`'s branch does.
+#[test]
+fn a_reactive_match_arm_splices_its_children_into_its_container() {
+    let code = crate::transpile_source(
+        "[logic]\nlet shape = signal(0u8);\n[view]\nrow gap:8\n    match $shape\n        0\n            text \"a\"\n            text \"b\"\n        _\n            text \"c\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains("fragment_branches(") && code.contains("Ok(__slots)"),
+        "{code}"
+    );
+    assert_eq!(
+        code.matches("Container::").count(),
+        1,
+        "the row alone, no cell around the arm:\n{code}"
+    );
+}
+
+/// A placeholder with a body places it where the call handed nothing, and what the call handed otherwise.
+#[test]
+fn a_placeholder_with_a_body_stands_it_in_for_children_not_handed() {
+    let code = crate::transpile_source(
+        "[logic]\npub struct Props {\n    #[props(default)]\n    pub children: Children,\n}\n[view]\nrow\n    children props.children\n        text \"none\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    let handed = code
+        .find(".is_handed() {")
+        .unwrap_or_else(|| panic!("{code}"));
+    let otherwise = code[handed..]
+        .find("} else {")
+        .unwrap_or_else(|| panic!("{code}"));
+    assert!(
+        code[handed + otherwise..].contains("\"none\""),
+        "the body is built where nothing was handed:\n{code}"
     );
 }

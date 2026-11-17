@@ -291,3 +291,44 @@ col gap:20
             prop_row name:"fill_rule" values:"Winding · EvenOdd" about:"How overlapping regions are filled."
             prop_row name:"Stroke::with_cap" values:"Butt·Round·Square" about:"Line ends (and with_join for corners)."
             prop_row name:"Stroke::with_dash" values:"pattern, offset" about:"Drawn and skipped lengths, and where the stroke starts in them."
+
+[previews "Media/Paths" layout:padded]
+A `path` with a `view_box` draws its data scaled into whatever box it is laid out in, in the ink of the text around it.
+
+[preview "View box"]
+row gap:8 align:center color:#ff0000
+    path d:"M4,12 A8,8 0 0 1 20,12 L20,20" view_box:"0 0 24 24" stroke:$text.ink stroke_width:2 stroke_cap:round width:24 height:24 a11y:hidden
+    path d:"M4,12 A8,8 0 0 1 20,12 L20,20" view_box:"0 0 24 24" stroke:$text.ink stroke_width:2 stroke_cap:round width:48 height:48 a11y:hidden
+
+[play]
+let drawn: Vec<(Vec<telar::Point>, Option<telar::Paint>)> = canvas
+    .frame()
+    .commands
+    .iter()
+    .filter_map(|command| match command {
+        telar::DrawCommand::Path { data, style } => Some((
+            data.verbs()
+                .iter()
+                .flat_map(|verb| match *verb {
+                    telar::PathVerb::MoveTo(p) | telar::PathVerb::LineTo(p) => vec![p],
+                    telar::PathVerb::QuadTo { ctrl, to } => vec![ctrl, to],
+                    telar::PathVerb::CubicTo { ctrl1, ctrl2, to } => vec![ctrl1, ctrl2, to],
+                    telar::PathVerb::Close => Vec::new(),
+                })
+                .collect(),
+            style.stroke.map(|stroke| stroke.paint),
+        )),
+        _ => None,
+    })
+    .collect();
+let [(small, small_ink), (large, large_ink)] = drawn.as_slice() else {
+    return Err(PlayError::new(format!("two paths are drawn, got {}", drawn.len())));
+};
+let doubled: Vec<telar::Point> = small.iter().map(|p| telar::Point::new(p.x * 2.0, p.y * 2.0)).collect();
+if *large != doubled {
+    return Err(PlayError::new(format!("the 48px box draws the 24px one at twice the scale: {small:?} then {large:?}")));
+}
+let red = Some(telar::Paint::Solid(telar::Color::rgba(1.0, 0.0, 0.0, 1.0)));
+if *small_ink != red || *large_ink != red {
+    return Err(PlayError::new(format!("both strokes take the ink of the row they sit in: {small_ink:?}, {large_ink:?}")));
+}

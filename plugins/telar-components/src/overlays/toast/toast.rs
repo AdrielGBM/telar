@@ -6,10 +6,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, BoxText, Container, FixedLayer, JustifyContent,
-    LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle, RwSignal,
-    ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface, box_item,
-    children, detached, effect, focus, focus::Role, on_cleanup, run_after, signal, style_follows,
+    Accessible, AlignItems, Border, BorderRadius, BoxText, Container, FixedLayer, Handler,
+    JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle,
+    RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface,
+    box_item, children, detached, effect, focus, focus::Role, on_cleanup, run_after, signal,
+    style_follows,
 };
 
 use crate::shared;
@@ -65,7 +66,7 @@ impl ToastTokens {
 #[derive(Clone)]
 pub struct ToastAction {
     pub label: Arc<str>,
-    pub run: Rc<dyn Fn()>,
+    pub run: Handler,
 }
 
 /// What a notice is about: the colour of its stripe, the word a reader hears before it, and whether it interrupts what a reader is saying.
@@ -170,10 +171,10 @@ impl Toast {
     }
 
     /// Gives the notice a button that runs `run` and puts it away, and keeps the notice until that is pressed or it is dismissed.
-    pub fn with_action(mut self, label: impl Into<Arc<str>>, run: impl Fn() + 'static) -> Self {
+    pub fn with_action(mut self, label: impl Into<Arc<str>>, run: impl Into<Handler>) -> Self {
         self.end = ToastEnd::Action(ToastAction {
             label: label.into(),
-            run: Rc::new(run),
+            run: run.into(),
         });
         self
     }
@@ -549,7 +550,7 @@ fn notice(
             size,
             move || label.to_string(),
             move || {
-                (action.run)();
+                action.run.run();
                 dismiss();
             },
             held,

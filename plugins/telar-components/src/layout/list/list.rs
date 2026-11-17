@@ -5,9 +5,9 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Color, Container, KeySequence, LayoutError,
-    LayoutItem, LayoutStyle, Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, Text, TextWrap, box_item,
+    Accessible, AlignItems, BorderRadius, Children, Color, Container, Handler, KeySequence,
+    LayoutError, LayoutItem, LayoutStyle, Margin, NodeId, Props, Reactive, RectStyle, RwSignal,
+    ShapeStyle, StyledContainer, Text, TextWrap, box_item,
     focus::{FocusId, Role},
     signal, use_context,
 };
@@ -110,7 +110,7 @@ pub(crate) fn row_paint(fill: Option<Color>) -> RectStyle {
 /// What the keyboard does to a row it commits: what a press on it does, or open the submenu it hangs.
 #[derive(Clone)]
 pub(crate) enum Act {
-    Run(Rc<dyn Fn()>),
+    Run(Handler),
     Opens,
 }
 
@@ -303,7 +303,7 @@ impl ListContext {
     /// Commits the row at `index` as a press on it would: the list's pick, then the row's own action.
     pub(crate) fn commit(&self, index: usize) {
         if let Some(Act::Run(act)) = self.act_of(index) {
-            act();
+            act.run();
         }
     }
 
@@ -421,8 +421,8 @@ pub struct ItemProps {
     #[props(some, into, default)]
     pub shortcut: Option<KeySequence>,
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
-    #[props(some, default)]
-    pub on_press: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_press: Option<Handler>,
     /// The row's content in place of [`label`](Self::label), when it needs more than a line of text.
     #[props(default)]
     pub children: Children,
@@ -516,21 +516,18 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     }
 
     let switching = switch.is_some();
-    let commit: Rc<dyn Fn()> = {
+    let commit = {
         let list = list.clone();
-        Rc::new(move || {
+        Handler::from(move || {
             if let (false, Some(ctx), Some(i)) = (switching, &list, index) {
                 ctx.pick(i);
             }
-            if let Some(cb) = &on_press {
-                cb();
+            if let Some(on_press) = &on_press {
+                on_press.run();
             }
         })
     };
-    let row = styled_row(size, &list, index, disabled.clone(), content)?.on_press({
-        let commit = commit.clone();
-        move || commit()
-    });
+    let row = styled_row(size, &list, index, disabled.clone(), content)?.on_press(commit.clone());
     // Announced without becoming a Tab stop: the list is driven by arrows from the trigger, so a reader can describe the open panel while Tab keeps treating it as one control.
     let row = match (&list, index) {
         (Some(ctx), Some(i)) => {

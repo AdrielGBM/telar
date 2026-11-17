@@ -917,7 +917,7 @@ fn pointed() -> Vec<Pointed> {
         build: |size| {
             crate::window_controls(
                 crate::WindowControlsProps::props()
-                    .on_close(std::rc::Rc::new(|| {}))
+                    .on_close(|| {})
                     .size(size)
                     .build(),
             )

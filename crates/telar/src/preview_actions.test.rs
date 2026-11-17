@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use telar::preview::{ActionLog, PreviewActions, PreviewCtx, preview};
 use telar::{
-    Children, Container, LayoutError, LayoutItem, LayoutStyle, Props, box_item,
+    Children, Container, Handler, LayoutError, LayoutItem, LayoutStyle, Props, box_item,
     reset_layout_runtime,
 };
 
@@ -15,8 +15,8 @@ struct Opaque;
 
 #[derive(Props)]
 struct PadProps {
-    #[props(default = Rc::new(|| {}))]
-    on_press: Rc<dyn Fn()>,
+    #[props(into, default = Handler::from(|| {}))]
+    on_press: Handler,
     #[props(some, default)]
     on_toggle: Option<Rc<dyn Fn(bool)>>,
     #[props(some, default)]
@@ -40,7 +40,7 @@ fn calls(log: &ActionLog) -> Vec<(&'static str, Vec<String>)> {
 }
 
 fn run(props: &PadProps) {
-    (props.on_press)();
+    props.on_press.run();
     if let Some(on_toggle) = &props.on_toggle {
         on_toggle(true);
     }
@@ -123,15 +123,15 @@ fn the_props_log_their_required_callbacks_too() {
 
 #[derive(Props)]
 struct ClickerProps {
-    #[props(default = Rc::new(|| {}))]
-    on_press: Rc<dyn Fn()>,
+    #[props(into, default = Handler::from(|| {}))]
+    on_press: Handler,
     #[props(default)]
     children: Children,
 }
 
 /// Presses itself as it builds, standing in for a user's tap.
 fn clicker(props: ClickerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    (props.on_press)();
+    props.on_press.run();
     Ok(box_item(Container::new(
         LayoutStyle::new(),
         props.children.build()?,
@@ -156,7 +156,7 @@ fn a_preview_logs_a_callback_it_sets_and_runs_it() {
         let nested = Children::new(move || Ok(vec![clicker(ClickerProps::props().build())?]));
         clicker(
             ClickerProps::props()
-                .on_press(Rc::new(move || presses.update(|count| *count += 1)))
+                .on_press(move || presses.update(|count| *count += 1))
                 .children(nested)
                 .build(),
         )

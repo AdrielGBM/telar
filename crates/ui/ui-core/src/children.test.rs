@@ -169,3 +169,11 @@ fn one_builds_a_single_item_each_time_it_is_asked() {
     assert_eq!(children.build().unwrap().len(), 1);
     assert_eq!(children.build().unwrap().len(), 1);
 }
+
+/// What a call handed is told apart from what it did not, without building either: a recipe that builds nothing was still handed.
+#[test]
+fn children_handed_are_told_apart_from_none() {
+    assert!(!Children::default().is_handed());
+    assert!(Children::new(|| Ok(Vec::new())).is_handed());
+    assert!(Children::default().build().unwrap().is_empty());
+}

@@ -418,7 +418,7 @@ pub fn surface_fraction(value: &str) -> Option<(&'static str, f32)> {
     })
 }
 
-/// The `BoxText` signal a `row`, `col`, `grid` or `box` keeps when anything it says reads its own text: a length in `em` or `lh`, or a `$text` read.
+/// The `BoxText` reading a `row`, `col`, `grid` or `box` keeps when anything it says reads its own text (a length in `em` or `lh`, or a `$text` read), and a `path` whose paint reads the text it is drawn in binds each paint.
 pub const BOX_TEXT_BINDING: &str = "__text";
 
 const TEXT_UNITS: [&str; 2] = ["em", "lh"];

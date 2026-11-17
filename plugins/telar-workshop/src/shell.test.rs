@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::time::Duration;
 
 use telar::focus;
@@ -489,7 +488,7 @@ fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     button(
         ButtonProps::props()
             .label(Reactive::of(move || format!("Pressed {}", presses.get())))
-            .on_press(Rc::new(move || presses.update(|count| *count += 1)))
+            .on_press(move || presses.update(|count| *count += 1))
             .build(),
     )
 }

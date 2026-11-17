@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::time::Duration;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
@@ -17,7 +16,7 @@ fn tools() -> Children {
                     .label("Run")
                     .shortcut("F5")
                     .pressed(playing)
-                    .on_press(Rc::new(move || playing.set(true)))
+                    .on_press(move || playing.set(true))
                     .build(),
             )?,
             icon_button(
@@ -25,7 +24,7 @@ fn tools() -> Children {
                     .icon(telar::icon!("lucide:square"))
                     .label("Stop")
                     .shortcut("Shift+F5")
-                    .on_press(Rc::new(move || playing.set(false)))
+                    .on_press(move || playing.set(false))
                     .build(),
             )?,
             icon_button(

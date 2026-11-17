@@ -36,9 +36,10 @@ is built so every target reads the same one:
 - The pattern restarts at every subpath. On a closed subpath the dash that runs through its start is one
   dash joined there, not two capped ones.
 - A drawn length of zero is a dash with no length: with `cap: Round` or `Square` it is a dot, so
-  `stroke_dash:"0 6"` on a round-capped stroke is a dotted line.
+  `stroke_dash:"0 6" stroke_cap:round` is a dotted line.
 - Lengths are in the same units as the stroke's width, and scale with it: a transform or a device scale
-  factor scales the pattern along with the path.
+  factor scales the pattern along with the path. A `path`'s `view_box` scales its points only, so its stroke
+  width and its pattern stay in pixels.
 
 `stroke_dash` takes lengths separated by spaces or commas, as SVG's `stroke-dasharray` does.
 `stroke_dash_offset` takes a plain number and needs a `stroke_dash`, which in turn needs a `stroke`. Both are

@@ -9,6 +9,8 @@ use geometry_core::Rect;
 use platform_core::{Event, PointerButton, TAP_SLOP};
 use ui_tree::EventResult;
 
+use crate::Handler;
+
 /// How long a press must be held (without moving past `TAP_SLOP`) to count as a long press rather than a tap.
 const LONG_PRESS_THRESHOLD: Duration = Duration::from_millis(500);
 
@@ -30,7 +32,7 @@ pub(crate) struct PressGesture {
 /// What a primary press fires: the box's own handler, then where its link goes.
 #[derive(Default)]
 struct Primary {
-    on_press: RefCell<Option<Rc<dyn Fn()>>>,
+    on_press: RefCell<Option<Handler>>,
     // Where a link goes on the press, after `on_press` has run: a box that is a link and also does something keeps both.
     follow: RefCell<Option<Rc<dyn Fn()>>>,
 }
@@ -41,8 +43,8 @@ impl Primary {
         // Cloned out so no borrow is held while a handler runs and, say, gives the box a new handler.
         let on_press = self.on_press.borrow().clone();
         let follow = self.follow.borrow().clone();
-        if let Some(cb) = &on_press {
-            cb();
+        if let Some(on_press) = &on_press {
+            on_press.run();
         }
         if let Some(follow) = &follow {
             follow();
@@ -56,8 +58,8 @@ impl Primary {
 }
 
 impl PressGesture {
-    pub(crate) fn set(&mut self, f: impl Fn() + 'static) {
-        *self.primary.on_press.borrow_mut() = Some(Rc::new(f));
+    pub(crate) fn set(&mut self, on_press: Handler) {
+        *self.primary.on_press.borrow_mut() = Some(on_press);
     }
 
     pub(crate) fn set_follow(&mut self, f: impl Fn() + 'static) {

@@ -283,13 +283,21 @@ impl ViewGen<'_> {
             _ => "|__value: &_| ::std::mem::discriminant(__value)".to_string(),
         };
 
+        // In a slot host an arm's children are the host's own, as a plain `match` splices them; elsewhere the arm is one cell a list holds.
+        let returns = match boxed {
+            true => "Box<dyn LayoutItem>",
+            false => "Vec<ChildSlot>",
+        };
         let mut body = String::new();
         let _ = writeln!(
             body,
-            "{pad}    move |__value| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+            "{pad}    move |__value| -> Result<{returns}, LayoutError> {{"
         );
         self.indent += 2;
         let bpad = self.indent_str();
+        if !boxed {
+            let _ = writeln!(body, "{bpad}let mut __slots: Vec<ChildSlot> = Vec::new();");
+        }
         let _ = writeln!(body, "{bpad}match __value {{");
         for arm in &block.arms {
             self.indent += 1;
@@ -298,14 +306,24 @@ impl ViewGen<'_> {
             let _ = writeln!(body, "{apad}{amarker}{} => {{", arm.pattern);
             self.indent += 1;
             let arm_body = arm.body.clone();
-            let cell = self.in_reactive(|g| g.emit_content_cell(&arm_body, &mut body));
-            let ipad = self.indent_str();
-            let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
+            self.in_reactive(|g| match boxed {
+                true => {
+                    let cell = g.emit_content_cell(&arm_body, &mut body);
+                    let ipad = g.indent_str();
+                    let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
+                }
+                false => g.with_child_sink(ChildMode::Slots, |g| {
+                    g.emit_branch_into_children(&arm_body, &mut body)
+                }),
+            });
             self.indent -= 1;
             let _ = writeln!(body, "{apad}}}");
             self.indent -= 1;
         }
         let _ = writeln!(body, "{bpad}}}");
+        if !boxed {
+            let _ = writeln!(body, "{bpad}Ok(__slots)");
+        }
         self.indent -= 2;
         let _ = write!(body, "{pad}    }}");
 
@@ -320,7 +338,7 @@ impl ViewGen<'_> {
         let opener = if boxed {
             "ReactiveList::new("
         } else {
-            "fragment("
+            "fragment_branches("
         };
         let closer = if boxed { ")?;" } else { ");" };
         let _ = writeln!(code, "{pad}let {var} = {opener}");
@@ -628,7 +646,7 @@ impl ViewGen<'_> {
     }
 
     /// Emits a control-flow branch's nodes, pushing each into the child accumulator in scope (its shape — `box_item` vs `ChildSlot::stat` — chosen by the current sink). A nested reactive fragment pushes as a `ChildSlot::Dynamic`.
-    fn emit_branch_into_children(&mut self, nodes: &[ViewNode], code: &mut String) {
+    pub(super) fn emit_branch_into_children(&mut self, nodes: &[ViewNode], code: &mut String) {
         let pad = self.indent_str();
         for node in nodes {
             match self.emit_node(node) {

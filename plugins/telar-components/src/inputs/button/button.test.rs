@@ -56,7 +56,7 @@ fn tap_fires_on_press() {
         ButtonProps::props()
             .label("OK")
             .color(Reactive::of(|| Color::rgba(0.2, 0.4, 0.9, 1.0)))
-            .on_press(Rc::new(move || sink.set(true)))
+            .on_press(move || sink.set(true))
             .build(),
     )
     .unwrap();

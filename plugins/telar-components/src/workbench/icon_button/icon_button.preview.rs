@@ -50,7 +50,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .icon(Glyph::Star.icon())
                     .label("Favourite")
                     .pressed(pressed)
-                    .on_press(std::rc::Rc::new(move || pressed.update(|on| *on = !*on)))
+                    .on_press(move || pressed.update(|on| *on = !*on))
                     .build(),
             )
         })

@@ -27,14 +27,6 @@ pub struct Props {
 
 let size = props.size;
 let tone = props.tone.clone();
-let own = props.children.clone();
-let turning = Children::new(move || {
-    let own = own.build()?;
-    match own.is_empty() {
-        true => Ok(vec![glyph(GlyphProps::props().shape(Mark::Arc).size(size).build())?]),
-        false => Ok(own),
-    }
-});
 let angle = Keyframes::<f32>::new(0.0)
     .then(360.0, ROTATION, Easing::Linear)
     .start(Repeat::Loop);
@@ -43,4 +35,5 @@ let angle = Keyframes::<f32>::new(0.0)
 row role:progressbar
     // Sized by what it holds and never stretched, so it turns as a square whatever room the spinner is given.
     row self:center shrink:0 align:center justify:center min_width:(shared::icon_size(size)) min_height:(shared::icon_size(size)) color:(tone.get().color($text.ink)) rotate:(angle.get())
-        children turning
+        children props.children
+            glyph shape:Mark::Arc size:size

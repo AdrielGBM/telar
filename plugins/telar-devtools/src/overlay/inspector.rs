@@ -1,7 +1,5 @@
 //! The inspector drawer: the shared inspection panels over the whole window, the components with their box model or what a reader is told, beside the part of the app it leaves showing.
 
-use std::rc::Rc;
-
 use telar::{
     Accessible, AlignItems, Border, Children, Container, LayoutError, LayoutItem, LayoutStyle,
     Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item,
@@ -92,7 +90,7 @@ fn header(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(CLOSE)))
             .variant(Variant::Ghost)
-            .on_press(Rc::new(move || model.inspector_open.set(false)))
+            .on_press(move || model.inspector_open.set(false))
             .build(),
     )?;
     let header = Container::new(

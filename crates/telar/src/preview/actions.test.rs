@@ -193,3 +193,23 @@ fn the_probe_logs_a_callback_of_one_borrowed_argument() {
     assert_eq!(calls[1].name, "on_select");
     assert!(calls[1].args[0].ends_with("Node>"), "{:?}", calls[1].args);
 }
+
+#[test]
+fn the_probe_logs_a_handler_before_it_runs() {
+    let log = ActionLog::new();
+    let ran = Rc::new(Cell::new(false));
+    let handler = Handler::from({
+        let ran = Rc::clone(&ran);
+        move || {
+            assert_eq!(log.count(), 1, "the press is recorded before it runs");
+            ran.set(true);
+        }
+    });
+    let unset: Option<Handler> = None;
+    let handler = crate::__preview_action!(log, "on_press", handler);
+    let unset = crate::__preview_action!(log, "on_close", unset);
+    handler.run();
+    assert!(ran.get());
+    assert!(unset.is_none());
+    assert_eq!(logged_calls(&log), [("on_press", Vec::new())]);
+}

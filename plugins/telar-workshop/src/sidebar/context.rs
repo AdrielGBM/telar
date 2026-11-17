@@ -1,7 +1,6 @@
 //! The sidebar's context menu: what a secondary press or the context-menu key offers on a preview, on a group, or on the empty space under the rows.
 
 use std::collections::HashSet;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{Children, LayoutError, LayoutItem, RwSignal};
@@ -162,7 +161,7 @@ fn rows(state: &WorkshopState, node: Option<TreeNode>) -> Children {
                     item(
                         ItemProps::props()
                             .label(strings::reactive(command.label()))
-                            .on_press(Rc::new(move || run(&state, command, node.as_ref())))
+                            .on_press(move || run(&state, command, node.as_ref()))
                             .build(),
                     )?
                 }

@@ -41,7 +41,7 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 ///             button(
 ///                 ButtonProps::props()
 ///                     .label("Press me")
-///                     .on_press(Rc::new(move || pressed.update(|n| *n += 1)))
+///                     .on_press(move || pressed.update(|n| *n += 1))
 ///                     .build(),
 ///             )
 ///         }),

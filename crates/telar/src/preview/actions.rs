@@ -7,6 +7,8 @@ use std::rc::Rc;
 
 use reactive_core::{RwSignal, signal};
 
+use crate::Handler;
+
 use super::__probe;
 
 /// One call a preview's callback received.
@@ -133,7 +135,7 @@ impl fmt::Debug for ActionLog {
     }
 }
 
-/// A callback whose calls a preview records: an `Rc<dyn Fn(…)>` or a `Box<dyn Fn(…)>` of up to three arguments that returns nothing, or an `Option` of one.
+/// A callback whose calls a preview records: a [`Handler`], an `Rc<dyn Fn(…)>` or a `Box<dyn Fn(…)>` of up to three arguments that returns nothing, or an `Option` of one.
 ///
 /// Each argument is recorded by its `Debug` text. The code `#[derive(Props)]` generates also logs a callback of one borrowed argument, `Rc<dyn Fn(&T)>`, and one whose arguments have no `Debug`, recording those by their type's name, and leaves any other field as it is.
 pub trait IntoAction: Sized {
@@ -192,6 +194,19 @@ callbacks!(__probe::IntoOpaqueAction, type_text, <A: [Any], B: [Any]>, (a: A, b:
 callbacks!(__probe::IntoOpaqueAction, type_text, <A: [Any], B: [Any], C: [Any]>, (a: A, b: B, c: C));
 callbacks!(__probe::IntoBorrowedAction, debug_text, <A: [Debug + ?Sized]>, (a: &A));
 callbacks!(__probe::IntoOpaqueBorrowedAction, type_text, <A: [?Sized]>, (a: &A));
+
+impl IntoAction for Handler {
+    fn action(log: ActionLog, name: &'static str) -> Self {
+        Handler::from(move || log.log(name, Vec::new()))
+    }
+
+    fn logged(self, log: ActionLog, name: &'static str) -> Self {
+        Handler::from(move || {
+            log.log(name, Vec::new());
+            self.run();
+        })
+    }
+}
 
 macro_rules! optional_callbacks {
     ($($trait:path),*) => {

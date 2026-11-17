@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Border, BorderRadius, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap,
-    amend_surface, box_item, children, focus::Role,
+    AlignItems, Border, BorderRadius, Color, Handler, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text,
+    TextWrap, amend_surface, box_item, children, focus::Role,
 };
 
 use crate::shared;
@@ -71,8 +71,8 @@ pub struct ButtonProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Runs when the button is pressed.
-    #[props(default = Rc::new(|| {}))]
-    pub on_press: Rc<dyn Fn()>,
+    #[props(into, default = Handler::from(|| {}))]
+    pub on_press: Handler,
     /// Amends the paint of the button's box — its **principal surface** — at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`ButtonTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -122,7 +122,7 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     .hover_style(move |_r| hover(State::Hovered))
     .active_style(move |_r| press(State::Pressed))
     .control(Role::Button)
-    .on_press(move || on_press());
+    .on_press(on_press);
     Ok(box_item(container))
 }
 

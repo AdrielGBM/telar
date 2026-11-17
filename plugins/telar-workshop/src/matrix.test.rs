@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use telar::ControlSize;
 use telar::preview::snapshot::SnapshotStatus;
 use telar::preview::{
@@ -78,7 +76,7 @@ fn confirming(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let opener = button(
         ButtonProps::props()
             .label("Ask")
-            .on_press(Rc::new(|| telar::open_overlay(CONFIRM)))
+            .on_press(|| telar::open_overlay(CONFIRM))
             .build(),
     )?;
     let dialog = modal(ModalProps::props().control(CONFIRM).title("Sure?").build())?;
@@ -95,7 +93,7 @@ fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .label(telar::Reactive::of(move || {
                 format!("Pressed {}", presses.get())
             }))
-            .on_press(Rc::new(move || presses.update(|count| *count += 1)))
+            .on_press(move || presses.update(|count| *count += 1))
             .build(),
     )
 }

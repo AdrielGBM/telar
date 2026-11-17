@@ -51,7 +51,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let reopen = button(
                 ButtonProps::props()
                     .label("Open the palette")
-                    .on_press(Rc::new(move || open.set(true)))
+                    .on_press(move || open.set(true))
                     .build(),
             )?;
             let palette = command_palette(

@@ -330,14 +330,26 @@ impl ViewGen<'_> {
             ),
             None => format!("{recipe}.build()?"),
         };
-        let code = match self.child_sinks.last() {
+        let placed = match self.child_sinks.last() {
             Some(sink) if sink.slots => format!(
-                "{pad}{}.extend({built}.into_iter().map(ChildSlot::stat));",
+                "{}.extend({built}.into_iter().map(ChildSlot::stat));",
                 sink.var
             ),
-            Some(sink) => format!("{pad}{}.extend({built});", sink.var),
-            None => format!("{pad}__children.extend({built});"),
+            Some(sink) => format!("{}.extend({built});", sink.var),
+            None => format!("__children.extend({built});"),
         };
+        if el.children.is_empty() {
+            return ChildEmit::Dynamic {
+                code: format!("{pad}{placed}"),
+            };
+        }
+        // The body stands in for what the call handed when it handed nothing.
+        let mut code =
+            format!("{pad}if {recipe}.is_handed() {{\n{pad}    {placed}\n{pad}}} else {{\n");
+        self.indent += 1;
+        self.emit_branch_into_children(&el.children, &mut code);
+        self.indent -= 1;
+        let _ = write!(code, "\n{pad}}}");
         ChildEmit::Dynamic { code }
     }
 

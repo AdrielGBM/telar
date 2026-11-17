@@ -246,12 +246,6 @@ impl ViewGen<'_> {
             .map(|_| ".holds_stroke()".to_string())
             .unwrap_or_default();
         let on_press = self.on_press_call(el);
-        // A forwarded (non-closure) `on_press` wires `.maybe_on_press`, which only StyledContainer has.
-        let on_press_forwarded = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "on_press")
-            .is_some_and(|a| !a.value.is_closure());
 
         let attrs = self.effective_attrs(el);
         let surface = attrs.iter().find(|a| a.key == "surface");
@@ -277,14 +271,13 @@ impl ViewGen<'_> {
         // What the container says about the text below it: `col font_size:11` draws no text, it names the size everything under it starts from.
         let declaring = self.declaring_call(&attrs, &transitions, &mut hoists);
 
-        // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case, and `operated` a role only a StyledContainer can make a control.
+        // Any of these forces the StyledContainer upgrade. `on_press` is excluded because a plain Container answers it in either form, and `operated` is a role only a StyledContainer can make a control.
         let styling = format!(
             "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{hit_outset}{to}{valued}"
         );
         let pieces = if always_style
             || has_paint(&attrs)
             || !styling.is_empty()
-            || on_press_forwarded
             || operated
             || surface.is_some()
         {
@@ -479,29 +472,34 @@ impl ViewGen<'_> {
             return String::new();
         };
         let value = attr.value.text().trim();
+        let value = super::redundant_parens(value).unwrap_or(value);
         errors.extend(refused_external(value));
         let read = substitute_reads(value, self.theme_access);
         format!(".to({})", self.owning(&[value], &format!("move || {read}")))
     }
 
-    /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`/ `on_drag`/`on_focus`/`on_long_press`), or an empty string when the attribute is absent. `$name` signals are cloned into the closure, `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
+    /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_hover`/`on_key`/`on_drag`/`on_focus`/`on_long_press`), or an empty string when the attribute is absent. `$name` signals are cloned into the closure, `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
     fn closure_attr_call(&self, el: &Element, key: &str, method: &str) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
         // A non-closure value is an `Option<handler>` being forwarded, and the `maybe_` form leaves the box untouched on `None`. A no-op stand-in would report the event handled and swallow the click.
         if !attr.value.is_closure() {
-            let text = attr.value.text().trim();
-            let (offset, inner) = match super::redundant_parens(text) {
-                Some(inner) => (1, inner),
-                None => (0, text),
-            };
-            let marker = expr_marker(attr.value_start + offset, inner.len());
-            let written = format!("{marker}{inner}");
-            let handler = self.by_value(inner, written.clone()).unwrap_or(written);
-            return format!(".maybe_{method}({handler})");
+            return format!(".maybe_{method}({})", self.forwarded_handler(attr));
         }
         format!(".{method}({})", self.emit_closure_value(attr))
+    }
+
+    /// The expression a non-closure event attribute forwards, marked so a cursor on it maps to the generated code, and cloned where it is still needed after.
+    fn forwarded_handler(&self, attr: &Attr) -> String {
+        let text = attr.value.text().trim();
+        let (offset, inner) = match super::redundant_parens(text) {
+            Some(inner) => (1, inner),
+            None => (0, text),
+        };
+        let marker = expr_marker(attr.value_start + offset, inner.len());
+        let written = format!("{marker}{inner}");
+        self.by_value(inner, written.clone()).unwrap_or(written)
     }
 
     /// Desugars a closure-valued attribute into a `move` closure: what it reads with `$` is read where it runs and cloned in, a handle it writes is named bare, and a `$`-free closure keeps its source span (so LSP completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
@@ -516,8 +514,18 @@ impl ViewGen<'_> {
         self.owning(&[attr.value.text()], &format!("move {marker}{closure}"))
     }
 
+    /// `on_press:` as `.on_press(move || …)` for a closure, and for anything else as `.maybe_on_press(…)` through `IntoPress`, so a forwarded closure binding, `Handler` or `Option<Handler>` each type-check without the markup saying which it is.
     fn on_press_call(&self, el: &Element) -> String {
-        self.closure_attr_call(el, "on_press", "on_press")
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "on_press") else {
+            return String::new();
+        };
+        if attr.value.is_closure() {
+            return format!(".on_press({})", self.emit_closure_value(attr));
+        }
+        format!(
+            ".maybe_on_press(::telar::IntoPress::into_press({}))",
+            self.forwarded_handler(attr)
+        )
     }
 
     /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate` in degrees, `scale`/`scale_x`/`scale_y`, `translate_x`/`translate_y`), or an empty string when there are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal` reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure; every value is cast to `f32` so integer and float literals both type-check. `track_rect:sig` — mirror this element's laid-out rect into `sig`, so a sibling can be positioned or painted from where this one ended up.

@@ -1,4 +1,3 @@
-use std::rc::Rc;
 
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
@@ -60,7 +59,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(Reactive::of(move || {
                         format!("Pressed {} times", presses.get())
                     }))
-                    .on_press(Rc::new(move || presses.update(|count| *count += 1)))
+                    .on_press(move || presses.update(|count| *count += 1))
                     .build(),
             )
         })

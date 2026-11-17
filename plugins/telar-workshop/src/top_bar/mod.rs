@@ -204,7 +204,7 @@ fn sidebar_opener(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutEr
             .icon(telar_icons::icon!("lucide:panel-left"))
             .label(strings::reactive(PREVIEWS))
             .shortcut(Action::ToggleSidebar.chords()[0])
-            .on_press(Rc::new(move || drawer.set(true)))
+            .on_press(move || drawer.set(true))
             .build(),
     )
 }
@@ -302,7 +302,7 @@ fn find_button(
                 strings::text_with(FIND_IN, &project())
             }))
             .shortcut(Action::Find.chords()[0])
-            .on_press(Rc::new(move || keymap.run(Action::Find)))
+            .on_press(move || keymap.run(Action::Find))
             .build(),
     )
 }

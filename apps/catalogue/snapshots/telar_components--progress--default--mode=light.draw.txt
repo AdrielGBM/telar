@@ -5,9 +5,11 @@ element group
     element group
       element group
         element progressbar
-          rect 288,296 224x8 fill=#4261ed14 radius=4
-          element group
-            rect 288,296 134x8 fill=#4261edff radius=4
+          clip 288,296 224x8 radius=4
+            rect 288,296 224x8 fill=#4261ed14 radius=4
+            element group
+              rect 288,296 134x8 fill=#4261edff radius=4
+            end
           end
         end
       end

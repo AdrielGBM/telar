@@ -8,7 +8,6 @@ mod editors;
 
 use std::cell::Cell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
 use telar::{
@@ -128,9 +127,7 @@ fn fold_button(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError
                 IconButtonProps::props()
                     .icon(icon)
                     .label(Reactive::of(move || strings::text(label)))
-                    .on_press(Rc::new(move || {
-                        collapsed.update(|folded| *folded = !*folded)
-                    }))
+                    .on_press(move || collapsed.update(|folded| *folded = !*folded))
                     .build(),
             )
         },
@@ -295,7 +292,7 @@ fn action_row(
         ItemProps::props()
             .label(Reactive::of(move || strings::text(label)))
             .disabled(Reactive::of(move || !enabled))
-            .on_press(Rc::new(act))
+            .on_press(act)
             .build(),
     )
 }
@@ -305,7 +302,7 @@ fn switch_row(label: &'static str, on: RwSignal<bool>) -> Result<Box<dyn LayoutI
         ItemProps::props()
             .label(Reactive::of(move || strings::text(label)))
             .switch(Reactive::of(move || on.get()))
-            .on_press(Rc::new(move || on.update(|on| *on = !*on)))
+            .on_press(move || on.update(|on| *on = !*on))
             .build(),
     )
 }
@@ -355,7 +352,7 @@ fn reset_all(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> 
         |entry: &PreviewEntry| entry.id,
         move |entry| {
             let args = state.args(&entry);
-            let on_press: Rc<dyn Fn()> = Rc::new(move || args.reset());
+            let on_press = move || args.reset();
             button(
                 ButtonProps::props()
                     .label(Reactive::of(|| strings::text(RESET_ALL)))

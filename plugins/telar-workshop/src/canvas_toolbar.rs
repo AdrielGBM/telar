@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, PreviewEntry, ViewportPreset};
 use telar::{
-    Accessible, Children, Direction, LayoutError, LayoutItem, LocaleTag, Reactive, RwSignal, Size,
-    effect, signal,
+    Accessible, Children, Direction, Handler, LayoutError, LayoutItem, LocaleTag, Reactive,
+    RwSignal, Size, effect, signal,
 };
 use telar_components::{
     GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, SubmenuProps,
@@ -279,7 +279,7 @@ struct Switch {
     icon: telar::IconName,
     name: &'static str,
     on: Rc<dyn Fn() -> bool>,
-    flip: Rc<dyn Fn()>,
+    flip: Handler,
     enabled: Option<Rc<dyn Fn() -> bool>>,
 }
 
@@ -294,7 +294,7 @@ impl Switch {
             icon,
             name,
             on: Rc::new(on),
-            flip: Rc::new(flip),
+            flip: Handler::from(flip),
             enabled: None,
         }
     }
@@ -329,7 +329,7 @@ impl Setting for Switch {
                 .label(self.label())
                 .pressed(self.is_on())
                 .disabled(self.is_disabled())
-                .on_press(Rc::clone(&self.flip))
+                .on_press(self.flip.clone())
                 .build(),
         )
     }
@@ -340,7 +340,7 @@ impl Setting for Switch {
                 .label(self.label())
                 .switch(self.is_on())
                 .disabled(self.is_disabled())
-                .on_press(Rc::clone(&self.flip))
+                .on_press(self.flip.clone())
                 .build(),
         )?;
         rows.push(row);
@@ -356,7 +356,7 @@ impl Setting for Switch {
 struct Action {
     icon: telar::IconName,
     name: &'static str,
-    act: Rc<dyn Fn()>,
+    act: Handler,
 }
 
 impl Action {
@@ -364,7 +364,7 @@ impl Action {
         Self {
             icon,
             name,
-            act: Rc::new(act),
+            act: Handler::from(act),
         }
     }
 }
@@ -376,7 +376,7 @@ impl Setting for Action {
             IconButtonProps::props()
                 .icon(self.icon.clone())
                 .label(Reactive::of(move || strings::text(name)))
-                .on_press(Rc::clone(&self.act))
+                .on_press(self.act.clone())
                 .build(),
         )
     }
@@ -386,7 +386,7 @@ impl Setting for Action {
         let row = item(
             ItemProps::props()
                 .label(Reactive::of(move || strings::text(name)))
-                .on_press(Rc::clone(&self.act))
+                .on_press(self.act.clone())
                 .build(),
         )?;
         rows.push(row);
@@ -464,7 +464,7 @@ fn choice_row<T: Clone + PartialEq + 'static>(
         .label(label.reactive())
         .checked(Reactive::of(move || current() == held))
         .radio(true)
-        .on_press(Rc::new(move || pick(value.clone())));
+        .on_press(move || pick(value.clone()));
     let props = match hint.clone() {
         Some(hint) => props.hint(Reactive::of(move || hint.clone())),
         None => props,

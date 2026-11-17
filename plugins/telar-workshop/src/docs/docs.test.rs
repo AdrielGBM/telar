@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use std::rc::Rc;
 
 use telar::preview::{
     ControlKind, Layout, PreviewCtx, PreviewEntry, PropDefault, PropField, PropsSchema, SourceSpan,
@@ -76,7 +75,7 @@ fn second(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     button(
         ButtonProps::props()
             .label("second body")
-            .on_press(Rc::new(move || log.log("on_second", Vec::new())))
+            .on_press(move || log.log("on_second", Vec::new()))
             .build(),
     )
 }

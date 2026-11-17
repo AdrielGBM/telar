@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::time::Duration;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
@@ -16,9 +15,9 @@ fn poster(
     button(
         ButtonProps::props()
             .label(label)
-            .on_press(Rc::new(move || {
+            .on_press(move || {
                 queue.push(toast());
-            }))
+            })
             .build(),
     )
 }

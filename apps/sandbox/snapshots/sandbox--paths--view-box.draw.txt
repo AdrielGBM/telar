@@ -1,0 +1,22 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,16,28
+              path M4,12 C4,7.58 7.58,4 12,4 C16.42,4 20,7.58 20,12 L20,20 stroke=2 stroke-color=#ff0000ff cap=round
+            end
+          end
+          element group
+            matrix 1,0,0,1,48,16
+              path M8,24 C8,15.16 15.16,8 24,8 C32.84,8 40,15.16 40,24 L40,40 stroke=2 stroke-color=#ff0000ff cap=round
+            end
+          end
+        end
+      end
+    end
+  end
+end

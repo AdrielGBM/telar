@@ -188,3 +188,59 @@ fn a_curved_edge_is_followed_and_an_open_subpath_fills_as_if_closed() {
     assert!(bowl.contains(Point::new(20.0, 20.0), FillRule::Winding));
     assert!(!bowl.contains(Point::new(20.0, 45.0), FillRule::Winding));
 }
+
+fn corners(path: &PathData) -> Vec<Point> {
+    path.verbs()
+        .iter()
+        .filter_map(|verb| match verb {
+            PathVerb::MoveTo(p) | PathVerb::LineTo(p) => Some(*p),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_fitted_path_scales_its_view_box_to_fill_the_box() {
+    let square = PathData::polygon(&[
+        Point::new(0.0, 0.0),
+        Point::new(24.0, 0.0),
+        Point::new(24.0, 24.0),
+    ]);
+    let fitted = square.fitted(
+        Rect::new(0.0, 0.0, 24.0, 24.0),
+        Rect::new(0.0, 0.0, 48.0, 48.0),
+    );
+    assert_eq!(
+        corners(&fitted),
+        vec![
+            Point::new(0.0, 0.0),
+            Point::new(48.0, 0.0),
+            Point::new(48.0, 48.0)
+        ]
+    );
+}
+
+#[test]
+fn a_fitted_path_keeps_its_aspect_and_is_centred_on_the_longer_side() {
+    let line = PathData::new()
+        .move_to(Point::new(10.0, 10.0))
+        .line_to(Point::new(20.0, 20.0));
+    let fitted = line.fitted(
+        Rect::new(10.0, 10.0, 10.0, 10.0),
+        Rect::new(0.0, 0.0, 40.0, 20.0),
+    );
+    assert_eq!(
+        corners(&fitted),
+        vec![Point::new(10.0, 0.0), Point::new(30.0, 20.0)],
+        "scaled by the shorter side and centred along the longer one"
+    );
+}
+
+#[test]
+fn a_view_box_with_no_area_leaves_the_path_as_drawn() {
+    let fitted = triangle().fitted(
+        Rect::new(0.0, 0.0, 0.0, 10.0),
+        Rect::new(0.0, 0.0, 40.0, 40.0),
+    );
+    assert_eq!(fitted, triangle());
+}

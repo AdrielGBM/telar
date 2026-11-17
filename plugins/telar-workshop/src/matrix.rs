@@ -118,7 +118,7 @@ fn axis_rows(state: &WorkshopState, entry: PreviewEntry) -> Children {
             let reset = item(
                 ItemProps::props()
                     .label(strings::reactive(RESET_AXES))
-                    .on_press(Rc::new(move || axes.set(MatrixAxes::Declared)))
+                    .on_press(move || axes.set(MatrixAxes::Declared))
                     .build(),
             )?;
             place_item(reset.layout_node(), changed);
@@ -200,11 +200,11 @@ fn axis_row(
             .label(label)
             .switch(on)
             .hint(values)
-            .on_press(Rc::new(move || {
+            .on_press(move || {
                 let flipped = picked_now(&axis).is_none();
                 let matrices = Matrices::installed();
                 axes.update(|axes| *axes = axes.toggled(&entry, &matrices, &axis, flipped));
-            }))
+            })
             .build(),
     )
 }
@@ -247,7 +247,7 @@ fn open_in_canvas(
                 IconButtonProps::props()
                     .icon(icon!("lucide:square-arrow-out-up-right"))
                     .label(strings::reactive(OPEN_IN_CANVAS))
-                    .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
+                    .on_press(move || open_cell(&state, &entry, &cell))
                     .build(),
             )
         },

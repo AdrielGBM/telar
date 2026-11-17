@@ -273,7 +273,7 @@ fn cell_menu(
         item(
             ItemProps::props()
                 .label(strings::reactive(OPEN_IN_CANVAS))
-                .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
+                .on_press(move || open_cell(&state, &entry, &cell))
                 .build(),
         )
     });

@@ -1352,7 +1352,7 @@ fn layered() -> Layered {
     let holder = crate::inputs::button::button::button(
         crate::inputs::button::button::ButtonProps::props()
             .label("Document")
-            .on_press(Rc::new(|| {}))
+            .on_press(|| {})
             .build(),
     )
     .unwrap();

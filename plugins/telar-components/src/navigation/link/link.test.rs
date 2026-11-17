@@ -131,7 +131,7 @@ fn a_press_runs_its_handler_and_the_keyboard_reaches_it() {
         LinkProps::props()
             .label("Settings")
             .to(anchor("settings"))
-            .on_press(Rc::new(move || sink.set(sink.get() + 1)))
+            .on_press(move || sink.set(sink.get() + 1))
             .build(),
     );
     let at = centre(the_link(&tree).rect);

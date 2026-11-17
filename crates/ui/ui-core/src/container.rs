@@ -7,6 +7,7 @@ use reactive_core::RwSignal;
 use renderer_core::Declared;
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::Handler;
 use crate::child_host::{ChildSlot, DynHost};
 use crate::context::{new_container, track_layout};
 use crate::input_region::{InputHandle, InputMode};
@@ -108,16 +109,18 @@ impl Container {
     }
 
     /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it; a child widget that handles the press wins, and a scroll gesture started on it does not fire it.
-    pub fn on_press(self, f: impl Fn() + 'static) -> Self {
-        self.maybe_on_press(Some(f))
+    pub fn on_press(self, on_press: impl Into<Handler>) -> Self {
+        self.maybe_on_press(Some(on_press.into()))
     }
 
     /// [`on_press`](Self::on_press) for a handler the caller may not have supplied.
     ///
-    /// The emitter picks this form for any `on_press:` whose value is not a closure literal, which is how a wrapper component forwards an `Option` — and a `Container` reached that emitter with no such method, so a plain container forwarding one did not compile. `None` leaves the container untouched: a no-op handler would still report the tap `Handled`, turning a display-only row into one that swallows it.
-    pub fn maybe_on_press(mut self, f: Option<impl Fn() + 'static>) -> Self {
-        let Some(f) = f else { return self };
-        self.press.set(f);
+    /// Markup hands this form any `on_press:` whose value is not a closure literal, through [`IntoPress`](crate::IntoPress), which is how a wrapper component forwards its own handler. `None` leaves the container untouched: a no-op handler would still report the tap `Handled`, turning a display-only row into one that swallows it.
+    pub fn maybe_on_press(mut self, on_press: Option<Handler>) -> Self {
+        let Some(on_press) = on_press else {
+            return self;
+        };
+        self.press.set(on_press);
         self.mark_interactive();
         self
     }

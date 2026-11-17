@@ -1,4 +1,3 @@
-use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{
@@ -50,7 +49,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let reopen = button(
                 ButtonProps::props()
                     .label("Show the menu")
-                    .on_press(Rc::new(move || open.set(Some(MenuPlace::At((24.0, 64.0))))))
+                    .on_press(move || open.set(Some(MenuPlace::At((24.0, 64.0)))))
                     .build(),
             )?;
             Ok::<_, LayoutError>(Container::column(children![
@@ -76,7 +75,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let target = button(
                 ButtonProps::props()
                     .label("Document")
-                    .on_press(Rc::new(|| {}))
+                    .on_press(|| {})
                     .build(),
             )?;
             let asks = telar::StyledContainer::new(

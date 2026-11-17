@@ -18,9 +18,9 @@ use crate::layout_item::{Child, LayoutItem, build_owned, make_child};
 ///
 /// The children see whatever is in force where the recipe runs — a [`provide_theme`](crate::provide_theme) scope, a context, anything an owner above provides — exactly as a child written inline there would. That is why a `children` placeholder builds its recipe where it stands rather than once up front.
 ///
-/// The default is a recipe for nothing, which is what a component's children prop holds when its caller handed it none.
-#[derive(Clone)]
-pub struct Children(Rc<Recipe>);
+/// The default is no recipe at all, which is what a component's children prop holds when its caller handed it none: it builds nothing, and [`is_handed`](Self::is_handed) tells it apart from a recipe the caller wrote, without building either.
+#[derive(Clone, Default)]
+pub struct Children(Option<Rc<Recipe>>);
 
 type Recipe = dyn Fn() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError>;
 
@@ -28,7 +28,7 @@ impl Children {
     pub fn new(
         build: impl Fn() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> + 'static,
     ) -> Self {
-        Self(Rc::new(build))
+        Self(Some(Rc::new(build)))
     }
 
     /// A recipe that builds one item, the same as [`Children::new`] over `Ok(vec![build()?])`.
@@ -38,7 +38,15 @@ impl Children {
 
     /// Builds the children under the current owner, so they see the theme and contexts in force where this is called. What a `children` placeholder runs where it stands, once per placement.
     pub fn build(&self) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
-        (self.0)()
+        match &self.0 {
+            Some(recipe) => recipe(),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// Whether the call handed a recipe, which a `children` placeholder with a body of its own places in that body's stead. A recipe that turns out to build nothing still counts: the call said what goes there.
+    pub fn is_handed(&self) -> bool {
+        self.0.is_some()
     }
 
     /// Builds the children with `context` visible to every one of them, and to anything they build in turn.
@@ -49,12 +57,6 @@ impl Children {
         context: T,
     ) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
         within(context, || self.build())
-    }
-}
-
-impl Default for Children {
-    fn default() -> Self {
-        Self::new(|| Ok(Vec::new()))
     }
 }
 

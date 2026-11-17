@@ -6,11 +6,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::{
-    IntoReading,
-    AlignItems, BorderRadius, Children, Color, Container, Insets, JustifyContent, LayoutError,
-    LayoutItem, LayoutStyle, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, Size,
-    SizeDimension, StyledContainer, SurfaceAmendment, Text, TextStyle, amend_surface, box_item,
-    focus::Role, track_layout,
+    AlignItems, BorderRadius, Children, Color, Container, Handler, Insets, IntoReading,
+    JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, Rect, RectStyle,
+    RwSignal, ShapeStyle, Size, SizeDimension, StyledContainer, SurfaceAmendment, Text, TextStyle,
+    amend_surface, box_item, focus::Role, track_layout,
 };
 
 use crate::chrome::title_bar::title_bar::{
@@ -144,7 +143,8 @@ pub struct WindowFrameProps {
     #[props(default)]
     pub size: ControlSize,
     /// What the close button does.
-    pub close: Rc<dyn Fn()>,
+    #[props(into)]
+    pub close: Handler,
     /// What the frame holds, under the title strip.
     #[props(default)]
     pub body: Children,

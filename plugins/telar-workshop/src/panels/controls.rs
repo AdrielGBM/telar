@@ -1,7 +1,6 @@
 //! The controls panel: one row per arg of the selected preview, with its editor, type, default and doc.
 
 use std::num::NonZeroU16;
-use std::rc::Rc;
 
 use telar::Variant;
 use telar::preview::host::{ArgState, Args};
@@ -334,12 +333,12 @@ fn reset(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
 fn reset_button(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = binding.name;
     let binding = binding.clone();
-    let on_press: Rc<dyn Fn()> = Rc::new(move || {
+    let on_press = move || {
         if let Some(default) = binding.state.peek().default {
             // A default the arg refuses leaves it as it was, which is all a reset could do anyway.
             let _ = binding.args.set(binding.name, default);
         }
-    });
+    };
     let button = button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(RESET)))

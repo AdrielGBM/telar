@@ -45,7 +45,7 @@ fn a_button_can_be_reached_and_pressed_without_a_mouse() {
     let item = button(
         ButtonProps::props()
             .label("Save")
-            .on_press(std::rc::Rc::new(move || sink.set(true)))
+            .on_press(move || sink.set(true))
             .build(),
     )
     .unwrap();

@@ -47,7 +47,7 @@ fn choices(chosen: RwSignal<usize>) -> Children {
                         .label(THEMES[at])
                         .checked(Reactive::of(move || chosen.get() == at))
                         .radio(true)
-                        .on_press(Rc::new(move || chosen.set(at)))
+                        .on_press(move || chosen.set(at))
                         .build(),
                 )
             })
@@ -91,7 +91,7 @@ fn view_menu(chosen: RwSignal<usize>, rulers: RwSignal<bool>) -> Children {
                 ItemProps::props()
                     .label("Rulers")
                     .checked(Reactive::of(move || rulers.get()))
-                    .on_press(Rc::new(move || rulers.set(!rulers.get())))
+                    .on_press(move || rulers.set(!rulers.get()))
                     .build(),
             )?,
         ])
@@ -109,7 +109,7 @@ fn settings_menu(
                 ItemProps::props()
                     .label(label)
                     .switch(Reactive::of(move || on.get()))
-                    .on_press(Rc::new(move || on.set(!on.get())))
+                    .on_press(move || on.set(!on.get()))
                     .build(),
             )
         };

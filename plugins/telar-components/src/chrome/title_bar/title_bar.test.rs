@@ -139,7 +139,7 @@ fn close_closes_the_window_unless_told_otherwise() {
     let count = closed.clone();
     let mut tree = controls(
         WindowControlsProps::props()
-            .on_close(Rc::new(move || count.set(count.get() + 1)))
+            .on_close(move || count.set(count.get() + 1))
             .build(),
     );
     click(&mut tree, "Close");

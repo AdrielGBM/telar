@@ -19,7 +19,7 @@ fn framing(title: &'static str, style: SurfaceFrameStyle) -> WindowFrameProps {
     WindowFrameProps::props()
         .title(title)
         .style(style)
-        .close(Rc::new(|| {}))
+        .close(|| {})
         .body(panel())
         .build()
 }

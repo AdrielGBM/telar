@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::look::Look;
 use crate::shared::{self, GlyphProps, Mark, glyph};
 use crate::strings;
-use telar::{ControlSize, Destination, IntoDestination, Tone, Variant};
+use telar::{ControlSize, Destination, Handler, IntoDestination, Tone, Variant};
 
 /// A link's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -76,8 +76,8 @@ pub struct Props {
     #[props(default)]
     pub trailing: Children,
     /// Runs when the link is pressed, before it is followed.
-    #[props(some, default)]
-    pub on_press: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_press: Option<Handler>,
     /// Amends the paint of the link's box — its **principal surface** — at rest and hovered. See [`telar::SurfaceStyle`] for when a theme token or [`LinkTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -98,10 +98,9 @@ let look = Look {
     selected: None,
     interactive: true,
 };
-let on_press = props.on_press.clone().map(|run| move || run());
 
 [view]
-row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.ink)) text_wrap:nowrap hover_style(fill:(look.hovered($text.ink)) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:on_press a11y_label:(heard($props.label, to.leaves())) surface:props.style
+row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.ink)) text_wrap:nowrap hover_style(fill:(look.hovered($text.ink)) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:props.on_press a11y_label:(heard($props.label, to.leaves())) surface:props.style
     row align:center gap:(shared::gap_sm(ControlSize::Regular))
         children props.leading
         if $props.current

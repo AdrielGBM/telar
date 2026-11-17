@@ -135,18 +135,16 @@ fn firing(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let fire = button(
         ButtonProps::props()
             .label("Fire")
-            .on_press(Rc::new(move || {
+            .on_press(move || {
                 fired.set(fired.get() + 1);
                 log.log("on_fire", vec![fired.get().to_string()]);
-            }))
+            })
             .build(),
     )?;
     let pick = button(
         ButtonProps::props()
             .label("Pick")
-            .on_press(Rc::new(move || {
-                log.log("on_pick", vec!["\"apple\"".to_string(), "2".to_string()])
-            }))
+            .on_press(move || log.log("on_pick", vec!["\"apple\"".to_string(), "2".to_string()]))
             .build(),
     )?;
     column(vec![fire, pick])

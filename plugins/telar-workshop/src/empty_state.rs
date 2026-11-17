@@ -1,10 +1,8 @@
 //! What a panel shows while it has nothing to: what is missing, what the panel is for, and how a preview gives it something, in Rust and in `.rsx`.
 
-use std::rc::Rc;
-
 use telar::{
-    AlignItems, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle,
-    Reactive, Role, SizeDimension, Text, TextAlign, box_item, children, place_item,
+    AlignItems, Container, Handler, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
+    LayoutStyle, Reactive, Role, SizeDimension, Text, TextAlign, box_item, children, place_item,
 };
 use telar_components::{ButtonProps, CodeViewProps, button, code_view};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
@@ -23,7 +21,7 @@ pub(crate) struct Example {
 
 struct Action {
     label: &'static str,
-    on_press: Rc<dyn Fn()>,
+    on_press: Handler,
 }
 
 pub(crate) struct EmptyState {
@@ -54,8 +52,11 @@ impl EmptyState {
         self
     }
 
-    pub(crate) fn action(mut self, label: &'static str, on_press: Rc<dyn Fn()>) -> Self {
-        self.action = Some(Action { label, on_press });
+    pub(crate) fn action(mut self, label: &'static str, on_press: impl Into<Handler>) -> Self {
+        self.action = Some(Action {
+            label,
+            on_press: on_press.into(),
+        });
         self
     }
 

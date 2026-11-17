@@ -180,6 +180,11 @@ impl BoxText {
         Self::of_styles(&root, &root)
     }
 
+    /// The text a leaf that declares none of its own is drawn in, from the `style` it inherited: what it holds and what it sits in are the same.
+    pub fn drawn_in(style: &TextStyle) -> Self {
+        Self::of_styles(style, style)
+    }
+
     fn of_styles(held: &TextStyle, around: &TextStyle) -> Self {
         Self {
             em: held.font_size,

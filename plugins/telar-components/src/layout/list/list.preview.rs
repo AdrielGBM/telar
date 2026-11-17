@@ -1,4 +1,3 @@
-use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_text, preview};
 use telar::{Container, LayoutError, LayoutStyle};
@@ -11,7 +10,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(item: ItemProps, "Default", |p| {
             item(
                 ItemProps::props()
-                    .on_press(Rc::new(|| {}))
+                    .on_press(|| {})
                     .label(p.arg("label", "Rename"))
                     .disabled(p.arg("disabled", false))
                     .checked(p.arg("checked", false))

@@ -3,7 +3,7 @@ use crate::StyledContainer;
 use crate::context::{compute_layout, reset_layout_runtime};
 use layout_core::AvailableSpace;
 use platform_core::{PointerButton, PointerSource};
-use renderer_core::RectStyle;
+use renderer_core::{Color, RectStyle, ShapeStyle};
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -282,4 +282,124 @@ fn the_cut_is_opened_inside_the_box_s_own_element() {
         children.into_iter().next(),
         Some(RenderNode::Clip { .. })
     ));
+}
+
+/// A 40×20 box painting `paint` and holding nothing, clipped to `clip`.
+fn painted_and_clipped(
+    paint: impl Fn(Rect) -> RectStyle + 'static,
+    build: impl FnOnce(StyledContainer) -> StyledContainer,
+    clip: Clip,
+) -> ClippedItem {
+    reset_layout_runtime();
+    let painted = StyledContainer::new(
+        LayoutStyle::new().flex_row().width(40.0).height(20.0),
+        paint,
+        vec![],
+    )
+    .unwrap();
+    let clipped = ClippedItem::new(Box::new(build(painted)), clip);
+    compute_layout(
+        clipped.layout_node(),
+        AvailableSpace::Definite(40.0),
+        AvailableSpace::Definite(20.0),
+    )
+    .unwrap();
+    clipped
+}
+
+fn rounded_paint(radius: f32) -> RectStyle {
+    RectStyle::default()
+        .with_fill(Color::rgb(0.2, 0.4, 0.6))
+        .with_radius(BorderRadius::all(radius))
+}
+
+/// What a track wants of the fill it holds: cut along the corner the track paints, so the fill needs no radius of its own, and a theme or a caller that reshapes the track reshapes the cut with it.
+#[test]
+fn a_clip_cuts_along_the_corner_the_box_paints_as_it_changes() {
+    let corner = reactive_core::signal(6.0_f32);
+    let clipped = painted_and_clipped(
+        move |_| rounded_paint(corner.get()),
+        |painted| painted,
+        Clip::both(),
+    );
+    assert_eq!(
+        cut_of(clipped.view()).map(|(_, radius)| radius),
+        Some(BorderRadius::all(6.0))
+    );
+
+    corner.set(3.0);
+    assert_eq!(
+        cut_of(clipped.view()).map(|(_, radius)| radius),
+        Some(BorderRadius::all(3.0)),
+        "the next frame cuts along the corner the box paints now"
+    );
+}
+
+#[test]
+fn a_clip_follows_the_corner_of_the_state_the_box_paints_in() {
+    let off = reactive_core::signal(false);
+    let clipped = painted_and_clipped(
+        |_| rounded_paint(6.0),
+        move |painted| {
+            painted
+                .disabled(move || off.get())
+                .disabled_style(|_| rounded_paint(2.0))
+        },
+        Clip::both(),
+    );
+    off.set(true);
+    assert_eq!(
+        cut_of(clipped.view()).map(|(_, radius)| radius),
+        Some(BorderRadius::all(2.0))
+    );
+}
+
+#[test]
+fn a_box_that_paints_nothing_is_cut_square() {
+    let clipped = painted_and_clipped(|_| RectStyle::default(), |painted| painted, Clip::both());
+    assert_eq!(
+        cut_of(clipped.view()).map(|(_, radius)| radius),
+        Some(BorderRadius::zero())
+    );
+}
+
+/// A box that paints nothing at rest still keeps the corner it declares, for its focus ring and for what a caller's surface paints, and the cut keeps it as well.
+#[test]
+fn a_box_that_paints_nothing_but_keeps_a_corner_is_cut_along_it() {
+    let clipped = painted_and_clipped(
+        |_| RectStyle::default().with_radius(BorderRadius::all(5.0)),
+        |painted| painted,
+        Clip::both(),
+    );
+    assert_eq!(
+        cut_of(clipped.view()).map(|(_, radius)| radius),
+        Some(BorderRadius::all(5.0))
+    );
+}
+
+/// An inset cut stays concentric with the corner it sits inside.
+#[test]
+fn an_inset_clip_pulls_the_painted_corner_in_with_its_edges() {
+    let clipped = painted_and_clipped(
+        |_| rounded_paint(6.0),
+        |painted| painted,
+        Clip::both().inset(2.0),
+    );
+    assert_eq!(
+        cut_of(clipped.view()),
+        Some((Rect::new(2.0, 2.0, 36.0, 16.0), BorderRadius::all(4.0)))
+    );
+}
+
+#[test]
+fn a_clip_that_names_a_radius_keeps_it_whatever_the_box_paints() {
+    let clipped = painted_and_clipped(
+        |_| rounded_paint(6.0),
+        |painted| painted,
+        Clip::both().rounded(0.0),
+    );
+    assert_eq!(
+        cut_of(clipped.view()).map(|(_, radius)| radius),
+        Some(BorderRadius::zero())
+    );
 }

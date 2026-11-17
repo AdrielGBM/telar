@@ -27,22 +27,13 @@ fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     button(
         ButtonProps::props()
             .label(Reactive::of(move || format!("Pressed {}", presses.get())))
-            .on_press(std::rc::Rc::new(move || {
-                presses.update(|count| *count += 1)
-            }))
+            .on_press(move || presses.update(|count| *count += 1))
             .build(),
     )
 }
 
 fn tipped(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let go = Children::one(|| {
-        button(
-            ButtonProps::props()
-                .label("Go")
-                .on_press(std::rc::Rc::new(|| {}))
-                .build(),
-        )
-    });
+    let go = Children::one(|| button(ButtonProps::props().label("Go").on_press(|| {}).build()));
     tooltip(TooltipProps::props().text("Explains").children(go).build())
 }
 
@@ -421,7 +412,7 @@ fn stepper(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     button(
         ButtonProps::props()
             .label(Reactive::of(move || format!("Count {}", count.get())))
-            .on_press(std::rc::Rc::new(move || count.update(|count| *count += 1)))
+            .on_press(move || count.update(|count| *count += 1))
             .build(),
     )
 }

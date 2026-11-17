@@ -1,7 +1,5 @@
 //! The panel itself: the snapshot of the selected preview, or of the focused matrix cell, against its golden as the last test run found it, and what acts on it.
 
-use std::rc::Rc;
-
 use telar::preview::snapshot::{FileStatus, Moment, SnapshotResult, SnapshotStatus};
 use telar::{
     AlignItems, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle,
@@ -315,7 +313,7 @@ fn accept(review: &SnapshotReview, id: &str) -> Result<Box<dyn LayoutItem>, Layo
     button(
         ButtonProps::props()
             .label(strings::reactive(SNAPSHOT_ACCEPT))
-            .on_press(Rc::new(move || review.accept(&id)))
+            .on_press(move || review.accept(&id))
             .build(),
     )
 }

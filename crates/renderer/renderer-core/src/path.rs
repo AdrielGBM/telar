@@ -146,6 +146,17 @@ impl PathData {
         out
     }
 
+    /// The path drawn in `view_box` coordinates, scaled uniformly to the largest size that fits `into` and centred there: a view box's `xMidYMid meet`. A view box with no area leaves nothing to scale from and returns the path unchanged.
+    pub fn fitted(&self, view_box: Rect, into: Rect) -> Self {
+        if view_box.width <= 0.0 || view_box.height <= 0.0 {
+            return self.clone();
+        }
+        let scale = (into.width / view_box.width).min(into.height / view_box.height);
+        let dx = into.x + (into.width - view_box.width * scale) / 2.0 - view_box.x * scale;
+        let dy = into.y + (into.height - view_box.height * scale) / 2.0 - view_box.y * scale;
+        self.refit(scale, dx, dy)
+    }
+
     /// A closed polygon through `points` (first point is the start; the path is closed back to it).
     pub fn polygon(points: &[Point]) -> Self {
         let mut path = Self::new();

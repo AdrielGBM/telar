@@ -54,7 +54,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .title(p.arg("title", "Settings"))
                     .style(style)
                     .size(size)
-                    .close(Rc::new(move || actions.log("on_close", Vec::new())))
+                    .close(move || actions.log("on_close", Vec::new()))
                     .body(body)
                     .resize(Rc::new(|_, _| {}))
                     .build(),

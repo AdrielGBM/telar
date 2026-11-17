@@ -593,7 +593,7 @@ impl<'a> ViewGen<'a> {
 
     /// Wraps a node's widget in a [`ClippedItem`] when it carries `clip`, cutting its rendered output to the shape the value names.
     ///
-    /// `clip` on its own is `Clip::both()`; a value is a `Clip` expression, so `clip:Clip::x()` cuts the left and right edges only — the thing CSS cannot say, since `overflow: hidden` on one axis forces the other out of `visible` — and `clip:(Clip::both().rounded(8.0))` follows a rounded box's own corners.
+    /// `clip` on its own is `Clip::both()`, which cuts along the corner the box paints, read every frame so a theme, its own `radius:` and a caller's amendment of its paint reshape the cut; a box that paints nothing cuts square. A value is a `Clip` expression, so `clip:Clip::x()` cuts the left and right edges only — the thing CSS cannot say, since `overflow: hidden` on one axis forces the other out of `visible` — and `clip:(Clip::both().rounded(8.0))` cuts at a radius of its own.
     ///
     /// A written shape is followed as it reads, and may yield a `Clip`, an `Option<Clip>` or a `bool`: `clip:$cut` stops and starts cutting without rebuilding what it wraps.
     fn clip_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
@@ -683,14 +683,15 @@ impl<'a> ViewGen<'a> {
 /// Why `value` is not one `tag`'s `key` takes, or `None` when it is (or when the key takes anything). Shared by an inline attribute and a `[style]` class property, so a value refused on one line is refused on the other.
 pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess) -> Option<String> {
     let value = value.trim();
-    if signals::reads_box_text(value) && !matches!(tag, "row" | "col" | "grid" | "box") {
+    let box_tag = matches!(tag, "row" | "col" | "grid" | "box");
+    if signals::reads_box_text(value) && !(box_tag || path::paints_in_its_text(tag, key)) {
         return Some(format!(
-            "`{key}:{value}` on `{tag}`: `$text` is what a box knows of its own text, so only a `row`, `col`, `grid` or `box` reads it"
+            "`{key}:{value}` on `{tag}`: `$text` is the text a `row`, `col`, `grid` or `box` holds, read by any of its attributes, or the text a `path` is drawn in, read by its `fill`, `stroke` and `stroke_width`"
         ));
     }
     if let crate::style::PropCall::Call(call) = crate::style::layout_prop_call(key, value, theme)
         && crate::style::reads_box_text(&call)
-        && !matches!(tag, "row" | "col" | "grid" | "box")
+        && !box_tag
     {
         return Some(format!(
             "`{key}:{value}` on `{tag}`: a length in `em` or `lh` is one of a box's own text, so only a `row`, `col`, `grid` or `box` takes one"
