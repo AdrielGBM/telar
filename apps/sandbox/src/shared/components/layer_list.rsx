@@ -1,7 +1,4 @@
 [logic]
-use telar::preview::{by_role, by_text};
-use telar::Role;
-
 // The layers of a design, read through a plain function so no `$` in the view says they change.
 #[derive(Default)]
 pub struct Props {}
@@ -31,8 +28,8 @@ A list and a count that follow the layers they read, with no `$` in the view to 
 layer_list
 
 [play]
-canvas.expect(by_text("One layer"))?;
-canvas.click(by_role(Role::Button).named("Add layer"))?;
-canvas.expect(by_text("Frame 1"))?;
-canvas.expect(by_text("2 layers"))?;
-canvas.expect_absent(by_text("One layer"))?;
+canvas.expect(telar::preview::by_text("One layer"))?;
+canvas.click(telar::preview::by_role(telar::Role::Button).named("Add layer"))?;
+canvas.expect(telar::preview::by_text("Frame 1"))?;
+canvas.expect(telar::preview::by_text("2 layers"))?;
+canvas.expect_absent(telar::preview::by_text("One layer"))?;
