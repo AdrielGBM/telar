@@ -12,34 +12,19 @@ use telar::ControlSize;
 /// A switch's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every length is at the regular size and scaled with the switch's own, and every field left `None` follows the role named beside it, read when the switch paints. The track is sized from the knob: two knobs and an inset each side long, one knob and an inset each side tall, so the knob travels one diameter.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ToggleTokens {
     /// Diameter of the knob. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
+    #[token(or = shared::icon_size, scaled)]
     pub knob: Option<f32>,
     /// Space between the knob and the track's edge. `None` is [`metrics::gap_xs`](crate::metrics::gap_xs).
+    #[token(or = shared::gap_xs, scaled)]
     pub inset: Option<f32>,
     /// Corner radius of the track; the knob's follows it, less the inset. `None` is a pill.
     pub radius: Option<f32>,
 }
 
 impl ToggleTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The knob's diameter in a switch of `size`.
-    pub fn knob(&self, size: ControlSize) -> f32 {
-        self.knob
-            .map_or_else(|| shared::icon_size(size), |knob| knob * size.scale())
-    }
-
-    /// The space between the knob and the track's edge in a switch of `size`.
-    pub fn inset(&self, size: ControlSize) -> f32 {
-        self.inset
-            .map_or_else(|| shared::gap_xs(size), |inset| inset * size.scale())
-    }
-
     /// The track's corner for a track laid out at `rect`.
     pub fn track_radius(&self, rect: telar::Rect) -> BorderRadius {
         self.radius

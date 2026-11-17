@@ -23,34 +23,17 @@ const DEFAULT_STEP: f32 = 16.0;
 /// A resizable's own tokens, which an application's theme supplies through a `#[theme(extension)]` field. A [`resize_handle`] reads them too.
 ///
 /// Every field left `None` follows the role named beside it, read when a handle paints.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ResizableTokens {
     /// Thickness of an edge handle, and the side of the corner one. `None` is [`metrics::spacing`](crate::metrics::spacing) at the regular size: a handle is a strip to grab, sized by what it resizes rather than by a size of its own.
+    #[token(or = || shared::spacing(ControlSize::Regular))]
     pub thickness: Option<f32>,
     /// The corner handle at rest. An edge handle is bare until a pointer finds it. `None` is the theme's `border`.
+    #[token(or = shared::border)]
     pub grip: Option<Color>,
     /// A handle under the pointer or being dragged. `None` is the theme's accent.
+    #[token(or = shared::accent)]
     pub active: Option<Color>,
-}
-
-impl ResizableTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn thickness(&self) -> f32 {
-        self.thickness
-            .unwrap_or_else(|| shared::spacing(ControlSize::Regular))
-    }
-
-    pub fn grip(&self) -> Color {
-        self.grip.unwrap_or_else(shared::border)
-    }
-
-    pub fn active(&self) -> Color {
-        self.active.unwrap_or_else(shared::accent)
-    }
 }
 
 /// Where a [`resize_handle`] sits on the content it resizes, and so what it resizes.

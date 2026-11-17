@@ -206,9 +206,36 @@ pub struct AppTheme {
 let theme = AppTheme { buttons: ButtonTokens { radius: Some(999.0), ..Default::default() }, /* … */ };
 ```
 
+A component's tokens are a struct deriving `telar::ComponentTokens`, which writes `XTokens::current()` (the tokens of the theme in force) and a getter for each field that declares its fallback:
+
+```rust
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
+pub struct TagTokens {
+    /// Corner radius. `None` is the theme's `radius_item`.
+    #[token(or = shared::radius_item)]
+    pub radius: Option<f32>,
+    /// Space between the edge and the label at the regular size. `None` is `gap_md`.
+    #[token(or = shared::gap_md, scaled)]
+    pub pad_x: Option<f32>,
+}
+```
+
+`or = f` makes `radius(&self) -> f32`: the field's value, or `f()` when it is `None`. Adding `scaled` makes `pad_x(&self, size: ControlSize) -> f32`: a set value times `size.scale()`, or `f(size)`. `f` is a path or a closure (`or = |size| shared::icon_size(size) + shared::gap_sm(size), scaled`). A getter carries its field's doc comment. A token with logic of its own (a width measured in ems, a row height rounded to whole pixels) has no attribute and a hand-written method beside the derive's.
+
 A component reads its tokens with `XTokens::current()` inside the closure that builds its style, and resolves each
-through the method of the same name. Every length is at the regular size, and a method that resolves one takes the
-component's `ControlSize` and scales it to that. Each field and what `None` falls back to (roles in `code`, `metrics` helpers by name):
+through the getter of the same name. Every length is at the regular size, and a getter that resolves one takes the
+component's `ControlSize` and scales it to that.
+
+A `.rsx` view reads them once in `[logic]` instead of repeating `XTokens::current()` on every attribute. `current()` subscribes its caller, so a memo of it re-runs on a theme switch or a mode change, and `$tokens` reads that memo the way it reads any other:
+
+```rust
+[logic]
+let tokens = memo(TagTokens::current);
+
+[view]
+box radius:$tokens.radius() { … }
+```
+ Each field and what `None` falls back to (roles in `code`, `metrics` helpers by name):
 
 | Tokens | Fields → fallback |
 | --- | --- |

@@ -31,35 +31,22 @@ const MIN_COLUMN_WIDTH: f32 = 48.0;
 /// A data table's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the table is built or painted, so a table's rows stand at the height every other list's do.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct DataTableTokens {
     /// Height of a row, the header's included, at the regular size and scaled with the table's own. `None` is [`metrics::row_height`](crate::metrics::row_height).
     pub row_height: Option<f32>,
     /// Space between a cell's edges and what it shows, likewise. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    #[token(or = shared::gap_md, scaled)]
     pub pad_x: Option<f32>,
     /// Corner of a row's wash and of the keyboard's cursor. `None` is the theme's `radius_item`.
+    #[token(or = shared::radius_item)]
     pub radius: Option<f32>,
 }
 
 impl DataTableTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
     /// The height of a row of a table of `size`, in whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
     pub fn row_height(&self, size: ControlSize) -> f32 {
         crate::layout::list::list::scaled_row_height(self.row_height, size)
-    }
-
-    /// The space between a cell's edges and what it shows in a table of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_item)
     }
 }
 

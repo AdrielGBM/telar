@@ -27,29 +27,14 @@ const COPIED_FOR: Duration = Duration::from_millis(1500);
 /// A code block's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the block paints and lays out.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct CodeViewTokens {
     /// Corner radius. `None` is the theme's `radius_surface`.
+    #[token(or = shared::radius_surface)]
     pub radius: Option<f32>,
     /// Space between the block's edge and its lines, at the regular size, scaled with the block's own. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    #[token(or = shared::gap_md, scaled)]
     pub pad: Option<f32>,
-}
-
-impl CodeViewTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_surface)
-    }
-
-    /// The padding of a block of `size`.
-    pub fn pad(&self, size: ControlSize) -> f32 {
-        self.pad
-            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
-    }
 }
 
 fn pad(size: ControlSize) -> f32 {

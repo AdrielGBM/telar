@@ -16,21 +16,11 @@ use telar::ControlSize;
 /// A stepper's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the stepper paints, so a theme that moves the role still moves every stepper it has not given a value of its own.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct StepperTokens {
     /// Corner radius of the − and + buttons. `None` is the theme's `radius_control`.
+    #[token(or = shared::radius_control)]
     pub radius: Option<f32>,
-}
-
-impl StepperTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_control)
-    }
 }
 
 fn row_box(size: ControlSize) -> LayoutStyle {

@@ -38,37 +38,22 @@ const INSET_IN_GAPS: f32 = 6.0;
 /// The command palette's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the palette opens. Its rows follow [`ListTokens`].
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct CommandPaletteTokens {
     /// Width of the dialog at the regular size, scaled with the palette's own. `None` is 40 ems of the document's text. A palette's own `panel_width` prop wins over it.
     pub width: Option<f32>,
     /// Corner of the dialog. `None` is the theme's `radius_dialog`.
+    #[token(or = shared::radius_dialog)]
     pub radius: Option<f32>,
     /// How far below the top of the window the dialog stands, at the regular size and scaled with the palette's own. `None` is six of [`metrics::gap_xl`](crate::metrics::gap_xl).
+    #[token(or = |size| shared::gap_xl(size) * INSET_IN_GAPS, scaled)]
     pub inset_top: Option<f32>,
 }
 
 impl CommandPaletteTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
     /// The width of a palette of `size` whose call names none.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, WIDTH_EMS)
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_dialog)
-    }
-
-    /// How far below the top of the window a palette of `size` stands.
-    pub fn inset_top(&self, size: ControlSize) -> f32 {
-        self.inset_top.map_or_else(
-            || shared::gap_xl(size) * INSET_IN_GAPS,
-            |inset| inset * size.scale(),
-        )
     }
 }
 

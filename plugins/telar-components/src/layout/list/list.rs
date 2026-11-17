@@ -24,35 +24,22 @@ const HEADING_RATIO: f32 = 0.85;
 /// The tokens of the rows a list draws — the items of a menu and a select, the commands of the palette — which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the row is laid out or painted, so every list in an application keeps one row height and one corner unless its theme says otherwise.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ListTokens {
     /// Height of a row at the regular size, scaled with the row's own. `None` is [`metrics::row_height`](crate::metrics::row_height).
     pub row_height: Option<f32>,
     /// Corner of the wash behind a row. `None` is the theme's `radius_item`.
+    #[token(or = shared::radius_item)]
     pub radius: Option<f32>,
     /// Space between a row's edge and what it says at the regular size, scaled with the row's own. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    #[token(or = shared::gap_md, scaled)]
     pub pad_x: Option<f32>,
 }
 
 impl ListTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
     /// The height of a row of `size`, in whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
     pub fn row_height(&self, size: ControlSize) -> f32 {
         scaled_row_height(self.row_height, size)
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_item)
-    }
-
-    /// The space between the edge and what a row of `size` says.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
     }
 }
 

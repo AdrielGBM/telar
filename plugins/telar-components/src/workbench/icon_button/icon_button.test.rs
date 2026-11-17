@@ -1,8 +1,9 @@
 use std::cell::Cell;
 
 use super::*;
-use telar::{IntoReading, 
-    AvailableSpace, ComponentList, Container, Event, Key, NamedKey, compute_layout, focus, signal,
+use telar::{
+    AvailableSpace, ComponentList, Container, Event, IntoReading, Key, NamedKey, compute_layout,
+    focus, signal,
 };
 
 fn mount(item: Box<dyn LayoutItem>) -> ComponentList {

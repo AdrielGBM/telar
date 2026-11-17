@@ -27,23 +27,29 @@ use crate::shared::{panel_pad, row_height};
 /// A menu's own tokens — its panels, whether a `menu` dropped them or a `context_menu` opened them — which an application's theme supplies through a `#[theme(extension)]` field, and one menu through its `tokens` prop. The button a `menu` drops from is [`MenuTriggerTokens`].
 ///
 /// Every field left `None` follows the theme role named beside it, read when the menu is laid out or painted, so a menu that names none is drawn like the list a `select` opens, in the light theme and the dark alike. A menu is chrome, which is where an application's own look shows, so every colour is a token as well as every length.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct MenuTokens {
     /// The panel's fill. `None` is the theme's `surface`.
+    #[token(or = shared::surface)]
     pub background: Option<Color>,
     /// The panel's edge and the rule between groups. `None` is the theme's `border`.
+    #[token(or = shared::border)]
     pub border: Option<Color>,
     /// A row's label. `None` is the ink the menu inherits.
     pub label: Option<Color>,
     /// A hint, a submenu's mark, and a disabled row's label. `None` is the theme's `muted`.
+    #[token(or = shared::muted)]
     pub faint: Option<Color>,
     /// Behind the row under the pointer or the keyboard. `None` is the theme's `highlight_low`, tinted by a `menu`'s `color`.
+    #[token(or = shared::hover_wash)]
     pub highlight: Option<Color>,
     /// Corner of a panel. `None` is the theme's `radius_surface`.
+    #[token(or = shared::radius_surface)]
     pub radius: Option<f32>,
     /// Height of a row, at the regular size and scaled with each row's own. `None` is [`ListTokens::row_height`](crate::ListTokens::row_height).
     pub row_height: Option<f32>,
     /// Space between a panel's edge and its rows, at the regular size and scaled with the menu's own. `None` is [`metrics::panel_pad`](crate::metrics::panel_pad).
+    #[token(or = shared::panel_pad, scaled)]
     pub padding: Option<f32>,
     /// The least width of a panel, at the regular size and scaled with the menu's own: a panel widens to its widest row, as far as the room it has. `None` is 13 ems of the document's text. A `context_menu`'s `panel_width` prop wins over it.
     pub width: Option<f32>,
@@ -52,11 +58,6 @@ pub struct MenuTokens {
 }
 
 impl MenuTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
     /// These tokens, with every field they leave `None` taken from `fallback`.
     pub fn or(self, fallback: Self) -> Self {
         Self {
@@ -73,38 +74,12 @@ impl MenuTokens {
         }
     }
 
-    pub fn background(&self) -> Color {
-        self.background.unwrap_or_else(shared::surface)
-    }
-
-    pub fn border(&self) -> Color {
-        self.border.unwrap_or_else(shared::border)
-    }
-
-    pub fn faint(&self) -> Color {
-        self.faint.unwrap_or_else(shared::muted)
-    }
-
-    pub fn highlight(&self) -> Color {
-        self.highlight.unwrap_or_else(shared::hover_wash)
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_surface)
-    }
-
     /// The height of a row of `size` in a panel drawn with these tokens.
     pub fn row_height(&self, size: ControlSize) -> f32 {
         crate::layout::list::list::scaled_row_height(
             self.row_height.or(crate::ListTokens::current().row_height),
             size,
         )
-    }
-
-    /// The padding of a panel of a menu of `size`.
-    pub fn padding(&self, size: ControlSize) -> f32 {
-        self.padding
-            .map_or_else(|| shared::panel_pad(size), |pad| pad * size.scale())
     }
 
     /// The least width of a panel of a menu of `size`.
@@ -121,38 +96,22 @@ impl MenuTokens {
 /// The tokens of the button a `menu` drops its panel from, which an application's theme supplies through a `#[theme(extension)]` field. The panel is [`MenuTokens`].
 ///
 /// Every field left `None` follows the theme role named beside it, read when the trigger is laid out or painted.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct MenuTriggerTokens {
     /// Corner of the trigger. `None` is the theme's `radius_control`.
+    #[token(or = shared::radius_control)]
     pub radius: Option<f32>,
     /// Space between the trigger's edge and its label at the regular size, scaled with the menu's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    #[token(or = shared::control_pad_x, scaled)]
     pub pad_x: Option<f32>,
     /// Width of a bordered trigger's frame. `None` is the theme's `border_width`.
+    #[token(or = shared::border_width)]
     pub border_width: Option<f32>,
     /// Width of the trigger, unless it is fitted or its call places another, at the regular size and scaled with the menu's own. `None` is 13 ems of the document's text.
     pub width: Option<f32>,
 }
 
 impl MenuTriggerTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_control)
-    }
-
-    /// The space between the edge and the label of the trigger of a menu of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
-    }
-
-    pub fn border_width(&self) -> f32 {
-        self.border_width.unwrap_or_else(shared::border_width)
-    }
-
     /// The width of the trigger of a menu of `size`.
     pub fn width(&self, size: ControlSize) -> f32 {
         dropdown::width(size, self.width)

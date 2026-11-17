@@ -22,13 +22,16 @@ use telar::track_layout;
 /// A select's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the trigger is laid out or painted. The rows of the list it opens follow [`ListTokens`](crate::ListTokens).
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct SelectTokens {
     /// Corner of the trigger. `None` is the theme's `radius_control`.
+    #[token(or = shared::radius_control)]
     pub radius: Option<f32>,
     /// Space between the trigger's edge and its value at the regular size, scaled with the select's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    #[token(or = shared::control_pad_x, scaled)]
     pub pad_x: Option<f32>,
     /// Width of the trigger's frame. `None` is the theme's `border_width`.
+    #[token(or = shared::border_width)]
     pub border_width: Option<f32>,
     /// The width the trigger takes where what holds it leaves the room, and the least the list it opens takes, at the regular size and scaled with the select's own: the trigger is narrower where the room is less, and as its call places it (`width:100%`). `None` is 13 ems of the document's text.
     pub width: Option<f32>,
@@ -37,25 +40,6 @@ pub struct SelectTokens {
 }
 
 impl SelectTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_control)
-    }
-
-    /// The space between the edge and the value of the trigger of a select of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
-    }
-
-    pub fn border_width(&self) -> f32 {
-        self.border_width.unwrap_or_else(shared::border_width)
-    }
-
     /// The width the trigger of a select of `size` takes where it has the room, and the least the list it opens takes.
     pub fn width(&self, size: ControlSize) -> f32 {
         dropdown::width(size, self.width)

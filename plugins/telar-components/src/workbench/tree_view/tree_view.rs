@@ -26,51 +26,28 @@ const OVERSCAN: usize = 4;
 /// A tree view's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the tree is built or painted, so a tree's rows stand at the height every other list's do.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct TreeViewTokens {
     /// Height of a row at the regular size, scaled with the tree's own. `None` is [`metrics::row_height`](crate::metrics::row_height).
     pub row_height: Option<f32>,
     /// How far each level is set in from the one above it, likewise. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
+    #[token(or = shared::gap_xl, scaled)]
     pub indent: Option<f32>,
     /// Corner of a row's wash and its cursor. `None` is the theme's `radius_item`.
+    #[token(or = shared::radius_item)]
     pub radius: Option<f32>,
     /// Space between a row's edges and what it shows, likewise. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    #[token(or = shared::gap_md, scaled)]
     pub pad_x: Option<f32>,
     /// Space between the tree's sides and its rows, so a row's wash stands clear of them as a menu's does of its panel, likewise. `None` is [`metrics::panel_pad`](crate::metrics::panel_pad).
+    #[token(or = shared::panel_pad, scaled)]
     pub inset: Option<f32>,
 }
 
 impl TreeViewTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
     /// The height of a row of a tree of `size`, in whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
     pub fn row_height(&self, size: ControlSize) -> f32 {
         crate::layout::list::list::scaled_row_height(self.row_height, size)
-    }
-
-    /// How far each level of a tree of `size` is set in from the one above it.
-    pub fn indent(&self, size: ControlSize) -> f32 {
-        self.indent
-            .map_or_else(|| shared::gap_xl(size), |indent| indent * size.scale())
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_item)
-    }
-
-    /// The space between a row's edges and what it shows in a tree of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
-    }
-
-    /// The space between the sides of a tree of `size` and its rows.
-    pub fn inset(&self, size: ControlSize) -> f32 {
-        self.inset
-            .map_or_else(|| shared::panel_pad(size), |inset| inset * size.scale())
     }
 }
 

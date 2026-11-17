@@ -13,29 +13,14 @@ use telar::ControlSize;
 /// An accordion's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the header paints.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct AccordionTokens {
     /// Space between the header's edge and its title at the regular size, scaled with the accordion's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    #[token(or = shared::control_pad_x, scaled)]
     pub pad_x: Option<f32>,
     /// Corner radius of the header's wash. `None` is the theme's `radius_control`.
+    #[token(or = shared::radius_control)]
     pub radius: Option<f32>,
-}
-
-impl AccordionTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The space between the edge and the title of the header of an accordion of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_control)
-    }
 }
 
 /// A header is a row of a list, a control height with the step that parts one row's wash from the next, so a stack of accordions reads like one.

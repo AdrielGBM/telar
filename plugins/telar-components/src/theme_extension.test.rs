@@ -4,9 +4,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::{
-    Color, ScopedTheme, ThemeTokens, effect, owner_scope, register_mode, set_mode, set_theme,
-    use_theme_tokens,
+    Color, ControlSize, ScopedTheme, ThemeTokens, effect, memo, owner_scope, register_mode,
+    set_mode, set_theme, use_theme_tokens,
 };
+use telar_components::TagTokens;
 
 mod plugin {
     #[derive(Clone, Debug, PartialEq)]
@@ -56,13 +57,23 @@ struct AppTheme {
     primary: Color,
     #[theme(extension)]
     chips: ChipTokens,
+    #[theme(extension)]
+    tags: TagTokens,
 }
 
 impl AppTheme {
+    fn with_tags(tags: TagTokens) -> Self {
+        Self {
+            tags,
+            ..Self::with_radius(4.0)
+        }
+    }
+
     fn with_radius(radius: f32) -> Self {
         Self {
             primary: Color::rgba(0.0, 0.0, 1.0, 1.0),
             chips: ChipTokens { radius, gap: 2.0 },
+            tags: TagTokens::default(),
         }
     }
 }
@@ -143,4 +154,62 @@ fn a_mode_switch_re_runs_a_reader() {
     set_mode(&soft);
 
     assert_eq!(*seen.borrow(), vec![2.0, 16.0]);
+}
+
+#[test]
+fn a_token_the_theme_sets_replaces_its_fallback_and_one_it_leaves_follows_it() {
+    set_theme(AppTheme::with_tags(TagTokens {
+        radius: Some(9.0),
+        ..TagTokens::default()
+    }));
+    let tokens = TagTokens::current();
+    assert_eq!(tokens.radius(), 9.0);
+    assert_eq!(
+        tokens.border_width(),
+        TagTokens::default().border_width(),
+        "an unset token is what the theme's role says"
+    );
+}
+
+#[test]
+fn a_scaled_token_scales_the_value_the_theme_sets_and_gives_the_size_to_its_fallback() {
+    set_theme(AppTheme::with_tags(TagTokens {
+        pad_x: Some(8.0),
+        ..TagTokens::default()
+    }));
+    let tokens = TagTokens::current();
+    assert_eq!(tokens.pad_x(ControlSize::Regular), 8.0);
+    assert_eq!(
+        tokens.pad_x(ControlSize::Large),
+        8.0 * ControlSize::Large.scale()
+    );
+
+    let unset = TagTokens::default();
+    assert_ne!(
+        unset.pad_x(ControlSize::Small),
+        unset.pad_x(ControlSize::Large),
+        "the fallback is asked for the size"
+    );
+}
+
+#[test]
+fn a_memo_of_the_tokens_follows_a_theme_switch() {
+    let flat = register_mode("flat", || {
+        set_theme(AppTheme::with_tags(TagTokens {
+            radius: Some(1.0),
+            ..TagTokens::default()
+        }))
+    });
+    let round = register_mode("round", || {
+        set_theme(AppTheme::with_tags(TagTokens {
+            radius: Some(12.0),
+            ..TagTokens::default()
+        }))
+    });
+    set_mode(&flat);
+    let tokens = memo(TagTokens::current);
+    let radius = memo(move || tokens.get().radius());
+    assert_eq!(radius.get(), 1.0);
+    set_mode(&round);
+    assert_eq!(radius.get(), 12.0);
 }

@@ -21,35 +21,24 @@ use telar::ControlSize;
 /// A colour picker's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the picker paints.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ColorPickerTokens {
     /// The width a picker takes where what holds it leaves the room, at the regular size and scaled with the picker's own: narrower where it does not, and as its call places it (`width:100%`). `None` is 16 ems of the document's text, a slider's length.
     pub width: Option<f32>,
     /// Corner radius of the saturation and brightness area and of the chip showing the colour. `None` is the theme's `radius_control`.
+    #[token(or = shared::radius_control)]
     pub radius: Option<f32>,
     /// Width of the ring round each thumb. `None` is the theme's `border_width_strong`.
+    #[token(or = shared::border_width_strong)]
     pub ring: Option<f32>,
 }
 
 const WIDTH_EMS: f32 = 16.0;
 
 impl ColorPickerTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
     /// The width a picker of `size` takes where what holds it leaves the room.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, WIDTH_EMS)
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_control)
-    }
-
-    pub fn ring(&self) -> f32 {
-        self.ring.unwrap_or_else(shared::border_width_strong)
     }
 }
 

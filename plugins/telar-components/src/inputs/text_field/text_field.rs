@@ -21,38 +21,22 @@ const ROWS: u32 = 3;
 /// A text field's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the field paints and lays out, so a theme that moves the role still moves every field it has not given a value of its own.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct TextFieldTokens {
     /// Corner radius. `None` is the theme's `radius_control`.
+    #[token(or = shared::radius_control)]
     pub radius: Option<f32>,
     /// Space between the frame and the text at the regular size, scaled with the field's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    #[token(or = shared::control_pad_x, scaled)]
     pub pad_x: Option<f32>,
     /// Width of the frame. `None` is the theme's `border_width`.
+    #[token(or = shared::border_width)]
     pub border_width: Option<f32>,
     /// The width a field takes where what holds it leaves the room, at the regular size, scaled with the field's text: narrower where it does not, and as its call places it (`width:100%`). `None` is 21.5 ems of the document's text.
     pub width: Option<f32>,
 }
 
 impl TextFieldTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_control)
-    }
-
-    /// The space between the frame and the text of a field of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
-    }
-
-    pub fn border_width(&self) -> f32 {
-        self.border_width.unwrap_or_else(shared::border_width)
-    }
-
     /// The width a field of `size` takes where what holds it leaves the room.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, WIDTH_EMS)

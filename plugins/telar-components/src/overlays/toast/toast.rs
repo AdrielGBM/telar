@@ -22,43 +22,25 @@ const DISMISS_GLYPH: &str = "✕";
 /// A notice's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role or measure named beside it, read when the notice paints and lays out.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ToastTokens {
     /// Corner radius of each notice. `None` is the theme's `radius_surface`.
+    #[token(or = shared::radius_surface)]
     pub radius: Option<f32>,
     /// Space between a notice's edge and what it says, at the regular size, scaled with the toaster's own. `None` is [`metrics::gap_lg`](crate::metrics::gap_lg).
+    #[token(or = shared::gap_lg, scaled)]
     pub pad: Option<f32>,
     /// A notice's width when the toaster names no `toast_width`, at the regular size, scaled with the toaster's text. `None` is 26 ems of the document's text.
     pub width: Option<f32>,
     /// Width of the stripe in the colour of the notice's tone, at the regular size, scaled with the toaster's own. `None` is [`metrics::gap_xs`](crate::metrics::gap_xs).
+    #[token(or = shared::gap_xs, scaled)]
     pub stripe_width: Option<f32>,
 }
 
 impl ToastTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_surface)
-    }
-
-    /// The space between a notice's edge and what it says in a toaster of `size`.
-    pub fn pad(&self, size: ControlSize) -> f32 {
-        self.pad
-            .map_or_else(|| shared::gap_lg(size), |pad| pad * size.scale())
-    }
-
     /// A notice's width in a toaster of `size` that names none.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, 26.0)
-    }
-
-    /// The stripe's width in a toaster of `size`.
-    pub fn stripe_width(&self, size: ControlSize) -> f32 {
-        self.stripe_width
-            .map_or_else(|| shared::gap_xs(size), |width| width * size.scale())
     }
 }
 

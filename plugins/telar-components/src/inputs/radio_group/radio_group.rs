@@ -15,30 +15,14 @@ use telar::ControlSize;
 /// A radio button's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the radio paints. The ring and its dot are pills at whatever size they are laid out.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct RadioTokens {
     /// Diameter of the ring at the regular size, scaled with the radio's own. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
+    #[token(or = shared::icon_size, scaled)]
     pub size: Option<f32>,
     /// Width of the ring. `None` is the theme's `border_width_strong`.
+    #[token(or = shared::border_width_strong)]
     pub border_width: Option<f32>,
-}
-
-impl RadioTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The diameter of the ring of a radio of `size`.
-    pub fn size(&self, size: ControlSize) -> f32 {
-        self.size
-            .map_or_else(|| shared::icon_size(size), |side| side * size.scale())
-    }
-
-    pub fn border_width(&self) -> f32 {
-        self.border_width
-            .unwrap_or_else(shared::border_width_strong)
-    }
 }
 
 fn ring_style(size: ControlSize) -> LayoutStyle {

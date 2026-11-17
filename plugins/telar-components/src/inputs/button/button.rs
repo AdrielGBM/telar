@@ -14,36 +14,17 @@ use telar::{ControlSize, Variant};
 /// A button's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the button paints, so a theme that moves the role still moves every button it has not given a value of its own.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ButtonTokens {
     /// Corner radius. `None` is the theme's `radius_control`.
+    #[token(or = shared::radius_control)]
     pub radius: Option<f32>,
     /// Space between the edge and the label at the regular size, scaled with the button's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    #[token(or = shared::control_pad_x, scaled)]
     pub pad_x: Option<f32>,
     /// Width of the outline variant's frame. `None` is the theme's `border_width_strong`.
+    #[token(or = shared::border_width_strong)]
     pub border_width: Option<f32>,
-}
-
-impl ButtonTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_control)
-    }
-
-    /// The space between the edge and the label of a button of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
-    }
-
-    pub fn border_width(&self) -> f32 {
-        self.border_width
-            .unwrap_or_else(shared::border_width_strong)
-    }
 }
 
 /// The label never wraps: a button names one action, and two lines of it without vertical padding would crowd the edge, so the layout around it gives way instead. A row so the label's measured width sets the box's main-axis size (a column would collapse the cross axis: `Text::new` sets `align_self_stretch`, which fights content-sizing and renders 0-wide). No vertical padding: the line is centred in the shared control height, so a button stands level with a field beside it.

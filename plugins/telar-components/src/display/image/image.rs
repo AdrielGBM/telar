@@ -15,21 +15,11 @@ use telar::ControlSize;
 /// An image's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the image is drawn.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ImageTokens {
     /// Corner of the picture and of its placeholder. `None` is the theme's `radius_item`. An image's own `radius` prop wins over it.
+    #[token(or = shared::radius_item)]
     pub radius: Option<f32>,
-}
-
-impl ImageTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_item)
-    }
 }
 
 /// Where an [`image`]'s picture is: still on its way, here, or not coming.

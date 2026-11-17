@@ -16,32 +16,19 @@ use telar::ControlSize;
 /// A drawer's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role or measure named beside it, read when the panel paints and lays out.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct DrawerTokens {
     /// Radius of the two corners away from the edge the panel is pinned to. `None` is the theme's `radius_dialog`.
+    #[token(or = shared::radius_dialog)]
     pub radius: Option<f32>,
     /// Space between the panel's edge and its content, at the regular size, scaled with the drawer's own. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
+    #[token(or = shared::gap_xl, scaled)]
     pub pad: Option<f32>,
     /// How far the panel reaches in from its edge when the drawer names no extent, at the regular size, scaled with the drawer's own. `None` is 20 ems of the document's text.
     pub extent: Option<f32>,
 }
 
 impl DrawerTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_dialog)
-    }
-
-    /// The padding of a drawer of `size`.
-    pub fn pad(&self, size: ControlSize) -> f32 {
-        self.pad
-            .map_or_else(|| shared::gap_xl(size), |pad| pad * size.scale())
-    }
-
     /// How far the panel reaches in from its edge in a drawer of `size` whose call names no extent.
     pub fn extent(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.extent, 20.0)

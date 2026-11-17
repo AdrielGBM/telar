@@ -17,11 +17,13 @@ use telar::ControlSize;
 /// A modal's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role or measure named beside it, read when the dialog paints and lays out.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ModalTokens {
     /// Corner radius. `None` is the theme's `radius_dialog`.
+    #[token(or = shared::radius_dialog)]
     pub radius: Option<f32>,
     /// Space between the dialog's edge and its content, and between the dialog and the window's edge, at the regular size, scaled with the modal's own. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
+    #[token(or = shared::gap_xl, scaled)]
     pub pad: Option<f32>,
     /// The narrowest the dialog is drawn, at the regular size, scaled with the modal's own. `None` is 24 ems of the document's text.
     pub min_width: Option<f32>,
@@ -30,21 +32,6 @@ pub struct ModalTokens {
 }
 
 impl ModalTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_dialog)
-    }
-
-    /// The padding of a modal of `size`.
-    pub fn pad(&self, size: ControlSize) -> f32 {
-        self.pad
-            .map_or_else(|| shared::gap_xl(size), |pad| pad * size.scale())
-    }
-
     /// The narrowest a modal of `size` is drawn.
     pub fn min_width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.min_width, 24.0)

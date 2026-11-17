@@ -26,40 +26,22 @@ const MAX_WIDTH_EMS: f32 = 17.0;
 /// A tooltip's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the bubble is laid out or painted. Its colours are the theme's `inverse_surface` and `inverse_ink`, which every transient label shares.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct TooltipTokens {
     /// Corner of the bubble. `None` is the theme's `radius_surface`.
+    #[token(or = shared::radius_surface)]
     pub radius: Option<f32>,
     /// Space between the bubble's sides and its text at the regular size, scaled with the tooltip's own. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    #[token(or = shared::gap_md, scaled)]
     pub pad_x: Option<f32>,
     /// Space above and below the text, likewise. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm).
+    #[token(or = shared::gap_sm, scaled)]
     pub pad_y: Option<f32>,
     /// How wide the bubble may get before its text wraps, likewise. `None` is 17 ems of the document's text.
     pub max_width: Option<f32>,
 }
 
 impl TooltipTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_surface)
-    }
-
-    /// The space between the bubble's sides and its text in a tooltip of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
-    }
-
-    /// The space above and below the text in a tooltip of `size`.
-    pub fn pad_y(&self, size: ControlSize) -> f32 {
-        self.pad_y
-            .map_or_else(|| shared::gap_sm(size), |pad| pad * size.scale())
-    }
-
     /// How wide the bubble of a tooltip of `size` may get before its text wraps.
     pub fn max_width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.max_width, MAX_WIDTH_EMS)

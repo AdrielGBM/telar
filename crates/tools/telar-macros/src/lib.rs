@@ -1,4 +1,4 @@
-//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, `library_previews!`, which tests a library's previews, plus the `Props`, `PreviewArg` and `ThemeTokens` derives, the `t!` catalogue lookup, the baked id behind a plugin's `icon!`, and the names and location behind `telar::preview::preview!`.
+//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, `library_previews!`, which tests a library's previews, plus the `Props`, `PreviewArg`, `ComponentTokens` and `ThemeTokens` derives, the `t!` catalogue lookup, the baked id behind a plugin's `icon!`, and the names and location behind `telar::preview::preview!`.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 mod app_input;
 mod baked_id;
 mod component;
+mod component_tokens;
 mod preview_arg;
 mod preview_id;
 mod preview_matrices;
@@ -175,6 +176,34 @@ pub fn derive_theme_tokens(input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
     match theme_tokens::expand(parsed) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// Reads a plugin's own tokens, the struct a theme supplies through a `#[theme(extension)]` field: generates `current()`, the tokens of the theme in force, and a getter for each field that declares what answers it when the theme left it `None`.
+///
+/// A field with no attribute is only a field, for a token that takes logic the attribute cannot say: write its method by hand. A getter takes the field's name and doc comment.
+///
+/// - `#[token(or = fallback)]`: `fn name(&self) -> T`, the field's value, or what `fallback` (a path or closure of no arguments) returns.
+/// - `#[token(or = fallback, scaled)]`: `fn name(&self, size: ControlSize) -> T`, the field's value times `size.scale()`, or what `fallback` returns for `size`.
+///
+/// ```ignore
+/// #[derive(Clone, Debug, Default, PartialEq, ComponentTokens)]
+/// pub struct TagTokens {
+///     #[token(or = shared::radius_item)]
+///     pub radius: Option<f32>,
+///     #[token(or = shared::gap_md, scaled)]
+///     pub pad_x: Option<f32>,
+/// }
+/// ```
+#[proc_macro_derive(ComponentTokens, attributes(token))]
+pub fn derive_component_tokens(input: TokenStream) -> TokenStream {
+    let parsed = match syn::parse::<syn::DeriveInput>(input) {
+        Ok(parsed) => parsed,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    match component_tokens::expand(parsed) {
         Ok(tokens) => tokens.into(),
         Err(e) => e.to_compile_error().into(),
     }

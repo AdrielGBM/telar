@@ -12,36 +12,17 @@ use telar::ControlSize;
 /// A checkbox's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the checkbox paints, so a theme that moves the role still moves every checkbox it has not given a value of its own.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct CheckboxTokens {
     /// Side of the box at the regular size, scaled with the checkbox's own. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
+    #[token(or = shared::icon_size, scaled)]
     pub size: Option<f32>,
     /// Corner radius of the box; the mark's is concentric with it. `None` is the theme's `radius_item`.
+    #[token(or = shared::radius_item)]
     pub radius: Option<f32>,
     /// Width of the box's frame. `None` is the theme's `border_width_strong`.
+    #[token(or = shared::border_width_strong)]
     pub border_width: Option<f32>,
-}
-
-impl CheckboxTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The side of the box of a checkbox of `size`.
-    pub fn size(&self, size: ControlSize) -> f32 {
-        self.size
-            .map_or_else(|| shared::icon_size(size), |side| side * size.scale())
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_item)
-    }
-
-    pub fn border_width(&self) -> f32 {
-        self.border_width
-            .unwrap_or_else(shared::border_width_strong)
-    }
 }
 
 /// How far the mark stands inside the box's edge.

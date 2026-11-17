@@ -4,12 +4,11 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    IntoReading,
     Accessible, BorderRadius, Children, Clip, ClippedItem, Container, Cursor, Direction, DragAxis,
-    Insets, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NumericValue,
-    Orientation, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension,
-    StyledContainer, SurfaceAmendment, Transaction, amend_surface, box_item, current_direction,
-    drag_start, focus::Role, signal, step_factor, track_layout,
+    Insets, IntoReading, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey,
+    NumericValue, Orientation, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle,
+    SizeDimension, StyledContainer, SurfaceAmendment, Transaction, amend_surface, box_item,
+    current_direction, drag_start, focus::Role, signal, step_factor, track_layout,
 };
 use web_time::Instant;
 
@@ -25,25 +24,16 @@ const DEFAULT_STEP: f32 = 16.0;
 /// A split pane's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the splitter paints.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct SplitPaneTokens {
     /// Width of the gap between the panes. The splitter is grabbed from a strip twice as wide, reaching half a gap over each pane and no further, so what a pane keeps at its edge, such as a scrollbar, stays its own. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm) at the regular size.
+    #[token(or = || shared::gap_sm(ControlSize::Regular))]
     pub thickness: Option<f32>,
     /// Corner radius of the rule drawn in the gap. `None` is a pill.
     pub radius: Option<f32>,
 }
 
 impl SplitPaneTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn thickness(&self) -> f32 {
-        self.thickness
-            .unwrap_or_else(|| shared::gap_sm(ControlSize::Regular))
-    }
-
     /// The bar's corner for a bar laid out at `rect`.
     pub fn radius(&self, rect: Rect) -> BorderRadius {
         self.radius

@@ -23,34 +23,14 @@ pub type ToPoint = Rc<dyn Fn(f32) -> (f32, f32)>;
 /// A handle's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the handle paints.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct HandleTokens {
     /// Diameter of the dot at the regular size, scaled with the handle's own. `None` is a slider's thumb less [`metrics::gap_sm`](crate::metrics::gap_sm) at that size, since a handle sits over the content it edits.
+    #[token(or = |size| crate::inputs::slider::slider::SliderTokens::current().thumb(size) - shared::gap_sm(size), scaled)]
     pub size: Option<f32>,
     /// Width of the ring that parts the dot from what it sits on. `None` is the theme's `border_width_strong`.
+    #[token(or = shared::border_width_strong)]
     pub ring: Option<f32>,
-}
-
-impl HandleTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The diameter of the dot of a handle of `size`.
-    pub fn size(&self, size: ControlSize) -> f32 {
-        self.size.map_or_else(
-            || {
-                crate::inputs::slider::slider::SliderTokens::current().thumb(size)
-                    - shared::gap_sm(size)
-            },
-            |diameter| diameter * size.scale(),
-        )
-    }
-
-    pub fn ring(&self) -> f32 {
-        self.ring.unwrap_or_else(shared::border_width_strong)
-    }
 }
 
 /// How far the dot's grab area reaches past its edge, so a small dot is still a target of [`shared::MIN_TARGET`].

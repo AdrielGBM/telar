@@ -14,45 +14,27 @@ use telar::ControlSize;
 /// A slider's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every length is at the regular size and scaled with the slider's own, and every field left `None` follows the role named beside it, read when the slider paints.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct SliderTokens {
     /// Length of the track where what holds it leaves the room: shorter where it does not, and as its call places it (`width:100%`). `None` is 16 ems of the document's text, a progress bar's length.
     pub width: Option<f32>,
     /// Thickness of the track. `None` is [`metrics::spacing`](crate::metrics::spacing).
+    #[token(or = shared::spacing, scaled)]
     pub track: Option<f32>,
     /// Diameter of the thumb. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
+    #[token(or = shared::icon_size, scaled)]
     pub thumb: Option<f32>,
     /// Width of the ring that parts the thumb from the fill under it. `None` is the theme's `border_width_strong`.
+    #[token(or = shared::border_width_strong)]
     pub ring: Option<f32>,
 }
 
 const WIDTH_EMS: f32 = 16.0;
 
 impl SliderTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
     /// The track's length in a slider of `size` where what holds it leaves the room.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, WIDTH_EMS)
-    }
-
-    /// The track's thickness in a slider of `size`.
-    pub fn track(&self, size: ControlSize) -> f32 {
-        self.track
-            .map_or_else(|| shared::spacing(size), |track| track * size.scale())
-    }
-
-    /// The thumb's diameter in a slider of `size`.
-    pub fn thumb(&self, size: ControlSize) -> f32 {
-        self.thumb
-            .map_or_else(|| shared::icon_size(size), |thumb| thumb * size.scale())
-    }
-
-    pub fn ring(&self) -> f32 {
-        self.ring.unwrap_or_else(shared::border_width_strong)
     }
 }
 

@@ -13,31 +13,14 @@ use telar::ControlSize;
 /// A swatch row's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the role named beside it, read when the swatches paint.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct SwatchesTokens {
     /// Diameter of a swatch at the regular size, scaled with the row's own. `None` is [`metrics::icon_size`](crate::metrics::icon_size) and [`metrics::gap_sm`](crate::metrics::gap_sm).
+    #[token(or = |size| shared::icon_size(size) + shared::gap_sm(size), scaled)]
     pub size: Option<f32>,
     /// Width of the frame round the chosen swatch. `None` is the theme's `border_width_strong`.
+    #[token(or = shared::border_width_strong)]
     pub ring: Option<f32>,
-}
-
-impl SwatchesTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The diameter of a swatch in a row of `size`.
-    pub fn size(&self, size: ControlSize) -> f32 {
-        self.size.map_or_else(
-            || shared::icon_size(size) + shared::gap_sm(size),
-            |diameter| diameter * size.scale(),
-        )
-    }
-
-    pub fn ring(&self) -> f32 {
-        self.ring.unwrap_or_else(shared::border_width_strong)
-    }
 }
 
 fn hit_size(diameter: f32) -> f32 {
