@@ -52,3 +52,22 @@ fn a_preview_header_marks_its_options_and_args() {
         "prose is not markup: {raw:?}"
     );
 }
+
+/// A signal handed on or written to is named bare, and is coloured as one as much as a `$` read of it; a binding that is no signal is not.
+#[test]
+fn a_signal_handed_on_bare_is_coloured_as_a_signal() {
+    let src = "[logic]\nlet agree = signal(false);\nlet name = \"x\";\n[view]\ncheckbox checked:agree label:name on_press:(|| agree.set(true))\n";
+    let raw = raw_tokens(src);
+    let line = src.lines().nth(4).unwrap();
+    let signal_at = |word: &str, nth: usize| {
+        let col = line.match_indices(word).nth(nth).unwrap().0 as u32;
+        raw.iter()
+            .any(|&(l, c, _, t)| l == 4 && c == col && t == SIGNAL)
+    };
+    assert!(signal_at("agree", 0), "the handle on the call: {raw:?}");
+    assert!(
+        signal_at("agree", 1),
+        "the handle a handler writes: {raw:?}"
+    );
+    assert!(!signal_at("name", 0), "a plain binding: {raw:?}");
+}

@@ -13,7 +13,7 @@ pub fn token_types() -> Vec<SemanticTokenType> {
         SemanticTokenType::KEYWORD,  // 0 — built-in tag (col, text, box, …)
         SemanticTokenType::FUNCTION, // 1 — component tag (another .rsx)
         SemanticTokenType::CLASS,    // 2 — @class (def or ref)
-        SemanticTokenType::VARIABLE, // 3 — $signal read, or a name `args(…)` declares
+        SemanticTokenType::VARIABLE, // 3 — a signal, read as `$name` or handed on bare, or a name `args(…)` declares
         SemanticTokenType::PROPERTY, // 4 — a preview header's option key or matrix axis
     ]
 }
@@ -53,11 +53,12 @@ pub fn semantic_tokens(source: &str) -> Vec<SemanticToken> {
 /// `(line, start_utf16, len_utf16, token_type)` for every classified token, sorted by position.
 fn raw_tokens(source: &str) -> Vec<(u32, u32, u32, u32)> {
     let mut raw = Vec::new();
+    let signals = super::occurrences::declared_signals(source);
     for (i, line) in source.lines().enumerate() {
         let li = i as u32;
         match find_section_at(source, li) {
             // `find_section_at` reports `[preview]` bodies as `View`, so they're covered here too.
-            Section::View => view_tokens(line, li, &mut raw),
+            Section::View => view_tokens(line, li, &signals, &mut raw),
             Section::Style => style_tokens(line, li, &mut raw),
             Section::Preview | Section::Previews => header_tokens(line, li, &mut raw),
             _ => {}
@@ -67,7 +68,7 @@ fn raw_tokens(source: &str) -> Vec<(u32, u32, u32, u32)> {
     raw
 }
 
-fn view_tokens(line: &str, li: u32, raw: &mut Vec<(u32, u32, u32, u32)>) {
+fn view_tokens(line: &str, li: u32, signals: &[String], raw: &mut Vec<(u32, u32, u32, u32)>) {
     // The element tag is the first token; classify built-in vs component.
     if let Some((lead, tag)) = leading_token(line)
         && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -84,6 +85,9 @@ fn view_tokens(line: &str, li: u32, raw: &mut Vec<(u32, u32, u32, u32)>) {
         push(raw, li, line, start, len, CLASS);
     }
     for (start, len) in sigil_tokens(line, b'$') {
+        push(raw, li, line, start, len, SIGNAL);
+    }
+    for (start, len) in super::occurrences::bare_handles(line, signals) {
         push(raw, li, line, start, len, SIGNAL);
     }
 }

@@ -117,7 +117,7 @@ pub fn signal_at(source: &str, line: u32, character: u32) -> Option<Signal> {
         }
         Section::Logic => {
             let name = ident_at(line_text, character)?.1.to_string();
-            is_declared_signal(source, &name).then_some(Signal {
+            declared_signals(source).contains(&name).then_some(Signal {
                 name,
                 preview: None,
             })
@@ -240,7 +240,7 @@ fn resolve_read(source: &str, scope: Option<usize>, name: String) -> Option<Sign
             preview: Some(header),
         });
     }
-    is_declared_signal(source, &name).then_some(Signal {
+    declared_signals(source).contains(&name).then_some(Signal {
         name,
         preview: None,
     })
@@ -252,28 +252,6 @@ fn reads_signal(source: &str, scope: Option<usize>, signal: &Signal) -> bool {
         Some(header) => scope == Some(header),
         None => !scope.is_some_and(|header| declares_arg(source, header, &signal.name)),
     }
-}
-
-/// Whether `name` is declared as a signal/memo (`let name = signal(…)` / `memo(…)`) in `[logic]`.
-fn is_declared_signal(source: &str, name: &str) -> bool {
-    for (i, line) in source.lines().enumerate() {
-        if find_section_at(source, i as u32) != Section::Logic {
-            continue;
-        }
-        let Some(rest) = line.trim().strip_prefix("let ") else {
-            continue;
-        };
-        let rest = rest.strip_prefix("mut ").unwrap_or(rest);
-        let Some((binding, expr)) = rest.split_once('=') else {
-            continue;
-        };
-        let bind = binding.trim().split(':').next().unwrap_or("").trim();
-        let expr = expr.trim_start();
-        if bind == name && (expr.starts_with("signal(") || expr.starts_with("memo(")) {
-            return true;
-        }
-    }
-    false
 }
 
 /// A place in a view line that names a signal: a `$name` read or a bare `name` handle.
@@ -412,6 +390,16 @@ pub fn declared_signals(source: &str) -> Vec<String> {
     telar_transpiler::scan_signals(&logic)
         .into_iter()
         .map(|s| s.name)
+        .collect()
+}
+
+/// The byte span of every bare handle in `line` that names one of `signals`: what a view writes when it hands a signal on or writes to it, `checked:agree`, `on_press:(|| count.set(1))`.
+pub(super) fn bare_handles(line: &str, signals: &[String]) -> Vec<(usize, usize)> {
+    signal_mentions(line)
+        .into_iter()
+        .filter(|mention| mention.sigil_start == mention.name_start)
+        .filter(|mention| signals.contains(&mention.name))
+        .map(|mention| (mention.name_start, mention.name.len()))
         .collect()
 }
 
