@@ -1,5 +1,6 @@
 //! [`ScopeProvider`]: a subtree drawn in a theme of its own.
 
+use geometry_core::BorderRadius;
 use layout_core::{LayoutError, NodeId};
 use platform_core::Event;
 use theme_core::ScopedTheme;
@@ -52,6 +53,10 @@ impl LayoutItem for ScopeProvider {
             .try_borrow()
             .map(|item| item.occludes())
             .unwrap_or(true)
+    }
+
+    fn painted_radius(&self) -> BorderRadius {
+        self.child.painted_radius()
     }
 }
 

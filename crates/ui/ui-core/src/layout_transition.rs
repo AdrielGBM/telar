@@ -3,7 +3,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use geometry_core::{Point, Transform};
+use geometry_core::{BorderRadius, Point, Transform};
 use layout_core::NodeId;
 use motion_core::{Animated, Curve, Lerp};
 use platform_core::Event;
@@ -142,6 +142,10 @@ impl LayoutItem for LayoutTransition {
             .item
             .try_borrow()
             .is_ok_and(|item| item.occludes())
+    }
+
+    fn painted_radius(&self) -> BorderRadius {
+        self.child.painted_radius()
     }
 }
 

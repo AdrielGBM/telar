@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use geometry_core::Color;
+use geometry_core::{BorderRadius, Color};
 use layout_core::{AvailableSpace, LayoutStyle};
 use renderer_core::{DrawCommand, RectStyle, ShapeStyle};
 use ui_tree::ComponentList;
@@ -9,8 +9,9 @@ use ui_tree::ComponentList;
 use super::*;
 use crate::container::Container;
 use crate::context::{compute_layout, live_node_count, reset_layout_runtime};
-use crate::layout_item::box_item;
+use crate::layout_item::{Clip, ClippedItem, box_item};
 use crate::rect::Rectangle;
+use crate::styled_container::StyledContainer;
 
 #[derive(Clone)]
 struct Menu(&'static str);
@@ -176,4 +177,35 @@ fn children_handed_are_told_apart_from_none() {
     assert!(!Children::default().is_handed());
     assert!(Children::new(|| Ok(Vec::new())).is_handed());
     assert!(Children::default().build().unwrap().is_empty());
+}
+
+/// A clip around a child cuts along the corner the child paints, which it resolves from the context its owner provided.
+#[test]
+fn a_clip_around_a_child_in_context_cuts_along_the_corner_it_paints_there() {
+    reset_layout_runtime();
+    let children = Children::one(|| {
+        Ok(box_item(StyledContainer::new(
+            LayoutStyle::new().width(40.0).height(20.0),
+            |_| {
+                let corner = use_context::<Menu>().map_or(0.0, |menu| menu.0.len() as f32);
+                RectStyle::default().with_radius(BorderRadius::all(corner))
+            },
+            vec![],
+        )?))
+    });
+    let mounted = children.build_with(Menu("edit")).unwrap().remove(0);
+    let clipped = ClippedItem::new(mounted, Clip::both());
+    compute_layout(
+        clipped.layout_node(),
+        AvailableSpace::Definite(40.0),
+        AvailableSpace::Definite(20.0),
+    )
+    .unwrap();
+
+    let tree = ComponentList::new(clipped);
+    let cut = tree.commands().iter().find_map(|command| match command {
+        DrawCommand::PushClip { radius, .. } => Some(*radius),
+        _ => None,
+    });
+    assert_eq!(cut, Some(BorderRadius::all(4.0)));
 }

@@ -57,6 +57,15 @@ impl Child {
         reactive_core::with_owner(self.built_under, f)
     }
 
+    /// What the child paints its corner at, resolved under the scope it was built in so a theme provided to it is the one it reads.
+    pub(crate) fn painted_radius(&self) -> BorderRadius {
+        self.owning(|| {
+            self.item
+                .try_borrow()
+                .map_or_else(|_| BorderRadius::zero(), |item| item.painted_radius())
+        })
+    }
+
     pub(crate) fn owner(&self) -> Option<OwnerId> {
         self.owner
     }

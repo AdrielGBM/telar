@@ -283,3 +283,40 @@ fn a_followed_scope_switches_with_it() {
     assert_eq!(seen.borrow().first(), Some(&RED));
     assert_eq!(seen.borrow().last(), Some(&BLUE));
 }
+
+#[derive(Clone)]
+struct Round(f32);
+impl ThemeTokens for Round {
+    fn radius(&self) -> f32 {
+        self.0
+    }
+}
+
+/// A clip around a provider cuts along the corner its child paints in the provided theme, not the one the region around it is in.
+#[test]
+fn a_clip_around_a_provider_cuts_along_the_corner_its_theme_gives() {
+    reset_layout_runtime();
+    set_theme(Round(2.0));
+    let provider = provide_theme(Round(9.0), || {
+        Ok(Box::new(crate::StyledContainer::new(
+            LayoutStyle::new().width(40.0).height(20.0),
+            |_| {
+                RectStyle::default().with_radius(geometry_core::BorderRadius::all(
+                    use_theme_tokens().radius(),
+                ))
+            },
+            vec![],
+        )?))
+    })
+    .unwrap();
+    let clipped =
+        crate::layout_item::ClippedItem::new(Box::new(provider), crate::layout_item::Clip::both());
+    lay_out(clipped.layout_node());
+
+    let tree = ComponentList::new(clipped);
+    let cut = tree.commands().iter().find_map(|command| match command {
+        DrawCommand::PushClip { radius, .. } => Some(*radius),
+        _ => None,
+    });
+    assert_eq!(cut, Some(geometry_core::BorderRadius::all(9.0)));
+}

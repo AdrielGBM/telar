@@ -191,3 +191,34 @@ fn a_node_rejoining_a_parent_that_moved_while_it_was_out_slides_from_where_it_wa
     tick(start + Duration::from_millis(SLIDE_MS));
     assert_eq!(drawn_y(&moving), 30.0, "and slid to its place");
 }
+
+#[test]
+fn a_clip_around_a_sliding_item_cuts_along_the_corner_it_paints() {
+    fresh();
+    let item = StyledContainer::new(
+        LayoutStyle::new().width(40.0).height(20.0),
+        |_| RectStyle::default().with_radius(geometry_core::BorderRadius::all(7.0)),
+        vec![],
+    )
+    .unwrap();
+    let clipped = crate::layout_item::ClippedItem::new(
+        box_item(animate_layout(
+            item,
+            tween(Duration::from_millis(SLIDE_MS), Easing::Linear),
+        )),
+        crate::layout_item::Clip::both(),
+    );
+    compute_layout(
+        clipped.layout_node(),
+        AvailableSpace::Definite(40.0),
+        AvailableSpace::Definite(20.0),
+    )
+    .unwrap();
+
+    let tree = ui_tree::ComponentList::new(clipped);
+    let cut = tree.commands().iter().find_map(|command| match command {
+        renderer_core::DrawCommand::PushClip { radius, .. } => Some(*radius),
+        _ => None,
+    });
+    assert_eq!(cut, Some(geometry_core::BorderRadius::all(7.0)));
+}
