@@ -1,9 +1,11 @@
-//! The signal hot path: creating a signal, reading and writing it with nobody watching, and reads an effect tracks.
+//! The signal hot path: creating a signal, reading and writing it with nobody watching, reads an effect tracks, and what a view pays to tell whether a value it works out read state.
 
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use telar_reactive_core::{dispose_owner, effect, memo, owner_scope, signal};
+use telar_reactive_core::{
+    Reactive, dispose_owner, effect, memo, owner_scope, reads_state, signal,
+};
 
 fn create(c: &mut Criterion) {
     c.bench_function("signal/create_and_dispose_100", |b| {
@@ -55,5 +57,31 @@ fn tracked_access(c: &mut Criterion) {
     drop(scope);
 }
 
-criterion_group!(benches, create, untracked_access, tracked_access);
+/// What every expression a view writes now costs once where it is built: a value reading nothing is held as itself, one reading state is kept to read again, and an effect that read nothing is let go after its run.
+fn probing(c: &mut Criterion) {
+    let scope = owner_scope();
+    let base = signal(2u64);
+    c.bench_function("probe/reads_nothing", |b| {
+        b.iter(|| black_box(reads_state(|| black_box(3u64) * 2)))
+    });
+    c.bench_function("probe/reads_a_signal", |b| {
+        b.iter(|| black_box(reads_state(|| base.get() * 2)))
+    });
+    c.bench_function("follow/constant", |b| {
+        b.iter(|| black_box(Reactive::<u64>::follow(|| black_box(3u64))))
+    });
+    c.bench_function("follow/reading", |b| {
+        b.iter(|| black_box(Reactive::<u64>::follow(move || base.get())))
+    });
+    c.bench_function("effect/run_reading_nothing_and_let_go", |b| {
+        b.iter(|| {
+            effect(|| {
+                black_box(1u64);
+            })
+        })
+    });
+    drop(scope);
+}
+
+criterion_group!(benches, create, untracked_access, tracked_access, probing);
 criterion_main!(benches);
