@@ -26,6 +26,21 @@ pub fn format_radius(value: &str, theme: ThemeAccess) -> Result<String, String> 
     }
 }
 
+const CONTENT_SIZE: &str = "SizeDimension::Content";
+
+/// A box's size: `content`, the size of what it holds with nothing wrapped, or a number as [`format_number`] reads one.
+/// Whether `key` is a size that may be the content's own (`content`), rather than a bound or an edge that cannot.
+pub(crate) fn takes_content_size(key: &str) -> bool {
+    matches!(key, "width" | "height" | "basis" | "flex_basis")
+}
+
+fn format_size(value: &str, theme: ThemeAccess) -> Result<String, String> {
+    match value.trim() {
+        "content" => Ok(CONTENT_SIZE.to_string()),
+        _ => format_number(value, theme),
+    }
+}
+
 /// What a `key:value` attribute contributes to a `LayoutStyle`.
 pub enum PropCall {
     /// The builder call to chain on.
@@ -154,13 +169,13 @@ fn layout_call(key: &str, value: &str, theme: ThemeAccess) -> Result<Option<Stri
         .filter(|inner| !inner.trim().is_empty())
         .unwrap_or(value);
     let call = match key {
-        "width" => format!(".width({})", format_number(value, theme)?),
-        "height" => format!(".height({})", format_number(value, theme)?),
+        "width" => format!(".width({})", format_size(value, theme)?),
+        "height" => format!(".height({})", format_size(value, theme)?),
         "min_width" => format!(".min_width({})", format_number(value, theme)?),
         "min_height" => format!(".min_height({})", format_number(value, theme)?),
         "max_width" => format!(".max_width({})", format_number(value, theme)?),
         "max_height" => format!(".max_height({})", format_number(value, theme)?),
-        "basis" | "flex_basis" => format!(".flex_basis({})", format_number(value, theme)?),
+        "basis" | "flex_basis" => format!(".flex_basis({})", format_size(value, theme)?),
         "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value, theme)?),
         "wrap" => format!(".{}()", keyword(key, value, registry::WRAP_VALUES)?),
         "self" => format!(".{}()", keyword(key, value, registry::SELF_VALUES)?),
@@ -604,12 +619,13 @@ pub fn colour_may_be_absent(raw: &str) -> bool {
 /// Whether `arg` is a fixed length, or read from the theme or the text around the box, none of which is ever absent.
 fn never_absent(arg: &str) -> bool {
     let read = arg.trim_start_matches('(');
-    let fixed = ["SizeDimension::", "TextLength::"].iter().any(|kind| {
-        arg.strip_prefix(kind)
-            .and_then(|rest| rest.split_once('('))
-            .and_then(|(_, number)| number.strip_suffix(')'))
-            .is_some_and(|number| number.trim().parse::<f32>().is_ok())
-    });
+    let fixed = arg == CONTENT_SIZE
+        || ["SizeDimension::", "TextLength::"].iter().any(|kind| {
+            arg.strip_prefix(kind)
+                .and_then(|rest| rest.split_once('('))
+                .and_then(|(_, number)| number.strip_suffix(')'))
+                .is_some_and(|number| number.trim().parse::<f32>().is_ok())
+        });
     let text = format!("{BOX_TEXT_BINDING}.get()");
     fixed
         || read.starts_with("theme.get().")

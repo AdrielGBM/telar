@@ -79,7 +79,7 @@ impl ImageSource {
 
 /// A picture, named for a reader by `alt`: what it shows, in words, or nothing at all for a picture that only decorates, which a reader then steps over.
 ///
-/// While the picture loads it is a quiet box of the size it will take; where it cannot be had, that box shows `alt` instead. Its own size is the picture's, or a control's height square while there is no picture yet. A caller placing `width:` alone leaves the height to the picture's proportions; `height:` alone keeps the image's own width, so place `width:` with it. Place its size before the picture arrives and the page does not move when it does.
+/// While the picture loads it is a quiet box of the size it will take; where it cannot be had, that box shows `alt` instead. Its own size is the picture's, or a control's height square while there is no picture yet, and a column that stretches what it holds leaves it at that size. A caller placing `width:` or `height:` alone has the other worked out from the picture's proportions. Place its size before the picture arrives and the page does not move when it does.
 #[derive(Props)]
 pub struct ImageProps {
     /// The picture: a decoded [`ImageData`], or where a load of one stands.
@@ -120,15 +120,16 @@ pub fn image(props: ImageProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         |(source, corner): &(ImageSource, u32)| (source.key(), *corner),
         move |(source, corner)| {
             let corner = f32::from_bits(corner);
+            let natural = natural_size(&source);
             let raster = if pixelated {
                 Raster::Pixel
             } else {
                 Raster::Smooth
             };
             match source {
-                ImageSource::Ready(data) => picture(data, &alt, fit, raster, corner),
-                ImageSource::Loading => placeholder(&alt, corner, &style, false),
-                ImageSource::Failed => placeholder(&alt, corner, &style, true),
+                ImageSource::Ready(data) => picture(data, &alt, fit, raster, corner, natural),
+                ImageSource::Loading => placeholder(&alt, corner, &style, false, natural),
+                ImageSource::Failed => placeholder(&alt, corner, &style, true, natural),
             }
         },
     )?;
@@ -136,9 +137,9 @@ pub fn image(props: ImageProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(picture))
 }
 
-/// The box an image is when nothing places it: the picture's own width, or a control's height while there is none, with the proportions that make the height of a width a caller places.
-fn own_box(source: &ImageSource) -> LayoutStyle {
-    let (width, height) = match source {
+/// The size an image is when nothing places it: the picture's own, or a control's height square while there is none.
+fn natural_size(source: &ImageSource) -> (f32, f32) {
+    match source {
         ImageSource::Ready(data) if data.width() > 0 && data.height() > 0 => {
             (data.width() as f32, data.height() as f32)
         }
@@ -146,18 +147,29 @@ fn own_box(source: &ImageSource) -> LayoutStyle {
             let side = shared::control_height(ControlSize::Regular);
             (side, side)
         }
-    };
+    }
+}
+
+/// The image's box: as big as what [`filling`] gives it, with the proportions that make the other side of a single side a caller places.
+fn own_box(source: &ImageSource) -> LayoutStyle {
+    let (width, height) = natural_size(source);
     LayoutStyle::row()
         .flex_shrink(0.0)
-        .width(width)
+        .width(SizeDimension::Content)
+        .height(SizeDimension::Content)
         .aspect_ratio(width / height)
 }
 
-/// What fills the image's box, whatever size it is placed at.
-fn filling() -> LayoutStyle {
+/// What fills the image's box: the box's size once it has one, and `natural` while the box is still asking what it holds how big it is, when a fraction of it means nothing.
+fn filling((width, height): (f32, f32)) -> LayoutStyle {
+    let whole = SizeDimension::Percent(1.0);
     LayoutStyle::new()
-        .width(SizeDimension::Percent(1.0))
-        .height(SizeDimension::Percent(1.0))
+        .width(width)
+        .height(height)
+        .min_width(whole)
+        .min_height(whole)
+        .max_width(whole)
+        .max_height(whole)
 }
 
 fn named(item: impl Accessible + 'static, alt: &Reactive<String>) -> Box<dyn LayoutItem> {
@@ -171,9 +183,15 @@ fn picture(
     fit: ObjectFit,
     raster: Raster,
     corner: f32,
+    natural: (f32, f32),
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let picture = telar::Image::new(filling(), move || data.clone(), move || raster, move || fit)?
-        .with_radius(corner);
+    let picture = telar::Image::new(
+        filling(natural),
+        move || data.clone(),
+        move || raster,
+        move || fit,
+    )?
+    .with_radius(corner);
     Ok(named(picture, alt))
 }
 
@@ -183,6 +201,7 @@ fn placeholder(
     corner: f32,
     style: &SurfaceStyle,
     failed: bool,
+    natural: (f32, f32),
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let content: Vec<Box<dyn LayoutItem>> = if failed && !alt.get().is_empty() {
         let words = {
@@ -203,7 +222,7 @@ fn placeholder(
     };
     let style = style.clone();
     let stand_in = StyledContainer::new(
-        filling()
+        filling(natural)
             .flex_row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)

@@ -154,8 +154,14 @@ impl LayoutEngine {
         self.styles.get(&node)
     }
 
-    /// Resolves `style` and pushes it to taffy, placing the leading margin — `resolve` cannot, since that needs the parent's axis to know which physical edge is "leading".
+    /// Resolves `style` and pushes it to taffy, then re-resolves the children whose alignment follows it.
     fn push_style(&mut self, node: NodeId, style: &LayoutStyle) {
+        self.push_resolved(node, style);
+        self.refit_children(node);
+    }
+
+    /// Resolves `style` and pushes it to taffy, placing what `resolve` cannot because it depends on the parent: the leading margin, whose physical edge follows the parent's axis, and the alignment of an item sized by its content.
+    fn push_resolved(&mut self, node: NodeId, style: &LayoutStyle) {
         let mut resolved = style.resolve(self.direction, self.surface, self.grid);
         self.note_sticky(node, style);
         if let Some((is_row, px)) = style.logical.leading_margin {
@@ -171,7 +177,49 @@ impl LayoutEngine {
                 resolved.margin.top = m;
             }
         }
+        self.fall_back_from_stretch(node, &mut resolved);
         let _ = self.tree.set_style(node, resolved);
+    }
+
+    /// Re-resolves the children of `parent` that are sized by their content, whose alignment depends on `parent`'s style.
+    fn refit_children(&mut self, parent: NodeId) {
+        let content_sized: Vec<(NodeId, LayoutStyle)> = self
+            .tree
+            .child_ids(parent)
+            .filter_map(|child| {
+                let style = self.styles.get(&child)?;
+                style.is_content_sized().then(|| (child, style.clone()))
+            })
+            .collect();
+        for (child, style) in content_sized {
+            self.push_resolved(child, &style);
+        }
+    }
+
+    /// Lays out a flex item whose cross size is its content's at `flex-start` where it would stretch, as CSS has `stretch` fall back for any cross size that is not `auto`.
+    fn fall_back_from_stretch(&self, node: NodeId, style: &mut taffy::Style) {
+        let Some(parent) = self
+            .tree
+            .parent(node)
+            .and_then(|parent| self.style_of(parent))
+        else {
+            return;
+        };
+        if parent.display != taffy::Display::Flex {
+            return;
+        }
+        let cross = match parent.flex_direction {
+            taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => style.size.height,
+            taffy::FlexDirection::Column | taffy::FlexDirection::ColumnReverse => style.size.width,
+        };
+        let alignment = style
+            .align_self
+            .or(parent.align_items)
+            .unwrap_or(taffy::AlignItems::STRETCH);
+        // Taffy 0.14 already places such an item at the start, but still stretches it while measuring its flex basis, and an aspect ratio carries that stretch into the main axis.
+        if cross.is_sizing_keyword() && alignment.keyword == taffy::AlignItemsKeyword::Stretch {
+            style.align_self = Some(taffy::AlignItems::FLEX_START);
+        }
     }
 
     /// Shared plumbing for every out-of-band mutator: mutate one field of the tracked style, push, re-track.
@@ -236,6 +284,7 @@ impl LayoutEngine {
         )?;
         self.note_sticky(node, &style);
         self.track(node, style);
+        self.refit_children(node);
         Ok(node)
     }
 
@@ -270,9 +319,9 @@ impl LayoutEngine {
         for &child in children {
             self.alive(child)?;
         }
-        self.tree
-            .set_children(parent, children)
-            .map_err(LayoutError::from)
+        self.tree.set_children(parent, children)?;
+        self.refit_children(parent);
+        Ok(())
     }
 
     /// Appends `child` to `parent`'s existing children (unlike [`set_children`](Self::set_children), which replaces them). Used to attach an overlay's out-of-flow content to the layout root without touching the root's other children.
@@ -280,9 +329,9 @@ impl LayoutEngine {
         self.alive(parent)?;
         self.alive(child)?;
         self.leave_parent(child);
-        self.tree
-            .add_child(parent, child)
-            .map_err(LayoutError::from)
+        self.tree.add_child(parent, child)?;
+        self.refit_children(parent);
+        Ok(())
     }
 
     /// Takes `child` out of the node that holds it, marking that node dirty, so adding it somewhere else moves it rather than leaving it in two child lists. A freed node, or one held by nothing, is left as it is.
@@ -392,7 +441,7 @@ impl LayoutEngine {
         }
     }
 
-    /// Whether the node's `width`/`height` are `auto` (i.e. content-sized).
+    /// Whether the node's `width`/`height` are `auto`.
     pub fn is_size_auto(&self, node: NodeId) -> (bool, bool) {
         match self.style_of(node) {
             Some(s) => (s.size.width.is_auto(), s.size.height.is_auto()),
@@ -498,6 +547,8 @@ impl LayoutEngine {
                 },
                 |inputs, _node, context, style| {
                     let containing_width = inputs.parent_size.width;
+                    // Taffy 0.14 measures a flex item across its parent's axis in the room the parent offers, even when its width is its content's own.
+                    let unwrapped = style.size.width == taffy::Dimension::max_content();
                     taffy::compute_leaf_layout(
                         inputs,
                         style,
@@ -506,10 +557,11 @@ impl LayoutEngine {
                             let Some(measure) = context else {
                                 return taffy::geometry::Size::ZERO;
                             };
-                            let width = known
-                                .width
-                                .map(AvailableSpace::Definite)
-                                .unwrap_or(available.width);
+                            let width = match (known.width, unwrapped) {
+                                (Some(width), _) => AvailableSpace::Definite(width),
+                                (None, true) => AvailableSpace::MaxContent,
+                                (None, false) => available.width,
+                            };
                             let (mw, mh) = measure(MeasureInput {
                                 width,
                                 containing_width,
@@ -900,3 +952,7 @@ mod scroll_tests;
 #[cfg(test)]
 #[path = "engine.grid.test.rs"]
 mod grid_tests;
+
+#[cfg(test)]
+#[path = "engine.content.test.rs"]
+mod content_tests;

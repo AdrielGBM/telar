@@ -712,6 +712,11 @@ pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess)
         ValueKind::KeywordsOrExpression(table) => {
             crate::style::keyword_or_expression(key, value, table, theme).err()
         }
+        ValueKind::Number if value == "content" && !crate::style::takes_content_size(key) => {
+            Some(format!(
+                "`{key}:content`: `content` is a size, the content's own, so only `width`, `height` and `basis` take it"
+            ))
+        }
         ValueKind::Number => crate::style::format_number(value, theme).err(),
         // A yes or a no is whatever rustc can make one of, so there is nothing here to refuse.
         ValueKind::Boolean => None,

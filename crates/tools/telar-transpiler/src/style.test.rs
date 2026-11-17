@@ -29,6 +29,22 @@ fn width_prop() {
 }
 
 #[test]
+fn a_size_key_takes_the_content_s_own_size() {
+    for (key, expected) in [
+        ("width", ".width(SizeDimension::Content)"),
+        ("height", ".height(SizeDimension::Content)"),
+        ("basis", ".flex_basis(SizeDimension::Content)"),
+        ("flex_basis", ".flex_basis(SizeDimension::Content)"),
+    ] {
+        assert_eq!(
+            call(key, "content").as_deref(),
+            Some(expected),
+            "`{key}:content`"
+        );
+    }
+}
+
+#[test]
 fn block_edge_props_map_to_their_builder_calls() {
     for (key, expected) in [
         ("padding_top", ".padding_top(12.0)"),

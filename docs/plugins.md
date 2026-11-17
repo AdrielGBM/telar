@@ -196,9 +196,11 @@ and `max_`, `grow`, `shrink`, `basis`, `self`, `aspect`, the `margin_` and `inse
 call's winning; how the component lays out what it holds, its `pad`, `gap` and `align`, stays its own. So no prop is
 named after one of those keys, which `#[derive(Props)]` refuses, and a component is fluid: the width its tokens give
 it is the one it takes where there is room, narrower where what holds it is, and `width:100%` or `grow:1` on the call
-where it should fill. A component drawn on a layer of its own, a dialog or a notice, says `#[props(layer)]` on its
-props struct, and a call that places it is a compile error. From Rust, `telar::place_item(item.layout_node(), |s| …)`
-places an item the same way.
+where it should fill. A box sized by what it holds is `width:content height:content`: the size of its content with
+nothing wrapped, which a parent that stretches what it holds leaves alone, and with `aspect` set a call placing one
+side alone has the other worked out through the ratio, as an `image` does. A component drawn on a layer of its own, a
+dialog or a notice, says `#[props(layer)]` on its props struct, and a call that places it is a compile error. From
+Rust, `telar::place_item(item.layout_node(), |s| …)` places an item the same way.
 
 ### Theme tokens
 

@@ -425,6 +425,7 @@ fn length_of(compact: CompactLength) -> Option<String> {
         CompactLength::LENGTH_TAG => Some(format!("{}px", format_number(compact.value()))),
         CompactLength::PERCENT_TAG => Some(format!("{}%", format_number(compact.value() * 100.0))),
         CompactLength::AUTO_TAG => Some("auto".to_string()),
+        CompactLength::MAX_CONTENT_TAG => Some("max-content".to_string()),
         _ => None,
     }
 }

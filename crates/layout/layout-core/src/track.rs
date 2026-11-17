@@ -98,10 +98,11 @@ impl TemplateTrack {
         Self::length(SizeDimension::Px(px))
     }
 
-    /// A fixed track of any length a size takes — pixels, a percentage of the grid, or a fraction of the surface. `auto` is [`auto`](Self::auto).
+    /// A fixed track of any length a size takes — pixels, a percentage of the grid, or a fraction of the surface. `auto` is [`auto`](Self::auto), and the content's own size [`max_content`](Self::max_content).
     pub fn length(length: SizeDimension) -> Self {
         match length {
             SizeDimension::Auto => Self::auto(),
+            SizeDimension::Content => Self::max_content(),
             other => Self::single(Breadth::Length(other)),
         }
     }

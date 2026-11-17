@@ -57,13 +57,27 @@ const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("clip").doc(
         "Cuts a node's output to its laid-out rect: bare, along the corner the box paints, followed as a theme, its `radius:` or a caller's amendment of its paint change it, and square on a node that paints nothing; or a `Clip` shape naming axis, radius and inset, one that names no radius cutting along the painted corner too. A written shape is followed as it reads, and may yield a `Clip`, an `Option<Clip>` or a `bool`, so `clip:$cut` stops and starts cutting without a rebuild.",
     ),
-    AttrSpec::num("width"),
-    AttrSpec::num("height"),
-    AttrSpec::num("min_width"),
-    AttrSpec::num("min_height"),
-    AttrSpec::num("max_width"),
-    AttrSpec::num("max_height"),
-    AttrSpec::num("basis"),
+    AttrSpec::num("width").doc(
+        "The width: pixels, a percentage of the parent's, a fraction of the surface (`50sw`), or `content`, the width of what the box holds with nothing wrapped. A `content` width is not stretched by a column that stretches what it holds, and with `aspect` set it is what the ratio makes of a set `height`.",
+    ),
+    AttrSpec::num("height").doc(
+        "The height: pixels, a percentage of the parent's, a fraction of the surface (`50sh`), or `content`, the height of what the box holds. A `content` height is not stretched by a row that stretches what it holds, and with `aspect` set it is what the ratio makes of a set `width`.",
+    ),
+    AttrSpec::num("min_width").doc(
+        "The least the width may be: pixels, a percentage of the parent's width or a fraction of the surface. `content` is a size, not a bound: write it on `width`.",
+    ),
+    AttrSpec::num("min_height").doc(
+        "The least the height may be: pixels, a percentage of the parent's height or a fraction of the surface. `content` is a size, not a bound: write it on `height`.",
+    ),
+    AttrSpec::num("max_width").doc(
+        "The most the width may be: pixels, a percentage of the parent's width or a fraction of the surface. `content` is a size, not a bound: write it on `width`.",
+    ),
+    AttrSpec::num("max_height").doc(
+        "The most the height may be: pixels, a percentage of the parent's height or a fraction of the surface. `content` is a size, not a bound: write it on `height`.",
+    ),
+    AttrSpec::num("basis").doc(
+        "The size a flex item starts from along its parent's axis before it grows or shrinks: a length as `width` takes one, or `content`, the size of what it holds with nothing wrapped.",
+    ),
     AttrSpec::num("flex_basis"),
     AttrSpec::num("aspect"),
     AttrSpec::num("aspect_ratio"),

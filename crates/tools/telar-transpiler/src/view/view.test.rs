@@ -2670,3 +2670,17 @@ fn an_attribute_handed_none_declares_nothing() {
         "a literal is set as written:\n{code}"
     );
 }
+
+#[test]
+fn the_content_s_own_size_is_fixed_and_only_a_size_takes_it() {
+    let code = transpile_view("[view]\nrow width:content height:content\n");
+    assert!(
+        !code.contains(".styled_by("),
+        "a content size never changes:\n{code}"
+    );
+    let refused = transpile_view("[view]\nrow min_width:content\n");
+    assert!(
+        refused.contains("compile_error!(\"`min_width:content`: `content` is a size"),
+        "a bound is refused:\n{refused}"
+    );
+}

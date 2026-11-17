@@ -1,4 +1,4 @@
-use telar::testing::lay_out;
+use telar::testing::{lay_out, lay_out_row};
 use telar::{AccessNode, ComponentList, DrawCommand, Role, relayout_if_dirty, signal};
 
 use super::*;
@@ -26,6 +26,24 @@ fn placed(
     let tree = ComponentList::new(item);
     let _ = tree.commands();
     tree
+}
+
+/// The box a 40 by 20 picture is laid out to, placed by `place` in `lay_out`'s 400 by 400 parent, whose cross axis stretches what it holds.
+fn picture_box(
+    lay_out: fn(telar::NodeId, f32, f32) -> telar::Rect,
+    place: impl Fn(LayoutStyle) -> LayoutStyle + 'static,
+) -> (f32, f32) {
+    crate::test_support::fresh_layout_runtime();
+    let item = image(
+        ImageProps::props()
+            .source(ImageSource::from(pixels(40, 20)))
+            .alt("Wide")
+            .build(),
+    )
+    .unwrap();
+    telar::place_item(item.layout_node(), place);
+    let rect = lay_out(item.layout_node(), 400.0, 400.0);
+    (rect.width, rect.height)
 }
 
 fn settle(tree: &ComponentList) {
@@ -117,6 +135,44 @@ fn a_placed_width_takes_the_height_from_the_picture() {
     );
     let drawn = drawn_image(&tree).expect("drawn");
     assert_eq!((drawn.width, drawn.height), (120.0, 60.0));
+}
+
+#[test]
+fn an_image_nothing_places_keeps_the_picture_s_size_where_its_parent_stretches_what_it_holds() {
+    assert_eq!(
+        picture_box(lay_out, |style| style),
+        (40.0, 20.0),
+        "in a column"
+    );
+    assert_eq!(
+        picture_box(lay_out_row, |style| style),
+        (40.0, 20.0),
+        "in a row"
+    );
+}
+
+#[test]
+fn a_placed_height_alone_takes_the_width_from_the_picture() {
+    assert_eq!(
+        picture_box(lay_out, |style| style.height(60.0)),
+        (120.0, 60.0)
+    );
+    assert_eq!(
+        picture_box(lay_out_row, |style| style.height(60.0)),
+        (120.0, 60.0)
+    );
+}
+
+#[test]
+fn a_placed_width_alone_takes_the_height_from_the_picture() {
+    assert_eq!(
+        picture_box(lay_out, |style| style.width(120.0)),
+        (120.0, 60.0)
+    );
+    assert_eq!(
+        picture_box(lay_out_row, |style| style.width(120.0)),
+        (120.0, 60.0)
+    );
 }
 
 #[test]

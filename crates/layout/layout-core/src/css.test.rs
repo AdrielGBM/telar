@@ -61,6 +61,18 @@ fn sizes_carry_their_unit() {
     assert!(out.contains("height:50%;"), "got {out}");
 }
 
+/// A browser that lays the box out has to be told the size is its content's, or it stretches it as it would an `auto` one.
+#[test]
+fn a_content_size_is_the_content_s_size_to_a_browser_too() {
+    let out = css(LayoutStyle::new()
+        .width(SizeDimension::Content)
+        .height(SizeDimension::Content)
+        .flex_basis(SizeDimension::Content));
+    assert!(out.contains("width:max-content;"), "got {out}");
+    assert!(out.contains("height:max-content;"), "got {out}");
+    assert!(out.contains("flex-basis:max-content;"), "got {out}");
+}
+
 #[test]
 fn equal_edges_collapse_to_one_value() {
     let out = css(LayoutStyle::new().padding_all(24.0));

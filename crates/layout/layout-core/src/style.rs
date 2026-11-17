@@ -14,7 +14,7 @@ use crate::sticky::StickyInsets;
 use crate::track::TemplateTrack;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-/// A width or height: a length in logical pixels, a fraction of the parent, a fraction of the surface, or `auto`.
+/// A width or height: a length in logical pixels, a fraction of the parent, a fraction of the surface, `auto`, or the content's own.
 ///
 /// The surface variants are fractions like [`Percent`](Self::Percent) (`0.5` is half), taken of the surface the tree is laid out on — the window, the page, the terminal — rather than of the parent. They have no value until the engine knows that surface, so a style holding one is resolved against it at layout time and again whenever it changes; converted directly into a taffy type, one stands in as `auto` (or zero where there is no `auto`).
 pub enum SizeDimension {
@@ -27,6 +27,8 @@ pub enum SizeDimension {
     /// A fraction of whichever side of the surface is longer.
     SurfaceMax(f32),
     Auto,
+    /// The size the content takes with nothing wrapped, whatever room the parent offers: never stretched to fill it, and on a box with an aspect ratio, what the ratio makes of the other side when that side is set. It sizes a width, a height, a flex basis and a grid track; anywhere else it is what [`Auto`](Self::Auto) is.
+    Content,
 }
 
 impl SizeDimension {
@@ -64,6 +66,7 @@ impl From<SizeDimension> for Dimension {
         match d {
             SizeDimension::Px(v) => Dimension::length(v),
             SizeDimension::Percent(v) => Dimension::percent(v),
+            SizeDimension::Content => Dimension::max_content(),
             _ => Dimension::auto(),
         }
     }
@@ -404,6 +407,11 @@ impl LayoutStyle {
             .into_iter()
             .flatten()
             .any(SizeDimension::is_surface_relative)
+    }
+
+    /// Whether the width or the height is the content's own, which makes how the box aligns depend on its parent.
+    pub(crate) fn is_content_sized(&self) -> bool {
+        self.inner.size.width.is_sizing_keyword() || self.inner.size.height.is_sizing_keyword()
     }
 
     /// A flex row along the inline axis: items run left-to-right under [`Direction::Ltr`] and right-to-left under [`Direction::Rtl`], the way `flex-direction: row` follows `dir` on the web. Use [`flex_row_reverse`](Self::flex_row_reverse) for a row that is reversed in both directions.
