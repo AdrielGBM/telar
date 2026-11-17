@@ -2686,3 +2686,17 @@ fn the_content_s_own_size_is_fixed_and_only_a_size_takes_it() {
         "a bound is refused:\n{refused}"
     );
 }
+
+#[test]
+fn a_signal_an_if_let_binds_is_read_inside_the_branch_not_captured_from_outside() {
+    let code = transpile_view(
+        "[logic]\nlet filter: Option<RwSignal<bool>> = None;\n[view]\ncol\n    if let Some(selected) = filter\n        row shown:$selected\n            text \"on\"\n",
+    );
+    let before_branch = &code[..code
+        .find("if let Some(selected) = filter")
+        .expect("the branch")];
+    assert!(
+        !before_branch.contains("let selected = selected.clone();"),
+        "`selected` is the pattern's, not a binding outside the branch:\n{code}"
+    );
+}

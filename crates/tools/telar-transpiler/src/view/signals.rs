@@ -630,6 +630,7 @@ fn collect_snippets(nodes: &[ViewNode], scope: &mut Vec<String>, out: &mut Vec<S
             }
             ViewNode::IfBlock(block) => {
                 out.push(ScopedSnippet::new(block.condition.clone(), scope));
+                scope.extend(if_let_bindings(&block.condition));
                 collect_snippets(&block.then_branch, scope, out);
                 // The branches are separate blocks: a `let` in one is not in scope in the other.
                 scope.truncate(depth);
@@ -835,4 +836,14 @@ pub(super) fn written_handle(key: &str, value: &str) -> Result<String, String> {
         )),
         None => Ok(value.to_string()),
     }
+}
+
+/// What an `if let` condition's pattern binds for its `then` branch; nothing for a plain condition.
+fn if_let_bindings(condition: &str) -> Vec<String> {
+    condition
+        .trim()
+        .strip_prefix("let ")
+        .and_then(|rest| rest.split_once(" = "))
+        .map(|(pattern, _)| pattern_idents(pattern))
+        .unwrap_or_default()
 }
