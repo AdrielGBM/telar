@@ -82,7 +82,9 @@ pub mod preview;
 
 #[cfg(feature = "runtime")]
 pub mod kw;
+mod markup_declared;
 mod markup_number;
+pub use markup_declared::{DeclaringIf, Handed, HandsItself};
 pub use markup_number::{Float, Int, PropNumber};
 
 /// Keeps items that exist only for previews — preview tables, props metadata, preview-only builder methods — in a crate's source while compiling them only when `telar/previews` is on, so a dependency carries its previews to an app that asks for them and costs every other build nothing.

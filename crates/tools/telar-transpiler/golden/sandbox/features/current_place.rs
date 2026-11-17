@@ -62,10 +62,10 @@ pub fn current_place(props: CurrentPlaceProps) -> Result<Box<dyn LayoutItem>, La
                                     Text::declaring(
                                         || "Intro".to_string(),
                                         LayoutStyle::new(),
-                                        { let on_intro = on_intro.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_intro.get() { theme.get().on_primary } else { theme.get().ink }) },
+                                        { let on_intro = on_intro.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).declaring_if((&::telar::Handed(if on_intro.get() { theme.get().on_primary } else { theme.get().ink })).declared(), |__s, __v| __s.with_color(__v)) },
                                     )?
                                 };
-                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_intro = on_intro.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_intro.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_0])?.to(move || anchor("place-intro")).current({ let on_intro = on_intro.clone(); move || on_intro.get() })
+                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_intro = on_intro.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_radius(BorderRadius::all(6.0)).declaring_if((&::telar::Handed(if on_intro.get() { theme.get().primary } else { theme.get().surface_alt })).declared(), |__s, __v| __s.with_fill(__v)) }, children![__text_0])?.to(move || anchor("place-intro")).current({ let on_intro = on_intro.clone(); move || on_intro.get() })
                             };
                             let __sbox_1 = {
                                 let __text_1 = {
@@ -73,10 +73,10 @@ pub fn current_place(props: CurrentPlaceProps) -> Result<Box<dyn LayoutItem>, La
                                     Text::declaring(
                                         || "Usage".to_string(),
                                         LayoutStyle::new(),
-                                        { let on_usage = on_usage.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_usage.get() { theme.get().on_primary } else { theme.get().ink }) },
+                                        { let on_usage = on_usage.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).declaring_if((&::telar::Handed(if on_usage.get() { theme.get().on_primary } else { theme.get().ink })).declared(), |__s, __v| __s.with_color(__v)) },
                                     )?
                                 };
-                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_usage = on_usage.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_usage.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_1])?.to(move || anchor("place-usage")).current({ let on_usage = on_usage.clone(); move || on_usage.get() })
+                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_usage = on_usage.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_radius(BorderRadius::all(6.0)).declaring_if((&::telar::Handed(if on_usage.get() { theme.get().primary } else { theme.get().surface_alt })).declared(), |__s, __v| __s.with_fill(__v)) }, children![__text_1])?.to(move || anchor("place-usage")).current({ let on_usage = on_usage.clone(); move || on_usage.get() })
                             };
                             let __sbox_2 = {
                                 let __text_2 = {
@@ -84,10 +84,10 @@ pub fn current_place(props: CurrentPlaceProps) -> Result<Box<dyn LayoutItem>, La
                                     Text::declaring(
                                         || "Limits".to_string(),
                                         LayoutStyle::new(),
-                                        { let on_limits = on_limits.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if on_limits.get() { theme.get().on_primary } else { theme.get().ink }) },
+                                        { let on_limits = on_limits.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).declaring_if((&::telar::Handed(if on_limits.get() { theme.get().on_primary } else { theme.get().ink })).declared(), |__s, __v| __s.with_color(__v)) },
                                     )?
                                 };
-                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_limits = on_limits.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_fill(if on_limits.get() { theme.get().primary } else { theme.get().surface_alt }).with_radius(BorderRadius::all(6.0)) }, children![__text_2])?.to(move || anchor("place-limits")).current({ let on_limits = on_limits.clone(); move || on_limits.get() })
+                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let on_limits = on_limits.clone(); let theme = theme.clone(); move |_| RectStyle::default().with_radius(BorderRadius::all(6.0)).declaring_if((&::telar::Handed(if on_limits.get() { theme.get().primary } else { theme.get().surface_alt })).declared(), |__s, __v| __s.with_fill(__v)) }, children![__text_2])?.to(move || anchor("place-limits")).current({ let on_limits = on_limits.clone(); move || on_limits.get() })
                             };
                             let __text_3 = {
                                 let shown = shown.clone();

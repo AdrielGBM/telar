@@ -241,8 +241,8 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1532..1539	4471	`presses`
 2090..2102	7058	`calm_reading`
-2032..2056	7994	`|| calm.set(!calm.get())`
-2242..2254	8566	`calm_reading`
-2765..2789	12164	`|| bold.set(!bold.get())`
-3144..3172	13718	`|| italic.set(!italic.get())`
-3318..3324	14254	`styles`
+2032..2056	8120	`|| calm.set(!calm.get())`
+2242..2254	8692	`calm_reading`
+2765..2789	12416	`|| bold.set(!bold.get())`
+3144..3172	14096	`|| italic.set(!italic.get())`
+3318..3324	14632	`styles`

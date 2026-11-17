@@ -283,7 +283,8 @@ fn a_bare_name_is_the_binding_not_a_theme_token() {
     )
     .unwrap();
     assert!(
-        out.rust_code.contains("with_fill(muted)"),
+        out.rust_code
+            .contains("Handed(muted)).declared(), |__s, __v| __s.with_fill(__v)"),
         "a bound colour is itself, not a token lookup:\n{}",
         out.rust_code
     );
@@ -1297,7 +1298,9 @@ fn shown_is_a_layout_value_that_re_resolves() {
     .unwrap();
     let code = &out.rust_code;
     assert!(
-        code.contains(".shown(open.get())"),
+        code.contains(
+            ".declaring_if((&::telar::Handed(open.get())).declared(), |__s, __v| __s.shown(__v))"
+        ),
         "the flag is read where it is written:\n{code}"
     );
     assert!(
@@ -1317,7 +1320,7 @@ fn sticky_follows_what_it_reads() {
     )
     .unwrap();
     let code = &out.rust_code;
-    assert!(code.contains(".sticky_when(pinned.get())"), "{code}");
+    assert!(code.contains(".declaring_if((&::telar::Handed(pinned.get())).declared(), |__s, __v| __s.sticky_when(__v))"), "{code}");
     assert!(code.contains(".styled_by("), "{code}");
 
     let negated = transpile_source(
@@ -1328,7 +1331,7 @@ fn sticky_follows_what_it_reads() {
     )
     .unwrap();
     assert!(
-        negated.rust_code.contains(".sticky_when(!reduced.get())"),
+        negated.rust_code.contains(".declaring_if((&::telar::Handed(!reduced.get())).declared(), |__s, __v| __s.sticky_when(__v))"),
         "{}",
         negated.rust_code
     );
@@ -2239,7 +2242,7 @@ fn fill_signal_reads_reactively_and_clones_into_the_closure() {
         "a signal fill must not error:\n{code}"
     );
     assert!(
-        code.contains("{ let accent = accent.clone(); move |_| RectStyle::default().with_fill(accent.get()).with_radius(BorderRadius::zero()) }"),
+        code.contains("{ let accent = accent.clone(); move |_| RectStyle::default().declaring_if((&::telar::Handed(accent.get())).declared(), |__s, __v| __s.with_fill(__v)) }"),
         "fill should reactively read the cloned signal:\n{code}"
     );
 }
@@ -2268,7 +2271,7 @@ fn stroke_signal_reads_reactively_and_clones_into_the_closure() {
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
         code.contains(
-            "{ let accent = accent.clone(); move |_| RectStyle { fill: None, border: Some(Border::new(Paint::Solid(accent.get()), [1.0; 4])), shadow: None, radius: BorderRadius::zero() } }"
+            "{ let accent = accent.clone(); move |_| RectStyle::default().declaring_if((&::telar::Handed(accent.get())).declared(), |__s, __v| __s.with_border(Border::new(Paint::Solid(__v), [1.0; 4]))) }"
         ),
         "stroke should reactively read the cloned signal:\n{code}"
     );
@@ -2280,7 +2283,7 @@ fn text_color_signal_reads_reactively_and_clones_into_the_closure() {
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
         code.contains(
-            "{ let accent = accent.clone(); move |__inherited: TextStyle| __inherited.with_color(accent.get()) }"
+            "{ let accent = accent.clone(); move |__inherited: TextStyle| __inherited.declaring_if((&::telar::Handed(accent.get())).declared(), |__s, __v| __s.with_color(__v)) }"
         ),
         "text color should reactively read the cloned signal:\n{code}"
     );
@@ -3261,7 +3264,12 @@ fn layout_and_opacity_values_leave_their_delimiters_behind() {
     )
     .unwrap();
     let code = &out.rust_code;
-    assert!(code.contains(".shown(open.get())"), "{code}");
+    assert!(
+        code.contains(
+            ".declaring_if((&::telar::Handed(open.get())).declared(), |__s, __v| __s.shown(__v))"
+        ),
+        "{code}"
+    );
     assert!(!code.contains(".shown(("), "{code}");
     assert!(code.contains("move || fade.get() * 0.5"), "{code}");
     assert!(!code.contains("|| (fade"), "{code}");

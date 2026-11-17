@@ -1088,7 +1088,7 @@ fn a_computed_layout_value_is_re_resolved_even_without_a_sigil() {
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     assert!(
         out.rust_code.contains(
-            ".styled_by(move || LayoutStyle::new().flex_column().gap(measured()).padding_all(8.0))"
+            ".styled_by(move || LayoutStyle::new().flex_column().declaring_if((&::telar::Handed(measured())).declared(), |__s, __v| __s.gap(__v)).padding_all(8.0))"
         ),
         "a call is a reading:\n{}",
         out.rust_code
@@ -1134,7 +1134,7 @@ fn a_re_resolving_style_copies_only_what_another_reader_needs() {
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     assert!(
         out.rust_code.contains(
-            ".styled_by(move || LayoutStyle::new().flex_column().gap(side).padding_all(props.pad))"
+            ".styled_by(move || LayoutStyle::new().flex_column().declaring_if((&::telar::Handed(side)).declared(), |__s, __v| __s.gap(__v)).declaring_if((&::telar::Handed(props.pad)).declared(), |__s, __v| __s.padding_all(__v)))"
         ),
         "{}",
         out.rust_code
@@ -1144,7 +1144,7 @@ fn a_re_resolving_style_copies_only_what_another_reader_needs() {
     let out = crate::transpile_source(shared, "demo", None, None).unwrap();
     assert!(
         out.rust_code.contains(
-            ".styled_by({ let side = side.clone(); let __props_pad = props.pad.clone(); move || LayoutStyle::new().flex_column().gap(side).padding_all(__props_pad) })"
+            ".styled_by({ let side = side.clone(); let __props_pad = props.pad.clone(); move || LayoutStyle::new().flex_column().declaring_if((&::telar::Handed(side)).declared(), |__s, __v| __s.gap(__v)).declaring_if((&::telar::Handed(__props_pad)).declared(), |__s, __v| __s.padding_all(__v)) })"
         ),
         "{}",
         out.rust_code
@@ -1159,9 +1159,12 @@ fn a_values_own_parens_do_not_reach_the_output() {
     let out = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
-    assert!(out.contains(".gap(space::lg() * 2.0)"), "{out}");
-    assert!(out.contains(".padding_all(::ui::scale::md())"), "{out}");
-    assert!(out.contains("with_fill(tint(on))"), "{out}");
+    assert!(out.contains(".declaring_if((&::telar::Handed(space::lg() * 2.0)).declared(), |__s, __v| __s.gap(__v))"), "{out}");
+    assert!(out.contains(".declaring_if((&::telar::Handed(::ui::scale::md())).declared(), |__s, __v| __s.padding_all(__v))"), "{out}");
+    assert!(
+        out.contains("Handed(tint(on))).declared(), |__s, __v| __s.with_fill(__v)"),
+        "{out}"
+    );
 }
 
 /// A theme read is a `$` read: the view binds `theme` as a handle, so the same sugar that reads a signal reads the theme, and it re-reads inside the paint closure instead of freezing at construction.
@@ -1363,7 +1366,7 @@ fn a_weight_may_be_any_expression_that_yields_one() {
     for (src, expected) in [
         (
             "[logic]\nlet w = signal(700u16);\n[view]\ntext \"x\" font_weight:$w\n",
-            ".with_font_weight(w.get())",
+            ".declaring_if((&::telar::Handed(w.get())).declared(), |__s, __v| __s.with_font_weight(__v))",
         ),
         (
             "[view]\ntext \"x\" font_weight:TITLE_WEIGHT\n",
@@ -1371,7 +1374,7 @@ fn a_weight_may_be_any_expression_that_yields_one() {
         ),
         (
             "[view]\ntext \"x\" font_weight:(base + 100)\n",
-            ".with_font_weight(base + 100)",
+            ".declaring_if((&::telar::Handed(base + 100)).declared(), |__s, __v| __s.with_font_weight(__v))",
         ),
         (
             "[view]\ncol font_weight:$theme.font_weight_strong\n    text \"x\"\n",
@@ -1524,12 +1527,14 @@ fn a_name_the_author_has_in_scope_is_still_carried_through() {
         out.rust_code
     );
     assert!(
-        out.rust_code.contains(".gap(gutter)"),
+        out.rust_code.contains(
+            ".declaring_if((&::telar::Handed(gutter)).declared(), |__s, __v| __s.gap(__v))"
+        ),
         "a name in scope is passed through untouched: {}",
         out.rust_code
     );
     assert!(
-        out.rust_code.contains(".padding_all(props.pad)"),
+        out.rust_code.contains(".declaring_if((&::telar::Handed(props.pad)).declared(), |__s, __v| __s.padding_all(__v))"),
         "and so is a field access: {}",
         out.rust_code
     );
@@ -1922,7 +1927,7 @@ fn a_case_and_an_underline_cascade_and_follow_state() {
         "a container declares them for its subtree:\n{code}"
     );
     assert!(
-        code.contains(".with_underline(hovered.get())"),
+        code.contains(".declaring_if((&::telar::Handed(hovered.get())).declared(), |__s, __v| __s.with_underline(__v))"),
         "an underline reads state:\n{code}"
     );
     assert!(
@@ -2073,7 +2078,7 @@ fn a_constant_layout_value_is_static() {
     );
     assert_eq!(code.matches(".styled_by(").count(), 1, "{code}");
     assert!(
-        code.contains(".styled_by(move || LayoutStyle::new().flex_column().gap(gutter()))"),
+        code.contains(".styled_by(move || LayoutStyle::new().flex_column().declaring_if((&::telar::Handed(gutter())).declared(), |__s, __v| __s.gap(__v)))"),
         "{code}"
     );
 }
@@ -2385,7 +2390,7 @@ fn a_prop_read_by_several_paint_closures_of_one_box_is_copied_into_each() {
     let code = &out.rust_code;
     assert!(
         code.contains(
-            "{ let __props_tint = props.tint.clone(); move |_| RectStyle { fill: Some(Paint::Solid(__props_tint.get())), border: Some(Border::new(Paint::Solid(__props_tint.get())"
+            "{ let __props_tint = props.tint.clone(); move |_| RectStyle::default().declaring_if((&::telar::Handed(__props_tint.get())).declared(), |__s, __v| __s.with_fill(__v)).declaring_if((&::telar::Handed(__props_tint.get())).declared(), |__s, __v| __s.with_border(Border::new(Paint::Solid(__v), [1.0; 4])))"
         ),
         "the base takes one copy for its fill and its stroke:\n{code}"
     );
@@ -2413,11 +2418,11 @@ fn a_prop_read_by_two_elements_is_copied_into_each_closure() {
         .unwrap()
         .rust_code;
     assert!(
-        code.contains("{ let __props_tint = props.tint.clone(); move |__inherited: TextStyle| __inherited.with_color(__props_tint.get()) }"),
+        code.contains("{ let __props_tint = props.tint.clone(); move |__inherited: TextStyle| __inherited.declaring_if((&::telar::Handed(__props_tint.get())).declared(), |__s, __v| __s.with_color(__v)) }"),
         "{code}"
     );
     assert!(
-        code.contains("{ let __props_tint = props.tint.clone(); move |_| RectStyle::default().with_fill(__props_tint.get())"),
+        code.contains("{ let __props_tint = props.tint.clone(); move |_| RectStyle::default().declaring_if((&::telar::Handed(__props_tint.get())).declared(), |__s, __v| __s.with_fill(__v))"),
         "{code}"
     );
     assert!(!code.contains("(props.tint.get())"), "{code}");
@@ -2566,7 +2571,7 @@ fn a_component_call_places_the_item_it_returns() {
     assert!(
         code.contains("const { assert!(ProgressProps::IN_FLOW,")
             && code.contains(
-                "place_item(__node_0.layout_node(), move |__style: LayoutStyle| __style.width("
+                "place_item(__node_0.layout_node(), move |__style: LayoutStyle| __style.width(SizeDimension::Percent(1.0))"
             )
             && code.contains(".flex_grow("),
         "the call places the item over what it declares:\n{code}"
@@ -2640,5 +2645,28 @@ fn a_placeholder_with_a_body_stands_it_in_for_children_not_handed() {
     assert!(
         code[handed + otherwise..].contains("\"none\""),
         "the body is built where nothing was handed:\n{code}"
+    );
+}
+
+/// An attribute handed an `Option` declares nothing for `None`, so what the tree around declared stands: a text's weight, a box's width and fill alike. A literal is set as written.
+#[test]
+fn an_attribute_handed_none_declares_nothing() {
+    let code = crate::transpile_source(
+        "[logic]\nlet on = signal(false);\n[view]\ncol width:240\n    text \"x\" font_weight:(if $on { Some(700) } else { None })\n    box width:(if $on { Some(80.0) } else { None }) fill:(if $on { Some(Color::BLACK) } else { None })\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    for method in ["with_font_weight", "width", "with_fill"] {
+        assert!(
+            code.contains(&format!("|__s, __v| __s.{method}(__v)")),
+            "`{method}` is declared only when handed a value:\n{code}"
+        );
+    }
+    assert!(
+        code.contains(".width(240.0)"),
+        "a literal is set as written:\n{code}"
     );
 }

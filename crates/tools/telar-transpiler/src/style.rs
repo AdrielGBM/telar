@@ -142,7 +142,7 @@ pub fn in_application_order<T>(props: &[T], key: impl Fn(&T) -> &str) -> Vec<&T>
 /// Maps a style property to the `LayoutStyle` builder call it contributes — or reports the value as one this key cannot mean, which is what stops a misspelling from being a property that silently does nothing.
 pub fn layout_prop_call(key: &str, value: &str, theme: ThemeAccess) -> PropCall {
     match layout_call(key, value.trim(), theme) {
-        Ok(Some(call)) => PropCall::Call(call),
+        Ok(Some(call)) => PropCall::Call(declared_when_handed(call)),
         Ok(None) => PropCall::Other,
         Err(message) => PropCall::Invalid(message),
     }
@@ -541,3 +541,78 @@ pub fn hex_to_color_expr(hex: &str) -> String {
 #[cfg(test)]
 #[path = "style.test.rs"]
 mod tests;
+
+/// `call`, the `.method(arg)` an attribute becomes, applied only when `arg` declares something: a value declares itself, and an `Option` its value or nothing, which leaves what the tree around declared or the default (`telar::Handed`). A literal or a constant is left as it is, since neither is an `Option`, and so is a call that is not one method of one argument.
+pub fn declared_when_handed(call: String) -> String {
+    let Some((method, arg)) = single_argument_call(&call) else {
+        return call;
+    };
+    if arg.parse::<f32>().is_ok()
+        || matches!(arg, "true" | "false")
+        || crate::rust::is_const_expr(arg)
+        || never_absent(arg)
+    {
+        return call;
+    }
+    format!(".declaring_if((&::telar::Handed({arg})).declared(), |__s, __v| __s.{method}(__v))")
+}
+
+/// The method and the one argument of `.method(arg)`, or `None` for anything else: no argument, several, or several calls chained.
+fn single_argument_call(call: &str) -> Option<(&str, &str)> {
+    let (method, rest) = call.strip_prefix('.')?.split_once('(')?;
+    let arg = rest.strip_suffix(')')?;
+    if arg.trim().is_empty()
+        || !method
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    {
+        return None;
+    }
+    let mut depth = 0i32;
+    let bytes = arg.as_bytes();
+    let mut at = 0;
+    while at < bytes.len() {
+        if let Some(end) = crate::lexer::literal_or_comment_end(bytes, at) {
+            at = end;
+            continue;
+        }
+        match bytes[at] {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => {
+                depth -= 1;
+                if depth < 0 {
+                    return None;
+                }
+            }
+            b',' if depth == 0 => return None,
+            _ => {}
+        }
+        at += 1;
+    }
+    (depth == 0).then_some((method, arg))
+}
+
+/// Whether a colour written `raw` may be an `Option`: not a `#hex`, a keyword or a `$theme`/`$text` read, each of which is a colour.
+pub fn colour_may_be_absent(raw: &str) -> bool {
+    let raw = raw.trim();
+    !(raw.starts_with('#')
+        || raw.starts_with("$theme.")
+        || raw.starts_with("$text.")
+        || crate::registry::color_keywords().contains(&raw))
+}
+
+/// Whether `arg` is a fixed length, or read from the theme or the text around the box, none of which is ever absent.
+fn never_absent(arg: &str) -> bool {
+    let read = arg.trim_start_matches('(');
+    let fixed = ["SizeDimension::", "TextLength::"].iter().any(|kind| {
+        arg.strip_prefix(kind)
+            .and_then(|rest| rest.split_once('('))
+            .and_then(|(_, number)| number.strip_suffix(')'))
+            .is_some_and(|number| number.trim().parse::<f32>().is_ok())
+    });
+    let text = format!("{BOX_TEXT_BINDING}.get()");
+    fixed
+        || read.starts_with("theme.get().")
+        || read.starts_with("::telar::use_theme_tokens().")
+        || arg.contains(&text) && arg.matches(".get()").count() == arg.matches(&text).count()
+}

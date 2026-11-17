@@ -426,14 +426,14 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 2555..2568	11045	`|| tab.set(0)`
 2739..2752	13112	`|| tab.set(1)`
-3455..3490	17236	`|x, y| { at_x.set(x); at_y.set(y) }`
-3514..3518	17701	`at_x`
-3535..3539	17721	`at_y`
-3920..3939	20379	`|x, _y| at_x.set(x)`
-3954..3999	20452	`|x, y| settled.set(format!("{x:.0}, {y:.0}"))`
-4032..4039	20869	`settled`
-4451..4470	23780	`|x, _y| at_x.set(x)`
-4889..4926	26615	`|_dx, dy| wheel.set(wheel.get() + dy)`
-4942..4981	26699	`|button| alt.set(format!("{button:?}"))`
-5145..5150	27145	`wheel`
-5219..5222	27724	`alt`
+3455..3490	17496	`|x, y| { at_x.set(x); at_y.set(y) }`
+3514..3518	17961	`at_x`
+3535..3539	17981	`at_y`
+3920..3939	20639	`|x, _y| at_x.set(x)`
+3954..3999	20712	`|x, y| settled.set(format!("{x:.0}, {y:.0}"))`
+4032..4039	21129	`settled`
+4451..4470	24040	`|x, _y| at_x.set(x)`
+4889..4926	26875	`|_dx, dy| wheel.set(wheel.get() + dy)`
+4942..4981	26959	`|button| alt.set(format!("{button:?}"))`
+5145..5150	27405	`wheel`
+5219..5222	27984	`alt`

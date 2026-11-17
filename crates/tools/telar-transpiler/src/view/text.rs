@@ -324,13 +324,13 @@ impl ViewGen<'_> {
                 (Some(_), StyleTarget::Declared) => modifiers.push_str(
                     ".with_font_size(::core::compile_error!(\"`font_size:fit(…)` fits one line to a width, so it goes on a `text`, not on what holds or runs inside one\"))",
                 ),
-                (None, _) => modifiers.push_str(&length_modifier(
+                (None, _) => modifiers.push_str(&crate::style::declared_when_handed(length_modifier(
                     "with_font_size",
                     size.value.text(),
                     DEFAULT_SIZE,
                     target,
                     self.theme_access,
-                )),
+                ))),
             }
         }
         let color_attr = attrs.iter().find(|a| a.key == "color");
@@ -339,7 +339,10 @@ impl ViewGen<'_> {
             if let Some(curve) = transitions.get("color") {
                 color = self.wrap_transition(curve, &color, hoists);
             }
-            let _ = write!(modifiers, ".with_color({color})");
+            modifiers.push_str(&handed_colour(
+                a.value.text(),
+                format!(".with_color({color})"),
+            ));
         }
         if let Some(family) = attrs.iter().find(|a| a.key == "font_family") {
             modifiers.push_str(&format!(".with_font_family({})", font_family_expr(family)));
@@ -353,7 +356,9 @@ impl ViewGen<'_> {
             )
             .ok()
         }) {
-            modifiers.push_str(&format!(".with_font_weight({w})"));
+            modifiers.push_str(&crate::style::declared_when_handed(format!(
+                ".with_font_weight({w})"
+            )));
         }
         if let Some(variant) = attrs
             .iter()
@@ -382,10 +387,10 @@ impl ViewGen<'_> {
             .map(|a| a.value.text().trim().to_string())
             .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&format!(
+            modifiers.push_str(&crate::style::declared_when_handed(format!(
                 ".with_line_height({})",
                 number_or(&lh, "1.0", self.theme_access)
-            ));
+            )));
         }
         if let Some(ls) = attrs
             .iter()
@@ -393,13 +398,13 @@ impl ViewGen<'_> {
             .map(|a| a.value.text().trim().to_string())
             .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&length_modifier(
+            modifiers.push_str(&crate::style::declared_when_handed(length_modifier(
                 "with_letter_spacing",
                 &ls,
                 "0.0",
                 target,
                 self.theme_access,
-            ));
+            )));
         }
         if let Some(attr) = attrs.iter().find(|a| a.key == "font_variation") {
             let mut value = font_settings_expr(attr, FontSetting::Variations, self.theme_access);
@@ -433,7 +438,9 @@ impl ViewGen<'_> {
             } else {
                 super::signals::substitute_reads(value, self.theme_access)
             };
-            let _ = write!(modifiers, ".with_underline({drawn})");
+            modifiers.push_str(&crate::style::declared_when_handed(format!(
+                ".with_underline({drawn})"
+            )));
         }
         for (key, method) in [
             ("underline_offset", "with_underline_offset"),
@@ -462,7 +469,10 @@ impl ViewGen<'_> {
         }
         if let Some(a) = attrs.iter().find(|a| a.key == "underline_color") {
             let color = self.color_expr(a.value.text(), Some(a.value_start));
-            let _ = write!(modifiers, ".with_underline_color({color})");
+            modifiers.push_str(&handed_colour(
+                a.value.text(),
+                format!(".with_underline_color({color})"),
+            ));
         }
         modifiers
     }
@@ -820,5 +830,13 @@ fn length_modifier(
             format!(".{method}_in({length}, {on})")
         }
         (None, _) => format!(".{method}({})", number_or(value, fallback, theme)),
+    }
+}
+
+/// `call`, a colour attribute's `.with_…(colour)`, applied only when the colour declares something: a colour written as `#hex`, a keyword or a `$theme`/`$text` read is one, and stays as written; any other expression may be an `Option`.
+fn handed_colour(raw: &str, call: String) -> String {
+    match crate::style::colour_may_be_absent(raw) {
+        true => crate::style::declared_when_handed(call),
+        false => call,
     }
 }

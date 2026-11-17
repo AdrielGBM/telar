@@ -98,7 +98,9 @@ fn a_theme_read_resolves_in_any_numeric_prop() {
 fn a_bare_ident_is_the_name_the_author_wrote() {
     assert_eq!(
         call("pad", "card_gap").as_deref(),
-        Some(".padding_all(card_gap)")
+        Some(
+            ".declaring_if((&::telar::Handed(card_gap)).declared(), |__s, __v| __s.padding_all(__v))"
+        )
     );
 }
 
@@ -262,7 +264,9 @@ fn sticky_is_a_bare_flag_that_keeps_its_insets() {
 fn a_sticky_value_says_whether_it_sticks() {
     assert_eq!(
         call("sticky", "$pinned").as_deref(),
-        Some(".sticky_when(pinned.get())")
+        Some(
+            ".declaring_if((&::telar::Handed(pinned.get())).declared(), |__s, __v| __s.sticky_when(__v))"
+        )
     );
     assert_eq!(
         call("sticky", "false").as_deref(),

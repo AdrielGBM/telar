@@ -525,7 +525,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 Container::new(style_wrap().align_items(AlignItems::CENTER).gap(16.0), children![__text_26, __text_27, __row_10])?
             };
-            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(PRIMARY).with_radius(BorderRadius::zero()), children![__col_15])?
+            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(PRIMARY), children![__col_15])?
         };
         let __sbox_11 = {
             let __row_11 = {

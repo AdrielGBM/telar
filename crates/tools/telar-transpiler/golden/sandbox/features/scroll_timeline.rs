@@ -81,7 +81,7 @@ pub fn scroll_timeline(props: ScrollTimelineProps) -> Result<Box<dyn LayoutItem>
                                                     };
                                                     StyledContainer::new(LayoutStyle::new().flex_column(), move |_| RectStyle::default(), children![__text_1])?.with_transform({ let stage_scale = stage_scale.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (stage_scale.get()) as f32, (stage_scale.get()) as f32, (0) as f32, (0) as f32) })
                                                 };
-                                                StyledContainer::new(LayoutStyle::new().flex_column().height(160.0).width(SizeDimension::Percent(1.0)).sticky().inset_top(40.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let stage_color = stage_color.clone(); move |_| RectStyle::default().with_fill(stage_color.get()).with_radius(BorderRadius::all(10.0)) }, children![__sbox_1])?
+                                                StyledContainer::new(LayoutStyle::new().flex_column().height(160.0).width(SizeDimension::Percent(1.0)).sticky().inset_top(40.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let stage_color = stage_color.clone(); move |_| RectStyle::default().with_radius(BorderRadius::all(10.0)).declaring_if((&::telar::Handed(stage_color.get())).declared(), |__s, __v| __s.with_fill(__v)) }, children![__sbox_1])?
                                             };
                                             Container::new(LayoutStyle::new().flex_column().height(800.0).width(SizeDimension::Percent(1.0)), children![__sbox_0])?
                                         };

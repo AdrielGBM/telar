@@ -97,11 +97,36 @@ impl ViewGen<'_> {
         {
             stroke = Some(self.wrap_transition(curve, &s, hoists));
         }
+        // A colour that may be absent is laid on only when present, after the rest of the paint.
+        let handed = |key: &str| {
+            pattrs
+                .iter()
+                .any(|a| a.key == key && crate::style::colour_may_be_absent(a.value.text()))
+                && !transitions.contains_key(key)
+        };
+        let absent_fill = solid_fill.take_if(|_| handed("fill"));
+        let absent_stroke = stroke.take_if(|_| handed("stroke"));
         let border_widths = self.border_widths_expr(pattrs);
         let radius = self.radius_expr(pattrs);
         let param = if gradient.is_some() { "r" } else { "_" };
-        let mut rect_style =
-            build_rect_style(gradient, solid_fill, stroke, border_widths, shadow, &radius);
+        let mut rect_style = build_rect_style(
+            gradient,
+            solid_fill,
+            stroke,
+            border_widths.clone(),
+            shadow,
+            &radius,
+        );
+        if let Some(fill) = absent_fill {
+            rect_style.push_str(&crate::style::declared_when_handed(format!(
+                ".with_fill({fill})"
+            )));
+        }
+        if let Some(stroke) = absent_stroke {
+            rect_style.push_str(&format!(
+                ".declaring_if((&::telar::Handed({stroke})).declared(), |__s, __v| __s.with_border(Border::new(Paint::Solid(__v), {border_widths})))"
+            ));
+        }
         if let Some(surface) = surface {
             rect_style = format!(
                 "amend_surface({rect_style}, &{})",

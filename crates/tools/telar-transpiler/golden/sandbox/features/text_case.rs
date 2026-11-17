@@ -128,7 +128,7 @@ pub fn text_case(props: TextCaseProps) -> Result<Box<dyn LayoutItem>, LayoutErro
                                         Text::declaring(
                                             || "Hover me to underline".to_string(),
                                             LayoutStyle::new(),
-                                            { let theme = theme.clone(); let hovered = hovered.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().primary).with_underline(hovered.get()).with_underline_offset(4.0) },
+                                            { let theme = theme.clone(); let hovered = hovered.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().primary).declaring_if((&::telar::Handed(hovered.get())).declared(), |__s, __v| __s.with_underline(__v)).with_underline_offset(4.0) },
                                         )?
                                     };
                                     StyledContainer::new(LayoutStyle::new().flex_column(), move |_| RectStyle::default(), children![__text_7])?.on_hover({ let hovered = hovered.clone(); move |h| hovered.set(h) }).cursor(Cursor::Pointer)
