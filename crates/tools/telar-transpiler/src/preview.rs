@@ -119,6 +119,7 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
             .collect();
         let root = root_component(&preview.body);
         let mut view = ViewGen::new(previews.classes, previews.assets)
+            .with_source(previews.source)
             .with_theme_access(previews.theme)
             .with_previewed(previews.component)
             .with_locals(

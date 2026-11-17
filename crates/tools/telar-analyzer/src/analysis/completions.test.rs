@@ -422,3 +422,27 @@ fn an_inline_matrix_skips_a_prop_handed_an_arg() {
     expected.extend(["agree", "label"]);
     assert_eq!(labels(&items), expected);
 }
+
+#[test]
+fn a_continuation_line_completes_the_attributes_of_its_element() {
+    let source = "[view]\ncol\n    box gap:4\n            fill:red \n        text \"a\"\n";
+    let line_end = source.lines().nth(3).unwrap().len() as u32;
+    assert_eq!(
+        completion_context(source, 3, line_end),
+        Some(CompletionKind::AttributeKey("box".into()))
+    );
+    assert_eq!(
+        completion_context(source, 3, 14),
+        Some(CompletionKind::AttributeKey("box".into())),
+        "the key opening the line"
+    );
+    assert_eq!(
+        completion_context(source, 3, 17),
+        Some(CompletionKind::ColorValue)
+    );
+    assert_eq!(
+        completion_context(source, 4, 9),
+        Some(CompletionKind::ElementName),
+        "a child still opens with a tag"
+    );
+}

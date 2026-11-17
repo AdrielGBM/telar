@@ -14,14 +14,6 @@
 #[derive(::telar::Props)]
 pub struct ButtonsProps {}
 
-#[allow(dead_code)]
-fn style_center() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .align_items(AlignItems::CENTER)
-        .justify_content(JustifyContent::CENTER)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -138,7 +130,7 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                         )?
                                     };
-                                    StyledContainer::new(style_center().flex_column().padding_all(20.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.on_press({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })
+                                    StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).padding_all(20.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.on_press({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })
                                 };
                                 __children.push(box_item(__sbox_0));
                                 let __text_2 = {
@@ -185,7 +177,7 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) })
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).padding_all(16.0).width(150.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) })
                                     };
                                     let __sbox_2 = {
                                         let __text_4 = {
@@ -195,7 +187,7 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().primary), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } })
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).padding_all(16.0).width(150.0).height(64.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().primary), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } })
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), children![__sbox_1, __sbox_2])?
                                 };

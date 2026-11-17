@@ -15,22 +15,6 @@
 #[derive(::telar::Props)]
 pub struct BlendProps {}
 
-#[allow(dead_code)]
-fn style_blend_center() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .align_items(AlignItems::CENTER)
-        .justify_content(JustifyContent::CENTER)
-}
-
-#[allow(dead_code)]
-fn style_blend_swatch() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .width(96.0)
-        .height(96.0)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn blend(props: BlendProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -61,9 +45,9 @@ pub fn blend(props: BlendProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                                 )?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_blend(|| BlendMode::Normal)
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(96.0).height(96.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_blend(|| BlendMode::Normal)
                                         };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_1])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(96.0).height(96.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_1])?
                                     };
                                     let __sbox_2 = {
                                         let __sbox_3 = {
@@ -74,9 +58,9 @@ pub fn blend(props: BlendProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                                 )?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_blend(|| BlendMode::Multiply)
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(96.0).height(96.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_blend(|| BlendMode::Multiply)
                                         };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_3])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(96.0).height(96.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_3])?
                                     };
                                     let __sbox_4 = {
                                         let __sbox_5 = {
@@ -87,9 +71,9 @@ pub fn blend(props: BlendProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                                 )?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_blend(|| BlendMode::Screen)
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(96.0).height(96.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_blend(|| BlendMode::Screen)
                                         };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_5])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(96.0).height(96.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_5])?
                                     };
                                     let __sbox_6 = {
                                         let __sbox_7 = {
@@ -100,9 +84,9 @@ pub fn blend(props: BlendProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
                                                 )?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_blend(|| BlendMode::Difference)
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(96.0).height(96.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_blend(|| BlendMode::Difference)
                                         };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_7])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(96.0).height(96.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_7])?
                                     };
                                     let __sbox_8 = {
                                         let __sbox_9 = {
@@ -113,9 +97,9 @@ pub fn blend(props: BlendProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                                 )?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_4])?.with_blend(|| BlendMode::ColorDodge)
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(96.0).height(96.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_4])?.with_blend(|| BlendMode::ColorDodge)
                                         };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_9])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(96.0).height(96.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_9])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(16.0).flex_wrap(), children![__sbox_0, __sbox_2, __sbox_4, __sbox_6, __sbox_8])?
                                 };

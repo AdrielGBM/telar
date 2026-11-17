@@ -14,14 +14,6 @@
 #[derive(::telar::Props)]
 pub struct OpacityProps {}
 
-#[allow(dead_code)]
-fn style_center() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .align_items(AlignItems::CENTER)
-        .justify_content(JustifyContent::CENTER)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn opacity(props: OpacityProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -51,7 +43,7 @@ pub fn opacity(props: OpacityProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_opacity(|| 1.0)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_opacity(|| 1.0)
                                     };
                                     let __sbox_1 = {
                                         let __text_1 = {
@@ -61,7 +53,7 @@ pub fn opacity(props: OpacityProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_opacity(|| 0.6)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_opacity(|| 0.6)
                                     };
                                     let __sbox_2 = {
                                         let __text_2 = {
@@ -71,7 +63,7 @@ pub fn opacity(props: OpacityProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_opacity(|| 0.3)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_opacity(|| 0.3)
                                     };
                                     let __sbox_3 = {
                                         let __text_3 = {
@@ -81,7 +73,7 @@ pub fn opacity(props: OpacityProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_opacity(|| 0.1)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_opacity(|| 0.1)
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(16.0).with_color(theme.get().on_primary) })
                                 };
@@ -121,7 +113,7 @@ pub fn opacity(props: OpacityProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().on_primary) },
                                         )?
                                     };
-                                    StyledContainer::new(style_center().flex_column().height(80.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_4])?.with_opacity(|| 0.75)
+                                    StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).height(80.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_4])?.with_opacity(|| 0.75)
                                 };
                                 __children.push(box_item(__sbox_4));
                                 Ok(__children)
@@ -167,7 +159,7 @@ pub fn opacity(props: OpacityProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().on_primary) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().flex_grow(1.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?.with_opacity(|| 0.6)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).flex_grow(1.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?.with_opacity(|| 0.6)
                                     };
                                     StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).padding_all(14.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![__text_5, __sbox_6])?.with_opacity(|| 0.6)
                                 };

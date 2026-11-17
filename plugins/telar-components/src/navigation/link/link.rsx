@@ -1,7 +1,7 @@
 [logic]
 use std::rc::Rc;
 
-use crate::look::Look;
+use crate::look::ToneLook;
 use crate::shared::{self, GlyphProps, Mark, glyph};
 use crate::strings;
 use telar::{ControlSize, Destination, Handler, IntoDestination, Tone, Variant};
@@ -9,21 +9,11 @@ use telar::{ControlSize, Destination, Handler, IntoDestination, Tone, Variant};
 /// A link's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the link paints.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct LinkTokens {
     /// Corner of the wash a pointer resting on the link lays behind it. `None` is the theme's `radius_item`.
+    #[token(or = shared::radius_item)]
     pub radius: Option<f32>,
-}
-
-impl LinkTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_item)
-    }
 }
 
 /// Where a [`link`] goes, re-read whenever what it reads changes: anything a box's `to:` takes — a typed route, a [`Location`](telar::Location), an [`anchor`](telar::anchor) or an [`external`](telar::external) address — or an `Option` of one, `None` being nowhere to go right now.
@@ -83,7 +73,6 @@ pub struct Props {
     pub style: Option<SurfaceAmendment>,
 }
 
-
 fn heard(label: String, leaves: bool) -> String {
     match leaves {
         true => strings::text_with(strings::EXTERNAL_LINK, &[("label", &label)]),
@@ -92,7 +81,7 @@ fn heard(label: String, leaves: bool) -> String {
 }
 
 let to = props.to.clone();
-let look = Look {
+let look = ToneLook {
     tone: props.tone.clone(),
     variant: Variant::Ghost,
     selected: None,

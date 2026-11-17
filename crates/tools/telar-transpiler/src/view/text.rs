@@ -40,12 +40,12 @@ impl ViewGen<'_> {
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         // Regression: the class reached a container and stopped there, so `@heading { font_size: 22 }` compiled and did nothing.
-        let attrs = self.effective_attrs(el);
-        let style = self.text_style(&attrs, &transitions, &mut hoists, &mut errors);
-        let fit = fit_closure(self, &attrs, &mut errors);
+        let attrs = el.attributes.as_slice();
+        let style = self.text_style(attrs, &transitions, &mut hoists, &mut errors);
+        let fit = fit_closure(self, attrs, &mut errors);
         let (constructor, fit_arg) = fit_constructor("Text::declaring", "Text::fitting", fit, &pad);
 
-        let layout_style = text_layout_style(&attrs, self.theme_access);
+        let layout_style = text_layout_style(attrs, self.theme_access);
 
         // Each `move` closure consumes its captures, so clone into block locals.
         let mut clones: String = content_clones
@@ -87,10 +87,10 @@ impl ViewGen<'_> {
         let (specs, mut errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
-        let attrs = self.effective_attrs(el);
-        let style = self.text_style(&attrs, &transitions, &mut hoists, &mut errors);
-        let layout_style = text_layout_style(&attrs, self.theme_access);
-        let fit = fit_closure(self, &attrs, &mut errors);
+        let attrs = el.attributes.as_slice();
+        let style = self.text_style(attrs, &transitions, &mut hoists, &mut errors);
+        let layout_style = text_layout_style(attrs, self.theme_access);
+        let fit = fit_closure(self, attrs, &mut errors);
         let (constructor, fit_arg) = fit_constructor("Text::runs", "Text::runs_fitting", fit, &pad);
 
         let mut runs: Vec<String> = Vec::new();
@@ -116,14 +116,16 @@ impl ViewGen<'_> {
                     .filter(|attr| !allowed.contains(&attr.key.as_str()))
                     .map(|attr| format!("`{}` is not an attribute of `span`", attr.key)),
             );
+            errors.extend(self.class_messages(span));
+            let span = self.with_classes_written(span);
             let content = span.content.as_deref().unwrap_or("");
             let mut run = format!(
                 "TextRun::new({})",
                 self.run_content(content, span.content_start, span.content_i18n)
             );
-            let span_attrs = self.effective_attrs(span);
+            let span_attrs = span.attributes.as_slice();
             let modifiers = self.inheritable_modifiers(
-                &span_attrs,
+                span_attrs,
                 &HashMap::new(),
                 &mut hoists,
                 StyleTarget::Declared,
@@ -133,7 +135,7 @@ impl ViewGen<'_> {
                 let _ = write!(
                     run,
                     ".declaring({})",
-                    self.owning(&raw_reactive_values(&span_attrs), &closure)
+                    self.owning(&raw_reactive_values(span_attrs), &closure)
                 );
             }
             if let Some(to) = span_attrs.iter().find(|a| a.key == "to") {

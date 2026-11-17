@@ -370,7 +370,7 @@
       ]
     },
     "view-tag": {
-      "match": "(?<=^\\s*)([a-z][\\w-]*)",
+      "match": "(?<=^\\s*)([a-z][\\w-]*)\\b(?!:(?!:)|\\()",
       "captures": {
         "1": {
           "name": "entity.name.tag.rsx"

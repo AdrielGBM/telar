@@ -1,42 +1,59 @@
-//! Paint/layout style helpers shared across the styled emitters: paint-attr merging, `RectStyle` assembly, opacity/transition closures, and `LayoutStyle` building.
+//! Paint/layout style helpers shared across the styled emitters: classes written onto the element that names them, paint-attr merging, `RectStyle` assembly, opacity/transition closures, and `LayoutStyle` building.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use telar_parser::{Attr, Element, Value};
+use telar_parser::{Attr, Element, StyleClass, Value};
 
 use crate::registry::ValueKind;
 use crate::style::{PropCall, format_f32, in_application_order, layout_prop_call};
-use telar_project::naming::style_function_name;
 
 use super::ViewGen;
 use super::signals::{build_rect_style, is_paint_key, substitute_reads};
 
 impl ViewGen<'_> {
-    /// Every attribute in force on an element: its inline attrs followed by its classes' props.
-    ///
-    /// Inline wins, because every reader takes the first `.find()` match and inline attrs come first; among several classes a later one overrides an earlier one, so classes are appended in REVERSE order and the last class's props land ahead of the first's.
-    ///
-    /// A class carries whatever it was written with, text keys such as `@heading { font_size: 22 }` included, not only the paint keys.
-    pub(super) fn effective_attrs(&self, el: &Element) -> Vec<Attr> {
-        let mut attrs = el.attributes.clone();
-        attrs.extend(self.class_attrs(&el.classes));
+    /// `el` as if the author had written its classes' properties on it: those of each class in the order the classes are named, then the element's own. A key the element writes keeps the element's value and a key a later class gives replaces an earlier class's, so every key is written once and every emitter reads the element alone. A component call keeps its classes, which amend the surfaces it paints, since an attribute on a call is a prop.
+    pub(super) fn with_classes_written<'e>(&self, el: &'e Element) -> Cow<'e, Element> {
+        if el.classes.is_empty() || super::is_component_tag(&el.tag) {
+            return Cow::Borrowed(el);
+        }
+        Cow::Owned(Element {
+            attributes: self.classes_then_own(&el.classes, &el.attributes),
+            classes: Vec::new(),
+            ..el.clone()
+        })
+    }
+
+    /// The attributes `classes` carry that `own` does not write, then `own`: every key once, the element's own value winning.
+    pub(super) fn classes_then_own(&self, classes: &[String], own: &[Attr]) -> Vec<Attr> {
+        let mut attrs = self.class_attrs(classes);
+        attrs.retain(|attr| !own.iter().any(|written| written.key == attr.key));
+        attrs.extend(own.iter().cloned());
         attrs
     }
 
-    /// The props `classes` carry, as attributes, the last class's first.
+    /// The properties `classes` carry, as attributes in the order the classes are named, a key a later class gives again replacing the earlier one's. A property has no position in this file's source (an imported one is written in another), so its value maps back to the line of the element naming it.
     pub(super) fn class_attrs(&self, classes: &[String]) -> Vec<Attr> {
-        classes
+        let mut attrs: Vec<Attr> = Vec::new();
+        for prop in classes
             .iter()
-            .rev()
-            .filter_map(|name| self.classes.iter().find(|c| &c.name == name))
+            .filter_map(|name| self.class(name))
             .flat_map(|class| &class.props)
-            .map(|prop| Attr {
+        {
+            attrs.retain(|attr| attr.key != prop.key);
+            attrs.push(Attr {
                 key: prop.key.clone(),
                 value: Value::Expr(prop.value.clone()),
                 value_start: 0,
-            })
-            .collect()
+            });
+        }
+        attrs
+    }
+
+    /// The class this file declares or imports under `name`.
+    pub(super) fn class(&self, name: &str) -> Option<&StyleClass> {
+        self.classes.iter().find(|class| class.name == name)
     }
 
     /// The `Some(Shadow::new(...))` the `shadow_*` attrs ask for, or `None` when there are none. Each value is emitted as written, so `shadow_blur:$theme.elevation` follows the theme like any other paint value; only an unwritten one takes its default.
@@ -281,11 +298,8 @@ impl ViewGen<'_> {
         if !has_transition {
             return (specs, errors);
         }
-        // No loop-depth gate: a `for` here is a construction loop, so the `Animated` hoisted per iteration is already a distinct handle. The value may come from the element's class, not only an inline attribute.
-        let attrs = self.effective_attrs(el);
-        let has_value = |prop: &str| {
-            el.attributes.iter().any(|a| a.key == prop) || attrs.iter().any(|a| a.key == prop)
-        };
+        // No loop-depth gate: a `for` here is a construction loop, so the `Animated` hoisted per iteration is already a distinct handle.
+        let has_value = |prop: &str| el.attributes.iter().any(|a| a.key == prop);
         for attr in el.attributes.iter().filter(|a| a.key == "transition") {
             let (parsed, errs) = crate::transition::parse_transition_value(attr.value.text());
             errors.extend(errs);
@@ -303,63 +317,25 @@ impl ViewGen<'_> {
         (specs, errors)
     }
 
-    /// Builds the `LayoutStyle` expression for a container: base style from the tag (or a class function), then inline attribute modifiers chained on.
-    pub(super) fn make_layout_style(
-        &self,
-        tag: &str,
-        classes: &[String],
-        attrs: &[Attr],
-    ) -> String {
-        // An unknown class is reported on its element; calling the constructor it would have had only adds rustc's word for the same thing.
-        let classes: Vec<String> = classes
-            .iter()
-            .filter(|name| self.classes.iter().any(|class| &&class.name == name))
-            .cloned()
-            .collect();
-        let classes = classes.as_slice();
-        let mut expr = if let Some((first, rest)) = classes.split_first() {
-            // The first class is the base; further classes inline their layout props as chained calls, so a later one overrides an earlier one.
-            let mut base = format!("{}()", style_function_name(first));
-            for name in rest {
-                if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
-                    for prop in in_application_order(&class.props, |prop| &prop.key) {
-                        if let PropCall::Call(call) =
-                            layout_prop_call(&prop.key, &prop.value, self.theme_access)
-                        {
-                            base.push_str(&call);
-                        }
-                    }
+    /// Builds the `LayoutStyle` expression for a container: the tag's own direction, then its attributes chained on, a later one overriding an earlier.
+    pub(super) fn make_layout_style(&self, tag: &str, attrs: &[Attr]) -> String {
+        let mut expr = match tag {
+            "row" => "LayoutStyle::new().flex_row()".to_string(),
+            // Regression: `lazy` became flex only as a side effect of `set_display(true)` forcing `Display::Flex`, which stopped once that call began restoring the node's declared display.
+            "col" | "box" | "overlay" | "layer" | "lazy" => {
+                "LayoutStyle::new().flex_column()".to_string()
+            }
+            // `cols:` adds `.display_grid()`, so start neutral and fall back to flex_row when no cols are declared.
+            "grid" => {
+                if attrs.iter().any(|a| a.key == "cols") {
+                    "LayoutStyle::new()".to_string()
+                } else {
+                    "LayoutStyle::new().flex_row()".to_string()
                 }
             }
-            // Only when no class declares one, so a styled `row @card` still lays out horizontally. `box` is included: a `LayoutStyle::new()` class fn defaults to `display:block`, where `align`/`justify` are no-ops.
-            if !classes.iter().any(|c| self.class_has_direction(c)) {
-                match tag {
-                    "row" | "grid" => base.push_str(".flex_row()"),
-                    "col" | "box" | "overlay" | "layer" | "lazy" => base.push_str(".flex_column()"),
-                    _ => {}
-                }
-            }
-            base
-        } else {
-            match tag {
-                "row" => "LayoutStyle::new().flex_row()".to_string(),
-                // Regression: `lazy` became flex only as a side effect of `set_display(true)` forcing `Display::Flex`, which stopped once that call began restoring the node's declared display.
-                "col" | "box" | "overlay" | "layer" | "lazy" => {
-                    "LayoutStyle::new().flex_column()".to_string()
-                }
-                // `cols:` adds `.display_grid()`, so start neutral and fall back to flex_row when no cols are declared.
-                "grid" => {
-                    if attrs.iter().any(|a| a.key == "cols") {
-                        "LayoutStyle::new()".to_string()
-                    } else {
-                        "LayoutStyle::new().flex_row()".to_string()
-                    }
-                }
-                _ => "LayoutStyle::new()".to_string(),
-            }
+            _ => "LayoutStyle::new()".to_string(),
         };
-
-        // Applied on top of the base style and taking precedence. A value the key cannot mean is dropped here and reported by `value_errors` instead.
+        // A value the key cannot mean is dropped here and reported by `value_errors` instead.
         for attr in in_application_order(attrs, |attr| &attr.key) {
             if let PropCall::Call(call) =
                 layout_prop_call(&attr.key, attr.value.text(), self.theme_access)
@@ -368,20 +344,10 @@ impl ViewGen<'_> {
             }
         }
         // `stroke` stays a paint key everywhere else — the registry offers it as one and `rect_style_pieces` emits it as one. It is added here rather than through `layout_prop_call` for exactly that reason: what a stroke costs is a property of the surface, not of the attribute, and only `LayoutStyle::bordered` knows the surface.
-        if self.declares_stroke(classes, attrs) {
+        if attrs.iter().any(|a| a.key == "stroke") {
             expr.push_str(".bordered()");
         }
         expr
-    }
-
-    /// Whether this element paints a stroke, inline or through any of its classes.
-    fn declares_stroke(&self, classes: &[String], attrs: &[Attr]) -> bool {
-        attrs.iter().any(|a| a.key == "stroke")
-            || classes.iter().any(|name| {
-                self.classes
-                    .iter()
-                    .any(|c| &c.name == name && c.props.iter().any(|p| p.key == "stroke"))
-            })
     }
 
     /// The raw values of this element's layout attributes that are not literals, so the caller can wrap the style expression in an effect. Empty means the style is a constant and the node needs none.
@@ -400,43 +366,20 @@ impl ViewGen<'_> {
             .map(|a| a.value.text().to_string())
             .collect()
     }
+}
 
-    /// Whether this container lays its children out horizontally, resolved the same way [`Self::make_layout_style`] resolves the direction: an inline or class `direction:` wins, then the tag's own default.
-    pub(super) fn container_is_row(&self, tag: &str, classes: &[String], attrs: &[Attr]) -> bool {
-        let from_direction = |value: &str| match value {
-            "row" => Some(true),
-            "col" | "column" | "row_reverse" => Some(false),
-            _ => None,
-        };
-        if let Some(is_row) = attrs
-            .iter()
-            .find(|a| a.key == "axis")
-            .and_then(|a| from_direction(a.value.text().trim()))
-        {
-            return is_row;
-        }
-        for name in classes.iter().rev() {
-            if let Some(is_row) = self
-                .classes
-                .iter()
-                .find(|c| &c.name == name)
-                .and_then(|c| c.props.iter().find(|p| p.key == "axis"))
-                .and_then(|p| from_direction(p.value.trim()))
-            {
-                return is_row;
-            }
-        }
-        matches!(tag, "row" | "grid")
-    }
-
-    /// Whether the named class declares a flex `direction`, so the tag should not override it.
-    fn class_has_direction(&self, class_name: &str) -> bool {
-        self.classes
-            .iter()
-            .find(|c| c.name == class_name)
-            .map(|c| c.props.iter().any(|p| p.key == "axis"))
-            .unwrap_or(false)
-    }
+/// Whether this container lays its children out horizontally, resolved the way [`ViewGen::make_layout_style`] resolves the direction: its `axis:` wins, then the tag's own default.
+pub(super) fn container_is_row(tag: &str, attrs: &[Attr]) -> bool {
+    let from_direction = |value: &str| match value {
+        "row" => Some(true),
+        "col" | "column" | "row_reverse" => Some(false),
+        _ => None,
+    };
+    attrs
+        .iter()
+        .find(|a| a.key == "axis")
+        .and_then(|a| from_direction(a.value.text().trim()))
+        .unwrap_or(matches!(tag, "row" | "grid"))
 }
 
 /// Whether `value` under `key` cannot change — a number, a percentage, a spelling from the key's own closed set, or arithmetic on constants (`WORKBENCH_GRID * 2.0`). Everything else names something, and a name can answer differently the next time it is asked.

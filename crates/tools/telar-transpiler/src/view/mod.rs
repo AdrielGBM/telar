@@ -7,6 +7,7 @@ mod control_flow;
 mod input;
 mod interp;
 mod lazy;
+mod look;
 mod mask;
 mod media;
 mod path;
@@ -253,6 +254,8 @@ pub struct ViewGen<'a> {
     reads: ViewReads,
     /// What the file binds that no scope tracks while the view is emitted: its items' names and every view `let`'s, wherever it is in scope. A bare word naming one is that binding, not a word of the vocabulary.
     bindings: Vec<String>,
+    /// Where each line of the `.rsx` begins, so an attribute on a continuation line reports its error on that line rather than the element's first.
+    line_starts: Vec<usize>,
 }
 
 /// How many snippets of the view read each `[logic]` binding, and which `props` places each snippet reads: what tells a closure that consuming a capture would take it from another reader.
@@ -332,6 +335,7 @@ impl<'a> ViewGen<'a> {
             previewed: None,
             reads: ViewReads::default(),
             bindings: Vec::new(),
+            line_starts: Vec::new(),
         }
     }
 
@@ -432,6 +436,24 @@ impl<'a> ViewGen<'a> {
         self
     }
 
+    pub(crate) fn with_source(mut self, source: &str) -> Self {
+        self.line_starts = std::iter::once(0)
+            .chain(source.match_indices('\n').map(|(at, _)| at + 1))
+            .collect();
+        self
+    }
+
+    /// `error` on the line `attr` is written on, or as it is where the attribute has no place in this file (a class's).
+    fn on_attr_line(&self, attr: &telar_parser::Attr, error: String) -> String {
+        match attr.value_start {
+            0 => error,
+            start => {
+                let line = self.line_starts.partition_point(|&begins| begins <= start);
+                format!("{}\n", on_source_line(line, error.trim_end()))
+            }
+        }
+    }
+
     pub(crate) fn with_theme_access(mut self, theme_access: ThemeAccess) -> Self {
         self.theme_access = theme_access;
         self
@@ -506,6 +528,8 @@ impl<'a> ViewGen<'a> {
 
     /// Generates the full view body and returns the final `Ok(Box::new(...))` expression.
     pub fn generate_root(&mut self, nodes: &[ViewNode]) -> String {
+        let looks_written = look::written_out(nodes);
+        let nodes = looks_written.as_deref().unwrap_or(nodes);
         self.reads = ViewReads::of(nodes, &self.locals, self.theme_access);
         // Returned directly so the branch is the component root: an injected column would trap a `row align:stretch` at content height.
         if let [ViewNode::IfBlock(block)] = nodes {
@@ -645,6 +669,10 @@ impl<'a> ViewGen<'a> {
                         "`surface:` amends the paint of a `box`, `row`, `col` or `grid`, and `{}` is none of them",
                         el.tag
                     ),
+                    crate::registry::LOOK_ATTR => format!(
+                        "`look:` paints a `box`, `row`, `col` or `grid`, and `{}` is none of them",
+                        el.tag
+                    ),
                     "label" if allowed.contains(&crate::registry::A11Y_LABEL_ATTR) => format!(
                         "`label:` on `{}` is spelled `a11y_label:`: it is the name assistive technology reads, and `label` is always a component's visible text",
                         el.tag
@@ -652,7 +680,7 @@ impl<'a> ViewGen<'a> {
                     crate::registry::FORMER_LANG_ATTR => crate::registry::former_lang_error(&el.tag),
                     key => format!("`{key}` is not an attribute of `{}`", el.tag),
                 };
-                format!("{pad}compile_error!({message:?});\n")
+                self.on_attr_line(attr, format!("{pad}compile_error!({message:?});\n"))
             })
             .collect()
     }
@@ -671,11 +699,14 @@ impl<'a> ViewGen<'a> {
                 let refused = (!builtin && attr.key == "role")
                     .then(|| crate::registry::refused_component_role(attr.value.text()))
                     .flatten();
-                refused.or_else(|| {
-                    value_error(&el.tag, &attr.key, attr.value.text(), self.theme_access)
-                })
+                refused
+                    .or_else(|| {
+                        value_error(&el.tag, &attr.key, attr.value.text(), self.theme_access)
+                    })
+                    .map(|message| {
+                        self.on_attr_line(attr, format!("{pad}compile_error!({message:?});\n"))
+                    })
             })
-            .map(|message| format!("{pad}compile_error!({message:?});\n"))
             .collect()
     }
 }
@@ -683,19 +714,8 @@ impl<'a> ViewGen<'a> {
 /// Why `value` is not one `tag`'s `key` takes, or `None` when it is (or when the key takes anything). Shared by an inline attribute and a `[style]` class property, so a value refused on one line is refused on the other.
 pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess) -> Option<String> {
     let value = value.trim();
-    let box_tag = matches!(tag, "row" | "col" | "grid" | "box");
-    if signals::reads_box_text(value) && !(box_tag || path::paints_in_its_text(tag, key)) {
-        return Some(format!(
-            "`{key}:{value}` on `{tag}`: `$text` is the text a `row`, `col`, `grid` or `box` holds, read by any of its attributes, or the text a `path` is drawn in, read by its `fill`, `stroke` and `stroke_width`"
-        ));
-    }
-    if let crate::style::PropCall::Call(call) = crate::style::layout_prop_call(key, value, theme)
-        && crate::style::reads_box_text(&call)
-        && !box_tag
-    {
-        return Some(format!(
-            "`{key}:{value}` on `{tag}`: a length in `em` or `lh` is one of a box's own text, so only a `row`, `col`, `grid` or `box` takes one"
-        ));
+    if let Some(message) = text_read_error(tag, key, value, theme) {
+        return Some(message);
     }
     let Some(kind) = crate::registry::value_kind(tag, key) else {
         return match crate::style::layout_prop_call(key, value, theme) {
@@ -744,21 +764,60 @@ pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess)
     }
 }
 
+/// Why `tag` cannot take `key:value` for the text it reads, which only a box holding text, or a path drawn in it, has. A `[style]` class is written for no tag, so this is judged where an element names it.
+fn text_read_error(tag: &str, key: &str, value: &str, theme: ThemeAccess) -> Option<String> {
+    let value = value.trim();
+    let box_tag = matches!(tag, "row" | "col" | "grid" | "box");
+    if signals::reads_box_text(value) && !(box_tag || path::paints_in_its_text(tag, key)) {
+        return Some(format!(
+            "`{key}:{value}` on `{tag}`: `$text` is the text a `row`, `col`, `grid` or `box` holds, read by any of its attributes, or the text a `path` is drawn in, read by its `fill`, `stroke` and `stroke_width`"
+        ));
+    }
+    if let crate::style::PropCall::Call(call) = crate::style::layout_prop_call(key, value, theme)
+        && crate::style::reads_box_text(&call)
+        && !box_tag
+    {
+        return Some(format!(
+            "`{key}:{value}` on `{tag}`: a length in `em` or `lh` is one of a box's own text, so only a `row`, `col`, `grid` or `box` takes one"
+        ));
+    }
+    None
+}
+
 impl ViewGen<'_> {
-    fn unknown_class_errors(&self, el: &Element) -> String {
-        let pad = self.indent_str();
-        el.classes
+    /// What is wrong with the classes `el` names: one no `[style]` declares or imports, and, on a tag the view builds, a property the tag does not take or a value it cannot mean there, which the class, written for no tag, could not be judged on.
+    pub(super) fn class_messages(&self, el: &Element) -> Vec<String> {
+        let mut messages: Vec<String> = el
+            .classes
             .iter()
             .cloned()
             .chain(component::part_class_names(el))
-            .filter(|name| !self.classes.iter().any(|class| &class.name == name))
+            .filter(|name| self.class(name).is_none())
             .map(|name| {
-                let message = format!(
+                format!(
                     "no class `@{name}` here: declare it in `[style]`, or `use` it there from the module that makes it `pub`"
-                );
-                format!("{pad}compile_error!({message:?});\n")
+                )
             })
-            .collect()
+            .collect();
+        if is_component_tag(&el.tag) {
+            return messages;
+        }
+        let allowed = crate::registry::tag_attr_keys(&el.tag);
+        for class in el.classes.iter().filter_map(|name| self.class(name)) {
+            for prop in &class.props {
+                let message = match allowed.is_empty() || allowed.contains(&prop.key.as_str()) {
+                    true => text_read_error(&el.tag, &prop.key, &prop.value, self.theme_access),
+                    false => Some(format!(
+                        "`{}` is not an attribute of `{}`",
+                        prop.key, el.tag
+                    )),
+                };
+                if let Some(message) = message {
+                    messages.push(format!("in `@{}`: {message}", class.name));
+                }
+            }
+        }
+        messages
     }
 
     fn class_value_errors(&self, el: &Element) -> String {
@@ -773,16 +832,22 @@ impl ViewGen<'_> {
     }
 
     fn emit_element(&mut self, el: &Element) -> ChildEmit {
+        let pad = self.indent_str();
+        let class_errors: String = self
+            .class_messages(el)
+            .into_iter()
+            .map(|message| format!("{pad}compile_error!({message:?});\n"))
+            .collect();
         let errors = format!(
-            "{}{}{}{}",
-            self.unknown_class_errors(el),
+            "{class_errors}{}{}{}",
             self.class_value_errors(el),
             self.unknown_attr_errors(el),
             self.value_errors(el)
         );
-        let emit = match component::without_class_values(el) {
+        let el = self.with_classes_written(el);
+        let emit = match component::without_class_values(&el) {
             Some(stripped) => self.emit_element_inner(&stripped),
-            None => self.emit_element_inner(el),
+            None => self.emit_element_inner(&el),
         };
         if errors.is_empty() {
             return emit;

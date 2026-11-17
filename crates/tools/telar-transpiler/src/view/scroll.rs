@@ -12,7 +12,7 @@ impl ViewGen<'_> {
     pub(super) fn emit_scroll(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
-        let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
+        let style = self.make_layout_style(&el.tag, &el.attributes);
         // Named and opt-in rather than implicit: a scroll emitted inside a `for` would otherwise have every row sharing one position.
         let keep = el
             .attributes

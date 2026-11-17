@@ -15,14 +15,6 @@
 #[derive(::telar::Props)]
 pub struct BackdropProps {}
 
-#[allow(dead_code)]
-fn style_stripe() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .width(28.0)
-        .height(160.0)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn backdrop(props: BackdropProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -51,34 +43,34 @@ pub fn backdrop(props: BackdropProps) -> Result<Box<dyn LayoutItem>, LayoutError
                                 let __sbox_0 = {
                                     let __row_0 = {
                                         let __sbox_1 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_2 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_3 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_4 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_5 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_6 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_7 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_8 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_9 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         let __sbox_10 = {
-                                            StyledContainer::new(style_stripe().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::zero()) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(28.0).height(160.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::zero()) }, children![])?
                                         };
                                         Container::new(LayoutStyle::new().flex_row(), children![__sbox_1, __sbox_2, __sbox_3, __sbox_4, __sbox_5, __sbox_6, __sbox_7, __sbox_8, __sbox_9, __sbox_10])?
                                     };

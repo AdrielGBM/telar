@@ -1,9 +1,10 @@
 use telar::{
     AvailableSpace, BorderRadius, ComponentList, Container, ControlSize, DrawCommand, KeySequence,
-    KeyboardConvention, LayoutItem, LayoutStyle, RectStyle, SurfaceAmendment, box_item,
-    compute_layout,
+    KeyboardConvention, LayoutItem, LayoutStyle, Look, Paint, Reactive, RectStyle,
+    SurfaceAmendment, Tone, Variant, box_item, compute_layout,
 };
 
+use crate::look::ToneLook;
 use crate::shared::shown_chord;
 use crate::{KbdCaps, KbdProps, KbdTokens, kbd};
 
@@ -268,4 +269,55 @@ fn a_sequence_is_drawn_step_after_step_and_heard_once() {
 )]
 fn a_chord_with_a_step_that_names_no_keys_is_refused_where_it_is_declared() {
     KbdProps::props().chord("Mod+Shift+P a+a");
+}
+
+/// A cap is painted as its tone in its variant works out in the ink of the place the chord sits in: its fill, its frame and the ink of its key, in every variant, whether the tone is the place's own ink or the theme's.
+#[test]
+fn a_cap_is_painted_as_its_tone_in_its_variant_looks() {
+    let around = telar::Color::rgb(0.95, 0.95, 0.97);
+    for variant in [
+        Variant::Solid,
+        Variant::Soft,
+        Variant::Outline,
+        Variant::Ghost,
+    ] {
+        for tone in [Tone::Ink, Tone::Accent, Tone::Danger] {
+            crate::test_support::fresh_layout_runtime();
+            let chord = kbd(KbdProps::props()
+                .chord("K")
+                .tone(tone)
+                .variant(variant)
+                .build())
+            .unwrap();
+            let place = Container::new(LayoutStyle::new(), vec![chord])
+                .unwrap()
+                .declaring(move || telar::Declared::default().with_color(around));
+            compute_layout(
+                place.layout_node(),
+                AvailableSpace::MaxContent,
+                AvailableSpace::MaxContent,
+            )
+            .unwrap();
+            let tree = ComponentList::new(box_item(place));
+            let look = ToneLook::shown(Reactive::Const(tone), variant);
+            let cap = caps(&tree)[0];
+            let ink = tree
+                .commands()
+                .iter()
+                .find_map(|c| match c {
+                    DrawCommand::Text { style, .. } => Some(style.color),
+                    _ => None,
+                })
+                .expect("the key is drawn");
+            assert_eq!(
+                (cap.fill, cap.border.map(|border| border.paint), ink),
+                (
+                    Some(Paint::Solid(look.fill(around))),
+                    Some(Paint::Solid(look.frame(around))),
+                    Paint::Solid(look.ink(around)),
+                ),
+                "{tone:?} {variant:?}"
+            );
+        }
+    }
 }

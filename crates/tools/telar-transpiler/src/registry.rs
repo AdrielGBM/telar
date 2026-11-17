@@ -169,6 +169,9 @@ pub const A11Y_LABEL_ATTR: &str = telar_project::call_keys::A11Y_LABEL;
 /// The key naming the language a box is written in, on a built-in tag and a component call alike: it decides how the text is shaped and broken, not only what a reader is told, so a component may not declare a prop of that name.
 pub const LANG_ATTR: &str = telar_project::call_keys::LANG;
 
+/// The key a `row`, `col`, `grid` or `box` names the value it is painted from with, written out as the paint attributes it stands for (`view::look`).
+pub const LOOK_ATTR: &str = "look";
+
 /// How a component call once said its language, refused with the spelling that replaced it: see [`former_lang_error`].
 pub(crate) const FORMER_LANG_ATTR: &str = telar_project::call_keys::FORMER_LANG;
 
@@ -375,6 +378,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     ),
     AttrSpec::free("surface").doc(
         "Hands this box's paint to a caller: a `SurfaceStyle` such as `props.style`, or `props.header_style` for a part, run over the finished style of the base paint and of every `hover_style`/`active_style`/`disabled_style` after the box's own, so a caller's `@class` restyles it in every state. The focus ring is drawn over the amended state, not amended itself.",
+    ),
+    AttrSpec::free(LOOK_ATTR).doc(
+        "Paints the box from one value implementing `telar::Look`, in the ink of the text around the box, followed as that ink or anything the look reads changes: its `fill`, its `stroke` from the look's frame at the `stroke_width` the box declares, the `color` of what it holds from the look's ink, and, on a box that answers the pointer (a press, a destination, a control's role, a state style of its own), the fill of its `hover_style` and `active_style`. `look:(look)` is those attributes written out, so an attribute the box writes itself replaces that part of the look, a state style it writes takes the look's fill unless it names one, and the look wins over the box's classes.",
     ),
     AttrSpec::free("on_press"),
     AttrSpec::free("on_alt_press").doc(
@@ -1082,6 +1088,7 @@ pub const ROLE_VALUES: &[(&str, &str)] = &[
     ("status", "Status"),
     ("log", "Log"),
     ("label", "Label"),
+    ("keyboardinput", "KeyboardInput"),
 ];
 
 /// The roles an application may name on a box, as [`ROLE_VALUES`].

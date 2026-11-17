@@ -294,3 +294,42 @@ fn a_measured_virtual_for_keeps_its_options() {
     );
     assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
 }
+
+#[test]
+fn continuation_lines_keep_their_split_two_levels_in() {
+    let src = concat!(
+        "[view]\n",
+        "col\n",
+        "  row role:button toggled:$selected\n",
+        "      on_press:(move || flip(selected))\n",
+        "      align:center   gap:4\n",
+        "    glyph size:2\n",
+        "    text \"a\"\n",
+    );
+    let expected = concat!(
+        "[view]\n",
+        "col\n",
+        "    row role:button toggled:$selected\n",
+        "            on_press:(move || flip(selected))\n",
+        "            align:center gap:4\n",
+        "        glyph size:2\n",
+        "        text \"a\"\n",
+    );
+    let out = format_document(src).unwrap();
+    assert_eq!(out, expected);
+    assert_eq!(format_document(&out).unwrap(), out, "a fixed point");
+}
+
+#[test]
+fn a_header_opened_bare_keeps_every_attribute_on_its_line() {
+    let src = "[view]\nbox\n    fill:accent\n    hover_style(fill:$theme.accent_hover) wide\n    text \"a\"\n";
+    let expected = "[view]\nbox\n        fill:accent\n        hover_style(fill:$theme.accent_hover) wide\n    text \"a\"\n";
+    assert_eq!(format_document(src).unwrap(), expected);
+}
+
+#[test]
+fn content_and_classes_on_a_continuation_line_move_to_the_header() {
+    let src = "[preview \"Default\"]\nText size:12\n        color:muted @lead \"hi\"\n";
+    let expected = "[preview \"Default\"]\nText @lead \"hi\" size:12\n        color:muted\n";
+    assert_eq!(format_document(src).unwrap(), expected);
+}

@@ -5,7 +5,7 @@ use super::style::check_hex_value;
 use super::{Parser, split_once_colon};
 use crate::ast::*;
 use crate::error::ParseError;
-use crate::lexer::Section;
+use crate::lexer::{Line, Section, lex};
 
 impl Parser {
     pub(super) fn parse_view(&mut self) -> Result<ViewSection, ParseError> {
@@ -72,19 +72,16 @@ impl Parser {
     /// Parses one view node (comment, element, if, for, match, or let) starting at `indent`.
     fn parse_view_node(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
         let content = self.lines[self.pos].content.clone();
-        let first_word = content.split_whitespace().next().unwrap_or("");
 
-        // Before the tag dispatch, which would read a note as a call to a component named `//`.
-        if content.starts_with("//") {
-            self.pos += 1;
-            return Ok(ViewNode::Comment(content));
-        }
-
-        match first_word {
-            "if" => self.parse_if_block(indent),
-            "for" => self.parse_for_block(indent),
-            "match" => self.parse_match_block(indent),
-            "let" => {
+        match NodeKind::of(&content) {
+            NodeKind::Comment => {
+                self.pos += 1;
+                Ok(ViewNode::Comment(content))
+            }
+            NodeKind::If => self.parse_if_block(indent),
+            NodeKind::For => self.parse_for_block(indent),
+            NodeKind::Match => self.parse_match_block(indent),
+            NodeKind::Let => {
                 let source_start = self.lines[self.pos].content_start;
                 self.pos += 1;
                 Ok(ViewNode::LetStmt(LetStmt {
@@ -92,7 +89,14 @@ impl Parser {
                     source_start,
                 }))
             }
-            _ => self.parse_element(indent),
+            NodeKind::Element if continues_element(&content) => Err(ParseError {
+                line: self.lines[self.pos].number,
+                message: format!(
+                    "`{}` opens with an attribute, so it continues an element's attribute list, and no element is open to take it: a continuation line goes right under its element, indented deeper, before the element's first child (a line that opens with a bare flag is a child, so write the flag after an attribute)",
+                    content.split_whitespace().next().unwrap_or_default()
+                ),
+            }),
+            NodeKind::Element => self.parse_element(indent),
         }
     }
 
@@ -223,32 +227,23 @@ impl Parser {
         }))
     }
 
-    /// Parses an element line plus its deeper-indented children.
+    /// Parses an element header, whatever lines it spans, plus its deeper-indented children.
     fn parse_element(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
-        let line = &self.lines[self.pos];
-        let number = line.number;
-        let content_start = line.content_start;
-        let mut content = line.content.clone();
-        let mut end = content_start + content.len();
-        self.pos += 1;
-
-        // An element header runs past its line whenever a value's delimiters are still open. The join reproduces the source byte for byte — the gap between one line's content and the next becomes a newline and spaces of exactly the width it occupied — so every span still points at the `.rsx` byte the author typed, which is what keeps a diagnostic on the right column when the expression started three lines up.
-        while unclosed_delimiters(&content) {
-            let Some(next) = self.lines.get(self.pos) else {
-                break;
-            };
-            if next.section != Section::View {
-                break;
-            }
-            let gap = next.content_start.saturating_sub(end);
-            content.push('\n');
-            content.push_str(&" ".repeat(gap.saturating_sub(1)));
-            content.push_str(&next.content);
-            end = next.content_start + next.content.len();
-            self.pos += 1;
-        }
-
-        let mut element = parse_element_header(&content, number, content_start)?;
+        let extent = header_extent(&self.lines, self.pos);
+        let head = &self.lines[self.pos];
+        let header = &self.lines[self.pos..extent.end];
+        let continuation_starts: Vec<usize> = extent
+            .continuations
+            .iter()
+            .map(|&at| self.lines[at].content_start - head.content_start)
+            .collect();
+        let mut element = parse_element_header(
+            &join_header(header),
+            head.number,
+            head.content_start,
+            &continuation_starts,
+        )?;
+        self.pos = extent.end;
 
         element.children = self.parse_children(indent)?;
 
@@ -278,6 +273,140 @@ impl Parser {
             }
         }
     }
+}
+
+/// What a view line opens, read from its first word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NodeKind {
+    Comment,
+    If,
+    For,
+    Match,
+    Let,
+    Element,
+}
+
+impl NodeKind {
+    fn of(content: &str) -> Self {
+        // Before the words, which would read a note as a call to a component named `//`.
+        if content.starts_with("//") {
+            return Self::Comment;
+        }
+        match content.split_whitespace().next().unwrap_or_default() {
+            "if" => Self::If,
+            "for" => Self::For,
+            "match" => Self::Match,
+            "let" => Self::Let,
+            _ => Self::Element,
+        }
+    }
+}
+
+/// Whether a view line opens with an attribute — `key:value` or a directive `key(…)` — and so continues the attribute list of the element above it.
+///
+/// No node can open that way, which is what keeps the two apart: a node begins with a tag or component name, `children`, a keyword, `//` or a string, a component path's `::` is not a colon, and `name(…)` is a header only for a directive. A bare flag is a word like a tag, so a line that opens with one is a child.
+pub fn continues_element(content: &str) -> bool {
+    let key_len = content
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .unwrap_or(content.len());
+    let (key, rest) = content.split_at(key_len);
+    let names_a_key = key.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_');
+    names_a_key
+        && ((rest.starts_with(':') && !rest.starts_with("::"))
+            || (rest.starts_with('(') && is_directive(key)))
+}
+
+/// When 0-based `line` continues the attribute list of a view element begun on an earlier line, the 0-based line that element's header begins on. For tooling holding a coordinate: the attribute keys on such a line belong to the tag written up there. `None` for any other line, a line inside a value whose delimiters are still open included.
+pub fn continued_element_line(source: &str, line: u32) -> Option<u32> {
+    let number = line as usize + 1;
+    let lines = lex(source);
+    let mut at = 0;
+    while let Some(current) = lines.get(at) {
+        if current.number > number {
+            return None;
+        }
+        if current.section != Section::View
+            || current.is_blank()
+            || NodeKind::of(&current.content) != NodeKind::Element
+        {
+            at += 1;
+            continue;
+        }
+        let extent = header_extent(&lines, at);
+        if extent
+            .continuations
+            .iter()
+            .any(|&k| lines[k].number == number)
+        {
+            return Some(current.number as u32 - 1);
+        }
+        at = extent.end;
+    }
+    None
+}
+
+/// The lines an element header spans, from the one it begins on.
+struct HeaderExtent {
+    /// Index past the header's last line.
+    end: usize,
+    /// The indices of the lines that continue its attribute list, as opposed to those a value's open delimiters carried it onto.
+    continuations: Vec<usize>,
+}
+
+/// How far the element header that begins at `lines[start]` runs: on while a value's delimiters are still open, and over each following line indented deeper than the element that opens with an attribute, blank lines between them included.
+fn header_extent(lines: &[Line], start: usize) -> HeaderExtent {
+    let indent = lines[start].indent;
+    let mut delimiters = Delimiters::default();
+    lines[start]
+        .content
+        .chars()
+        .for_each(|c| delimiters.feed(c));
+    let mut end = start + 1;
+    let mut continuations = Vec::new();
+    loop {
+        let next = if delimiters.is_open() {
+            end
+        } else {
+            let past_blanks = lines[end..]
+                .iter()
+                .position(|l| !(l.section == Section::View && l.is_blank()))
+                .map_or(lines.len(), |k| end + k);
+            match lines.get(past_blanks) {
+                Some(l)
+                    if l.section == Section::View
+                        && l.indent > indent
+                        && continues_element(&l.content) =>
+                {
+                    continuations.push(past_blanks);
+                    past_blanks
+                }
+                _ => break,
+            }
+        };
+        let Some(line) = lines.get(next).filter(|l| l.section == Section::View) else {
+            break;
+        };
+        delimiters.feed('\n');
+        line.content.chars().for_each(|c| delimiters.feed(c));
+        end = next + 1;
+    }
+    HeaderExtent { end, continuations }
+}
+
+/// Joins the lines of one header into the text it is tokenized from.
+///
+/// The join reproduces the source byte for byte from the first line's content on — the gap between one line's content and the next becomes a newline and spaces of exactly the width it occupied — so every span still points at the `.rsx` byte the author typed and every newline at a line they broke, which is what keeps a diagnostic on the right line and column when the attribute sits three lines below its tag.
+fn join_header(lines: &[Line]) -> String {
+    let mut content = lines[0].content.clone();
+    let mut end = lines[0].content_start + content.len();
+    for next in &lines[1..] {
+        let gap = next.content_start - end;
+        content.push('\n');
+        content.push_str(&" ".repeat(gap - 1));
+        content.push_str(&next.content);
+        end = next.content_start + next.content.len();
+    }
+    content
 }
 
 const FOR_USAGE: &str = "expected `for <pattern> in <expr> [key <expr>] [gap:<expr>] [virtual row_height:<expr> | virtual estimated_height:<expr> [overscan:<px>] [rows:<handle>]]`";
@@ -401,18 +530,22 @@ fn split_match_header(rest: &str) -> Option<(String, Option<String>, Option<Stri
     (!scrutinee.is_empty()).then_some((scrutinee, binding, key_expr))
 }
 
-/// Parses an element header line into tag, classes, attrs, and quoted content.
+/// Parses an element header into tag, classes, attrs, and quoted content.
 ///
 /// Tokens are consumed left to right. A bare `@name` is a class; a quoted string is the content; `key:value` is an attribute. Two rules delimit a value and there are no exceptions to them: `key:value` is one token with its parens balanced, and `key(…)` is anything wanting a space at depth 0. Which of the two was written — and whether the text was quoted or an i18n key — is what the resulting [`Value`] records.
+///
+/// `content` is the header as [`join_header`] joins it, `line` the line it begins on, and `continuation_starts` the byte offsets within it where a continuation line begins, which mark the attribute opening each.
 fn parse_element_header(
     content: &str,
     line: usize,
     content_start: usize,
+    continuation_starts: &[usize],
 ) -> Result<Element, ParseError> {
     let mut element = Element {
         tag: String::new(),
         classes: Vec::new(),
         attributes: Vec::new(),
+        continued_at: Vec::new(),
         content: None,
         children: Vec::new(),
         line,
@@ -421,6 +554,7 @@ fn parse_element_header(
     };
 
     let chars: Vec<char> = content.chars().collect();
+    let line_at = |idx: usize| line + chars[..idx].iter().filter(|&&c| c == '\n').count();
     let mut i = 0;
     let len = chars.len();
     let mut first = true;
@@ -432,17 +566,19 @@ fn parse_element_header(
         if i >= len {
             break;
         }
+        let token_line = line_at(i);
+        let opens_line = continuation_starts.contains(&byte_at(&chars, i));
 
         if let Some((str_at, is_key)) = string_start(&chars, i) {
             let (text, next, content_at) =
                 read_string_value(&chars, str_at).ok_or_else(|| ParseError {
                     message: "unterminated string literal".to_string(),
-                    line,
+                    line: token_line,
                 })?;
             if element.content.is_some() {
                 return Err(ParseError {
                     message: "an element takes one content string, found a second".to_string(),
-                    line,
+                    line: token_line,
                 });
             }
             element.content = Some(text);
@@ -474,7 +610,7 @@ fn parse_element_header(
                             "`{0}(…)` is the directive form, and `{0}` is a value — write `{0}:(…)`",
                             key.trim()
                         ),
-                        line,
+                        line: token_line,
                     });
                 }
                 paren_at = Some(j);
@@ -487,7 +623,7 @@ fn parse_element_header(
             let key: String = chars[token_start..paren].iter().collect();
             let (value, next) = read_balanced_parens(&chars, paren).ok_or_else(|| ParseError {
                 message: "unterminated `(` in attribute value".to_string(),
-                line,
+                line: token_line,
             })?;
             // To the first non-space char inside the parens, matching the colon form.
             let mut vs = paren + 1;
@@ -501,6 +637,8 @@ fn parse_element_header(
                     value: Value::Directive(value.trim().to_string()),
                     value_start: content_start + byte_at(&chars, vs),
                 },
+                token_line,
+                opens_line,
             )?;
             i = next;
             continue;
@@ -508,7 +646,8 @@ fn parse_element_header(
 
         if let Some(colon) = colon_at {
             let key: String = chars[token_start..colon].iter().collect();
-            let (value, next, text_at) = read_colon_value(&chars, key.trim(), colon + 1, line)?;
+            let (value, next, text_at) =
+                read_colon_value(&chars, key.trim(), colon + 1, token_line)?;
             push_attribute(
                 &mut element,
                 Attr {
@@ -516,6 +655,8 @@ fn parse_element_header(
                     value,
                     value_start: content_start + byte_at(&chars, text_at),
                 },
+                token_line,
+                opens_line,
             )?;
             i = next;
             continue;
@@ -540,6 +681,8 @@ fn parse_element_header(
                     value: Value::Flag,
                     value_start: content_start + byte_at(&chars, token_start),
                 },
+                token_line,
+                opens_line,
             )?;
         }
     }
@@ -554,7 +697,13 @@ fn parse_element_header(
     Ok(element)
 }
 
-fn push_attribute(element: &mut Element, attr: Attr) -> Result<(), ParseError> {
+/// Adds `attr`, written on `line`; `opens_line` when it is the first token of a continuation line.
+fn push_attribute(
+    element: &mut Element,
+    attr: Attr,
+    line: usize,
+    opens_line: bool,
+) -> Result<(), ParseError> {
     if element
         .attributes
         .iter()
@@ -562,8 +711,11 @@ fn push_attribute(element: &mut Element, attr: Attr) -> Result<(), ParseError> {
     {
         return Err(ParseError {
             message: format!("attribute `{}` is given twice", attr.key),
-            line: element.line,
+            line,
         });
+    }
+    if opens_line {
+        element.continued_at.push(element.attributes.len());
     }
     element.attributes.push(attr);
     Ok(())
@@ -739,13 +891,6 @@ pub(super) fn value_end(chars: &[char], from: usize) -> usize {
     chars.len()
 }
 
-/// Whether `content` leaves a bracket open, so the element header continues on the next line.
-fn unclosed_delimiters(content: &str) -> bool {
-    let mut state = Delimiters::default();
-    content.chars().for_each(|c| state.feed(c));
-    state.is_open()
-}
-
 /// Reads a balanced `( … )` group starting at `open` (which must be `(`). Returns the inner text with the outer parens stripped, plus the index past the closing `)`. Nested parens are balanced and parens inside a `"…"` string literal are ignored, so a closure body like `|| f(x)` is captured whole. `None` if unbalanced.
 pub(super) fn read_balanced_parens(chars: &[char], open: usize) -> Option<(String, usize)> {
     debug_assert_eq!(chars.get(open), Some(&'('));
@@ -816,3 +961,7 @@ fn is_directive(key: &str) -> bool {
 #[cfg(test)]
 #[path = "view.header.test.rs"]
 mod header_tests;
+
+#[cfg(test)]
+#[path = "view.continuation.test.rs"]
+mod continuation_tests;

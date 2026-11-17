@@ -188,8 +188,11 @@ pub struct Element {
     pub tag: String,
     pub classes: Vec<String>,
     pub attributes: Vec<Attr>,
+    /// Indices into `attributes` of those that open a continuation line, so the formatter keeps the header split where its author split it.
+    pub continued_at: Vec<usize>,
     pub content: Option<String>,
     pub children: Vec<ViewNode>,
+    /// 1-based `.rsx` line the header begins on; an attribute on a continuation line sits below it.
     pub line: usize,
     /// Byte offset in the source where the (de-quoted) `content` begins, or the line start when the element has no quoted content. Used to map `{…}` interpolation expressions back to source.
     pub content_start: usize,

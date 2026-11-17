@@ -190,6 +190,59 @@ Named content is a prop of type `Children` as well, `pub header: Children`; a ca
 call handed nothing for that prop: `children props.children` over `glyph shape:Mark::Arc` is a spinner's arc unless its
 call nests something to turn.
 
+### Painting a box from a look
+
+A component whose colours are worked out from one value, a tone in a variant, a toggle's state, says how in one type
+and paints its boxes from it with `look:`, instead of writing each paint attribute and handing each the ink around.
+The type implements `telar::Look`, whose methods take `around`, the ink of the text around the box, and answer the
+fill, the frame, the ink of what the box holds, and the fill hovered and pressed; each has a default that paints
+nothing of its own (no fill, no frame, the ink around kept, no change under the pointer), so a look says only what it
+paints:
+
+```rust
+#[derive(Clone)]
+pub struct ChipLook {
+    pub tone: telar::Reactive<telar::Tone>,
+}
+
+impl telar::Look for ChipLook {
+    fn fill(&self, around: telar::Color) -> telar::Color {
+        let hue = self.tone.get().color(around);
+        hue.with_alpha(hue.a * 0.15)
+    }
+
+    fn ink(&self, around: telar::Color) -> telar::Color {
+        self.tone.get().color(around)
+    }
+
+    fn hovered(&self, around: telar::Color) -> telar::Color {
+        let hue = self.tone.get().color(around);
+        hue.with_alpha(hue.a * 0.25)
+    }
+}
+```
+
+```rsx
+[logic]
+let look = ChipLook { tone: props.tone.clone() };
+
+[view]
+row look:look stroke_width:1 radius:(use_chip_tokens().radius) on_press:props.on_press surface:props.style
+    text "{$props.label}"
+```
+
+`look:look` is the attributes it stands for written out, every one read in the box's `$text.ink`, so the box follows
+the ink around it, the theme and whatever the look reads, a `Reactive` tone or a toggle's signal: `fill`, `stroke`
+from the frame at the `stroke_width` the box declares, `color` from the ink, which everything inside the box inherits,
+and, on a box that answers the pointer anyway (a press, a destination, a control's role, a state style of its own), the
+fill of `hover_style` and `active_style`. A look on a box that does not answer the pointer paints no states and does
+not make it a target. What the box writes itself replaces that part of the look, the rule an attribute written on an
+element follows over its classes: `fill:` beside `look:` replaces the rest fill only, a `hover_style` the box writes
+takes the look's hovered fill unless it names one, and the look wins over a class the box names. `surface:` amends
+the result in every state, as it amends any paint the box declares.
+
+`telar-components` paints from `ToneLook`, the tone and variant every component that has both works out the same way.
+
 Whoever places a component sizes it. A call takes the keys that place a box (`width`, `height` and their `min_`
 and `max_`, `grow`, `shrink`, `basis`, `self`, `aspect`, the `margin_` and `inset_` sides, `absolute`, `sticky`,
 `shown`), written inline or in a class, and lays them over the style the item the component returns declares, the

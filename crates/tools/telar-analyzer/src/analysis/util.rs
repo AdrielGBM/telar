@@ -2,6 +2,7 @@
 
 use crate::position::{Section, find_section_at};
 use crate::text::word_at_cursor;
+use telar_parser::continued_element_line;
 use telar_transpiler::color_attr_keys;
 
 /// The attribute key a value position belongs to, or `None` when the cursor is not in one.
@@ -46,10 +47,19 @@ pub fn view_token_at(source: &str, line: u32, character: u32) -> Option<ViewToke
             .contains(&key)
             .then_some(ViewToken::ColorValue(word));
     }
-    let is_leading = line_text[..word_start].trim().is_empty();
-    if !is_leading && line_text[word_start + word.len()..].starts_with(':') {
-        let tag = line_text.split_whitespace().next()?;
+    let header_line = continued_element_line(source, line);
+    let opens_node = header_line.is_none() && line_text[..word_start].trim().is_empty();
+    if !opens_node && line_text[word_start + word.len()..].starts_with(':') {
+        let header_text = match header_line {
+            Some(header) => source.lines().nth(header as usize)?,
+            None => line_text,
+        };
+        let tag = header_text.split_whitespace().next()?;
         return Some(ViewToken::Attr { tag, key: word });
     }
-    is_leading.then_some(ViewToken::Tag(word))
+    opens_node.then_some(ViewToken::Tag(word))
 }
+
+#[cfg(test)]
+#[path = "util.test.rs"]
+mod tests;

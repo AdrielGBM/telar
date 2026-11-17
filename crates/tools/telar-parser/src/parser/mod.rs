@@ -7,6 +7,8 @@ mod preview;
 mod style;
 mod view;
 
+pub use view::{continued_element_line, continues_element};
+
 use crate::ast::*;
 use crate::error::ParseError;
 use crate::lexer::{self, Line, Section};

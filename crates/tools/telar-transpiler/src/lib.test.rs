@@ -498,7 +498,6 @@ fn generates_counter() {
         code.contains("pub fn counter(props: CounterProps) ->"),
         "{code}"
     );
-    assert!(code.contains("fn style_card() -> LayoutStyle"), "{code}");
     assert!(
         code.contains("move || format!(\"Count: {}\", count.get())"),
         "{code}"
@@ -511,7 +510,9 @@ fn generates_counter() {
     );
     assert!(code.contains("count.update(|n| *n += 1)"), "{code}");
     assert!(
-        code.contains("Container::new(style_card(), children!["),
+        code.contains(
+            "Container::new(LayoutStyle::new().flex_column().width(240.0).padding_all(20.0).gap(12.0).flex_column().align_items(AlignItems::CENTER), children!["
+        ),
         "{code}"
     );
     assert!(code.contains("Ok(Box::new(__col_0))"), "{code}");
@@ -3643,4 +3644,68 @@ fn a_hex_colour_on_a_component_prop_goes_through_its_follow_setter() {
         .find(|line| line.contains(".__follow_tone("))
         .unwrap_or_else(|| panic!("{code}"));
     assert!(call.contains(".__follow_tone(move || Color::"), "{call}");
+}
+
+#[test]
+fn an_element_continued_over_lines_emits_its_one_line_form() {
+    let transpile = |view: &str| {
+        let source = format!("[logic]\nlet open = signal(false);\n\n[view]\n{view}");
+        transpile_source(&source, "demo", None, None)
+            .unwrap()
+            .rust_code
+    };
+    let one_line = transpile(concat!(
+        "col\n",
+        "    row gap:4 align:center pad:(2.0 * 4.0) on_press:(move || open.set(true)) hover_style(fill:#eee)\n",
+        "        text \"label\" font_size:14\n",
+        "    if $open\n",
+        "        box fill:#fff radius:4\n",
+    ));
+    let continued = transpile(concat!(
+        "col\n",
+        "    row gap:4\n",
+        "            align:center pad:(2.0 * 4.0)\n",
+        "            on_press:(move || open.set(true))\n",
+        "            hover_style(fill:#eee)\n",
+        "        text \"label\"\n",
+        "            font_size:14\n",
+        "    if $open\n",
+        "        box fill:#fff\n",
+        "              radius:4\n",
+    ));
+    assert!(one_line.contains("open.set(true)"), "{one_line}");
+    assert_eq!(continued, one_line);
+}
+
+#[test]
+fn a_continued_attribute_maps_back_to_its_own_line() {
+    let source = "[logic]\nlet open = signal(false);\n\n[view]\nrow gap:4\n        on_press:(|| open.set(true))\n";
+    let out = transpile_source(source, "demo", None, None).unwrap();
+    let written = |start: u32, len: u32| &source[start as usize..][..len as usize];
+    let handler = out
+        .expr_spans
+        .iter()
+        .find(|span| written(span.rsx_start, span.len).contains("open.set(true)"))
+        .expect("the handler is a mapped expression");
+    assert_eq!(source[..handler.rsx_start as usize].lines().count(), 6);
+    assert_eq!(
+        &out.rust_code[handler.gen_start as usize..][..handler.len as usize],
+        written(handler.rsx_start, handler.len)
+    );
+}
+
+#[test]
+fn an_attribute_refused_on_a_continued_line_is_reported_on_that_line() {
+    let source = "[view]\nrow gap:4\n        bogus:1\n        align:centre\n";
+    let out = transpile_source(source, "demo", None, None).unwrap();
+    let line_of = |needle: &str| {
+        let at = out
+            .rust_code
+            .lines()
+            .position(|line| line.contains(needle))
+            .unwrap_or_else(|| panic!("{needle} is refused:\n{}", out.rust_code));
+        out.source_map[at]
+    };
+    assert_eq!(line_of("`bogus` is not an attribute of `row`"), Some(2));
+    assert_eq!(line_of("centre"), Some(3));
 }

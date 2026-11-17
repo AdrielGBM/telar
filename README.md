@@ -34,7 +34,7 @@ feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirt
 
 A `.rsx` file has up to four sections: `[logic]` for verbatim Rust (a `pub struct Props` declares the component's props), `[style]` for reusable style classes, `[view]` for the node tree, and `[preview]` blocks that the tooling renders in isolation, with live controls, a `[play]` that drives them and snapshots that guard them ([docs/previews.md](docs/previews.md)).
 
-`[logic]` is Rust at two levels. An item written at its left margin — `use`, `const`, `static`, `fn`, `struct`, `enum`, `impl`, `trait`, `type`, `mod`, `macro_rules!` — is an item of the file's module, so a `[style]` class, a `[preview]`, a `#[cfg(test)] mod tests` and another module can name it. A statement — a `let`, an `effect(…)` — runs in the component each time it is built, where `props` is in scope.
+`[logic]` is Rust at two levels. An item written at its left margin — `use`, `const`, `static`, `fn`, `struct`, `enum`, `impl`, `trait`, `type`, `mod`, `macro_rules!` — is an item of the file's module, so a `[style]` class, a `[preview]`, a `#[cfg(test)] mod tests` and another module can name it. A statement — a `let`, an `effect(…)` — runs in the component each time it is built, where `props` is in scope, and its view reads what the statement binds, through the classes its elements name as much as through their own attributes.
 
 ## Quick start
 
@@ -158,6 +158,20 @@ Four sugars survive, because each is a token shape rather than a second language
 all: `transition(fill 250ms ease-out)` is a clause list, `hover_style(fill:$theme.accent)` a nested
 attribute list. The spelling says which world you are in.
 
+A long header continues on the lines below it. A line indented deeper than its element that opens with an
+attribute — `key:value` or a directive `key(…)` — carries on that element's attributes; a child always opens with a
+tag, `children`, a keyword, `//` or a string, so the two never meet. Any deeper indent will do, and the formatter
+sets continuation lines two levels in, apart from the children at one. A bare flag reads as a tag at the start of a
+line, so it goes after an attribute (`align:center wide`):
+
+```rsx
+row role:button toggled:$selected
+        on_press:(move || flip(selected, on_toggle.as_ref()))
+        align:center gap:(shared::gap_sm(size))
+    glyph shape:Mark::Check size:size
+    text "{$props.label}"
+```
+
 **Reactivity is reading, not marking.** What a view follows is what it read when it ran, not where a `$` was
 written. A layout value that can change is re-resolved whenever what it reads changes — `pad:$theme.gutter` follows
 a theme switch, and so does `pad:gutter()`. One that cannot — a literal, or arithmetic on constants spelled as
@@ -170,6 +184,16 @@ that read state is refused as the component is built rather than frozen in silen
 a handler's `$count += 1` writes the signal it reads.
 An attribute handed an `Option` declares its value for `Some` and nothing for `None`, so what the tree around declared
 stands: `font_weight:(if $current { Some($theme.font_weight_strong) } else { None })` is strong only while current.
+
+**A box can take its paint from one value.** `look:(value)` on a `row`, `col`, `grid` or `box` hands it a value
+implementing `telar::Look`, whose methods take the ink of the text around the box and give its fill, its frame, the ink
+of what it holds and its fill hovered and pressed. It is those attributes written out, each read in `$text.ink` and
+followed as that ink, the theme or anything the look reads changes: `fill`, `stroke` drawn at the `stroke_width` the
+box declares, `color`, and on a box that answers the pointer anyway (a press, a destination, a control's role, a
+state style of its own) the fill of its `hover_style` and `active_style`, so a look never makes a box a pointer
+target. What the box writes itself wins part by part, as it wins over a class, and the look wins over the box's
+classes: `row look:look fill:transparent` keeps the look's frame and ink, and `hover_style(radius:4)` takes the look's
+hovered fill where `hover_style(fill:x)` keeps its own.
 
 ### Components are Rust paths
 
@@ -209,7 +233,34 @@ A module written as `keymap.rs` beside `keymap/` cannot place the `.rsx` in `key
 
 `apps/sandbox` in this repo is the reference app and covers most of the surface.
 
-### Shared classes
+### Classes
+
+A `[style]` class is a name for a group of attributes, and naming it on an element is writing them there. Its values
+are read in the component, where the element's own are: a class reads the `[logic]` statements' bindings and `props`,
+follows the state it reads the same way, and gives an element only attributes its tag takes. Each property is a
+`key: value` line, the value running to the end of it, so a directive takes the colon there too
+(`hover_style: fill:$theme.surface_alt`); a state style keeps the base paint it does not name, as it does inline. A key
+the element writes itself wins over its classes, and of two classes giving one key the later wins:
+
+```rsx
+[logic]
+let size = props.size;
+let selected = signal(false);
+
+[style]
+@chip
+    pad_x: (shared::gap_sm(size))
+    radius: full
+    fill: (if $selected { $theme.accent } else { $theme.surface })
+    hover_style: fill:$theme.surface_alt
+
+[view]
+row @chip align:center pad_x:0
+    text "{props.label}"
+```
+
+On a component call an attribute is a prop, so a class there is no attribute: it amends the surface the component
+paints ([docs/plugins.md](docs/plugins.md#class-and-surfacestyle)).
 
 A class is the file's own until it says otherwise. `pub @name` shares it, and a `use` in another file's `[style]`
 brings it in by its module path, Rust's own spelling with class names where Rust has items:
@@ -233,11 +284,12 @@ row @rule align:center
 
 A `.rsx` with classes and no `[view]` — `src/styles.rsx` above — is a module of them rather than a component, and a
 directory's `mod.rsx` may hold the classes its modules share. Any other `.rsx` with no `[view]` is a build error: a
-component needs one, and a file of previews alone is named `<name>.preview.rsx`. A class is a bundle of attributes written onto each
-element that names it, so its values are Rust read where it is used, the way a `macro_rules!` macro's paths are: a
-shared class names what it reads by a path any file can reach, or each file that uses it imports that name. A class
-no `[style]` declares or imports is an error on the element naming it, and so is an import of a module that is not
-there, of a class it does not declare, or of one it keeps private.
+component needs one, and a file of previews alone is named `<name>.preview.rsx`. A class's values are Rust read where it is used,
+the way a `macro_rules!` macro's paths are: a shared class names what it reads by a path any file can reach, or each
+file that uses it imports that name. What only its own component binds no other file can reach, so a `pub @name`
+reading a `[logic]` statement's binding, `props` or a view `let` is an error on the class, and so is importing it. A
+class no `[style]` declares or imports is an error on the element naming it, and so is an import of a module that is
+not there, of a class it does not declare, or of one it keeps private.
 
 ## What's in the box
 

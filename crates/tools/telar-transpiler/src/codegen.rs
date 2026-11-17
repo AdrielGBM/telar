@@ -6,7 +6,7 @@ use crate::error::TranspileError;
 use crate::lexer::{contains_ident, literal_or_comment_end};
 use crate::signal_scan::{scan_locals, scan_signals};
 use crate::source_map::{ExprSpan, ShadowBinding};
-use crate::style::{class_errors, generate_classes};
+use crate::style::{class_errors, component_scope};
 use crate::style_import::ResolvedImports;
 use crate::tag_errors::glob_import;
 use crate::theme_access::ThemeAccess;
@@ -404,20 +404,13 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
             input.component_name
         )));
     }
-    let style_section = match style_module {
-        true => doc
-            .style
-            .classes
-            .iter()
-            .map(|class| class_errors(class, theme))
-            .collect(),
-        false => generate_classes(&doc.style.classes, &imported, theme_type, theme),
-    };
+    let scope = component_scope(doc);
 
     let locals = scan_locals(logic_source);
     let view_locals_bind_scheme = locals.iter().any(|name| name == "scheme");
     let items = logic_item_names(logic_source);
     let mut view_gen = ViewGen::new(&classes, input.assets)
+        .with_source(input.source)
         .with_theme_access(theme)
         .with_locals(locals)
         .with_file_bindings(
@@ -528,7 +521,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
             );
             j = statement_end(&logic_lines, j);
         }
-        code.push(&style_section, None);
+        push_class_errors(&mut code, &doc.style.classes, &scope, theme);
         return Ok(TranspiledSource {
             rust_code: code.out,
             preview_names: Vec::new(),
@@ -580,11 +573,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
 
     push_items(&mut code);
 
-    if !style_section.is_empty() {
-        code.push(&style_section, None);
-        if !style_section.ends_with('\n') {
-            code.push("\n", None);
-        }
+    if push_class_errors(&mut code, &doc.style.classes, &scope, theme) {
         code.push("\n", None);
     }
 
@@ -711,6 +700,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         code.push(crate::preview::CLOSE, None);
     }
 
+    expr_spans.retain(|span| span.is_verbatim(&code.out, input.source));
     Ok(TranspiledSource {
         rust_code: code.out,
         preview_names: doc.previews.iter().map(|p| p.name.clone()).collect(),
@@ -1039,12 +1029,7 @@ pub(crate) fn preview_file(input: TranspileInput<'_>) -> Result<TranspiledSource
         push_import_errors(&mut code, input.imports);
         let imported = input.imports.class_list();
         let classes: Vec<StyleClass> = doc.style.classes.iter().chain(&imported).cloned().collect();
-        let style_section = generate_classes(&doc.style.classes, &imported, theme_type, theme);
-        if !style_section.is_empty() {
-            code.push("\n", None);
-            code.push(style_section.trim_end(), None);
-            code.push("\n", None);
-        }
+        push_class_errors(&mut code, &doc.style.classes, &component_scope(doc), theme);
         mapped = crate::preview::emit_variants(
             &mut code,
             &crate::preview::Previews {
@@ -1062,11 +1047,13 @@ pub(crate) fn preview_file(input: TranspileInput<'_>) -> Result<TranspiledSource
         );
         code.push(crate::preview::CLOSE, None);
     }
+    let mut expr_spans = mapped.expr_spans;
+    expr_spans.retain(|span| span.is_verbatim(&code.out, input.source));
     Ok(TranspiledSource {
         rust_code: code.out,
         preview_names: doc.previews.iter().map(|p| p.name.clone()).collect(),
         source_map: code.map,
-        expr_spans: mapped.expr_spans,
+        expr_spans,
         shadows: mapped.shadows,
     })
 }
@@ -1138,9 +1125,12 @@ pub(crate) fn module_root(
         code.push(line, src);
         code.push("\n", src);
     }
-    for class in &doc.style.classes {
-        code.push(&class_errors(class, ThemeAccess::Handle), None);
-    }
+    push_class_errors(
+        &mut code,
+        &doc.style.classes,
+        &component_scope(doc),
+        ThemeAccess::Handle,
+    );
     code.push(&format!("include!({children_file:?});\n"), None);
 
     Ok(TranspiledSource {
@@ -1169,6 +1159,22 @@ fn is_style_module(doc: &RsxDocument, has_props: bool) -> bool {
         && doc.previews_meta.is_none()
         && !has_props
         && !doc.style.classes.is_empty()
+}
+
+/// The errors each of `classes` earns where it is declared, on the class's own line; whether there were any.
+fn push_class_errors(
+    code: &mut Code,
+    classes: &[StyleClass],
+    scope: &[String],
+    theme: ThemeAccess,
+) -> bool {
+    let mut any = false;
+    for class in classes {
+        let errors = class_errors(class, scope, theme);
+        any |= !errors.is_empty();
+        code.push(&errors, Some(class.line.saturating_sub(1) as u32));
+    }
+    any
 }
 
 fn push_import_errors(code: &mut Code, imports: &ResolvedImports) {

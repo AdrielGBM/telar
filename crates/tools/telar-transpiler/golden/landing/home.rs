@@ -15,75 +15,6 @@ pub struct HomeProps {}
 #[allow(dead_code)]
 const PRIMARY: Color = Color::rgba(0.263, 0.380, 0.933, 1.0);
 
-#[allow(dead_code)]
-fn style_page() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    LayoutStyle::new()
-        .flex_column()
-}
-
-#[allow(dead_code)]
-fn style_navband() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    LayoutStyle::new()
-        .flex_column()
-        .align_items(AlignItems::CENTER)
-        .padding_horizontal(24.0)
-        .padding_vertical(14.0)
-}
-
-#[allow(dead_code)]
-fn style_footband() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    LayoutStyle::new()
-        .flex_column()
-        .align_items(AlignItems::CENTER)
-        .padding_horizontal(24.0)
-        .padding_vertical(40.0)
-}
-
-#[allow(dead_code)]
-fn style_band() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    LayoutStyle::new()
-        .flex_column()
-        .align_items(AlignItems::CENTER)
-        .padding_horizontal(24.0)
-        .padding_vertical(64.0)
-}
-
-#[allow(dead_code)]
-fn style_wrap() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    LayoutStyle::new()
-        .flex_column()
-        .width(SizeDimension::Percent(1.0))
-        .max_width(1120.0)
-        .gap(40.0)
-}
-
-#[allow(dead_code)]
-fn style_navwrap() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    LayoutStyle::new()
-        .flex_row()
-        .width(SizeDimension::Percent(1.0))
-        .max_width(1120.0)
-        .align_items(AlignItems::CENTER)
-        .justify_content(JustifyContent::SPACE_BETWEEN)
-}
-
-#[allow(dead_code)]
-fn style_footwrap() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    LayoutStyle::new()
-        .flex_row()
-        .width(SizeDimension::Percent(1.0))
-        .max_width(1120.0)
-        .justify_content(JustifyContent::SPACE_BETWEEN)
-        .gap(32.0)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -136,9 +67,9 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     let __node_1 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER).flex_wrap(), children![__text_1, __text_2, __text_3, __node_1])?
                 };
-                Container::new(style_navwrap().flex_wrap().gap(12.0), children![__row_1, __row_2])?
+                Container::new(LayoutStyle::new().flex_row().flex_row().width(SizeDimension::Percent(1.0)).max_width(1120.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::SPACE_BETWEEN).flex_wrap().gap(12.0), children![__row_1, __row_2])?
             };
-            StyledContainer::new(style_navband(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__row_0])?
+            StyledContainer::new(LayoutStyle::new().flex_column().flex_column().align_items(AlignItems::CENTER).padding_horizontal(24.0).padding_vertical(14.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__row_0])?
         };
         let __sbox_1 = {
             let __col_1 = {
@@ -188,9 +119,9 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(48.0).flex_wrap().align_items(AlignItems::CENTER), children![__col_2, __col_3])?
                 };
-                Container::new(style_wrap(), children![__row_3])?
+                Container::new(LayoutStyle::new().flex_column().flex_column().width(SizeDimension::Percent(1.0)).max_width(1120.0).gap(40.0), children![__row_3])?
             };
-            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_1])?
+            StyledContainer::new(LayoutStyle::new().flex_column().flex_column().align_items(AlignItems::CENTER).padding_horizontal(24.0).padding_vertical(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_1])?
         };
         let __sbox_2 = {
             let __col_4 = {
@@ -272,9 +203,9 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap(), children![__sbox_3, __sbox_4, __sbox_5, __sbox_6])?
                 };
-                Container::new(style_wrap().gap(24.0), children![__text_7, __row_5])?
+                Container::new(LayoutStyle::new().flex_column().flex_column().width(SizeDimension::Percent(1.0)).max_width(1120.0).gap(24.0), children![__text_7, __row_5])?
             };
-            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__col_4])?
+            StyledContainer::new(LayoutStyle::new().flex_column().flex_column().align_items(AlignItems::CENTER).padding_horizontal(24.0).padding_vertical(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__col_4])?
         };
         let __sbox_7 = {
             let __col_5 = {
@@ -354,9 +285,9 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).flex_wrap(), children![__node_4, __node_6, __node_8, __node_10])?
                 };
-                Container::new(style_wrap().gap(28.0), children![__col_6, __row_6])?
+                Container::new(LayoutStyle::new().flex_column().flex_column().width(SizeDimension::Percent(1.0)).max_width(1120.0).gap(28.0), children![__col_6, __row_6])?
             };
-            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_5])?
+            StyledContainer::new(LayoutStyle::new().flex_column().flex_column().align_items(AlignItems::CENTER).padding_horizontal(24.0).padding_vertical(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_5])?
         };
         let __sbox_8 = {
             let __col_7 = {
@@ -440,9 +371,9 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap(), children![__col_9, __col_10, __col_11])?
                 };
-                Container::new(style_wrap().gap(28.0), children![__col_8, __row_7])?
+                Container::new(LayoutStyle::new().flex_column().flex_column().width(SizeDimension::Percent(1.0)).max_width(1120.0).gap(28.0), children![__col_8, __row_7])?
             };
-            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__col_7])?
+            StyledContainer::new(LayoutStyle::new().flex_column().flex_column().align_items(AlignItems::CENTER).padding_horizontal(24.0).padding_vertical(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__col_7])?
         };
         let __sbox_9 = {
             let __col_12 = {
@@ -490,9 +421,9 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(48.0).flex_wrap().align_items(AlignItems::CENTER), children![__col_13, __col_14])?
                 };
-                Container::new(style_wrap(), children![__row_8])?
+                Container::new(LayoutStyle::new().flex_column().flex_column().width(SizeDimension::Percent(1.0)).max_width(1120.0).gap(40.0), children![__row_8])?
             };
-            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_12])?
+            StyledContainer::new(LayoutStyle::new().flex_column().flex_column().align_items(AlignItems::CENTER).padding_horizontal(24.0).padding_vertical(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_12])?
         };
         let __sbox_10 = {
             let __col_15 = {
@@ -523,9 +454,9 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER).flex_wrap(), children![__node_13, __text_28])?
                 };
-                Container::new(style_wrap().align_items(AlignItems::CENTER).gap(16.0), children![__text_26, __text_27, __row_10])?
+                Container::new(LayoutStyle::new().flex_column().flex_column().width(SizeDimension::Percent(1.0)).max_width(1120.0).align_items(AlignItems::CENTER).gap(16.0), children![__text_26, __text_27, __row_10])?
             };
-            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(PRIMARY), children![__col_15])?
+            StyledContainer::new(LayoutStyle::new().flex_column().flex_column().align_items(AlignItems::CENTER).padding_horizontal(24.0).padding_vertical(64.0), move |_| RectStyle::default().with_fill(PRIMARY), children![__col_15])?
         };
         let __sbox_11 = {
             let __row_11 = {
@@ -598,11 +529,11 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     Container::new(LayoutStyle::new().flex_column().gap(6.0).min_width(140.0), children![__text_34, __text_35, __text_36])?
                 };
-                Container::new(style_footwrap(), children![__col_16, __col_17, __col_18])?
+                Container::new(LayoutStyle::new().flex_row().flex_row().width(SizeDimension::Percent(1.0)).max_width(1120.0).justify_content(JustifyContent::SPACE_BETWEEN).gap(32.0), children![__col_16, __col_17, __col_18])?
             };
-            StyledContainer::new(style_footband(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().dark).with_radius(BorderRadius::zero()) }, children![__row_11])?
+            StyledContainer::new(LayoutStyle::new().flex_column().flex_column().align_items(AlignItems::CENTER).padding_horizontal(24.0).padding_vertical(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().dark).with_radius(BorderRadius::zero()) }, children![__row_11])?
         };
-        Container::new(style_page(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_7, __sbox_8, __sbox_9, __sbox_10, __sbox_11])?
+        Container::new(LayoutStyle::new().flex_column().flex_column(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_7, __sbox_8, __sbox_9, __sbox_10, __sbox_11])?
     };
     Ok(Box::new(__col_0))
 }

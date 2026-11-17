@@ -17,22 +17,6 @@
 #[derive(::telar::Props)]
 pub struct ColorProps {}
 
-#[allow(dead_code)]
-fn style_swatch() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .gap(6.0)
-        .align_items(AlignItems::CENTER)
-}
-
-#[allow(dead_code)]
-fn style_chip() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .width(SizeDimension::Percent(1.0))
-        .height(52.0)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -57,7 +41,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let __node_3 = {
                                     let __col_1 = {
                                         let __sbox_0 = {
-                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_0 = {
                                             Text::declaring(
@@ -66,11 +50,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_0, __text_0])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_0])?
                                     };
                                     let __col_2 = {
                                         let __sbox_1 = {
-                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(10.0)) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_1 = {
                                             Text::declaring(
@@ -79,11 +63,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_1, __text_1])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_1, __text_1])?
                                     };
                                     let __col_3 = {
                                         let __sbox_2 = {
-                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_2 = {
                                             Text::declaring(
@@ -92,11 +76,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_2, __text_2])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_2, __text_2])?
                                     };
                                     let __col_4 = {
                                         let __sbox_3 = {
-                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_3 = {
                                             Text::declaring(
@@ -105,11 +89,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_3, __text_3])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_3, __text_3])?
                                     };
                                     let __col_5 = {
                                         let __sbox_4 = {
-                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(10.0)) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_4 = {
                                             Text::declaring(
@@ -118,11 +102,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_4, __text_4])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_4, __text_4])?
                                     };
                                     let __col_6 = {
                                         let __sbox_5 = {
-                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(10.0)) }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_5 = {
                                             Text::declaring(
@@ -131,7 +115,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_5, __text_5])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_5, __text_5])?
                                     };
                                     Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(120.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_1, __col_2, __col_3, __col_4, __col_5, __col_6])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(12.0).with_color(theme.get().ink) })
                                 };
@@ -166,7 +150,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let __node_7 = {
                                     let __col_7 = {
                                         let __sbox_6 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().ink)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().ink)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_6 = {
                                             Text::declaring(
@@ -175,11 +159,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_6, __text_6])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_6, __text_6])?
                                     };
                                     let __col_8 = {
                                         let __sbox_7 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().muted)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().muted)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_7 = {
                                             Text::declaring(
@@ -188,11 +172,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_7, __text_7])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_7, __text_7])?
                                     };
                                     let __col_9 = {
                                         let __sbox_8 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_8 = {
                                             Text::declaring(
@@ -201,11 +185,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_8, __text_8])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_8, __text_8])?
                                     };
                                     let __col_10 = {
                                         let __sbox_9 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_9 = {
                                             Text::declaring(
@@ -214,11 +198,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_9, __text_9])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_9, __text_9])?
                                     };
                                     let __col_11 = {
                                         let __sbox_10 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().border)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().border)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_10 = {
                                             Text::declaring(
@@ -227,11 +211,11 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_10, __text_10])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_10, __text_10])?
                                     };
                                     let __col_12 = {
                                         let __sbox_11 = {
-                                            StyledContainer::new(style_chip().flex_column().bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().background)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(52.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().background)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_11 = {
                                             Text::declaring(
@@ -240,7 +224,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_11, __text_11])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_11, __text_11])?
                                     };
                                     Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(120.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_7, __col_8, __col_9, __col_10, __col_11, __col_12])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(12.0).with_color(theme.get().ink) })
                                 };

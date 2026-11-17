@@ -125,3 +125,30 @@ fn a_file_whose_module_path_is_not_utf8_refuses_every_import_saying_why() {
         resolved.errors[0].message
     );
 }
+
+/// What a class reads from its own component is there only on that component's elements, so no other file can name it, however the module spells it.
+#[test]
+fn a_class_reading_its_component_is_not_imported() {
+    let files = package(&[
+        (
+            "card.rsx",
+            "[logic]\npub struct Props {\n    pub size: f32,\n}\nlet size = props.size;\n\n[style]\npub @sized\n    gap: (size * 2.0)\n\npub @plain\n    gap: 4\n\n[view]\ncol @sized\n",
+        ),
+        (
+            "list.rsx",
+            "[style]\nuse crate::card::{sized, plain};\n[view]\ncol @sized\n",
+        ),
+        ("grid.rsx", "[style]\nuse crate::card::*;\n[view]\ncol\n"),
+    ]);
+    for importer in ["list.rsx", "grid.rsx"] {
+        let resolved = resolve(&files, importer);
+        assert_eq!(
+            resolved.errors,
+            [ImportError {
+                line: 2,
+                message: "`@sized` reads `size`, which only `crate::card`'s component binds, so no other file can name it".to_string(),
+            }],
+            "{importer}"
+        );
+    }
+}

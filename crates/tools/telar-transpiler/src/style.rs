@@ -1,12 +1,9 @@
-//! Generates the `[style]` section: one `LayoutStyle` constructor function per class.
-
-use std::fmt::Write;
+//! The `[style]` section: what a class is checked for where it is declared, and the layout properties every element, a class's included, resolves its keys through.
 
 use telar_parser::StyleClass;
 
 use crate::registry;
 use crate::theme_access::ThemeAccess;
-use telar_project::naming::style_function_name;
 
 /// A number for a key [`crate::registry::value_kind`] describes, where a value the key cannot mean has already been reported on the attribute itself. What stands in its place only has to be *something*: the build stops before anything reads it.
 pub fn number_or(value: &str, fallback: &str, theme: ThemeAccess) -> String {
@@ -51,87 +48,75 @@ pub enum PropCall {
     Invalid(String),
 }
 
-/// One `LayoutStyle` constructor function per class a file uses: its own, each behind the errors its properties earn, and the ones it imports, which the file declaring them already checks.
-pub fn generate_classes(
-    own: &[StyleClass],
-    imported: &[StyleClass],
-    theme_type: Option<&str>,
-    theme: ThemeAccess,
-) -> String {
-    let mut out = String::new();
-    let all = own.iter().map(|class| (class, true));
-    let all = all.chain(imported.iter().map(|class| (class, false)));
-    for (i, (class, checked)) in all.enumerate() {
-        if i > 0 {
-            out.push('\n');
-        }
-        if checked {
-            out.push_str(&class_errors(class, theme));
-        }
-        out.push_str(&generate_class_function(class, theme_type, theme));
-        out.push('\n');
-    }
-    out
-}
-
-/// What a class may carry beyond the layout keys: what a box paints with, and what flows down to the text below it. Anything else is a typo, and is refused rather than dropped.
+/// What a class may carry beyond the layout keys: what a box paints with, how it paints in each state, and what flows down to the text below it. Anything else is a typo, and is refused rather than dropped.
 fn is_style_key(key: &str) -> bool {
     crate::view::is_paint_key(key)
+        || crate::registry::STATE_STYLE_KEYS.contains(&key)
         || crate::registry::is_inheritable_text_attr(key)
         || matches!(key, "lines" | "ellipsis")
 }
 
-pub fn class_errors(class: &StyleClass, theme: ThemeAccess) -> String {
-    let mut out = String::new();
-    // A class property has no attribute line, so the class name is what locates it. The key is checked here as well as the value: an unrecognised one is otherwise dropped, and a renamed key silently stops laying out.
-    for prop in &class.props {
-        let message = match layout_prop_call(&prop.key, &prop.value, theme) {
-            PropCall::Invalid(message) => Some(message),
-            PropCall::Other if !is_style_key(&prop.key) => {
-                Some(format!("`{}` is not a style property", prop.key))
-            }
-            PropCall::Other => crate::view::value_error("box", &prop.key, &prop.value, theme),
-            PropCall::Call(call) if reads_box_text(&call) => Some(format!(
-                "`{}:{}` is a length in the text of the box it lands on, which a class is written apart from: write it on the box",
-                prop.key, prop.value
-            )),
-            PropCall::Call(_) => None,
-        };
-        if let Some(message) = message {
-            let message = format!("in `@{}`: {message}", class.name);
-            let _ = writeln!(out, "compile_error!({message:?});");
-        }
+/// The `compile_error!`s a class earns where it is declared: a key no element takes from a class, a value no element could mean, and a `pub @name` reading what only this file's component binds. What one tag makes of it is judged on each element naming it. `scope` is what the component binds that a class may read on its own elements and nowhere else: the `[logic]` statements' bindings, `props`, and the view's `let`s.
+pub fn class_errors(class: &StyleClass, scope: &[String], theme: ThemeAccess) -> String {
+    // The key is checked as well as the value: an unrecognised one is otherwise dropped, and a renamed key silently stops laying out.
+    let mut messages: Vec<String> = class
+        .props
+        .iter()
+        .filter_map(
+            |prop| match layout_prop_call(&prop.key, &prop.value, theme) {
+                PropCall::Invalid(message) => Some(message),
+                PropCall::Other if !is_style_key(&prop.key) => {
+                    Some(format!("`{}` is not a style property", prop.key))
+                }
+                PropCall::Other
+                    if crate::registry::STATE_STYLE_KEYS.contains(&prop.key.as_str()) =>
+                {
+                    None
+                }
+                PropCall::Other => crate::view::value_error("box", &prop.key, &prop.value, theme),
+                PropCall::Call(_) => None,
+            },
+        )
+        .map(|message| format!("in `@{}`: {message}", class.name))
+        .collect();
+    let read = component_reads(class, scope);
+    if class.public && !read.is_empty() {
+        messages.push(format!(
+            "`pub @{0}` reads {1}, which only this file's component binds: a shared class is read where another file names it, so keep `@{0}` to this file, or have it read what any file can reach",
+            class.name,
+            read.iter()
+                .map(|name| format!("`{name}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
     }
-    out
+    messages
+        .iter()
+        .map(|message| format!("compile_error!({message:?});\n"))
+        .collect()
 }
 
-fn generate_class_function(
-    class: &StyleClass,
-    theme_type: Option<&str>,
-    theme: ThemeAccess,
-) -> String {
-    let mut out = String::new();
-    // A paint-only class never has its layout fn called, so the generated fn can be dead.
-    out.push_str("#[allow(dead_code)]\n");
-    let _ = writeln!(
-        out,
-        "fn {}() -> LayoutStyle {{",
-        style_function_name(&class.name)
-    );
-    if let Some(theme_type) = theme_type {
-        let _ = writeln!(
-            out,
-            "    #[allow(unused_variables)] let theme = telar::Theme::<{theme_type}>::default();"
-        );
-    }
-    out.push_str("    LayoutStyle::new()");
-    for prop in in_application_order(&class.props, |prop| &prop.key) {
-        if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value, theme) {
-            let _ = write!(out, "\n        {call}");
-        }
-    }
-    out.push_str("\n}");
-    out
+/// The names of `scope` a class's values read, in `scope`'s order. A `$theme` read is read as a library reads it, through a path, since the theme is never a binding of the component's own.
+pub fn component_reads<'s>(class: &StyleClass, scope: &'s [String]) -> Vec<&'s str> {
+    let values: Vec<String> = class
+        .props
+        .iter()
+        .map(|prop| crate::view::substitute_reads(&prop.value, ThemeAccess::Tokens))
+        .collect();
+    let free: Vec<Option<Vec<String>>> = values
+        .iter()
+        .map(|value| crate::rust::free_idents(value))
+        .collect();
+    scope
+        .iter()
+        .filter(|name| {
+            values.iter().zip(&free).any(|(value, free)| match free {
+                Some(free) => free.contains(name),
+                None => crate::lexer::contains_ident(value, name),
+            })
+        })
+        .map(String::as_str)
+        .collect()
 }
 
 /// The order one element's layout keys are applied in: a padding naming fewer edges after one naming more, so the narrower key wins however the author ordered them, as an edge does for `radius` and `stroke_width`. Every other key keeps its written place.
@@ -557,6 +542,10 @@ pub fn hex_to_color_expr(hex: &str) -> String {
 #[path = "style.test.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "style.class.test.rs"]
+mod class_tests;
+
 /// `call`, the `.method(arg)` an attribute becomes, applied only when `arg` declares something: a value declares itself, and an `Option` its value or nothing, which leaves what the tree around declared or the default (`telar::Handed`). A literal or a constant is left as it is, since neither is an `Option`, and so is a call that is not one method of one argument.
 pub fn declared_when_handed(call: String) -> String {
     let Some((method, arg)) = single_argument_call(&call) else {
@@ -631,4 +620,15 @@ fn never_absent(arg: &str) -> bool {
         || read.starts_with("theme.get().")
         || read.starts_with("::telar::use_theme_tokens().")
         || arg.contains(&text) && arg.matches(".get()").count() == arg.matches(&text).count()
+}
+
+/// What a component binds that its classes may read on its own elements and nowhere else: its `[logic]` statements' bindings, `props`, and its view's `let`s.
+pub fn component_scope(doc: &telar_parser::RsxDocument) -> Vec<String> {
+    let mut scope = crate::signal_scan::scan_locals(&doc.logic.source);
+    for name in crate::view::view_let_names(&doc.view.nodes) {
+        if !scope.contains(&name) {
+            scope.push(name);
+        }
+    }
+    scope
 }

@@ -59,6 +59,14 @@ fn role_of(el: &Element) -> Option<(&'static str, semantics_core::Role)> {
     ))
 }
 
+/// Whether the box answers the pointer through what it says: a handler, a state style, a cursor, a destination, or a role a person operates.
+pub(super) fn answers_pointer(el: &Element) -> bool {
+    el.attributes
+        .iter()
+        .any(|a| POINTER_HANDLERS.contains(&a.key.as_str()))
+        || role_of(el).is_some_and(|(_, role)| role.is_control())
+}
+
 /// What a role cannot be said together with, as compile errors: a destination, which makes the box a link whatever else it claimed, and an on/off state on a role that has none to carry it in.
 fn role_contradictions(
     el: &Element,
@@ -117,7 +125,7 @@ impl ViewGen<'_> {
     fn emit_styled_container(&mut self, el: &Element, always_style: bool) -> ChildEmit {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
-        let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
+        let style = self.make_layout_style(&el.tag, &el.attributes);
         // A computed layout prop makes the whole style reactive: `LayoutStyle` is a value handed to the tree once, not a closure the renderer re-runs, so the node keeps an effect that re-resolves it.
         let reactive = self.reactive_layout_values(&el.tag, &el.attributes);
         let raw: Vec<&str> = reactive.iter().map(String::as_str).collect();
@@ -204,6 +212,7 @@ impl ViewGen<'_> {
             .unwrap_or_default();
         let (specs, mut errors) = self.parse_transitions(el);
         errors.extend(input_contradictions(el));
+        errors.extend(super::look::flag_error(el));
         let input = ["input_opaque", "input_transparent"]
             .into_iter()
             .filter(|key| el.attributes.iter().any(|a| a.key == *key))
@@ -247,11 +256,11 @@ impl ViewGen<'_> {
             .unwrap_or_default();
         let on_press = self.event_call(el, "on_press");
 
-        let attrs = self.effective_attrs(el);
+        let attrs = el.attributes.as_slice();
         let surface = attrs.iter().find(|a| a.key == "surface");
-        let hover_call = self.state_style_call(el, "hover_style", &attrs, surface);
-        let active_call = self.state_style_call(el, "active_style", &attrs, surface);
-        let disabled_call = self.state_style_call(el, "disabled_style", &attrs, surface);
+        let hover_call = self.state_style_call(el, "hover_style", attrs, surface);
+        let active_call = self.state_style_call(el, "active_style", attrs, surface);
+        let disabled_call = self.state_style_call(el, "disabled_style", attrs, surface);
         let disabled = self.predicate_call(el, "disabled");
         // Not amended: the ring is composed over whichever state won, which already was, and an amendment restroking it would hide where the keyboard is.
         let focus_ring = self.state_style_call(el, "focus_style", &[], None);
@@ -269,26 +278,26 @@ impl ViewGen<'_> {
         let mut hoists: Vec<String> = Vec::new();
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
         // What the container says about the text below it: `col font_size:11` draws no text, it names the size everything under it starts from.
-        let declaring = self.declaring_call(&attrs, &transitions, &mut hoists);
+        let declaring = self.declaring_call(attrs, &transitions, &mut hoists);
 
         // Any of these forces the StyledContainer upgrade. `on_press` is excluded because a plain Container answers it in either form, and `operated` is a role only a StyledContainer can make a control.
         let styling = format!(
             "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{hit_outset}{to}{valued}"
         );
         let pieces = if always_style
-            || has_paint(&attrs)
+            || has_paint(attrs)
             || !styling.is_empty()
             || operated
             || surface.is_some()
         {
-            Some(self.rect_style_pieces(&attrs, &transitions, &mut hoists, surface))
+            Some(self.rect_style_pieces(attrs, &transitions, &mut hoists, surface))
         } else {
             None
         };
 
         let mode = Self::child_mode(&el.children);
 
-        let is_row = self.container_is_row(&el.tag, &el.classes, &el.attributes);
+        let is_row = super::style_helpers::container_is_row(&el.tag, &el.attributes);
         self.indent += 1;
         let inner_pad = self.indent_str();
         let child_emits: Vec<ChildEmit> = self.within_host(is_row, |g| {
@@ -359,7 +368,7 @@ impl ViewGen<'_> {
     fn emit_hoisted(&mut self, el: &Element, tag: &str, ty: &str) -> ChildEmit {
         let var = self.next_variable_name(tag);
         let pad = self.indent_str();
-        let style = self.make_layout_style(tag, &el.classes, &el.attributes);
+        let style = self.make_layout_style(tag, &el.attributes);
 
         // The constructor takes a plain child vec, so a reactive region here stays a boxed `ReactiveList`.
         let mode = if el.children.iter().any(forces_child_vec) {
@@ -649,7 +658,7 @@ impl ViewGen<'_> {
 /// Parses a `hover(...)` inner value — a whitespace-separated list of `key:value` paint props — into `Attr`s. A token without a `:` (a bare flag) is ignored: hover overrides are always keyed paint props.
 ///
 /// `base` is where `value` begins in the `.rsx`, so each prop carries its real position. Standing in a `0` here made every one of these read as an attribute at the start of the file: a rename inside `hover_style(…)` then edited whatever bytes sat there, which in a file with a `[logic]` header meant corrupting an unrelated line.
-fn parse_inline_paint_attrs(value: &str, base: usize) -> Vec<Attr> {
+pub(super) fn parse_inline_paint_attrs(value: &str, base: usize) -> Vec<Attr> {
     split_outside_delimiters(value)
         .into_iter()
         .filter_map(|(at, tok)| {

@@ -10,7 +10,7 @@ impl ViewGen<'_> {
     pub(super) fn emit_mask(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_variable_name("mask");
         let pad = self.indent_str();
-        let style = self.make_layout_style("mask", &el.classes, &el.attributes);
+        let style = self.make_layout_style("mask", &el.attributes);
         let children: Vec<&ViewNode> = el
             .children
             .iter()

@@ -1,23 +1,23 @@
-//! [`Look`]: what a component's `tone` and `variant` paint, in every state, worked out once for every component that has both.
+//! [`ToneLook`]: what a component's `tone` and `variant` paint, in every state, worked out once for every component that has both.
 
-use telar::{Color, Reactive, RwSignal, Tone, Variant};
+use telar::{Color, Look, Reactive, RwSignal, Tone, Variant};
 
 use crate::shared;
 
-/// A tone in a variant, as a component carrying it paints: its fill, its frame, the wash a part the pointer operates lays over it, and the ink of what sits on it.
+/// A tone in a variant, as a component carrying it paints: its fill, its frame, the wash a part the pointer operates lays over it, and the ink of what sits on it. A view paints a box with one through `look:`.
 ///
 /// Every colour is worked out from `around`, the ink of the place the component sits in, which [`Tone::Ink`] is.
 #[derive(Clone)]
-pub(crate) struct Look {
+pub(crate) struct ToneLook {
     pub tone: Reactive<Tone>,
     pub variant: Variant,
     /// A toggle's state: off draws a neutral frame instead of the tone. `None` is always on.
     pub selected: Option<RwSignal<bool>>,
-    /// Whether a part answers the pointer, so the ink has to read on its hover and press washes too.
+    /// Whether a part answers the pointer: only then does the pointer change its paint, and the ink has to read on its hover and press washes too.
     pub interactive: bool,
 }
 
-impl Look {
+impl ToneLook {
     /// A component that only shows its tone: no toggle, nothing the pointer operates.
     pub fn shown(tone: Reactive<Tone>, variant: Variant) -> Self {
         Self {
@@ -34,24 +34,6 @@ impl Look {
 
     fn lit(&self) -> bool {
         self.selected.is_none_or(|on| on.get())
-    }
-
-    pub fn fill(&self, around: Color) -> Color {
-        let hue = self.hue(around);
-        match (self.lit(), self.variant) {
-            (true, Variant::Solid) => hue,
-            // Scaled by the colour's own alpha, so a transparent colour washes nothing in.
-            (true, Variant::Soft) => hue.with_alpha(hue.a * shared::held_wash().a),
-            _ => Color::TRANSPARENT,
-        }
-    }
-
-    pub fn frame(&self, around: Color) -> Color {
-        match (self.lit(), self.variant) {
-            (false, _) => shared::control_border(),
-            (true, Variant::Outline) => self.hue(around),
-            (true, _) => Color::TRANSPARENT,
-        }
     }
 
     /// What a part the pointer operates lays over the component while the pointer rests on it, or while it is pressed: a filled one's fill stepped away from its ink, a wash of the colour over a soft or outline one, and the theme's own wash where it has no surface of its own, which is how a ghost's surface appears.
@@ -74,18 +56,37 @@ impl Look {
         }
     }
 
-    pub fn hovered(&self, around: Color) -> Color {
-        self.state(around, false)
+    fn under_pointer(&self, around: Color, pressed: bool) -> Color {
+        match self.interactive {
+            true => self.state(around, pressed),
+            false => self.fill(around),
+        }
+    }
+}
+
+impl Look for ToneLook {
+    fn fill(&self, around: Color) -> Color {
+        let hue = self.hue(around);
+        match (self.lit(), self.variant) {
+            (true, Variant::Solid) => hue,
+            // Scaled by the colour's own alpha, so a transparent colour washes nothing in.
+            (true, Variant::Soft) => hue.with_alpha(hue.a * shared::held_wash().a),
+            _ => Color::TRANSPARENT,
+        }
     }
 
-    pub fn pressed(&self, around: Color) -> Color {
-        self.state(around, true)
+    fn frame(&self, around: Color) -> Color {
+        match (self.lit(), self.variant) {
+            (false, _) => shared::control_border(),
+            (true, Variant::Outline) => self.hue(around),
+            (true, _) => Color::TRANSPARENT,
+        }
     }
 
     /// The ink of what sits on the component.
     ///
     /// A solid fill's ink is picked for the fill alone, since its states step away from that ink. Any other ink is held to every state the component can show, because a wash only deepens the colour the label is drawn in, against the theme's surface it is assumed to sit on, except the ink of the place itself: that one already reads on whatever the place is, which may be no theme surface at all.
-    pub fn ink(&self, around: Color) -> Color {
+    fn ink(&self, around: Color) -> Color {
         let surface = shared::surface();
         let rest = self.fill(around).over(surface);
         let wanted = match (self.lit(), self.variant, self.tone.get()) {
@@ -106,5 +107,13 @@ impl Look {
         under.into_iter().fold(wanted.over(surface), |ink, page| {
             shared::readable_on(ink, page)
         })
+    }
+
+    fn hovered(&self, around: Color) -> Color {
+        self.under_pointer(around, false)
+    }
+
+    fn pressed(&self, around: Color) -> Color {
+        self.under_pointer(around, true)
     }
 }

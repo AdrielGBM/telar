@@ -88,8 +88,8 @@ fn class_paint_promotes_container_and_is_consumed() {
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
-        code.contains("StyledContainer::new(style_card()"),
-        "painted col should be a StyledContainer:\n{code}"
+        code.contains("StyledContainer::new(LayoutStyle::new().flex_column().padding_all(8.0),"),
+        "painted col should be a StyledContainer laid out by its class:\n{code}"
     );
     assert!(
         code.contains("with_fill"),
@@ -103,8 +103,8 @@ fn multiple_classes_compose_layout_and_paint() {
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
-        code.contains("style_a().align_items(AlignItems::START)"),
-        "second class's layout should compose on top of the first:\n{code}"
+        code.contains("LayoutStyle::new().flex_column().align_items(AlignItems::START),"),
+        "the second class's `align` replaces the first's:\n{code}"
     );
     assert!(
         code.contains("with_fill"),
@@ -114,11 +114,12 @@ fn multiple_classes_compose_layout_and_paint() {
 
 #[test]
 fn classed_box_is_a_flex_container() {
-    // A `style_*()` class fn is `LayoutStyle::new()` (display:block), so a classed `box` still needs `.flex_column()` for its children to centre.
     let src = "[style]\n@center\n    align: center\n    justify: center\n[view]\nbox @center width:100 height:60\n    text \"hi\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     assert!(
-        out.rust_code.contains("style_center().flex_column()"),
+        out.rust_code.contains(
+            "LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(100.0)"
+        ),
         "a classed box must be a flex container so align/justify apply:\n{}",
         out.rust_code
     );
@@ -1971,6 +1972,7 @@ fn every_tag_the_view_builds_is_told_from_a_component_call() {
             tag: tag.to_string(),
             classes: Vec::new(),
             attributes: Vec::new(),
+            continued_at: Vec::new(),
             content: None,
             children: Vec::new(),
             line: 1,

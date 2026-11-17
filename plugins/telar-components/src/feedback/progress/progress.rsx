@@ -1,41 +1,27 @@
 [logic]
-use crate::look::Look;
+use crate::look::ToneLook;
 use crate::shared;
 use telar::{ControlSize, NumericValue, SizeDimension, Tone, Variant};
 
 /// A progress bar's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role or measure named beside it, read when the bar paints and lays out.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct ProgressTokens {
     /// Corner radius of the track and its fill. `None` rounds both ends fully, whatever the bar's thickness.
+    #[token(or = || BorderRadius::FULL)]
     pub radius: Option<f32>,
     /// The width a bar takes where what holds it leaves the room, at the regular size, scaled with the bar's own: narrower where it does not, and as the call places it (`width:100%`). `None` is 16 ems of the document's text.
     pub width: Option<f32>,
     /// The track's thickness at the regular size, scaled with the bar's own. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    #[token(or = shared::gap_md, scaled)]
     pub height: Option<f32>,
 }
 
 impl ProgressTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The corner radius of the track and its fill.
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or(BorderRadius::FULL)
-    }
-
     /// The width a bar of `size` takes where what holds it leaves the room.
     pub fn width(&self, size: ControlSize) -> f32 {
         shared::width_or_measure(size, self.width, 16.0)
-    }
-
-    /// The track's thickness in a bar of `size`.
-    pub fn height(&self, size: ControlSize) -> f32 {
-        self.height
-            .map_or_else(|| shared::gap_md(size), |height| height * size.scale())
     }
 }
 
@@ -63,8 +49,8 @@ pub struct Props {
 }
 
 let size = props.size;
-let reached = Look::shown(props.tone.clone(), Variant::Solid);
-let rail = Look::shown(props.tone.clone(), Variant::Soft);
+let reached = ToneLook::shown(props.tone.clone(), Variant::Solid);
+let rail = ToneLook::shown(props.tone.clone(), Variant::Soft);
 
 [view]
 row width:(ProgressTokens::current().width(size)) max_width:100% min_width:0 height:(ProgressTokens::current().height(size)) fill:(rail.fill($text.ink)) radius:(ProgressTokens::current().radius()) role:progressbar valued:(NumericValue::new(0.0..=100.0, f64::from($props.value.clamp(0.0, 1.0)) * 100.0).ok()) surface:props.style clip

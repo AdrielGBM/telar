@@ -108,3 +108,13 @@ fn a_signal_counts_its_reads_and_its_bare_handles() {
     assert_eq!(signal_at(src, 4, 22), Some(signal.clone()));
     assert_eq!(signal_at(src, 6, 9), None);
 }
+
+#[test]
+fn a_bare_handle_opening_a_continuation_line_is_an_occurrence() {
+    let src = "[logic]\nlet agree = signal(false);\n[view]\ncheckbox label:\"x\"\n        checked:agree\n";
+    let signal = signal_at(src, 1, 5).unwrap();
+    let ranges = signal_occurrences(src, &signal);
+    assert_eq!(lines(&ranges), vec![1, 4]);
+    assert_eq!(ranges[1].start.character, 16);
+    assert_eq!(signal_at(src, 4, 18), Some(signal));
+}

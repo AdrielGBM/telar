@@ -399,10 +399,11 @@ fn an_imported_class_styles_the_importer() {
     let row_code = code("row.rs");
     assert!(!row_code.contains("compile_error!"), "{row_code}");
     assert!(
-        row_code.contains("fn style_rule() -> LayoutStyle"),
+        row_code.contains(
+            "LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER).bordered()"
+        ),
         "{row_code}"
     );
-    assert!(row_code.contains("style_rule().flex_row()"), "{row_code}");
     assert!(
         row_code.contains(".with_font_family(FontFamily::Monospace)"),
         "{row_code}"

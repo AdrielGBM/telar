@@ -37,7 +37,7 @@ impl ViewGen<'_> {
 
         let fit = fit_closure(&el.attributes);
 
-        let layout_style = self.make_layout_style("img", &el.classes, &el.attributes);
+        let layout_style = self.make_layout_style("img", &el.attributes);
 
         // The picture's own rounding, not a parent's: clipping to a rounded box would need a container per image, which costs most in a thumbnail grid.
         let rounds = el
@@ -90,7 +90,7 @@ impl ViewGen<'_> {
 
         let fit = fit_closure(&el.attributes);
 
-        let layout_style = self.make_layout_style("svg", &el.classes, &el.attributes);
+        let layout_style = self.make_layout_style("svg", &el.attributes);
 
         let code = format!(
             "{pad}let {var} = {{\n\

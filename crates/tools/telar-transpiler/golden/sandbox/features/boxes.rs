@@ -15,20 +15,6 @@
 #[derive(::telar::Props)]
 pub struct BoxesProps {}
 
-#[allow(dead_code)]
-fn style_center() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .align_items(AlignItems::CENTER)
-        .justify_content(JustifyContent::CENTER)
-}
-
-#[allow(dead_code)]
-fn style_tile() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -58,7 +44,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?
                                     };
                                     let __sbox_1 = {
                                         let __text_1 = {
@@ -68,7 +54,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border::new(Paint::Solid(theme.get().primary), [2.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_1])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border::new(Paint::Solid(theme.get().primary), [2.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_1])?
                                     };
                                     let __sbox_2 = {
                                         let __text_2 = {
@@ -78,7 +64,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().primary), [2.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_2])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().primary), [2.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_2])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2])?
                                 };
@@ -119,7 +105,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(0.0)) }, children![__text_3])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(0.0)) }, children![__text_3])?
                                     };
                                     let __sbox_4 = {
                                         let __text_4 = {
@@ -129,7 +115,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(8.0)) }, children![__text_4])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(8.0)) }, children![__text_4])?
                                     };
                                     let __sbox_5 = {
                                         let __text_5 = {
@@ -139,7 +125,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(20.0)) }, children![__text_5])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(20.0)) }, children![__text_5])?
                                     };
                                     let __sbox_6 = {
                                         let __text_6 = {
@@ -149,7 +135,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(130.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(40.0)) }, children![__text_6])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(130.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(40.0)) }, children![__text_6])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap().align_items(AlignItems::CENTER), children![__sbox_3, __sbox_4, __sbox_5, __sbox_6])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) })
                                 };
@@ -230,7 +216,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().success), [0.0, 0.0, 2.0, 0.0])), shadow: None, radius: BorderRadius::zero() } }, children![__text_7])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().success), [0.0, 0.0, 2.0, 0.0])), shadow: None, radius: BorderRadius::zero() } }, children![__text_7])?
                                     };
                                     let __sbox_11 = {
                                         let __text_8 = {
@@ -240,7 +226,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().success), logical_border_widths(0.0, 0.0, 0.0, 0.0, None, Some(2.0)))), shadow: None, radius: BorderRadius::zero() } }, children![__text_8])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().success), logical_border_widths(0.0, 0.0, 0.0, 0.0, None, Some(2.0)))), shadow: None, radius: BorderRadius::zero() } }, children![__text_8])?
                                     };
                                     let __sbox_12 = {
                                         let __text_9 = {
@@ -250,7 +236,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().success), [3.0, 0.0, 1.0, 0.0])), shadow: None, radius: BorderRadius::zero() } }, children![__text_9])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().success), [3.0, 0.0, 1.0, 0.0])), shadow: None, radius: BorderRadius::zero() } }, children![__text_9])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap().align_items(AlignItems::CENTER), children![__sbox_10, __sbox_11, __sbox_12])?
                                 };
@@ -291,7 +277,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius { top_left: 16.0, top_right: 16.0, bottom_right: 0.0, bottom_left: 0.0 }) }, children![__text_10])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius { top_left: 16.0, top_right: 16.0, bottom_right: 0.0, bottom_left: 0.0 }) }, children![__text_10])?
                                     };
                                     let __sbox_14 = {
                                         let __text_11 = {
@@ -301,7 +287,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius { top_left: 16.0, top_right: 16.0, bottom_right: 0.0, bottom_left: 0.0 }) }, children![__text_11])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius { top_left: 16.0, top_right: 16.0, bottom_right: 0.0, bottom_left: 0.0 }) }, children![__text_11])?
                                     };
                                     let __sbox_15 = {
                                         let __text_12 = {
@@ -311,7 +297,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(logical_border_radius(0.0, 0.0, 0.0, 0.0, Some(20.0), None)) }, children![__text_12])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(logical_border_radius(0.0, 0.0, 0.0, 0.0, Some(20.0), None)) }, children![__text_12])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap().align_items(AlignItems::CENTER), children![__sbox_13, __sbox_14, __sbox_15])?
                                 };
@@ -351,7 +337,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                         )?
                                     };
-                                    StyledContainer::new(style_center().flex_column().width(SizeDimension::Percent(1.0)).height(96.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_13])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(SizeDimension::Percent(1.0)).height(96.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_13])?
                                 };
                                 __children.push(box_item(__sbox_16));
                                 Ok(__children)
@@ -390,7 +376,7 @@ pub fn boxes(props: BoxesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_14])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(70.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_14])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_17])?
                                 };

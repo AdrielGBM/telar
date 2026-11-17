@@ -15,14 +15,6 @@
 #[derive(::telar::Props)]
 pub struct SizingProps {}
 
-#[allow(dead_code)]
-fn style_center() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .align_items(AlignItems::CENTER)
-        .justify_content(JustifyContent::CENTER)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn sizing(props: SizingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -131,7 +123,7 @@ pub fn sizing(props: SizingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_0])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_0])?
                                     };
                                     let __sbox_7 = {
                                         let __text_1 = {
@@ -141,7 +133,7 @@ pub fn sizing(props: SizingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_1])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_1])?
                                     };
                                     let __sbox_8 = {
                                         let __text_2 = {
@@ -151,7 +143,7 @@ pub fn sizing(props: SizingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_2])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_2])?
                                     };
                                     let __sbox_9 = {
                                         let __text_3 = {
@@ -161,7 +153,7 @@ pub fn sizing(props: SizingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0).grid_column_span(2), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_3])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).height(44.0).grid_column_span(2), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_3])?
                                     };
                                     let __sbox_10 = {
                                         let __text_4 = {
@@ -171,7 +163,7 @@ pub fn sizing(props: SizingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_4])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_4])?
                                     };
                                     Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::repeat(3, TemplateTrack::fr(1.0))]).gap(10.0), children![__sbox_6, __sbox_7, __sbox_8, __sbox_9, __sbox_10])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(13.0).with_color(theme.get().on_primary) })
                                 };

@@ -1,34 +1,19 @@
 [logic]
-use crate::look::Look;
+use crate::look::ToneLook;
 use crate::shared::{self, shown_chord};
 use telar::{ControlSize, KeySequence, Tone, Variant, keyboard_convention};
 
 /// The key caps' own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when a cap paints, so a theme that moves the role still moves every cap it has not given a value of its own.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct KbdTokens {
     /// Corner radius of a cap. `None` is the theme's `radius_item`: a cap sits inside a row or a tooltip.
+    #[token(or = shared::radius_item)]
     pub radius: Option<f32>,
     /// Width of a cap's frame. `None` is the theme's `border_width`.
+    #[token(or = shared::border_width)]
     pub border_width: Option<f32>,
-}
-
-impl KbdTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The corner radius of a cap.
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_item)
-    }
-
-    /// The width of a cap's frame.
-    pub fn border_width(&self) -> f32 {
-        self.border_width.unwrap_or_else(shared::border_width)
-    }
 }
 
 /// The keys of a shortcut, each on its own cap, for hints beside a command.
@@ -88,7 +73,7 @@ fn shown_steps(sequence: &KeySequence, caps: KbdCaps) -> Vec<Vec<(Option<&'stati
 
 let size = props.size;
 let chord = props.chord.clone();
-let look = Look::shown(props.tone.clone(), props.variant);
+let look = ToneLook::shown(props.tone.clone(), props.variant);
 let caps = props.caps;
 let steps = memo({
     let chord = chord.clone();
@@ -96,7 +81,7 @@ let steps = memo({
 });
 
 [view]
-row role:(Role::KeyboardInput) a11y_label:(shown_chord(&chord))
+row role:keyboardinput a11y_label:(shown_chord(&chord))
     // The steps of a sequence stand as far apart as two controls do, well clear of the keys inside one.
     row align:center gap:(shared::gap_md(size))
         for (step, keys) in $steps key (*step, keys.clone())
@@ -105,5 +90,5 @@ row role:(Role::KeyboardInput) a11y_label:(shown_chord(&chord))
                     if let Some(separator) = separator
                         text "{separator}" font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap
                     // Never narrower than it is tall, so a one-letter key is a square.
-                    row align:center justify:center min_width:(1lh + shared::gap_xs(size) * 2.0) pad_x:(shared::gap_sm(size)) pad_y:(shared::gap_xs(size)) fill:(look.fill($text.ink)) stroke:(look.frame($text.ink)) color:(look.ink($text.ink)) stroke_width:(KbdTokens::current().border_width()) radius:(KbdTokens::current().radius()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em surface:props.style
+                    row align:center justify:center min_width:(1lh + shared::gap_xs(size) * 2.0) pad_x:(shared::gap_sm(size)) pad_y:(shared::gap_xs(size)) look:look stroke_width:(KbdTokens::current().border_width()) radius:(KbdTokens::current().radius()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em surface:props.style
                         text "{key}" text_wrap:nowrap

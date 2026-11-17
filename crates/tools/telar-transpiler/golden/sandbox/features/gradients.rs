@@ -15,14 +15,6 @@
 #[derive(::telar::Props)]
 pub struct GradientsProps {}
 
-#[allow(dead_code)]
-fn style_swatch() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .gap(6.0)
-        .align_items(AlignItems::CENTER)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn gradients(props: GradientsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -55,7 +47,7 @@ pub fn gradients(props: GradientsProps) -> Result<Box<dyn LayoutItem>, LayoutErr
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_0, __text_0])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_0])?
                                     };
                                     let __col_2 = {
                                         let __sbox_1 = {
@@ -68,7 +60,7 @@ pub fn gradients(props: GradientsProps) -> Result<Box<dyn LayoutItem>, LayoutErr
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_1, __text_1])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_1, __text_1])?
                                     };
                                     let __col_3 = {
                                         let __sbox_2 = {
@@ -81,7 +73,7 @@ pub fn gradients(props: GradientsProps) -> Result<Box<dyn LayoutItem>, LayoutErr
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_2, __text_2])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_2, __text_2])?
                                     };
                                     Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(160.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_1, __col_2, __col_3])?
                                 };
@@ -156,7 +148,7 @@ pub fn gradients(props: GradientsProps) -> Result<Box<dyn LayoutItem>, LayoutErr
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_4, __text_3])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_4, __text_3])?
                                     };
                                     let __col_5 = {
                                         let __sbox_5 = {
@@ -169,7 +161,7 @@ pub fn gradients(props: GradientsProps) -> Result<Box<dyn LayoutItem>, LayoutErr
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_5, __text_4])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_5, __text_4])?
                                     };
                                     let __col_6 = {
                                         let __sbox_6 = {
@@ -182,7 +174,7 @@ pub fn gradients(props: GradientsProps) -> Result<Box<dyn LayoutItem>, LayoutErr
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__sbox_6, __text_5])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_6, __text_5])?
                                     };
                                     Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(160.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_4, __col_5, __col_6])?
                                 };

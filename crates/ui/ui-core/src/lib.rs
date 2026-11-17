@@ -49,6 +49,7 @@ mod layout_leaf;
 mod layout_transition;
 mod lazy;
 mod link;
+mod look;
 mod mask;
 mod movable;
 mod named_overlay;
@@ -162,6 +163,7 @@ pub use link::{
     AnchorRegistration, activate_box, activate_run, follow, follow_beside, follow_pressed,
     has_anchor, reader_moved, register_anchor, reveal_anchor,
 };
+pub use look::Look;
 pub use mask::Mask;
 pub use movable::{Movable, MovableOutlet};
 pub use named_overlay::{

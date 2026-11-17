@@ -15,14 +15,6 @@
 #[derive(::telar::Props)]
 pub struct ShadowsProps {}
 
-#[allow(dead_code)]
-fn style_center() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .align_items(AlignItems::CENTER)
-        .justify_content(JustifyContent::CENTER)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shadows(props: ShadowsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -112,7 +104,7 @@ pub fn shadows(props: ShadowsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().primary)), border: None, shadow: Some(Shadow::new(0.0, 8.0, 22.0, theme.get().primary)), radius: BorderRadius::all(12.0) } }, children![__text_3])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().primary)), border: None, shadow: Some(Shadow::new(0.0, 8.0, 22.0, theme.get().primary)), radius: BorderRadius::all(12.0) } }, children![__text_3])?
                                     };
                                     let __sbox_5 = {
                                         let __text_4 = {
@@ -122,7 +114,7 @@ pub fn shadows(props: ShadowsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().danger)), border: None, shadow: Some(Shadow::new(0.0, 8.0, 22.0, theme.get().danger)), radius: BorderRadius::all(12.0) } }, children![__text_4])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().danger)), border: None, shadow: Some(Shadow::new(0.0, 8.0, 22.0, theme.get().danger)), radius: BorderRadius::all(12.0) } }, children![__text_4])?
                                     };
                                     let __sbox_6 = {
                                         let __text_5 = {
@@ -132,7 +124,7 @@ pub fn shadows(props: ShadowsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().purple)), border: None, shadow: Some(Shadow::new(0.0, 8.0, 22.0, theme.get().purple)), radius: BorderRadius::all(12.0) } }, children![__text_5])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).width(150.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().purple)), border: None, shadow: Some(Shadow::new(0.0, 8.0, 22.0, theme.get().purple)), radius: BorderRadius::all(12.0) } }, children![__text_5])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap(), children![__sbox_4, __sbox_5, __sbox_6])?
                                 };

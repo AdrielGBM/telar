@@ -37,6 +37,7 @@ pub use lexer::{
     Section, find_section_at, header_section, is_preview_header, is_previews_header,
     section_opened_by,
 };
+pub use parser::{continued_element_line, continues_element};
 
 /// Parses `.rsx` source text into an [`RsxDocument`].
 pub fn parse(source: &str) -> Result<RsxDocument, ParseError> {

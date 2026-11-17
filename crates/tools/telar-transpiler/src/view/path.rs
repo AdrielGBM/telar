@@ -55,7 +55,7 @@ impl ViewGen<'_> {
         };
         let path_style = self.path_style_expr(el, &stroke_calls);
 
-        let mut layout = self.make_layout_style("path", &el.classes, &el.attributes);
+        let mut layout = self.make_layout_style("path", &el.attributes);
         layout.push_str(&self.natural_size(el, view_box, extent));
 
         // Cloned into the paint closure, which re-reads it each frame, leaving the outer binding usable.
@@ -108,22 +108,14 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// The size a path's box takes where neither its attributes nor its classes give one, so it does not collapse to zero: the view box's, keeping its proportions when only one side is given, or else the extent the shape reaches.
+    /// The size a path's box takes where its attributes give none, so it does not collapse to zero: the view box's, keeping its proportions when only one side is given, or else the extent the shape reaches.
     fn natural_size(
         &self,
         el: &Element,
         view_box: Option<[f32; 4]>,
         extent: Option<(f32, f32)>,
     ) -> String {
-        let declared = |keys: &[&str]| {
-            el.attributes.iter().any(|a| keys.contains(&a.key.as_str()))
-                || el.classes.iter().any(|name| {
-                    self.classes
-                        .iter()
-                        .filter(|class| &class.name == name)
-                        .any(|class| class.props.iter().any(|p| keys.contains(&p.key.as_str())))
-                })
-        };
+        let declared = |keys: &[&str]| el.attributes.iter().any(|a| keys.contains(&a.key.as_str()));
         let (width, height) = (declared(&["width"]), declared(&["height"]));
         let (natural_width, natural_height) = match (view_box, extent) {
             (Some([_, _, w, h]), _) => (w, h),

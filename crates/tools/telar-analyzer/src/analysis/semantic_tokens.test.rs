@@ -71,3 +71,17 @@ fn a_signal_handed_on_bare_is_coloured_as_a_signal() {
     );
     assert!(!signal_at("name", 0), "a plain binding: {raw:?}");
 }
+
+#[test]
+fn a_continuation_line_marks_its_classes_and_signals_and_no_tag() {
+    let src = "[logic]\nlet open = signal(false);\n[style]\n@card\n[view]\nrow gap:4\n        toggled:open @card\n        fill:$theme.accent\n";
+    let raw = raw_tokens(src);
+    let on_line = |line: u32| -> Vec<(u32, u32, u32)> {
+        raw.iter()
+            .filter(|&&(l, ..)| l == line)
+            .map(|&(_, c, len, ty)| (c, len, ty))
+            .collect()
+    };
+    assert_eq!(on_line(6), vec![(16, 4, SIGNAL), (21, 5, CLASS)], "{raw:?}");
+    assert_eq!(on_line(7), vec![(13, 6, SIGNAL)], "{raw:?}");
+}

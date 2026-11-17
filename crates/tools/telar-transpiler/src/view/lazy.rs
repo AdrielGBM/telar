@@ -11,7 +11,7 @@ impl ViewGen<'_> {
     pub(super) fn emit_lazy(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_variable_name("lazy");
         let pad = self.indent_str();
-        let style = self.make_layout_style("lazy", &el.classes, &el.attributes);
+        let style = self.make_layout_style("lazy", &el.attributes);
 
         // `Lazy::new` takes a plain child vec, so a reactive region here stays a boxed `ReactiveList`.
         let mode = if el.children.iter().any(forces_child_vec) {

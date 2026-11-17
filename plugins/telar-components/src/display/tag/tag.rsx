@@ -1,42 +1,22 @@
 [logic]
-use crate::look::Look;
+use crate::look::ToneLook;
 use crate::shared::{self, GlyphProps, Mark, glyph};
 use telar::{ControlSize, Tone, Variant};
 
 /// A tag's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
 /// Every field left `None` follows the theme role named beside it, read when the tag paints and lays out, so a theme that moves the role still moves every tag it has not given a value of its own.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct TagTokens {
     /// Corner radius. `None` is the theme's `radius_item`, the corner of a key cap; a class with `radius:full` makes a pill of one tag.
+    #[token(or = shared::radius_item)]
     pub radius: Option<f32>,
     /// Space between the edge and the label at the regular size, scaled with the tag's own. `None` is [`gap_md`](crate::metrics::gap_md).
+    #[token(or = shared::gap_md, scaled)]
     pub pad_x: Option<f32>,
     /// Width of the outline variant's frame, and of the frame round a filter that is not selected. `None` is the theme's `border_width`.
+    #[token(or = shared::border_width)]
     pub border_width: Option<f32>,
-}
-
-impl TagTokens {
-    /// The tokens of the theme in force, subscribing the caller to it.
-    pub fn current() -> Self {
-        telar::use_theme_extension::<Self>()
-    }
-
-    /// The corner radius.
-    pub fn radius(&self) -> f32 {
-        self.radius.unwrap_or_else(shared::radius_item)
-    }
-
-    /// The space between the edge and the label of a tag of `size`.
-    pub fn pad_x(&self, size: ControlSize) -> f32 {
-        self.pad_x
-            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
-    }
-
-    /// The width of a frame the tag draws.
-    pub fn border_width(&self) -> f32 {
-        self.border_width.unwrap_or_else(shared::border_width)
-    }
 }
 
 /// A short label for a status ("Saved"), a category ("Beta"), a value the user removes ("Logo ×") or a filter they select, at a caption's share of the text around it.
@@ -100,7 +80,7 @@ let filter = (props.selected.is_some() || props.on_toggle.is_some())
     .then(|| props.selected.unwrap_or_else(|| signal(false)));
 let size = props.size;
 let on_toggle = props.on_toggle.clone();
-let look = Look {
+let look = ToneLook {
     tone: props.tone.clone(),
     variant: props.variant,
     selected: filter,

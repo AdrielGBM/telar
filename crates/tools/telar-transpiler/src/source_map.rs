@@ -50,6 +50,16 @@ pub enum RsxSpan {
     Line(u32),
 }
 
+impl ExprSpan {
+    /// Whether `generated` holds at this span the very text `rsx` holds, which is all a span promises. One that does not names text written elsewhere, a class property read where an element names it, and would underline whatever happens to sit at its offset here.
+    pub(crate) fn is_verbatim(&self, generated: &str, rsx: &str) -> bool {
+        let (start, len) = (self.rsx_start as usize, self.len as usize);
+        let gen_start = self.gen_start as usize;
+        let written = rsx.get(start..start + len);
+        written.is_some() && written == generated.get(gen_start..gen_start + len)
+    }
+}
+
 impl SourceMap {
     /// Without shadows: the `.rs.map` on disk is read by editors that only ask about positions, and a rename resolves against the in-memory map instead.
     pub fn new(lines: Vec<Option<u32>>, exprs: Vec<ExprSpan>) -> Self {

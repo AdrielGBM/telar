@@ -11,7 +11,7 @@ use lsp_types::{
 };
 use std::collections::HashSet;
 use std::path::Path;
-use telar_parser::{Preview, RsxDocument, ViewNode};
+use telar_parser::{Preview, RsxDocument, ViewNode, continued_element_line};
 use telar_project::naming::to_pascal_case;
 use telar_transpiler::PreviewOption;
 use telar_transpiler::{color_attr_keys, color_keywords, is_builtin_tag, is_control_flow_keyword};
@@ -60,13 +60,21 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
     }
 
     let trimmed = prefix.trim_start();
-    if trimmed.is_empty() || !trimmed.contains(char::is_whitespace) {
-        return Some(CompletionKind::ElementName);
-    }
-
-    let mut tokens = trimmed.splitn(2, char::is_whitespace);
-    let tag = tokens.next().unwrap_or("").to_string();
-    let rest = tokens.next().unwrap_or("");
+    let (tag, rest) = match continued_element_line(source, line) {
+        Some(header) => {
+            let header_text = source.lines().nth(header as usize).unwrap_or_default();
+            let tag = header_text.split_whitespace().next().unwrap_or_default();
+            (tag.to_string(), trimmed)
+        }
+        None if trimmed.is_empty() || !trimmed.contains(char::is_whitespace) => {
+            return Some(CompletionKind::ElementName);
+        }
+        None => {
+            let mut tokens = trimmed.splitn(2, char::is_whitespace);
+            let tag = tokens.next().unwrap_or_default().to_string();
+            (tag, tokens.next().unwrap_or_default())
+        }
+    };
 
     // Control-flow lines carry Rust expressions, and `:|` marks a closure attribute value that runs to end of line — neither is an element/attr position.
     if is_control_flow_keyword(&tag) || rest.contains(":|") {

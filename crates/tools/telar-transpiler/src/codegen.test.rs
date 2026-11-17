@@ -148,7 +148,6 @@ fn logic_items_are_hoisted_out_of_the_component() {
         "enum Side {",
         "impl Side {",
         "mod tests {",
-        "fn style_card() -> LayoutStyle {",
     ] {
         let at = code
             .lines()
@@ -265,8 +264,9 @@ fn an_unknown_class_is_refused_where_it_is_named() {
         .expect("the class is named");
     assert_eq!(out.source_map[at], Some(1), "{}", out.rust_code);
     assert!(
-        !out.rust_code.contains("style_missing()"),
-        "{}",
+        out.rust_code
+            .contains("Container::new(LayoutStyle::new().flex_column().gap(4.0),"),
+        "the element keeps its own attributes:\n{}",
         out.rust_code
     );
 }

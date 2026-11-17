@@ -20,3 +20,12 @@ fn closing_a_document_drops_its_live_map() {
     assert!(store.live_map(&view_build).is_none());
     assert!(store.live_map(&other_build).is_some());
 }
+
+#[test]
+fn a_parse_error_on_a_continuation_line_is_published_on_that_line() {
+    let mut store = Store::new();
+    let source = "[view]\nbox gap:4\n        fill:accent\n        gap:8\n".to_string();
+    let diagnostics = store.reparse(uri("file:///crate/src/view.rsx"), source);
+    let lines: Vec<usize> = diagnostics.iter().map(|d| d.span.line).collect();
+    assert_eq!(lines, [4]);
+}

@@ -66,20 +66,13 @@ impl ViewGen<'_> {
         let placing = |key: &str| telar_project::call_keys::PLACEMENT_KEYS.contains(&key);
         let mut calls = String::new();
         let mut raw: Vec<&str> = Vec::new();
-        let class_props = el
-            .classes
-            .iter()
-            .filter_map(|name| self.classes.iter().find(|class| &class.name == name))
-            .flat_map(|class| in_application_order(&class.props, |prop| &prop.key));
-        let written = class_props
-            .map(|prop| (prop.key.as_str(), prop.value.as_str()))
-            .chain(
-                in_application_order(&el.attributes, |attr| &attr.key)
-                    .into_iter()
-                    .map(|attr| (attr.key.as_str(), attr.value.text())),
-            );
-        for (key, value) in written.filter(|(key, _)| placing(key)) {
-            if let PropCall::Call(call) = layout_prop_call(key, value, self.theme_access) {
+        let written = self.classes_then_own(&el.classes, &el.attributes);
+        for attr in in_application_order(&written, |attr| &attr.key) {
+            if !placing(&attr.key) {
+                continue;
+            }
+            let value = attr.value.text();
+            if let PropCall::Call(call) = layout_prop_call(&attr.key, value, self.theme_access) {
                 calls.push_str(&call);
                 raw.push(value);
             }
@@ -259,18 +252,12 @@ impl ViewGen<'_> {
     ///
     /// A component with no principal surface — a layout, a fragment, a thing that paints three boxes and can't say which one you meant — has nothing a class could honestly mean. The setter is emitted anyway, so rustc says there is no `style` prop, on the author's line, rather than the class being dropped silently.
     fn class_surface_style(&self, classes: &[String]) -> Option<String> {
-        // Reverse order so a later class wins the `find`, matching how `paint_attrs` resolves a box's classes.
-        let props: Vec<&telar_parser::StyleProp> = classes
-            .iter()
-            .rev()
-            .filter_map(|name| self.classes.iter().find(|c| &c.name == name))
-            .flat_map(|c| c.props.iter())
-            .collect();
+        let attrs = self.class_attrs(classes);
         let find = |key: &str| {
-            props
+            attrs
                 .iter()
-                .find(|p| p.key == key)
-                .map(|p| p.value.as_str())
+                .find(|attr| attr.key == key)
+                .map(|attr| attr.value.text())
         };
 
         let mut chain = String::new();
@@ -497,7 +484,7 @@ impl ViewGen<'_> {
             .filter(|a| a.key != "paint")
             .cloned()
             .collect();
-        let style = self.make_layout_style(&el.tag, &el.classes, &layout);
+        let style = self.make_layout_style(&el.tag, &layout);
         // Deliberately not the prop ladder: that resolves a bare lowercase name against the theme, so a drawing called `draw_paths` came out as a colour constant.
         let text = paint.value.text().trim();
         let closure = match text.starts_with('|') || text.starts_with("move |") {

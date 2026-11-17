@@ -148,20 +148,34 @@ fn resolve_one(
         )
     })?;
     let declared = &document.style.classes;
-    let imported = |class: &StyleClass, local: &str| ImportedClass {
-        class: StyleClass {
-            name: local.to_string(),
-            ..class.clone()
-        },
-        source: path.clone(),
-        line: class.line,
+    let scope = crate::style::component_scope(&document);
+    let imported = |class: &StyleClass, local: &str| {
+        let read = crate::style::component_reads(class, &scope);
+        if !read.is_empty() {
+            return Err(format!(
+                "`@{}` reads {}, which only `{shown}`'s component binds, so no other file can name it",
+                class.name,
+                read.iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        Ok(ImportedClass {
+            class: StyleClass {
+                name: local.to_string(),
+                ..class.clone()
+            },
+            source: path.clone(),
+            line: class.line,
+        })
     };
     match &import.items {
-        StyleImportItems::Glob => Ok(declared
+        StyleImportItems::Glob => declared
             .iter()
             .filter(|class| class.public)
             .map(|class| imported(class, &class.name))
-            .collect()),
+            .collect(),
         StyleImportItems::Names(names) => names
             .iter()
             .map(|name| {
@@ -175,7 +189,7 @@ fn resolve_one(
                         name.name, name.name
                     ));
                 }
-                Ok(imported(class, name.local()))
+                imported(class, name.local())
             })
             .collect(),
     }

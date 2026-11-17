@@ -74,3 +74,17 @@ fn a_built_in_a11y_label_hovers_the_name_a_reader_hears() {
             .is_none_or(|text| !text.contains("assistive technology"))
     );
 }
+
+#[test]
+fn an_attribute_on_a_continuation_line_hovers_as_its_elements() {
+    let component = hover_text("[view]\ncard gap:4\n        role:nav\n", 2, 9)
+        .expect("hover over the continued `role`");
+    assert!(
+        component.starts_with("`role` — group | banner"),
+        "{component}"
+    );
+    assert!(!component.contains("button"), "{component}");
+    let builtin = hover_text("[view]\nbox\n    role:nav\n    text \"a\"\n", 2, 5)
+        .expect("hover over the continued `role` of a box");
+    assert!(builtin.contains("button"), "{builtin}");
+}

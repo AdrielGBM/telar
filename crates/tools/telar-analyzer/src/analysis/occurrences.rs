@@ -6,7 +6,7 @@ use telar_transpiler::{is_builtin_tag, is_control_flow_keyword};
 use crate::analysis::preview_header::{self, TokenKind};
 use crate::position::{Section, find_section_at};
 use crate::text::{ident_at, leading_token, name_range, utf16_to_byte};
-use telar_parser::{header_section, section_opened_by};
+use telar_parser::{continues_element, header_section, section_opened_by};
 
 /// The class name under the cursor, if it sits on a `@name` token (on the `@` or anywhere in `name`).
 pub fn class_at(source: &str, line: u32, character: u32) -> Option<String> {
@@ -267,14 +267,18 @@ impl Mention {
     }
 }
 
-/// Every `$ident` and every bare identifier in `line` that can name a signal: not a path or field segment, an attribute key, the element or keyword opening the line, or text in a string.
+/// Every `$ident` and every bare identifier in `line` that can name a signal: not a path or field segment, an attribute key, the element or keyword opening the line, or text in a string. A line that opens with an attribute continues an element's header, so its first token is an attribute like any other.
 fn signal_mentions(line: &str) -> Vec<Mention> {
     let bytes = line.as_bytes();
     let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
-    let first_token_end = line
-        .trim_start()
-        .find(char::is_whitespace)
-        .map_or(line.len(), |end| line.len() - line.trim_start().len() + end);
+    let body = line.trim_start();
+    let lead = line.len() - body.len();
+    let first_token_end = match continues_element(body) {
+        true => lead,
+        false => body
+            .find(char::is_whitespace)
+            .map_or(line.len(), |end| lead + end),
+    };
     let mut out = Vec::new();
     let (mut in_str, mut depth, mut escaped) = (false, 0u32, false);
     let mut i = 0;

@@ -52,11 +52,6 @@ pub fn to_pascal_case(name: &str) -> String {
     out
 }
 
-/// Generated `LayoutStyle` constructor name for a style class: `card` -> `style_card`.
-pub fn style_function_name(class: &str) -> String {
-    format!("style_{}", to_snake_case(class))
-}
-
 /// Generated preview entries const name for a file stem: `card` -> `CARD_PREVIEW_ENTRIES`. This must match the name emitted by the transpiler in the generated `.rs` file.
 pub fn preview_entries_const_name(stem: &str) -> String {
     format!(

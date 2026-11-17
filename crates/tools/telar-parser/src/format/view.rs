@@ -23,7 +23,7 @@ pub(super) fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
     match node {
         ViewNode::Element(element) => {
             out.push_str(&pad);
-            out.push_str(&format_element_header(element));
+            out.push_str(&format_element_header(element, depth));
             out.push('\n');
             for child in &element.children {
                 emit_node(child, depth + 1, out);
@@ -127,20 +127,31 @@ pub(super) fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
     }
 }
 
-/// Re-emits an element header as `tag .class "content" key:value`, the canonical token order (the parser accepts these in any order but splits them apart).
-pub(super) fn format_element_header(element: &Element) -> String {
-    let mut parts: Vec<String> = Vec::with_capacity(1 + element.classes.len());
-    parts.push(element.tag.clone());
+/// Re-emits an element header as `tag @class "content" key:value`, the canonical token order (the parser accepts these in any order but splits them apart). An attribute that opened a continuation line opens one again, two levels in from the element so its attributes stand apart from its children.
+fn format_element_header(element: &Element, depth: usize) -> String {
+    let mut head: Vec<String> = Vec::with_capacity(1 + element.classes.len());
+    head.push(element.tag.clone());
     for class in &element.classes {
-        parts.push(format!("@{class}"));
+        head.push(format!("@{class}"));
     }
     if let Some(content) = &element.content {
-        parts.push(format!("\"{}\"", escape_rsx_string(content)));
+        head.push(format!("\"{}\"", escape_rsx_string(content)));
     }
-    for attr in &element.attributes {
-        parts.push(format_attr(attr));
+    let mut lines = vec![head];
+    for (index, attr) in element.attributes.iter().enumerate() {
+        if element.continued_at.contains(&index) {
+            lines.push(Vec::new());
+        }
+        if let Some(line) = lines.last_mut() {
+            line.push(format_attr(attr));
+        }
     }
-    parts.join(" ")
+    let break_line = format!("\n{}", INDENT.repeat(depth + 2));
+    lines
+        .iter()
+        .map(|parts| parts.join(" "))
+        .collect::<Vec<_>>()
+        .join(&break_line)
 }
 
 /// Escapes a string value for re-emission inside `"…"`. Parsed content is stored unescaped (the parser interprets `\n`/`\"`/… and raw `r"…"` keeps backslashes literal), so re-emitting verbatim would corrupt any value containing a quote, backslash, or control char on the next save. Always emits the escaped form; raw literals normalize to it (same content).

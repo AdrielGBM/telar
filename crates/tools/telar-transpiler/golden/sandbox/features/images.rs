@@ -17,14 +17,6 @@
 #[derive(::telar::Props)]
 pub struct ImagesProps {}
 
-#[allow(dead_code)]
-fn style_swatch() -> LayoutStyle {
-    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    LayoutStyle::new()
-        .gap(6.0)
-        .align_items(AlignItems::CENTER)
-}
-
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -106,7 +98,7 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__img_1, __text_0])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__img_1, __text_0])?
                                     };
                                     let __col_2 = {
                                         let __img_2 = {
@@ -125,7 +117,7 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__img_2, __text_1])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__img_2, __text_1])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::END).flex_wrap(), children![__col_1, __col_2])?
                                 };
@@ -177,7 +169,7 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__img_3, __text_2])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__img_3, __text_2])?
                                     };
                                     let __col_4 = {
                                         let __img_4 = {
@@ -196,7 +188,7 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__img_4, __text_3])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__img_4, __text_3])?
                                     };
                                     let __col_5 = {
                                         let __img_5 = {
@@ -215,7 +207,7 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        Container::new(style_swatch().flex_column(), children![__img_5, __text_4])?
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__img_5, __text_4])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap().align_items(AlignItems::START), children![__col_3, __col_4, __col_5])?
                                 };
