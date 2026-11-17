@@ -321,11 +321,11 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 3002..3007	5191	`total`
-3209..3341	7999	`|| { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); }`
-3389..3396	8263	`outline`
-3428..3490	8405	`|| { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) }`
-4033..4193	12180	`|| { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); }`
-4241..4248	12561	`outline`
-4279..4370	12735	`|| { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); }`
-4471..4476	15265	`found`
-4716..4720	16770	`name`
+3209..3341	7982	`|| { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); }`
+3389..3396	8245	`outline`
+3428..3490	8370	`|| { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) }`
+4033..4193	12127	`|| { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); }`
+4241..4248	12507	`outline`
+4279..4370	12664	`|| { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); }`
+4471..4476	15193	`found`
+4716..4720	16698	`name`

@@ -439,7 +439,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     )?
                                 };
                                 __children.push(box_item(__text_28));
-                                let __node_21 = button(ButtonProps::props().label("Move the axis").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let heavy = heavy.clone(); move || heavy.toggle() })).build())?;
+                                let __node_21 = button(ButtonProps::props().label("Move the axis").variant(::telar::kw::ghost).on_press({ let heavy = heavy.clone(); move || heavy.toggle() }).build())?;
                                 __children.push(box_item(__node_21));
                                 let __text_29 = {
                                     Text::declaring(

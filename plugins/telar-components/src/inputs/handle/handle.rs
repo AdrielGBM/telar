@@ -101,8 +101,8 @@ pub struct HandleProps {
     #[props(some, into, default)]
     pub on_start: Option<Handler>,
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept: `true` when it was let go, `false` when it was cancelled — Escape, another pointer button, the window losing focus — or the handle went away mid-drag. An undone drag has reverted its transaction by the time this runs; a kept one has written the value it was let go at, and its transaction commits as this returns. A drag that joined a transaction already open elsewhere leaves that decision to whoever opened it, and ends kept whenever its gesture ends.
-    #[props(some, default)]
-    pub on_end: Option<Rc<dyn Fn(bool)>>,
+    #[props(some, into, default)]
+    pub on_end: Option<Handler<fn(bool)>>,
     /// Amends the paint of the dot — the handle's **principal surface** — clamped or not. See [`telar::SurfaceStyle`] for when a theme token or [`HandleTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,

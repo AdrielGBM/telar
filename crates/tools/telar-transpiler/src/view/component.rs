@@ -382,7 +382,7 @@ impl ViewGen<'_> {
     /// Converts a component attribute to what its setter is handed:
     /// - a quoted attr (`label:"text"`) becomes a string literal, a `t"…"` key a catalog lookup, and a string with `{…}` holes the closure formatting it;
     /// - a bare flag (`elevated`) or `true`/`false` becomes a `bool`;
-    /// - a closure (`on_tap(|| $x += 1)`) becomes a boxed `move` closure with `$signal`s cloned in;
+    /// - a closure (`on_tap(|| $x += 1)`) becomes a `move` closure with `$signal`s cloned in, which the prop converts into what it holds, a [`Handler`](telar::Handler) for a callback;
     /// - a lone `$signal` becomes the cloned handle (`count.clone()`);
     /// - numbers become `Int`/`Float`, a hex colour a `Color`;
     /// - a bare lowercase word no binding of the file is named (`size:small`) becomes that name in `telar::kw`, which is the value itself (`ControlSize::Small`);
@@ -397,16 +397,13 @@ impl ViewGen<'_> {
         if v == "true" || v == "false" {
             return PropValue::Given(v.to_string());
         }
-        // Boxed like `on_press`, so a `$`-free closure keeps its source span for LSP completion. The delimiting parens come off first: they are the value's delimiters, not part of the closure.
+        // The delimiting parens come off first: they are the value's delimiters, not part of the closure.
         let (v, delimiters) = match super::redundant_parens(v) {
             Some(inner) => (inner, 1),
             None => (v, 0),
         };
         if v.starts_with('|') || v.starts_with("move |") {
-            return PropValue::Given(format!(
-                "std::rc::Rc::new({})",
-                self.emit_closure_value(attr)
-            ));
+            return PropValue::Given(self.emit_closure_value(attr));
         }
         if v.starts_with('#') {
             return PropValue::Colour(hex_to_color_expr(v));
@@ -420,7 +417,7 @@ impl ViewGen<'_> {
         }
         // Includes the delimiting paren stripped above: `value_start` still points at it, so a span built from `v` would start one byte early and end one short.
         let lead = attr.value.text().len() - attr.value.text().trim_start().len() + delimiters;
-        // Cloned only where the clone is load-bearing, since cloning would demand `Clone` of every forwarded binding — which a `Box<dyn Fn()>` prop can never satisfy.
+        // Cloned only where the clone is load-bearing, since cloning would demand `Clone` of every forwarded binding — which a `Box<dyn Fn() -> T>` prop can never satisfy.
         let written = format!("{}{v}", expr_marker(attr.value_start + lead, v.len()));
         if let Some(taken) = self.by_value(v, written.clone()) {
             return PropValue::Given(taken);

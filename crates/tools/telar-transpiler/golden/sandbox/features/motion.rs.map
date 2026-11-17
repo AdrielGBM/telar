@@ -280,11 +280,11 @@
 279	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-3755..3825	6511	`|| { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) }`
-4061..4070	8307	`equalizer`
-4363..4375	10095	`progress_bar`
-4420..4428	10362	`progress`
-4541..4566	10939	`|| { progress.restart() }`
-4921..4926	13483	`scrub`
-4934..4945	13514	`0.0..=100.0`
-5027..5032	14259	`scrub`
+3755..3825	6494	`|| { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) }`
+4061..4070	8289	`equalizer`
+4363..4375	10077	`progress_bar`
+4420..4428	10344	`progress`
+4541..4566	10904	`|| { progress.restart() }`
+4921..4926	13447	`scrub`
+4934..4945	13478	`0.0..=100.0`
+5027..5032	14223	`scrub`

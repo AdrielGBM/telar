@@ -351,11 +351,11 @@
 2028..2041	12762	`pages.clone()`
 2688..2692	15776	`open`
 2821..2825	16159	`open`
-3121..3154	18413	`|| { panes.push(Pane::Overview) }`
-3205..3237	18619	`|| { panes.push(Pane::Pricing) }`
-3285..3314	18821	`|| { panes.push(Pane::Team) }`
-3360..3365	18981	`ghost`
-3376..3399	19019	`|| { navigate_back(); }`
-3421..3428	19623	`address`
-3435..3440	19638	`depth`
-3528..3535	20339	`address`
+3121..3154	18396	`|| { panes.push(Pane::Overview) }`
+3205..3237	18584	`|| { panes.push(Pane::Pricing) }`
+3285..3314	18768	`|| { panes.push(Pane::Team) }`
+3360..3365	18927	`ghost`
+3376..3399	18948	`|| { navigate_back(); }`
+3421..3428	19551	`address`
+3435..3440	19566	`depth`
+3528..3535	20267	`address`

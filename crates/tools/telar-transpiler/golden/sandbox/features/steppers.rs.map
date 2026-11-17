@@ -125,5 +125,5 @@
 1025..1028	2881	`qty`
 1341..1346	5167	`seats`
 1354..1363	5198	`1.0..=8.0`
-1402..1451	5304	`|v| last_change.set(format!("stepped to {v:.0}"))`
-1477..1488	5708	`last_change`
+1402..1451	5287	`|v| last_change.set(format!("stepped to {v:.0}"))`
+1477..1488	5690	`last_change`

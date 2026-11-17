@@ -7,10 +7,10 @@ use std::time::Duration;
 
 use telar::{
     Accessible, Border, BorderRadius, Canvas, Color, Container, Declared, FontFamily, FontStyle,
-    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, Rect, RectStyle,
-    RenderNode, ShapeStyle, Span, StyledContainer, SurfaceAmendment, Text, TextStyle, TextWrap,
-    Timer, amend_surface, box_item, children, focus::Role, inherited_text_style, line_box, memo,
-    run_after, signal,
+    Handler, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, Rect,
+    RectStyle, RenderNode, ShapeStyle, Span, StyledContainer, SurfaceAmendment, Text, TextStyle,
+    TextWrap, Timer, amend_surface, box_item, children, focus::Role, inherited_text_style,
+    line_box, memo, run_after, signal,
 };
 
 use crate::shared;
@@ -89,9 +89,6 @@ impl CodeSpan {
 /// What [`CodeViewProps::token_style`] restyles a kind of token with.
 pub type TokenStyler = Rc<dyn Fn(TokenKind) -> Declared>;
 
-/// What [`CodeViewProps::on_copy`] is called with: the code put on the clipboard.
-pub type CopyHandler = Rc<dyn Fn(&str)>;
-
 /// Source shown as it is written, in a monospace face, with the runs its caller marked in their token colours: the source of a preview, a docs snippet, the excerpt a build error points into.
 ///
 /// It reads nothing itself: [`spans`](Self::spans) carries whatever a lexer, a compiler's diagnostics or a hand-written table said about the text. Lines never wrap; a long one scrolls sideways. The block grows to fit every line, and scrolls the rest when a caller places a `max_height:` on it.
@@ -118,8 +115,8 @@ pub struct CodeViewProps {
     #[props(default = true)]
     pub copyable: bool,
     /// Fired with the code the copy button put on the clipboard.
-    #[props(some, default)]
-    pub on_copy: Option<CopyHandler>,
+    #[props(some, into, default)]
+    pub on_copy: Option<Handler<fn(String)>>,
     /// What a reader calls the block, beyond its text.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
@@ -351,19 +348,19 @@ fn copy_room(size: ControlSize) -> f32 {
 fn copy_button(
     size: ControlSize,
     code: Reactive<String>,
-    on_copy: Option<CopyHandler>,
+    on_copy: Option<Handler<fn(String)>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let copied = signal(false);
     let reset: Rc<RefCell<Option<Timer>>> = Rc::default();
-    let press = Rc::new(move || {
+    let press = move || {
         let text = code.get();
         telar::set_clipboard_text(&text);
         if let Some(on_copy) = &on_copy {
-            on_copy(&text);
+            on_copy.run(text);
         }
         copied.set(true);
         *reset.borrow_mut() = Some(run_after(COPIED_FOR, move || copied.set(false)));
-    });
+    };
     let button = icon_button(
         IconButtonProps::props()
             .icon(telar::icon!("lucide:copy"))

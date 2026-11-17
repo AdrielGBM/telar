@@ -92,7 +92,7 @@ fn resize_grip(
     size: ControlSize,
     color: Option<Reactive<Color>>,
     card_rect: DeferredRect,
-    resize: Rc<dyn Fn(f32, f32)>,
+    resize: Handler<fn(f32, f32)>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let grip = StyledContainer::new(
         grip_box(size),
@@ -116,7 +116,7 @@ fn resize_grip(
                 Size::new(card.width, card.height)
             });
             let (dx, dy) = grab.travel(pointer);
-            resize(
+            resize.run(
                 (grab.from.width + dx).max(MIN_FRAME_SIZE.0),
                 (grab.from.height + dy).max(MIN_FRAME_SIZE.1),
             );
@@ -149,8 +149,8 @@ pub struct WindowFrameProps {
     #[props(default)]
     pub body: Children,
     /// Opts the frame into a corner grip, handed the size the surface should take, in logical pixels, on every move of that grip. A backend that can renegotiate a surface's size wires it up; one that cannot leaves it `None` (the default) and the grip is not drawn, rather than drawn and inert.
-    #[props(some, default)]
-    pub resize: Option<Rc<dyn Fn(f32, f32)>>,
+    #[props(some, into, default)]
+    pub resize: Option<Handler<fn(f32, f32)>>,
 }
 
 /// A titled, closable window frame around its body.

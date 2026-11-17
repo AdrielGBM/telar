@@ -168,9 +168,9 @@
 1201..1207	3597	`active`
 1229..1236	3611	`address`
 1342..1347	4162	`ghost`
-1358..1404	4200	`|| telar::set_locale(telar::locale_tag!("en"))`
-1454..1459	4378	`ghost`
-1470..1516	4416	`|| telar::set_locale(telar::locale_tag!("es"))`
-1572..1577	4600	`ghost`
-1588..1634	4638	`|| telar::set_locale(telar::locale_tag!("ar"))`
-2116..2143	11059	`t!("locale_address.anchor")`
+1358..1404	4183	`|| telar::set_locale(telar::locale_tag!("en"))`
+1454..1459	4360	`ghost`
+1470..1516	4381	`|| telar::set_locale(telar::locale_tag!("es"))`
+1572..1577	4564	`ghost`
+1588..1634	4585	`|| telar::set_locale(telar::locale_tag!("ar"))`
+2116..2143	11005	`t!("locale_address.anchor")`

@@ -3,9 +3,9 @@
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Color, JustifyContent, Key, LayoutError, LayoutItem,
-    LayoutStyle, NamedKey, NumericValue, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceAmendment, Text, amend_surface, box_item, children,
+    Accessible, AlignItems, BorderRadius, Color, Handler, JustifyContent, Key, LayoutError,
+    LayoutItem, LayoutStyle, NamedKey, NumericValue, Props, Reactive, RectStyle, RwSignal,
+    ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface, box_item, children,
     focus::{Role, Step},
     signal,
 };
@@ -65,8 +65,8 @@ pub struct StepperProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fires with the new (already clamped) value whenever a press, an arrow key or a reader moves it.
-    #[props(some, default)]
-    pub on_change: Option<Rc<dyn Fn(f32)>>,
+    #[props(some, into, default)]
+    pub on_change: Option<Handler<fn(f32)>>,
     /// Amends the paint of the − and + buttons — the stepper's **principal surface** — at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`StepperTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -96,7 +96,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         }
         value.set(next);
         if let Some(cb) = &on_change {
-            cb(next);
+            cb.run(next);
         }
         true
     });

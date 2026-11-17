@@ -115,7 +115,7 @@ impl Container {
 
     /// [`on_press`](Self::on_press) for a handler the caller may not have supplied.
     ///
-    /// Markup hands this form any `on_press:` whose value is not a closure literal, through [`IntoPress`](crate::IntoPress), which is how a wrapper component forwards its own handler. `None` leaves the container untouched: a no-op handler would still report the tap `Handled`, turning a display-only row into one that swallows it.
+    /// Markup hands this form any `on_press:` whose value is not a closure literal, through [`IntoHandler`](crate::IntoHandler), which is how a wrapper component forwards its own handler. `None` leaves the container untouched: a no-op handler would still report the tap `Handled`, turning a display-only row into one that swallows it.
     pub fn maybe_on_press(mut self, on_press: Option<Handler>) -> Self {
         let Some(on_press) = on_press else {
             return self;

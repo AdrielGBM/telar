@@ -33,7 +33,7 @@ fn build(
             .names(vec!["Red".to_string(), "Green".to_string()])
             .selected(selected)
             .diameter(DIAMETER)
-            .on_select(Rc::new(move |i| sink.borrow_mut().push(i)))
+            .on_select(move |i| sink.borrow_mut().push(i))
             .build(),
     )
     .unwrap();

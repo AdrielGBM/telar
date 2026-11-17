@@ -8,6 +8,7 @@ use platform_core::{Event, ModifiersState, PointerButton};
 use reactive_core::{SurfaceHandle, Transaction};
 use ui_tree::EventResult;
 
+use crate::Handler;
 use crate::pointer::PointerButtons;
 
 /// What armed a drag: the button pressed, what was held down at that moment, and where it landed.
@@ -61,7 +62,7 @@ struct Live {
     // The surface whose events may cancel it: Escape or a press on one window says nothing about a stroke in another.
     surface: Option<SurfaceHandle>,
     button: PointerButton,
-    cancel: Rc<dyn Fn()>,
+    cancel: Handler,
 }
 
 /// Cancels the most recently started transacted drag on the active surface: its transaction reverts and its `on_drag_cancel` runs. What Escape does before anything else sees it.
@@ -84,7 +85,7 @@ fn cancel_latest_here(cancels: impl FnOnce(&Live) -> bool) -> bool {
     let Some(live) = live else {
         return false;
     };
-    (live.cancel)();
+    live.cancel.run();
     true
 }
 
@@ -93,7 +94,7 @@ struct Stroke {
     id: u64,
     transaction: Rc<dyn GestureTransaction>,
     cancelled: Rc<Cell<bool>>,
-    cancel: Rc<dyn Fn()>,
+    cancel: Handler,
 }
 
 impl Drop for Stroke {
@@ -145,8 +146,8 @@ pub enum DragAxis {
 
 /// A drag gesture any container can opt into: reports the pointer position on a press inside its bounds and on every move until release. Because pointer events are broadcast to every widget, a drag keeps receiving moves even after the pointer leaves the widget's bounds — no explicit pointer capture is needed. Coordinates are reported *local to the widget* (relative to its rect origin), so a slider maps `x / width` to a value regardless of where the widget sits; they can go negative or exceed the size once the pointer leaves the bounds.
 pub(crate) struct DragGesture {
-    on_drag: Option<Box<dyn Fn(f32, f32)>>,
-    on_drag_end: Option<Box<dyn Fn(f32, f32)>>,
+    on_drag: Option<Handler<fn(f32, f32)>>,
+    on_drag_end: Option<Handler<fn(f32, f32)>>,
     /// Which buttons may start it. The primary one alone by default, which is every slider and splitter in the catalogue; a viewport widens it, because a modeller pans with the button the OS calls secondary.
     arms: PointerButtons,
     /// Where the press landed (widget-local) and what armed it, for as long as the gesture is live.
@@ -169,7 +170,7 @@ pub(crate) struct DragGesture {
     within: Option<Box<dyn Fn() -> Rect>>,
     /// Opened when the drag starts and decided when it ends: the release commits, and Escape, another button, a lost focus or the box going away revert.
     transaction: Option<Rc<dyn GestureTransaction>>,
-    on_cancel: Option<Rc<dyn Fn()>>,
+    on_cancel: Option<Handler>,
     /// Present while this drag owns an open transaction. A drag whose transaction was already open elsewhere joins it without one, and leaves the decision to whoever opened it.
     stroke: Option<Stroke>,
 }
@@ -209,12 +210,12 @@ impl Drop for DragGesture {
 }
 
 impl DragGesture {
-    pub(crate) fn set(&mut self, f: impl Fn(f32, f32) + 'static) {
-        self.on_drag = Some(Box::new(f));
+    pub(crate) fn set(&mut self, on_drag: Handler<fn(f32, f32)>) {
+        self.on_drag = Some(on_drag);
     }
 
-    pub(crate) fn set_end(&mut self, f: impl Fn(f32, f32) + 'static) {
-        self.on_drag_end = Some(Box::new(f));
+    pub(crate) fn set_end(&mut self, on_drag_end: Handler<fn(f32, f32)>) {
+        self.on_drag_end = Some(on_drag_end);
     }
 
     pub(crate) fn arm_with(&mut self, button: &PointerButton) {
@@ -242,8 +243,8 @@ impl DragGesture {
         self.transaction = Some(transaction);
     }
 
-    pub(crate) fn set_cancel(&mut self, f: impl Fn() + 'static) {
-        self.on_cancel = Some(Rc::new(f));
+    pub(crate) fn set_cancel(&mut self, on_cancel: Handler) {
+        self.on_cancel = Some(on_cancel);
     }
 
     /// Opens the transaction as the drag starts, before its first report previews into it.
@@ -255,17 +256,17 @@ impl DragGesture {
             return;
         }
         let cancelled = Rc::new(Cell::new(false));
-        let cancel: Rc<dyn Fn()> = {
+        let cancel = {
             let cancelled = cancelled.clone();
             let transaction = transaction.clone();
             let on_cancel = self.on_cancel.clone();
-            Rc::new(move || {
+            Handler::from(move || {
                 if cancelled.replace(true) {
                     return;
                 }
                 transaction.revert();
-                if let Some(cb) = &on_cancel {
-                    cb();
+                if let Some(on_cancel) = &on_cancel {
+                    on_cancel.run();
                 }
             })
         };
@@ -304,7 +305,7 @@ impl DragGesture {
     pub(crate) fn abort(&mut self) {
         match self.stroke.as_ref().map(|s| s.cancel.clone()) {
             Some(cancel) => {
-                cancel();
+                cancel.run();
                 self.settle();
             }
             None => {
@@ -407,7 +408,7 @@ impl DragGesture {
             return;
         };
         if let Some(cb) = &self.on_drag {
-            in_drag(start, self.travel, || cb(x, y));
+            in_drag(start, self.travel, || cb.run(x, y));
         }
     }
 
@@ -426,7 +427,7 @@ impl DragGesture {
             let (x, y) = landed.unwrap_or(self.last);
             self.last = (x, y);
             if let Some(cb) = &self.on_drag_end {
-                in_drag(start, self.travel, || cb(x, y));
+                in_drag(start, self.travel, || cb.run(x, y));
             }
         }
         // After `on_drag_end`, so a final preview made at the release position is part of what is committed.

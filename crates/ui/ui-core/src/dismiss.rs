@@ -8,6 +8,7 @@ use std::rc::Rc;
 use layout_core::NodeId;
 use reactive_core::{RwSignal, Transaction, effect, on_cleanup, signal};
 
+use crate::Handler;
 use crate::surface_context::HomeSurface;
 
 /// Identifies one registration, so a closing overlay can withdraw exactly its own entry.
@@ -18,8 +19,8 @@ struct Entry {
     id: DismissId,
     /// The box the overlay is declared in; while it or an ancestor is out of layout flow the entry is skipped.
     within: Option<NodeId>,
-    dismiss: Rc<dyn Fn()>,
-    confirm: Option<Rc<dyn Fn()>>,
+    dismiss: Handler,
+    confirm: Option<Handler>,
 }
 
 struct Stack {
@@ -49,7 +50,7 @@ fn publish_depth() {
     }
 }
 
-fn push(within: Option<NodeId>, dismiss: Rc<dyn Fn()>, confirm: Option<Rc<dyn Fn()>>) -> DismissId {
+fn push(within: Option<NodeId>, dismiss: Handler, confirm: Option<Handler>) -> DismissId {
     let id = NEXT_ID.with(|n| {
         n.set(n.get() + 1);
         DismissId(n.get())
@@ -80,30 +81,30 @@ pub struct DismissRegistration {
 
 impl DismissRegistration {
     /// Registers an open overlay as the new top of the active surface's dismiss stack.
-    pub fn new(dismiss: Rc<dyn Fn()>) -> Self {
-        Self::registered(push(None, dismiss, None))
+    pub fn new(dismiss: impl Into<Handler>) -> Self {
+        Self::registered(push(None, dismiss.into(), None))
     }
 
     /// A registration for an overlay declared in the box `within`: Escape and Back skip it while that box or any ancestor is out of layout flow, as inside a parked [`Movable`](crate::Movable), and reach it again once it is shown.
-    pub fn within(within: NodeId, dismiss: Rc<dyn Fn()>) -> Self {
-        Self::registered(push(Some(within), dismiss, None))
+    pub fn within(within: NodeId, dismiss: impl Into<Handler>) -> Self {
+        Self::registered(push(Some(within), dismiss.into(), None))
     }
 
     /// A registration Enter can close too, through `confirm`, while it is the top. See [`confirm_top`].
-    pub fn confirmable(dismiss: Rc<dyn Fn()>, confirm: Rc<dyn Fn()>) -> Self {
-        Self::registered(push(None, dismiss, Some(confirm)))
+    pub fn confirmable(dismiss: impl Into<Handler>, confirm: impl Into<Handler>) -> Self {
+        Self::registered(push(None, dismiss.into(), Some(confirm.into())))
     }
 
     /// [`confirmable`](Self::confirmable) for an overlay declared in the box `within`; see [`within`](Self::within).
     pub fn confirmable_within(
         within: NodeId,
-        dismiss: Rc<dyn Fn()>,
-        confirm: Rc<dyn Fn()>,
+        dismiss: impl Into<Handler>,
+        confirm: impl Into<Handler>,
     ) -> Self {
-        Self::registered(push(Some(within), dismiss, Some(confirm)))
+        Self::registered(push(Some(within), dismiss.into(), Some(confirm.into())))
     }
 
-    fn from_parts(within: Option<NodeId>, dismiss: Rc<dyn Fn()>, confirm: Rc<dyn Fn()>) -> Self {
+    fn from_parts(within: Option<NodeId>, dismiss: Handler, confirm: Handler) -> Self {
         Self::registered(push(within, dismiss, Some(confirm)))
     }
 
@@ -150,7 +151,7 @@ pub fn dismiss_top() -> bool {
         return false;
     };
     publish_depth();
-    (entry.dismiss)();
+    entry.dismiss.run();
     true
 }
 
@@ -168,7 +169,7 @@ pub fn confirm_top() -> bool {
         return false;
     };
     publish_depth();
-    confirm();
+    confirm.run();
     true
 }
 
@@ -220,16 +221,16 @@ fn register_transaction_in<T: Clone + 'static>(
             }
         });
     }
-    let cancel: Rc<dyn Fn()> = {
+    let cancel = {
         let holding = holding.clone();
-        Rc::new(move || {
+        Handler::from(move || {
             if holding.replace(false) {
                 let _ = transaction.revert();
             }
             open.set(false);
         })
     };
-    let confirm: Rc<dyn Fn()> = Rc::new(move || open.set(false));
+    let confirm = Handler::from(move || open.set(false));
     let registered: Cell<Option<DismissRegistration>> = Cell::new(None);
     effect(move || {
         if open.get() {

@@ -105,8 +105,8 @@ pub struct ColorPickerProps {
     #[props(into, default)]
     pub label: Reactive<String>,
     /// Fires with the colour every drag, key, typed hex or swatch picks.
-    #[props(some, default)]
-    pub on_change: Option<Rc<dyn Fn(Color)>>,
+    #[props(some, into, default)]
+    pub on_change: Option<Handler<fn(Color)>>,
     /// Amends the paint of the saturation and brightness area — the picker's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ColorPickerTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -175,7 +175,7 @@ struct Picker {
     size: ControlSize,
     value: RwSignal<Color>,
     hsv: RwSignal<Hsv>,
-    on_change: Option<Rc<dyn Fn(Color)>>,
+    on_change: Option<Handler<fn(Color)>>,
 }
 
 impl Picker {
@@ -192,7 +192,7 @@ impl Picker {
     fn commit(&self, color: Color) {
         self.value.set_if_changed(color);
         if let Some(on_change) = &self.on_change {
-            on_change(color);
+            on_change.run(color);
         }
     }
 
@@ -521,7 +521,7 @@ fn area(
 /// One channel along a track: where it stands as `0..=1`, how to set it, what its track is painted with, and what a reader is told.
 struct Channel {
     read: Rc<dyn Fn() -> f32>,
-    write: Rc<dyn Fn(f32)>,
+    write: Handler<fn(f32)>,
     paint: Rc<dyn Fn(Rect) -> Paint>,
     /// The colour the track shows under the thumb, which the thumb's ring has to stand out from.
     under: Rc<dyn Fn() -> Color>,
@@ -537,7 +537,7 @@ fn hue_slider(picker: &Picker) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let (read, write, under) = (picker.clone(), picker.clone(), picker.clone());
     channel(Channel {
         read: Rc::new(move || read.hsv.get().h / 360.0),
-        write: Rc::new(move |t| {
+        write: Handler::from(move |t: f32| {
             let hsv = write.hsv.peek();
             write.set_hsv(Hsv {
                 h: (t * 360.0).clamp(0.0, 360.0),
@@ -582,7 +582,7 @@ fn alpha_slider(picker: &Picker) -> Result<Box<dyn LayoutItem>, LayoutError> {
     );
     channel(Channel {
         read: Rc::new(move || read.value.get().a),
-        write: Rc::new(move |t| write.set_alpha(t)),
+        write: Handler::from(move |t: f32| write.set_alpha(t)),
         paint: Rc::new(move |r: Rect| {
             let opaque = paint.value.get().with_alpha(1.0);
             Paint::Gradient(Gradient::linear(
@@ -677,7 +677,7 @@ fn channel(channel: Channel) -> Result<Box<dyn LayoutItem>, LayoutError> {
             telar::focus::Step::Decrement => before - KEY_STEP,
         }
         .clamp(0.0, 1.0);
-        set(next);
+        set.run(next);
         next != before
     })
     .on_focused_key(move |key: &Key| {
@@ -689,10 +689,10 @@ fn channel(channel: Channel) -> Result<Box<dyn LayoutItem>, LayoutError> {
             Key::Named(NamedKey::End) => 1.0,
             _ => return false,
         };
-        write(next.clamp(0.0, 1.0));
+        write.run(next.clamp(0.0, 1.0));
         true
     })
-    .on_drag(move |x, _| drag((x / track_rect.peek().width).clamp(0.0, 1.0)));
+    .on_drag(move |x, _| drag.run((x / track_rect.peek().width).clamp(0.0, 1.0)));
     Ok(box_item(track))
 }
 
@@ -827,11 +827,11 @@ fn swatch_row(
     }
     let choose = {
         let (picker, palette) = (picker.clone(), palette.clone());
-        Rc::new(move |index: u32| {
+        move |index: u32| {
             if let Some(&color) = palette.get(index as usize) {
                 picker.set_color(color);
             }
-        })
+        }
     };
     swatches(
         SwatchesProps::props()

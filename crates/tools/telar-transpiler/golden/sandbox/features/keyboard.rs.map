@@ -106,9 +106,9 @@
 105	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1547..1552	3204	`level`
-1185..1190	4153	`|| ()`
-1221..1511	4232	`|key: &Key| -> bool { if !focused.get() { return false; } match key { Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => { level.set((level.get() + 1).min(10)); true } Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => { level.set((level.get() - 1).max(0)); true } _ => false } }`
-1151..1173	4573	`|now| focused.set(now)`
-1635..1642	4832	`outline`
-1876..1883	5706	`pressed`
+1547..1552	3186	`level`
+1185..1190	4135	`|| ()`
+1221..1511	4214	`|key: &Key| -> bool { if !focused.get() { return false; } match key { Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => { level.set((level.get() + 1).min(10)); true } Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => { level.set((level.get() - 1).max(0)); true } _ => false } }`
+1151..1173	4555	`|now| focused.set(now)`
+1635..1642	4814	`outline`
+1876..1883	5670	`pressed`

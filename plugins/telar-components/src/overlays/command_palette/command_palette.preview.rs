@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Chord, Container, Key, LayoutError, NamedKey, Role, box_item};
@@ -56,7 +54,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )?;
             let palette = command_palette(
                 CommandPaletteProps::props()
-                    .on_run(Rc::new(|_| {}))
+                    .on_run(|_| {})
                     .control(open)
                     .commands(commands())
                     .given(p.arg("panel_width", None::<f32>), |props, value| props.panel_width(value))

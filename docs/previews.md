@@ -113,9 +113,10 @@ telar::__previews! {
 
 - **`button: ButtonProps`** names the component under preview and its props type. The props feed the Docs page and
   refine the control of each arg named after a prop. The type can be left out for a component with no derived
-  props. When it is written, every callback the body hands to `button` is logged in the Actions panel. An optional
-  callback the body leaves unset stays unset, since its presence can be what a component does (`tag`'s `on_toggle`
-  makes it a filter): set it, even to `|| {}`, for a play to expect its calls.
+  props. When it is written, every callback the body hands to `button`, a `Handler` of up to three arguments, is
+  logged in the Actions panel with its arguments. An optional callback the body leaves unset stays unset, since its
+  presence can be what a component does (`tag`'s `on_toggle` makes it a filter): set it, even to `|| {}`, for a play
+  to expect its calls.
 - **`"Primary"`** names the variant and, slugged, ends its [id](#ids). A name with no letter or digit is a compile
   error.
 - **`|p| body`** builds the tree and returns what a component call returns, `Result<impl LayoutItem, LayoutError>`.

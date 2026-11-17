@@ -38,12 +38,12 @@ fn strip() -> Strip {
                     vec![],
                 )?))
             }))
-            .on_move(Rc::new(move |from, to| {
+            .on_move(move |from, to| {
                 recorded.borrow_mut().push((from, to));
                 let mut current = moved_items.peek();
                 telar::apply_move(&mut current, from, to);
                 moved_items.set(current);
-            }))
+            })
             .row(true)
             .gap(0.0)
             .drag_threshold(0.0)
@@ -75,12 +75,12 @@ fn named_strip(
                     vec![box_item(label)],
                 )?))
             }))
-            .on_move(Rc::new(move |from, to| {
+            .on_move(move |from: usize, to: usize| {
                 actions.log("on_move", vec![from.to_string(), to.to_string()]);
                 items.update(|items| {
                     telar::apply_move(items, from, to);
                 });
-            }))
+            })
             .row(true)
             .drop_preview(drop_preview)
             .build(),

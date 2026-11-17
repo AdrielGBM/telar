@@ -121,7 +121,7 @@ pub(crate) enum Act {
 pub struct ListContext(Rc<ListState>);
 
 struct ListState {
-    pick: Rc<dyn Fn(usize)>,
+    pick: Handler<fn(usize)>,
     /// The keyboard cursor. Deliberately not the selection: moving it commits nothing.
     highlighted: RwSignal<Option<usize>>,
     /// The bound choice, for a list that has one (`select`) rather than one-shot actions (`menu`).
@@ -157,7 +157,7 @@ impl Row {
 
 impl ListContext {
     pub(crate) fn new(
-        pick: Rc<dyn Fn(usize)>,
+        pick: Handler<fn(usize)>,
         highlighted: RwSignal<Option<usize>>,
         selected: Option<RwSignal<Option<usize>>>,
         color: Option<Reactive<Color>>,
@@ -178,7 +178,7 @@ impl ListContext {
 
     /// The list of one panel of a menu, whose rows move the cursor as the pointer rests on them, draw with the menu's tokens, and may open a submenu.
     pub(crate) fn menu(
-        pick: Rc<dyn Fn(usize)>,
+        pick: Handler<fn(usize)>,
         highlighted: RwSignal<Option<usize>>,
         color: Option<Reactive<Color>>,
         cascade: Rc<crate::overlays::menu::menu_panel::Cascade>,
@@ -359,7 +359,7 @@ impl ListContext {
     }
 
     pub(crate) fn pick(&self, index: usize) {
-        (self.0.pick)(index);
+        self.0.pick.run(index);
     }
 
     /// Whether a type-ahead query is still running, which is what makes a space a character rather than a key.

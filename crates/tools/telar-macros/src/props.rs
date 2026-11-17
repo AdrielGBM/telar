@@ -32,7 +32,7 @@ impl Prop {
     ///
     /// **`impl Into<T>` is opt-in, and that is not timidity.** A generic parameter leaves a literal's type unconstrained, so it falls back — `.size(20.0)` infers `f64` and needs `f32: From<f64>`, which does not exist (a warning today, a hard error soon), and `.span(5)` infers `i32` and needs `u32: From<i32>`, which is an error already. Coercion is right for a prop whose type exists to accept several shapes, `Reactive<T>` above all; it is wrong for a plain number. Declaring it means forgetting it fails loudly on the author's line instead of quietly bending a literal.
     ///
-    /// **`some` and `into` are separate knobs because they answer separate questions.** `Option<Reactive< String>>` wants both — the caller writes `hint:"⌘Z"` and means `Some(Reactive::from(…))`. But `Option<Box<dyn Fn(u32)>>` wants only `some`: a boxed closure reaches its `dyn` type by unsizing, which is a coercion at a known parameter type and not an `Into` a generic can find. Folding them into one attribute makes one of those two cases impossible to express.
+    /// **`some` and `into` are separate knobs because they answer separate questions.** `Option<Reactive< String>>` wants both — the caller writes `hint:"⌘Z"` and means `Some(Reactive::from(…))`. But `Option<Rc<dyn Fn() -> bool>>` wants only `some`: a shared closure reaches its `dyn` type by unsizing, which is a coercion at a known parameter type and not an `Into` a generic can find. Folding them into one attribute makes one of those two cases impossible to express.
     fn setter_param(&self) -> (TokenStream2, TokenStream2) {
         let ty = &self.ty;
         let inner = self.some.then(|| option_inner(ty)).flatten();
@@ -265,7 +265,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         quote! { #field: self.#field }
     });
 
-    // A `Clone` of its own rather than a derive the author writes, because a props struct that cannot be cloned cannot reach a closure that runs again, and `[view]` puts one around any node whose layout is computed. This is also why a handler prop is shared, a `Handler` or an `Rc<dyn Fn…>`: a unique box has no second owner to give.
+    // A `Clone` of its own rather than a derive the author writes, because a props struct that cannot be cloned cannot reach a closure that runs again, and `[view]` puts one around any node whose layout is computed. This is also why a callback prop is a shared `Handler`: a unique box has no second owner to give.
     let cloned = props.iter().map(|p| {
         let field = &p.name;
         quote! { #field: ::core::clone::Clone::clone(&self.#field) }

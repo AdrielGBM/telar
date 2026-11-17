@@ -9,7 +9,7 @@ use telar::{
     reset_layout_runtime,
 };
 
-type OnPick = Rc<dyn Fn(u32)>;
+type OnPick = Handler<fn(u32)>;
 
 struct Opaque;
 
@@ -17,12 +17,12 @@ struct Opaque;
 struct PadProps {
     #[props(into, default = Handler::from(|| {}))]
     on_press: Handler,
-    #[props(some, default)]
-    on_toggle: Option<Rc<dyn Fn(bool)>>,
-    #[props(some, default)]
+    #[props(some, into, default)]
+    on_toggle: Option<Handler<fn(bool)>>,
+    #[props(some, into, default)]
     on_pick: Option<OnPick>,
-    #[props(some, default)]
-    on_drop: Option<Rc<dyn Fn(Opaque)>>,
+    #[props(some, into, default)]
+    on_drop: Option<Handler<fn(Opaque)>>,
     #[props(some, default)]
     style: Option<Rc<dyn Fn(u32) -> u32>>,
     #[props(into)]
@@ -43,13 +43,13 @@ fn calls(log: &ActionLog) -> Vec<(&'static str, Vec<String>)> {
 fn run(props: &PadProps) {
     props.on_press.run();
     if let Some(on_toggle) = &props.on_toggle {
-        on_toggle(true);
+        on_toggle.run(true);
     }
     if let Some(on_pick) = &props.on_pick {
-        on_pick(2);
+        on_pick.run(2);
     }
     if let Some(on_drop) = &props.on_drop {
-        on_drop(Opaque);
+        on_drop.run(Opaque);
     }
     props.on_close.run();
 }
@@ -58,9 +58,9 @@ fn run(props: &PadProps) {
 fn the_builder_logs_every_optional_callback_it_holds_in_any_state() {
     let log = ActionLog::new();
     let props = props()
-        .on_toggle(Rc::new(|_| {}))
-        .on_pick(Rc::new(|_| {}))
-        .on_drop(Rc::new(|_| {}))
+        .on_toggle(|_| {})
+        .on_pick(|_| {})
+        .on_drop(|_| {})
         .__preview_actions(&log)
         .on_close(|| {})
         .build();
@@ -89,10 +89,10 @@ fn a_callback_set_before_the_builder_logs_still_runs() {
     let log = ActionLog::new();
     let toggled = Rc::new(Cell::new(None));
     let props = props()
-        .on_toggle(Rc::new({
+        .on_toggle({
             let toggled = Rc::clone(&toggled);
             move |on| toggled.set(Some(on))
-        }))
+        })
         .on_close(|| {})
         .__preview_actions(&log)
         .build();

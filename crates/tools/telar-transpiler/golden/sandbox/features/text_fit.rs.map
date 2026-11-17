@@ -208,4 +208,4 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1597..1602	7772	`ghost`
-1613..1631	7841	`|| narrow.toggle()`
+1613..1631	7824	`|| narrow.toggle()`

@@ -161,7 +161,7 @@ fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
     let item = menu(
         MenuProps::props()
             .label("Actions")
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(rows(&["Rename", "Duplicate", "Delete"]))
             .build(),
     )
@@ -200,7 +200,7 @@ fn escape_closes_a_menu_whose_trigger_holds_focus() {
     let item = menu(
         MenuProps::props()
             .label("Actions")
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(rows(&["Rename", "Duplicate"]))
             .build(),
     )
@@ -232,7 +232,7 @@ fn selecting_an_item_fires_on_select_and_closes() {
     let item = menu(
         MenuProps::props()
             .label("Actions")
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(rows(&["Rename", "Duplicate", "Delete"]))
             .build(),
     )
@@ -310,7 +310,7 @@ fn the_keyboard_steps_over_what_it_cannot_commit() {
     let item = menu(
         MenuProps::props()
             .label("Actions")
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(structured)
             .build(),
     )
@@ -357,7 +357,7 @@ fn a_disabled_row_does_not_commit_on_a_tap() {
     let item = menu(
         MenuProps::props()
             .label("Actions")
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(structured)
             .build(),
     )
@@ -417,7 +417,7 @@ fn typeahead_menu(sink: Rc<Cell<Option<usize>>>) -> Box<dyn LayoutItem> {
     let item = menu(
         MenuProps::props()
             .label("Actions")
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(structured)
             .build(),
     )
@@ -1250,7 +1250,7 @@ fn a_row_comes_and_goes_with_what_it_acts_on_while_the_menu_is_open() {
     let item = menu(
         MenuProps::props()
             .label("Actions")
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(structured)
             .build(),
     )
@@ -1318,7 +1318,7 @@ fn a_menu_opened_from_the_keyboard_starts_on_its_first_shown_row() {
     let item = menu(
         MenuProps::props()
             .label("Actions")
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(structured)
             .build(),
     )

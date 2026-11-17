@@ -297,10 +297,10 @@ move || vec![tab.get() == 2]
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_15 = button(ButtonProps::props().label("Overview").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Overview) } })).build())?;
-                                    let __node_16 = button(ButtonProps::props().label("Pricing").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Pricing) } })).build())?;
-                                    let __node_17 = button(ButtonProps::props().label("Team").on_press(std::rc::Rc::new({ let panes = panes.clone(); move || { panes.push(Pane::Team) } })).build())?;
-                                    let __node_18 = button(ButtonProps::props().label("Back").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || { navigate_back(); })).build())?;
+                                    let __node_15 = button(ButtonProps::props().label("Overview").on_press({ let panes = panes.clone(); move || { panes.push(Pane::Overview) } }).build())?;
+                                    let __node_16 = button(ButtonProps::props().label("Pricing").on_press({ let panes = panes.clone(); move || { panes.push(Pane::Pricing) } }).build())?;
+                                    let __node_17 = button(ButtonProps::props().label("Team").on_press({ let panes = panes.clone(); move || { panes.push(Pane::Team) } }).build())?;
+                                    let __node_18 = button(ButtonProps::props().label("Back").variant(::telar::kw::ghost).on_press(move || { navigate_back(); }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_15, __node_16, __node_17, __node_18])?
                                 };
                                 __children.push(box_item(__row_0));

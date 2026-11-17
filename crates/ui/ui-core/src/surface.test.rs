@@ -39,7 +39,7 @@ fn dismiss_fires_on_outside_press_only() {
         AlignItems::CENTER,
         (20, 20, 20, 20),
         Some(Scrim::Theme),
-        Some(Rc::new(move || f.set(f.get() + 1))),
+        Some(Handler::from(move || f.set(f.get() + 1))),
         panel(),
     )
     .unwrap();
@@ -65,7 +65,7 @@ fn escape_dismisses_only_what_the_panel_left_alone() {
         AlignItems::CENTER,
         (20, 20, 20, 20),
         Some(Scrim::Theme),
-        Some(Rc::new(move || f.set(f.get() + 1))),
+        Some(Handler::from(move || f.set(f.get() + 1))),
         panel(),
     )
     .unwrap();
@@ -101,7 +101,7 @@ fn escape_dismisses_only_what_the_panel_left_alone() {
         AlignItems::CENTER,
         (20, 20, 20, 20),
         Some(Scrim::Theme),
-        Some(Rc::new(move || u.set(u.get() + 1))),
+        Some(Handler::from(move || u.set(u.get() + 1))),
         box_item(field),
     )
     .unwrap();
@@ -128,7 +128,7 @@ fn cross_axis_margin_insets_the_panel_from_the_side_edges() {
         AlignItems::START,
         (30, 10, 10, 10),
         Some(Scrim::Theme),
-        Some(Rc::new(move || f.set(f.get() + 1))),
+        Some(Handler::from(move || f.set(f.get() + 1))),
         panel(),
     )
     .unwrap();

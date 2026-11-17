@@ -23,7 +23,7 @@ type Told = Rc<std::cell::RefCell<Vec<&'static str>>>;
 #[derive(Default)]
 struct Ends {
     on_start: Option<Handler>,
-    on_end: Option<Rc<dyn Fn(bool)>>,
+    on_end: Option<Handler<fn(bool)>>,
     size: ControlSize,
 }
 
@@ -32,7 +32,7 @@ impl Ends {
         let (started, ended) = (told.clone(), told.clone());
         Self {
             on_start: Some(Handler::from(move || started.borrow_mut().push("start"))),
-            on_end: Some(Rc::new(move |kept| {
+            on_end: Some(Handler::from(move |kept: bool| {
                 ended
                     .borrow_mut()
                     .push(if kept { "kept" } else { "undone" })

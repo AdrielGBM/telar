@@ -4,10 +4,10 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use telar::{
-    Axis, ConsumedKeys, Container, Cursor, DragAxis, Key, LayoutError, LayoutItem, LayoutStyle,
-    NamedKey, Props, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension,
-    StyledContainer, Transaction, Transform, box_item, focus::Role, insertion_index, on_cleanup,
-    signal, track_layout,
+    Axis, ConsumedKeys, Container, Cursor, DragAxis, Handler, Key, LayoutError, LayoutItem,
+    LayoutStyle, NamedKey, Props, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle,
+    SizeDimension, StyledContainer, Transaction, Transform, box_item, focus::Role, insertion_index,
+    on_cleanup, signal, track_layout,
 };
 
 use crate::shared;
@@ -174,15 +174,18 @@ impl Zone {
     }
 }
 
-type MoveHandler = Rc<dyn Fn(Slot, Slot)>;
-type DetachHandler = Rc<dyn Fn(Slot, (f32, f32))>;
+/// What a group tells its caller of the moves it ends.
+#[derive(Default)]
+struct Reports {
+    on_move: Option<Handler<fn(Slot, Slot)>>,
+    on_detach: Option<Handler<fn(Slot, (f32, f32))>>,
+}
 
 struct Group {
     zones: RefCell<Vec<(usize, Rc<Zone>)>>,
     held: RwSignal<Option<Held>>,
     transaction: Transaction<Option<Held>>,
-    on_move: RefCell<Option<MoveHandler>>,
-    on_detach: RefCell<Option<DetachHandler>>,
+    reports: RefCell<Reports>,
     threshold: Cell<f32>,
     drop_preview: Cell<DropPreview>,
     reach: Cell<Reach>,
@@ -207,8 +210,7 @@ impl ReorderGroup {
             zones: RefCell::new(Vec::new()),
             held,
             transaction: Transaction::new(held),
-            on_move: RefCell::new(None),
-            on_detach: RefCell::new(None),
+            reports: RefCell::default(),
             threshold: Cell::new(4.0),
             drop_preview: Cell::new(DropPreview::default()),
             reach: Cell::new(Reach::default()),
@@ -216,13 +218,13 @@ impl ReorderGroup {
     }
 
     pub fn on_move(self, f: impl Fn(Slot, Slot) + 'static) -> Self {
-        *self.0.on_move.borrow_mut() = Some(Rc::new(f));
+        self.0.reports.borrow_mut().on_move = Some(Handler::from(f));
         self
     }
 
     /// Lets an item dropped outside every container leave the group, told where it was dropped in surface coordinates.
     pub fn on_detach(self, f: impl Fn(Slot, (f32, f32)) + 'static) -> Self {
-        *self.0.on_detach.borrow_mut() = Some(Rc::new(f));
+        self.0.reports.borrow_mut().on_detach = Some(Handler::from(f));
         self
     }
 
@@ -496,15 +498,15 @@ impl Group {
         self.hold(None);
         match (held.to, held.hand) {
             (Some(to), _) if !held.is_noop(to) => {
-                let on_move = self.on_move.borrow().clone();
+                let on_move = self.reports.borrow().on_move.clone();
                 if let Some(on_move) = on_move {
-                    on_move(held.from, to);
+                    on_move.run(held.from, to);
                 }
             }
             (None, Hand::Pointer { at, .. }) => {
-                let on_detach = self.on_detach.borrow().clone();
+                let on_detach = self.reports.borrow().on_detach.clone();
                 if let Some(on_detach) = on_detach {
-                    on_detach(held.from, at);
+                    on_detach.run(held.from, at);
                 }
             }
             _ => {}

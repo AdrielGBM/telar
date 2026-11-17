@@ -337,7 +337,7 @@ fn handle(edge: ResizeEdge, resize: &Resize) -> Result<Box<dyn LayoutItem>, Layo
     let mut props = ResizeHandleProps::props()
         .edge(edge)
         .size(Reactive::of(move || measured.current()))
-        .on_resize(Rc::new(move |size| resized.set(size)))
+        .on_resize(move |size| resized.set(size))
         .min(Size::new(VIEWPORT_MIN, VIEWPORT_MIN))
         .max(Reactive::of(move || bounded.room()))
         .growth(ResizeGrowth::Centred)
@@ -348,13 +348,13 @@ fn handle(edge: ResizeEdge, resize: &Resize) -> Result<Box<dyn LayoutItem>, Layo
             let before = Rc::clone(&before);
             move || *before.borrow_mut() = Some(settings.peek())
         })
-        .on_end(Rc::new(move |kept| {
+        .on_end(move |kept: bool| {
             if let Some(before) = before.take()
                 && !kept
             {
                 settings.set(before);
             }
-        }))
+        })
         .build();
     props.label = match edge {
         ResizeEdge::End => Some(Reactive::of(|| strings::text(VIEWPORT_WIDTH))),

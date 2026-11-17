@@ -529,8 +529,8 @@ fn enter_and_escape_in_a_foreign_field_neither_confirm_nor_dismiss_the_hosts_dia
     let decided = Rc::new(RefCell::new(Vec::new()));
     let (dismissed, confirmed) = (Rc::clone(&decided), Rc::clone(&decided));
     let _dialog = crate::DismissRegistration::confirmable(
-        Rc::new(move || dismissed.borrow_mut().push("dismissed")),
-        Rc::new(move || confirmed.borrow_mut().push("confirmed")),
+        move || dismissed.borrow_mut().push("dismissed"),
+        move || confirmed.borrow_mut().push("confirmed"),
     );
     focus::request(stop.id());
     fake.focused.set(Some(0));

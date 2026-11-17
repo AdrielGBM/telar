@@ -417,8 +417,8 @@ fn enter_and_escape_inside_the_guest_reach_it_rather_than_the_hosts_dialog() {
     let decided = Rc::new(RefCell::new(Vec::new()));
     let (dismissed, confirmed) = (Rc::clone(&decided), Rc::clone(&decided));
     let _dialog = ui_core::DismissRegistration::confirmable(
-        Rc::new(move || dismissed.borrow_mut().push("dismissed")),
-        Rc::new(move || confirmed.borrow_mut().push("confirmed")),
+        move || dismissed.borrow_mut().push("dismissed"),
+        move || confirmed.borrow_mut().push("confirmed"),
     );
     let inside = host.embed.foreign_surface();
     host.tab_in();

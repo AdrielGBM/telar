@@ -126,9 +126,9 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 };
                                 __children.push(box_item(__text_2));
                                 let __row_0 = {
-                                    let __node_3 = button(ButtonProps::props().label("−").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let count = count.clone(); move || count.update(|n| *n = (*n - 1).max(0)) })).build())?;
-                                    let __node_4 = button(ButtonProps::props().label("+").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let count = count.clone(); move || count.update(|n| *n = (*n + 1).min(10)) })).build())?;
-                                    let __node_5 = button(ButtonProps::props().label("Reset").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let count = count.clone(); move || count.set(0) })).build())?;
+                                    let __node_3 = button(ButtonProps::props().label("−").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let count = count.clone(); move || count.update(|n| *n = (*n - 1).max(0)) }).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("+").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let count = count.clone(); move || count.update(|n| *n = (*n + 1).min(10)) }).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("Reset").variant(::telar::kw::ghost).on_press({ let count = count.clone(); move || count.set(0) }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -210,9 +210,9 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_12 = button(ButtonProps::props().label("Add").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let todos = todos.clone(); move || todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }) })).build())?;
-                                    let __node_13 = button(ButtonProps::props().label("Reverse").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let todos = todos.clone(); move || todos.update(|v| v.reverse()) })).build())?;
-                                    let __node_14 = button(ButtonProps::props().label("Remove first").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let todos = todos.clone(); move || todos.update(|v| { if !v.is_empty() { v.remove(0); } }) })).build())?;
+                                    let __node_12 = button(ButtonProps::props().label("Add").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let todos = todos.clone(); move || todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }) }).build())?;
+                                    let __node_13 = button(ButtonProps::props().label("Reverse").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let todos = todos.clone(); move || todos.update(|v| v.reverse()) }).build())?;
+                                    let __node_14 = button(ButtonProps::props().label("Remove first").variant(::telar::kw::ghost).on_press({ let todos = todos.clone(); move || todos.update(|v| { if !v.is_empty() { v.remove(0); } }) }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_12, __node_13, __node_14])?
                                 };
                                 __children.push(box_item(__row_1));
@@ -321,7 +321,7 @@ pub fn reactivity(props: ReactivityProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 let count = count.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_23 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let show = show.clone(); move || show.toggle() })).build())?;
+                                let __node_23 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let show = show.clone(); move || show.toggle() }).build())?;
                                 __children.push(box_item(__node_23));
                                 let __node_24_build =
                                     {
@@ -415,7 +415,7 @@ move || vec![show.get()]
                                     )?
                                 };
                                 __children.push(box_item(__text_9));
-                                let __node_28 = button(ButtonProps::props().label("Toggle panel").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let show_panel = show_panel.clone(); move || show_panel.toggle() })).build())?;
+                                let __node_28 = button(ButtonProps::props().label("Toggle panel").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let show_panel = show_panel.clone(); move || show_panel.toggle() }).build())?;
                                 __children.push(box_item(__node_28));
                                 let __lazy_0 = {
                                     Lazy::new(
@@ -622,7 +622,7 @@ move || vec![show.get()]
                                 let show_modal = show_modal.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_41 = button(ButtonProps::props().label("Open modal").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(true) })).build())?;
+                                let __node_41 = button(ButtonProps::props().label("Open modal").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let show_modal = show_modal.clone(); move || show_modal.set(true) }).build())?;
                                 __children.push(box_item(__node_41));
                                 Ok(__children)
                             }
@@ -655,7 +655,7 @@ move || vec![show.get()]
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            let __node_43 = button(ButtonProps::props().label("Close").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(false) })).build())?;
+                                            let __node_43 = button(ButtonProps::props().label("Close").variant(::telar::kw::outline).__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let show_modal = show_modal.clone(); move || show_modal.set(false) }).build())?;
                                             StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0).gap(12.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border::new(Paint::Solid(theme.get().border), [1.0; 4])), shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_14, __text_15, __node_43])?.on_press(move || ())
                                         };
                                         StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default().with_fill(Color::rgba(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 128.0 / 255.0)).with_radius(BorderRadius::zero()), children![__sbox_10])?.on_press({ let show_modal = show_modal.clone(); move || show_modal.set(false) })

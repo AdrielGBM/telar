@@ -18,9 +18,6 @@ use crate::shared;
 use crate::strings;
 use telar::ControlSize;
 
-/// What [`SearchFieldProps::on_submit`] is called with: the query as it stands.
-pub type SearchHandler = Rc<dyn Fn(&str)>;
-
 /// A field a query is typed into, in a text field's frame and sized by [`TextFieldTokens`](crate::TextFieldTokens).
 ///
 /// Enter submits the query; Escape clears it, and a second Escape, with nothing left to clear, leaves the field. The clear button shows only while there is a query, and is no Tab stop of its own: Escape is the keyboard's way to the same thing.
@@ -40,9 +37,9 @@ pub struct SearchFieldProps {
     /// How large the field is drawn: its frame as a text field of this size, and the glass and the clear button in it, as [`ControlSize`] works them out.
     #[props(default)]
     pub size: ControlSize,
-    /// Runs with the query when Enter is pressed in the field.
-    #[props(some, default)]
-    pub on_submit: Option<SearchHandler>,
+    /// Runs with the query, as it stands, when Enter is pressed in the field.
+    #[props(some, into, default)]
+    pub on_submit: Option<Handler<fn(String)>>,
     /// Runs when the query is cleared, by the button or by Escape.
     #[props(some, into, default)]
     pub on_clear: Option<Handler>,
@@ -125,7 +122,7 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
         .size(size)
         .on_key(keys);
     if let Some(on_submit) = on_submit {
-        field = field.on_submit(move || on_submit(&value.get()));
+        field = field.on_submit(move || on_submit.run(value.get()));
     }
     if let Some(read) = active_descendant {
         field = field.active_descendant(read);

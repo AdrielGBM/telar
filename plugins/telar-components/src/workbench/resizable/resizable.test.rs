@@ -365,9 +365,7 @@ fn every_drag_starts_once_and_ends_once_with_whether_it_was_kept() {
     let mut tree = mount(
         ResizableProps::props()
             .on_start(move || started.borrow_mut().push("start".into()))
-            .on_end(Rc::new(move |kept| {
-                ended.borrow_mut().push(format!("end {kept}"))
-            }))
+            .on_end(move |kept| ended.borrow_mut().push(format!("end {kept}")))
             .build(),
     );
     let (x, y) = centre(width_handle());
@@ -400,7 +398,7 @@ fn a_lone_handle_asks_for_sizes_within_its_limits_at_its_scale() {
     let mut tree = lone_handle(
         ResizeHandleProps::props()
             .size(Size::new(100.0, 80.0))
-            .on_resize(Rc::new(move |size| sink.set(Some(size))))
+            .on_resize(move |size| sink.set(Some(size)))
             .min(Size::new(60.0, 60.0))
             .max(Size::new(120.0, 120.0))
             .scale(2.0)
@@ -421,7 +419,7 @@ fn a_cancelled_drag_on_a_lone_handle_asks_for_the_size_it_started_from() {
     let mut tree = lone_handle(
         ResizeHandleProps::props()
             .size(Size::new(100.0, 80.0))
-            .on_resize(Rc::new(move |size| sink.borrow_mut().push(size)))
+            .on_resize(move |size| sink.borrow_mut().push(size))
             .build(),
     );
     let (x, y) = centre(width_handle());

@@ -176,8 +176,7 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                     vec![],
                 )?));
             }
-            let dismissal =
-                DismissRegistration::within(trigger_node, Rc::new(move || dismissed.set(true)));
+            let dismissal = DismissRegistration::within(trigger_node, move || dismissed.set(true));
             let left = pointer.clone();
             on_cleanup(move || {
                 drop(dismissal);

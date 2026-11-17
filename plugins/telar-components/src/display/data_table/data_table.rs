@@ -8,11 +8,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Border, Children, Clip, ClippedItem, Color, Container, JustifyContent,
-    Key, KeyNav, KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
-    NamedKey, Props, Reactive, Rect, RectStyle, RwSignal, ScrollbarStyle, ShapeStyle, Size,
-    SortDirection, StyledContainer, Text, TextAlign, TextWrap, box_item, children,
-    current_direction,
+    Accessible, AlignItems, Border, Children, Clip, ClippedItem, Color, Container, Handler,
+    JustifyContent, Key, KeyNav, KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea,
+    LayoutStyle, Memo, NamedKey, Props, Reactive, Rect, RectStyle, RwSignal, ScrollbarStyle,
+    ShapeStyle, Size, SortDirection, StyledContainer, Text, TextAlign, TextWrap, box_item,
+    children, current_direction,
     focus::{self, FocusId, Role, SetPosition},
     key_nav_apply_grid, memo, signal, track_layout,
 };
@@ -20,7 +20,7 @@ use telar::{
 use crate::shared::rows::{
     BuiltRows, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
 };
-use crate::shared::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
+use crate::shared::selection::{Gesture, RowSelection, SelectionMode};
 use crate::workbench::resizable::resizable::{ResizeEdge, ResizeHandleProps, resize_handle};
 use crate::{shared, strings};
 use telar::ControlSize;
@@ -221,12 +221,6 @@ pub struct TableSort {
     pub direction: SortDirection,
 }
 
-/// What [`DataTableProps::on_sort`] is called with.
-pub type SortHandler = Rc<dyn Fn(&TableSort)>;
-
-/// What [`DataTableProps::on_select`] is called with.
-pub type TableRowHandler = Rc<dyn Fn(&TableRow)>;
-
 /// Rows of data under a header of columns, read by a screen reader as a grid.
 ///
 /// It fills the height its parent gives it and scrolls within it, header held at the top, building only the rows on screen, so a table of thousands of rows costs what a screenful does. Every row stands at [`DataTableTokens::row_height`], unless a column [wraps](Column::wrap): then each row is measured once built, as tall as its tallest cell, and stands at the row height until then.
@@ -247,8 +241,8 @@ pub struct DataTableProps {
     #[props(some, into, default)]
     pub sort: Option<RwSignal<Option<TableSort>>>,
     /// Fired with the sort a header asked for.
-    #[props(some, default)]
-    pub on_sort: Option<SortHandler>,
+    #[props(some, into, default)]
+    pub on_sort: Option<Handler<fn(TableSort)>>,
     /// Whether the table orders its rows by the sort itself. On by default; off for rows the application orders as it hears [`on_sort`](Self::on_sort) — rows fetched sorted — which the table then shows as given.
     #[props(default = true)]
     pub sort_rows: bool,
@@ -265,11 +259,11 @@ pub struct DataTableProps {
     #[props(some, into, default)]
     pub selected_rows: Option<RwSignal<BTreeSet<Arc<str>>>>,
     /// Fired with the row a press or Enter chose on its own, and in [`SelectionMode::Single`] the row Space chose.
-    #[props(some, default)]
-    pub on_select: Option<TableRowHandler>,
+    #[props(some, into, default)]
+    pub on_select: Option<Handler<fn(TableRow)>>,
     /// Fired with every row chosen each time a press or a key changes them, in [`SelectionMode::Multiple`].
-    #[props(some, default)]
-    pub on_selection_change: Option<SelectionHandler>,
+    #[props(some, into, default)]
+    pub on_selection_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
     /// What a reader calls the table.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
@@ -455,10 +449,10 @@ struct Table {
     columns: Rc<[Column]>,
     rows: Memo<Ordered>,
     sort: RwSignal<Option<TableSort>>,
-    on_sort: Option<SortHandler>,
+    on_sort: Option<Handler<fn(TableSort)>>,
     widths: RwSignal<ColumnWidths>,
     selection: RowSelection,
-    on_select: Option<TableRowHandler>,
+    on_select: Option<Handler<fn(TableRow)>>,
     /// Deliberately not the selection: walking the table chooses nothing.
     cursor: RwSignal<Option<At>>,
     places: RowPlaces,
@@ -621,7 +615,7 @@ impl Table {
         if gesture == Gesture::Only
             && let Some(on_select) = &self.on_select
         {
-            on_select(row);
+            on_select.run(row.clone());
         }
     }
 
@@ -639,7 +633,7 @@ impl Table {
         };
         self.sort.set(Some(sort.clone()));
         if let Some(on_sort) = &self.on_sort {
-            on_sort(&sort);
+            on_sort.run(sort);
         }
     }
 
@@ -921,13 +915,13 @@ fn column_resizer(
             .size(Reactive::of(move || {
                 Size::new(laid.get().map_or(0.0, |rect| rect.get().width), 0.0)
             }))
-            .on_resize(Rc::new(resize))
+            .on_resize(resize)
             .min(Size::new(column.min_width, 0.0))
             .label(Reactive::of(move || {
                 strings::text_with(strings::RESIZE_COLUMN, &[("label", &name)])
             }))
             .on_start(start)
-            .on_end(Rc::new(end))
+            .on_end(end)
             .build(),
     )?;
     let edge = Container::new(

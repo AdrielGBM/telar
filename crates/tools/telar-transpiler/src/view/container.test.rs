@@ -356,8 +356,8 @@ fn a_forwarded_press_is_handed_over_whatever_it_holds() {
         .unwrap()
         .rust_code;
     let call = code
-        .split_once(".maybe_on_press(::telar::IntoPress::into_press(")
-        .expect("a forwarded press goes through IntoPress")
+        .split_once(".maybe_on_press(::telar::IntoHandler::into_handler(")
+        .expect("a forwarded press goes through IntoHandler")
         .1;
     assert!(call.split_once(')').unwrap().0.ends_with("add"), "{code}");
 }

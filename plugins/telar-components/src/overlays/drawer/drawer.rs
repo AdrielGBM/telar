@@ -152,7 +152,7 @@ fn build_open_drawer(
     body: Vec<Box<dyn LayoutItem>>,
     label: Option<Reactive<String>>,
     paint: Rc<dyn Fn() -> RectStyle>,
-    dismiss: scrim::DismissFn,
+    dismiss: Handler,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let room = scrim::Room::new();
     let across = matches!(side, Side::Start | Side::End);
@@ -213,7 +213,7 @@ fn build_open_drawer(
         children![panel],
     )?;
     room.follow(scrim.layout_node());
-    let scrim = shared::dismissed_by_press(scrim, move || (*dismiss)());
+    let scrim = shared::dismissed_by_press(scrim, dismiss);
 
     Ok(box_item(scrim))
 }

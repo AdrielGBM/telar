@@ -107,11 +107,11 @@ impl Mounted {
         mounted
     }
 
-    fn with_copy_sink(props: impl FnOnce(Rc<dyn Fn(&str)>) -> CodeViewProps) -> Self {
+    fn with_copy_sink(props: impl FnOnce(Handler<fn(String)>) -> CodeViewProps) -> Self {
         let copied: Rc<RefCell<Vec<String>>> = Rc::default();
         let sink = copied.clone();
-        let mut mounted = Self::new(props(Rc::new(move |code: &str| {
-            sink.borrow_mut().push(code.to_string())
+        let mut mounted = Self::new(props(Handler::from(move |code: String| {
+            sink.borrow_mut().push(code)
         })));
         mounted.copied = copied;
         mounted

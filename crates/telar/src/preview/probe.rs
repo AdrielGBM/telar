@@ -137,25 +137,10 @@ impl<T: 'static> ViaOpaque for Probe<T> {
     }
 }
 
-macro_rules! callback_traits {
-    ($($(#[$doc:meta])* $name:ident;)*) => {
-        $(
-            $(#[$doc])*
-            pub trait $name: Sized {
-                fn action(log: ActionLog, name: &'static str) -> Self;
-                fn logged(self, log: ActionLog, name: &'static str) -> Self;
-            }
-        )*
-    };
-}
-
-callback_traits! {
-    /// [`IntoAction`] for a callback with an argument that has no `Debug`, each argument recorded by its type's name.
-    IntoOpaqueAction;
-    /// [`IntoAction`] for a callback of one borrowed argument, `Rc<dyn Fn(&T)>`, recorded by its `Debug` text. A trait of its own because an impl of `IntoAction` for it would overlap the one for `Rc<dyn Fn(T)>` as coherence will come to see it (rust-lang/rust#56105).
-    IntoBorrowedAction;
-    /// [`IntoBorrowedAction`] for an argument that has no `Debug`, recorded by its type's name.
-    IntoOpaqueBorrowedAction;
+/// [`IntoAction`] for a handler with an argument that has no `Debug`, each argument recorded by its type's name.
+pub trait IntoOpaqueAction: Sized {
+    fn action(log: ActionLog, name: &'static str) -> Self;
+    fn logged(self, log: ActionLog, name: &'static str) -> Self;
 }
 
 macro_rules! action_tiers {
@@ -178,16 +163,11 @@ macro_rules! action_tiers {
     };
 }
 
-// A callback has at most one of `IntoAction` and `IntoBorrowedAction`, and of their opaque pair, so two tiers can share a depth.
 action_tiers! {
     /// The tier for a callback with [`IntoAction`].
     ViaAction: IntoAction for &&Probe<T>;
-    /// The tier for a callback with [`IntoBorrowedAction`].
-    ViaBorrowedAction: IntoBorrowedAction for &&Probe<T>;
     /// The tier for a callback whose arguments have no `Debug`.
     ViaOpaqueAction: IntoOpaqueAction for &Probe<T>;
-    /// The tier for a callback whose borrowed argument has no `Debug`.
-    ViaOpaqueBorrowedAction: IntoOpaqueBorrowedAction for &Probe<T>;
 }
 
 /// The last tier: a value that is no callback, left as it is.
@@ -271,10 +251,7 @@ macro_rules! __preview_probe {
 macro_rules! __preview_action {
     ($log:expr, $name:expr, $value:expr $(,)?) => {{
         #[allow(unused_imports)]
-        use $crate::preview::__probe::{
-            ViaAction as _, ViaBorrowedAction as _, ViaInert as _, ViaOpaqueAction as _,
-            ViaOpaqueBorrowedAction as _,
-        };
+        use $crate::preview::__probe::{ViaAction as _, ViaInert as _, ViaOpaqueAction as _};
         let __telar_value = $value;
         (&&&$crate::preview::__probe::Probe::of(&__telar_value)).log_calls(
             __telar_value,

@@ -266,8 +266,8 @@ fn an_embedded_guests_surface_is_read_acted_on_and_typed_into_where_the_host_dra
     let decided = std::rc::Rc::new(std::cell::Cell::new(false));
     let (dismissed, confirmed) = (decided.clone(), decided.clone());
     let _dialog = ui_core::DismissRegistration::confirmable(
-        std::rc::Rc::new(move || dismissed.set(true)),
-        std::rc::Rc::new(move || confirmed.set(true)),
+        move || dismissed.set(true),
+        move || confirmed.set(true),
     );
     for key in [NamedKey::Enter, NamedKey::Escape] {
         assert_eq!(

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::testing::{press, release, route};
 use telar::{
     AvailableSpace, ComponentList, compute_layout, dispatch_overlays, relayout_if_dirty, signal,
@@ -60,7 +62,7 @@ fn selecting_an_option_sets_the_signal_and_closes() {
     let item = select(
         SelectProps::props()
             .selected(picked)
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(sizes())
             .build(),
     )
@@ -155,7 +157,7 @@ fn a_choice_can_be_disabled_which_a_list_of_strings_could_not_say() {
     let item = select(
         SelectProps::props()
             .selected(picked)
-            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .on_select(move |i| sink.set(Some(i)))
             .children(rows)
             .build(),
     )

@@ -7,9 +7,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Children, Clip, ClippedItem, Color, FocusRing, Key, KeyNav, KeyNavMove,
-    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey, Props, Reactive,
-    RwSignal, StyledContainer, Text, TextWrap, box_item,
+    Accessible, AlignItems, Children, Clip, ClippedItem, Color, FocusRing, Handler, Key, KeyNav,
+    KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey, Props,
+    Reactive, RwSignal, StyledContainer, Text, TextWrap, box_item,
     focus::{self, FocusId, Role, SetPosition},
     key_nav_apply, memo, signal,
 };
@@ -19,7 +19,7 @@ use crate::shared;
 use crate::shared::rows::{
     BuiltRows, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
 };
-use crate::shared::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
+use crate::shared::selection::{Gesture, RowSelection, SelectionMode};
 use crate::shared::type_ahead::TypeAhead;
 use telar::ControlSize;
 
@@ -58,9 +58,6 @@ impl ListRow {
     }
 }
 
-/// What [`VirtualListProps::on_select`] is called with.
-pub type RowHandler = Rc<dyn Fn(&ListRow)>;
-
 /// What [`VirtualListProps::row`] builds a row's content with.
 pub type RowBuilder = Rc<dyn Fn(&ListRow) -> Result<Box<dyn LayoutItem>, LayoutError>>;
 
@@ -86,11 +83,11 @@ pub struct VirtualListProps {
     #[props(some, into, default)]
     pub selected_rows: Option<RwSignal<BTreeSet<Arc<str>>>>,
     /// Fired with the row a press or Enter chose on its own, and in [`SelectionMode::Single`] the row Space chose.
-    #[props(some, default)]
-    pub on_select: Option<RowHandler>,
+    #[props(some, into, default)]
+    pub on_select: Option<Handler<fn(ListRow)>>,
     /// Fired with every row chosen each time a press or a key changes them, in [`SelectionMode::Multiple`].
-    #[props(some, default)]
-    pub on_selection_change: Option<SelectionHandler>,
+    #[props(some, into, default)]
+    pub on_selection_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
     /// Builds what a row shows, in place of its label and detail. The row itself — its height, its wash and what a reader hears it as — stays the list's.
     #[props(some, default)]
     pub row: Option<RowBuilder>,
@@ -208,7 +205,7 @@ struct List {
     cursor: RwSignal<Option<Arc<str>>>,
     selection: RowSelection,
     search: RefCell<TypeAhead>,
-    on_select: Option<RowHandler>,
+    on_select: Option<Handler<fn(ListRow)>>,
     places: RowPlaces,
     focus: Cell<Option<FocusId>>,
     built: BuiltRows<Arc<str>>,
@@ -312,7 +309,7 @@ impl List {
         if gesture == Gesture::Only
             && let Some(on_select) = &self.on_select
         {
-            on_select(row);
+            on_select.run(row.clone());
         }
     }
 

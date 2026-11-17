@@ -128,7 +128,7 @@ fn a_child_that_panics_mid_build_leaves_its_siblings_and_no_registrations() {
                     .borrow_mut()
                     .extend([button.layout_node(), overlay.content_node()]);
                 let held: Cell<Option<DismissRegistration>> = Cell::new(None);
-                effect(move || held.set(Some(DismissRegistration::new(Rc::new(|| {})))));
+                effect(move || held.set(Some(DismissRegistration::new(|| {}))));
                 assert_eq!(dismiss_depth(), 1);
                 assert!(built.borrow().iter().any(|&node| mentions(node)));
                 let _still_held = (button, overlay);

@@ -265,12 +265,12 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1363..1373	4001	`note.title`
 1453..1462	4686	`note.body`
-1753..1811	7911	`|| if let Some(rows) = rows.get() { rows.reveal(40, 8.0) }`
-1863..1922	8141	`|| if let Some(rows) = rows.get() { rows.reveal(250, 8.0) }`
-1972..1979	8335	`outline`
-1990..2049	8402	`|| if let Some(rows) = rows.get() { rows.reveal(399, 8.0) }`
-2300..2310	10145	`note.title`
-2390..2399	10830	`note.body`
-2753..2760	13950	`outline`
-2771..2803	14019	`|| notes.update(|v| v.reverse())`
-2991..2995	15391	`note`
+1753..1811	7894	`|| if let Some(rows) = rows.get() { rows.reveal(40, 8.0) }`
+1863..1922	8106	`|| if let Some(rows) = rows.get() { rows.reveal(250, 8.0) }`
+1972..1979	8299	`outline`
+1990..2049	8349	`|| if let Some(rows) = rows.get() { rows.reveal(399, 8.0) }`
+2300..2310	10091	`note.title`
+2390..2399	10776	`note.body`
+2753..2760	13896	`outline`
+2771..2803	13948	`|| notes.update(|v| v.reverse())`
+2991..2995	15319	`note`

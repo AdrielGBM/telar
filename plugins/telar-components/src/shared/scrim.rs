@@ -8,9 +8,6 @@ use telar::{
     ReactiveList, Rect, RwSignal, Size, box_item, children, effect, signal,
 };
 
-/// The dismiss handler the helper hands to each widget's scrim (and, for `modal`, its Close): shared so both affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.
-pub(crate) type DismissFn = Rc<dyn Fn()>;
-
 /// How much of the window a dialog's card may take, read from the backdrop the card stands on so it follows the window as it is resized and is right from the first layout of the backdrop, however the dialog came to be built.
 #[derive(Clone, Copy)]
 pub(crate) struct Room(RwSignal<Option<RwSignal<Rect>>>);
@@ -42,7 +39,7 @@ impl Room {
 }
 
 /// Keeps the dismiss stack in step with `open`: on the transition into open the overlay becomes the stack's top, and on the way out it withdraws — including when it was closed by its own Close button rather than by a dismissal, which is why the entry is tracked by id instead of assumed to still be on top.
-fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: DismissFn) {
+fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: Handler) {
     let registered: Cell<Option<DismissRegistration>> = Cell::new(None);
     effect(move || {
         if open.get() {
@@ -93,9 +90,9 @@ fn collapsed() -> Result<Box<dyn LayoutItem>, LayoutError> {
 pub(crate) fn scrim_overlay(
     open: RwSignal<bool>,
     on_close: Option<Handler>,
-    build_inner: impl Fn(DismissFn) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    build_inner: impl Fn(Handler) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let dismiss: DismissFn = Rc::new(move || {
+    let dismiss = Handler::from(move || {
         open.set(false);
         if let Some(on_close) = &on_close {
             on_close.run();

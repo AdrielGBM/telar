@@ -128,9 +128,9 @@ pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, La
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_9 = button(ButtonProps::props().label("Note 40").on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(40, 8.0) } })).build())?;
-                                    let __node_10 = button(ButtonProps::props().label("Note 250").on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(250, 8.0) } })).build())?;
-                                    let __node_11 = button(ButtonProps::props().label("Note 399").variant(::telar::kw::outline).on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(399, 8.0) } })).build())?;
+                                    let __node_9 = button(ButtonProps::props().label("Note 40").on_press({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(40, 8.0) } }).build())?;
+                                    let __node_10 = button(ButtonProps::props().label("Note 250").on_press({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(250, 8.0) } }).build())?;
+                                    let __node_11 = button(ButtonProps::props().label("Note 399").variant(::telar::kw::outline).on_press({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(399, 8.0) } }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_9, __node_10, __node_11])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -206,7 +206,7 @@ pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, La
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_18 = button(ButtonProps::props().label("Reverse").variant(::telar::kw::outline).on_press(std::rc::Rc::new({ let notes = notes.clone(); move || notes.update(|v| v.reverse()) })).build())?;
+                                let __node_18 = button(ButtonProps::props().label("Reverse").variant(::telar::kw::outline).on_press({ let notes = notes.clone(); move || notes.update(|v| v.reverse()) }).build())?;
                                 __children.push(box_item(__node_18));
                                 let __node_19 = {
                                     LayoutScrollArea::new_with(LayoutStyle::new().height(200.0).width(SizeDimension::Percent(1.0)), |__viewport| {

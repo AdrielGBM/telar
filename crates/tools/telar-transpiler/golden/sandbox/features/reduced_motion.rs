@@ -85,9 +85,9 @@ pub fn reduced_motion(props: ReducedMotionProps) -> Result<Box<dyn LayoutItem>, 
                                 };
                                 __children.push(box_item(__text_2));
                                 let __row_0 = {
-                                    let __node_3 = button(ButtonProps::props().label("Follow the system").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(None))).build())?;
-                                    let __node_4 = button(ButtonProps::props().label("Less motion").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(true)))).build())?;
-                                    let __node_5 = button(ButtonProps::props().label("Full motion").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(false)))).build())?;
+                                    let __node_3 = button(ButtonProps::props().label("Follow the system").variant(::telar::kw::ghost).on_press(move || telar::set_reduced_motion_override(None)).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("Less motion").variant(::telar::kw::ghost).on_press(move || telar::set_reduced_motion_override(Some(true))).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("Full motion").variant(::telar::kw::ghost).on_press(move || telar::set_reduced_motion_override(Some(false))).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -129,7 +129,7 @@ pub fn reduced_motion(props: ReducedMotionProps) -> Result<Box<dyn LayoutItem>, 
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_9 = button(ButtonProps::props().label("Slide").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) })).build())?;
+                                    let __node_9 = button(ButtonProps::props().label("Slide").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) }).build())?;
                                     let __node_10 = spinner(SpinnerProps::props().build())?;
                                     let __node_10 = __node_10.a11y_label(|| "Working");
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_9, __node_10])?

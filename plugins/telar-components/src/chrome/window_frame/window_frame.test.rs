@@ -36,7 +36,7 @@ fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
     let sink = asked.clone();
     let style = SurfaceFrameStyle::default();
     let mut frame = window_frame(WindowFrameProps {
-        resize: Some(Rc::new(move |w, h| sink.borrow_mut().push((w, h)))),
+        resize: Some(Handler::from(move |w, h| sink.borrow_mut().push((w, h)))),
         ..framing("Settings", style)
     })
     .unwrap();
@@ -99,7 +99,7 @@ fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
     let sink = asked.clone();
     let mut frame = window_frame(WindowFrameProps {
         body: hungry,
-        resize: Some(Rc::new(move |w, h| sink.borrow_mut().push((w, h)))),
+        resize: Some(Handler::from(move |w, h| sink.borrow_mut().push((w, h)))),
         ..framing("Settings", style)
     })
     .unwrap();

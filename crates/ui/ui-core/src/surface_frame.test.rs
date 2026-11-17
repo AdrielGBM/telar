@@ -181,9 +181,8 @@ fn page_with_modal(modal: &Modal) -> impl FnOnce() -> Result<Box<dyn LayoutItem>
         let held: RefCell<Option<DismissRegistration>> = RefCell::new(None);
         effect(move || {
             if open.get() {
-                held.borrow_mut().get_or_insert_with(|| {
-                    DismissRegistration::new(Rc::new(move || open.set(false)))
-                });
+                held.borrow_mut()
+                    .get_or_insert_with(|| DismissRegistration::new(move || open.set(false)));
             } else {
                 held.borrow_mut().take();
             }

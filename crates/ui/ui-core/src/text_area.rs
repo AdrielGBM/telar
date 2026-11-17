@@ -8,6 +8,7 @@ use reactive_core::RwSignal;
 use renderer_core::{TextStyle, TextWrap};
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::Handler;
 use crate::focus::{self, FocusId};
 use crate::layout_item::LeafWidget;
 use crate::layout_leaf::LayoutLeaf;
@@ -57,8 +58,8 @@ impl TextArea {
     }
 
     /// Runs when Escape is pressed while focused, just before the area hands the keyboard back. See [`Input::on_cancel`](crate::Input::on_cancel).
-    pub fn on_cancel(mut self, f: impl Fn() + 'static) -> Self {
-        self.editor.on_cancel = Some(Box::new(f));
+    pub fn on_cancel(mut self, on_cancel: impl Into<Handler>) -> Self {
+        self.editor.on_cancel = Some(on_cancel.into());
         self
     }
 

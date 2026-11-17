@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use telar::KeyboardConvention;
 
@@ -148,7 +149,7 @@ fn the_handler_hears_each_change_and_nothing_that_changes_nothing() {
         SelectionMode::Multiple,
         None,
         None,
-        Some(Rc::new(move |rows: &BTreeSet<Arc<str>>| {
+        Some(Handler::from(move |rows: BTreeSet<Arc<str>>| {
             sink.borrow_mut().push(rows.len())
         })),
     );

@@ -73,7 +73,7 @@ pub fn transitions(props: TransitionsProps) -> Result<Box<dyn LayoutItem>, Layou
                                         };
                                         Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_1, __text_1])?
                                     };
-                                    let __node_3 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let theme = theme.clone(); let accent = accent.clone(); let alt = alt.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } })).build())?;
+                                    let __node_3 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let theme = theme.clone(); let accent = accent.clone(); let alt = alt.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__col_1, __col_2, __node_3])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -118,7 +118,7 @@ pub fn transitions(props: TransitionsProps) -> Result<Box<dyn LayoutItem>, Layou
                                         let __transition_2 = motion::Animated::new(fade.get(), motion::tween(std::time::Duration::from_millis(300), motion::Easing::EaseInOut));
                                         StyledContainer::new(LayoutStyle::new().flex_column().width(130.0).height(64.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![__text_2])?.with_opacity({ let fade = fade.clone(); move || { __transition_2.retarget(fade.get()); __transition_2.get() } })
                                     };
-                                    let __node_7 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let fade = fade.clone(); move || { let v = fade.peek(); fade.set(if v > 0.5 { 0.15 } else { 1.0 }) } })).build())?;
+                                    let __node_7 = button(ButtonProps::props().label("Toggle").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let fade = fade.clone(); move || { let v = fade.peek(); fade.set(if v > 0.5 { 0.15 } else { 1.0 }) } }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_2, __node_7])?
                                 };
                                 __children.push(box_item(__row_1));
@@ -157,7 +157,7 @@ pub fn transitions(props: TransitionsProps) -> Result<Box<dyn LayoutItem>, Layou
                                         let __transition_3 = motion::Animated::new((stepped_x.get()) as f32, motion::tween(std::time::Duration::from_millis(600), motion::Easing::Steps(6, motion::StepPosition::JumpEnd)));
                                         StyledContainer::new(LayoutStyle::new().flex_column().width(24.0).height(24.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?.with_transform({ let stepped_x = stepped_x.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (1) as f32, (1) as f32, { __transition_3.retarget((stepped_x.get()) as f32); __transition_3.get() }, (0) as f32) })
                                     };
-                                    let __node_11 = button(ButtonProps::props().label("Move").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let stepped = stepped.clone(); move || { stepped.toggle() } })).build())?;
+                                    let __node_11 = button(ButtonProps::props().label("Move").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let stepped = stepped.clone(); move || { stepped.toggle() } }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_3, __node_11])?
                                 };
                                 __children.push(box_item(__row_2));

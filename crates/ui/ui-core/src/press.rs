@@ -19,8 +19,8 @@ const LONG_PRESS_THRESHOLD: Duration = Duration::from_millis(500);
 pub(crate) struct PressGesture {
     // Shared with the focus order, so a control activated without a pointer runs exactly what a tap runs.
     primary: Rc<Primary>,
-    on_long_press: Option<Box<dyn Fn()>>,
-    on_alt_press: Option<Box<dyn Fn(PointerButton)>>,
+    on_long_press: Option<Handler>,
+    on_alt_press: Option<Handler<fn(PointerButton)>>,
     // The press point while a tap is pending; cleared once the pointer travels past `TAP_SLOP`.
     press_origin: Option<(f32, f32)>,
     // Cleared alongside `press_origin`, so a press that turned into a drag never fires as a long press.
@@ -34,7 +34,7 @@ pub(crate) struct PressGesture {
 struct Primary {
     on_press: RefCell<Option<Handler>>,
     // Where a link goes on the press, after `on_press` has run: a box that is a link and also does something keeps both.
-    follow: RefCell<Option<Rc<dyn Fn()>>>,
+    follow: RefCell<Option<Handler>>,
 }
 
 impl Primary {
@@ -47,7 +47,7 @@ impl Primary {
             on_press.run();
         }
         if let Some(follow) = &follow {
-            follow();
+            follow.run();
         }
         on_press.is_some() || follow.is_some()
     }
@@ -62,8 +62,8 @@ impl PressGesture {
         *self.primary.on_press.borrow_mut() = Some(on_press);
     }
 
-    pub(crate) fn set_follow(&mut self, f: impl Fn() + 'static) {
-        *self.primary.follow.borrow_mut() = Some(Rc::new(f));
+    pub(crate) fn set_follow(&mut self, follow: Handler) {
+        *self.primary.follow.borrow_mut() = Some(follow);
     }
 
     /// What activating the control without a pointer fires — from the keyboard or from assistive technology — reporting whether there was anything to fire. It runs the handlers in place when it is called, so it can be taken before they are set.
@@ -81,12 +81,12 @@ impl PressGesture {
         self.primary.is_set()
     }
 
-    pub(crate) fn set_long_press(&mut self, f: impl Fn() + 'static) {
-        self.on_long_press = Some(Box::new(f));
+    pub(crate) fn set_long_press(&mut self, on_long_press: Handler) {
+        self.on_long_press = Some(on_long_press);
     }
 
-    pub(crate) fn set_alt_press(&mut self, f: impl Fn(PointerButton) + 'static) {
-        self.on_alt_press = Some(Box::new(f));
+    pub(crate) fn set_alt_press(&mut self, on_alt_press: Handler<fn(PointerButton)>) {
+        self.on_alt_press = Some(on_alt_press);
     }
 
     pub(crate) fn is_set(&self) -> bool {
@@ -151,7 +151,7 @@ impl PressGesture {
                     }
                     Some(other) => {
                         if let Some(cb) = &self.on_alt_press {
-                            cb(other);
+                            cb.run(other);
                         }
                     }
                     None => {}
@@ -178,8 +178,8 @@ impl PressGesture {
             && started.elapsed() >= LONG_PRESS_THRESHOLD
         {
             self.cancel();
-            if let Some(cb) = &self.on_long_press {
-                cb();
+            if let Some(on_long_press) = &self.on_long_press {
+                on_long_press.run();
             }
             return true;
         }

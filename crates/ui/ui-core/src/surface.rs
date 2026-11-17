@@ -14,6 +14,7 @@ use renderer_core::{Color, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::Handler;
 use crate::context::{compute_layout, mark_dirty, new_container, track_layout};
 use crate::input_region::{InputHandle, Placement};
 use crate::layout_item::LayoutItem;
@@ -135,7 +136,7 @@ pub struct SurfaceScaffold {
     root_rect: Option<RwSignal<Rect>>,
     content: Box<dyn LayoutItem>,
     scrim: Option<Scrim>,
-    dismiss: Option<Rc<dyn Fn()>>,
+    dismiss: Option<Handler>,
     edge: Edge,
     transition: Option<SurfaceTransition>,
     input: InputHandle,
@@ -148,7 +149,7 @@ impl SurfaceScaffold {
         align: AlignItems,
         margin: (i32, i32, i32, i32),
         scrim: Option<Scrim>,
-        dismiss: Option<Rc<dyn Fn()>>,
+        dismiss: Option<Handler>,
         content: Box<dyn LayoutItem>,
     ) -> Result<Self, LayoutError> {
         let panel_node = content.layout_node();
@@ -286,7 +287,7 @@ impl Component for SurfaceScaffold {
                     .unwrap_or(false);
                 match (inside, &self.dismiss) {
                     (false, Some(dismiss)) => {
-                        dismiss();
+                        dismiss.run();
                         EventResult::Handled
                     }
                     _ => self.content.on_event(event),
@@ -298,7 +299,7 @@ impl Component for SurfaceScaffold {
                 ..
             } => match (self.content.on_event(event), &self.dismiss) {
                 (EventResult::Ignored, Some(dismiss)) => {
-                    dismiss();
+                    dismiss.run();
                     EventResult::Handled
                 }
                 (result, _) => result,

@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Clip, ClippedItem, Color, Container, Direction, FocusRing,
+    Accessible, AlignItems, Clip, ClippedItem, Color, Container, Direction, FocusRing, Handler,
     JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey,
     PointerButton, Props, Reactive, Rect, RectStyle, RwSignal, StyledContainer, Text, TextWrap,
     box_item, current_direction,
@@ -144,11 +144,11 @@ pub struct TreeViewProps {
     #[props(some, into, default)]
     pub expanded: Option<RwSignal<HashSet<Arc<str>>>>,
     /// Fired with the node a click, Enter or Space chose.
-    #[props(some, default)]
-    pub on_select: Option<SelectHandler>,
+    #[props(some, into, default)]
+    pub on_select: Option<Handler<fn(TreeNode)>>,
     /// Fired when a row's context menu is asked for — a secondary press on the row, or the context-menu key or Shift+F10 on the row the keyboard is on — with the row and where the menu opens. The row takes the keyboard cursor first, so it reads as the one the menu is about. `None` (the default) leaves a secondary press to what is behind the tree.
-    #[props(some, default)]
-    pub on_context: Option<ContextHandler>,
+    #[props(some, into, default)]
+    pub on_context: Option<Handler<fn(TreeContext)>>,
     /// Whether a branch can be selected. Off, a click, Enter or Space on a branch opens or shuts it instead, for a tree whose selection only ever names a leaf. On by default.
     #[props(default = true)]
     pub select_branches: bool,
@@ -166,9 +166,6 @@ pub struct TreeViewProps {
     pub color: Option<Reactive<Color>>,
 }
 
-/// What [`TreeViewProps::on_select`] is called with.
-pub type SelectHandler = Rc<dyn Fn(&TreeNode)>;
-
 /// What a row's context menu was asked for on, and where it opens, as [`ContextMenuProps`](crate::ContextMenuProps) takes it: at the pointer for a secondary press, or under the row for one asked for from the keyboard.
 #[derive(Clone, Debug)]
 pub struct TreeContext {
@@ -185,8 +182,6 @@ impl TreeContext {
         }
     }
 }
-
-pub type ContextHandler = Rc<dyn Fn(TreeContext)>;
 
 /// What [`TreeViewProps::trailing`] builds a row's trailing content with.
 pub type TrailingBuilder = Rc<dyn Fn(&TreeNode) -> Result<Box<dyn LayoutItem>, LayoutError>>;
@@ -349,8 +344,8 @@ struct Tree {
     selected: RwSignal<Option<Arc<str>>>,
     expanded: RwSignal<HashSet<Arc<str>>>,
     search: RefCell<TypeAhead>,
-    on_select: Option<SelectHandler>,
-    on_context: Option<ContextHandler>,
+    on_select: Option<Handler<fn(TreeNode)>>,
+    on_context: Option<Handler<fn(TreeContext)>>,
     select_branches: bool,
     places: RowPlaces,
     focus: Cell<Option<FocusId>>,
@@ -454,7 +449,7 @@ impl Tree {
         self.cursor.set(Some(id.clone()));
         self.selected.set(Some(id));
         if let Some(on_select) = &self.on_select {
-            on_select(&row.node);
+            on_select.run(row.node.clone());
         }
     }
 
@@ -501,7 +496,7 @@ impl Tree {
             return;
         };
         self.cursor.set(Some(row.node.id.clone()));
-        on_context(TreeContext {
+        on_context.run(TreeContext {
             node: row.node.clone(),
             at,
             around,
@@ -664,13 +659,13 @@ fn build_row(
         .on_press(press)
         .maybe_on_alt_press(tree.on_context.is_some().then(|| {
             let (tree, row) = (tree.clone(), row.clone());
-            move |button: PointerButton| {
+            Handler::from(move |button: PointerButton| {
                 if button == PointerButton::Secondary {
                     tree.take_focus();
                     let at = telar::pointer_position().unwrap_or_default();
                     tree.ask_context(&row, at, None);
                 }
-            }
+            })
         }));
     let built = if row.node.is_branch() {
         let (tree, id) = (tree.clone(), id.clone());

@@ -12,9 +12,9 @@ pub(crate) mod selection;
 pub(crate) mod type_ahead;
 
 use telar::{
-    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Color, Container, KeySequence,
-    LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect, RectStyle,
-    StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
+    Accessible, AlignItems, BODY_TEXT_CONTRAST, BorderRadius, Color, Container, Handler,
+    KeySequence, LayoutError, LayoutItem, LayoutStyle, NON_TEXT_CONTRAST, Reactive, Rect,
+    RectStyle, StyledContainer, Text, TextStyle, box_item, children, focus::Role, style_follows,
     use_theme_tokens,
 };
 
@@ -437,7 +437,7 @@ pub(crate) fn labelled_control(
 /// Makes `backdrop` close what it holds when it is pressed, around it rather than on it. That press is the pointer's way out, as Escape is the keyboard's, so the backdrop stays a box: a box that answers a press is otherwise a button, and a button wrapped around the dialog or the menu it holds is one a reader is offered and cannot make sense of.
 pub(crate) fn dismissed_by_press(
     backdrop: StyledContainer,
-    dismiss: impl Fn() + 'static,
+    dismiss: impl Into<Handler>,
 ) -> StyledContainer {
     backdrop.role(Role::Group).on_press(dismiss)
 }
@@ -618,16 +618,16 @@ pub fn mark(
     ink: impl Fn(&TextStyle) -> telar::Paint + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let current = shape.clone();
-    let canvas = telar::Canvas::declaring(mark_box(size, shape()), move |rect, text| {
-        telar::RenderNode::path(
+    let path = telar::Path::declaring(mark_box(size, shape()), move |rect, text| {
+        (
             std::sync::Arc::new(mark_path(current(), rect)),
             telar::PathStyle::default()
-                .with_stroke(telar::Stroke::new(ink(&text), border_width_strong())),
+                .with_stroke(telar::Stroke::new(ink(text), border_width_strong())),
         )
     })?
     .a11y_hidden();
-    style_follows(canvas.layout_node(), move || mark_box(size, shape()));
-    Ok(box_item(canvas))
+    style_follows(path.layout_node(), move || mark_box(size, shape()));
+    Ok(box_item(path))
 }
 
 /// What [`glyph`] draws.

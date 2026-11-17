@@ -97,7 +97,7 @@ impl Mounted {
                 .alpha(alpha)
                 .swatches(vec![Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0)])
                 .swatch_names(vec!["Red".to_string(), "Blue".to_string()])
-                .on_change(Rc::new(move |color| sink.borrow_mut().push(color)))
+                .on_change(move |color| sink.borrow_mut().push(color))
                 .build(),
         )
         .unwrap();

@@ -15,7 +15,7 @@ fn dismisses_the_most_recently_opened_first() {
         .into_iter()
         .map(|name| {
             let log = log.clone();
-            DismissRegistration::new(Rc::new(move || log.borrow_mut().push(name)))
+            DismissRegistration::new(move || log.borrow_mut().push(name))
         })
         .collect();
     assert_eq!(dismiss_depth(), 2);
@@ -35,12 +35,12 @@ fn dropping_a_registration_below_the_top_withdraws_only_it() {
     let hit = Rc::new(Cell::new(0));
     let first = {
         let hit = hit.clone();
-        DismissRegistration::new(Rc::new(move || hit.set(hit.get() + 1)))
+        DismissRegistration::new(move || hit.set(hit.get() + 1))
     };
     let log = Rc::new(RefCell::new(Vec::new()));
     let _top = {
         let log = log.clone();
-        DismissRegistration::new(Rc::new(move || log.borrow_mut().push("top")))
+        DismissRegistration::new(move || log.borrow_mut().push("top"))
     };
     drop(first);
     assert_eq!(dismiss_depth(), 1);
@@ -63,7 +63,7 @@ fn escape_dismisses_only_past_a_focused_field() {
     let closed = Rc::new(Cell::new(false));
     let _dialog = {
         let closed = closed.clone();
-        DismissRegistration::new(Rc::new(move || closed.set(true)))
+        DismissRegistration::new(move || closed.set(true))
     };
     let esc = Event::KeyPressed {
         key: Key::Named(NamedKey::Escape),
@@ -91,7 +91,7 @@ fn a_handler_that_drops_its_own_registration_is_safe() {
     reset();
     let held = Rc::new(RefCell::new(None::<DismissRegistration>));
     let inner = held.clone();
-    let registration = DismissRegistration::new(Rc::new(move || drop(inner.borrow_mut().take())));
+    let registration = DismissRegistration::new(move || drop(inner.borrow_mut().take()));
     *held.borrow_mut() = Some(registration);
     assert!(
         dismiss_top(),
@@ -263,7 +263,7 @@ mod transactions {
         crate::focus::clear();
         crate::focus::unregister(id);
 
-        let dialog = DismissRegistration::new(Rc::new(|| {}));
+        let dialog = DismissRegistration::new(|| {});
         assert_eq!(
             crate::dispatch_overlays(&key(NamedKey::Enter)),
             EventResult::Ignored,
@@ -376,10 +376,7 @@ fn escape_and_enter_go_past_a_focused_control_that_does_not_keep_them() {
     let (closed, confirmed) = (Rc::new(Cell::new(false)), Rc::new(Cell::new(false)));
     let _registration = {
         let (closed, confirmed) = (closed.clone(), confirmed.clone());
-        DismissRegistration::confirmable(
-            Rc::new(move || closed.set(true)),
-            Rc::new(move || confirmed.set(true)),
-        )
+        DismissRegistration::confirmable(move || closed.set(true), move || confirmed.set(true))
     };
     let button = crate::focus::next_id();
     crate::focus::register_with_role(button, crate::focus::FocusKind::Widget, node, Role::Button);
@@ -402,7 +399,7 @@ fn escape_and_enter_go_past_a_focused_control_that_does_not_keep_them() {
 
     let _again = {
         let closed = closed.clone();
-        DismissRegistration::new(Rc::new(move || closed.set(true)))
+        DismissRegistration::new(move || closed.set(true))
     };
     assert_eq!(
         crate::dispatch_overlays(&pressed(NamedKey::Escape)),
@@ -426,14 +423,14 @@ fn an_entry_inside_a_hidden_box_is_skipped_by_dismissal_and_confirmation() {
     let log = Rc::new(RefCell::new(Vec::new()));
     let _below = {
         let log = log.clone();
-        DismissRegistration::within(shown, Rc::new(move || log.borrow_mut().push("below")))
+        DismissRegistration::within(shown, move || log.borrow_mut().push("below"))
     };
     let above = {
         let (dismissed, confirmed) = (log.clone(), log.clone());
         DismissRegistration::confirmable_within(
             hidden,
-            Rc::new(move || dismissed.borrow_mut().push("above")),
-            Rc::new(move || confirmed.borrow_mut().push("confirm")),
+            move || dismissed.borrow_mut().push("above"),
+            move || confirmed.borrow_mut().push("confirm"),
         )
     };
     set_display(hidden, false);

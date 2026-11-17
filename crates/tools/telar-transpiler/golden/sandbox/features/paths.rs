@@ -321,15 +321,15 @@ pub fn paths(props: PathsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let __row_0 = {
                                     let __path_0 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
-                                        Path::static_data(LayoutStyle::new().width(100.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().primary)), stroke: Some(Stroke::new(theme.get().ink, 2.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                        Path::new(LayoutStyle::new().width(100.0).height(80.0).bordered(), { let theme = theme.clone(); move |_: Rect| (__path_data.clone(), PathStyle { fill: Some(Paint::Solid(theme.get().primary)), stroke: Some(Stroke::new(theme.get().ink, 2.0)), shadow: None, fill_rule: FillRule::Winding }) })?
                                     };
                                     let __path_1 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(6.0, 42.0)).line_to(Point::new(34.0, 70.0)).line_to(Point::new(74.0, 14.0)));
-                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().success, 7.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                        Path::new(LayoutStyle::new().width(80.0).height(80.0).bordered(), { let theme = theme.clone(); move |_: Rect| (__path_data.clone(), PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().success, 7.0)), shadow: None, fill_rule: FillRule::Winding }) })?
                                     };
                                     let __path_2 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
-                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().warning)), stroke: Some(Stroke::new(theme.get().ink, 1.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                        Path::new(LayoutStyle::new().width(80.0).height(80.0).bordered(), { let theme = theme.clone(); move |_: Rect| (__path_data.clone(), PathStyle { fill: Some(Paint::Solid(theme.get().warning)), stroke: Some(Stroke::new(theme.get().ink, 1.0)), shadow: None, fill_rule: FillRule::Winding }) })?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_0, __path_1, __path_2])?
                                 };
@@ -366,15 +366,15 @@ pub fn paths(props: PathsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     let __row_1 = {
                                         let __path_3 = {
                                             let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 40.0)).line_to(Point::new(120.0, 40.0)));
-                                            Path::static_data(LayoutStyle::new().width(120.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().ink, 1.0).with_dash(&[1.0, 4.0], 0.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                            Path::new(LayoutStyle::new().width(120.0).height(80.0).bordered(), { let theme = theme.clone(); move |_: Rect| (__path_data.clone(), PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().ink, 1.0).with_dash(&[1.0, 4.0], 0.0)), shadow: None, fill_rule: FillRule::Winding }) })?
                                         };
                                         let __path_4 = {
                                             let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
-                                            Path::static_data(LayoutStyle::new().width(100.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().primary, 2.0).with_dash(&[6.0, 3.0], 0.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                            Path::new(LayoutStyle::new().width(100.0).height(80.0).bordered(), { let theme = theme.clone(); move |_: Rect| (__path_data.clone(), PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().primary, 2.0).with_dash(&[6.0, 3.0], 0.0)), shadow: None, fill_rule: FillRule::Winding }) })?
                                         };
                                         let __path_5 = {
                                             let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
-                                            Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().warning, 2.0).with_dash(&[8.0, 4.0], 4.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                            Path::new(LayoutStyle::new().width(80.0).height(80.0).bordered(), { let theme = theme.clone(); move |_: Rect| (__path_data.clone(), PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().warning, 2.0).with_dash(&[8.0, 4.0], 4.0)), shadow: None, fill_rule: FillRule::Winding }) })?
                                         };
                                         Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_3, __path_4, __path_5])?
                                     };
@@ -429,12 +429,12 @@ pub fn paths_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<d
     let __row_0 = {
         let __path_0 = {
             let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(4.0, 12.0)).cubic_to(Point::new(4.0, 7.581722), Point::new(7.581722, 4.0), Point::new(12.0, 4.0)).cubic_to(Point::new(16.418278, 4.0), Point::new(20.0, 7.581722), Point::new(20.0, 12.0)).line_to(Point::new(20.0, 20.0)));
-            Canvas::declaring(LayoutStyle::new().width(24.0).height(24.0).bordered(), move |__rect: Rect, __text_style: TextStyle| { let __text = Reactive::Const(BoxText::drawn_in(&__text_style)); RenderNode::path(std::sync::Arc::new(__path_data.fitted(Rect::new(0.0, 0.0, 24.0, 24.0), __rect)), PathStyle { fill: None, stroke: Some(Stroke::new(__text.get().ink, 2.0).with_cap(LineCap::Round)), shadow: None, fill_rule: FillRule::Winding }) })?
+            Path::declaring(LayoutStyle::new().width(24.0).height(24.0).bordered(), move |__rect: Rect, __text_style: &TextStyle| { let __text = Reactive::Const(BoxText::drawn_in(__text_style)); (std::sync::Arc::new(__path_data.fitted(Rect::new(0.0, 0.0, 24.0, 24.0), __rect)), PathStyle { fill: None, stroke: Some(Stroke::new(__text.get().ink, 2.0).with_cap(LineCap::Round)), shadow: None, fill_rule: FillRule::Winding }) })?
         };
         let __path_0 = __path_0.a11y_hidden();
         let __path_1 = {
             let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(4.0, 12.0)).cubic_to(Point::new(4.0, 7.581722), Point::new(7.581722, 4.0), Point::new(12.0, 4.0)).cubic_to(Point::new(16.418278, 4.0), Point::new(20.0, 7.581722), Point::new(20.0, 12.0)).line_to(Point::new(20.0, 20.0)));
-            Canvas::declaring(LayoutStyle::new().width(48.0).height(48.0).bordered(), move |__rect: Rect, __text_style: TextStyle| { let __text = Reactive::Const(BoxText::drawn_in(&__text_style)); RenderNode::path(std::sync::Arc::new(__path_data.fitted(Rect::new(0.0, 0.0, 24.0, 24.0), __rect)), PathStyle { fill: None, stroke: Some(Stroke::new(__text.get().ink, 2.0).with_cap(LineCap::Round)), shadow: None, fill_rule: FillRule::Winding }) })?
+            Path::declaring(LayoutStyle::new().width(48.0).height(48.0).bordered(), move |__rect: Rect, __text_style: &TextStyle| { let __text = Reactive::Const(BoxText::drawn_in(__text_style)); (std::sync::Arc::new(__path_data.fitted(Rect::new(0.0, 0.0, 24.0, 24.0), __rect)), PathStyle { fill: None, stroke: Some(Stroke::new(__text.get().ink, 2.0).with_cap(LineCap::Round)), shadow: None, fill_rule: FillRule::Winding }) })?
         };
         let __path_1 = __path_1.a11y_hidden();
         Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__path_0, __path_1])?.declaring(move || Declared::default().with_color(Color::rgba(255.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0)))

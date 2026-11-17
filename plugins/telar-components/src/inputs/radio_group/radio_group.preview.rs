@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Key, NamedKey, Role};
@@ -14,7 +12,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 RadioGroupProps::props()
                     .items(vec!["Small", "Medium", "Large"])
                     .label("Size")
-                    .on_select(Rc::new(|_| {}))
+                    .on_select(|_| {})
                     .selected(p.signal("selected", Some(1usize)))
                     .size(p.arg("size", ControlSize::Regular))
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))

@@ -832,7 +832,7 @@ fn a_dialog_inside_a_parked_subtree_cannot_be_dismissed_until_it_is_shown_again(
     let closed = Rc::new(Cell::new(0));
     let counting = Rc::clone(&closed);
     let _registration =
-        DismissRegistration::within(dialog, Rc::new(move || counting.set(counting.get() + 1)));
+        DismissRegistration::within(dialog, move || counting.set(counting.get() + 1));
     let depth = Rc::new(Cell::new(usize::MAX));
     let reading = Rc::clone(&depth);
     effect(move || reading.set(crate::dismiss::use_dismiss_depth()));

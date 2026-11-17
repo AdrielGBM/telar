@@ -89,7 +89,7 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 let tags = tags.clone();
                                             move || {
                                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                let __node_12 = icon_button(IconButtonProps::props().icon(("lucide:x", crate::__rsx_assets::ASSET_188735C3.get(), true)).label("Remove removable").size(::telar::kw::small).on_press(std::rc::Rc::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build())?;
+                                                let __node_12 = icon_button(IconButtonProps::props().icon(("lucide:x", crate::__rsx_assets::ASSET_188735C3.get(), true)).label("Remove removable").size(::telar::kw::small).on_press({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } }).build())?;
                                                 __children.push(box_item(__node_12));
                                                 Ok(__children)
                                             }

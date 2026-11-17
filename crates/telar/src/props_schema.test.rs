@@ -1,9 +1,7 @@
 //! A props struct's schema as a crate depending on `telar` sees it: docs, types, defaults and the control each prop gets.
 
-use std::rc::Rc;
-
 use telar::preview::{ControlKind, HasPropsSchema, PreviewEntry, PropDefault, PropsSchema};
-use telar::{Children, Container, LayoutError, LayoutItem, LayoutStyle, Props, Reactive};
+use telar::{Children, Container, Handler, LayoutError, LayoutItem, LayoutStyle, Props, Reactive};
 
 #[derive(Clone, Debug)]
 struct Track;
@@ -26,8 +24,8 @@ struct SliderProps {
     track: Track,
     #[props(default, control = read_only)]
     locked: bool,
-    #[props(default = Rc::new(|_| {}))]
-    on_change: Rc<dyn Fn(f32)>,
+    #[props(into, default = Handler::from(|_: f32| {}))]
+    on_change: Handler<fn(f32)>,
     /// Drawn along the track.
     #[props(default)]
     marks: Children,
@@ -90,7 +88,7 @@ fn a_field_carries_its_type_doc_default_and_setter() {
     assert_eq!(schema().field("track").unwrap().doc, "");
     assert_eq!(
         schema().field("on_change").unwrap().default,
-        PropDefault::Expr("Rc::new(|_| {})")
+        PropDefault::Expr("Handler::from(|_: f32| {})")
     );
 }
 

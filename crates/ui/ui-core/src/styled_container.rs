@@ -144,10 +144,10 @@ impl StateStyle {
 /// What the box wants told about the pointer, beyond press and drag.
 #[derive(Default)]
 struct PointerHooks {
-    hover: Option<Box<dyn Fn(bool)>>,
+    hover: Option<Handler<fn(bool)>>,
     // The continuous half of `hover`, which reports only the crossings.
-    moved: Option<Box<dyn Fn(f32, f32)>>,
-    scroll: Option<Box<dyn Fn(f32, f32)>>,
+    moved: Option<Handler<fn(f32, f32)>>,
+    scroll: Option<Handler<fn(f32, f32)>>,
     cursor: Option<CursorClaim>,
 }
 
@@ -431,7 +431,7 @@ impl StyledContainer {
             self.set_active(false);
         }
         if inside && let Some(cb) = &self.pointer.moved {
-            cb(x as f32 - rect.x, y as f32 - rect.y);
+            cb.run(x as f32 - rect.x, y as f32 - rect.y);
         }
         let tracks_hover = self.state.hover.is_some()
             || self.pointer.hover.is_some()
@@ -445,7 +445,7 @@ impl StyledContainer {
                 claim.hover(cursor::depth(), inside);
             }
             if let Some(cb) = &self.pointer.hover {
-                cb(inside);
+                cb.run(inside);
             }
             return EventResult::Handled;
         }
@@ -683,13 +683,13 @@ impl StyledContainer {
             Rc::new(move || crate::link::admitted(destination().into_destination()));
         self.link_token = Some(crate::link::register_link(self.node, read.clone()));
         self.link = Some(read.clone());
-        self.press.set_follow(move || {
+        self.press.set_follow(Handler::from(move || {
             if !crate::link::surface_follows_links()
                 && let Some(destination) = read()
             {
                 crate::link::follow_pressed(&destination, crate::modifiers());
             }
-        });
+        }));
         self.control(renderer_core::Role::Link(renderer_core::Link::default()))
     }
 
@@ -945,7 +945,7 @@ impl StyledContainer {
                 claim.hover(cursor::depth(), false);
             }
             if let Some(cb) = &self.pointer.hover {
-                cb(false);
+                cb.run(false);
             }
         }
     }
@@ -1080,11 +1080,11 @@ impl StyledContainer {
     ///
     /// Opt-in per box rather than folded into `on_press`, because a non-primary press otherwise falls through to whatever is behind it — silently swallowing right-clicks on every pressable box would break that.
     pub fn on_alt_press(self, f: impl Fn(PointerButton) + 'static) -> Self {
-        self.maybe_on_alt_press(Some(f))
+        self.maybe_on_alt_press(Some(Handler::from(f)))
     }
 
     /// [`on_alt_press`](Self::on_alt_press) for a handler the caller may not have supplied.
-    pub fn maybe_on_alt_press(mut self, f: Option<impl Fn(PointerButton) + 'static>) -> Self {
+    pub fn maybe_on_alt_press(mut self, f: Option<Handler<fn(PointerButton)>>) -> Self {
         let Some(f) = f else { return self };
         self.press.set_alt_press(f);
         self.mark_interactive();
@@ -1092,25 +1092,27 @@ impl StyledContainer {
     }
 
     /// Fires once a press inside the box is held past ~500ms without moving past the tap slop, instead of `on_press`'s tap-on-release. There is no dedicated timer in the gesture pipeline, so the threshold is only checked on the next pointer event after the press (a move or the release) — it fires slightly late, never at exactly 500ms, and a release before that next check-in is a normal tap.
-    pub fn on_long_press(self, f: impl Fn() + 'static) -> Self {
-        self.maybe_on_long_press(Some(f))
+    pub fn on_long_press(self, on_long_press: impl Into<Handler>) -> Self {
+        self.maybe_on_long_press(Some(on_long_press.into()))
     }
 
     /// [`on_long_press`](Self::on_long_press) for a handler the caller may not have supplied.
-    pub fn maybe_on_long_press(mut self, f: Option<impl Fn() + 'static>) -> Self {
-        let Some(f) = f else { return self };
-        self.press.set_long_press(f);
+    pub fn maybe_on_long_press(mut self, on_long_press: Option<Handler>) -> Self {
+        let Some(on_long_press) = on_long_press else {
+            return self;
+        };
+        self.press.set_long_press(on_long_press);
         self.mark_interactive();
         self
     }
 
     /// `on_drag` never says the pointer let go, so a threshold gesture decides here; a release the drag never saw (pointer left the window, a child consumed it) reports the last position, and a cancelled transacted drag ends in `on_drag_cancel` instead.
     pub fn on_drag_end(self, f: impl Fn(f32, f32) + 'static) -> Self {
-        self.maybe_on_drag_end(Some(f))
+        self.maybe_on_drag_end(Some(Handler::from(f)))
     }
 
     /// [`on_drag_end`](Self::on_drag_end) for a handler the caller may not have supplied.
-    pub fn maybe_on_drag_end(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
+    pub fn maybe_on_drag_end(mut self, f: Option<Handler<fn(f32, f32)>>) -> Self {
         let Some(f) = f else { return self };
         self.drag.set_end(f);
         self.mark_interactive();
@@ -1118,11 +1120,11 @@ impl StyledContainer {
     }
 
     pub fn on_drag(self, f: impl Fn(f32, f32) + 'static) -> Self {
-        self.maybe_on_drag(Some(f))
+        self.maybe_on_drag(Some(Handler::from(f)))
     }
 
     /// [`on_drag`](Self::on_drag) for a handler the caller may not have supplied.
-    pub fn maybe_on_drag(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
+    pub fn maybe_on_drag(mut self, f: Option<Handler<fn(f32, f32)>>) -> Self {
         let Some(f) = f else { return self };
         self.drag.set(f);
         self.mark_interactive();
@@ -1173,8 +1175,8 @@ impl StyledContainer {
     }
 
     /// Fires when a transacted drag is cancelled, after its transaction has reverted. See [`drag_transaction`](Self::drag_transaction).
-    pub fn on_drag_cancel(mut self, f: impl Fn() + 'static) -> Self {
-        self.drag.set_cancel(f);
+    pub fn on_drag_cancel(mut self, on_cancel: impl Into<Handler>) -> Self {
+        self.drag.set_cancel(on_cancel.into());
         self
     }
 
@@ -1213,13 +1215,13 @@ impl StyledContainer {
     ///
     /// Registers the box as a pointer target, like [`on_scroll`](Self::on_scroll) does for the same reason: a surface that carves its input region from its content (a click-through overlay) never receives a move event over a box it left out of that region, so a hover it did not register is a hover it can't observe.
     pub fn on_hover(self, f: impl Fn(bool) + 'static) -> Self {
-        self.maybe_on_hover(Some(f))
+        self.maybe_on_hover(Some(Handler::from(f)))
     }
 
     /// [`on_hover`](Self::on_hover) for a handler the caller may not have supplied.
-    pub fn maybe_on_hover(mut self, f: Option<impl Fn(bool) + 'static>) -> Self {
+    pub fn maybe_on_hover(mut self, f: Option<Handler<fn(bool)>>) -> Self {
         let Some(f) = f else { return self };
-        self.pointer.hover = Some(Box::new(f));
+        self.pointer.hover = Some(f);
         self.mark_interactive();
         self
     }
@@ -1228,13 +1230,13 @@ impl StyledContainer {
     ///
     /// The continuous half of [`on_hover`](Self::on_hover), which reports only the crossings. It is what a surface that answers to *where* the pointer is needs: highlighting the face under the cursor, previewing a snap, stretching a dimension line. Fires for touch as well as mouse, since a drag on a touchscreen asks the same question.
     pub fn on_pointer_move(self, f: impl Fn(f32, f32) + 'static) -> Self {
-        self.maybe_on_pointer_move(Some(f))
+        self.maybe_on_pointer_move(Some(Handler::from(f)))
     }
 
     /// [`on_pointer_move`](Self::on_pointer_move) for a handler the caller may not have supplied.
-    pub fn maybe_on_pointer_move(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
+    pub fn maybe_on_pointer_move(mut self, f: Option<Handler<fn(f32, f32)>>) -> Self {
         let Some(f) = f else { return self };
-        self.pointer.moved = Some(Box::new(f));
+        self.pointer.moved = Some(f);
         self.mark_interactive();
         self
     }
@@ -1243,13 +1245,13 @@ impl StyledContainer {
     ///
     /// Targeted by hit-testing the wheel's own position, so it answers a wheel that arrives before the pointer has moved at all. A scrollable child (a scroll area inside the box) gets first refusal and keeps it.
     pub fn on_scroll(self, f: impl Fn(f32, f32) + 'static) -> Self {
-        self.maybe_on_scroll(Some(f))
+        self.maybe_on_scroll(Some(Handler::from(f)))
     }
 
     /// [`on_scroll`](Self::on_scroll) for a handler the caller may not have supplied.
-    pub fn maybe_on_scroll(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
+    pub fn maybe_on_scroll(mut self, f: Option<Handler<fn(f32, f32)>>) -> Self {
         let Some(f) = f else { return self };
-        self.pointer.scroll = Some(Box::new(f));
+        self.pointer.scroll = Some(f);
         self.mark_interactive();
         self
     }
@@ -1286,11 +1288,11 @@ impl StyledContainer {
 
     /// Make the box focusable and fire `f(true)`/`f(false)` when it gains/loses keyboard focus. It joins the tab order (Tab/Shift-Tab reach it) and takes focus on tap. Use it to drive a focus ring or to build a custom focusable widget on top of a `box`.
     pub fn on_focus(self, f: impl Fn(bool) + 'static) -> Self {
-        self.maybe_on_focus(Some(f))
+        self.maybe_on_focus(Some(Handler::from(f)))
     }
 
     /// [`on_focus`](Self::on_focus) for a handler the caller may not have supplied.
-    pub fn maybe_on_focus(mut self, f: Option<impl Fn(bool) + 'static>) -> Self {
+    pub fn maybe_on_focus(mut self, f: Option<Handler<fn(bool)>>) -> Self {
         let Some(f) = f else { return self };
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_at(id, focus::FocusKind::Widget, self.node);
@@ -1300,7 +1302,7 @@ impl StyledContainer {
             let now = focus::is_focused(id);
             if now != last.get() {
                 last.set(now);
-                f(now);
+                f.run(now);
             }
         });
         self.mark_interactive();
@@ -1554,7 +1556,7 @@ impl StyledContainer {
                     return EventResult::Ignored;
                 }
                 let (dx, dy) = delta.pixels();
-                cb(dx, dy);
+                cb.run(dx, dy);
                 EventResult::Handled
             }
             Event::KeyPressed { key, modifiers, .. } => {

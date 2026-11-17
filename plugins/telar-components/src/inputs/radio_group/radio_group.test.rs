@@ -20,7 +20,7 @@ fn group(selected: RwSignal<Option<usize>>, seen: &Rc<RefCell<Vec<usize>>>) -> C
             .items(SIZES.to_vec())
             .label("Size")
             .selected(selected)
-            .on_select(Rc::new(move |at| sink.borrow_mut().push(at)))
+            .on_select(move |at| sink.borrow_mut().push(at))
             .build(),
     )
     .unwrap();

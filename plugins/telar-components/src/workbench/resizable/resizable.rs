@@ -194,8 +194,8 @@ pub struct ResizableProps {
     #[props(some, into, default)]
     pub on_start: Option<Handler>,
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept: `true` when it was let go, `false` when it was cancelled (Escape, another pointer button, the window losing focus) or the handle went away mid-drag. A cancelled drag has put the size back by the time this runs.
-    #[props(some, default)]
-    pub on_end: Option<Rc<dyn Fn(bool)>>,
+    #[props(some, into, default)]
+    pub on_end: Option<Handler<fn(bool)>>,
     /// Amends the paint of every handle, the resizable's **principal surface**, at rest, under the pointer and while dragged. See [`telar::SurfaceStyle`] for when a theme token or [`ResizableTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -213,8 +213,8 @@ pub struct ResizeHandleProps {
     #[props(into, default)]
     pub size: Reactive<Size>,
     /// Takes every size a drag or a key step asks for, kept within [`min`](Self::min) and [`max`](Self::max). A cancelled drag asks once more for the size it started from, before [`on_end`](Self::on_end) runs.
-    #[props(some, default)]
-    pub on_resize: Option<Rc<dyn Fn(Size)>>,
+    #[props(some, into, default)]
+    pub on_resize: Option<Handler<fn(Size)>>,
     /// Smallest size.
     #[props(default)]
     pub min: Size,
@@ -240,8 +240,8 @@ pub struct ResizeHandleProps {
     #[props(some, into, default)]
     pub on_start: Option<Handler>,
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept.
-    #[props(some, default)]
-    pub on_end: Option<Rc<dyn Fn(bool)>>,
+    #[props(some, into, default)]
+    pub on_end: Option<Handler<fn(bool)>>,
     /// Amends the paint of the handle at rest, under the pointer and while dragged.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -249,7 +249,7 @@ pub struct ResizeHandleProps {
 
 struct Target {
     size: Reactive<Size>,
-    resize: Rc<dyn Fn(Size)>,
+    resize: Handler<fn(Size)>,
     min: Size,
     max: Box<dyn Fn() -> Size>,
     growth: ResizeGrowth,
@@ -268,7 +268,7 @@ impl Target {
 
     fn request(&self, raw: Size) {
         let bound = self.bound();
-        (self.resize)(Size::new(
+        self.resize.run(Size::new(
             raw.width.clamp(self.min.width, bound.width),
             raw.height.clamp(self.min.height, bound.height),
         ));
@@ -381,7 +381,7 @@ pub fn resizable(props: ResizableProps) -> Result<Box<dyn LayoutItem>, LayoutErr
                 let rect = laid_out.get();
                 Size::new(rect.width, rect.height)
             }),
-            resize: Rc::new(move |next| write_through(transaction, next)),
+            resize: Handler::from(move |next| write_through(transaction, next)),
             min,
             max: Box::new({
                 let room = room.clone();
@@ -458,7 +458,7 @@ pub fn resize_handle(props: ResizeHandleProps) -> Result<Box<dyn LayoutItem>, La
     } = props;
     let target = Target {
         size,
-        resize: on_resize.unwrap_or_else(|| Rc::new(|_| {})),
+        resize: on_resize.unwrap_or_else(|| Handler::from(|_: Size| {})),
         min,
         max: match max {
             Some(max) => Box::new(move || max.get()),
@@ -553,7 +553,7 @@ fn build_handle(
                 if let Some(grab) = latch.release()
                     && restores
                 {
-                    (target.resize)(grab.from);
+                    target.resize.run(grab.from);
                 }
                 dragging.set(false);
                 stroke.end(false);

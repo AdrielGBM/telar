@@ -133,7 +133,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                         )?
                     };
-                    let __node_1 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
+                    let __node_1 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER).flex_wrap(), children![__text_1, __text_2, __text_3, __node_1])?
                 };
                 Container::new(style_navwrap().flex_wrap().gap(12.0), children![__row_1, __row_2])?
@@ -159,7 +159,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                             )?
                         };
                         let __row_4 = {
-                            let __node_2 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
+                            let __node_2 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }).build())?;
                             let __node_3 = button(ButtonProps::props().label("Read the docs").variant(::telar::kw::outline).color(PRIMARY).build())?;
                             Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_2, __node_3])?
                         };
@@ -512,7 +512,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     )?
                 };
                 let __row_10 = {
-                    let __node_13 = button(ButtonProps::props().label("Reserve a seat").__follow_color({ let theme = theme.clone(); move || theme.get().accent }).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
+                    let __node_13 = button(ButtonProps::props().label("Reserve a seat").__follow_color({ let theme = theme.clone(); move || theme.get().accent }).on_press({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }).build())?;
                     let __text_28 = {
                         let signups = signups.clone();
                         Text::declaring(

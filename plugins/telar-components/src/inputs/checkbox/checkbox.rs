@@ -1,11 +1,9 @@
 //! [`checkbox`]: a box and its label, toggling a bound boolean.
 
-use std::rc::Rc;
-
 use telar::{
-    AlignItems, Border, BorderRadius, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
-    amend_surface, box_item, children, focus::Role, signal,
+    AlignItems, Border, BorderRadius, Color, Handler, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -80,8 +78,8 @@ pub struct CheckboxProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fires with the new state on every toggle.
-    #[props(some, default)]
-    pub on_toggle: Option<Rc<dyn Fn(bool)>>,
+    #[props(some, into, default)]
+    pub on_toggle: Option<Handler<fn(bool)>>,
     /// Amends the paint of the box — the checkbox's **principal surface** — checked and unchecked. See [`telar::SurfaceStyle`] for when a theme token or [`CheckboxTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -152,7 +150,7 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
             let next = !toggle_checked.get();
             toggle_checked.set(next);
             if let Some(cb) = &on_toggle {
-                cb(next);
+                cb.run(next);
             }
         },
     )

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -62,7 +60,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 ["src", "src/ui"].into_iter().map(Arc::from).collect();
             let tree = tree_view(
                 TreeViewProps::props()
-                    .on_select(Rc::new(|_| {}))
+                    .on_select(|_| {})
                     .items(project())
                     .selected(signal(Some(Arc::from("src/lib.rs"))))
                     .expanded(signal(expanded))
@@ -98,7 +96,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 ["start", "views"].into_iter().map(Arc::from).collect();
             let tree = tree_view(
                 TreeViewProps::props()
-                    .on_select(Rc::new(|_| {}))
+                    .on_select(|_| {})
                     .items(chapters())
                     .wrap(p.arg("wrap", true))
                     .selected(signal(Some(Arc::from("views/lists"))))

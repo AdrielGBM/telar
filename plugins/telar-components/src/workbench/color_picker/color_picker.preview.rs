@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
@@ -24,7 +22,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let value = p.signal("value", Color::rgba(0.15, 0.39, 0.92, 1.0));
             color_picker(
                 ColorPickerProps::props()
-                    .on_change(Rc::new(|_| {}))
+                    .on_change(|_| {})
                     .value(value)
                     .alpha(p.arg("alpha", true))
                     .label(p.arg("label", "Accent"))

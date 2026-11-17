@@ -2,10 +2,9 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
-use std::rc::Rc;
 use std::sync::Arc;
 
-use telar::{ModifiersState, RwSignal, signal};
+use telar::{Handler, ModifiersState, RwSignal, signal};
 
 /// How many rows of a [`virtual_list`](crate::virtual_list) or a [`data_table`](crate::data_table) can be chosen at once.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
@@ -16,9 +15,6 @@ pub enum SelectionMode {
     /// Any number. A press or Enter chooses the row alone; Ctrl with a press (Command on a Mac) or Space adds the row or takes it away; Shift with a press, an arrow, Home, End, Page Up, Page Down or Space chooses every row from the one last pressed, toggled or walked to without Shift; Ctrl+A (Command+A) chooses every row, or none once all are.
     Multiple,
 }
-
-/// What a list or a table calls with the ids of the rows chosen each time a press or a key changes them, in [`SelectionMode::Multiple`].
-pub type SelectionHandler = Rc<dyn Fn(&BTreeSet<Arc<str>>)>;
 
 /// What a press asks of the selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,7 +49,7 @@ pub(crate) struct RowSelection {
     one: RwSignal<Option<Arc<str>>>,
     many: RwSignal<BTreeSet<Arc<str>>>,
     anchor: RefCell<Option<Arc<str>>>,
-    on_change: Option<SelectionHandler>,
+    on_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
 }
 
 impl RowSelection {
@@ -62,7 +58,7 @@ impl RowSelection {
         mode: SelectionMode,
         one: Option<RwSignal<Option<Arc<str>>>>,
         many: Option<RwSignal<BTreeSet<Arc<str>>>>,
-        on_change: Option<SelectionHandler>,
+        on_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
     ) -> Self {
         Self {
             mode,
@@ -194,7 +190,7 @@ impl RowSelection {
         }
         self.many.set(next.clone());
         if let Some(on_change) = &self.on_change {
-            on_change(&next);
+            on_change.run(next);
         }
     }
 }

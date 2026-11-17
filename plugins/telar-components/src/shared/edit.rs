@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use std::rc::Rc;
 
 use telar::{Handler, Transaction};
 
@@ -32,12 +31,12 @@ pub(crate) fn snap(raw: f32, increment: f32, min: f32, max: f32) -> f32 {
 /// A drag under way, so a widget's `on_end` answers each `on_start` exactly once: at the release, at a cancel, or — when neither comes because the widget is gone — as the last closure holding it drops.
 pub(crate) struct Stroke {
     on_start: Option<Handler>,
-    on_end: Option<Rc<dyn Fn(bool)>>,
+    on_end: Option<Handler<fn(bool)>>,
     live: Cell<bool>,
 }
 
 impl Stroke {
-    pub(crate) fn new(on_start: Option<Handler>, on_end: Option<Rc<dyn Fn(bool)>>) -> Self {
+    pub(crate) fn new(on_start: Option<Handler>, on_end: Option<Handler<fn(bool)>>) -> Self {
         Self {
             on_start,
             on_end,
@@ -57,7 +56,7 @@ impl Stroke {
         if self.live.replace(false)
             && let Some(on_end) = &self.on_end
         {
-            on_end(kept);
+            on_end.run(kept);
         }
     }
 }

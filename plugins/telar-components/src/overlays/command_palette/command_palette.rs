@@ -127,9 +127,6 @@ impl Command {
     }
 }
 
-/// What [`CommandPaletteProps::on_run`] is called with.
-pub type RunHandler = Rc<dyn Fn(&Command)>;
-
 /// A dialog over the page with a search field and, under it, the commands that match what was typed, best first and listed under their groups.
 ///
 /// The keyboard stays in the field: the arrows walk the list, Enter runs the command the cursor is on, Escape closes. A reader hears the row the cursor is on as it moves, because the field points at it.
@@ -154,8 +151,8 @@ pub struct CommandPaletteProps {
     #[props(some, into, default)]
     pub empty_label: Option<Reactive<String>>,
     /// Fired with the command a press or Enter ran, after the palette has closed.
-    #[props(some, default)]
-    pub on_run: Option<RunHandler>,
+    #[props(some, into, default)]
+    pub on_run: Option<Handler<fn(Command)>>,
     /// Runs whenever the palette closes, whether a command ran or not.
     #[props(some, into, default)]
     pub on_close: Option<Handler>,
@@ -215,7 +212,7 @@ struct Parts {
     placeholder: Option<Reactive<String>>,
     label: Option<Reactive<String>>,
     empty_label: Option<Reactive<String>>,
-    on_run: Option<RunHandler>,
+    on_run: Option<Handler<fn(Command)>>,
     /// `None` for the tokens' width.
     panel_width: Option<f32>,
     size: ControlSize,
@@ -345,7 +342,7 @@ struct Palette {
     /// Every row, a heading's too, at one height while the palette is open: nothing in a row runs onto a second line, so there is nothing to measure.
     places: RowPlaces,
     built: BuiltRows<Arc<str>>,
-    run: Rc<dyn Fn(&Command)>,
+    run: Handler<fn(Command)>,
     color: Option<Reactive<Color>>,
     /// The palette's card: while the keyboard shows focus anywhere in it, the cursor's row wears the keyboard's ring.
     card: Cell<Option<NodeId>>,
@@ -430,11 +427,11 @@ impl Palette {
         if let Some(i) = self.cursor_index(&entries)
             && let Entry::Item { command, .. } = &*entries[i]
         {
-            (self.run)(command);
+            self.run.run(command.clone());
         }
     }
 
-    fn on_key(&self, key: &Key, modifiers: ModifiersState, dismiss: &dyn Fn()) -> bool {
+    fn on_key(&self, key: &Key, modifiers: ModifiersState, dismiss: &Handler) -> bool {
         let Key::Named(named) = key else {
             return false;
         };
@@ -443,7 +440,7 @@ impl Palette {
             NamedKey::ArrowDown if plain => self.step(1),
             NamedKey::ArrowUp if plain => self.step(-1),
             NamedKey::Enter => self.run_cursor(),
-            NamedKey::Escape => dismiss(),
+            NamedKey::Escape => dismiss.run(),
             _ => return false,
         }
         true
@@ -453,7 +450,7 @@ impl Palette {
 fn build_open_palette(
     parts: Parts,
     open: RwSignal<bool>,
-    dismiss: scrim::DismissFn,
+    dismiss: Handler,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Parts {
         commands,
@@ -478,15 +475,15 @@ fn build_open_palette(
     let cursor = signal(None::<Arc<str>>);
 
     let mut made: Option<Rc<Palette>> = None;
-    let run: Rc<dyn Fn(&Command)> = {
+    let run = {
         let dismiss = dismiss.clone();
-        Rc::new(move |command: &Command| {
+        Handler::from(move |command: Command| {
             if command.disabled {
                 return;
             }
-            dismiss();
+            dismiss.run();
             if let Some(on_run) = &on_run {
-                on_run(command);
+                on_run.run(command);
             }
         })
     };
@@ -527,7 +524,7 @@ fn build_open_palette(
         scroll
             .control(Role::ListBox)
             .focus_ring(|| None)
-            .on_focused_key(move |key: &Key| keys.on_key(key, telar::modifiers(), &*dismiss))
+            .on_focused_key(move |key: &Key| keys.on_key(key, telar::modifiers(), &dismiss))
             .active_descendant(move || cursor.cursor_row())
             .a11y_label(|| strings::text(strings::COMMANDS))
     };
@@ -557,7 +554,7 @@ fn build_open_palette(
         let palette = palette.clone();
         let dismiss = dismiss.clone();
         Rc::new(move |key: &Key, modifiers: ModifiersState| {
-            palette.on_key(key, modifiers, &*dismiss)
+            palette.on_key(key, modifiers, &dismiss)
         })
     };
     let pointed = {
@@ -634,7 +631,7 @@ fn build_open_palette(
     )?
     .styled_by(backdrop_box);
     room.follow(backdrop.layout_node());
-    let backdrop = shared::dismissed_by_press(backdrop, move || dismiss());
+    let backdrop = shared::dismissed_by_press(backdrop, dismiss);
     Ok(box_item(backdrop))
 }
 
@@ -750,7 +747,7 @@ fn build_row(
     let disabled = command.disabled;
     let press = {
         let (palette, command) = (palette.clone(), command.clone());
-        move || (palette.run)(&command)
+        move || palette.run.run(command.clone())
     };
     let reach = {
         let (palette, id) = (palette.clone(), id.clone());

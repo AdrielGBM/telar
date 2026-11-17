@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role};
@@ -42,7 +40,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let size = p.arg("size", ControlSize::Regular);
             select(
                 SelectProps::props()
-                    .on_select(Rc::new(|_| {}))
+                    .on_select(|_| {})
                     .size(size)
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .children(sizes(size))

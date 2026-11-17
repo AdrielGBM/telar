@@ -49,11 +49,9 @@ fn square() -> crate::Path {
         Point::new(32.0, 32.0),
         Point::new(0.0, 32.0),
     ]));
-    crate::Path::new(
-        LayoutStyle::new().width(32.0).height(32.0),
-        move || Arc::clone(&data),
-        || PathStyle::default().with_fill(INK),
-    )
+    crate::Path::new(LayoutStyle::new().width(32.0).height(32.0), move |_| {
+        (Arc::clone(&data), PathStyle::default().with_fill(INK))
+    })
     .unwrap()
 }
 
@@ -723,11 +721,9 @@ fn over_triangle(covering: bool) -> Built {
         ],
     };
     let data = Arc::new(PathData::polygon(&corners));
-    let triangle = crate::Path::new(
-        LayoutStyle::new().absolute_fill(),
-        move || Arc::clone(&data),
-        || PathStyle::default().with_fill(INK),
-    )?
+    let triangle = crate::Path::new(LayoutStyle::new().absolute_fill(), move |_| {
+        (Arc::clone(&data), PathStyle::default().with_fill(INK))
+    })?
     .a11y_hidden();
     column(vec![box_item(Container::new(
         LayoutStyle::new().width(200.0).height(40.0),

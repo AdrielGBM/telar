@@ -247,7 +247,7 @@ fn logs(expansion: &str, prop: &str) -> bool {
 #[test]
 fn the_builder_logs_its_optional_props_and_the_props_log_every_one() {
     let (builder, props) = actions_of(
-        "struct PadProps { on_close: Rc<dyn Fn()>, #[props(default)] on_press: Option<Rc<dyn Fn()>>, #[props(default)] r#type: u8 }",
+        "struct PadProps { on_close: Handler, #[props(default)] on_press: Option<Handler>, #[props(default)] r#type: u8 }",
     );
     assert!(
         builder.contains("impl < S0 > PadPropsBuilder < S0 >"),
@@ -274,7 +274,7 @@ fn the_builder_logs_its_optional_props_and_the_props_log_every_one() {
 
 #[test]
 fn a_builder_with_no_optional_prop_leaves_the_log_unused() {
-    let (builder, _) = actions_of("struct PadProps { on_close: Rc<dyn Fn()> }");
+    let (builder, _) = actions_of("struct PadProps { on_close: Handler }");
     assert!(
         builder.contains("pub fn __preview_actions (self , _log : & :: telar :: preview :: ActionLog) -> Self { self }"),
         "{builder}"

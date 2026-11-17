@@ -1,0 +1,2 @@
+# A callback names its signature in its type, `Option<Handler<fn(f32, f32)>>`, which the default threshold of 250 already counts as too complex.
+type-complexity-threshold = 400

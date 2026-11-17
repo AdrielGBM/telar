@@ -262,8 +262,8 @@
 3162..3168	12064	`chosen`
 3195..3201	12090	`scheme`
 3303..3308	12636	`ghost`
-3319..3383	12674	`|| telar::set_scheme_preference(telar::SchemePreference::System)`
-3430..3435	12868	`ghost`
-3446..3509	12906	`|| telar::set_scheme_preference(telar::SchemePreference::Light)`
-3555..3560	13098	`ghost`
-3571..3633	13136	`|| telar::set_scheme_preference(telar::SchemePreference::Dark)`
+3319..3383	12657	`|| telar::set_scheme_preference(telar::SchemePreference::System)`
+3430..3435	12850	`ghost`
+3446..3509	12871	`|| telar::set_scheme_preference(telar::SchemePreference::Light)`
+3555..3560	13062	`ghost`
+3571..3633	13083	`|| telar::set_scheme_preference(telar::SchemePreference::Dark)`

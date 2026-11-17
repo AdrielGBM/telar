@@ -466,7 +466,7 @@ fn single_line(
         .placeholder(placeholder.get())
         .a11y_label(name);
     if let Some(submit) = on_submit {
-        input = input.on_submit(move || submit.run());
+        input = input.on_submit(submit);
     }
     if let Some(hook) = on_key {
         input = input.on_key(move |key, modifiers| hook(key, modifiers));

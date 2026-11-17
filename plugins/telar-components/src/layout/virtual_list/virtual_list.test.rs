@@ -48,9 +48,7 @@ impl Mounted {
             VirtualListProps::props()
                 .items(items)
                 .selected(selected)
-                .on_select(Rc::new(move |row: &ListRow| {
-                    sink.borrow_mut().push(row.id.to_string())
-                }))
+                .on_select(move |row: ListRow| sink.borrow_mut().push(row.id.to_string()))
                 .label("Fruit")
                 .wrap(wrap)
                 .build(),
@@ -341,12 +339,12 @@ impl Several {
                 .items(items)
                 .selection_mode(SelectionMode::Multiple)
                 .selected_rows(chosen)
-                .on_selection_change(Rc::new(move |rows: &BTreeSet<Arc<str>>| {
+                .on_selection_change(move |rows: BTreeSet<Arc<str>>| {
                     changes.borrow_mut().push(format!("change {}", rows.len()))
-                }))
-                .on_select(Rc::new(move |row: &ListRow| {
+                })
+                .on_select(move |row: ListRow| {
                     picks.borrow_mut().push(format!("select {}", row.id))
-                }))
+                })
                 .label("Fruit")
                 .wrap(wrap)
                 .build(),

@@ -158,7 +158,7 @@ fn build_open_modal(
     close_label: Option<Reactive<String>>,
     body: Vec<Box<dyn LayoutItem>>,
     paint: Rc<dyn Fn() -> RectStyle>,
-    dismiss: scrim::DismissFn,
+    dismiss: Handler,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = title.clone();
     let body_name = title.clone();
@@ -181,10 +181,7 @@ fn build_open_modal(
     let close = close
         .control(Role::Button)
         .hit_outset(Reactive::of(move || shared::target_reach(laid.peek())))
-        .on_press({
-            let dismiss = dismiss.clone();
-            move || (*dismiss)()
-        });
+        .on_press(dismiss.clone());
 
     let header = Container::new(header_row(size), children![heading, close])?
         .styled_by(move || header_row(size));
@@ -211,7 +208,7 @@ fn build_open_modal(
     )?
     .styled_by(move || backdrop(size));
     room.follow(scrim.layout_node());
-    let scrim = shared::dismissed_by_press(scrim, move || (*dismiss)());
+    let scrim = shared::dismissed_by_press(scrim, dismiss);
 
     Ok(box_item(scrim))
 }

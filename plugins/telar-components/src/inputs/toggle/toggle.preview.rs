@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
@@ -12,7 +10,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(toggle: ToggleProps, "Default", |p| {
             toggle(
                 ToggleProps::props()
-                    .on_toggle(Rc::new(|_| {}))
+                    .on_toggle(|_| {})
                     .checked(p.signal("checked", true))
                     .label(p.arg("label", "Notifications"))
                     .size(p.arg("size", ControlSize::Regular))

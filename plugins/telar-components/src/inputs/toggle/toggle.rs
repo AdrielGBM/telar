@@ -1,11 +1,9 @@
 //! [`toggle`]: a switch flipping a bound boolean.
 
-use std::rc::Rc;
-
 use telar::{
-    AlignItems, Border, BorderRadius, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive,
-    RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item,
-    box_transform, children, focus::Role, signal,
+    AlignItems, Border, BorderRadius, Color, Handler, LayoutError, LayoutItem, LayoutStyle, Props,
+    Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface,
+    box_item, box_transform, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -173,8 +171,8 @@ pub struct ToggleProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fires with the new state on every toggle.
-    #[props(some, default)]
-    pub on_toggle: Option<Rc<dyn Fn(bool)>>,
+    #[props(some, into, default)]
+    pub on_toggle: Option<Handler<fn(bool)>>,
     /// Amends the paint of the track — the switch's **principal surface** — on and off. See [`telar::SurfaceStyle`] for when a theme token or [`ToggleTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -211,7 +209,7 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             let next = !toggle_on.get();
             toggle_on.set(next);
             if let Some(cb) = &on_toggle {
-                cb(next);
+                cb.run(next);
             }
         },
     )

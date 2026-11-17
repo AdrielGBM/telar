@@ -3,9 +3,10 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, RovingAxis, RovingGroup, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
+    Accessible, AlignItems, Border, Color, Container, Handler, JustifyContent, LayoutError,
+    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RovingAxis, RovingGroup, RwSignal,
+    ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role,
+    signal,
 };
 
 use crate::shared;
@@ -80,8 +81,8 @@ pub struct RadioGroupProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fires with the index a press or a key chose.
-    #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(usize)>>,
+    #[props(some, into, default)]
+    pub on_select: Option<Handler<fn(usize)>>,
     /// Amends the paint of every ring — the group's **principal surface** — chosen and not. See [`telar::SurfaceStyle`] for when a theme token or [`RadioTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -102,7 +103,7 @@ pub fn radio_group(props: RadioGroupProps) -> Result<Box<dyn LayoutItem>, Layout
     let choose = Rc::new(move |at: usize| {
         selected.set(Some(at));
         if let Some(cb) = &on_select {
-            cb(at);
+            cb.run(at);
         }
     });
     let group = {

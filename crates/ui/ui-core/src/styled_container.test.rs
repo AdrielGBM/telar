@@ -974,7 +974,7 @@ fn a_box_wanting_only_alt_presses_leaves_the_primary_one_alone() {
 // `None` must leave the box transparent to a right-click, not report the press handled and swallow the context menu behind it.
 #[test]
 fn maybe_on_alt_press_of_none_lets_a_secondary_press_fall_through() {
-    let mut card = laid_out_box().maybe_on_alt_press(None::<fn(PointerButton)>);
+    let mut card = laid_out_box().maybe_on_alt_press(None);
     settle(&mut card);
 
     assert_eq!(
@@ -2183,7 +2183,7 @@ fn maybe_on_focus_of_none_does_not_join_the_tab_order() {
         vec![],
     )
     .unwrap()
-    .maybe_on_focus(None::<fn(bool)>);
+    .maybe_on_focus(None);
     assert!(card.focusable.id.is_none(), "no handler, no focus id");
 
     focus::focus_next();
@@ -2202,7 +2202,7 @@ fn maybe_on_focus_of_some_fires_like_on_focus() {
         vec![],
     )
     .unwrap()
-    .maybe_on_focus(Some(move |f| sink.borrow_mut().push(f)));
+    .maybe_on_focus(Some(Handler::from(move |f| sink.borrow_mut().push(f))));
     compute_layout(
         card.layout_node(),
         AvailableSpace::Definite(100.0),

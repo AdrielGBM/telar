@@ -144,7 +144,7 @@ fn container_on_press_emits_click_handler() {
 }
 
 #[test]
-fn a_forwarded_on_press_is_handed_through_into_press_on_a_plain_row() {
+fn a_forwarded_on_press_is_handed_through_into_handler_on_a_plain_row() {
     let src = "[logic]\npub struct Props {\n    pub on_press: Option<Handler>,\n}\n\n[view]\nrow on_press:(props.on_press)\n    text \"x\"\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
@@ -154,7 +154,7 @@ fn a_forwarded_on_press_is_handed_through_into_press_on_a_plain_row() {
         "a plain Container answers a forwarded on_press as it answers a closure:\n{code}"
     );
     assert!(
-        code.contains(".maybe_on_press(::telar::IntoPress::into_press("),
+        code.contains(".maybe_on_press(::telar::IntoHandler::into_handler("),
         "{code}"
     );
 }

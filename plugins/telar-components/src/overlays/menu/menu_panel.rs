@@ -69,7 +69,7 @@ pub(crate) struct Spec {
     /// The size of the menu or submenu that opens it, which its padding is drawn at.
     pub(crate) size: ControlSize,
     /// Fired with the index of the picked row among this panel's rows.
-    pub(crate) on_select: Option<Rc<dyn Fn(usize)>>,
+    pub(crate) on_select: Option<Handler<fn(usize)>>,
     pub(crate) anchoring: Anchored,
     pub(crate) width: f32,
     pub(crate) level: Level,
@@ -86,7 +86,7 @@ pub(crate) struct Built {
     pub(crate) list: FocusId,
     deepest: Deepest,
     /// Puts the cursor on the first row, or on none, as the panel is shown again.
-    enter: Rc<dyn Fn(bool)>,
+    enter: Handler<fn(bool)>,
     /// Whether the keyboard opened it, which the menu always shows focus for as it takes it.
     from_keyboard: bool,
 }
@@ -109,7 +109,7 @@ pub(crate) struct Cascade {
 struct Sub {
     keys: Keys,
     deepest: Deepest,
-    enter: Rc<dyn Fn(bool)>,
+    enter: Handler<fn(bool)>,
 }
 
 /// What a submenu is placed against: the panel its row is in, which exists only once every row has been built.
@@ -158,7 +158,7 @@ impl Cascade {
         if seed || !shown {
             let sub = self.subs.borrow().get(&index).cloned();
             match sub {
-                Some(sub) => (sub.enter)(seed),
+                Some(sub) => sub.enter.run(seed),
                 None => self.seeding.set(seed),
             }
         }
@@ -205,12 +205,12 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
     } = spec;
     let cascade = Rc::new(Cascade::new(config.clone()));
     let highlighted: RwSignal<Option<usize>> = signal(None);
-    let pick: Rc<dyn Fn(usize)> = {
+    let pick = {
         let close = config.close.clone();
-        Rc::new(move |index| {
+        Handler::from(move |index: usize| {
             close.run();
             if let Some(on_select) = &on_select {
-                on_select(index);
+                on_select.run(index);
             }
         })
     };
@@ -263,9 +263,9 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
         let cascade = cascade.clone();
         Rc::new(move || cascade.deepest().unwrap_or(list_id))
     };
-    let enter: Rc<dyn Fn(bool)> = {
+    let enter = {
         let list = list.clone();
-        Rc::new(move |seed| highlighted.set(if seed { list.edge(1) } else { None }))
+        Handler::from(move |seed: bool| highlighted.set(if seed { list.edge(1) } else { None }))
     };
     Ok(Built {
         panel: box_item(panel),
@@ -425,8 +425,8 @@ pub struct SubmenuProps {
     #[props(into, default)]
     pub disabled: Reactive<bool>,
     /// Fired with the index of the row picked in the submenu, among its own rows.
-    #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(usize)>>,
+    #[props(some, into, default)]
+    pub on_select: Option<Handler<fn(usize)>>,
     /// The rows of the menu it opens.
     #[props(default)]
     pub children: Children,

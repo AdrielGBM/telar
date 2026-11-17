@@ -94,7 +94,7 @@ fn back_closes_an_open_overlay_before_popping_a_page() {
     let closed = std::rc::Rc::new(std::cell::Cell::new(false));
     let dialog = {
         let closed = closed.clone();
-        telar::DismissRegistration::new(std::rc::Rc::new(move || closed.set(true)))
+        telar::DismissRegistration::new(move || closed.set(true))
     };
 
     assert!(nav.back(), "the open overlay consumed the back");

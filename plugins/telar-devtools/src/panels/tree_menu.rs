@@ -1,16 +1,14 @@
 //! The context menu the inspection panels' trees share: opening or shutting a branch with everything under it, or the whole tree, from a secondary press or the context-menu key.
 
 use std::collections::HashSet;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Children, Container, LayoutError, LayoutItem, Memo, PointerButton, Reactive, RectStyle,
-    RwSignal, StyledContainer, box_item, pointer_position, signal,
+    Children, Container, Handler, LayoutError, LayoutItem, Memo, PointerButton, Reactive,
+    RectStyle, RwSignal, StyledContainer, box_item, pointer_position, signal,
 };
 use telar_components::{
-    ContextHandler, ItemProps, MenuPlace, SeparatorProps, TreeContext, TreeNode, item, menu_layer,
-    separator,
+    ItemProps, MenuPlace, SeparatorProps, TreeContext, TreeNode, item, menu_layer, separator,
 };
 
 use crate::strings::{self, COLLAPSE, COLLAPSE_ALL, EXPAND, EXPAND_ALL};
@@ -72,8 +70,8 @@ impl TreeMenu {
     }
 
     /// What the tree calls when a row asks for its menu.
-    pub(super) fn on_context(self) -> ContextHandler {
-        Rc::new(move |context: TreeContext| {
+    pub(super) fn on_context(self) -> Handler<fn(TreeContext)> {
+        Handler::from(move |context: TreeContext| {
             self.asked.set(Some(Asked {
                 place: context.place(),
                 node: Some(context.node),

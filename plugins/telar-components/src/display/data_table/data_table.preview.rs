@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -104,8 +102,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(data_table: DataTableProps, "Files", |p| {
             let table = data_table(
                 DataTableProps::props()
-                    .on_sort(Rc::new(|_| {}))
-                    .on_select(Rc::new(|_| {}))
+                    .on_sort(|_| {})
+                    .on_select(|_| {})
                     .columns(columns())
                     .rows(files())
                     .label(p.arg("label", "Files"))
@@ -146,8 +144,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let chosen = BTreeSet::from([Arc::from("file-1")]);
             let table = data_table(
                 DataTableProps::props()
-                    .on_select(Rc::new(|_| {}))
-                    .on_selection_change(Rc::new(|_| {}))
+                    .on_select(|_| {})
+                    .on_selection_change(|_| {})
                     .columns(columns())
                     .rows(files())
                     .selection_mode(p.arg("selection_mode", SelectionMode::Multiple))
@@ -178,7 +176,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(data_table: DataTableProps, "Wrapped cells", |p| {
             let table = data_table(
                 DataTableProps::props()
-                    .on_select(Rc::new(|_| {}))
+                    .on_select(|_| {})
                     .columns(task_columns())
                     .rows(tasks())
                     .label(p.arg("label", "Tasks"))

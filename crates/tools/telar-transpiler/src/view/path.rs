@@ -1,6 +1,6 @@
 //! Declarative vector-path emitter: a `path d:"…"` tag whose SVG path-data string is parsed at compile time into a `PathData` builder chain.
 //!
-//! A path drawn in its box's own pixels is a `Path` widget. One with a `view_box`, or whose paint reads the text it is drawn in, is drawn by a `Canvas::declaring` closure, the one place handed both the laid-out rect and the inherited text style each paint.
+//! Every `path` is a `Path` widget whose closure is handed the laid-out rect each paint, to fit a `view_box` into it; one whose paint reads the text it is drawn in is `Path::declaring`, handed the inherited text style as well.
 
 use telar_parser::Element;
 
@@ -65,39 +65,34 @@ impl ViewGen<'_> {
             .filter(|a| PAINT_KEYS.contains(&a.key.as_str()))
             .map(|a| a.value.text())
             .collect();
-        let reads_text = crate::style::reads_box_text(&path_style);
-        let widget = match (view_box, reads_text) {
-            (None, false) => format!(
-                "Path::static_data({layout}, __path_data, {})",
-                self.owning(&raw_paint, &format!("move || {path_style}"))
-            ),
-            (view_box, _) => {
-                let data = match view_box {
-                    Some([x, y, width, height]) => format!(
-                        "std::sync::Arc::new(__path_data.fitted(Rect::new({}, {}, {}, {}), __rect))",
-                        format_f32(x),
-                        format_f32(y),
-                        format_f32(width),
-                        format_f32(height)
-                    ),
-                    None => "__path_data.clone()".to_string(),
-                };
-                let text = match reads_text {
-                    true => format!(
-                        "let {} = Reactive::Const(BoxText::drawn_in(&__text_style)); ",
-                        crate::style::BOX_TEXT_BINDING
-                    ),
-                    false => String::new(),
-                };
-                let draw = format!(
-                    "move |__rect: Rect, __text_style: TextStyle| {{ {text}RenderNode::path({data}, {path_style}) }}"
-                );
+        let (rect, data) = match view_box {
+            Some([x, y, width, height]) => (
+                "__rect",
                 format!(
-                    "Canvas::declaring({layout}, {})",
-                    self.owning(&raw_paint, &draw)
-                )
-            }
+                    "std::sync::Arc::new(__path_data.fitted(Rect::new({}, {}, {}, {}), __rect))",
+                    format_f32(x),
+                    format_f32(y),
+                    format_f32(width),
+                    format_f32(height)
+                ),
+            ),
+            None => ("_", "__path_data.clone()".to_string()),
         };
+        // Only a path that reads its text resolves the inherited style, so one that does not neither walks the tree each paint nor repaints when an ancestor declares new text.
+        let (constructor, draw) = match crate::style::reads_box_text(&path_style) {
+            true => (
+                "declaring",
+                format!(
+                    "move |{rect}: Rect, __text_style: &TextStyle| {{ let {} = Reactive::Const(BoxText::drawn_in(__text_style)); ({data}, {path_style}) }}",
+                    crate::style::BOX_TEXT_BINDING
+                ),
+            ),
+            false => ("new", format!("move |{rect}: Rect| ({data}, {path_style})")),
+        };
+        let widget = format!(
+            "Path::{constructor}({layout}, {})",
+            self.owning(&raw_paint, &draw)
+        );
 
         let err_lines: String = errors
             .iter()

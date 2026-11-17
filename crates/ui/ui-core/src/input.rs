@@ -8,6 +8,7 @@ use reactive_core::{RwSignal, effect};
 use renderer_core::TextStyle;
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::Handler;
 use crate::focus;
 use crate::layout_item::LeafWidget;
 use crate::layout_leaf::LayoutLeaf;
@@ -64,16 +65,16 @@ impl Input {
     }
 
     /// Runs when Enter is pressed while focused (e.g. submit a form / run a search).
-    pub fn on_submit(mut self, f: impl Fn() + 'static) -> Self {
-        self.editor.on_submit = Some(Box::new(f));
+    pub fn on_submit(mut self, on_submit: impl Into<Handler>) -> Self {
+        self.editor.on_submit = Some(on_submit.into());
         self
     }
 
     /// Runs when Escape is pressed while focused, just before the field hands the keyboard back.
     ///
     /// **The other half of [`on_submit`](Self::on_submit).** A field that can be committed but not abandoned is half a contract, and the missing half is the one a caller cannot write for itself: Escape is a key a focused field eats, so an application watching from outside sees the keyboard leave and has no way to tell «they gave up» from «they clicked somewhere else» — opposite answers wherever losing focus commits.
-    pub fn on_cancel(mut self, f: impl Fn() + 'static) -> Self {
-        self.editor.on_cancel = Some(Box::new(f));
+    pub fn on_cancel(mut self, on_cancel: impl Into<Handler>) -> Self {
+        self.editor.on_cancel = Some(on_cancel.into());
         self
     }
 

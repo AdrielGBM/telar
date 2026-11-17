@@ -74,12 +74,8 @@ impl Mounted {
                 .items(items)
                 .selected(selected)
                 .expanded(expanded)
-                .on_select(Rc::new(move |node: &TreeNode| {
-                    sink.borrow_mut().push(node.id.to_string())
-                }))
-                .on_context(Rc::new(move |context: TreeContext| {
-                    asking.borrow_mut().push(context)
-                }))
+                .on_select(move |node: TreeNode| sink.borrow_mut().push(node.id.to_string()))
+                .on_context(move |context: TreeContext| asking.borrow_mut().push(context))
                 .label("Components")
                 .select_branches(select_branches)
                 .wrap(wrap)

@@ -37,7 +37,9 @@ fn logging(threshold: f32) -> (DragGesture, Log) {
     let mut drag = DragGesture::default();
     drag.set_threshold(threshold);
     let sink = log.clone();
-    drag.set(move |x, y| sink.borrow_mut().push(((x, y), drag_start())));
+    drag.set(Handler::from(move |x, y| {
+        sink.borrow_mut().push(((x, y), drag_start()))
+    }));
     (drag, log)
 }
 
@@ -118,7 +120,7 @@ fn a_live_drag_is_cancelled_only_from_its_own_surface() {
         let (mut drag, _log) = logging(0.0);
         drag.transact(Rc::new(Transaction::new(reactive_core::signal(0.0_f32))));
         let seen = cancelled.clone();
-        drag.set_cancel(move || seen.set(true));
+        drag.set_cancel(Handler::from(move || seen.set(true)));
         drag.press(&press_at(10.0, 10.0), RECT, RECT);
         drag
     });

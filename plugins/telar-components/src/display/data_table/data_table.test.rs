@@ -76,17 +76,17 @@ impl Mounted {
                 .rows(rows)
                 .sort(sort)
                 .sort_rows(sort_rows)
-                .on_sort(Rc::new(move |sort: &TableSort| {
+                .on_sort(move |sort: TableSort| {
                     sorted.borrow_mut().push(format!(
                         "sort {} {}",
                         sort.column,
                         sort.direction.as_str()
                     ))
-                }))
+                })
                 .selected(selected)
-                .on_select(Rc::new(move |row: &TableRow| {
+                .on_select(move |row: TableRow| {
                     chosen.borrow_mut().push(format!("select {}", row.id))
-                }))
+                })
                 .label("Files")
                 .build(),
         )
@@ -669,12 +669,10 @@ fn several() -> Chosen {
             .rows(files())
             .selection_mode(SelectionMode::Multiple)
             .selected_rows(rows)
-            .on_selection_change(Rc::new(move |rows: &BTreeSet<Arc<str>>| {
+            .on_selection_change(move |rows: BTreeSet<Arc<str>>| {
                 changes.borrow_mut().push(format!("change {}", rows.len()))
-            }))
-            .on_select(Rc::new(move |row: &TableRow| {
-                picks.borrow_mut().push(format!("select {}", row.id))
-            }))
+            })
+            .on_select(move |row: TableRow| picks.borrow_mut().push(format!("select {}", row.id)))
             .label("Files")
             .build(),
     );

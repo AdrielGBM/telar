@@ -104,4 +104,4 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 647..706	3332	`crate::core::theme::SandboxTheme::by_mode(mode.name()).name`
-794..804	4841	`theme_name`
+794..804	4823	`theme_name`

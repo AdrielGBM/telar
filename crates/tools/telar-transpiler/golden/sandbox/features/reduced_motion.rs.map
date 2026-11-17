@@ -194,9 +194,9 @@
 1346..1352	3897	`chosen`
 1418..1427	4526	`effective`
 1548..1553	5089	`ghost`
-1564..1607	5127	`|| telar::set_reduced_motion_override(None)`
-1660..1665	5305	`ghost`
-1676..1725	5343	`|| telar::set_reduced_motion_override(Some(true))`
-1778..1783	5527	`ghost`
-1794..1844	5565	`|| telar::set_reduced_motion_override(Some(false))`
-2332..2387	8248	`|| pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 })`
+1564..1607	5110	`|| telar::set_reduced_motion_override(None)`
+1660..1665	5287	`ghost`
+1676..1725	5308	`|| telar::set_reduced_motion_override(Some(true))`
+1778..1783	5491	`ghost`
+1794..1844	5512	`|| telar::set_reduced_motion_override(Some(false))`
+2332..2387	8177	`|| pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 })`

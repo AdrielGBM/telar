@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{
     Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, Role, Text, box_item,
@@ -56,7 +54,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .size(size)
                     .close(move || actions.log("on_close", Vec::new()))
                     .body(body)
-                    .resize(Rc::new(|_, _| {}))
+                    .resize(|_, _| {})
                     .build(),
             )
         })

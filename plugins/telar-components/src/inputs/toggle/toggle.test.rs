@@ -39,7 +39,7 @@ fn on_toggle_reports_new_state() {
     crate::test_support::fresh_layout_runtime();
     let mut widget = toggle(
         ToggleProps::props()
-            .on_toggle(Rc::new(move |v| sink.set(Some(v))))
+            .on_toggle(move |v| sink.set(Some(v)))
             .build(),
     )
     .unwrap();

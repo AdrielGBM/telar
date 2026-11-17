@@ -171,9 +171,7 @@ fn uncontrolled(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let actions = ctx.actions();
     tag(TagProps::props()
         .label("Images")
-        .on_toggle(Rc::new(move |on| {
-            actions.log("on_toggle", vec![on.to_string()])
-        }))
+        .on_toggle(move |on: bool| actions.log("on_toggle", vec![on.to_string()]))
         .build())
 }
 
@@ -182,9 +180,7 @@ fn bound_and_told(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> 
     tag(TagProps::props()
         .label("Images")
         .selected(ctx.signal("on", false))
-        .on_toggle(Rc::new(move |on| {
-            actions.log("on_toggle", vec![on.to_string()])
-        }))
+        .on_toggle(move |on: bool| actions.log("on_toggle", vec![on.to_string()]))
         .build())
 }
 

@@ -1,7 +1,5 @@
 //! The command palette: every preview by its title and name, then every action with its shortcut, found by typing part of either.
 
-use std::rc::Rc;
-
 use telar::{Chord, LayoutError, LayoutItem, Reactive};
 use telar_components::{Command, CommandPaletteProps, command_palette};
 
@@ -18,9 +16,7 @@ pub(super) fn palette(keymap: &Keymap) -> Result<Box<dyn LayoutItem>, LayoutErro
             .control(keymap.palette)
             .commands(Reactive::of(move || commands(&listing)))
             .placeholder(Reactive::of(|| strings::text(FIND)))
-            .on_run(Rc::new(move |command: &Command| {
-                running.run_command(&command.id)
-            }))
+            .on_run(move |command: Command| running.run_command(&command.id))
             .build(),
     )
 }

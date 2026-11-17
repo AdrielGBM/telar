@@ -17,6 +17,7 @@ use renderer_core::{Color, LineHeight, RectStyle, Semantics, ShapeStyle, TextSty
 use ui_tree::{EventResult, RenderNode};
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::Handler;
 use crate::cap_band::CapBandCache;
 use crate::caret::Blink;
 use crate::composition::{self, Composed, Composition, Step};
@@ -188,8 +189,8 @@ pub(crate) struct Editor {
     drawn_caret: Rc<Cell<Option<TextInput>>>,
     clicks: Clicks,
     drag: Option<Drag>,
-    pub(crate) on_submit: Option<Box<dyn Fn()>>,
-    pub(crate) on_cancel: Option<Box<dyn Fn()>>,
+    pub(crate) on_submit: Option<Handler>,
+    pub(crate) on_cancel: Option<Handler>,
     pub(crate) on_key: Option<Box<KeyHandler>>,
     pub(crate) tab_key: TabKey,
     pub(crate) underlines: Option<Box<dyn Fn() -> Vec<Underline>>>,
@@ -511,7 +512,7 @@ impl Editor {
             }
             Key::Named(NamedKey::Enter) => {
                 if let Some(submit) = &self.on_submit {
-                    submit();
+                    submit.run();
                 }
                 return EventResult::Handled;
             }
@@ -580,7 +581,7 @@ impl Editor {
             Key::Named(NamedKey::Escape) => {
                 // Before the keyboard goes back, so a caller watching focus reads what follows as the consequence.
                 if let Some(cancel) = &self.on_cancel {
-                    cancel();
+                    cancel.run();
                 }
                 focus::release(self.id);
                 return EventResult::Handled;

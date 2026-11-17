@@ -300,20 +300,20 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1316..1322	4046	`picked`
 1457..1463	4434	`picked`
-1766..1783	7237	`|i| action.set(i)`
-1901..1907	7652	`action`
-2288..2297	10315	`cant_redo`
-2462..2467	11154	`ruler`
-2478..2504	11222	`|| ruler.set(!ruler.get())`
-2573..2582	11925	`cant_redo`
-2635..2640	12087	`ruler`
-3024..3033	15984	`on_system`
-3050..3065	16068	`|| shade.set(0)`
-3114..3122	16341	`on_light`
-3139..3154	16424	`|| shade.set(1)`
-3202..3209	16696	`on_dark`
-3226..3241	16778	`|| shade.set(2)`
-2965..2975	17260	`shade_name`
-3291..3296	17581	`ruler`
-3307..3333	17649	`|| ruler.set(!ruler.get())`
-3364..3374	18418	`shade_name`
+1766..1783	7220	`|i| action.set(i)`
+1901..1907	7634	`action`
+2288..2297	10297	`cant_redo`
+2462..2467	11136	`ruler`
+2478..2504	11187	`|| ruler.set(!ruler.get())`
+2573..2582	11889	`cant_redo`
+2635..2640	12051	`ruler`
+3024..3033	15948	`on_system`
+3050..3065	16015	`|| shade.set(0)`
+3114..3122	16287	`on_light`
+3139..3154	16353	`|| shade.set(1)`
+3202..3209	16624	`on_dark`
+3226..3241	16689	`|| shade.set(2)`
+2965..2975	17170	`shade_name`
+3291..3296	17491	`ruler`
+3307..3333	17542	`|| ruler.set(!ruler.get())`
+3364..3374	18310	`shade_name`

@@ -1,9 +1,7 @@
 //! [`swatches`]: a row of colour swatches selecting one of them, or none.
 
-use std::rc::Rc;
-
 use telar::{
-    Accessible, AlignItems, Border, Color, Container, Cursor, JustifyContent, LayoutError,
+    Accessible, AlignItems, Border, Color, Container, Cursor, Handler, JustifyContent, LayoutError,
     LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RovingAxis, RovingGroup, RwSignal,
     ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role,
     signal,
@@ -89,8 +87,8 @@ pub struct SwatchesProps {
     #[props(some, default)]
     pub diameter: Option<f32>,
     /// Fires with the index a press or a key selected.
-    #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(u32)>>,
+    #[props(some, into, default)]
+    pub on_select: Option<Handler<fn(u32)>>,
     /// Amends the paint of every swatch — the row's **principal surface** — chosen or not. See [`telar::SurfaceStyle`] for when a theme token or [`SwatchesTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -115,7 +113,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
         RovingGroup::new(
             RovingAxis::Both,
             move || selected.get().map(|at| at as usize),
-            move |at| choose(selected, at as u32, on_select.as_deref()),
+            move |at| choose(selected, at as u32, on_select.as_ref()),
         )
     };
     let mut names = names.into_iter();
@@ -149,7 +147,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
                 .roving(&group, i)
                 .toggled(move || announced.get() == Some(idx))
                 .cursor(Cursor::Pointer)
-                .on_press(move || choose(press_selected, idx, press_cb.as_deref()));
+                .on_press(move || choose(press_selected, idx, press_cb.as_ref()));
         cells.push(box_item(swatch));
     }
 
@@ -162,10 +160,10 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
     })
 }
 
-fn choose(selected: RwSignal<Option<u32>>, idx: u32, on_select: Option<&dyn Fn(u32)>) {
+fn choose(selected: RwSignal<Option<u32>>, idx: u32, on_select: Option<&Handler<fn(u32)>>) {
     selected.set_if_changed(Some(idx));
-    if let Some(cb) = on_select {
-        cb(idx);
+    if let Some(on_select) = on_select {
+        on_select.run(idx);
     }
 }
 

@@ -15,6 +15,8 @@ use renderer_core::Focusable;
 use rustc_hash::FxHashSet;
 use ui_tree::EventResult;
 
+use crate::Handler;
+
 /// Allocated with [`next_id`].
 pub use platform_core::FocusId;
 
@@ -95,7 +97,7 @@ struct Entry {
     role: Role,
     stop: Stop,
     /// For a control [presented](register_presented) by another, how its owner moves its cursor onto it: what asking to focus it does, since it never holds focus itself.
-    reach: Option<Rc<dyn Fn()>>,
+    reach: Option<Handler>,
     /// What the control does when it is asked to act rather than pressed or keyed. See [`perform`].
     actions: Actions,
     /// For a scroll area, whether its content can scroll now: it is a stop only then, and only while no stop inside it is reachable. See [`register_scroller`].
@@ -347,7 +349,7 @@ fn take_arriving(id: FocusId, from_pointer: bool, travel: Option<Travel>) {
         if let Some((node, Some(reach))) = found
             && reachable(node, &scope_views())
         {
-            reach();
+            reach.run();
         }
         return;
     }
@@ -535,9 +537,9 @@ pub fn register_with_role(id: FocusId, kind: FocusKind, node: NodeId, role: Role
 /// The rows of a menu are the case: they answer to arrow keys and type-ahead, and a reader that could not see them would be handed an open menu it could not describe — while a Tab order containing every row would walk the user through a list they opened in order to *avoid* walking it.
 ///
 /// It never holds focus. `reach` is the owner's: it moves the owner's cursor onto this control, which is what a [`request`] for it does, so a reader moving to a row leaves the keyboard with the list and the arrows carry on from that row.
-pub fn register_presented(id: FocusId, node: NodeId, role: Role, reach: impl Fn() + 'static) {
+pub fn register_presented(id: FocusId, node: NodeId, role: Role, reach: impl Into<Handler>) {
     register_node(id, FocusKind::Widget, Some(node), role, Stop::Never);
-    let reach: Rc<dyn Fn()> = Rc::new(reach);
+    let reach = reach.into();
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.reach = Some(reach);

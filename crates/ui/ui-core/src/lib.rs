@@ -138,7 +138,7 @@ pub use focus_ring::{FocusRing, focus_ring};
 pub use foreign_surface::{ForeignBoundary, ForeignSurface};
 pub use frame_focus::{FrameFocus, KeyRoute};
 pub use guest_surface::{GuestAudit, GuestSurface};
-pub use handler::{Handler, IntoPress};
+pub use handler::{Handler, HandlerSignature, IntoHandler};
 pub use height_index::HeightIndex;
 pub use image::Image;
 pub use inherit::{

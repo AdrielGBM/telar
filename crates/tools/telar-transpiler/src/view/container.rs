@@ -245,7 +245,7 @@ impl ViewGen<'_> {
             .find(|a| a.key == "holds_stroke")
             .map(|_| ".holds_stroke()".to_string())
             .unwrap_or_default();
-        let on_press = self.on_press_call(el);
+        let on_press = self.event_call(el, "on_press");
 
         let attrs = self.effective_attrs(el);
         let surface = attrs.iter().find(|a| a.key == "surface");
@@ -255,15 +255,15 @@ impl ViewGen<'_> {
         let disabled = self.predicate_call(el, "disabled");
         // Not amended: the ring is composed over whichever state won, which already was, and an amendment restroking it would hide where the keyboard is.
         let focus_ring = self.state_style_call(el, "focus_style", &[], None);
-        let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
-        let on_pointer_move = self.closure_attr_call(el, "on_pointer_move", "on_pointer_move");
-        let on_key = self.closure_attr_call(el, "on_key", "on_key");
-        let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
-        let on_drag_end = self.closure_attr_call(el, "on_drag_end", "on_drag_end");
-        let on_scroll = self.closure_attr_call(el, "on_scroll", "on_scroll");
-        let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
-        let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
-        let on_alt_press = self.closure_attr_call(el, "on_alt_press", "on_alt_press");
+        let on_hover = self.event_call(el, "on_hover");
+        let on_pointer_move = self.event_call(el, "on_pointer_move");
+        let on_key = self.on_key_call(el);
+        let on_drag = self.event_call(el, "on_drag");
+        let on_drag_end = self.event_call(el, "on_drag_end");
+        let on_scroll = self.event_call(el, "on_scroll");
+        let on_focus = self.event_call(el, "on_focus");
+        let on_long_press = self.event_call(el, "on_long_press");
+        let on_alt_press = self.event_call(el, "on_alt_press");
         let consumes_keys = consumes_keys_call(self, el, &mut errors);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
@@ -478,16 +478,29 @@ impl ViewGen<'_> {
         format!(".to({})", self.owning(&[value], &format!("move || {read}")))
     }
 
-    /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_hover`/`on_key`/`on_drag`/`on_focus`/`on_long_press`), or an empty string when the attribute is absent. `$name` signals are cloned into the closure, `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
-    fn closure_attr_call(&self, el: &Element, key: &str, method: &str) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
+    /// Builds a trailing `.{event}(...)` from an event attribute (`on_press`, `on_hover`, `on_drag`, …), or an empty string when the attribute is absent: a closure as `.{event}(move …)`, with `$name` signals cloned in and a `$`-free closure keeping its source span, and anything else as `.maybe_{event}(…)` through `IntoHandler`, so a forwarded closure binding, `Handler` or `Option<Handler>` each type-check without the markup saying which it is, and one left unset leaves the box untouched.
+    fn event_call(&self, el: &Element, event: &str) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == event) else {
             return String::new();
         };
-        // A non-closure value is an `Option<handler>` being forwarded, and the `maybe_` form leaves the box untouched on `None`. A no-op stand-in would report the event handled and swallow the click.
-        if !attr.value.is_closure() {
-            return format!(".maybe_{method}({})", self.forwarded_handler(attr));
+        if attr.value.is_closure() {
+            return format!(".{event}({})", self.emit_closure_value(attr));
         }
-        format!(".{method}({})", self.emit_closure_value(attr))
+        format!(
+            ".maybe_{event}(::telar::IntoHandler::into_handler({}))",
+            self.forwarded_handler(attr)
+        )
+    }
+
+    /// `on_key:` as `.on_key(move …)` for a closure, and for anything else as `.maybe_on_key(…)`: a key handler answers whether it took the key, so it is no [`Handler`](telar::Handler), and what is forwarded is the `Option` of one.
+    fn on_key_call(&self, el: &Element) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "on_key") else {
+            return String::new();
+        };
+        if attr.value.is_closure() {
+            return format!(".on_key({})", self.emit_closure_value(attr));
+        }
+        format!(".maybe_on_key({})", self.forwarded_handler(attr))
     }
 
     /// The expression a non-closure event attribute forwards, marked so a cursor on it maps to the generated code, and cloned where it is still needed after.
@@ -502,7 +515,7 @@ impl ViewGen<'_> {
         self.by_value(inner, written.clone()).unwrap_or(written)
     }
 
-    /// Desugars a closure-valued attribute into a `move` closure: what it reads with `$` is read where it runs and cloned in, a handle it writes is named bare, and a `$`-free closure keeps its source span (so LSP completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
+    /// Desugars a closure-valued attribute into a `move` closure: what it reads with `$` is read where it runs and cloned in, a handle it writes is named bare, and a `$`-free closure keeps its source span (so LSP completion works inside it). Shared by `event_call` (element event attrs) and the component closure-prop arm, which hand the result to `.method(..)` and to the prop's setter respectively.
     pub(super) fn emit_closure_value(&self, attr: &Attr) -> String {
         let closure = substitute_reads(&normalize_closure(attr.value.text()), self.theme_access);
         // A `$` substitution breaks the byte-for-byte span, so only a `$`-free closure carries a marker.
@@ -512,20 +525,6 @@ impl ViewGen<'_> {
             closure_marker(Some(attr))
         };
         self.owning(&[attr.value.text()], &format!("move {marker}{closure}"))
-    }
-
-    /// `on_press:` as `.on_press(move || …)` for a closure, and for anything else as `.maybe_on_press(…)` through `IntoPress`, so a forwarded closure binding, `Handler` or `Option<Handler>` each type-check without the markup saying which it is.
-    fn on_press_call(&self, el: &Element) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == "on_press") else {
-            return String::new();
-        };
-        if attr.value.is_closure() {
-            return format!(".on_press({})", self.emit_closure_value(attr));
-        }
-        format!(
-            ".maybe_on_press(::telar::IntoPress::into_press({}))",
-            self.forwarded_handler(attr)
-        )
     }
 
     /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate` in degrees, `scale`/`scale_x`/`scale_y`, `translate_x`/`translate_y`), or an empty string when there are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal` reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure; every value is cast to `f32` so integer and float literals both type-check. `track_rect:sig` — mirror this element's laid-out rect into `sig`, so a sibling can be positioned or painted from where this one ended up.

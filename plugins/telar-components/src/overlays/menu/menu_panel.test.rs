@@ -545,7 +545,7 @@ fn a_submenu_reports_its_own_picks() {
         items.push(submenu(
             SubmenuProps::props()
                 .label("Modo")
-                .on_select(Rc::new(move |at| sink.borrow_mut().push(at)))
+                .on_select(move |at| sink.borrow_mut().push(at))
                 .children(Children::new(|| {
                     let mut items = Vec::new();
                     for name in ["Sistema", "Claro", "Oscuro"] {
@@ -560,7 +560,7 @@ fn a_submenu_reports_its_own_picks() {
     let menu = context_menu(
         ContextMenuProps::props()
             .within(WINDOW)
-            .on_select(Rc::new(move |at| outer.borrow_mut().push(at)))
+            .on_select(move |at| outer.borrow_mut().push(at))
             .children(rows)
             .build(),
     )

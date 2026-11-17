@@ -74,7 +74,7 @@ fn the_roots_literals_are_read_through_the_args() {
         let read = format!(".{key}(::telar::__preview_arg!(__preview, \"{key}\", {value}))");
         assert!(code.contains(&read), "`{key}` is an arg: {read}\n{code}");
     }
-    assert!(code.contains(".on_change(std::rc::Rc::new("), "{code}");
+    assert!(code.contains(".on_change(move "), "{code}");
     assert!(code.contains(".width(1 + 2)"), "{code}");
     assert!(
         code.contains(".__preview_actions(&actions).build()"),

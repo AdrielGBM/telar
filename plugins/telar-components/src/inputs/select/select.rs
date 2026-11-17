@@ -1,9 +1,8 @@
 //! [`select`]: a field that opens a list and writes the picked index back.
 
-use std::rc::Rc;
-
 use telar::{
-    Children, Color, LayoutError, LayoutItem, Props, Reactive, RwSignal, SurfaceAmendment, signal,
+    Children, Color, Handler, LayoutError, LayoutItem, Props, Reactive, RwSignal, SurfaceAmendment,
+    signal,
 };
 
 use crate::shared;
@@ -97,8 +96,8 @@ pub struct SelectProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Fired with the picked index whenever a selection is made.
-    #[props(some, default)]
-    pub on_select: Option<Rc<dyn Fn(usize)>>,
+    #[props(some, into, default)]
+    pub on_select: Option<Handler<fn(usize)>>,
     /// Amends the paint of the trigger — this component's **principal surface** — at rest, hovered and held open. See [`telar::SurfaceStyle`] for when a theme token or [`SelectTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,

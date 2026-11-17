@@ -57,9 +57,7 @@ fn on_change_fires_with_mapped_value() {
     let sink = seen.clone();
     crate::test_support::fresh_layout_runtime();
     let mut widget = placed(
-        SliderProps::props()
-            .on_change(Rc::new(move |v| sink.set(v)))
-            .build(),
+        SliderProps::props().on_change(move |v| sink.set(v)).build(),
         100.0,
     );
     let rect = lay_out(widget.layout_node());
@@ -183,7 +181,7 @@ fn a_reader_steps_the_slider_and_sets_it_to_a_step() {
         SliderProps::props()
             .value(value)
             .step(0.1)
-            .on_change(Rc::new(move |v| sink.set(v)))
+            .on_change(move |v| sink.set(v))
             .build(),
     )
     .unwrap();

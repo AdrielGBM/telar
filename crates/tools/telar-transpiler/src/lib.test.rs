@@ -2583,7 +2583,7 @@ fn path_tag_emits_pathdata_builder_and_widget() {
         "d: compiles to a PathData builder chain:\n{code}"
     );
     assert!(
-        code.contains("Path::static_data(LayoutStyle::new()"),
+        code.contains("Path::new(LayoutStyle::new()"),
         "draws a Path widget from the baked path data:\n{code}"
     );
     assert!(!code.contains("Canvas::new("), "{code}");
@@ -2804,9 +2804,12 @@ fn an_rsx_box_can_arm_a_non_primary_press() {
 /// A forwarded (non-literal) value wires the `maybe_` form, so a wrapper component can pass an `Option` through without a no-op stand-in swallowing every right-click.
 #[test]
 fn a_forwarded_alt_press_wires_the_maybe_form() {
-    let src = "[logic]\nlet alt: Option<Box<dyn Fn(PointerButton)>> = None;\n\n[view]\nbox width:20 on_alt_press:alt\n";
+    let src = "[logic]\nlet alt: Option<Handler<fn(PointerButton)>> = None;\n\n[view]\nbox width:20 on_alt_press:alt\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
-    assert!(code.contains(".maybe_on_alt_press("), "{code}");
+    assert!(
+        code.contains(".maybe_on_alt_press(::telar::IntoHandler::into_handler("),
+        "{code}"
+    );
 }
 
 /// The one escape hatch a 1069-line application needed: a node paints wherever its commands say, so without a clip an axis line runs straight over the header. `ClippedItem` existed the whole time; the markup had no way to ask for it, so the `.rsx` dropped into Rust and spliced the widget back in.
@@ -2920,7 +2923,8 @@ fn a_logic_binding_passed_to_a_component_is_cloned_for_the_author() {
 /// A component's children are a recipe that may run again, so its body is a rebuilding region and the call site inside takes a copy of the recipe's binding on each run. The consequence is worth stating: a binding that is not `Clone` cannot be forwarded through a component's children at all, and must become an `Rc` or a `Reactive` to cross that line.
 #[test]
 fn a_logic_binding_forwarded_from_a_recipe_is_copied_on_each_run() {
-    let src = "[logic]\nlet save: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncolumn\n    save_row on_press:save\n";
+    let src =
+        "[logic]\nlet save = Handler::from(|| {});\n\n[view]\ncolumn\n    save_row on_press:save\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
         code.contains(".on_press(::core::clone::Clone::clone(&save))"),
@@ -2955,7 +2959,7 @@ fn a_recipe_takes_a_copy_of_what_its_body_uses_by_value() {
 
 #[test]
 fn a_logic_binding_inside_a_reactive_branch_is_still_cloned() {
-    let src = "[logic]\nlet open = signal(true);\nlet save: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncolumn\n    if $open\n        save_row on_press:save\n";
+    let src = "[logic]\nlet open = signal(true);\nlet save = Handler::from(|| {});\n\n[view]\ncolumn\n    if $open\n        save_row on_press:save\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
         code.contains("::core::clone::Clone::clone(&save)"),

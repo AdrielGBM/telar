@@ -131,7 +131,7 @@ pub fn motion(props: MotionProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         };
                                         StyledContainer::new(LayoutStyle::new().flex_column().width(100.0).height(100.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
                                     };
-                                    let __node_3 = button(ButtonProps::props().label("Bounce").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build())?;
+                                    let __node_3 = button(ButtonProps::props().label("Bounce").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__sbox_0, __node_3])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -201,7 +201,7 @@ pub fn motion(props: MotionProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    let __node_10 = button(ButtonProps::props().label("Replay").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press(std::rc::Rc::new({ let progress = progress.clone(); move || { progress.restart() } })).build())?;
+                                    let __node_10 = button(ButtonProps::props().label("Replay").__follow_color({ let theme = theme.clone(); move || theme.get().primary }).on_press({ let progress = progress.clone(); move || { progress.restart() } }).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__canvas_1, __text_0, __node_10])?
                                 };
                                 __children.push(box_item(__row_1));

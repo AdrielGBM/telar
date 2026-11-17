@@ -124,7 +124,7 @@ pub(crate) fn while_open(
 
 /// Keeps a panel on the dismiss stack while `open` holds, so Escape and the platform Back gesture reach it in the order things were opened. The stack is keyed by open and close rather than build order for exactly that reason.
 pub(crate) fn dismissable(open: RwSignal<bool>, trigger: NodeId) {
-    let close: Rc<dyn Fn()> = Rc::new(move || open.set(false));
+    let close = Handler::from(move || open.set(false));
     let registered: std::cell::Cell<Option<DismissRegistration>> = std::cell::Cell::new(None);
     effect(move || {
         if open.get() {
@@ -189,7 +189,7 @@ pub(crate) struct Dropdown {
     /// The panel's rows, as the recipe for making them rather than the rows themselves — see [`Children`](telar::Children). Two things need it that way: the rows are remade on every open, and each one has to be built inside the [`ListContext`](crate::layout::list::list::ListContext) this scaffold provides.
     pub rows: Children,
     pub color: Option<Reactive<Color>>,
-    pub on_pick: Option<Rc<dyn Fn(usize)>>,
+    pub on_pick: Option<Handler<fn(usize)>>,
     pub selected: RwSignal<Option<usize>>,
     pub geometry: fn(ControlSize) -> Geometry,
     pub offset: fn(ControlSize) -> f32,
@@ -211,10 +211,10 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     let open = signal(false);
     // Not the same as what is selected: a select opens with its value under the cursor, and moving off it must not commit anything.
     let highlighted: RwSignal<Option<usize>> = signal(None);
-    let pick: Rc<dyn Fn(usize)> = Rc::new(move |idx: usize| {
+    let pick = Handler::from(move |idx: usize| {
         selected.set(Some(idx));
-        if let Some(cb) = &on_pick {
-            cb(idx);
+        if let Some(on_pick) = &on_pick {
+            on_pick.run(idx);
         }
         open.set(false);
     });

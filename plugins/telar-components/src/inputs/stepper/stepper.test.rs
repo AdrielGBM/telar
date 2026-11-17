@@ -88,7 +88,7 @@ fn on_change_fires_with_new_value() {
         StepperProps::props()
             .range(0.0..=5.0)
             .step(1.0)
-            .on_change(Rc::new(move |v| sink.set(v)))
+            .on_change(move |v| sink.set(v))
             .build(),
     )
     .unwrap();
@@ -242,7 +242,7 @@ fn a_reader_steps_the_stepper_by_one_step_within_its_range() {
             .value(value)
             .range(0.0..=5.0)
             .step(1.0)
-            .on_change(Rc::new(move |v| sink.set(v)))
+            .on_change(move |v| sink.set(v))
             .build(),
     );
 

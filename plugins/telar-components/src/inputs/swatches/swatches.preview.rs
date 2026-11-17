@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
@@ -23,7 +21,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(swatches: SwatchesProps, "Theme palette", |p| {
             swatches(
                 SwatchesProps::props()
-                    .on_select(Rc::new(|_| {}))
+                    .on_select(|_| {})
                     .colors(palette())
                     .names(
                         ["Primary", "Info", "Success", "Warning", "Error"]

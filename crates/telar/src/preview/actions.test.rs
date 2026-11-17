@@ -82,10 +82,10 @@ fn logged_calls(log: &ActionLog) -> Vec<(&'static str, Vec<String>)> {
 #[test]
 fn an_action_records_each_call_by_its_arguments_debug_text() {
     let log = ActionLog::new();
-    <Rc<dyn Fn()>>::action(log, "on_press")();
-    <Rc<dyn Fn(u32)>>::action(log, "on_select")(2);
-    <Box<dyn Fn(f32, bool)>>::action(log, "on_end")(0.5, true);
-    <Rc<dyn Fn(&'static str, char, Option<u8>)>>::action(log, "on_edit")("hi", 'x', None);
+    <Handler>::action(log, "on_press").run();
+    <Handler<fn(u32)>>::action(log, "on_select").run(2);
+    <Handler<fn(f32, bool)>>::action(log, "on_end").run(0.5, true);
+    <Handler<fn(&'static str, char, Option<u8>)>>::action(log, "on_edit").run("hi", 'x', None);
     assert_eq!(
         logged_calls(&log),
         [
@@ -101,7 +101,7 @@ fn an_action_records_each_call_by_its_arguments_debug_text() {
 fn a_logged_callback_records_the_call_then_runs() {
     let log = ActionLog::new();
     let seen = Rc::new(Cell::new(0));
-    let callback: Rc<dyn Fn(u32)> = Rc::new({
+    let callback: Handler<fn(u32)> = Handler::from({
         let seen = Rc::clone(&seen);
         move |value| {
             assert_eq!(
@@ -112,7 +112,7 @@ fn a_logged_callback_records_the_call_then_runs() {
             seen.set(value);
         }
     });
-    callback.logged(log, "on_change")(7);
+    callback.logged(log, "on_change").run(7);
     assert_eq!(seen.get(), 7);
     assert_eq!(logged_calls(&log), [("on_change", texts(&["7"]))]);
 }
@@ -121,12 +121,12 @@ fn a_logged_callback_records_the_call_then_runs() {
 fn an_unset_optional_callback_stays_unset_and_a_set_one_keeps_running() {
     let log = ActionLog::new();
     let ran = Rc::new(Cell::new(false));
-    let set: Option<Rc<dyn Fn()>> = Some(Rc::new({
+    let set: Option<Handler> = Some(Handler::from({
         let ran = Rc::clone(&ran);
         move || ran.set(true)
     }));
-    let unset: Option<Rc<dyn Fn(bool)>> = None;
-    set.logged(log, "on_close").expect("still set")();
+    let unset: Option<Handler<fn(bool)>> = None;
+    set.logged(log, "on_close").expect("still set").run();
     assert!(
         unset.logged(log, "on_toggle").is_none(),
         "a component that draws something for a callback must not be handed one it was not given"
@@ -140,9 +140,9 @@ struct Node;
 #[test]
 fn the_probe_logs_a_callback_whose_arguments_have_no_debug_by_their_type() {
     let log = ActionLog::new();
-    let callback: Option<Rc<dyn Fn(Node, u8)>> = Some(Rc::new(|_, _| {}));
+    let callback: Option<Handler<fn(Node, u8)>> = Some(Handler::from(|_, _| {}));
     let callback = crate::__preview_action!(log, "on_pick", callback);
-    callback.expect("still set")(Node, 3);
+    callback.expect("still set").run(Node, 3);
     let call = log.last().expect("logged");
     assert_eq!(call.name, "on_pick");
     assert_eq!(call.args.len(), 2);
@@ -173,25 +173,9 @@ fn a_callback_that_outlives_its_log_records_nothing() {
     let owner = scope.id();
     let log = ActionLog::new();
     drop(scope);
-    let action = <Rc<dyn Fn()>>::action(log, "on_press");
+    let action = <Handler>::action(log, "on_press");
     reactive_core::dispose_owner(owner);
-    action();
-}
-
-#[test]
-fn the_probe_logs_a_callback_of_one_borrowed_argument() {
-    let log = ActionLog::new();
-    type OnCopy = Rc<dyn Fn(&str)>;
-    let copied: Option<OnCopy> = Some(Rc::new(|_| {}));
-    let copied = crate::__preview_action!(log, "on_copy", copied);
-    copied.expect("still set")("let x = 1;");
-    let picked: Rc<dyn Fn(&Node)> = Rc::new(|_| {});
-    let picked = crate::__preview_action!(log, "on_select", picked);
-    picked(&Node);
-    let calls = log.calls();
-    assert_eq!(calls[0].args, texts(&["\"let x = 1;\""]));
-    assert_eq!(calls[1].name, "on_select");
-    assert!(calls[1].args[0].ends_with("Node>"), "{:?}", calls[1].args);
+    action.run();
 }
 
 #[test]

@@ -3,7 +3,6 @@
 use std::any::{Any, type_name};
 use std::collections::VecDeque;
 use std::fmt::{self, Debug};
-use std::rc::Rc;
 
 use reactive_core::{RwSignal, signal};
 
@@ -135,9 +134,9 @@ impl fmt::Debug for ActionLog {
     }
 }
 
-/// A callback whose calls a preview records: a [`Handler`], an `Rc<dyn Fn(…)>` or a `Box<dyn Fn(…)>` of up to three arguments that returns nothing, or an `Option` of one.
+/// A callback whose calls a preview records: a [`Handler`] of up to three arguments, or an `Option` of one.
 ///
-/// Each argument is recorded by its `Debug` text. The code `#[derive(Props)]` generates also logs a callback of one borrowed argument, `Rc<dyn Fn(&T)>`, and one whose arguments have no `Debug`, recording those by their type's name, and leaves any other field as it is.
+/// Each argument is recorded by its `Debug` text. The code `#[derive(Props)]` generates also logs a handler whose arguments have no `Debug`, recording those by their type's name, and leaves any other field as it is.
 pub trait IntoAction: Sized {
     /// A callback that does nothing but record each call to `name` in `log`.
     fn action(log: ActionLog, name: &'static str) -> Self;
@@ -164,20 +163,15 @@ fn type_text<T>(_: &T) -> String {
 
 macro_rules! callbacks {
     ($trait:path, $describe:ident, <$($generic:ident: [$($bound:tt)+]),*>, ($($arg:ident: $ty:ty),*)) => {
-        callbacks!(@pointer Rc, $trait, $describe, <$($generic: [$($bound)+]),*>, ($($arg: $ty),*));
-        callbacks!(@pointer Box, $trait, $describe, <$($generic: [$($bound)+]),*>, ($($arg: $ty),*));
-    };
-    (@pointer $pointer:ident, $trait:path, $describe:ident, <$($generic:ident: [$($bound:tt)+]),*>, ($($arg:ident: $ty:ty),*)) => {
-        impl<$($generic: $($bound)+ + 'static),*> $trait for $pointer<dyn Fn($($ty),*)> {
+        impl<$($generic: $($bound)+ + 'static),*> $trait for Handler<fn($($ty),*)> {
             fn action(log: ActionLog, name: &'static str) -> Self {
-                $pointer::new(move |$($arg: $ty),*| log.log(name, vec![$($describe(&$arg)),*]))
+                Handler::from(move |$($arg: $ty),*| log.log(name, vec![$($describe(&$arg)),*]))
             }
 
             fn logged(self, log: ActionLog, name: &'static str) -> Self {
-                let callback = self;
-                $pointer::new(move |$($arg: $ty),*| {
+                Handler::from(move |$($arg: $ty),*| {
                     log.log(name, vec![$($describe(&$arg)),*]);
-                    callback($($arg),*)
+                    self.run($($arg),*)
                 })
             }
         }
@@ -188,25 +182,9 @@ callbacks!(IntoAction, debug_text, <>, ());
 callbacks!(IntoAction, debug_text, <A: [Debug]>, (a: A));
 callbacks!(IntoAction, debug_text, <A: [Debug], B: [Debug]>, (a: A, b: B));
 callbacks!(IntoAction, debug_text, <A: [Debug], B: [Debug], C: [Debug]>, (a: A, b: B, c: C));
-callbacks!(__probe::IntoOpaqueAction, type_text, <>, ());
 callbacks!(__probe::IntoOpaqueAction, type_text, <A: [Any]>, (a: A));
 callbacks!(__probe::IntoOpaqueAction, type_text, <A: [Any], B: [Any]>, (a: A, b: B));
 callbacks!(__probe::IntoOpaqueAction, type_text, <A: [Any], B: [Any], C: [Any]>, (a: A, b: B, c: C));
-callbacks!(__probe::IntoBorrowedAction, debug_text, <A: [Debug + ?Sized]>, (a: &A));
-callbacks!(__probe::IntoOpaqueBorrowedAction, type_text, <A: [?Sized]>, (a: &A));
-
-impl IntoAction for Handler {
-    fn action(log: ActionLog, name: &'static str) -> Self {
-        Handler::from(move || log.log(name, Vec::new()))
-    }
-
-    fn logged(self, log: ActionLog, name: &'static str) -> Self {
-        Handler::from(move || {
-            log.log(name, Vec::new());
-            self.run();
-        })
-    }
-}
 
 macro_rules! optional_callbacks {
     ($($trait:path),*) => {
@@ -224,12 +202,7 @@ macro_rules! optional_callbacks {
     };
 }
 
-optional_callbacks!(
-    IntoAction,
-    __probe::IntoOpaqueAction,
-    __probe::IntoBorrowedAction,
-    __probe::IntoOpaqueBorrowedAction
-);
+optional_callbacks!(IntoAction, __probe::IntoOpaqueAction);
 
 #[cfg(test)]
 #[path = "actions.test.rs"]

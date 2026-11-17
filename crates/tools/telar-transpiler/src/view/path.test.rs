@@ -230,14 +230,13 @@ fn a_view_box_path_is_fitted_to_the_rect_it_is_laid_out_in() {
     let code =
         view_code("path d:\"M2,12 L22,12\" view_box:\"0 0 24 24\" stroke:#000000 stroke_width:2");
     assert!(
-        code.contains("Canvas::declaring(") && code.contains(".width(24.0).height(24.0)"),
+        code.contains("Path::new(") && code.contains(".width(24.0).height(24.0)"),
         "the box is the view box's size when nothing else gives one:\n{code}"
     );
     assert!(
-        code.contains("__path_data.fitted(Rect::new(0.0, 0.0, 24.0, 24.0), __rect)"),
+        code.contains("move |__rect: Rect| (std::sync::Arc::new(__path_data.fitted(Rect::new(0.0, 0.0, 24.0, 24.0), __rect)), "),
         "the data is scaled from the view box into the laid-out rect each paint:\n{code}"
     );
-    assert!(!code.contains("Path::static_data"), "{code}");
     assert!(!code.contains("compile_error!"), "{code}");
 }
 
@@ -268,7 +267,11 @@ fn a_view_box_that_cannot_be_one_is_a_compile_error() {
 fn a_path_without_a_view_box_is_drawn_in_its_own_pixels() {
     let code = view_code("path d:\"M0,0 L10,8\" stroke:#000000 stroke_width:2");
     assert!(
-        code.contains("Path::static_data(") && code.contains(".width(10.0).height(8.0)"),
+        code.contains("Path::new(") && code.contains(".width(10.0).height(8.0)"),
+        "{code}"
+    );
+    assert!(
+        code.contains("move |_: Rect| (__path_data.clone(), PathStyle {"),
         "{code}"
     );
     assert!(!code.contains("fitted("), "{code}");
@@ -338,22 +341,33 @@ fn a_path_paints_in_the_ink_of_the_text_it_is_drawn_in() {
     let code = view_code("path d:\"M0,0 L10,0\" stroke:$text.ink stroke_width:2");
     assert!(!code.contains("compile_error!"), "{code}");
     assert!(
-        code.contains("Canvas::declaring(")
-            && code.contains("move |__rect: Rect, __text_style: TextStyle|"),
+        code.contains("Path::declaring(")
+            && code.contains("move |_: Rect, __text_style: &TextStyle|"),
         "reading its text draws the path where the inherited text style is handed over:\n{code}"
     );
     assert!(
-        code.contains("let __text = Reactive::Const(BoxText::drawn_in(&__text_style));"),
+        code.contains("let __text = Reactive::Const(BoxText::drawn_in(__text_style));"),
         "{code}"
     );
     assert!(
         code.contains("Stroke::new(__text.get().ink, 2.0)"),
         "{code}"
     );
-    assert!(
-        code.contains("RenderNode::path(__path_data.clone(), "),
-        "{code}"
-    );
+    assert!(code.contains("(__path_data.clone(), PathStyle {"), "{code}");
+}
+
+#[test]
+fn a_path_is_a_path_widget_whatever_it_reads() {
+    for view in [
+        "path d:\"M0,0 L10,0\" stroke:#000000",
+        "path d:\"M0,0 L10,0\" view_box:\"0 0 10 10\" stroke:#000000",
+        "path d:\"M0,0 L10,0\" stroke:$text.ink",
+        "path d:\"M0,0 L10,0\" view_box:\"0 0 10 10\" stroke:$text.ink",
+    ] {
+        let code = view_code(view);
+        assert!(code.contains("Path::"), "`{view}`:\n{code}");
+        assert!(!code.contains("Canvas::"), "`{view}`:\n{code}");
+    }
 }
 
 #[test]

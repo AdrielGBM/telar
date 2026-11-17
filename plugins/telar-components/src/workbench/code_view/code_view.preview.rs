@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Role, place_item};
 
@@ -32,7 +30,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(code_view: CodeViewProps, "Rust", |p| {
             let block = code_view(
                 CodeViewProps::props()
-                    .on_copy(Rc::new(|_| {}))
+                    .on_copy(|_| {})
                     .code(SOURCE)
                     .size(p.arg("size", ControlSize::Regular))
                     .spans(spans())

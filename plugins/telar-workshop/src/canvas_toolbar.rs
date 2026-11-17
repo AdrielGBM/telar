@@ -400,7 +400,7 @@ struct Choice<T> {
     width: f32,
     rows: Rc<[Row<T>]>,
     current: Rc<dyn Fn() -> T>,
-    pick: Rc<dyn Fn(T)>,
+    pick: Handler<fn(T)>,
 }
 
 impl<T: Clone + PartialEq + 'static> Choice<T> {
@@ -416,7 +416,7 @@ impl<T: Clone + PartialEq + 'static> Choice<T> {
             width,
             rows: rows.into(),
             current: Rc::new(current),
-            pick: Rc::new(pick),
+            pick: Handler::from(pick),
         }
     }
 
@@ -439,7 +439,7 @@ impl<T: Clone + PartialEq + 'static> Choice<T> {
         let (rows, current, pick) = (
             Rc::clone(&self.rows),
             Rc::clone(&self.current),
-            Rc::clone(&self.pick),
+            self.pick.clone(),
         );
         Children::new(move || {
             rows.iter()
@@ -453,18 +453,18 @@ impl<T: Clone + PartialEq + 'static> Choice<T> {
 fn choice_row<T: Clone + PartialEq + 'static>(
     row: &Row<T>,
     current: &Rc<dyn Fn() -> T>,
-    pick: &Rc<dyn Fn(T)>,
+    pick: &Handler<fn(T)>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Row::Choice { value, label, hint } = row else {
         return row.build();
     };
     let (held, current) = (value.clone(), Rc::clone(current));
-    let (value, pick) = (value.clone(), Rc::clone(pick));
+    let (value, pick) = (value.clone(), pick.clone());
     let props = ItemProps::props()
         .label(label.reactive())
         .checked(Reactive::of(move || current() == held))
         .radio(true)
-        .on_press(move || pick(value.clone()));
+        .on_press(move || pick.run(value.clone()));
     let props = match hint.clone() {
         Some(hint) => props.hint(Reactive::of(move || hint.clone())),
         None => props,
@@ -481,12 +481,12 @@ impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
             let at = shown.iter().position(|row| row.holds(&current));
             selected.set_if_changed(at);
         });
-        let (picked, pick) = (Rc::clone(&self.rows), Rc::clone(&self.pick));
-        let on_select: Rc<dyn Fn(usize)> = Rc::new(move |at| {
+        let (picked, pick) = (Rc::clone(&self.rows), self.pick.clone());
+        let on_select = move |at: usize| {
             if let Some(Row::Choice { value, .. }) = picked.get(at) {
-                pick(value.clone());
+                pick.run(value.clone());
             }
-        });
+        };
         let (rows, name) = (Rc::clone(&self.rows), self.name);
         let field = select(
             SelectProps::props()

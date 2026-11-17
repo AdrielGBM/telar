@@ -68,7 +68,7 @@ pub use chrome::window_frame::window_frame::{
 };
 pub use display::data_table::data_table::{
     CellAlign, CellBuilder, Column, ColumnWidth, ColumnWidths, Comparator, DataTableProps,
-    DataTableTokens, SortHandler, TableRow, TableRowHandler, TableSort, data_table,
+    DataTableTokens, TableRow, TableSort, data_table,
 };
 pub use display::image::image::{ImageProps, ImageSource, ImageTokens, image};
 pub use display::kbd::kbd::{KbdCaps, KbdProps, KbdTokens, kbd};
@@ -82,7 +82,7 @@ pub use inputs::radio_group::radio_group::{RadioGroupProps, RadioTokens, radio_g
 pub use inputs::scrub_field::scrub_field::{
     Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field,
 };
-pub use inputs::search_field::search_field::{SearchFieldProps, SearchHandler, search_field};
+pub use inputs::search_field::search_field::{SearchFieldProps, search_field};
 pub use inputs::select::select::{SelectProps, SelectTokens, select};
 pub use inputs::slider::slider::{SliderProps, SliderTokens, slider};
 pub use inputs::stepper::stepper::{StepperProps, StepperTokens, stepper};
@@ -101,14 +101,12 @@ pub use layout::reorder_zones::reorder_zones::{
 };
 pub use layout::reorderable::reorderable::{ReorderableProps, reorderable};
 pub use layout::section::section::{SectionProps, section};
-pub use layout::virtual_list::virtual_list::{
-    ListRow, RowBuilder, RowHandler, VirtualListProps, virtual_list,
-};
+pub use layout::virtual_list::virtual_list::{ListRow, RowBuilder, VirtualListProps, virtual_list};
 pub use navigation::link::link::{LinkProps, LinkTarget, LinkTokens, link};
 pub use navigation::tabs::tab_panel::{TabPanelLink, TabPanelProps, tab_panel};
 pub use navigation::tabs::tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
 pub use overlays::command_palette::command_palette::{
-    Command, CommandPaletteProps, CommandPaletteTokens, RunHandler, command_palette,
+    Command, CommandPaletteProps, CommandPaletteTokens, command_palette,
 };
 pub use overlays::command_palette::fuzzy::{FuzzyMatch, fuzzy_match};
 pub use overlays::drawer::drawer::{DrawerProps, DrawerTokens, drawer};
@@ -124,9 +122,9 @@ pub use overlays::toast::toast::{
 };
 pub use overlays::tooltip::tooltip::{TooltipProps, TooltipTokens, tooltip};
 pub use shared::DOUBLE_CLICK;
-pub use shared::selection::{SelectionHandler, SelectionMode};
+pub use shared::selection::SelectionMode;
 pub use workbench::code_view::code_view::{
-    CodeSpan, CodeViewProps, CodeViewTokens, CopyHandler, TokenKind, TokenStyler, code_view,
+    CodeSpan, CodeViewProps, CodeViewTokens, TokenKind, TokenStyler, code_view,
 };
 pub use workbench::color_picker::color_picker::{
     ColorPickerProps, ColorPickerTokens, color_picker,
@@ -142,8 +140,7 @@ pub use workbench::split_pane::split_pane::{
 };
 pub use workbench::toolbar::toolbar::{ToolbarProps, toolbar};
 pub use workbench::tree_view::tree_view::{
-    ContextHandler, SelectHandler, TrailingBuilder, TreeContext, TreeNode, TreeViewProps,
-    TreeViewTokens, tree_view,
+    TrailingBuilder, TreeContext, TreeNode, TreeViewProps, TreeViewTokens, tree_view,
 };
 
 /// The geometry, washes, type and marks every catalogue control is drawn from, for an application drawing controls of its own that have to sit beside the catalogue's.

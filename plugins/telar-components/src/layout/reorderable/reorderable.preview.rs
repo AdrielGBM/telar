@@ -17,11 +17,11 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .item(Rc::new(move |index| {
                         sample::tile(Reactive::of(move || items.get()[index].to_string()))
                     }))
-                    .on_move(Rc::new(move |from, to| {
+                    .on_move(move |from, to| {
                         items.update(|items| {
                             telar::apply_move(items, from, to);
                         });
-                    }))
+                    })
                     .row(p.arg("row", true))
                     .gap(p.arg("gap", 8.0f32))
                     .drag_threshold(p.arg("drag_threshold", 4.0f32))

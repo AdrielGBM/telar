@@ -66,9 +66,9 @@ pub fn locale_address(props: LocaleAddressProps) -> Result<Box<dyn LayoutItem>, 
                                 };
                                 __children.push(box_item(__text_1));
                                 let __row_0 = {
-                                    let __node_3 = button(ButtonProps::props().label("English").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale(telar::locale_tag!("en")))).build())?;
-                                    let __node_4 = button(ButtonProps::props().label("Español").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale(telar::locale_tag!("es")))).build())?;
-                                    let __node_5 = button(ButtonProps::props().label("العربية").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_locale(telar::locale_tag!("ar")))).build())?;
+                                    let __node_3 = button(ButtonProps::props().label("English").variant(::telar::kw::ghost).on_press(move || telar::set_locale(telar::locale_tag!("en"))).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("Español").variant(::telar::kw::ghost).on_press(move || telar::set_locale(telar::locale_tag!("es"))).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("العربية").variant(::telar::kw::ghost).on_press(move || telar::set_locale(telar::locale_tag!("ar"))).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));

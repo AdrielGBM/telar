@@ -37,11 +37,12 @@ fn a_path_is_placed_by_the_row_it_sits_in() {
         telar::RectStyle::default().with_fill(Color::BLACK)
     })
     .unwrap();
-    let path = Path::static_data(
-        LayoutStyle::new().width(60.0).height(40.0),
-        triangle(),
-        || PathStyle::default().with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0)),
-    )
+    let path = Path::new(LayoutStyle::new().width(60.0).height(40.0), |_| {
+        (
+            triangle(),
+            PathStyle::default().with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+        )
+    })
     .unwrap();
     let row = new_container(
         LayoutStyle::new().flex_row(),
@@ -68,11 +69,12 @@ fn a_paths_geometry_is_drawn_where_layout_put_it() {
         telar::RectStyle::default().with_fill(Color::BLACK)
     })
     .unwrap();
-    let path = Path::static_data(
-        LayoutStyle::new().width(60.0).height(40.0),
-        triangle(),
-        || PathStyle::default().with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0)),
-    )
+    let path = Path::new(LayoutStyle::new().width(60.0).height(40.0), |_| {
+        (
+            triangle(),
+            PathStyle::default().with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+        )
+    })
     .unwrap();
     let row = telar::Container::new(
         LayoutStyle::new().flex_row(),

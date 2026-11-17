@@ -150,7 +150,7 @@ fn search_field_item(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutErr
             .value(search)
             .placeholder(Reactive::of(|| strings::text(SEARCH)))
             .focus_id(focus)
-            .on_submit(Rc::new(move |_: &str| submit.select_first_match()))
+            .on_submit(move |_: String| submit.select_first_match())
             .on_key(Rc::new(move |key: &Key, _modifiers| match key {
                 Key::Named(NamedKey::ArrowDown) => {
                     keys.focus_tree();
@@ -236,12 +236,10 @@ fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .items(panel.items)
             .selected(state.selection())
             .expanded(state.expanded())
-            .on_select(Rc::new(move |_: &TreeNode| {
+            .on_select(move |_: TreeNode| {
                 picked.close_drawer();
-            }))
-            .on_context(Rc::new(move |asked_for: TreeContext| {
-                asked.set(Some(asked_for.into()))
-            }))
+            })
+            .on_context(move |asked_for: TreeContext| asked.set(Some(asked_for.into())))
             .select_branches(false)
             .trailing(drift_badges(state))
             .label(Reactive::of(|| strings::text(PREVIEWS)))
