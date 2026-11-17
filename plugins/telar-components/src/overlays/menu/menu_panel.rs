@@ -6,10 +6,10 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use telar::{
-    AnchorAlign, Anchoring, Border, Children, Color, Container, HasPopup, Key, LayoutError,
-    LayoutItem, LayoutStyle, NamedKey, NodeId, Overlay, PointerButton, Props, Reactive, Rect,
-    RectStyle, RwSignal, ScrollViewport, Side, StyledContainer, SurfaceStyle, amend_surface,
-    box_item, children, effect,
+    AnchorAlign, Anchoring, Border, Children, Color, Container, Handler, HasPopup, Key,
+    LayoutError, LayoutItem, LayoutStyle, NamedKey, NodeId, Overlay, PointerButton, Props,
+    Reactive, Rect, RectStyle, RwSignal, ScrollViewport, Side, StyledContainer, SurfaceStyle,
+    amend_surface, box_item, children, effect,
     focus::{self, FocusId},
     memo, on_cleanup, signal, track_layout, use_context,
 };
@@ -41,7 +41,7 @@ pub(crate) struct Config {
     /// Tints the rows' washes. `None` leaves the theme's.
     pub(crate) color: Option<Reactive<Color>>,
     /// Closes the whole menu: a pick, Escape on its first panel, a press away.
-    pub(crate) close: Rc<dyn Fn()>,
+    pub(crate) close: Handler,
 }
 
 impl Config {
@@ -208,7 +208,7 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
     let pick: Rc<dyn Fn(usize)> = {
         let close = config.close.clone();
         Rc::new(move |index| {
-            close();
+            close.run();
             if let Some(on_select) = &on_select {
                 on_select(index);
             }
@@ -308,7 +308,7 @@ fn keys(list: ListContext, cascade: Rc<Cascade>, level: Level) -> Keys {
                 (Some(at), Some(Act::Run(_))) => list.commit(at),
                 _ => {}
             },
-            Key::Named(NamedKey::Escape) if level == Level::Root => (cascade.config.close)(),
+            Key::Named(NamedKey::Escape) if level == Level::Root => cascade.config.close.run(),
             // Ctrl or Meta makes a character a command rather than a query. Alt is left out: on many layouts it is how a character is typed.
             Key::Char(c) if !c.is_control() && !mods.is_ctrl && !mods.is_meta => {
                 if let Some(at) = list.type_ahead(*c, held) {
@@ -364,7 +364,7 @@ pub(crate) fn kept_inside(within: Rect) -> Rect {
 /// A see-through sheet under the panels, so a press never reaches whatever the menu is about. It closes on the stroke rather than the tap: a drag with no threshold reports from the press itself, so this fires the moment the button goes down, which also covers the hand that presses away and keeps moving. Waiting for a release a drag never delivers is how a menu ends up standing over a window nobody asked it to be on.
 pub(crate) fn overlay(
     built: Built,
-    close: Rc<dyn Fn()>,
+    close: Handler,
     keys: Option<Keys>,
 ) -> Result<Overlay, LayoutError> {
     let Built {
@@ -382,7 +382,7 @@ pub(crate) fn overlay(
         |_| RectStyle::default(),
         layers,
     )?
-    .on_drag(move |_x, _y| close())
+    .on_drag(move |_x, _y| close.run())
     .drag_button(PointerButton::Secondary);
     let backdrop = match keys {
         Some(keys) => backdrop.on_key(move |key: &Key| keys(key)),

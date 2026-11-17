@@ -4,7 +4,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, BorderRadius, JustifyContent, Key, LayoutError, LayoutItem,
+    Accessible, AlignItems, BorderRadius, Handler, JustifyContent, Key, LayoutError, LayoutItem,
     LayoutStyle, ModifiersState, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
     StyledContainer, SurfaceAmendment, box_item, children,
     focus::{self, FocusId, Role},
@@ -44,8 +44,8 @@ pub struct SearchFieldProps {
     #[props(some, default)]
     pub on_submit: Option<SearchHandler>,
     /// Runs when the query is cleared, by the button or by Escape.
-    #[props(some, default)]
-    pub on_clear: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_clear: Option<Handler>,
     /// Hears every key pressed while the field holds the keyboard, before the field or its Escape do; answering `true` takes the key. Where a list of results under the field gets its arrows.
     #[props(some, default)]
     pub on_key: Option<FieldKeyHandler>,
@@ -80,10 +80,10 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
     } = props;
     let value = value.unwrap_or_else(|| signal(String::new()));
     let line: Rc<Cell<Option<FocusId>>> = Rc::default();
-    let clear: Rc<dyn Fn()> = Rc::new(move || {
+    let clear = Handler::from(move || {
         value.set(String::new());
         if let Some(on_clear) = &on_clear {
-            on_clear();
+            on_clear.run();
         }
     });
 
@@ -109,7 +109,7 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
             }
             let escape = matches!(key, Key::Named(NamedKey::Escape));
             if escape && value.with(|query| !query.is_empty()) {
-                clear();
+                clear.run();
                 return true;
             }
             false
@@ -125,7 +125,7 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
         .size(size)
         .on_key(keys);
     if let Some(on_submit) = on_submit {
-        field = field.on_submit(Rc::new(move || on_submit(&value.get())));
+        field = field.on_submit(move || on_submit(&value.get()));
     }
     if let Some(read) = active_descendant {
         field = field.active_descendant(read);
@@ -153,7 +153,7 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
 /// The button that empties the field, handing the keyboard back to the line typed into. Announced, but no Tab stop: Escape in the field does the same.
 fn clear_button(
     size: ControlSize,
-    clear: Rc<dyn Fn()>,
+    clear: Handler,
     line: Rc<Cell<Option<FocusId>>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let cross = shared::mark(
@@ -195,7 +195,7 @@ fn clear_button(
             telar::Insets::all(shared::target_outset(shared::icon_size(size)))
         }))
         .on_press(move || {
-            clear();
+            clear.run();
             if let Some(id) = line.get() {
                 focus::request_from_pointer(id);
             }

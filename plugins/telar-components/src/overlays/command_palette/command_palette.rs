@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Chord, Clip, ClippedItem, Color, Container,
-    Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
-    ModifiersState, NamedKey, NodeId, OverlayControl, Props, Reactive, ReactiveList, RectStyle,
-    RwSignal, ShapeStyle, SizeDimension, Span, StyledContainer, SurfaceAmendment, SurfaceStyle,
-    Text, TextWrap, amend_surface, box_item, children, effect,
+    Declared, Handler, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle,
+    Memo, ModifiersState, NamedKey, NodeId, OverlayControl, Props, Reactive, ReactiveList,
+    RectStyle, RwSignal, ShapeStyle, SizeDimension, Span, StyledContainer, SurfaceAmendment,
+    SurfaceStyle, Text, TextWrap, amend_surface, box_item, children, effect,
     focus::{FocusId, Role},
     memo, place_item, signal,
 };
@@ -157,8 +157,8 @@ pub struct CommandPaletteProps {
     #[props(some, default)]
     pub on_run: Option<RunHandler>,
     /// Runs whenever the palette closes, whether a command ran or not.
-    #[props(some, default)]
-    pub on_close: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_close: Option<Handler>,
     /// The dialog's width in logical px. `None` (the default) is [`CommandPaletteTokens::width`].
     #[props(some, default)]
     pub panel_width: Option<f32>,

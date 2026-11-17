@@ -24,7 +24,7 @@ impl Mounted {
                 .on_submit(Rc::new(move |query: &str| {
                     submitted.borrow_mut().push(format!("submit {query}"))
                 }))
-                .on_clear(Rc::new(move || cleared.borrow_mut().push("clear".into())))
+                .on_clear(move || cleared.borrow_mut().push("clear".into()))
                 .build(),
         )
         .unwrap();

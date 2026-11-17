@@ -485,7 +485,7 @@ fn row_probes() -> Vec<Rows> {
                 crate::context_menu(
                     crate::ContextMenuProps::props()
                         .at((40.0, 30.0))
-                        .on_close(std::rc::Rc::new(|| {}))
+                        .on_close(|| {})
                         .within(Rect::new(0.0, 0.0, 800.0, 600.0))
                         .size(size)
                         .children(two_items(size))
@@ -687,7 +687,7 @@ fn panel_probes() -> Vec<Panel> {
                     crate::context_menu(
                         crate::ContextMenuProps::props()
                             .at((40.0, 30.0))
-                            .on_close(std::rc::Rc::new(|| {}))
+                            .on_close(|| {})
                             .within(Rect::new(0.0, 0.0, 800.0, 600.0))
                             .children(two_items(ControlSize::Regular))
                             .build(),

@@ -124,7 +124,7 @@ fn enter_fires_on_submit_while_focused() {
     let (field, rect) = laid_out_field(
         TextFieldProps::props()
             .value(value)
-            .on_submit(Rc::new(move || sink.set(true)) as Rc<dyn Fn()>)
+            .on_submit(move || sink.set(true))
             .build(),
     );
     let mut tree = ComponentList::new(field);
@@ -174,7 +174,7 @@ fn a_key_hook_hears_keys_first_and_takes_only_the_ones_it_answers() {
     let (field, rect) = laid_out_field(
         TextFieldProps::props()
             .value(value)
-            .on_submit(Rc::new(move || submit.set(true)) as Rc<dyn Fn()>)
+            .on_submit(move || submit.set(true))
             .on_key(Rc::new(move |key: &Key, _: ModifiersState| {
                 sink.borrow_mut().push(key.clone());
                 matches!(key, Key::Named(NamedKey::Enter))

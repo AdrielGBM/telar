@@ -8,7 +8,7 @@ use telar::{
     SurfaceAmendment, Transaction, amend_surface, box_item, current_direction, focus::Role, signal,
     step_factor, track_layout,
 };
-use telar::{Children, Clip, ClippedItem, Container, RwSignal};
+use telar::{Children, Clip, ClippedItem, Container, Handler, RwSignal};
 
 use crate::shared;
 use crate::shared::edit::Stroke;
@@ -191,8 +191,8 @@ pub struct ResizableProps {
     #[props(some, into, default)]
     pub height_label: Option<Reactive<String>>,
     /// Runs as a drag takes hold of a handle, before its first size is asked for. Key steps are not drags and do not run it.
-    #[props(some, default)]
-    pub on_start: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_start: Option<Handler>,
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept: `true` when it was let go, `false` when it was cancelled (Escape, another pointer button, the window losing focus) or the handle went away mid-drag. A cancelled drag has put the size back by the time this runs.
     #[props(some, default)]
     pub on_end: Option<Rc<dyn Fn(bool)>>,
@@ -237,8 +237,8 @@ pub struct ResizeHandleProps {
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
     /// Runs as a drag takes hold of the handle, before its first size is asked for.
-    #[props(some, default)]
-    pub on_start: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_start: Option<Handler>,
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept.
     #[props(some, default)]
     pub on_end: Option<Rc<dyn Fn(bool)>>,

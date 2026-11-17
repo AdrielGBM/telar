@@ -120,7 +120,7 @@ fn opened_at(at: (f32, f32), lines: Vec<Line>) -> (Scoped<ComponentList>, Said) 
         let menu = context_menu(
             ContextMenuProps::props()
                 .at(at)
-                .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
+                .on_close(move || closing.borrow_mut().push("cerrar".into()))
                 .panel_width(120.0)
                 .within(WINDOW)
                 .children(written(lines, &said))
@@ -609,7 +609,7 @@ fn hosted(open: RwSignal<bool>, lines: Vec<Line>) -> (ComponentList, FocusId) {
             context_menu(
                 ContextMenuProps::props()
                     .at((40.0, 60.0))
-                    .on_close(Rc::new(move || open.set(false)))
+                    .on_close(move || open.set(false))
                     .panel_width(120.0)
                     .within(WINDOW)
                     .children(written(lines.clone(), &said))
@@ -1177,7 +1177,7 @@ fn switching_at(size: ControlSize, ticked: bool) -> (Scoped<ComponentList>, RwSi
         let menu = context_menu(
             ContextMenuProps::props()
                 .at((40.0, 30.0))
-                .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
+                .on_close(move || closing.borrow_mut().push("cerrar".into()))
                 .panel_width(160.0)
                 .within(WINDOW)
                 .children(rows)

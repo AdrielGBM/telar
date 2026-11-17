@@ -129,9 +129,9 @@ fn buttons(play: &Play) -> Vec<(String, Option<Toggle>)> {
 }
 
 /// A control a caller brings to the tag's `action` slot: a button named `name`, a full pointer target, that runs `run`.
-fn acting(name: &'static str, run: Rc<dyn Fn()>) -> telar::Children {
+fn acting(name: &'static str, run: impl Into<telar::Handler>) -> telar::Children {
+    let run = run.into();
     telar::Children::one(move || {
-        let run = run.clone();
         let button = telar::StyledContainer::new(
             LayoutStyle::new()
                 .width(shared::MIN_TARGET)
@@ -140,7 +140,7 @@ fn acting(name: &'static str, run: Rc<dyn Fn()>) -> telar::Children {
             vec![],
         )?
         .control(Role::Button)
-        .on_press(move || run())
+        .on_press(run.clone())
         .a11y_label(move || name);
         Ok(telar::box_item(button))
     })
@@ -154,10 +154,9 @@ fn with_an_action(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let actions = ctx.actions();
     tag(TagProps::props()
         .label("Logo")
-        .action(acting(
-            "Remove Logo",
-            Rc::new(move || actions.log("remove", Vec::new())),
-        ))
+        .action(acting("Remove Logo", move || {
+            actions.log("remove", Vec::new())
+        }))
         .build())
 }
 
@@ -195,10 +194,9 @@ fn filter_with_an_action(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, Layout
     tag(TagProps::props()
         .label("Images")
         .selected(on)
-        .action(acting(
-            "Remove Images",
-            Rc::new(move || actions.log("remove", Vec::new())),
-        ))
+        .action(acting("Remove Images", move || {
+            actions.log("remove", Vec::new())
+        }))
         .build())
 }
 
@@ -392,7 +390,7 @@ fn tapping_the_action_runs_it() {
     let sink = removed.clone();
     let mut tag = tag(TagProps::props()
         .label("Logo")
-        .action(acting("Remove Logo", Rc::new(move || sink.set(true))))
+        .action(acting("Remove Logo", move || sink.set(true)))
         .build())
     .unwrap();
     let rect = track_layout(tag.layout_node()).unwrap();
@@ -663,10 +661,7 @@ fn behaviours(tone: Tone, variant: Variant) -> Vec<(&'static str, TagProps)> {
         ("static", tag().build()),
         ("filter on", tag().selected(telar::signal(true)).build()),
         ("filter off", tag().selected(telar::signal(false)).build()),
-        (
-            "with an action",
-            tag().action(acting("Act", Rc::new(|| {}))).build(),
-        ),
+        ("with an action", tag().action(acting("Act", || {})).build()),
     ]
 }
 
@@ -779,7 +774,7 @@ fn leading_and_trailing_sit_before_and_after_the_label_and_before_the_action() {
             .label("Logo")
             .leading(word("L"))
             .trailing(word("T"))
-            .action(acting("Remove Logo", Rc::new(|| {})));
+            .action(acting("Remove Logo", || {}));
         let props = match filter {
             true => props.selected(telar::signal(true)),
             false => props,
@@ -879,10 +874,7 @@ fn a_press_at_the_toggle_s_label_edge_toggles_and_does_not_reach_the_action() {
             .label("Images")
             .size(size)
             .selected(on)
-            .action(acting(
-                "Remove Images",
-                Rc::new(move || sink.set(sink.get() + 1)),
-            ))
+            .action(acting("Remove Images", move || sink.set(sink.get() + 1)))
             .build())
         .unwrap();
         in_a_row_node(tag.layout_node());

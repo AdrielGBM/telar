@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use telar::Transaction;
+use telar::{Handler, Transaction};
 
 /// If `transaction` is already open (a drag or popover in progress), previews `next` on it instead of starting a new commit, so a concurrent transaction on the same signal rebases onto it.
 pub(crate) fn write_through<T: Clone + PartialEq + 'static>(transaction: Transaction<T>, next: T) {
@@ -31,13 +31,13 @@ pub(crate) fn snap(raw: f32, increment: f32, min: f32, max: f32) -> f32 {
 
 /// A drag under way, so a widget's `on_end` answers each `on_start` exactly once: at the release, at a cancel, or — when neither comes because the widget is gone — as the last closure holding it drops.
 pub(crate) struct Stroke {
-    on_start: Option<Rc<dyn Fn()>>,
+    on_start: Option<Handler>,
     on_end: Option<Rc<dyn Fn(bool)>>,
     live: Cell<bool>,
 }
 
 impl Stroke {
-    pub(crate) fn new(on_start: Option<Rc<dyn Fn()>>, on_end: Option<Rc<dyn Fn(bool)>>) -> Self {
+    pub(crate) fn new(on_start: Option<Handler>, on_end: Option<Rc<dyn Fn(bool)>>) -> Self {
         Self {
             on_start,
             on_end,
@@ -49,7 +49,7 @@ impl Stroke {
         if !self.live.replace(true)
             && let Some(on_start) = &self.on_start
         {
-            on_start();
+            on_start.run();
         }
     }
 

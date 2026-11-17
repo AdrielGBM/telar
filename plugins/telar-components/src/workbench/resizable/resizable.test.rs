@@ -364,7 +364,7 @@ fn every_drag_starts_once_and_ends_once_with_whether_it_was_kept() {
     let (started, ended) = (heard.clone(), heard.clone());
     let mut tree = mount(
         ResizableProps::props()
-            .on_start(Rc::new(move || started.borrow_mut().push("start".into())))
+            .on_start(move || started.borrow_mut().push("start".into()))
             .on_end(Rc::new(move |kept| {
                 ended.borrow_mut().push(format!("end {kept}"))
             }))

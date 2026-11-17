@@ -5,8 +5,8 @@ use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, Border, Color, Cursor, Insets, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey,
-    Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Accessible, Border, Color, Cursor, Handler, Insets, Key, LayoutError, LayoutItem, LayoutStyle,
+    NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
     Transaction, Transform, amend_surface, box_item, focus::Role, signal, step_factor,
     use_theme_tokens,
 };
@@ -98,8 +98,8 @@ pub struct HandleProps {
     #[props(into, default)]
     pub label: Reactive<String>,
     /// Runs as a drag takes hold of the handle, before its first value is asked for. Arrow-key steps are not drags and do not run it.
-    #[props(some, default)]
-    pub on_start: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_start: Option<Handler>,
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept: `true` when it was let go, `false` when it was cancelled — Escape, another pointer button, the window losing focus — or the handle went away mid-drag. An undone drag has reverted its transaction by the time this runs; a kept one has written the value it was let go at, and its transaction commits as this returns. A drag that joined a transaction already open elsewhere leaves that decision to whoever opened it, and ends kept whenever its gesture ends.
     #[props(some, default)]
     pub on_end: Option<Rc<dyn Fn(bool)>>,

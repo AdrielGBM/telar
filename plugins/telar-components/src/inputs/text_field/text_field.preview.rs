@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::sample::at_width;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Key, NamedKey, Reactive, Role};
@@ -14,7 +12,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(text_field: TextFieldProps, "Default", |p| {
             text_field(
                 TextFieldProps::props()
-                    .on_submit(Rc::new(|| {}))
+                    .on_submit(|| {})
                     .label(p.arg("label", "Name"))
                     .placeholder(p.arg("placeholder", "Type here"))
                     .size(p.arg("size", ControlSize::Regular))

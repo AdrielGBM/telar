@@ -6,8 +6,8 @@ use crate::shared;
 use crate::strings;
 use telar::ControlSize;
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Color, Container, Input, JustifyContent, Key,
-    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, ModifiersState, NodeId, Props,
+    Accessible, AlignItems, Border, BorderRadius, Color, Container, Handler, Input, JustifyContent,
+    Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, ModifiersState, NodeId, Props,
     Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextArea,
     TextStyle, TextWrap, amend_surface, box_item, children, focus::FocusId, signal, style_follows,
 };
@@ -151,8 +151,8 @@ pub struct TextFieldProps {
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
     /// Runs when Enter is pressed while a field of one line is focused. A [`multiline`](Self::multiline) field breaks the line instead.
-    #[props(some, default)]
-    pub on_submit: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_submit: Option<Handler>,
     /// Hears every key pressed while the field holds the keyboard, before the field acts on it; answering `true` takes the key from the field. What a field that walks a list of suggestions under it needs: the arrows and Enter are keys a focused field keeps for itself.
     #[props(some, default)]
     pub on_key: Option<FieldKeyHandler>,
@@ -458,7 +458,7 @@ fn single_line(
     placeholder: &Reactive<String>,
     name: impl Fn() -> String + 'static,
     text: impl Fn(TextStyle) -> TextStyle + 'static,
-    on_submit: Option<Rc<dyn Fn()>>,
+    on_submit: Option<Handler>,
     on_key: Option<FieldKeyHandler>,
     layout: Box<dyn Fn() -> LayoutStyle>,
 ) -> Result<Editor, LayoutError> {
@@ -466,7 +466,7 @@ fn single_line(
         .placeholder(placeholder.get())
         .a11y_label(name);
     if let Some(submit) = on_submit {
-        input = input.on_submit(move || submit());
+        input = input.on_submit(move || submit.run());
     }
     if let Some(hook) = on_key {
         input = input.on_key(move |key, modifiers| hook(key, modifiers));

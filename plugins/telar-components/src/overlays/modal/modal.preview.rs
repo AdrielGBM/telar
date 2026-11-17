@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, Text, box_item};
@@ -50,7 +48,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )?;
             let dialog = modal(
                 ModalProps::props()
-                    .on_close(Rc::new(|| {}))
+                    .on_close(|| {})
                     .control(open)
                     .title(p.arg("title", "Confirm"))
                     .size(p.arg("size", ControlSize::Regular))

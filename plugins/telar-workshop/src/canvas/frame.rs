@@ -344,10 +344,10 @@ fn handle(edge: ResizeEdge, resize: &Resize) -> Result<Box<dyn LayoutItem>, Layo
         .scale(resize.scale)
         .step(KEY_STEP)
         .thickness(HANDLE)
-        .on_start(Rc::new({
+        .on_start({
             let before = Rc::clone(&before);
             move || *before.borrow_mut() = Some(settings.peek())
-        }))
+        })
         .on_end(Rc::new(move |kept| {
             if let Some(before) = before.take()
                 && !kept

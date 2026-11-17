@@ -2,10 +2,10 @@
 
 use std::rc::Rc;
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent,
-    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, OverlayControl, Props, Reactive,
-    RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface, box_item,
-    children, focus::Role,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Handler,
+    JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, OverlayControl, Props,
+    Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface,
+    box_item, children, focus::Role,
 };
 
 use crate::layout::heading::heading::{HeadingProps, heading};
@@ -105,8 +105,8 @@ pub struct ModalProps {
     #[props(default)]
     pub size: ControlSize,
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.
-    #[props(some, default)]
-    pub on_close: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_close: Option<Handler>,
     /// The Close affordance's text. `None` (the default) uses the localized `telar_components.close` message, which an application can override in its catalog; `Some` wins over both.
     #[props(some, into, default)]
     pub close_label: Option<Reactive<String>>,

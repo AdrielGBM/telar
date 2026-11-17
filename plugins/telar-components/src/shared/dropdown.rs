@@ -3,10 +3,10 @@
 use std::rc::Rc;
 use telar::{
     AlignItems, Anchoring, Border, BorderRadius, Children, Clip, ClippedItem, Color, ConsumedKeys,
-    Container, DismissRegistration, HasPopup, JustifyContent, Key, LayoutError, LayoutItem,
-    LayoutStyle, Memo, NamedKey, NodeId, Overlay, Reactive, ReactiveList, Rect, RectStyle,
-    RwSignal, ShapeStyle, Side, StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface,
-    box_item, children, effect,
+    Container, DismissRegistration, Handler, HasPopup, JustifyContent, Key, LayoutError,
+    LayoutItem, LayoutStyle, Memo, NamedKey, NodeId, Overlay, Reactive, ReactiveList, Rect,
+    RectStyle, RwSignal, ShapeStyle, Side, StyledContainer, SurfaceStyle, Text, TextWrap,
+    amend_surface, box_item, children, effect,
     focus::{FocusId, Role},
     memo, signal, track_layout,
 };
@@ -58,7 +58,7 @@ pub(crate) struct Face {
 pub(crate) fn trigger(
     face: Face,
     open: RwSignal<bool>,
-    toggle: Rc<dyn Fn()>,
+    toggle: Handler,
 ) -> Result<StyledContainer, LayoutError> {
     let Face {
         label,
@@ -99,7 +99,7 @@ pub(crate) fn trigger(
         StyledContainer::new(trigger_box(), move |_r| rest(false), children)?
             .styled_by(trigger_box)
             .hover_style(move |_r| hover(true))
-            .on_press(move || toggle()),
+            .on_press(toggle),
     )
 }
 
@@ -241,7 +241,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     };
     // Key events are broadcast, so without this a bare Enter would open every select on the page.
     let trigger_focused = signal(false);
-    let toggle: Rc<dyn Fn()> = Rc::new(move || {
+    let toggle = Handler::from(move || {
         let opening = !open.peek();
         if opening {
             // The cursor starts on what is already chosen, so the first arrow moves from there.
@@ -299,7 +299,9 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                         highlighted.set(Some(idx));
                     }
                 }
-                Key::Named(NamedKey::ArrowDown) if !is_open && trigger_focused.peek() => toggle(),
+                Key::Named(NamedKey::ArrowDown) if !is_open && trigger_focused.peek() => {
+                    toggle.run()
+                }
                 _ => return false,
             }
             // Taken, so the list the panel scrolls does not also answer an arrow by scrolling when it holds focus.

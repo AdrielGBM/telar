@@ -5,9 +5,9 @@
 use std::rc::Rc;
 
 use telar::{
-    Anchoring, Children, Color, ConsumedKeys, Container, HasPopup, Key, LayoutError, LayoutItem,
-    LayoutStyle, NamedKey, Props, Reactive, ReactiveList, Rect, RwSignal, Side, SurfaceAmendment,
-    box_item, effect,
+    Anchoring, Children, Color, ConsumedKeys, Container, Handler, HasPopup, Key, LayoutError,
+    LayoutItem, LayoutStyle, NamedKey, Props, Reactive, ReactiveList, Rect, RwSignal, Side,
+    SurfaceAmendment, box_item, effect,
     focus::{self, FocusId, Role},
     memo, signal, track_layout, use_direction,
 };
@@ -228,7 +228,7 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let open_list: RwSignal<Option<FocusId>> = signal(None);
     // Key events are broadcast, so without this a bare Enter would open every menu on the page.
     let trigger_focused = signal(false);
-    let toggle: Rc<dyn Fn()> = Rc::new(move || open.set(!open.peek()));
+    let toggle = Handler::from(move || open.set(!open.peek()));
     let face = dropdown::Face {
         label,
         size,
@@ -248,7 +248,7 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             match key {
                 Key::Named(NamedKey::ArrowDown) if trigger_focused.peek() => {
                     seed.set(true);
-                    toggle();
+                    toggle.run();
                     true
                 }
                 _ => false,
@@ -277,7 +277,7 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let holder = {
         let held = held.clone();
         dropdown::while_open(open, move || {
-            let close: Rc<dyn Fn()> = Rc::new(move || open.set(false));
+            let close = Handler::from(move || open.set(false));
             let config = Rc::new(Config {
                 tokens,
                 width: None,
@@ -333,8 +333,8 @@ pub struct ContextMenuProps {
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(usize)>>,
     /// Run when the menu is done with: a row was picked, Escape was pressed, or the hand went elsewhere. The caller owns whether the menu exists, so this is how it says the answer is in.
-    #[props(default = Rc::new(|| {}))]
-    pub on_close: Rc<dyn Fn()>,
+    #[props(into, default = Handler::from(|| {}))]
+    pub on_close: Handler,
     /// The least width of each panel in logical px; a panel widens to its widest row. `None` (the default) is [`MenuTokens::width`].
     #[props(some, default)]
     pub panel_width: Option<f32>,
@@ -432,7 +432,7 @@ pub fn menu_layer<T: Clone + 'static>(
             let Some(value) = asked.peek().filter(|_| shown) else {
                 return Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?));
             };
-            let props = ContextMenuProps::props().on_close(Rc::new(move || asked.set(None)));
+            let props = ContextMenuProps::props().on_close(move || asked.set(None));
             let props = match place(&value) {
                 MenuPlace::At(point) => props.at(point),
                 MenuPlace::Under(control) => props.around(control),

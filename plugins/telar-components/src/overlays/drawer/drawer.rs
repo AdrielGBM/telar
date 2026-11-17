@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Direction,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Direction, Handler,
     JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, OverlayControl, Props,
     Reactive, RectStyle, ShapeStyle, Side, StyledContainer, SurfaceAmendment, amend_surface,
     box_item, children, current_direction, focus::Role,
@@ -67,8 +67,8 @@ pub struct DrawerProps {
     #[props(default)]
     pub size: ControlSize,
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
-    #[props(some, default)]
-    pub on_close: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    pub on_close: Option<Handler>,
     /// Names the panel for a reader. `None` (the default) uses the localized `telar_components.drawer` message, which an application can override in its catalog.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,

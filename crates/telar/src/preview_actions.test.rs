@@ -25,7 +25,8 @@ struct PadProps {
     on_drop: Option<Rc<dyn Fn(Opaque)>>,
     #[props(some, default)]
     style: Option<Rc<dyn Fn(u32) -> u32>>,
-    on_close: Rc<dyn Fn()>,
+    #[props(into)]
+    on_close: Handler,
 }
 
 fn props() -> PadPropsBuilder<PadPropsMissingOnClose> {
@@ -50,7 +51,7 @@ fn run(props: &PadProps) {
     if let Some(on_drop) = &props.on_drop {
         on_drop(Opaque);
     }
-    (props.on_close)();
+    props.on_close.run();
 }
 
 #[test]
@@ -61,7 +62,7 @@ fn the_builder_logs_every_optional_callback_it_holds_in_any_state() {
         .on_pick(Rc::new(|_| {}))
         .on_drop(Rc::new(|_| {}))
         .__preview_actions(&log)
-        .on_close(Rc::new(|| {}))
+        .on_close(|| {})
         .build();
     run(&props);
     let names: Vec<&str> = calls(&log).iter().map(|(name, _)| *name).collect();
@@ -92,7 +93,7 @@ fn a_callback_set_before_the_builder_logs_still_runs() {
             let toggled = Rc::clone(&toggled);
             move |on| toggled.set(Some(on))
         }))
-        .on_close(Rc::new(|| {}))
+        .on_close(|| {})
         .__preview_actions(&log)
         .build();
     run(&props);
@@ -105,10 +106,10 @@ fn the_props_log_their_required_callbacks_too() {
     let log = ActionLog::new();
     let closed = Rc::new(Cell::new(false));
     let props = props()
-        .on_close(Rc::new({
+        .on_close({
             let closed = Rc::clone(&closed);
             move || closed.set(true)
-        }))
+        })
         .build()
         .preview_actions(&log);
     run(&props);
@@ -185,15 +186,15 @@ fn a_preview_without_props_logs_nothing() {
 
 #[derive(Props)]
 struct ChipProps {
-    #[props(some, default)]
-    on_remove: Option<Rc<dyn Fn()>>,
+    #[props(some, into, default)]
+    on_remove: Option<Handler>,
 }
 
 /// What a component draws for a callback it is handed: a remove button for an `on_remove`.
 fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let parts = match props.on_remove {
         Some(on_remove) => {
-            on_remove();
+            on_remove.run();
             vec![box_item(Container::new(LayoutStyle::new(), Vec::new())?)]
         }
         None => Vec::new(),
@@ -206,7 +207,7 @@ fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 fn a_preview_leaves_an_optional_callback_it_does_not_set_unset() {
     let bare = preview!(chip: ChipProps, "Bare", |_| chip(ChipProps::props().build()));
     let removable = preview!(chip: ChipProps, "Removable", |_| {
-        chip(ChipProps::props().on_remove(Rc::new(|| {})).build())
+        chip(ChipProps::props().on_remove(|| {}).build())
     });
     reset_layout_runtime();
     let ctx = PreviewCtx::default();

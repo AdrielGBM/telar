@@ -4,7 +4,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Container, DismissRegistration, LayoutError, LayoutItem, LayoutStyle, NodeId, Overlay,
+    Container, DismissRegistration, Handler, LayoutError, LayoutItem, LayoutStyle, NodeId, Overlay,
     ReactiveList, Rect, RwSignal, Size, box_item, children, effect, signal,
 };
 
@@ -92,13 +92,13 @@ fn collapsed() -> Result<Box<dyn LayoutItem>, LayoutError> {
 /// The scrim is built ONCE — lazily on the first open, so the layout host exists and the portal attaches to the viewport — then kept mounted and shown/hidden via `open` (see `Overlay::toggleable`), preserving the body across close/reopen. The `ReactiveList` is keyed on a latch that flips true on the first open and stays true, so the built scrim is never disposed.
 pub(crate) fn scrim_overlay(
     open: RwSignal<bool>,
-    on_close: Option<Rc<dyn Fn()>>,
+    on_close: Option<Handler>,
     build_inner: impl Fn(DismissFn) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let dismiss: DismissFn = Rc::new(move || {
         open.set(false);
-        if let Some(cb) = &on_close {
-            cb();
+        if let Some(on_close) = &on_close {
+            on_close.run();
         }
     });
 

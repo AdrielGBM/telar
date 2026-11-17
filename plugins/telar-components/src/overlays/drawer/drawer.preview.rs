@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Container, LayoutError, Role, Side, box_item};
@@ -21,7 +19,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )?;
             let panel = drawer(
                 DrawerProps::props()
-                    .on_close(Rc::new(|| {}))
+                    .on_close(|| {})
                     .control(open)
                     .side(p.arg("side", Side::Start))
                     .given(p.arg("extent", None::<f32>), |props, extent| props.extent(extent))

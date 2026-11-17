@@ -14,7 +14,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             search_field(
                 SearchFieldProps::props()
                     .on_submit(Rc::new(|_| {}))
-                    .on_clear(Rc::new(|| {}))
+                    .on_clear(|| {})
                     .value(value)
                     .size(p.arg("size", ControlSize::Regular))
                     .build(),

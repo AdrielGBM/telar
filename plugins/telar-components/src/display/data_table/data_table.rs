@@ -926,7 +926,7 @@ fn column_resizer(
             .label(Reactive::of(move || {
                 strings::text_with(strings::RESIZE_COLUMN, &[("label", &name)])
             }))
-            .on_start(Rc::new(start))
+            .on_start(start)
             .on_end(Rc::new(end))
             .build(),
     )?;

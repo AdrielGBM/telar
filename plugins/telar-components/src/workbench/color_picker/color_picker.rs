@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Canvas, Clip, ClippedItem, Color, Container,
-    Cursor, Gradient, Key, LayoutError, LayoutItem, LayoutStyle, ModifiersState, NamedKey,
+    Cursor, Gradient, Handler, Key, LayoutError, LayoutItem, LayoutStyle, ModifiersState, NamedKey,
     NumericValue, Orientation, Paint, Point, Props, Reactive, Rect, RectStyle, RenderNode,
     RovingAxis, RovingGroup, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
     amend_surface, box_item, box_transform, children, effect,
@@ -763,9 +763,9 @@ fn hex_field(picker: &Picker, alpha: bool) -> Result<Box<dyn LayoutItem>, Layout
         let shown = hex_of(value.get(), alpha);
         text.set_if_changed(shown);
     });
-    let apply: Rc<dyn Fn()> = {
+    let apply = {
         let picker = picker.clone();
-        Rc::new(move || {
+        Handler::from(move || {
             let typed = text.peek();
             match Color::from_hex(typed.trim()) {
                 Some(parsed) => {
@@ -785,7 +785,7 @@ fn hex_field(picker: &Picker, alpha: bool) -> Result<Box<dyn LayoutItem>, Layout
         let apply = apply.clone();
         Rc::new(move |key: &Key, _: ModifiersState| {
             match key {
-                Key::Named(NamedKey::Tab) => apply(),
+                Key::Named(NamedKey::Tab) => apply.run(),
                 Key::Named(NamedKey::Escape) => text.set(hex_of(value.peek(), alpha)),
                 _ => {}
             }
