@@ -153,17 +153,16 @@ impl ViewGen<'_> {
                 let value = super::redundant_parens(raw.trim()).unwrap_or(raw.trim());
                 match crate::registry::cursor_keyword(value) {
                     Some(variant) => format!(".cursor({variant})"),
-                    None if value.contains('$') => format!(
+                    None => format!(
                         ".cursor({})",
                         self.owning(
                             &[value],
                             &format!(
-                                "Reactive::of(move || {})",
+                                "Reactive::follow(move || {})",
                                 substitute_reads(value, self.theme_access)
                             )
                         )
                     ),
-                    None => format!(".cursor({})", value),
                 }
             })
             .unwrap_or_default();
@@ -695,7 +694,12 @@ fn consumes_keys_call(generator: &ViewGen, el: &Element, errors: &mut Vec<String
     };
     let raw = attr.value.text().trim();
     let value = super::redundant_parens(raw).unwrap_or(raw).trim();
-    if value.contains('$') {
+    // Key names are written bare; anything else is an expression yielding the set, followed as it reads.
+    let names = value
+        .split([',', ' '])
+        .filter(|part| !part.trim().is_empty())
+        .all(|part| telar_project::is_plain_identifier(part.trim()));
+    if !names {
         let read = substitute_reads(value, theme);
         return format!(
             ".consumes_keys({})",

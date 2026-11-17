@@ -318,13 +318,13 @@
 317	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-910..919	2423	`demo_icon`
-963..972	2959	`demo_icon`
-1016..1025	3495	`demo_icon`
-1069..1078	4031	`demo_icon`
-1314..1323	6278	`demo_icon`
-1388..1397	6871	`demo_icon`
-1462..1471	7464	`demo_icon`
-1535..1544	8056	`demo_icon`
-1837..1841	10445	`logo`
-2005..2012	11797	`blurred`
+910..919	2485	`demo_icon`
+963..972	3084	`demo_icon`
+1016..1025	3683	`demo_icon`
+1069..1078	4282	`demo_icon`
+1314..1323	6592	`demo_icon`
+1388..1397	7248	`demo_icon`
+1462..1471	7904	`demo_icon`
+1535..1544	8559	`demo_icon`
+1837..1841	11001	`logo`
+2005..2012	12412	`blurred`

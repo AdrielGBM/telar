@@ -175,10 +175,10 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     let __col_3 = {
                         let __img_0 = {
-                            let __src = gradient_img.clone();
+                            let __src = Reactive::follow({ let gradient_img = gradient_img.clone(); move || gradient_img.clone() });
                             Image::new(
                                 LayoutStyle::new().width(SizeDimension::Percent(1.0)).height(320.0),
-                                move || __src.clone(),
+                                move || __src.get(),
                                 move || Raster::Smooth,
                                 move || ObjectFit::Contain,
                             )?
@@ -380,10 +380,10 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let __row_7 = {
                     let __col_9 = {
                         let __img_1 = {
-                            let __src = gradient_img.clone();
+                            let __src = Reactive::follow({ let gradient_img = gradient_img.clone(); move || gradient_img.clone() });
                             Image::new(
                                 LayoutStyle::new().width(SizeDimension::Percent(1.0)).height(200.0),
-                                move || __src.clone(),
+                                move || __src.get(),
                                 move || Raster::Smooth,
                                 move || ObjectFit::Contain,
                             )?
@@ -400,10 +400,10 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     let __col_10 = {
                         let __img_2 = {
-                            let __src = checker_img.clone();
+                            let __src = Reactive::follow({ let checker_img = checker_img.clone(); move || checker_img.clone() });
                             Image::new(
                                 LayoutStyle::new().width(SizeDimension::Percent(1.0)).height(200.0),
-                                move || __src.clone(),
+                                move || __src.get(),
                                 move || Raster::Smooth,
                                 move || ObjectFit::Contain,
                             )?
@@ -420,10 +420,10 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     let __col_11 = {
                         let __img_3 = {
-                            let __src = radial_img.clone();
+                            let __src = Reactive::follow(move || radial_img.clone());
                             Image::new(
                                 LayoutStyle::new().width(SizeDimension::Percent(1.0)).height(200.0),
-                                move || __src.clone(),
+                                move || __src.get(),
                                 move || Raster::Smooth,
                                 move || ObjectFit::Contain,
                             )?
@@ -449,10 +449,10 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let __row_8 = {
                     let __col_13 = {
                         let __img_4 = {
-                            let __src = checker_img.clone();
+                            let __src = Reactive::follow({ let checker_img = checker_img.clone(); move || checker_img.clone() });
                             Image::new(
                                 LayoutStyle::new().width(SizeDimension::Percent(1.0)).height(280.0),
-                                move || __src.clone(),
+                                move || __src.get(),
                                 move || Raster::Smooth,
                                 move || ObjectFit::Contain,
                             )?

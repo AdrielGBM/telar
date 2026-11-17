@@ -597,7 +597,7 @@ impl<'a> ViewGen<'a> {
     ///
     /// `clip` on its own is `Clip::both()`; a value is a `Clip` expression, so `clip:Clip::x()` cuts the left and right edges only — the thing CSS cannot say, since `overflow: hidden` on one axis forces the other out of `visible` — and `clip:(Clip::both().rounded(8.0))` follows a rounded box's own corners.
     ///
-    /// A value reading `$state` is followed, and may yield a `Clip`, an `Option<Clip>` or a `bool`: `clip:$cut` stops and starts cutting without rebuilding what it wraps.
+    /// A written shape is followed as it reads, and may yield a `Clip`, an `Option<Clip>` or a `bool`: `clip:$cut` stops and starts cutting without rebuilding what it wraps.
     fn clip_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "clip") else {
             return emit;
@@ -610,7 +610,7 @@ impl<'a> ViewGen<'a> {
             ChildEmit::Simple { name, code } => {
                 let pad = self.indent_str();
                 let wrapped = self.next_variable_name("clipped");
-                let clipped = if shape.contains('$') {
+                let clipped = if !attr.value.text().trim().is_empty() {
                     let read = self.owning(
                         &[shape],
                         &format!("move || {}", substitute_reads(shape, self.theme_access)),

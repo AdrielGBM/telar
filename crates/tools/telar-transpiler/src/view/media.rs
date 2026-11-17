@@ -141,7 +141,7 @@ impl ViewGen<'_> {
     ///
     /// - Quoted, non-empty `src:"path"` is a static asset the CLI baked: `data_fn` clones the `Arc` the artifact's `static` holds, and `setup` is empty — the payload lives once per crate in the generated module, not once per use site as it did when the macro baked it.
     /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). The closure takes its captures by [`ViewGen::owning`], so the outer handle stays usable, mirroring `svg color:$sig` / `box fill:$sig`.
-    /// - Non-quoted, `$`-free `src:expr` is a constant `Arc<Data>` handle: `setup` hoists it into `__src` once and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
+    /// - Non-quoted, `$`-free `src:expr` is an `Arc<Data>` handle worked out through `Reactive::follow`: held as it is when working it out read no state, and worked out again when what it read changes otherwise, so `src:icon_for(level)` follows `level` as `src:$icon` does. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
     /// - Missing, empty, or written in a form that cannot name an asset (a bare flag, a `t"…"` key) falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
     fn media_src_binding(&self, src_attr: Option<&Attr>, kind: AssetKind) -> (String, String) {
         let pad = self.indent_str();
@@ -160,9 +160,10 @@ impl ViewGen<'_> {
                 }
                 let lead = expr.len() - expr.trim_start().len();
                 let src = format!("{}{v}", expr_marker(a.value_start + lead, v.len()));
+                let read = self.owning(&[v], &format!("move || {src}.clone()"));
                 (
-                    format!("{pad}    let __src = {src}.clone();\n"),
-                    "move || __src.clone()".to_string(),
+                    format!("{pad}    let __src = Reactive::follow({read});\n"),
+                    "move || __src.get()".to_string(),
                 )
             }
             _ => (

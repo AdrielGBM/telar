@@ -950,11 +950,11 @@ fn svg_generates_src_color_and_layout() {
     let code = &out.rust_code;
     assert!(code.contains("Svg::new("), "missing Svg::new:\n{code}");
     assert!(
-        code.contains("let __src = props.icon.clone();"),
-        "missing src hoist:\n{code}"
+        code.contains("let __src = Reactive::follow("),
+        "the src is worked out through a reading:\n{code}"
     );
     assert!(
-        code.contains("move || __src.clone(),"),
+        code.contains("move || __src.get(),"),
         "missing src closure:\n{code}"
     );
     assert!(
@@ -1218,8 +1218,10 @@ fn a_cursor_is_a_keyword_or_the_expression_that_answers_with_one() {
     let worked_out =
         transpile_source("[view]\nbox cursor:(along(axis))\n", "demo", None, None).unwrap();
     assert!(
-        worked_out.rust_code.contains(".cursor(along(axis))"),
-        "and anything else is the expression the author wrote, without its delimiters:\n{}",
+        worked_out
+            .rust_code
+            .contains(".cursor(Reactive::follow(move || along(axis)))"),
+        "and anything else is the expression the author wrote, without its delimiters, followed as it reads:\n{}",
         worked_out.rust_code
     );
 }
@@ -1236,7 +1238,7 @@ fn a_cursor_that_reads_a_signal_keeps_reading_it() {
     .unwrap();
     assert!(
         out.rust_code
-            .contains("Reactive::of(move || shape(busy.get()))"),
+            .contains("Reactive::follow(move || shape(busy.get()))"),
         "the read is kept as one:\n{}",
         out.rust_code
     );
@@ -1675,13 +1677,13 @@ fn svg_src_signal_is_reactive_and_clones_the_handle() {
 }
 
 #[test]
-fn svg_src_constant_expr_is_still_captured_once() {
+fn svg_src_expr_is_held_as_itself_when_it_reads_nothing() {
     let src = "[view]\ncol\n    svg src:icon(\"bell\") width:18 height:18\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains("let __src = icon(\"bell\").clone();")
-            && code.contains("move || __src.clone(),"),
-        "constant src should be captured once:\n{code}"
+        code.contains("let __src = Reactive::follow(move || icon(\"bell\").clone());")
+            && code.contains("move || __src.get(),"),
+        "worked out once, and held as itself when that read no state:\n{code}"
     );
 }
 

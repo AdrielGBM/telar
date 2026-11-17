@@ -10,7 +10,7 @@ col theme:(AppTheme::for_act(Act::Web, $scheme)) fill:$theme.background
 
 `theme:` works on any built-in tag and provides the theme to that box and everything under it, however many
 children it has; the box's own `$theme` reads resolve it too. The value is a theme, or a `ScopedTheme` the
-caller keeps to switch the subtree later. A value that reads `$state` is followed: when the state changes the
+caller keeps to switch the subtree later. A value worked out rather than named is followed: when what it read changes the
 theme is swapped in place and only the readers under it run again. The global `set_theme` does not reach the
 subtree.
 
@@ -28,7 +28,7 @@ In Rust:
 | --- | --- |
 | `provide_theme(theme, \|\| build)` | Builds `build` with `theme` in force. Adds no layout node. |
 | `ScopedTheme::new(theme)`, `.set(theme)` | A theme for one subtree, switchable in place. |
-| `follow_theme(\|\| theme)` | A `ScopedTheme` that follows what the closure reads, which is what `theme:` with a `$` value builds. |
+| `follow_theme(\|\| theme)` | A `ScopedTheme` that follows what the closure reads, which is what `theme:` with a worked-out value builds. The closure yields a theme, or a `ScopedTheme` it then follows as that changes. |
 | `nearest_theme()` | The theme provided at or above the current owner, if any. |
 
 Every target resolves themes the same way: they are reactive state, read where a style is built.

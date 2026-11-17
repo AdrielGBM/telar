@@ -115,19 +115,19 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
                                     let __svg_0 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(40.0).height(40.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             || None,
                                             move || ObjectFit::Contain,
                                         )?
                                     };
                                     let __svg_1 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(40.0).height(40.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             { let theme = theme.clone(); move || Some(theme.get().primary) },
                                             move || ObjectFit::Contain,
                                         )?

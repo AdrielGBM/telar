@@ -42,37 +42,37 @@ pub fn svg(props: SvgProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
                                     let __svg_0 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(20.0).height(20.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             || None,
                                             move || ObjectFit::Contain,
                                         )?
                                     };
                                     let __svg_1 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(36.0).height(36.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             || None,
                                             move || ObjectFit::Contain,
                                         )?
                                     };
                                     let __svg_2 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(64.0).height(64.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             || None,
                                             move || ObjectFit::Contain,
                                         )?
                                     };
                                     let __svg_3 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(96.0).height(96.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             || None,
                                             move || ObjectFit::Contain,
                                         )?
@@ -111,37 +111,37 @@ pub fn svg(props: SvgProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
                                     let __svg_4 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(48.0).height(48.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             { let theme = theme.clone(); move || Some(theme.get().primary) },
                                             move || ObjectFit::Contain,
                                         )?
                                     };
                                     let __svg_5 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(48.0).height(48.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             { let theme = theme.clone(); move || Some(theme.get().success) },
                                             move || ObjectFit::Contain,
                                         )?
                                     };
                                     let __svg_6 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(48.0).height(48.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             { let theme = theme.clone(); move || Some(theme.get().danger) },
                                             move || ObjectFit::Contain,
                                         )?
                                     };
                                     let __svg_7 = {
-                                        let __src = demo_icon.clone();
+                                        let __src = Reactive::follow({ let demo_icon = demo_icon.clone(); move || demo_icon.clone() });
                                         Svg::new(
                                             LayoutStyle::new().width(48.0).height(48.0),
-                                            move || __src.clone(),
+                                            move || __src.get(),
                                             { let theme = theme.clone(); move || Some(theme.get().purple) },
                                             move || ObjectFit::Contain,
                                         )?
@@ -181,10 +181,10 @@ pub fn svg(props: SvgProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let __row_2 = {
                                     let __col_1 = {
                                         let __svg_8 = {
-                                            let __src = logo.clone();
+                                            let __src = Reactive::follow({ let logo = logo.clone(); move || logo.clone() });
                                             Svg::new(
                                                 LayoutStyle::new().width(88.0).height(88.0),
-                                                move || __src.clone(),
+                                                move || __src.get(),
                                                 || None,
                                                 move || ObjectFit::Contain,
                                             )?
@@ -200,10 +200,10 @@ pub fn svg(props: SvgProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_2 = {
                                         let __svg_9 = {
-                                            let __src = blurred.clone();
+                                            let __src = Reactive::follow({ let blurred = blurred.clone(); move || blurred.clone() });
                                             Svg::new(
                                                 LayoutStyle::new().width(88.0).height(88.0),
-                                                move || __src.clone(),
+                                                move || __src.get(),
                                                 || None,
                                                 move || ObjectFit::Contain,
                                             )?

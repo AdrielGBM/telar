@@ -50,10 +50,10 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __img_0 = {
-                                    let __src = gradient.clone();
+                                    let __src = Reactive::follow({ let gradient = gradient.clone(); move || gradient.clone() });
                                     Image::new(
                                         LayoutStyle::new().width(128.0).height(128.0),
-                                        move || __src.clone(),
+                                        move || __src.get(),
                                         move || Raster::Smooth,
                                         move || ObjectFit::Contain,
                                     )?
@@ -91,10 +91,10 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let __row_0 = {
                                     let __col_1 = {
                                         let __img_1 = {
-                                            let __src = checker.clone();
+                                            let __src = Reactive::follow({ let checker = checker.clone(); move || checker.clone() });
                                             Image::new(
                                                 LayoutStyle::new().width(120.0).height(120.0),
-                                                move || __src.clone(),
+                                                move || __src.get(),
                                                 move || Raster::Smooth,
                                                 move || ObjectFit::Contain,
                                             )?
@@ -110,10 +110,10 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_2 = {
                                         let __img_2 = {
-                                            let __src = checker.clone();
+                                            let __src = Reactive::follow({ let checker = checker.clone(); move || checker.clone() });
                                             Image::new(
                                                 LayoutStyle::new().width(120.0).height(120.0),
-                                                move || __src.clone(),
+                                                move || __src.get(),
                                                 move || Raster::Pixel,
                                                 move || ObjectFit::Contain,
                                             )?
@@ -162,10 +162,10 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 let __row_1 = {
                                     let __col_3 = {
                                         let __img_3 = {
-                                            let __src = gradient.clone();
+                                            let __src = Reactive::follow({ let gradient = gradient.clone(); move || gradient.clone() });
                                             Image::new(
                                                 LayoutStyle::new().width(150.0).height(80.0),
-                                                move || __src.clone(),
+                                                move || __src.get(),
                                                 move || Raster::Smooth,
                                                 move || ObjectFit::Contain,
                                             )?
@@ -181,10 +181,10 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_4 = {
                                         let __img_4 = {
-                                            let __src = gradient.clone();
+                                            let __src = Reactive::follow({ let gradient = gradient.clone(); move || gradient.clone() });
                                             Image::new(
                                                 LayoutStyle::new().width(150.0).height(80.0),
-                                                move || __src.clone(),
+                                                move || __src.get(),
                                                 move || Raster::Smooth,
                                                 move || ObjectFit::Cover,
                                             )?
@@ -200,10 +200,10 @@ pub fn images(props: ImagesProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     };
                                     let __col_5 = {
                                         let __img_5 = {
-                                            let __src = gradient.clone();
+                                            let __src = Reactive::follow({ let gradient = gradient.clone(); move || gradient.clone() });
                                             Image::new(
                                                 LayoutStyle::new().width(150.0).height(80.0),
-                                                move || __src.clone(),
+                                                move || __src.get(),
                                                 move || Raster::Smooth,
                                                 move || ObjectFit::Fill,
                                             )?

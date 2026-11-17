@@ -1833,7 +1833,7 @@ fn a_theme_is_provided_to_a_subtree() {
         "a theme read from state is followed:\n{code}"
     );
     assert!(
-        code.contains("provide_theme(Palette::default(), || {"),
+        code.contains("provide_theme(follow_theme(move || Palette::default()), || {"),
         "{code}"
     );
     assert!(

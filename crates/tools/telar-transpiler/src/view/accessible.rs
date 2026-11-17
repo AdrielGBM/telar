@@ -180,7 +180,7 @@ impl ViewGen<'_> {
 mod tests;
 
 impl ViewGen<'_> {
-    /// `theme:` builds the element inside a scope that provides the theme it names, so the element's own `$theme` reads and everything under it resolve that theme. A value reading `$state` is followed with `follow_theme`.
+    /// `theme:` builds the element inside a scope that provides the theme it names, so the element's own `$theme` reads and everything under it resolve that theme. A value worked out rather than named is followed with `follow_theme`.
     pub(super) fn theme_scope(&self, el: &Element, emit: ChildEmit) -> ChildEmit {
         if !crate::registry::is_builtin_tag(&el.tag) {
             return emit;
@@ -193,7 +193,9 @@ impl ViewGen<'_> {
         };
         let raw = theme.value.text().trim();
         let value = super::redundant_parens(raw).unwrap_or(raw);
-        let provided = if value.contains('$') {
+        // A name is a theme value; anything worked out is followed as it reads.
+        let named = value.split("::").all(telar_project::is_plain_identifier);
+        let provided = if !named {
             let read = substitute_reads(value, self.theme_access);
             format!(
                 "follow_theme({})",

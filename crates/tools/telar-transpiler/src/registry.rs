@@ -55,7 +55,7 @@ pub fn builtin_tag_doc(tag: &str) -> Option<&'static str> {
 const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("track_rect"),
     AttrSpec::free("clip").doc(
-        "Cuts a node's output to its laid-out rect: bare, or a `Clip` shape naming axis, radius and inset. A value reading `$state` is followed and may yield a `Clip`, an `Option<Clip>` or a `bool`, so `clip:$cut` stops and starts cutting without a rebuild.",
+        "Cuts a node's output to its laid-out rect: bare, or a `Clip` shape naming axis, radius and inset. A written shape is followed as it reads, and may yield a `Clip`, an `Option<Clip>` or a `bool`, so `clip:$cut` stops and starts cutting without a rebuild.",
     ),
     AttrSpec::num("width"),
     AttrSpec::num("height"),
@@ -128,7 +128,7 @@ const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
         "Names the box as a place on the page that `to:anchor(\"name\")` reaches: a quoted string, `t!(…)`, or an expression reading `$state`. Following it reveals the box at the top of its scroll and adds a history entry; a document gives the element that `id`, so `#name` in the address opens there. `use_anchor_at(line)` reads which place is under a line across the page's view, for marking the `current:` link.",
     ),
     AttrSpec::free("theme").doc(
-        "Provides a theme to the box and everything under it, any number of children: a theme value, or a `ScopedTheme` to switch it later. A value reading `$state` is followed, re-running only the readers under it.",
+        "Provides a theme to the box and everything under it, any number of children: a theme value, or a `ScopedTheme` to switch it later. A value worked out rather than named is followed as it reads, re-running only the readers under it.",
     ),
     AttrSpec::free("view_progress").doc(
         "Writes how far the box is through its passage through the view of the scroll it sits in into a signal of `f32`, `0.0..=1.0`: `view_progress:$p`. The range is `view_range:`, `cover` by default.",
