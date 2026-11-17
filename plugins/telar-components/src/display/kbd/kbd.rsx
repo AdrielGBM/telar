@@ -80,6 +80,13 @@ let steps = memo({
     move || shown_steps(&chord, caps).into_iter().enumerate().collect::<Vec<_>>()
 });
 
+let tokens = memo(KbdTokens::current);
+
+[style]
+@caption
+    font_size: (size.text_scale() * shared::CAPTION_RATIO)em
+    text_wrap: nowrap
+
 [view]
 row role:keyboardinput a11y_label:(shown_chord(&chord))
     // The steps of a sequence stand as far apart as two controls do, well clear of the keys inside one.
@@ -88,7 +95,9 @@ row role:keyboardinput a11y_label:(shown_chord(&chord))
             row align:center gap:(shared::gap_xs(size))
                 for (separator, key) in keys.iter()
                     if let Some(separator) = separator
-                        text "{separator}" font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap
+                        text @caption "{separator}"
                     // Never narrower than it is tall, so a one-letter key is a square.
-                    row align:center justify:center min_width:(1lh + shared::gap_xs(size) * 2.0) pad_x:(shared::gap_sm(size)) pad_y:(shared::gap_xs(size)) look:look stroke_width:(KbdTokens::current().border_width()) radius:(KbdTokens::current().radius()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em surface:props.style
-                        text "{key}" text_wrap:nowrap
+                    row @caption align:center justify:center look:look surface:props.style
+                            min_width:(1lh + shared::gap_xs(size) * 2.0) pad_x:(shared::gap_sm(size)) pad_y:(shared::gap_xs(size))
+                            radius:($tokens.radius()) stroke_width:($tokens.border_width())
+                        text "{key}"

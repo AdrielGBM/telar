@@ -87,9 +87,13 @@ let look = ToneLook {
     selected: None,
     interactive: true,
 };
+let tokens = memo(LinkTokens::current);
 
 [view]
-row align:center radius:(LinkTokens::current().radius()) color:(look.ink($text.ink)) text_wrap:nowrap hover_style(fill:(look.hovered($text.ink)) radius:(LinkTokens::current().radius())) to:to.read() current:$props.current on_press:props.on_press a11y_label:(heard($props.label, to.leaves())) surface:props.style
+row align:center text_wrap:nowrap radius:($tokens.radius()) surface:props.style
+        color:(look.ink($text.ink)) hover_style(fill:(look.hovered($text.ink)))
+        to:to.read() current:$props.current on_press:props.on_press
+        a11y_label:(heard($props.label, to.leaves()))
     row align:center gap:(shared::gap_sm(ControlSize::Regular))
         children props.leading
         text "{$props.label}" underline font_weight:(if $props.current { Some($theme.font_weight_strong) } else { None })

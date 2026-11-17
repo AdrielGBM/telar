@@ -52,6 +52,12 @@ let size = props.size;
 let reached = ToneLook::shown(props.tone.clone(), Variant::Solid);
 let rail = ToneLook::shown(props.tone.clone(), Variant::Soft);
 
+let tokens = memo(ProgressTokens::current);
+
 [view]
-row width:(ProgressTokens::current().width(size)) max_width:100% min_width:0 height:(ProgressTokens::current().height(size)) fill:(rail.fill($text.ink)) radius:(ProgressTokens::current().radius()) role:progressbar valued:(NumericValue::new(0.0..=100.0, f64::from($props.value.clamp(0.0, 1.0)) * 100.0).ok()) surface:props.style clip
-    box width:(SizeDimension::Percent($props.value.clamp(0.0, 1.0))) shrink:0 fill:(reached.fill($text.ink)) radius:(ProgressTokens::current().radius()) surface:props.fill_style
+row role:progressbar clip surface:props.style
+        valued:(NumericValue::new(0.0..=100.0, f64::from($props.value.clamp(0.0, 1.0)) * 100.0).ok())
+        width:($tokens.width(size)) max_width:100% min_width:0 height:($tokens.height(size))
+        radius:($tokens.radius()) fill:(rail.fill($text.ink))
+    box width:(SizeDimension::Percent($props.value.clamp(0.0, 1.0))) shrink:0
+            radius:($tokens.radius()) fill:(reached.fill($text.ink)) surface:props.fill_style

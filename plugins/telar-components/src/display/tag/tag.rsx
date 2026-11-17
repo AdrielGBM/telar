@@ -86,18 +86,31 @@ let look = ToneLook {
     selected: filter,
     interactive: filter.is_some(),
 };
+let tokens = memo(TagTokens::current);
+
+[style]
+@body
+    align: center
+    gap: (shared::gap_sm(size))
+    pad_x: ($tokens.pad_x(size))
+    color: (look.ink($text.ink))
 
 [view]
-row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill($text.ink)) stroke:(look.frame($text.ink)) stroke_width:(TagTokens::current().border_width()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:props.style
+row align:stretch font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:props.style
+        fill:(look.fill($text.ink)) stroke:(look.frame($text.ink))
+        radius:($tokens.radius()) stroke_width:($tokens.border_width())
     if let Some(selected) = filter
-        row role:button toggled:selected.get() on_press:(move || flip(selected, on_toggle.as_ref())) cursor:pointer color:(look.ink($text.ink)) fill:transparent radius:(TagTokens::current().radius()) hover_style(fill:(look.hovered($text.ink)) radius:(TagTokens::current().radius())) active_style(fill:(look.pressed($text.ink)) radius:(TagTokens::current().radius())) align:center gap:(shared::gap_sm(size)) min_height:(body_height(size, true)) min_width:(shared::MIN_TARGET) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
-            row shown:selected.get()
+        row @body role:button toggled:$selected cursor:pointer on_press:(move || flip(selected, on_toggle.as_ref()))
+                min_height:(body_height(size, true)) min_width:(shared::MIN_TARGET)
+                radius:($tokens.radius()) fill:transparent
+                hover_style(fill:(look.hovered($text.ink))) active_style(fill:(look.pressed($text.ink)))
+            row shown:$selected
                 glyph shape:Mark::Check size:size
             children props.leading
             text "{$props.label}"
             children props.trailing
     else
-        row align:center gap:(shared::gap_sm(size)) min_height:(body_height(size, false)) color:(look.ink($text.ink)) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
+        row @body min_height:(body_height(size, false))
             children props.leading
             text "{$props.label}"
             children props.trailing
