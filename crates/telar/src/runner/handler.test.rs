@@ -2622,3 +2622,85 @@ fn a_renderer_is_built_with_the_debug_settings_its_surface_was_started_with() {
     resume(&mut handler, &HeadlessWindow::new(120, 80));
     assert_eq!(seen.get(), Some(settings));
 }
+
+/// A window on screen, which the runner starts a renderer for rather than rasterising offscreen.
+#[derive(Clone)]
+struct OnScreen;
+
+impl platform_core::Window for OnScreen {
+    fn width(&self) -> u32 {
+        120
+    }
+
+    fn height(&self) -> u32 {
+        80
+    }
+
+    fn request_redraw(&self) {}
+}
+
+/// An overlay that builds a surface of its own with a label on it as soon as it hears which renderer is up, as the dev overlay builds its stats corner.
+#[derive(Default)]
+struct Labelling {
+    canvas: Option<ui_core::SurfaceCanvas>,
+}
+
+impl DevOverlay for Labelling {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [renderer_core::DrawCommand],
+        _window_w: f32,
+        _window_h: f32,
+        _tree_dirty: bool,
+    ) -> std::borrow::Cow<'a, [renderer_core::DrawCommand]> {
+        std::borrow::Cow::Borrowed(base)
+    }
+
+    fn set_renderer_info(&mut self, info: &str) {
+        let info = info.to_owned();
+        let canvas =
+            ui_core::SurfaceCanvas::new(geometry_core::Size::new(120.0, 80.0), move || {
+                let label = ui_core::Text::new(
+                    move || info.clone(),
+                    layout_core::LayoutStyle::new(),
+                    || renderer_core::TextStyle::new(12.0, renderer_core::Color::BLACK),
+                )?;
+                Ok(ui_core::box_item(label))
+            })
+            .expect("the overlay's surface builds");
+        self.canvas = Some(canvas);
+    }
+}
+
+/// A renderer started in place, as the software one is, tells the dev overlay it is up before the app's tree is built, and the overlay builds its own surface right then. That surface measures its text with the measurer of the surface it is built in, so the window's has to be open by then: the software backend panicked at startup where the hardware one, built in the background, did not.
+#[test]
+fn an_overlay_built_as_the_renderer_starts_measures_its_text() {
+    let mut handler = build_app_handler::<OnScreen, Labelling>(
+        Box::new(LocalApp(Unchanging)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        renderer_core::DebugSettings::default(),
+        "overlay-metrics-test".to_string(),
+        SurfaceRenderer::installed(renderer_record::RecordingFactory::new(
+            renderer_record::Recording::new(),
+            Arc::new(renderer_text::ShaperMetrics),
+        )),
+    );
+    handler.new_events();
+    assert!(handler.on_resume(&OnScreen));
+
+    let canvas = handler
+        .dev
+        .canvas
+        .as_ref()
+        .expect("the overlay heard the renderer start");
+    assert!(
+        canvas
+            .frame_commands()
+            .iter()
+            .any(|command| matches!(command, renderer_core::DrawCommand::Text { text, .. } if &**text == "installed renderer")),
+        "the overlay's surface draws its label"
+    );
+    handler.on_suspend();
+}

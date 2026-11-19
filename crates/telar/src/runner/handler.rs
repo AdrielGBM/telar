@@ -401,6 +401,13 @@ where
         }
     }
 
+    /// Opens on this surface the measurer its renderer lays text out with, before anything is built on it: the app's tree, and what a dev overlay builds as soon as it hears the renderer is up, which for a renderer started in place is before the tree.
+    fn open_text_metrics(&self) {
+        if let Some(metrics) = self.renderer_host.text_metrics() {
+            ui_core::open_surface_text_metrics(metrics);
+        }
+    }
+
     /// Drops the previous tree and builds the app's UI again, then fits it to the surface as [`fit_tree_to`](Self::fit_tree_to) does.
     fn mount_tree(&mut self, window: &W) {
         // Dropped before the new one is built: an effect from the outgoing tree re-running mid-assembly would write into widgets nothing is drawing any more.
@@ -419,9 +426,6 @@ where
         self.hand_over_location();
         if let Some(title) = &self.title {
             self.app.open_title(&title.app, &title.showing);
-        }
-        if let Some(metrics) = self.renderer_host.text_metrics() {
-            ui_core::open_surface_text_metrics(metrics);
         }
         self.app.open_font_family(self.fonts.family.as_ref());
         self.app.set_surface_conventions(self.conventions);
@@ -1227,6 +1231,10 @@ where
         if self.renderer_host.shapes_text() {
             super::font_config::install_window_fonts(&self.fonts, self.env.paths.as_ref());
         }
+        let mounting = self.tree.is_none();
+        if mounting {
+            self.open_text_metrics();
+        }
         // Offscreen windows have no surface for a windowed renderer to create, so they rasterize into a CPU pixmap regardless of the configured backend and need no GPU adapter.
         let renderer_ok = if window.is_offscreen() {
             let transparent = self.is_transparent();
@@ -1255,9 +1263,7 @@ where
             .map(|wake| platform_core::RedrawWaker::new(move || wake()));
         // The same wake reaches the app's reactive runtime, so `spawn_task` needs no waker ceremony. Under the per-window fallback this points at whichever surface resumed last, which is enough: every frame drains the whole task queue.
         self.install_task_waker();
-        if self.tree.is_some() {
-            self.fit_tree_to(window);
-        } else {
+        if mounting {
             #[cfg(all(
                 feature = "dev",
                 not(target_os = "android"),
@@ -1265,6 +1271,8 @@ where
             ))]
             self.relay_hot_reload();
             self.mount_tree(window);
+        } else {
+            self.fit_tree_to(window);
         }
         // Before the platform first shows the window, so a tree that asked for no decorations is never seen with them.
         self.apply_window_commands(window);
